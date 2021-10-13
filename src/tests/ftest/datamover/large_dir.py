@@ -66,11 +66,7 @@ class DmvrLargeDir(DataMoverTestBase):
             "DAOS", "/", self.pool[0], self.container[0],
             "DAOS", "/", self.pool[0], self.container[1])
 
-        # dcp treats a trailing slash on the source as /*
-        # so strip trailing slash from posix path so dcp
-        # behaves similar to "cp"
-        shared_dir = os.environ['DAOS_TEST_SHARED_DIR'].rstrip("/")
-        posix_path = self.new_posix_test_path(shared=True, parent=shared_dir)
+        posix_path = self.new_posix_test_path(shared=True)
 
         # copy from daos cont2 to posix file system (dfuse)
         self.run_datamover(

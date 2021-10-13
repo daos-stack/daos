@@ -81,6 +81,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dfuse_hosts = None
         self.num_run_datamover = 0  # Number of times run_datamover was called
         self.job_manager = None
+        self.parent = None
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
@@ -122,6 +123,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             "np", "/run/dserialize/client_processes/*", 1)
         self.ddeserialize_processes = self.params.get(
             "np", "/run/ddeserialize/client_processes/*", 1)
+
+        parent = self.params.get("parent", "/run/datamover/*", self.tmp)
 
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:
@@ -230,7 +233,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         Args:
             shared (bool): Whether to create a directory shared across nodes or local.
-                Defaults to True.
+                Defaults to False.
             create (bool): Whether to create the directory.
                 Defaults to True.
             mount_dir (bool): Whether or not posix directory will be manually
