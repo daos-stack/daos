@@ -1,3 +1,9 @@
+daos (2.1.100-2) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update mercury to v2.1.0rc2
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 13 Oct 2021 010:00:01 -0100
+
 daos (2.1.100-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Switch version to 2.1.100 for 2.2 test builds

@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -479,6 +479,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Wed Oct 13 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-2
+- Update mercury to v2.1.0rc2
+
 * Wed Oct 13 2021 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-1
 - Switch version to 2.1.100 for 2.2 test builds
 
