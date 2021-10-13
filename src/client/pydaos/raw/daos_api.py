@@ -1143,7 +1143,8 @@ class IORequest():
 
         return result
 
-    def prepare_dkey_ptr(self, dkey):
+    @staticmethod
+    def prepare_dkey_ptr(dkey):
         """Prepare dkey pointer.
 
         dkey needs to be converted to daos_cref.IOV() in order to pass in to the
@@ -1167,7 +1168,8 @@ class IORequest():
 
         return dkey_ptr
 
-    def prepare_kds(self, key_num):
+    @staticmethod
+    def prepare_kds(key_num):
         """Define the array of DaosKeyDescriptor and convert it to ctypes
         variable.
 
@@ -1210,7 +1212,8 @@ class IORequest():
 
         return buf
 
-    def collect_keys(self, key_count, daos_kds, buf):
+    @staticmethod
+    def collect_keys(key_count, daos_kds, buf):
         """Get keys from buffer.
 
         Keys are written contiguously in the buffer. Use the key size
