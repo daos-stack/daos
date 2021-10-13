@@ -2457,7 +2457,6 @@ def log_test(conf,
              show_memleaks=True,
              quiet=False,
              skip_fi=False,
-             fi_signal=None,
              leak_wf=None,
              check_read=False,
              check_write=False,
@@ -3200,8 +3199,7 @@ class AllocFailTestRun():
                                    show_memleaks=show_memleaks,
                                    quiet=True,
                                    skip_fi=True,
-                                   leak_wf=wf,
-                                   fi_signal=fi_signal)
+                                   leak_wf=wf)
             self.fault_injected = True
             assert self.fi_loc
         except NLTestNoFi:
