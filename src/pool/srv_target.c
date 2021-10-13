@@ -183,9 +183,12 @@ pool_child_add_one(void *varg)
 
 	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(arg->pla_uuid));
 
+	ds_pool_get(arg->pla_pool);
 	D_ALLOC_PTR(child);
-	if (child == NULL)
-		return -DER_NOMEM;
+	if (child == NULL) {
+		rc = -DER_NOMEM;
+		goto out_pool;
+	}
 
 	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tgt_id,
 			      &path);
@@ -244,6 +247,8 @@ out_vos:
 	vos_pool_close(child->spc_hdl);
 out_free:
 	D_FREE(child);
+out_pool:
+	ds_pool_put(arg->pla_pool);
 	return rc;
 }
 
@@ -255,12 +260,14 @@ out_free:
 static int
 pool_child_delete_one(void *uuid)
 {
-	struct ds_pool_child *child;
+	struct ds_pool_child	*child;
+	struct ds_pool		*pool;
 
 	child = ds_pool_child_lookup(uuid);
 	if (child == NULL)
 		return 0;
 
+	pool = child->spc_pool;
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
 	stop_gc_ult(child);
@@ -269,11 +276,7 @@ pool_child_delete_one(void *uuid)
 
 	ds_pool_child_put(child); /* -1 for lookup */
 
-	/*
-	 * FIXME: Need to wait for last reference of ds_pool_child dropped,
-	 * since the ds_pool_child references ds_pool by 'spc_pool' without
-	 * holding ds_pool refcount.
-	 */
+	ds_pool_put(pool);
 	return 0;
 }
 
