@@ -5,6 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
+import re
 from ClusterShell.NodeSet import NodeSet
 
 
@@ -43,7 +44,6 @@ class TelemetryUtils():
         "engine_pool_ops_tgt_punch",
         "engine_pool_ops_tgt_update",
         "engine_pool_ops_update",
-        "engine_pool_ops_open_active",
         "engine_pool_pool_handles",
         "engine_pool_resent",
         "engine_pool_restarted",
@@ -329,16 +329,11 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
-        "engine_net_ofi_sockets_failed_addr",
-        "engine_net_ofi_sockets_req_timeout",
-        "engine_net_ofi_sockets_uri_lookup_timeout",
+        "engine_net_<provider>_failed_addr",
+        "engine_net_<provider>_req_timeout",
+        "engine_net_<provider>_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
-        "engine_net_uri_lookup_self",
-        "engine_net_failed_addr",
-        "engine_net_req_timeout",
-        "engine_net_uri_lookup_other",
-        "engine_net_uri_lookup_self",
-        "engine_net_uri_lookup_timeout"]
+        "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     GO_METRICS = [
@@ -448,7 +443,6 @@ class TelemetryUtils():
         """
         all_metrics_names = list(self.ENGINE_EVENT_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
-        all_metrics_names.extend(self.ENGINE_NET_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
         all_metrics_names.extend(self.GO_METRICS)
         all_metrics_names.extend(self.PROCESS_METRICS)
@@ -456,14 +450,20 @@ class TelemetryUtils():
             all_metrics_names.extend(self.ENGINE_POOL_METRICS)
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)
 
+        # Add engine network metrics for the configured provider
+        try:
+            provider = re.sub("[+;]", "_", server.manager.job.get_config_value("provider"))
+        except TypeError:
+            provider = "ofi_sockets"
+        net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
+        all_metrics_names.extend(net_metrics)
+
         # Add NVMe metrics for any NVMe devices configured for this server
         for nvme_list in server.manager.job.get_engine_values("bdev_list"):
             for nvme in nvme_list if nvme_list is not None else []:
                 # Replace the '<id>' placeholder with the actual NVMe ID
                 nvme_id = nvme.replace(":", "_").replace(".", "_")
-                nvme_metrics = [
-                    name.replace("<id>", nvme_id)
-                    for name in self.ENGINE_NVME_METRICS]
+                nvme_metrics = [name.replace("<id>", nvme_id) for name in self.ENGINE_NVME_METRICS]
                 all_metrics_names.extend(nvme_metrics)
 
         return all_metrics_names
