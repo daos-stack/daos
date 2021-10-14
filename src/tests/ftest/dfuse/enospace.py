@@ -14,7 +14,7 @@ from dfuse_test_base import DfuseTestBase
 
 class Enospace(DfuseTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
-    """Dfuse Sparse File base class.
+    """Dfuse ENOSPC File base class.
 
     :avocado: recursive
     """
@@ -22,7 +22,6 @@ class Enospace(DfuseTestBase):
     def __init__(self, *args, **kwargs):
         """Initialize a Enospace object."""
         super().__init__(*args, **kwargs)
-        self.space_before = None
 
     def test_enospace(self):
         """Jira ID: DAOS-8264.
@@ -37,17 +36,15 @@ class Enospace(DfuseTestBase):
             Create file
             Write to file until error occurs
             The test should then get a enospace error.
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfuseenospace
         """
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
-        container = TestContainer(self.pool, daos_command=DaosCommand(self.bin))
-        container.get_params(self)
-        container.create()
-        self.start_dfuse(self.hostlist_clients, self.pool, container)
+        self.add_container(self.pool)
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # create large file and perform write to it so that if goes out of
         # space.
@@ -64,17 +61,17 @@ class Enospace(DfuseTestBase):
         file_size = 0
         while True:
             stat_pre = os.fstat(fd.fileno())
-            assert stat_pre.st_size == file_size
+            self.assertTrue(stat_pre.st_size == file_size)
             try:
                 fd.write(bytearray(write_size))
                 file_size += write_size
             except OSError as e:
                 if e.errno != errno.ENOSPC:
                     raise
-                print('File write returned ENOSPACE')
+                self.log.info('File write returned ENOSPACE')
                 stat_post = os.fstat(fd.fileno())
                 # Check that the failed write didn't change the file size.
-                assert stat_pre.st_size == stat_post.st_size
+                self.assertTrue(stat_pre.st_size == stat_post.st_size)
                 break
 
         fd.close()
