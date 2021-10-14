@@ -2,12 +2,7 @@ hosts:
   test_servers:
     - server-A
     - server-B
-    - server-C
-    - server-D
-  test_clients:
-    - client-E
-    - client-F
-timeout: 605
+timeout: 2000
 server_config:
   name: daos_server
   transport_config:

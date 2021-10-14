@@ -32,7 +32,7 @@ class MdtestSmall(MdtestBase):
             depth of hierarchical directory structure: 0|5
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,small
         :avocado: tags=mdtest,checksum,mdtestsmall,mdtest
         :avocado: tags=DAOS_5610
         """
