@@ -73,8 +73,6 @@ struct dtx_handle {
 					 dth_touched_leader_oid:1,
 					 /* Local TX is started. */
 					 dth_local_tx_started:1,
-					 /* Retry with this server. */
-					 dth_local_retry:1,
 					 /* The DTX share lists are inited. */
 					 dth_shares_inited:1,
 					 /* Distributed transaction. */
