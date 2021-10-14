@@ -824,7 +824,7 @@ pipeline {
                       always {
                             functionalTestPostV2()
                             unitTestPost artifacts: ['valgrind_logs/*'],
-                                         testResults: 'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
+                                         testResults: 'Functional*on*CentOS*8*with*Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
                                          valgrind_stash: 'centos7-gcc-cart-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
@@ -832,7 +832,7 @@ pipeline {
                                          ignoreQualityGate: true,
                                          name: "CaRT Valgrind leaks",
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-                                         tool: issues(pattern: 'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
+                                         tool: issues(pattern: 'Functional*on*CentOS*8*with*Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
                                            name: 'CaRT Valgrind results',
                                            id: 'CaRT_Valgrind_server')
                         }
