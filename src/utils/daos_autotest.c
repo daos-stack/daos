@@ -200,7 +200,7 @@ init(void)
 	rc = daos_init();
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -216,7 +216,7 @@ pconnect(void)
 			       DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	/** gather domain_nr for poh */
@@ -277,7 +277,7 @@ ccreate(void)
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -303,7 +303,7 @@ copen(void)
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -324,13 +324,13 @@ oS1(void)
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 		if (rc) {
 			step_fail("failed to open object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
 
 		rc = daos_obj_close(oh, NULL);
 		if (rc) {
 			step_fail("failed to close object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
 		increment_progress(i);
 	}
@@ -358,13 +358,13 @@ oSX(void)
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 		if (rc) {
 			step_fail("failed to open object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
 
 		rc = daos_obj_close(oh, NULL);
 		if (rc) {
 			step_fail("failed to close object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
 		increment_progress(i);
 	}
@@ -645,7 +645,7 @@ kv_insert128(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	put_rc = kv_put(oh, 128);
@@ -653,12 +653,12 @@ kv_insert128(void)
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -675,7 +675,7 @@ kv_read128(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	get_rc = kv_get(oh, 128);
@@ -683,12 +683,12 @@ kv_read128(void)
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return get_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -710,7 +710,7 @@ kv_punch(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	punch_rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
@@ -718,12 +718,12 @@ kv_punch(void)
 
 	if (punch_rc) {
 		step_fail("failed to punch object: %s", d_errdesc(punch_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -744,7 +744,7 @@ kv_insert4k(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	put_rc = kv_put(oh, 4096);
@@ -752,12 +752,12 @@ kv_insert4k(void)
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -774,7 +774,7 @@ kv_read4k(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	get_rc = kv_get(oh, 4096);
@@ -782,12 +782,12 @@ kv_read4k(void)
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -807,7 +807,7 @@ kv_insert1m(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	put_rc = kv_put(oh, 1048576);
@@ -815,12 +815,12 @@ kv_insert1m(void)
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -837,7 +837,7 @@ kv_read1m(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	get_rc = kv_get(oh, 1048576);
@@ -845,12 +845,12 @@ kv_read1m(void)
 
 	if (get_rc) {
 		step_fail("failed to insert: %s", d_errdesc(get_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -873,7 +873,7 @@ kv_insertrf1(void)
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	put_rc = kv_put(oh, 128);
@@ -881,12 +881,12 @@ kv_insertrf1(void)
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -909,7 +909,7 @@ kv_readrf1(void)
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	get_rc = kv_get(oh, 128);
@@ -917,12 +917,12 @@ kv_readrf1(void)
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return get_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -949,7 +949,7 @@ kv_insertrf2(void)
 	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	put_rc = kv_put(oh, 128);
@@ -957,12 +957,12 @@ kv_insertrf2(void)
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -986,7 +986,7 @@ kv_readrf2(void)
 	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	get_rc = kv_get(oh, 128);
@@ -994,12 +994,12 @@ kv_readrf2(void)
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -1032,7 +1032,7 @@ cclose(void)
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -1057,7 +1057,7 @@ cdestroy(void)
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -1068,7 +1068,7 @@ pdisconnect(void)
 	rc = daos_pool_disconnect(poh, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -1082,7 +1082,7 @@ fini(void)
 	rc = daos_fini();
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -1145,6 +1145,7 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 	int		rc;
 	int		resume = 0;
 	struct step	*s;
+	int		ret = 0;
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_AUTOTEST);
@@ -1181,19 +1182,17 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 
 		if (rc) {
 			force = 1;
+			ret = rc;
 			resume = s->clean_step;
 		}
 	}
 
-	if (force) {
+	if (force)
 		fprintf(ap->outstream,
 			"\nSome steps \033[0;31mfailed\033[0m.\n");
-		rc = 1;
-	} else {
+	else
 		fprintf(ap->outstream,
 			"\nAll steps \033[0;32mpassed\033[0m.\n");
-		rc = 0;
-	}
 
-	return rc;
+	return ret;
 }
