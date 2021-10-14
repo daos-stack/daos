@@ -25,7 +25,6 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-        - D_FI_CONFIG=/home/rpadma2/daos/install/tmp/fi.yml
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -40,7 +39,6 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt,md,rebuild
-        - D_FI_CONFIG=/home/rpadma2/daos/install/tmp/fi.yml
   transport_config:
     allow_insecure: True
 agent_config:
@@ -82,5 +80,4 @@ ior:
       - RP_2G1
 faults:
   fault_list:
-     - DAOS_CHECKSUM_UPDATE_FAIL
-
+     - DAOS_CSUM_CORRUPT_DISK
