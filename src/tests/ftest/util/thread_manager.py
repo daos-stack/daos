@@ -7,7 +7,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from concurrent.futures import ThreadPoolExecutor, as_completed, CancelledError, TimeoutError
 from logging import getLogger
 
-from avocado.utils import CmdResult
+from avocado.utils.process import CmdResult
 
 
 class ThreadManager():
