@@ -846,14 +846,11 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				rc = remap_alloc_one(remap_list, k, target, false, remap_grp_used);
 				if (rc)
 					D_GOTO(out, rc);
-
-				if (is_extending != NULL &&
-				    (target->ta_comp.co_status ==
-				     PO_COMP_ST_UP ||
-				     target->ta_comp.co_status ==
-				     PO_COMP_ST_DRAIN))
-					*is_extending = true;
 			}
+
+			if (is_extending != NULL && (target->ta_comp.co_status == PO_COMP_ST_UP ||
+						     target->ta_comp.co_status == PO_COMP_ST_DRAIN))
+				*is_extending = true;
 		}
 	}
 
@@ -1069,7 +1066,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	D_INIT_LIST_HEAD(&extend_list);
-	allow_status = PO_COMP_ST_UPIN;
+	allow_status = PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
 	rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status, &layout,
 				      NULL, &is_extending);
 	if (rc != 0) {
@@ -1096,11 +1093,12 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 			DP_OID(oid), md->omd_ver, is_adding_new ? "yes" : "no",
 			is_extending ? "yes" : "no");
 
+		allow_status = PO_COMP_ST_UPIN;
 		if (is_adding_new)
 			allow_status |= PO_COMP_ST_NEW;
 
 		if (is_extending)
-			allow_status |= PO_COMP_ST_UP | PO_COMP_ST_DRAIN;
+			allow_status |= PO_COMP_ST_UP;
 
 		/* Don't repeat remapping failed shards during this phase -
 		 * they have already been remapped.
