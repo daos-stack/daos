@@ -7,7 +7,7 @@
 import time
 import os
 import shlex
-import subprocess
+import subprocess #nosec
 import logging
 import cart_logparse
 import cart_logtest
