@@ -467,11 +467,11 @@ class DaosServerYamlParameters(YamlParameters):
             # Define any required env vars
             required_env_vars = {}
             for env in self.REQUIRED_ENV_VARS["common"]:
-                required_env_vars[env.split("=")[0]] = env.split("=", maxsplit=1)[1]
+                required_env_vars[env.split("=", maxsplit=1)[0]] = env.split("=", maxsplit=1)[1]
             for name in self._provider.split(";"):
                 if name in self.REQUIRED_ENV_VARS:
                     required_env_vars.update({
-                        env.split("=")[0]: env.split("=")[1]
+                        env.split("=", maxsplit=1)[0]: env.split("=", maxsplit=1)[1]
                         for env in self.REQUIRED_ENV_VARS[name]})
 
             # Enable fault injection if configured
