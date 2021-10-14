@@ -37,16 +37,7 @@
 
 #include "daos_hdlr.h"
 
-#define NUM_DIRENTS 24
-#define MAX_FILENAME 256
 #define OID_ARR_SIZE 8
-
-struct fs_copy_dirent {
-	dfs_obj_t *dir;
-	struct dirent ents[NUM_DIRENTS];
-	daos_anchor_t anchor;
-	uint32_t num_ents;
-};
 
 struct file_dfs {
 	enum {POSIX, DAOS} type;
@@ -846,7 +837,7 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 
 	if (ap->snapname_str == NULL && ap->epc == 0) {
 		for (i = 0; i < min(expected_count, snaps_count); i++)
-			D_PRINT(DF_X64" %s\n", epochs[i], names[i]);
+			D_PRINT("0x"DF_X64" %s\n", epochs[i], names[i]);
 	} else {
 		for (i = 0; i < min(expected_count, snaps_count); i++)
 			if (ap->snapname_str != NULL &&
@@ -862,8 +853,7 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 					"%s not found in snapshots list\n",
 				ap->snapname_str);
 			else
-				fprintf(ap->errstream,
-					DF_U64" not found in snapshots list\n",
+				fprintf(ap->errstream, "0x"DF_X64" not found in snapshots list\n",
 					ap->epc);
 			rc = -DER_NONEXIST;
 		}
@@ -893,7 +883,7 @@ cont_create_snap_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	fprintf(ap->outstream, "snapshot/epoch "DF_U64" has been created\n", ap->epc);
+	fprintf(ap->outstream, "snapshot/epoch 0x"DF_X64" has been created\n", ap->epc);
 out:
 	return rc;
 }
@@ -1629,8 +1619,8 @@ cmd_args_print(struct cmd_args_s *ap)
 	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk_size="DF_U64"\n",
 		ap->path ? ap->path : "NULL",
 		type, oclass, ap->chunk_size);
-	D_INFO("\tsnapshot: name=%s, epoch="DF_U64", epoch range=%s "
-		"("DF_U64"-"DF_U64")\n",
+	D_INFO("\tsnapshot: name=%s, epoch=0x"DF_X64", epoch range=%s "
+		"(0x"DF_X64"-0x"DF_X64")\n",
 		ap->snapname_str ? ap->snapname_str : "NULL",
 		ap->epc,
 		ap->epcrange_str ? ap->epcrange_str : "NULL",
@@ -1754,7 +1744,7 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	printf("Pool UUID:\t%s\n", ap->pool_str);
 	printf("Container UUID:\t"DF_UUIDF"\n", DP_UUID(cont_info.ci_uuid));
 	printf("Number of snapshots: %i\n", (int)cont_info.ci_nsnapshots);
-	printf("Latest Persistent Snapshot: "DF_X64"\n", cont_info.ci_lsnapshot);
+	printf("Latest Persistent Snapshot: 0x"DF_X64"\n", cont_info.ci_lsnapshot);
 	printf("Container redundancy factor: %d\n", cont_info.ci_redun_fac);
 	daos_unparse_ctype(cont_type, type);
 	printf("Container Type:\t%s\n", type);
@@ -2245,7 +2235,6 @@ fs_copy_dir(struct cmd_args_s *ap,
 	    uint64_t *num_files)
 {
 	DIR			*src_dir = NULL;
-	struct fs_copy_dirent	*dirp = NULL;
 	struct dirent		*entry = NULL;
 	char			*next_src_path = NULL;
 	char			*next_dst_path = NULL;
@@ -2265,10 +2254,6 @@ fs_copy_dir(struct cmd_args_s *ap,
 	rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
 	if (rc != EEXIST && rc != 0)
 		D_GOTO(out, rc = daos_errno2der(rc));
-
-	/* initialize DAOS anchor */
-	dirp = (struct fs_copy_dirent *)src_dir;
-	memset(&dirp->anchor, 0, sizeof(dirp->anchor));
 
 	/* copy all directory entries */
 	while (1) {
@@ -3841,7 +3826,7 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_rollback(ap->cont, ap->epc, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to roll back container %s to snapshot "DF_U64": %s (%d)\n",
+			"failed to roll back container %s to snapshot 0x"DF_X64": %s (%d)\n",
 			ap->cont_str, ap->epc, d_errdesc(rc), rc);
 		return rc;
 	}

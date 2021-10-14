@@ -79,9 +79,13 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 		return EINVAL;
 
 	if (matched == 2) {
-		if (c == 'm' || c == 'M')
+		if (c == 'd' || c == 'D')
+			out *= 60 * 60 * 24;
+		else if (c == 'h' || c == 'H')
+			out *= 60 * 60;
+		else if (c == 'm' || c == 'M')
 			out *= 60;
-		if (c == 's' || c == 'S')
+		else if (c == 's' || c == 'S')
 			true;
 		else
 			return EINVAL;
@@ -977,7 +981,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
 	if (rc != 0)
-		D_GOTO(err_eq, 0);
+		D_GOTO(err_eq, rc = daos_errno2der(errno));
 
 	fs_handle->dpi_shutdown = false;
 	*_fsh = fs_handle;
