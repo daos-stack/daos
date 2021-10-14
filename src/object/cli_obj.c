@@ -1088,6 +1088,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 			if (req_tgts->ort_shard_tgts !=
 				req_tgts->ort_tgts_inline)
 				D_FREE(req_tgts->ort_shard_tgts);
+			req_tgts->ort_shard_tgts = NULL;
 		}
 		if (req_tgts->ort_shard_tgts == NULL) {
 			D_ALLOC_ARRAY(req_tgts->ort_shard_tgts, shard_nr);
