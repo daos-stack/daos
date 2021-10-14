@@ -4,12 +4,10 @@ hosts:
   test_servers:
     - server-A
     - server-B
-    - server-C
-    - server-D
 # Note that subtests below can set their own timeout so this
 # should be a general average of all tests not including outliers
 # (I'm looking at you "rebuild tests")
-timeout: 600
+timeout: 1200
 timeouts:
     test_daos_degraded_mode: 450
     test_daos_management: 110
@@ -46,11 +44,11 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: ib0
+      fabric_iface: eth0
       fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
+      bdev_list: ["aaaa:aa:aa.a"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
@@ -61,11 +59,11 @@ server_config:
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
-      fabric_iface: ib1
+      fabric_iface: eth0
       fabric_iface_port: 31417
       log_file: daos_server1.log
       bdev_class: nvme
-      bdev_list: ["0000:da:00.0"]
+      bdev_list: ["bbbb:bb:bb.b"]
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
