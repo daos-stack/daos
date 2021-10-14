@@ -32,9 +32,7 @@ ior:
     transfer_size: '1M'
     block_size: '64M'
     dfs_oclass: "SX"
-    read_x:
-      - .01    # 1%
-      - 10     # 1000%
+    read_x: 10 # 1000%
     iorflags:
       - "-v -w -k"
       - "-v -r -k"
