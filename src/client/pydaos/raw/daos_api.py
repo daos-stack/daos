@@ -34,6 +34,11 @@ DaosContPropEnum = enum.Enum(
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
 
+# Value used to determine whether we need to call daos_obj_list_dkey again.
+# This is a value used in daos_anchor_is_eof in daos_api.h. Not sure how to
+# access that method from here, so define it.
+DAOS_ANCHOR_TYPE_EOF = 3
+
 
 class DaosPool():
     """A python object representing a DAOS pool."""
@@ -1168,26 +1173,6 @@ class IORequest():
 
         return dkey_ptr
 
-    @staticmethod
-    def prepare_kds(key_num):
-        """Define the array of DaosKeyDescriptor and convert it to ctypes
-        variable.
-
-        Args:
-            key_num (int): Number of keys that determine the array size.
-
-        Returns:
-            daos_cref.DaosKeyDescriptor: Key descriptor array.
-
-        """
-        daos_kds_pylist = []
-        for _ in range(key_num):
-            daos_kds_pylist.append(daos_cref.DaosKeyDescriptor())
-
-        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(*daos_kds_pylist)
-
-        return daos_kds
-
     def prepare_sgl(self, key_num, key_len):
         """Prepare the scatter/gather list to store the dkeys obtained.
 
@@ -1202,9 +1187,10 @@ class IORequest():
 
         """
         sgl_iov = daos_cref.IOV()
-        sgl_iov.iov_len = ctypes.c_size_t(key_num * key_len)
-        sgl_iov.iov_buf_len = ctypes.c_size_t(key_num * key_len)
-        buf = ctypes.create_string_buffer(key_num * key_len)
+        buf_len = key_num * key_len
+        sgl_iov.iov_len = ctypes.c_size_t(buf_len)
+        sgl_iov.iov_buf_len = ctypes.c_size_t(buf_len)
+        buf = ctypes.create_string_buffer(buf_len)
         sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
         self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
         self.sgl.sg_nr = 1
@@ -1283,9 +1269,9 @@ class IORequest():
 
         nr_val = ctypes.c_uint32(key_num)
 
-        # Define the array of DaosKeyDescriptor and convert it to ctypes
-        # variable.
-        daos_kds = self.prepare_kds(key_num)
+        # Define the array of ctypes DaosKeyDescriptor.
+        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(
+            daos_cref.DaosKeyDescriptor())
 
         # Prepare the scatter/gather list to store the dkeys obtained. Use
         # key_num * key_len for the buffer size.
@@ -1295,16 +1281,11 @@ class IORequest():
         # used to determine whether we need to call it again.
         anchor = daos_cref.Anchor()
 
-        # Value used to determine whether we need to call daos_obj_list_dkey
-        # again. This is a value used in daos_anchor_is_eof in daos_api.h.
-        # Not sure how to access that method from here, so hard-code it.
-        daos_anchor_type_eof = 3
-
         list_dkey_func = self.context.get_function('list-dkey')
 
         dkeys = []
 
-        while not anchor.da_type == daos_anchor_type_eof:
+        while not anchor.da_type == DAOS_ANCHOR_TYPE_EOF:
             ret = list_dkey_func(
                 obj_handle, txn, ctypes.byref(nr_val),
                 ctypes.byref(daos_kds), ctypes.byref(self.sgl),
@@ -1357,7 +1338,8 @@ class IORequest():
 
         nr_val = ctypes.c_uint32(key_num)
 
-        daos_kds = self.prepare_kds(key_num)
+        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(
+            daos_cref.DaosKeyDescriptor())
 
         buf = self.prepare_sgl(key_num=key_num, key_len=key_len)
 
@@ -1365,16 +1347,11 @@ class IORequest():
         # used to determine whether we need to call it again.
         anchor = daos_cref.Anchor()
 
-        # Value used to determine whether we need to call daos_obj_list_dkey
-        # again. This is a value used in daos_anchor_is_eof in daos_api.h.
-        # Not sure how to access that method from here, so hard-code it.
-        daos_anchor_type_eof = 3
-
         list_akey_func = self.context.get_function('list-akey')
 
         akeys = []
 
-        while not anchor.da_type == daos_anchor_type_eof:
+        while not anchor.da_type == DAOS_ANCHOR_TYPE_EOF:
             ret = list_akey_func(
                 obj_handle, txn, dkey_ptr, ctypes.byref(nr_val),
                 ctypes.byref(daos_kds), ctypes.byref(self.sgl),
