@@ -9,7 +9,7 @@ hosts:
     - client-A
     - client-B
     - client-C
-timeout: 4000
+timeout: 1500
 setup:
   start_agents_once: False
   start_servers_once: False
@@ -44,8 +44,8 @@ server_config:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 90%
-    nvme_size: 50%
+    scm_size: 2%
+    nvme_size: 5%
     svcn: 1
     control_method: dmg
     pool_query_timeout: 30
@@ -74,4 +74,4 @@ ior:
     - ["EC_4P2GX", 6]
     - ["EC_8P2GX", 10]
   data_percentage:
-    size: 2
+    size: 1

@@ -286,7 +286,7 @@ class ServerFillUp(IorTestBase):
             time.sleep(30)
             # Kill the server rank
             if self.rank_to_kill is not None:
-                self.get_dmg_command().system_stop(True, self.rank_to_kill)
+                self.server_managers[0].stop_ranks([self.rank_to_kill], self.d_log, force=True)
 
         # Wait to finish the thread
         job.join()

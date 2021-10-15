@@ -61,6 +61,7 @@ class EcodServerRestart(ErasureCodeIor):
         # Read all EC object data from NVMe
         self.ior_read_dataset(operation="Auto_Read", percent=self.percent)
         # Read all EC object data which was written on SCM
+        self.read_set_from_beginning = False
         self.ior_read_dataset(storage='SCM', operation="Auto_Read", percent=self.percent)
 
     def test_ec_restart_before_agg(self):

@@ -79,7 +79,9 @@ class ErasureCodeIor(ServerFillUp):
         super().__init__(*args, **kwargs)
         self.server_count = None
         self.ec_container = None
-        self.cont_uuid = {}
+        self.cont_uuid = []
+        self.cont_number = 0
+        self.read_set_from_beginning = True
 
     def setUp(self):
         """Set up each test case."""
@@ -148,11 +150,7 @@ class ErasureCodeIor(ServerFillUp):
         self.start_ior_load(storage, operation, percent, create_cont=False)
 
         # Store the container UUID for future reading
-        self.cont_uuid["{}-{}-{}-{}".format(
-            self.ior_cmd.dfs_oclass.value,
-            self.ior_cmd.dfs_chunk.value,
-            self.ior_cmd.block_size.value,
-            self.ior_cmd.transfer_size.value)] = self.ior_cmd.dfs_cont.value
+        self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
 
     def ior_write_dataset(self, storage='NVMe', operation="WriteRead", percent=1):
         """Write IOR data set with different EC object and different sizes.
@@ -186,11 +184,8 @@ class ErasureCodeIor(ServerFillUp):
         self.ior_param_update(oclass, sizes)
 
         # retrieve the container UUID to read the existing data
-        self.container.uuid = self.cont_uuid[
-            "{}-{}-{}-{}".format(self.ior_cmd.dfs_oclass.value,
-                                 self.ior_cmd.dfs_chunk.value,
-                                 self.ior_cmd.block_size.value,
-                                 self.ior_cmd.transfer_size.value)]
+        self.container.uuid = self.cont_uuid[self.cont_number]
+
         # Start IOR Read
         self.start_ior_load(storage, operation, percent, create_cont=False)
 
@@ -204,6 +199,10 @@ class ErasureCodeIor(ServerFillUp):
                             runtime.
             parity(int): object parity type for reading data, default is 1.
         """
+        # By default read the data set from beginning, or start from the specific container UUID
+        if self.read_set_from_beginning:
+            self.cont_number = 0
+
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
                 # Skip the object type if server count does not meet the minimum EC object server
@@ -214,9 +213,12 @@ class ErasureCodeIor(ServerFillUp):
                 # Read the requested data+parity data set only
                 if parity != 1 and parity_set not in oclass[0]:
                     print("Skipping Read as object type is {}".format(oclass[0]))
+                    self.cont_number += 1
                     continue
-                self.ior_read_single_dataset(oclass, sizes, storage, operation, percent)
 
+                self.ior_read_single_dataset(oclass, sizes, storage, operation, percent)
+                self.cont_number += 1
+ 
 
 class ErasureCodeSingle(TestWithServers):
     # pylint: disable=too-many-ancestors
