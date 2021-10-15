@@ -360,9 +360,6 @@ ut_free(void **state)
 	print_message("persistent free extents:\n");
 	vea_dump(args->vua_vsi, false);
 
-	/* wait for free extents expire */
-	print_message("wait for %d seconds ...\n", VEA_MIGRATE_INTVL);
-	sleep(VEA_MIGRATE_INTVL);
 	/* call vea_flush to trigger free extents migration */
 	vea_flush(args->vua_vsi, false);
 
