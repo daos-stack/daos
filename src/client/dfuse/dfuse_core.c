@@ -859,7 +859,10 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 
 	/* Allow for uuid to be NULL, in which case this represents a pool */
 	if (uuid_is_null(*cont)) {
-		dfc->dfs_ops = &dfuse_cont_ops;
+		if (uuid_is_null(dfp->dfp_pool))
+			dfc->dfs_ops = &dfuse_pool_ops;
+		else
+			dfc->dfs_ops = &dfuse_cont_ops;
 
 		/* Turn on some caching of metadata, otherwise container
 		 * operations will be very frequent
@@ -1050,7 +1053,6 @@ int
 dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
 	struct fuse_args		args = {0};
-	struct fuse_lowlevel_ops	*fuse_ops = NULL;
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
@@ -1078,10 +1080,6 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	args.argv[3] = strdup("-odefault_permissions");
 	if (!args.argv[3])
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	fuse_ops = dfuse_get_fuse_ops();
-	if (!fuse_ops)
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	/* Create the root inode and insert into table */
@@ -1124,9 +1122,8 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
-	rc = dfuse_launch_fuse(fs_handle, fuse_ops, &args);
+	rc = dfuse_launch_fuse(fs_handle, &args);
 	fuse_opt_free_args(&args);
-	D_FREE(fuse_ops);
 	if (rc == -DER_SUCCESS)
 		return rc;
 
@@ -1135,7 +1132,7 @@ err_ie_remove:
 err:
 	DFUSE_TRA_ERROR(fs_handle,
 			"Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
-	D_FREE(fuse_ops);
+	fuse_opt_free_args(&args);
 	D_FREE(ie);
 	return rc;
 }

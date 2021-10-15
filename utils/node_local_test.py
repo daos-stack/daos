@@ -2523,6 +2523,9 @@ def set_server_fi(server):
     cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     vh = ValgrindHelper(server.conf)
 
+    if server.conf.args.memcheck == 'no':
+        vh.use_valgrind = False
+
     system_name = 'daos_server'
 
     exec_cmd = vh.get_cmd_prefix()
@@ -3685,7 +3688,7 @@ def run(wf, args):
             # Container attribute tests
 
             # Tests work but report failures.
-            # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+            fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
             # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
             # filesystem copy test.

@@ -165,19 +165,14 @@ dfuse_bg(struct dfuse_info *dfuse_info)
  * Returns true on success, false on failure.
  */
 int
-dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
-		  struct fuse_lowlevel_ops *flo,
-		  struct fuse_args *args)
+dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args)
 {
-	struct dfuse_info	*dfuse_info;
-	int			rc;
+	struct dfuse_info		*dfuse_info;
+	int				rc;
 
 	dfuse_info = fs_handle->dpi_info;
 
-	dfuse_info->di_session = fuse_session_new(args,
-						   flo,
-						   sizeof(*flo),
-						   fs_handle);
+	dfuse_info->di_session = fuse_session_new(args, &dfuse_ops, sizeof(dfuse_ops), fs_handle);
 	if (dfuse_info->di_session == NULL) {
 		DFUSE_TRA_ERROR(dfuse_info, "Could not create fuse session");
 		return -DER_INVAL;
@@ -540,9 +535,6 @@ main(int argc, char **argv)
 		printf("Failed to connect to container (%d) %s\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
-
-	if (uuid_is_null(dfp->dfp_pool))
-		dfs->dfs_ops = &dfuse_pool_ops;
 
 	rc = dfuse_fs_start(fs_handle, dfs);
 	if (rc != -DER_SUCCESS)

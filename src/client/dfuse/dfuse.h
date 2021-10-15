@@ -52,9 +52,7 @@ struct dfuse_projection_info {
 
 /* Launch fuse, and do not return until complete */
 int
-dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
-		  struct fuse_lowlevel_ops *flo,
-		  struct fuse_args *args);
+dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args);
 
 struct dfuse_inode_entry;
 
@@ -267,7 +265,8 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle);
 extern int
 dfuse_loop(struct dfuse_info *dfuse_info);
 
-struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
+extern
+struct fuse_lowlevel_ops dfuse_ops;
 
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\
