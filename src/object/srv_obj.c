@@ -2462,6 +2462,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
 	struct dtx_id			*dti_cos = NULL;
+	struct obj_pool_metrics		*opm;
 	int				dti_cos_cnt;
 	uint32_t			tgt_cnt;
 	uint32_t			version = 0;
@@ -2547,16 +2548,16 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (orw->orw_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
+	opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		daos_epoch_t		 e;
-		struct obj_pool_metrics	*opm;
 
 		dtx_flags |= DTX_RESEND;
+		d_tm_inc_counter(opm->opm_update_resent, 1);
 
 again1:
-		opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
-		d_tm_inc_counter(opm->opm_update_resent, 1);
 		e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2679,6 +2680,7 @@ again2:
 	case -DER_AGAIN:
 		orw->orw_flags |= ORF_RESEND;
 		need_abort = true;
+		d_tm_inc_counter(opm->opm_update_retry, 1);
 		goto again1;
 	default:
 		break;
