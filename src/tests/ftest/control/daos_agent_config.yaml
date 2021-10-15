@@ -131,16 +131,6 @@ agent_config_val: !mux
        - "key"
        - /tmp/does_not_exist.ext
        - "PASS"
-  server_name_junk:
-    config_val:
-       - "server_name"
-       - "! @#$%^&*()_+{}|:<>?-=[];',./"
-       - "PASS"
-  server_name_list:
-    config_val:
-      - "server_name"
-      - [12345, "ABDCD"]
-      - "FAIL"
   runtime_dir_wrong_path:
     config_val:
       - "runtime_dir"
