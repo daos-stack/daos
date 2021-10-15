@@ -45,7 +45,11 @@ dc_cont_init(void)
 void
 dc_cont_fini(void)
 {
-	daos_rpc_unregister(&cont_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&cont_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 /*
@@ -1751,13 +1755,13 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		rc = dc_task_resched(task);
+		rc = dc_task_depend(task, 1, &ptask);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
 		}
 
-		rc = dc_task_depend(task, 1, &ptask);
+		rc = dc_task_resched(task);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);

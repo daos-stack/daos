@@ -1897,7 +1897,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog,
-				&oiter->it_epr, iter->it_for_discard, range_discard,
+				&oiter->it_epr, iter->it_for_discard, false,
 				&oiter->it_punched, &oiter->it_ilog_info);
 
 	if (rc == 1) {

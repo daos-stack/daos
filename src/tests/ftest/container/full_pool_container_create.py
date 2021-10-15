@@ -15,9 +15,6 @@ class FullPoolContainerCreate(TestWithServers):
     :avocado: recursive
     """
 
-    # Cancel test for small pool size due to DAOS-8400
-    CANCEL_FOR_TICKET = [["DAOS-8400", "size", 134217728]]
-
     def test_no_space_cont_create(self):
         """JIRA ID: DAOS-1169 DAOS-7374
 

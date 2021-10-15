@@ -213,8 +213,8 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_in_obj_discard:1,
 				vc_reindex_cmt_dtx:1;
+	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
 };
 
@@ -323,9 +323,6 @@ extern int vos_evt_feats;
 
 #define VOS_KEY_CMP_UINT64_SET	(BTR_FEAT_UINT_KEY)
 #define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
-#define VOS_OFEAT_SHIFT		48
-#define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
-#define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
 
 /** Iterator ops for objects and OIDs */
 extern struct vos_iter_ops vos_oi_iter_ops;

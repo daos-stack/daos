@@ -134,6 +134,7 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"
+    run_test "${SL_PREFIX}/bin/vea_stress -d 60"
 
     COMP="UTEST_bio"
     run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
