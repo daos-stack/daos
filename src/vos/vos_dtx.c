@@ -2122,6 +2122,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 
 			if (abort) {
 				daes[i]->dae_aborted = 1;
+				daes[i]->dae_prepared = 0;
 				dtx_act_ent_cleanup(cont, daes[i], NULL, true);
 			} else {
 				daes[i]->dae_committed = 1;
@@ -2703,15 +2704,17 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 					DP_DTI(&dth->dth_xid), DP_RC(rc));
 
 				dae = dth->dth_ent;
-				if (dae != NULL)
+				if (dae != NULL) {
 					dae->dae_aborted = 1;
+					dae->dae_prepared = 0;
+				}
 			} else {
 				rc = 0;
 			}
 		} else {
 			dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-			/* Cannot cleanup 'prepared' or 'committed' DTX entry. */
-			if (dae->dae_prepared || dae->dae_committed)
+			/* Cannot cleanup 'committed' DTX entry. */
+			if (dae->dae_committable || dae->dae_committed)
 				goto out;
 
 			rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_BYPASS, &kiov, &dae);
