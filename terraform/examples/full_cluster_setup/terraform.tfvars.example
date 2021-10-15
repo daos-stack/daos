@@ -1,0 +1,28 @@
+project_id         = ""
+network            = "default"
+subnetwork         = "default"
+subnetwork_project = ""
+region             = "us-central1"
+zone               = "us-central1-a"
+preemptible        = "false"
+# Server
+server_number_of_instances = 1
+server_daos_disk_count     = 8
+server_instance_base_name  = "daos-server"
+server_os_disk_size_gb     = 20
+server_os_disk_type        = "pd-ssd"
+server_template_name       = "daos-server"
+server_mig_name            = "daos-server"
+server_machine_type        = "n2-highmem-32"
+server_os_project          = ""
+server_os_family           = "daos-server"
+# Client
+client_number_of_instances = 1
+client_instance_base_name  = "daos-client"
+client_os_disk_size_gb     = 20
+client_os_disk_type        = "pd-ssd"
+client_template_name       = "daos-client"
+client_mig_name            = "daos-client"
+client_machine_type        = "c2-standard-16"
+client_os_project          = ""
+client_os_family           = "daos-client"

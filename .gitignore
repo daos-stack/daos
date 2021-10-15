@@ -12,6 +12,9 @@
 # Ignore Terraform plan file
 tfplan
 
+# Ignore Terraform vars files to avoid leaking information
+terraform.tfvars
+
 # Ignore other files
 id_rsa*
 hosts
