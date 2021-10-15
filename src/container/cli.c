@@ -45,7 +45,11 @@ dc_cont_init(void)
 void
 dc_cont_fini(void)
 {
-	daos_rpc_unregister(&cont_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&cont_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 /*
