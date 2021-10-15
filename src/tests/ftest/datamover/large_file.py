@@ -59,7 +59,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             "DAOS", "/", self.pool[0], self.container[0],
             "DAOS", "/", self.pool[0], self.container[1])
 
-        posix_path = self.new_posix_test_path(shared=True, parent=self.parent)
+        posix_path = self.new_posix_test_path(shared=True)
 
         # copy from daos cont2 to posix file system
         self.run_datamover(

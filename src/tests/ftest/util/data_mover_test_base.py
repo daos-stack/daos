@@ -239,7 +239,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             mount_dir (bool): Whether or not posix directory will be manually
 	        mounted in tmpfs.
             parent (str, optional): The parent directory to create the
-                path in. Defaults to self.tmp.
+                path in. Defaults to self.parent, which has a default of self.tmp.
 
         Returns:
             str: the posix path.
@@ -252,7 +252,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if parent:
             path = join(parent, dir_name)
         else:
-            path = join(self.tmp, dir_name)
+            path = join(self.parent, dir_name)
 
         # Add to the list of posix paths
         if shared:
