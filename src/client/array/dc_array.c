@@ -522,6 +522,7 @@ write_md_cb(tse_task_t *task, void *data)
 	update_args->nr		= 1;
 	update_args->iods	= &params->iod;
 	update_args->sgls	= &params->sgl;
+	update_args->flags	= DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT;
 
 	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params,
 				       sizeof(params));
@@ -715,6 +716,7 @@ fetch_md_cb(tse_task_t *task, void *data)
 	fetch_args->nr		= 1;
 	fetch_args->iods	= &params->iod;
 	fetch_args->sgls	= &params->sgl;
+	fetch_args->flags	= DAOS_COND_DKEY_FETCH | DAOS_COND_AKEY_FETCH;
 
 	return 0;
 }
