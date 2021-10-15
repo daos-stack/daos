@@ -403,8 +403,8 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 	    dtx_agg_thd_age_lo)
 		return;
 
-	/* No single pool exceeds DTX thresholds, but the whole pool does,
-	 * we choose the victim container to do the DTX aggregation.
+	/* No single container exceeds DTX thresholds, but the whole pool does,
+	 * then we choose the victim container to do the DTX aggregation.
 	 */
 
 	dbca = dbpa->dbpa_victim;
@@ -1578,7 +1578,6 @@ int
 dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		  daos_epoch_t *epoch, uint32_t *pm_ver)
 {
-	uint64_t	age;
 	int		rc;
 
 	if (daos_is_zero_dti(dti))
@@ -1603,16 +1602,23 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		return -DER_ALREADY;
 	case DTX_ST_CORRUPTED:
 		return -DER_DATA_LOSS;
-	case -DER_NONEXIST:
-		age = dtx_hlc_age2sec(dti->dti_hlc);
-		if (age > dtx_agg_thd_age_lo ||
+	case -DER_NONEXIST: {
+		struct dtx_stat		stat = { 0 };
+
+		/* dtx_id::dti_hlc is client side time stamp. If it is older than the time
+		 * of the most new DTX entry that has been aggregated, then it may has been
+		 * removed by DTX aggregation. Under such case, return -DER_EP_OLD.
+		 */
+		vos_dtx_stat(coh, &stat, DSF_SKIP_BAD);
+		if (dti->dti_hlc <= stat.dtx_newest_aggregated ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
-			D_ERROR("Not sure about whether the old RPC "DF_DTI
-				" is resent or not. Age="DF_U64" s.\n",
-				DP_DTI(dti), age);
+			D_ERROR("Not sure about whether the old RPC "
+				DF_DTI" is resent or not: %lu/%lu\n",
+				DP_DTI(dti), dti->dti_hlc, stat.dtx_newest_aggregated);
 			rc = -DER_EP_OLD;
 		}
 		return rc;
+	}
 	default:
 		return rc >= 0 ? -DER_INVAL : rc;
 	}
