@@ -965,19 +965,19 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 					 3, fs_handle, &pool_hops,
 					 &fs_handle->dpi_pool_table);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err, rc = daos_der2errno(rc));
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
 					 5, fs_handle, &ie_hops,
 					 &fs_handle->dpi_iet);
 	if (rc != 0)
-		D_GOTO(err_pt, 0);
+		D_GOTO(err_pt, rc = daos_der2errno(rc));
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
 	rc = daos_eq_create(&fs_handle->dpi_eq);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(err_iht, 0);
+		D_GOTO(err_iht, rc = daos_der2errno(rc));
 
 	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
 	if (rc != 0)
@@ -1107,13 +1107,13 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
 				rc);
-		D_GOTO(err, 0);
+		D_GOTO(err, rc = daos_der2errno(rc));
 	}
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_ie_remove, 0);
+		D_GOTO(err_ie_remove, rc);
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
