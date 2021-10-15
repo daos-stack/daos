@@ -124,7 +124,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_processes = self.params.get(
             "np", "/run/ddeserialize/client_processes/*", 1)
 
-        parent = self.params.get("parent", "/run/datamover/*", self.tmp)
+        self.parent = self.params.get("parent", "/run/datamover/*", self.tmp)
 
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:

@@ -28,7 +28,6 @@ class DmvrLargeDir(DataMoverTestBase):
             Create POSIX type cont2.
             Copy data from cont1 to cont2.
             Copy data from cont2 to external POSIX file system.
-            (Assuming dfuse mount as external POSIX FS).
             Create POSIX type cont4.
             Copy data from external POSIX file system to cont4.
             Run mdtest -a DFS with read verify on copied directory to verify
@@ -66,9 +65,9 @@ class DmvrLargeDir(DataMoverTestBase):
             "DAOS", "/", self.pool[0], self.container[0],
             "DAOS", "/", self.pool[0], self.container[1])
 
-        posix_path = self.new_posix_test_path(shared=True)
+        posix_path = self.new_posix_test_path(shared=True, parent=self.parent)
 
-        # copy from daos cont2 to posix file system (dfuse)
+        # copy from daos cont2 to posix file system
         self.run_datamover(
             self.test_id + " (cont2 to posix)",
             "DAOS", "/", self.pool[0], self.container[1],
