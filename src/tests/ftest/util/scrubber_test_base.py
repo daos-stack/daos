@@ -28,6 +28,7 @@ class TestWithScrubber(IorTestBase):
         self.scrubber = ScrubberUtils(self.get_dmg_command(),
                                       self.server_managers[0].hosts)
         self.daos_cmd = self.get_daos_command()
+        self.dmg_cmd = self.get_dmg_command()
         self.sc_pool = None
         self.sc_container = None
 
@@ -69,6 +70,11 @@ class TestWithScrubber(IorTestBase):
         self.scrubber.get_csum_total_metrics()
         self.pool = pool
         self.container = cont
+        # Print the pool properties
+        result = self.dmg_cmd.pool_get_prop(self.pool.uuid, "scrub")
+        self.log.info("Pool Properties")
+        self.log.info("===============")
+        self.log.info(result)
         # Add a thread for these IOR arguments
         process = threading.Thread(target=self.run_ior_with_pool,
                                    kwargs={"create_pool": True,
