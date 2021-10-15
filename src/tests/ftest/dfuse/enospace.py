@@ -7,8 +7,6 @@
 
 import os
 import errno
-from test_utils_container import TestContainer
-from daos_utils import DaosCommand
 
 from dfuse_test_base import DfuseTestBase
 
@@ -18,10 +16,6 @@ class Enospace(DfuseTestBase):
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a Enospace object."""
-        super().__init__(*args, **kwargs)
 
     def test_enospace(self):
         """Jira ID: DAOS-8264.
