@@ -16,6 +16,7 @@ usr/bin/pool_scrubbing_tests
 usr/bin/vos_tests
 usr/bin/smd_ut
 usr/bin/vea_ut
+usr/bin/vea_stress
 usr/bin/daos_perf
 usr/bin/vos_perf
 usr/bin/daos_racer

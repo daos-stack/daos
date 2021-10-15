@@ -37,16 +37,7 @@
 
 #include "daos_hdlr.h"
 
-#define NUM_DIRENTS 24
-#define MAX_FILENAME 256
 #define OID_ARR_SIZE 8
-
-struct fs_copy_dirent {
-	dfs_obj_t *dir;
-	struct dirent ents[NUM_DIRENTS];
-	daos_anchor_t anchor;
-	uint32_t num_ents;
-};
 
 struct file_dfs {
 	enum {POSIX, DAOS} type;
@@ -2297,7 +2288,6 @@ fs_copy_dir(struct cmd_args_s *ap,
 	    uint64_t *num_files)
 {
 	DIR			*src_dir = NULL;
-	struct fs_copy_dirent	*dirp = NULL;
 	struct dirent		*entry = NULL;
 	char			*next_src_path = NULL;
 	char			*next_dst_path = NULL;
@@ -2317,10 +2307,6 @@ fs_copy_dir(struct cmd_args_s *ap,
 	rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
 	if (rc != EEXIST && rc != 0)
 		D_GOTO(out, rc = daos_errno2der(rc));
-
-	/* initialize DAOS anchor */
-	dirp = (struct fs_copy_dirent *)src_dir;
-	memset(&dirp->anchor, 0, sizeof(dirp->anchor));
 
 	/* copy all directory entries */
 	while (1) {

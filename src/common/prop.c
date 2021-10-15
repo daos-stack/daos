@@ -893,6 +893,7 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 	int	rc = 0;
 
 	/** get prop_name */
+	D_ASSERT(str != NULL);
 	name = strtok_r(str, ":", &end_token);
 	if (name == NULL)
 		return -DER_INVAL;

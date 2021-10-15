@@ -138,25 +138,9 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 		goto out;
 	}
 
-	/* For the DTX with 'DTE_BLOCK' flag, we will sych commit them. But
-	 * before it is committed, if someone wants to read related data on
-	 * non-leader, we can make related IO handle to retry locally, that
-	 * will not cause too much overhead unless the DTX hit some trouble
-	 * (such as client or server failure) that may cause current reader
-	 * to be blocked until such DTX has been handled by the new leader.
-	 */
-
-	if (!dth->dth_force_refresh && dth->dth_ver <= DAE_VER(dae)) {
-		if (DAE_FLAGS(dae) & DTE_BLOCK &&
-		    dth->dth_modification_cnt == 0) {
-			if (dth->dth_share_tbd_count == 0)
-				dth->dth_local_retry = 1;
-			goto out;
-		}
-
-		if (DAE_MBS_FLAGS(dae) & DMF_SRDG_REP && dth->dth_dist == 0)
-			goto out;
-	}
+	if (!dth->dth_force_refresh && !dth->dth_dist &&
+	    dth->dth_ver <= DAE_VER(dae) && DAE_MBS_FLAGS(dae) & DMF_SRDG_REP)
+		goto out;
 
 	s_try = true;
 
@@ -208,8 +192,7 @@ out:
 		hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
 		dth, dth != NULL && dth->dth_force_refresh ? "yes" : "no",
 		dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
-		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" :
-		(dth != NULL && dth->dth_local_retry) ? "local" : "client");
+		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" : "client");
 
 	return -DER_INPROGRESS;
 }
@@ -2139,6 +2122,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 
 			if (abort) {
 				daes[i]->dae_aborted = 1;
+				daes[i]->dae_prepared = 0;
 				dtx_act_ent_cleanup(cont, daes[i], NULL, true);
 			} else {
 				daes[i]->dae_committed = 1;
@@ -2718,14 +2702,18 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 				D_ERROR("Fail to remove DTX entry "DF_DTI":"
 					DF_RC"\n",
 					DP_DTI(&dth->dth_xid), DP_RC(rc));
+			else
+				rc = 0;
 
 			dae = dth->dth_ent;
-			if (dae != NULL)
+			if (dae != NULL) {
 				dae->dae_aborted = 1;
+				dae->dae_prepared = 0;
+			}
 		} else {
 			dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-			/* Cannot cleanup 'prepared' or 'committed' DTX entry. */
-			if (dae->dae_prepared || dae->dae_committed)
+			/* Cannot cleanup 'committed' DTX entry. */
+			if (dae->dae_committable || dae->dae_committed)
 				goto out;
 
 			rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_BYPASS, &kiov, &dae);
