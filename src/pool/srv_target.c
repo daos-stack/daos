@@ -279,11 +279,6 @@ pool_child_delete_one(void *uuid)
 
 	ds_pool_child_put(child); /* -1 for lookup */
 
-	/*
-	 * FIXME: Need to wait for last reference of ds_pool_child dropped,
-	 * since the ds_pool_child references ds_pool by 'spc_pool' without
-	 * holding ds_pool refcount.
-	 */
 	rc = ABT_eventual_wait(child->spc_ref_eventual, (void **)&ref);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
