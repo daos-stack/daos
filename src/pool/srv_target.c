@@ -73,6 +73,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
+		ds_pool_put(child->spc_pool);
 		D_FREE(child);
 	}
 }
@@ -261,13 +262,11 @@ static int
 pool_child_delete_one(void *uuid)
 {
 	struct ds_pool_child	*child;
-	struct ds_pool		*pool;
 
 	child = ds_pool_child_lookup(uuid);
 	if (child == NULL)
 		return 0;
 
-	pool = child->spc_pool;
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
 	stop_gc_ult(child);
@@ -276,7 +275,6 @@ pool_child_delete_one(void *uuid)
 
 	ds_pool_child_put(child); /* -1 for lookup */
 
-	ds_pool_put(pool);
 	return 0;
 }
 
