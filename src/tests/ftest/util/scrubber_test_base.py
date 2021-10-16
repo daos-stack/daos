@@ -75,6 +75,11 @@ class TestWithScrubber(IorTestBase):
         self.log.info("Pool Properties")
         self.log.info("===============")
         self.log.info(result)
+        result = self.daos_cmd.container_get_prop(self.pool.uuid, self.container.uuid)
+        self.log.info("Container Properties")
+        self.log.info("===============")
+        self.log.info(result)
+
         # Add a thread for these IOR arguments
         process = threading.Thread(target=self.run_ior_with_pool,
                                    kwargs={"create_pool": True,
