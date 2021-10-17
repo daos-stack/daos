@@ -123,6 +123,8 @@ struct obj_reasb_req {
 	daos_obj_id_t			 orr_oid;
 	/* epoch for IO (now only used for fetch */
 	struct dtx_epoch		 orr_epoch;
+	/* original obj IO API args */
+	daos_obj_rw_t			*orr_args;
 	/* original user input iods/sgls */
 	daos_iod_t			*orr_uiods;
 	d_sg_list_t			*orr_usgls;
@@ -148,6 +150,8 @@ struct obj_reasb_req {
 	 * parity cell.
 	 */
 	uint8_t				*tgt_bitmap;
+	/* iod_size is set by IO reply, one per iod */
+	daos_size_t			*orr_size_set;
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
@@ -170,8 +174,6 @@ struct obj_reasb_req {
 					 orr_singv_only:1,
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
 					 orr_iom_realloc:1,
-	/* iod_size is set by IO reply */
-					 orr_size_set:1,
 	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
 					 orr_fail_alloc:1;
 };
