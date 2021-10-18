@@ -291,6 +291,7 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 {
 	if (!tls)
 		return;
+	d_list_del(&tls->mpt_list);
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version);
 	if (tls->mpt_pool)
@@ -307,7 +308,6 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 		obj_tree_destroy(tls->mpt_root_hdl);
 	if (daos_handle_is_valid(tls->mpt_migrated_root_hdl))
 		obj_tree_destroy(tls->mpt_migrated_root_hdl);
-	d_list_del(&tls->mpt_list);
 	D_FREE(tls);
 }
 
@@ -2266,12 +2266,12 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	return rc;
 }
 
-static void
-migrate_obj_punch_ult(void *data)
+static int
+migrate_obj_punch_one(void *data)
 {
 	struct migrate_pool_tls *tls;
 	struct iter_obj_arg	*arg = data;
-	struct ds_cont_child	*cont = NULL;
+	struct ds_cont_child	*cont;
 	int			rc;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
@@ -2303,6 +2303,8 @@ put:
 			tls->mpt_status = rc;
 		migrate_pool_tls_put(tls);
 	}
+
+	return rc;
 }
 
 static int
@@ -2650,8 +2652,8 @@ ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
 static int
 migrate_obj_punch(struct iter_obj_arg *arg)
 {
-	return dss_ult_create(migrate_obj_punch_ult, arg, DSS_XS_VOS,
-			      arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
+	return dss_ult_execute(migrate_obj_punch_one, arg, NULL, NULL, DSS_XS_VOS,
+			       arg->tgt_idx, MIGRATE_STACK_SIZE);
 }
 
 /* Destroys an object prior to migration. Called exactly once per object ID per
