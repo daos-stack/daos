@@ -1110,7 +1110,7 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_ie_remove, rc);
+		D_GOTO(err_ie_remove, rc = daos_errno2derr(rc));
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
