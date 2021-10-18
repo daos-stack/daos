@@ -356,7 +356,7 @@ configuration files will be defined. Examples are available at
 
 1. Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
-1. Create an agent configuration file by modifying the default `/etc/daos/daos_agent.yml` file on the client nodes.  The following is an example `daos_agent.yml`. Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`. 
+1. Create an agent configuration file by modifying the default `/etc/daos/daos_agent.yml` file on the client nodes.  The following is an example `daos_agent.yml`. Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`.
         More details on configuring the agent are available in the [daos_agent.yml sample file](../../utils/config/daos_agent.yml).
 
 		name: daos_server
@@ -372,7 +372,7 @@ configuration files will be defined. Examples are available at
 		runtime_dir: /var/run/daos_agent
 		log_file: /tmp/daos_agent.log
 
-1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node. The following is an example of the `daos_control.yml`. 
+1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node. The following is an example of the `daos_control.yml`.
 More details on configuring `dmg` are available in the [daos_control.yml sample file](../../utils/config/daos_control.yml).
 
 		name: daos_server
