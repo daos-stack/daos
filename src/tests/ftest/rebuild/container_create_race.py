@@ -115,7 +115,7 @@ class RbldContainerCreate(TestWithServers):
             numbers of rebuild targets and no available rebuild targets.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=medium
+        :avocado: tags=hw,large
         :avocado: tags=rebuild,rebuild_cont_create
         """
         # Get test params
