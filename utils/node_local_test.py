@@ -3532,7 +3532,6 @@ def test_alloc_fail_cat(server, conf):
     cmd = ['cat', target_file]
 
     test_cmd = AllocFailTest(conf, 'il-cat', cmd)
-
     test_cmd.use_il = True
     test_cmd.check_stderr = False
     test_cmd.wf = conf.wf
