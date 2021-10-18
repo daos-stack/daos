@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh -e
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
