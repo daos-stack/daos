@@ -354,8 +354,8 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	vts_dtx_end(dth);
 
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
-	assert_rc_equal(rc, 0);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
+	assert_rc_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -386,8 +386,8 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	vts_dtx_end(dth);
 
 	/* Aborted the punch DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
-	assert_rc_equal(rc, 0);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
+	assert_rc_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -484,8 +484,8 @@ dtx_14(void **state)
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Committed DTX cannot be aborted. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
-	assert_int_not_equal(rc, 0);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
+	assert_int_not_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -546,12 +546,12 @@ dtx_15(void **state)
 	vts_dtx_end(dth);
 
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
-	assert_rc_equal(rc, 0);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
+	assert_rc_equal(rc, 1);
 
 	/* Double aborted the DTX is harmless. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, epoch);
-	assert_int_not_equal(rc, 0);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1);
+	assert_int_not_equal(rc, 1);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);

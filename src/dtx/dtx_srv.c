@@ -195,18 +195,22 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 			break;
 
-		/* Currently, only support to abort single DTX. */
-		if (din->di_dtx_array.ca_count != 1)
-			D_GOTO(out, rc = -DER_PROTO);
+		while (i < din->di_dtx_array.ca_count) {
+			if (i + count > din->di_dtx_array.ca_count)
+				count = din->di_dtx_array.ca_count - i;
 
-		if (din->di_epoch != 0)
-			rc = vos_dtx_abort(cont->sc_hdl,
-					   (struct dtx_id *)din->di_dtx_array.ca_arrays,
-					   din->di_epoch);
-		else
-			rc = vos_dtx_set_flags(cont->sc_hdl,
-					       (struct dtx_id *)din->di_dtx_array.ca_arrays,
-					       DTE_CORRUPTED);
+			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
+			if (din->di_epoch != 0)
+				rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
+						    dtis, count);
+			else
+				rc1 = vos_dtx_set_flags(cont->sc_hdl, dtis,
+							count, DTE_CORRUPTED);
+			if (rc == 0 && rc1 < 0)
+				rc = rc1;
+
+			i += count;
+		}
 		break;
 	case DTX_CHECK:
 		/* Currently, only support to check single DTX state. */

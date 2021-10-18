@@ -1253,7 +1253,8 @@ abort:
 	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
 		/* Drop partial modification for distributed transaction. */
 		vos_dtx_cleanup(dth);
-		dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
+		dte = &dth->dth_dte;
+		dtx_abort(cont, dth->dth_epoch, &dte, 1);
 		aborted = true;
 	}
 

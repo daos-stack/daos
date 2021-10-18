@@ -1556,7 +1556,8 @@ out:
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &wtx->th_saved_xid, 1, NULL);
 		else
-			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, &wtx->th_saved_xid, DAOS_EPOCH_MAX);
+			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+					   &wtx->th_saved_xid, 1);
 		assert(rc >= 0 || rc == -DER_NONEXIST);
 	}
 
@@ -1565,7 +1566,8 @@ out:
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &atx->th_saved_xid, 1, NULL);
 		else
-			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, &atx->th_saved_xid, DAOS_EPOCH_MAX);
+			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
+					   &atx->th_saved_xid, 1);
 		assert(rc >= 0 || rc == -DER_NONEXIST);
 	}
 

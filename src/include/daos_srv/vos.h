@@ -108,25 +108,31 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
  * Abort the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifiers to be aborted.
  * \param epoch	[IN]	The max epoch for the DTX to be aborted.
+ * \param dtis	[IN]	The array for DTX identifiers to be aborted.
+ * \param count [IN]	The count of DTXs to be aborted.
  *
- * \return		Zero on success, negative value if error.
+ * \return		Negative value if error.
+ * \return		Others are for the count of aborted DTXs.
  */
 int
-vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
+vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
+	      int count);
 
 /**
  * Set flags on the active DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifiers to be handled.
+ * \param dtis	[IN]	The array for DTX identifiers to be handled.
+ * \param count [IN]	The count of DTXs to be handled.
  * \param flags [IN]	The flags for the DTXs.
  *
- * \return		Zero on success, negative value if error.
+ * \return		Negative value if error.
+ * \return		Others are for the count of handled DTXs.
  */
 int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags);
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dtis, int count,
+		  uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.
