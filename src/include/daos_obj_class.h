@@ -165,6 +165,13 @@ enum {
 	OC_S6K,
 	OC_S8K,
 	OC_SX,
+	OC_S15,
+	OC_S30,
+	OC_S60,
+	OC_S90,
+	OC_S120,
+	OC_S150,
+	OC_S180,
 
 	/**
 	 * Replicated object with explicit layout
