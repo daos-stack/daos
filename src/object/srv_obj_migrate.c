@@ -2235,11 +2235,9 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	return rc;
 }
 
-static void
-migrate_obj_punch_one(void *data)
+static int
+migrate_obj_punch(struct migrate_pool_tls *tls, struct iter_obj_arg *arg)
 {
-	struct migrate_pool_tls *tls;
-	struct iter_obj_arg	*arg = data;
 	struct ds_cont_child	*cont;
 	int			rc;
 
@@ -2283,6 +2281,7 @@ put:
 			tls->mpt_status = rc;
 		migrate_pool_tls_put(tls);
 	}
+	return rc;
 }
 
 static int
@@ -2627,13 +2626,6 @@ ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
 	migrate_pool_tls_put(tls);
 }
 
-static int
-migrate_obj_punch(struct iter_obj_arg *arg)
-{
-	return dss_ult_create(migrate_obj_punch_one, arg, DSS_XS_VOS,
-			      arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
-}
-
 /* Destroys an object prior to migration. Called exactly once per object ID per
  * container on the appropriate VOS target xstream.
  */
@@ -2751,7 +2743,7 @@ migrate_obj_ult(void *data)
 	}
 
 	if (arg->snap_cnt > 0 && arg->punched_epoch != 0) {
-		rc = migrate_obj_punch(arg);
+		rc = migrate_obj_punch(tls, arg);
 		if (rc)
 			D_GOTO(free, rc);
 	}
