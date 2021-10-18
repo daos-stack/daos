@@ -33,6 +33,7 @@ class POSIXStatTest(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=small
+        :avocado: tags=dfuse
         :avocado: tags=stat_parameters
         """
         block_sizes = self.params.get("block_sizes", "/run/*")

@@ -90,7 +90,6 @@ struct ec_agg_stripe {
 	daos_off_t	as_stripenum;   /* ordinal of stripe, offset/(k*len) */
 	daos_epoch_t	as_hi_epoch;    /* highest epoch  in stripe          */
 	d_list_t	as_dextents;    /* list of stripe's data extents     */
-	d_list_t	as_hoextents;   /* list of hold-over extents         */
 	daos_off_t	as_stripe_fill; /* amount of stripe covered by data  */
 	unsigned int	as_extent_cnt;  /* number of replica extents         */
 	unsigned int	as_offset;      /* start offset in stripe            */
@@ -127,7 +126,6 @@ struct ec_agg_param {
 	uint32_t		 ap_credits_max; /* # of tight loops to yield */
 	uint32_t		 ap_credits;     /* # of tight loops          */
 	uint32_t		 ap_initialized:1, /* initialized flag */
-				 ap_yielded:1,	   /* yielded */
 				 ap_obj_skipped:1; /* skipped obj during aggregation */
 };
 
@@ -291,6 +289,9 @@ agg_clear_extents(struct ec_agg_entry *entry)
 	struct ec_agg_extent	*extent, *ext_tmp;
 	uint64_t		 tail;
 	bool			 carry_is_hole = false;
+
+	if (entry->ae_cur_stripe.as_extent_cnt == 0)
+		return;
 
 	d_list_for_each_entry_safe(extent, ext_tmp,
 				   &entry->ae_cur_stripe.as_dextents,
@@ -672,7 +673,6 @@ static int
 agg_encode_full_stripe(struct ec_agg_entry *entry)
 {
 	struct ec_agg_stripe_ud		stripe_ud = { 0 };
-	struct ec_agg_param		*agg_param;
 	int				*status;
 	int				tid, rc = 0;
 
@@ -688,8 +688,6 @@ agg_encode_full_stripe(struct ec_agg_entry *entry)
 	if (rc)
 		goto ev_out;
 
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	agg_param->ap_yielded = 1;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1144,7 +1142,6 @@ static int
 agg_process_partial_stripe(struct ec_agg_entry *entry)
 {
 	struct ec_agg_stripe_ud	 stripe_ud = { 0 };
-	struct ec_agg_param	*agg_param;
 	struct ec_agg_extent	*extent;
 	int			*status;
 	uint8_t			*bit_map = NULL;
@@ -1234,8 +1231,6 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
-	agg_param->ap_yielded = 1;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1465,7 +1460,6 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
-	agg_param->ap_yielded = 1;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1750,7 +1744,6 @@ agg_process_holes(struct ec_agg_entry *entry)
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
-	agg_param->ap_yielded = 1;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -2040,11 +2033,6 @@ agg_akey_post(daos_handle_t ih, struct ec_agg_param *agg_param,
 		agg_entry->ae_cur_stripe.as_offset	= 0U;
 	}
 
-	if (agg_param->ap_yielded) {
-		*acts |= VOS_ITER_CB_YIELD;
-		agg_param->ap_yielded = 0;
-	}
-
 	return rc;
 }
 
@@ -2290,7 +2278,6 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	agg_param->ap_credits++;
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
 		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
 			type, *acts);
 		if (!(*acts & VOS_ITER_CB_SKIP))
@@ -2358,11 +2345,15 @@ out:
 static void
 ec_agg_param_fini(struct ec_agg_param *agg_param)
 {
+	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
+
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_cont_hdl))
 		dsc_cont_close(agg_param->ap_pool_info.api_pool_hdl,
 			       agg_param->ap_pool_info.api_cont_hdl);
 
-	d_sgl_fini(&agg_param->ap_agg_entry.ae_sgl, true);
+	D_ASSERT(agg_entry->ae_sgl.sg_nr == AGG_IOV_CNT || agg_entry->ae_sgl.sg_nr == 0);
+	d_sgl_fini(&agg_entry->ae_sgl, true);
+	agg_clear_extents(agg_entry);
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_pool_hdl))
 		dsc_pool_close(agg_param->ap_pool_info.api_pool_hdl);
 
@@ -2392,8 +2383,6 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_yield_arg		= param;
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
-	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_hoextents);
-	agg_param->ap_yielded = 0;
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
@@ -2450,7 +2439,7 @@ out:
  */
 static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		     bool full_scan, struct agg_param *agg_param)
+		     bool full_scan, struct agg_param *agg_param, uint64_t *msec)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	vos_iter_param_t	 iter_param = { 0 };
@@ -2520,8 +2509,14 @@ again:
 		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (ec_agg_param->ap_obj_skipped)
-		D_ERROR("with skipped obj during aggregation.\n");
+	if (ec_agg_param->ap_obj_skipped) {
+		D_DEBUG(DB_EPC, "with skipped obj during aggregation.\n");
+		/* There is rebuild going no, and we can proceed EC aggregate boundary,
+		 * Let's wait for 5 seconds for another EC aggregation.
+		 */
+		if (msec)
+			*msec = 5 * 1000;
+	}
 
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0)
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);

@@ -1158,9 +1158,9 @@ static int
 cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 	       struct test_op_record **op)
 {
-	char			 cmd[CMD_LINE_LEN_MAX] = { 0 };
+	char			 cmd[CMD_LINE_LEN_MAX + 1] = { 0 };
 	struct test_op_record	*op_rec = NULL;
-	char			*argv[CMD_LINE_ARGC_MAX] = { 0 };
+	char			*argv[CMD_LINE_ARGC_MAX + 1] = { 0 };
 	char			*dkey = NULL;
 	char			*akey = NULL;
 	size_t			 cmd_size;

@@ -68,7 +68,8 @@ struct ds_cont_child {
 				 sc_dtx_cos_shutdown:1,
 				 sc_closing:1,
 				 sc_props_fetched:1,
-				 sc_stopping:1;
+				 sc_stopping:1,
+				 sc_vos_agg_active:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
@@ -126,11 +127,12 @@ struct agg_param {
 	struct sched_request	*ap_req;
 	agg_param_get_eph_t	ap_max_eph_get;
 	agg_param_get_eph_t	ap_start_eph_get;
+	uint32_t		ap_vos_agg:1;
 };
 
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
 				   daos_epoch_range_t *epr, bool full_scan,
-				   struct agg_param *param);
+				   struct agg_param *param, uint64_t *msecs);
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			struct agg_param *param);
