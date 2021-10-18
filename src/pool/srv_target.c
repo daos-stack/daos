@@ -204,6 +204,7 @@ pool_child_add_one(void *varg)
 	uuid_copy(child->spc_uuid, arg->pla_uuid);
 	child->spc_map_version = arg->pla_map_version;
 	child->spc_ref = 1; /* 1 for the list */
+
 	rc = ABT_eventual_create(sizeof(child->spc_ref),
 				 &child->spc_ref_eventual);
 	if (rc != ABT_SUCCESS) {
@@ -217,7 +218,7 @@ pool_child_add_one(void *varg)
 
 	rc = start_gc_ult(child);
 	if (rc != 0)
-		goto out_vos;
+		goto out_eventual;
 
 	rc = ds_start_scrubbing_ult(child);
 	if (rc != 0)
@@ -249,6 +250,8 @@ out_scrub:
 	ds_stop_scrubbing_ult(child);
 out_gc:
 	stop_gc_ult(child);
+out_eventual:
+	ABT_eventual_free(&child->spc_ref_eventual);
 out_vos:
 	vos_pool_close(child->spc_hdl);
 out_free:
