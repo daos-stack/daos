@@ -3355,7 +3355,7 @@ class AllocFailTest():
         print('Maximum number of spawned tests will be {}'.format(max_child))
 
         active = []
-        fid = 1
+        fid = 2
         max_count = 0
         finished = False
 
