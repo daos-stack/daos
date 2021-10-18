@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -9,6 +9,7 @@
 # *** Keep these in as much alphbetical order as possible ***
 
 export DEBIAN_FRONTEND=noninteractive
+set -e
 
 apt-get -y update
 apt-get -y install apt-utils

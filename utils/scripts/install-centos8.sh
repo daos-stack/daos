@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -7,6 +7,8 @@
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
+
+set -e
 
 dnf -y upgrade
 dnf -y install \
