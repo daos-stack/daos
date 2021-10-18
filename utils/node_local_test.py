@@ -3327,7 +3327,7 @@ class AllocFailTest():
         self.use_il = False
         self.wf = conf.wf
         # Instruct the fault injection code to skip daos_init().
-        self.skip_daos_init = False
+        self.skip_daos_init = True
 
     def launch(self):
         """Run all tests for this command"""
@@ -3355,7 +3355,7 @@ class AllocFailTest():
         print('Maximum number of spawned tests will be {}'.format(max_child))
 
         active = []
-        fid = 2
+        fid = 1
         max_count = 0
         finished = False
 
@@ -3498,6 +3498,7 @@ def test_alloc_fail_copy(server, conf, wf):
         return cmd
 
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
+    test_cmd.skip_daos_init = False
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
@@ -3531,7 +3532,6 @@ def test_alloc_fail_cat(server, conf):
     cmd = ['cat', target_file]
 
     test_cmd = AllocFailTest(conf, 'il-cat', cmd)
-    test_cmd.skip_daos_init = True
 
     test_cmd.use_il = True
     test_cmd.check_stderr = False
