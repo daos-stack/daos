@@ -423,7 +423,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	size_t		rel_len = 0;
 	int		rc;
 #ifdef LUSTRE_INCLUDE
-	char *dir;
+	char *dir = NULL;
 #endif
 
 	if (path == NULL || strlen(path) == 0)

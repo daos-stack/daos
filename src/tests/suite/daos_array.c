@@ -75,7 +75,7 @@ simple_array_mgmt(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
-	daos_handle_t	oh;
+	daos_handle_t	oh, oh2;
 	daos_size_t	cell_size = 0, csize = 0;
 	daos_size_t	size;
 	int		rc;
@@ -99,6 +99,11 @@ simple_array_mgmt(void **state)
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
 			       &oh, NULL);
 	assert_rc_equal(rc, 0);
+
+	/** create the same array again, should fail */
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
+			       &oh2, NULL);
+	assert_rc_equal(rc, -DER_EXIST);
 
 	rc = daos_array_get_attr(oh, &csize, &cell_size);
 	assert_rc_equal(rc, 0);
@@ -154,11 +159,9 @@ simple_array_mgmt(void **state)
 	rc = daos_array_destroy(oh, DAOS_TX_NONE, NULL);
 	assert_rc_equal(rc, 0);
 
-	daos_handle_t temp_oh;
-
 	rc = daos_array_open(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
-			     &cell_size, &csize, &temp_oh, NULL);
-	assert_rc_equal(rc, -DER_NO_PERM);
+			     &cell_size, &csize, &oh2, NULL);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	rc = daos_array_close(oh, NULL);
 	assert_rc_equal(rc, 0);

@@ -7,7 +7,7 @@
 import time
 import os
 import shlex
-import subprocess
+import subprocess #nosec
 import logging
 import cart_logparse
 import cart_logtest
@@ -34,12 +34,22 @@ class CartTest(TestWithoutServers):
         self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(
                        os.path.dirname(os.path.dirname(os.path.dirname(
                        os.path.dirname(os.path.abspath(__file__))))))))
+        self.attach_dir = None
 
     def setUp(self):
         """Set up the test case."""
         super().setUp()
         self.set_other_env_vars()
         self.env = self.get_env()
+
+        # clean CRT_ATTACH_INFO_PATH dir of stale attach files
+        files_in_attach = os.listdir(self.attach_dir)
+        filtered = [f for f in files_in_attach if f.endswith(".attach_info_tmp")]
+
+        for f in filtered:
+            to_del = os.path.join(self.attach_dir, f)
+            print("WARN: stale file {} found, deleting...\n".format(to_del))
+            os.remove(to_del)
 
         # Add test binaries and daos binaries to PATH
         test_dirs = {"TESTING": "tests", "install": "bin"}
@@ -271,6 +281,7 @@ class CartTest(TestWithoutServers):
         env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
         env += " -x COVFILE=/tmp/test.cov"
 
+        self.attach_dir = daos_test_shared_dir
         self.log_path = log_path
 
         if not os.path.exists(log_path):

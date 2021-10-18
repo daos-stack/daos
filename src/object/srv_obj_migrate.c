@@ -1622,7 +1622,7 @@ migrate_one_ult(void *arg)
 	 *   (nonexistent)
 	 * This is just a workaround...
 	 */
-	if (rc != -DER_NONEXIST && tls->mpt_status == 0)
+	if (rc != -DER_NONEXIST && rc != -DER_DATA_LOSS && tls->mpt_status == 0)
 		tls->mpt_status = rc;
 out:
 	migrate_one_destroy(mrone);
@@ -2253,7 +2253,21 @@ migrate_obj_punch_one(void *data)
 		tls, DP_UUID(tls->mpt_pool_uuid), arg->version, arg->punched_epoch,
 		DP_UOID(arg->oid));
 	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, arg->cont_uuid, &cont);
-	D_ASSERT(rc == 0);
+	if (rc != 0 || cont->sc_stopping) {
+		D_DEBUG(DB_REBUILD, DF_UUID" status %d:%d\n", DP_UUID(arg->cont_uuid), rc,
+			cont ? cont->sc_stopping : -1);
+
+		/**
+		 * If the current container is being destroyed, let's
+		 * ignore the failure.
+		 */
+		if (rc == -DER_NONEXIST || (cont != NULL && cont->sc_stopping))
+			rc = 0;
+		if (cont)
+			ds_cont_child_put(cont);
+
+		D_GOTO(put, rc);
+	}
 
 	D_ASSERT(arg->punched_epoch != 0);
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->punched_epoch,
@@ -2261,11 +2275,14 @@ migrate_obj_punch_one(void *data)
 			   NULL, 0, NULL, NULL);
 	ds_cont_child_put(cont);
 put:
-	if (tls)
-		migrate_pool_tls_put(tls);
 	if (rc)
 		D_ERROR(DF_UOID" migrate punch failed: "DF_RC"\n",
 			DP_UOID(arg->oid), DP_RC(rc));
+	if (tls) {
+		if (tls->mpt_status == 0 && rc != 0)
+			tls->mpt_status = rc;
+		migrate_pool_tls_put(tls);
+	}
 }
 
 static int
@@ -2310,7 +2327,7 @@ put:
 	return rc;
 }
 
-#define KDS_NUM		16
+#define KDS_NUM		96
 #define ITER_BUF_SIZE	2048
 
 /**
@@ -2343,6 +2360,12 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
 		DF_U64"-"DF_U64"\n", DP_UOID(arg->oid), arg->shard, epr->epr_lo,
 		epr->epr_hi);
+
+	if (tls->mpt_fini) {
+		D_DEBUG(DB_REBUILD, DF_UUID "migration is aborted.\n",
+			DP_UUID(tls->mpt_pool_uuid));
+		return 0;
+	}
 
 	rc = dsc_pool_open(tls->mpt_pool_uuid, tls->mpt_poh_uuid, 0,
 			   NULL, tls->mpt_pool->spc_pool->sp_map,
@@ -2416,7 +2439,17 @@ retry:
 			D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" got "
 				"-DER_KEY2BIG, key_len "DF_U64"\n",
 				DP_UOID(arg->oid), kds[0].kd_key_len);
-			buf_len = roundup(kds[0].kd_key_len * 2, 8);
+			/* For EC parity migration, it will enumerate from all data
+			 * shards, so buffer needs to time grp_size to make sure
+			 * retry buffer will be large enough.
+			 */
+			if (daos_oclass_is_ec(&unpack_arg.oc_attr) &&
+			    obj_shard_is_ec_parity(arg->oid, &unpack_arg.oc_attr))
+				buf_len = roundup(kds[0].kd_key_len * 2 *
+						  daos_oclass_grp_size(&unpack_arg.oc_attr), 8);
+			else
+				buf_len = roundup(kds[0].kd_key_len * 2, 8);
+
 			if (buf != stack_buf)
 				D_FREE(buf);
 			D_ALLOC(buf, buf_len);
@@ -2609,6 +2642,7 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		     daos_unit_oid_t *oid, uuid_t cont_uuid)
 {
 	struct ds_cont_child *cont;
+	daos_epoch_range_t   epr;
 	int rc;
 
 	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont);
@@ -2625,7 +2659,24 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		return rc;
 	}
 
-	rc = vos_obj_delete(cont->sc_hdl, *oid);
+	/* Wait until container aggregation are stopped */
+	while (cont->sc_vos_agg_active && !tls->mpt_fini && !cont->sc_stopping) {
+		D_DEBUG(DB_REBUILD, "wait for "DF_UUID"/"DF_UUID"/%u vos aggregation"
+			" to be inactive\n", DP_UUID(tls->mpt_pool_uuid),
+			DP_UUID(cont_uuid), tls->mpt_version);
+		dss_sleep(2 * 1000);
+	}
+
+	if (tls->mpt_fini || cont->sc_stopping) {
+		D_DEBUG(DB_REBUILD, DF_UUID "container migration is aborted.\n",
+			DP_UUID(cont_uuid));
+		ds_cont_child_put(cont);
+		return 0;
+	}
+
+	epr.epr_hi = tls->mpt_max_eph;
+	epr.epr_lo = 0;
+	rc = vos_discard(cont->sc_hdl, oid, &epr, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Migrate failed to destroy object prior to "
 			"reintegration: pool/object "DF_UUID"/"DF_UOID
@@ -3058,7 +3109,7 @@ migrate_ult(void *arg)
  * tree to see if the objects being migrated already.
  */
 static int
-migrate_del_object_tree(struct migrate_pool_tls *tls)
+migrate_try_create_object_tree(struct migrate_pool_tls *tls)
 {
 	struct umem_attr uma;
 	int rc;
@@ -3211,7 +3262,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* NB: only create this tree on xstream 0 */
-	rc = migrate_del_object_tree(pool_tls);
+	rc = migrate_try_create_object_tree(pool_tls);
 	if (rc)
 		D_GOTO(out, rc);
 
