@@ -231,8 +231,8 @@ void dtx_batched_commit_deregister(struct ds_cont_child *cont);
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
 
-int dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
-	      struct dtx_entry **dtes, int count);
+int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch);
+
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
 /**
