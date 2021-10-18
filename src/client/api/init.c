@@ -142,6 +142,10 @@ daos_init(void)
 		D_GOTO(unlock, rc = 0);
 	}
 
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		D_GOTO(unlock, rc);
+
 	d_fault_init = d_fault_attr_lookup(10);
 
 	/* If fault injection 10 is set then turn off fault injection 0 for the rest of this
@@ -156,10 +160,6 @@ daos_init(void)
 		d_fault_mem_saved = *d_fault_mem;
 		d_fault_attr_set(0, blank);
 	}
-
-	rc = daos_debug_init(NULL);
-	if (rc != 0)
-		D_GOTO(unlock, rc);
 
 	/** set up handle hash-table */
 	rc = daos_hhash_init();
