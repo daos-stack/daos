@@ -41,13 +41,13 @@ type containerCmd struct {
 	Clone       containerCloneCmd       `command:"clone" description:"clone a container"`
 	Check       containerCheckCmd       `command:"check" description:"check objects' consistency in a container"`
 
-	ListAttributes  containerListAttributesCmd  `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list container user-defined attributes"`
-	DeleteAttribute containerDeleteAttributeCmd `command:"del-attr" alias:"delattr" description:"delete container user-defined attribute"`
-	GetAttribute    containerGetAttributeCmd    `command:"get-attr" alias:"getattr" description:"get container user-defined attribute"`
-	SetAttribute    containerSetAttributeCmd    `command:"set-attr" alias:"setattr" description:"set container user-defined attribute"`
+	ListAttributes  containerListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list container user-defined attributes"`
+	DeleteAttribute containerDelAttrCmd   `command:"del-attr" alias:"delattr" description:"delete container user-defined attribute"`
+	GetAttribute    containerGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get container user-defined attribute"`
+	SetAttribute    containerSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set container user-defined attribute"`
 
-	GetProperty containerGetPropertyCmd `command:"get-prop" alias:"getprop" description:"get container user-defined attribute"`
-	SetProperty containerSetPropertyCmd `command:"set-prop" alias:"setprop" description:"set container user-defined attribute"`
+	GetProperty containerGetPropCmd `command:"get-prop" alias:"getprop" description:"get container user-defined attribute"`
+	SetProperty containerSetPropCmd `command:"set-prop" alias:"setprop" description:"set container user-defined attribute"`
 
 	GetACL       containerGetACLCmd       `command:"get-acl" description:"get a container's ACL"`
 	OverwriteACL containerOverwriteACLCmd `command:"overwrite-acl" alias:"replace" description:"replace a container's ACL"`
@@ -55,9 +55,9 @@ type containerCmd struct {
 	DeleteACL    containerDeleteACLCmd    `command:"delete-acl" description:"delete a container's ACL"`
 	SetOwner     containerSetOwnerCmd     `command:"set-owner" alias:"chown" description:"change ownership for a container"`
 
-	CreateSnapshot  containerSnapshotCreateCmd  `command:"create-snap" alias:"snap" description:"create container snapshot"`
-	DestroySnapshot containerSnapshotDestroyCmd `command:"destroy-snap" description:"destroy container snapshot"`
-	ListSnapshots   containerSnapshotListCmd    `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
+	CreateSnapshot  containerSnapCreateCmd  `command:"create-snap" alias:"snap" description:"create container snapshot"`
+	DestroySnapshot containerSnapDestroyCmd `command:"destroy-snap" description:"destroy container snapshot"`
+	ListSnapshots   containerSnapListCmd    `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
 }
 
 type containerBaseCmd struct {
@@ -201,18 +201,6 @@ type containerCreateCmd struct {
 	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
 	ContFlag    ContainerID          `long:"cont" short:"c" description:"container UUID (optional)"`
-	Args        struct {
-		Container ContainerID `positional-arg-name:"<container UUID (optional)>"`
-	} `positional-args:"yes"`
-}
-
-func (cmd *containerCreateCmd) getUserUUID() uuid.UUID {
-	for _, id := range []ContainerID{cmd.Args.Container, cmd.ContFlag} {
-		if id.HasUUID() {
-			return id.UUID
-		}
-	}
-	return uuid.Nil
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -222,8 +210,8 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer deallocCmdArgs()
 
-	if cu := cmd.getUserUUID(); cu != uuid.Nil {
-		cmd.contUUID = cu
+	if cmd.ContFlag.HasUUID() {
+		cmd.contUUID = cmd.ContFlag.UUID
 		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
 			return err
 		}
@@ -813,13 +801,13 @@ func (cmd *containerCheckCmd) Execute(_ []string) error {
 	return nil
 }
 
-type containerListAttributesCmd struct {
+type containerListAttrsCmd struct {
 	existingContainerCmd
 
 	Verbose bool `long:"verbose" short:"V" description:"Include values"`
 }
 
-func (cmd *containerListAttributesCmd) Execute(args []string) error {
+func (cmd *containerListAttrsCmd) Execute(args []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
@@ -840,7 +828,10 @@ func (cmd *containerListAttributesCmd) Execute(args []string) error {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attrs.asMap(), nil)
+		if cmd.Verbose {
+			return cmd.outputJSON(attrs.asMap(), nil)
+		}
+		return cmd.outputJSON(attrs.asList(), nil)
 	}
 
 	var bld strings.Builder
@@ -852,7 +843,7 @@ func (cmd *containerListAttributesCmd) Execute(args []string) error {
 	return nil
 }
 
-type containerDeleteAttributeCmd struct {
+type containerDelAttrCmd struct {
 	existingContainerCmd
 
 	FlagAttr string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
@@ -861,7 +852,7 @@ type containerDeleteAttributeCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *containerDeleteAttributeCmd) Execute(args []string) error {
+func (cmd *containerDelAttrCmd) Execute(args []string) error {
 	if cmd.FlagAttr != "" {
 		cmd.Args.Attr = cmd.FlagAttr
 	}
@@ -890,7 +881,7 @@ func (cmd *containerDeleteAttributeCmd) Execute(args []string) error {
 	return nil
 }
 
-type containerGetAttributeCmd struct {
+type containerGetAttrCmd struct {
 	existingContainerCmd
 
 	FlagAttr string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
@@ -899,7 +890,7 @@ type containerGetAttributeCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *containerGetAttributeCmd) Execute(args []string) error {
+func (cmd *containerGetAttrCmd) Execute(args []string) error {
 	if cmd.FlagAttr != "" {
 		cmd.Args.Attr = cmd.FlagAttr
 	}
@@ -939,7 +930,7 @@ func (cmd *containerGetAttributeCmd) Execute(args []string) error {
 	return nil
 }
 
-type containerSetAttributeCmd struct {
+type containerSetAttrCmd struct {
 	existingContainerCmd
 
 	FlagAttr  string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
@@ -950,7 +941,7 @@ type containerSetAttributeCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *containerSetAttributeCmd) Execute(args []string) error {
+func (cmd *containerSetAttrCmd) Execute(args []string) error {
 	if cmd.FlagAttr != "" {
 		cmd.Args.Attr = cmd.FlagAttr
 	}
@@ -989,13 +980,13 @@ func (cmd *containerSetAttributeCmd) Execute(args []string) error {
 	return nil
 }
 
-type containerGetPropertyCmd struct {
+type containerGetPropCmd struct {
 	existingContainerCmd
 
 	Properties GetPropertiesFlag `long:"properties" description:"container properties to get" default:"all"`
 }
 
-func (cmd *containerGetPropertyCmd) Execute(args []string) error {
+func (cmd *containerGetPropCmd) Execute(args []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
@@ -1047,13 +1038,13 @@ func (cmd *containerGetPropertyCmd) Execute(args []string) error {
 	return nil
 }
 
-type containerSetPropertyCmd struct {
+type containerSetPropCmd struct {
 	existingContainerCmd
 
 	Properties SetPropertiesFlag `long:"properties" required:"1" description:"container properties to set"`
 }
 
-func (cmd *containerSetPropertyCmd) Execute(args []string) error {
+func (cmd *containerSetPropCmd) Execute(args []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err

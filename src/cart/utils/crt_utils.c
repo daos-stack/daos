@@ -141,7 +141,7 @@ crtu_progress_fn(void *data)
 		crt_progress(*p_ctx, 1000);
 
 	if (opts.is_swim_enabled && idx == 0)
-		crt_swim_fini();
+		crt_swim_disable_all();
 
 	rc = crtu_drain_queue(*p_ctx);
 	D_ASSERTF(rc == 0, "crtu_drain_queue() failed with rc=%d\n", rc);
@@ -673,6 +673,11 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 			  "pthread_create() failed; rc=%d\n",
 			  rc);
 
+	if (opts.is_swim_enabled) {
+		rc = crt_swim_init(0);
+		D_ASSERTF(rc == 0, "crt_swim_init() failed; rc=%d\n", rc);
+	}
+
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 
 	rc = crt_rank_uri_get(*grp, my_rank, 0, &my_uri);
@@ -690,11 +695,6 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 			  rc);
 
 	D_FREE(my_uri);
-
-	if (opts.is_swim_enabled) {
-		rc = crt_swim_init(0);
-		D_ASSERTF(rc == 0, "crt_swim_init() failed; rc=%d\n", rc);
-	}
 
 	rc = crt_group_size(NULL, grp_size);
 	D_ASSERTF(rc == 0, "crt_group_size() failed; rc=%d\n", rc);

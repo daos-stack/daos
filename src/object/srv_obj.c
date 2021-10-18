@@ -359,9 +359,21 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 
 		local_bulk = vos_iod_bulk_at(ioh, sgl_idx, iov_idx, &local_off);
 		if (local_bulk != NULL) {
+			unsigned int tmp_off;
+
 			length = sgl->sg_iovs[iov_idx].iov_len;
 			iov_idx++;
 			cached_bulk = true;
+
+			/* Check if following IOVs are sharing same bulk handle */
+			while (iov_idx < sgl->sg_nr_out &&
+			       sgl->sg_iovs[iov_idx].iov_buf != NULL &&
+			       vos_iod_bulk_at(ioh, sgl_idx, iov_idx,
+						&tmp_off) == local_bulk) {
+				D_ASSERT(tmp_off == 0);
+				length += sgl->sg_iovs[iov_idx].iov_len;
+				iov_idx++;
+			};
 		} else {
 			start = iov_idx;
 			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
@@ -1705,8 +1717,10 @@ obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 		return -DER_NO_PERM;
 	}
 
-	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled)
+	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled) {
+		D_ERROR("cont hdl "DF_UUID" exceeds rf\n", DP_UUID(coh->sch_uuid));
 		return -DER_RF;
+	}
 
 	return 0;
 }
@@ -2248,8 +2262,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			/* Abort it by force with MAX epoch to guarantee
 			 * that it can be aborted.
 			 */
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
-					   &orw->orw_dti, 1);
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &orw->orw_dti, DAOS_EPOCH_MAX);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -2487,7 +2500,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle dth = {0};
-		int		  retry = 0;
 
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
@@ -2506,7 +2518,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (orw->orw_flags & ORF_DTX_REFRESH)
 			dtx_flags |= DTX_FORCE_REFRESH;
 
-re_fetch:
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
 			       orw->orw_map_ver, &orw->orw_oid,
 			       NULL, 0, dtx_flags, NULL, &dth);
@@ -2515,24 +2526,6 @@ re_fetch:
 
 		rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth, false);
 		rc = dtx_end(&dth, ioc.ioc_coc, rc);
-
-		if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-			if (++retry > 5)
-				D_GOTO(out, rc = -DER_TX_BUSY);
-
-			/* XXX: Currently, we commit the distributed transaction
-			 *	synchronously. Normally it will be very quickly.
-			 *	So let's yield then retry. If related
-			 *	distributed transaction is still not committed
-			 *	after several cycles, replies '-DER_TX_BUSY' to
-			 *	the client.
-			 */
-			D_DEBUG(DB_IO, "Hit non-commit DTX when fetch "
-				DF_UOID" (%d)\n", DP_UOID(orw->orw_oid), retry);
-			ABT_thread_yield();
-
-			goto re_fetch;
-		}
 
 		D_GOTO(out, rc);
 	}
@@ -2697,15 +2690,13 @@ again2:
 out:
 	if (rc != 0 && need_abort) {
 		struct dtx_entry	 dte;
-		struct dtx_entry	*pdte;
 		int			 rc1;
 
 		dte.dte_xid = orw->orw_dti;
 		dte.dte_ver = version;
 		dte.dte_refs = 1;
 		dte.dte_mbs = mbs;
-		pdte = &dte;
-		rc1 = dtx_abort(ioc.ioc_coc, orw->orw_epoch, &pdte, 1);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&orw->orw_dti), DP_RC(rc1));
@@ -2784,7 +2775,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	struct dss_enum_arg	saved_arg;
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
 	uint32_t		flags = 0;
-	int			retry = 0;
 	int			opc = opc_get(rpc->cr_opc);
 	int			type;
 	int			rc;
@@ -2891,7 +2881,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_DTX_REFRESH)
 		flags |= DTX_FORCE_REFRESH;
 
-again:
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,
 		       NULL, &dth);
@@ -2932,27 +2921,6 @@ re_pack:
 	if (rc_tmp != 0)
 		rc = rc_tmp;
 
-	if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-		if (++retry > 5)
-			D_GOTO(out, rc = -DER_TX_BUSY);
-
-		/* XXX: Currently, we commit the distributed transaction
-		 *	synchronously. Normally it will be very quickly.
-		 *	So let's yield then retry. If related distributed
-		 *	transaction is still not committed after several
-		 *	cycles, replies '-DER_TX_BUSY' to the client.
-		 */
-		D_DEBUG(DB_IO, "Hit non-commit DTX when enum "
-			DF_UOID" (%d)\n", DP_UOID(oei->oei_oid), retry);
-		ABT_thread_yield();
-
-		*anchors = saved_anchors;
-		obj_restore_enum_args(rpc, enum_arg, &saved_arg);
-
-		goto again;
-	}
-
-out:
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_ev = anchors->ia_sv;
 
@@ -3265,8 +3233,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 			/* Abort it by force with MAX epoch to guarantee
 			 * that it can be aborted.
 			 */
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
-					   &opi->opi_dti, 1);
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, DAOS_EPOCH_MAX);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -3581,15 +3548,13 @@ again2:
 out:
 	if (rc != 0 && need_abort) {
 		struct dtx_entry	 dte;
-		struct dtx_entry	*pdte;
 		int			 rc1;
 
 		dte.dte_xid = opi->opi_dti;
 		dte.dte_ver = version;
 		dte.dte_refs = 1;
 		dte.dte_mbs = mbs;
-		pdte = &dte;
-		rc1 = dtx_abort(ioc.ioc_coc, opi->opi_epoch, &pdte, 1);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&opi->opi_dti), DP_RC(rc1));
@@ -3618,7 +3583,6 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	uint64_t			 stripe_size = 0;
 	daos_recx_t			 ec_recx[3] = {0};
 	daos_recx_t			*query_recx;
-	int				 retry = 0;
 	int				 rc;
 
 	okqi = crt_req_get(rpc);
@@ -3633,14 +3597,13 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 			   okqi->okqi_co_uuid, opc_get(rpc->cr_opc),
 			   okqi->okqi_flags, &ioc);
 	if (rc)
-		D_GOTO(out, rc);
+		D_GOTO(failed, rc);
 
 	rc = process_epoch(&okqi->okqi_epoch, &okqi->okqi_epoch_first,
 			   &okqi->okqi_flags);
 	if (rc == PE_OK_LOCAL)
 		okqi->okqi_flags &= ~ORF_EPOCH_UNCERTAIN;
 
-again:
 	dkey = &okqi->okqi_dkey;
 	akey = &okqi->okqi_akey;
 	d_iov_set(&okqo->okqo_akey, NULL, 0);
@@ -3658,7 +3621,7 @@ again:
 		       okqi->okqi_map_ver, &okqi->okqi_oid, NULL, 0, 0, NULL,
 		       &dth);
 	if (rc != 0)
-		goto out;
+		goto failed;
 
 	query_flags = okqi->okqi_api_flags;
 	if ((okqi->okqi_flags & ORF_EC) &&
@@ -3686,24 +3649,6 @@ re_query:
 	}
 
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
-
-out:
-	if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-		if (++retry > 5)
-			D_GOTO(failed, rc = -DER_TX_BUSY);
-
-		/* XXX: Currently, we commit the distributed transaction
-		 *	synchronously. Normally it will be very quickly.
-		 *	So let's yield then retry. If related distributed
-		 *	transaction is still not committed after several
-		 *	cycles, then replies '-DER_TX_BUSY' to the client.
-		 */
-		D_DEBUG(DB_IO, "Hit non-commit DTX when query "
-			DF_UOID" (%d)\n", DP_UOID(okqi->okqi_oid), retry);
-		ABT_thread_yield();
-
-		goto again;
-	}
 
 failed:
 	obj_reply_set_status(rpc, rc);
@@ -4250,20 +4195,19 @@ again:
 	}
 
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
-	if (!dth->dth_pinned) {
-		int	rc1;
-
-		/* There will be CPU yield during DTX refresh. We need
-		 * to pin current DTX before refreshing other DTX(es),
-		 * that will avoid race with the resent RPC during the
+	if (obj_dtx_need_refresh(dth, rc)) {
+		/* There will be CPU yield during DTX refresh. We need to pin current DTX before
+		 * refreshing other DTX(es), that will avoid race with the resent RPC during the
 		 * DTX refresh.
 		 */
-		rc1 = vos_dtx_pin(dth, false);
-		if (rc1 != 0)
-			return -DER_INPROGRESS;
-	}
+		if (!dth->dth_pinned) {
+			int	rc1;
 
-	if (obj_dtx_need_refresh(dth, rc)) {
+			rc1 = vos_dtx_pin(dth, false);
+			if (rc1 != 0)
+				return -DER_INPROGRESS;
+		}
+
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
@@ -4323,8 +4267,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		/* For resent RPC, abort it firstly if exist but with different
 		 * (old) epoch, then re-execute with new epoch.
 		 */
-		rc = vos_dtx_abort(ioc->ioc_vos_coh, DAOS_EPOCH_MAX,
-				   &dcsh->dcsh_xid, 1);
+		rc = vos_dtx_abort(ioc->ioc_vos_coh, &dcsh->dcsh_xid, DAOS_EPOCH_MAX);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -4643,16 +4586,13 @@ out:
 
 	if (rc != 0 && need_abort) {
 		struct dtx_entry	 dte;
-		struct dtx_entry	*pdte;
 		int			 rc1;
 
 		dte.dte_xid = dcsh->dcsh_xid;
 		dte.dte_ver = oci->oci_map_ver;
 		dte.dte_refs = 1;
 		dte.dte_mbs = dcsh->dcsh_mbs;
-		pdte = &dte;
-		rc1 = dtx_abort(dca->dca_ioc->ioc_coc,
-				dcsh->dcsh_epoch.oe_value, &pdte, 1);
+		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&dcsh->dcsh_xid), DP_RC(rc1));
