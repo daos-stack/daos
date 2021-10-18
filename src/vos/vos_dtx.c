@@ -138,9 +138,25 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 		goto out;
 	}
 
-	if (!dth->dth_force_refresh && !dth->dth_dist &&
-	    dth->dth_ver <= DAE_VER(dae) && DAE_MBS_FLAGS(dae) & DMF_SRDG_REP)
-		goto out;
+	/* For the DTX with 'DTE_BLOCK' flag, we will sych commit them. But
+	 * before it is committed, if someone wants to read related data on
+	 * non-leader, we can make related IO handle to retry locally, that
+	 * will not cause too much overhead unless the DTX hit some trouble
+	 * (such as client or server failure) that may cause current reader
+	 * to be blocked until such DTX has been handled by the new leader.
+	 */
+
+	if (!dth->dth_force_refresh && dth->dth_ver <= DAE_VER(dae)) {
+		if (DAE_FLAGS(dae) & DTE_BLOCK &&
+		    dth->dth_modification_cnt == 0) {
+			if (dth->dth_share_tbd_count == 0)
+				dth->dth_local_retry = 1;
+			goto out;
+		}
+
+		if (DAE_MBS_FLAGS(dae) & DMF_SRDG_REP && dth->dth_dist == 0)
+			goto out;
+	}
 
 	s_try = true;
 
@@ -192,7 +208,8 @@ out:
 		hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
 		dth, dth != NULL && dth->dth_force_refresh ? "yes" : "no",
 		dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
-		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" : "client");
+		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" :
+		(dth != NULL && dth->dth_local_retry) ? "local" : "client");
 
 	return -DER_INPROGRESS;
 }

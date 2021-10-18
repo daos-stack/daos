@@ -720,6 +720,7 @@ dtx_handle_reinit(struct dtx_handle *dth)
 	dth->dth_active = 0;
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
+	dth->dth_local_retry = 0;
 	dth->dth_cos_done = 0;
 
 	dth->dth_op_seq = 0;
@@ -769,6 +770,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_active = 0;
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
+	dth->dth_local_retry = 0;
 	dth->dth_dist = dist ? 1 : 0;
 	dth->dth_for_migration = migration ? 1 : 0;
 	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
