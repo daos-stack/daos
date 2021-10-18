@@ -6,6 +6,8 @@ hosts:
   test_clients:
     - client-D
 timeout: 900
+timeouts:
+  test_osa_offline_reintegrate_with_less_pool_space: 1300
 setup:
   start_servers_once: False
 server_config:
@@ -122,4 +124,4 @@ pool_capacity:
   pool_fillup: 60
   pool_test_oclass: RP_2GX
   pool_test_repetitions: 1
-  pool_test_timeout: 1300
+

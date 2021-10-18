@@ -106,6 +106,9 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     # Exclude rank 3
                     output = self.dmg_command.pool_exclude(self.pool.uuid, "3")
                     self.pool.wait_for_rebuild(True)
+                # If the pool is filled up just drain only a single rank.
+                if pool_fillup > 0 and index > 0:
+                    continue
                 output = self.dmg_command.pool_drain(self.pool.uuid,
                                                      rank, t_string)
                 self.print_and_assert_on_rebuild_failure(output)
@@ -255,6 +258,4 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         self.log.info("Offline Drain : Test with less pool space")
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
         pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
-        test_timeout = self.params.get("pool_test_timeout", '/run/pool_capacity/*')
-        self.timeout = test_timeout
         self.run_offline_drain_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)
