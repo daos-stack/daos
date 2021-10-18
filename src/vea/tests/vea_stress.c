@@ -949,7 +949,7 @@ int main(int argc, char **argv)
 
 	rand_seed = time(0);
 	memset(pool_file, 0, sizeof(pool_file));
-	while ((rc = getopt_long(argc, argv, "C:c:d:f:H:lo:h", long_ops, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "C:c:d:f:H:lo:s:h", long_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'C':
 			pool_capacity = strtoul(optarg, &endp, 0);
