@@ -21,7 +21,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +46,8 @@ const (
 	BadFloatVal = float64(BadUintVal)
 	BadIntVal   = int64(BadUintVal >> 1)
 	BadDuration = time.Duration(BadIntVal)
+
+	pathSep = '/'
 )
 
 type (
@@ -168,7 +169,7 @@ func (mb *metricBase) FullPath() string {
 		return "<nil>"
 	}
 
-	return filepath.Join(mb.Path(), mb.Name())
+	return mb.Path() + string(pathSep) + mb.Name()
 }
 
 func (mb *metricBase) fillMetadata() {
@@ -346,6 +347,21 @@ func (s *Schema) Prune() {
 	s.seen = make(map[string]struct{}) // reset for the next time
 }
 
+func splitId(id string) (string, string) {
+	i := len(id) - 1
+	for i >= 0 && id[i] != pathSep {
+		i--
+	}
+
+	name := id[i+1:]
+	// Trim trailing separator.
+	if id[i] == pathSep {
+		i--
+	}
+
+	return id[:i+1], name
+}
+
 func (s *Schema) Add(hdl *handle, id string, typ C.int, node *C.struct_d_tm_node_t) Metric {
 	s.setSeen(id)
 	s.mu.RLock()
@@ -356,8 +372,7 @@ func (s *Schema) Add(hdl *handle, id string, typ C.int, node *C.struct_d_tm_node
 	s.mu.RUnlock()
 
 	var m Metric
-	path, name := filepath.Split(id)
-	path = filepath.Clean(path)
+	path, name := splitId(id)
 	switch {
 	case typ == C.D_TM_GAUGE:
 		m = newGauge(hdl, path, &name, node)
@@ -396,7 +411,7 @@ func visit(hdl *handle, s *Schema, node *C.struct_d_tm_node_t, pathComps []strin
 		return
 	}
 	name := C.GoString(C.d_tm_get_name(hdl.ctx, node))
-	id := filepath.Join(append(pathComps, name)...)
+	id := strings.Join(append(pathComps, name), string(pathSep))
 
 	cType := node.dtn_type
 

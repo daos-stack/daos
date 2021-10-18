@@ -352,7 +352,7 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 		engSrc.rmSchema.mu.Lock()
 		for m := range engSrc.rmSchema.rankMetrics {
 			_, name := extractLabels(m)
-			names = append(names, "engine_"+name)
+			names = append(names, name)
 		}
 		engSrc.rmSchema.mu.Unlock()
 
@@ -373,7 +373,7 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 
 		names := []string{}
 		for u := range unique {
-			names = append(names, "engine_"+u)
+			names = append(names, u)
 		}
 		sort.Strings(names)
 		return names
