@@ -78,11 +78,11 @@ class POSIXStatTest(IorTestBase):
             creation_epoch = stdout[-1]
 
             # Calculate the epoch difference between the creation time and the
-            # value in the file metadata. They're usually 5 to 10 sec apart.
+            # value in the file metadata. They're usually 5 to 30 sec apart.
             creation_epoch_int = int(creation_epoch)
             current_epoch_int = int(current_epoch)
             diff_epoch = creation_epoch_int - current_epoch_int
-            if diff_epoch > 20:
+            if diff_epoch > 50:
                 msg = "Unexpected creation time! Expected = {}; Actual = {}"
                 error_list.append(
                     msg.format(current_epoch_int, creation_epoch_int))
