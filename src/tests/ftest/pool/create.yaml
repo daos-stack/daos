@@ -16,6 +16,7 @@ timeouts:
   test_create_no_space_loop: 2160
 server_config:
   name: daos_server
+  control_log_mask: DEBUG
   servers:
     0:
       bdev_class: nvme
@@ -23,6 +24,11 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+      log_mask: DEBUG,MEM=ERR,SWIM=ERR
+      env_vars:
+        - DD_MASK=all
+        - DD_SUBSYS=all
+        - DAOS_SCHED_RELAX_MODE=disabled
 pool_1:
   name: daos_server
   control_method: dmg
