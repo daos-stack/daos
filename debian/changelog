@@ -1,3 +1,11 @@
+daos (2.1.100-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
+  * Rename daos-tests daos-client-tests and make daos-tests require all
+    other test suites to maintain existing behavior
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 22 Oct 2021 10:04:15 -0400
+
 daos (2.1.100-2) unstable; urgency=medium
   [ David Quigley ]
   * Add defusedxml as a required dependency for the test package.
