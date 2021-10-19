@@ -128,25 +128,17 @@ daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, da
 }
 
 /**
- * Create an Array object. This opens a DAOS KV object and adds metadata to
- * define the cell size and chunk size. Further access to that object using the
- * handle will use that metadata to store the array elements.
+ * Create an Array object. This opens a DAOS object and adds metadata under a special akey to define
+ * the cell size and chunk size. Further access to that object using the handle will use that
+ * metadata to store the array elements.
  *
- * The metadata of the array is stored under a special AKEY in DKEY 0. This
- * means that this is a generic array object with it's metadata tracked in the
- * DAOS object. The feat bits in the oid must set DAOS_OF_DKEY_UINT64 |
- * DAOS_OF_KV_FLAT | DAOS_OF_ARRAY.  If the feat bits does not set
- * DAOS_OF_ARRAY, the user would be responsible for remembering the array
- * metadata since DAOS will not store those, and should not call this API since
- * nothing will be written to the array object. daos_array_open_with_attrs() can
- * be used to get an array OH in that case to access with the Array APIs.
- *
- * The metadata are just entries in the KV object, meaning that any user can
- * open the object and overwrite that metadata. The user can recreate the array;
- * This will not punch the existing raw data; just overwrite the metadata.
- * However changing the metadata will cause undefined access issues. (MSC - we
- * can force an error in this case by checking for object existence by reading
- * the metadata. But this adds extra overhead).
+ * The metadata of the array is stored under a special AKEY in DKEY 0. This means that this is a
+ * generic array object with it's metadata tracked in the DAOS object. The feat bits in the oid must
+ * set DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY.  If the feat bits does not set
+ * DAOS_OF_ARRAY, the user would be responsible for remembering the array metadata since DAOS will
+ * not store those, and should not call this API since nothing will be written to the array
+ * object. daos_array_open_with_attrs() can be used to get an array OH in that case to access with
+ * the Array APIs.
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
@@ -167,7 +159,7 @@ daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, da
  *			0		Success
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
+ *			-DER_EXIST	Array already exists
  *			-DER_UNREACH	Network is unreachable
  */
 int
@@ -176,8 +168,8 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
 		  daos_handle_t *oh, daos_event_t *ev);
 
 /**
- * Open an Array object. If the array has not been created before (no array
- * metadata exists), this will fail.
+ * Open an Array object. If the array has not been created before (no array metadata exists), this
+ * will fail.
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type

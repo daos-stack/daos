@@ -202,18 +202,6 @@ type containerCreateCmd struct {
 	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
 	ContFlag    ContainerID          `long:"cont" short:"c" description:"container UUID (optional)"`
-	Args        struct {
-		Container ContainerID `positional-arg-name:"<container UUID (optional)>"`
-	} `positional-args:"yes"`
-}
-
-func (cmd *containerCreateCmd) getUserUUID() uuid.UUID {
-	for _, id := range []ContainerID{cmd.Args.Container, cmd.ContFlag} {
-		if id.HasUUID() {
-			return id.UUID
-		}
-	}
-	return uuid.Nil
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -223,8 +211,8 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer deallocCmdArgs()
 
-	if cu := cmd.getUserUUID(); cu != uuid.Nil {
-		cmd.contUUID = cu
+	if cmd.ContFlag.HasUUID() {
+		cmd.contUUID = cmd.ContFlag.UUID
 		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
 			return err
 		}
