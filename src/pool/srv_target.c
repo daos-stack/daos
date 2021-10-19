@@ -263,8 +263,6 @@ pool_child_delete_one(void *uuid)
 
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
-	stop_gc_ult(child);
-	ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
 	ds_pool_child_put(child); /* -1 for lookup */
@@ -274,6 +272,11 @@ pool_child_delete_one(void *uuid)
 	 * since the ds_pool_child references ds_pool by 'spc_pool' without
 	 * holding ds_pool refcount.
 	 */
+
+	/* only stop scrubbing and gc ULTs when all ops ULTs are done */
+	ds_stop_scrubbing_ult(child);
+	stop_gc_ult(child);
+
 	return 0;
 }
 
