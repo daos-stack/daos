@@ -23,7 +23,7 @@ ARG REPO_DISTRO
 RUN if [ -n "${REPO_DISTRO}" ]; then                                                                                                         \
       rm -f /etc/zypp/repos.d/*.repo &&                                                                                                      \
       for repo in opensuse-15.3-{update-oss-x86_64-provo-mirror-proxy,update-non-oss-x86_64-proxy,oss-x86_64-proxy,non-oss-x86_64-proxy}; do \
-          zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo                                                                    \
+          zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo $repo                                                              \
                 ${REPO_URL}$repo/;                                                                                                           \
       done;                                                                                                                                  \
       zypper clean --all;                                                                                                                    \
@@ -33,7 +33,7 @@ RUN if [ -n "${REPO_DISTRO}" ]; then                                            
 # This is mainly for quickbuilds
 ARG REPO_DAOS
 RUN if [ -n "$REPO_DAOS" ]; then                                         \
-      REPO_DAOS="repository/daos-stack-opensuse-15-x86_64-stable-local"; \
+      REPO_DAOS="repository/daos-stack-leap-15-x86_64-stable-local";     \
       zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo    \
              ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&       \
       zypper --non-interactive modifyrepo --no-gpgcheck                  \
