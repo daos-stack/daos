@@ -116,7 +116,33 @@ struct iter_obj_arg {
 	uint64_t		*snaps;
 	uint32_t		snap_cnt;
 	uint32_t		version;
+	int			oa_ref;
+	ABT_mutex		oa_lock;
 };
+
+static void obj_arg_addref(struct iter_obj_arg *oa)
+{
+	ABT_mutex_lock(oa->oa_lock);
+	oa->oa_ref++;
+	ABT_mutex_unlock(oa->oa_lock);
+}
+
+static void obj_arg_decref(struct iter_obj_arg *oa)
+{
+	bool	free;
+
+	ABT_mutex_lock(oa->oa_lock);
+	D_ASSERT(oa->oa_ref > 0);
+	oa->oa_ref--;
+	free = oa->oa_ref == 0;
+	ABT_mutex_unlock(oa->oa_lock);
+
+	if (free) {
+		ABT_mutex_free(&oa->oa_lock);
+		D_FREE(oa->snaps);
+		D_FREE(oa);
+	}
+}
 
 static int
 obj_tree_destory_cb(daos_handle_t ih, d_iov_t *key_iov,
@@ -2283,6 +2309,7 @@ put:
 			tls->mpt_status = rc;
 		migrate_pool_tls_put(tls);
 	}
+	obj_arg_decref(arg);
 }
 
 static int
@@ -2312,6 +2339,7 @@ migrate_start_ult(struct enum_unpack_arg *unpack_arg)
 			mrone->mo_iod_num);
 
 		d_list_del_init(&mrone->mo_list);
+		/* NB: no need to addref(arg) */
 		rc = dss_ult_create(migrate_one_ult, mrone, DSS_XS_VOS,
 				    arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
 		if (rc) {
@@ -2630,8 +2658,15 @@ ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
 static int
 migrate_obj_punch(struct iter_obj_arg *arg)
 {
-	return dss_ult_create(migrate_obj_punch_one, arg, DSS_XS_VOS,
-			      arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
+	int	rc;
+
+	obj_arg_addref(arg);
+	rc = dss_ult_create(migrate_obj_punch_one, arg, DSS_XS_VOS,
+			    arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
+	if (rc)
+		obj_arg_decref(arg);
+
+	return rc;
 }
 
 /* Destroys an object prior to migration. Called exactly once per object ID per
@@ -2803,8 +2838,7 @@ free:
 		DP_UOID(arg->oid), arg->shard, tls->mpt_obj_executed_ult,
 		DP_RC(rc));
 free_notls:
-	D_FREE(arg->snaps);
-	D_FREE(arg);
+	obj_arg_decref(arg);
 	migrate_pool_tls_put(tls);
 }
 
@@ -2835,6 +2869,12 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	if (obj_arg == NULL)
 		return -DER_NOMEM;
 
+	rc = ABT_mutex_create(&obj_arg->oa_lock);
+	if (rc != ABT_SUCCESS) {
+		D_FREE(obj_arg);
+		return dss_abterr2der(rc);
+	}
+
 	obj_arg->oid = oid;
 	obj_arg->epoch = eph;
 	obj_arg->shard = shard;
@@ -2843,6 +2883,8 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	uuid_copy(obj_arg->pool_uuid, cont_arg->pool_tls->mpt_pool_uuid);
 	uuid_copy(obj_arg->cont_uuid, cont_arg->cont_uuid);
 	obj_arg->version = cont_arg->pool_tls->mpt_version;
+	obj_arg->oa_ref = 1;
+
 	if (cont_arg->snaps) {
 		D_ALLOC(obj_arg->snaps,
 			sizeof(*cont_arg->snaps) * cont_arg->snap_cnt);
@@ -2873,7 +2915,9 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 		ult_tgt_idx = oid.id_pub.lo % dss_tgt_nr;
 	}
 
-	/* Let's iterate the object on different xstream */
+	/* Let's iterate the object on different xstream
+	 * NB: this ULT takes over the refcount of obj_arg
+	 */
 	rc = dss_ult_create(migrate_obj_ult, obj_arg, DSS_XS_VOS,
 			    ult_tgt_idx, MIGRATE_STACK_SIZE,
 			    NULL);
@@ -2896,8 +2940,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	return 0;
 
 free:
-	D_FREE(obj_arg->snaps);
-	D_FREE(obj_arg);
+	obj_arg_decref(obj_arg);
 	return rc;
 }
 
