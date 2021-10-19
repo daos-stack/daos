@@ -44,31 +44,29 @@ class Enospace(DfuseTestBase):
         # space.
         target_file = os.path.join(self.dfuse.mount_dir.value, "file.txt")
 
-        # pylint: disable=consider-using-with
-        fd = open(target_file, 'wb', buffering=0)
+        with open(target_file, 'wb', buffering=0) as fd:
 
-        # Use a write size of 128.  On CentOS 8 this could be 1MiB, however older kernels use
-        # 128k, and using a bigger size here than the kernel can support will lead to the kernel
-        # splitting writes, and the size check atfer ENOSPC failing due to writes having
-        # partially succeeded.
-        write_size = 1024 * 128
-        file_size = 0
-        while True:
-            stat_pre = os.fstat(fd.fileno())
-            self.assertTrue(stat_pre.st_size == file_size)
-            try:
-                fd.write(bytearray(write_size))
-                file_size += write_size
-            except OSError as e:
-                if e.errno != errno.ENOSPC:
-                    raise
-                self.log.info('File write returned ENOSPACE')
-                stat_post = os.fstat(fd.fileno())
-                # Check that the failed write didn't change the file size.
-                self.assertTrue(stat_pre.st_size == stat_post.st_size)
-                break
+            # Use a write size of 128.  On CentOS 8 this could be 1MiB, however older kernels
+            # use 128k, and using a bigger size here than the kernel can support will lead to
+            # the kernel splitting writes, and the size check atfer ENOSPC failing due to writes
+            # having partially succeeded.
+            write_size = 1024 * 128
+            file_size = 0
+            while True:
+                stat_pre = os.fstat(fd.fileno())
+                self.assertTrue(stat_pre.st_size == file_size)
+                try:
+                    fd.write(bytearray(write_size))
+                    file_size += write_size
+                except OSError as e:
+                    if e.errno != errno.ENOSPC:
+                        raise
+                    self.log.info('File write returned ENOSPACE')
+                    stat_post = os.fstat(fd.fileno())
+                    # Check that the failed write didn't change the file size.
+                    self.assertTrue(stat_pre.st_size == stat_post.st_size)
+                    break
 
-        fd.close()
         # As the pool is smaller in size there will be no reserved space for metadata
         # so this is expected to fail.
         try:
