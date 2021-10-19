@@ -71,7 +71,7 @@ class POSIXStatTest(IorTestBase):
             # Get epoch of the created file.
             creation_epoch = -1
             # As in date command, run stat command in the client node.
-            stat_command = "stat -c%Z {}".format(self.ior_cmd.test_file.value)
+            stat_command = "stat -c%W {}".format(self.ior_cmd.test_file.value)
             output = run_pcmd(hosts=self.hostlist_clients, command=stat_command)
             stdout = output[0]["stdout"]
             self.log.info("stat stdout = %s", stdout)
