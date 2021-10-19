@@ -650,7 +650,7 @@ pipeline {
                 expression { ! skipStage() }
             }
             parallel {
-                stage('Unit Test') {
+                stage('Unit Test on CentOS 8') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
@@ -669,7 +669,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT') {
+                stage('NLT on CentOS 8') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
@@ -701,7 +701,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test Bullseye') {
+                stage('Unit Test Bullseye on CentOS 8') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
@@ -727,7 +727,7 @@ pipeline {
                         }
                     }
                 } // stage('Unit test Bullseye')
-                stage('Unit Test with memcheck') {
+                stage('Unit Test with memcheck on CentOS 8') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
