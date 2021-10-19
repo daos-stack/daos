@@ -56,8 +56,8 @@ class TestWithTelemetryNvme(TestWithTelemetry,TestWithServers):
             threshold = self.params.get(yaml_key, "/run/*", [None, None])
             test_metrics = getattr(TelemetryUtils, group)
             metrics_data = self.telemetry.get_nvme_metrics(self.server_managers[0], test_metrics)
-            description = " ".join([item.lower() if item != "NVME" else item for item in group.split("_")])
-            self.log.info("Verify %s", description)
+            desc = " ".join([item.lower() if item != "NVME" else item for item in group.split("_")])
+            self.log.info("Verify %s", desc)
             status = self.telemetry.verify_metric_value(metrics_data, threshold[0], threshold[1])
             if not status:
                 self.fail("##Telemetry test NVMe metrics verification failed.")
