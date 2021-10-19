@@ -66,7 +66,8 @@ class POSIXStatTest(IorTestBase):
             self.log.info("date stdout = %s", stdout)
             current_epoch = stdout[-1]
 
-            # Get epoch of the created file.
+            # Get epoch of the created file. (technically %Z is for last status
+            # change. %W is file birth, but it returns 0.)
             creation_epoch = -1
             # As in date command, run stat command in the client node.
             stat_command = "stat -c%Z {}".format(self.ior_cmd.test_file.value)
@@ -76,11 +77,11 @@ class POSIXStatTest(IorTestBase):
             creation_epoch = stdout[-1]
 
             # Calculate the epoch difference between the creation time and the
-            # value in the file metadata. They're usually 5 to 30 sec apart.
+            # value in the file metadata. They're usually 2 sec apart.
             creation_epoch_int = int(creation_epoch)
             current_epoch_int = int(current_epoch)
             diff_epoch = creation_epoch_int - current_epoch_int
-            if diff_epoch > 50:
+            if diff_epoch > 10:
                 msg = "Unexpected creation time! Expected = {}; Actual = {}"
                 error_list.append(
                     msg.format(current_epoch_int, creation_epoch_int))
