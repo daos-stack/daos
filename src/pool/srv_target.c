@@ -282,8 +282,6 @@ pool_child_delete_one(void *uuid)
 
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
-	stop_gc_ult(child);
-	ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
 	ds_pool_child_put(child); /* -1 for lookup */
@@ -293,6 +291,11 @@ pool_child_delete_one(void *uuid)
 		return dss_abterr2der(rc);
 
 	ABT_eventual_free(&child->spc_ref_eventual);
+
+	/* only stop scrubbing and gc ULTs when all ops ULTs are done */
+	ds_stop_scrubbing_ult(child);
+	stop_gc_ult(child);
+
 	/* ds_pool_child must be freed here to keep
 	 * spc_ref_enventual usage safe
 	 */
