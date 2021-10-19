@@ -48,15 +48,6 @@ class POSIXStatTest(IorTestBase):
             self.ior_cmd.block_size.update(block_size)
 
             # 1. Verify creation time.
-            # Get current epoch before running ior. The timestamp of the file
-            # created by ior is near the time of the start of the ior command
-            # execution.
-            current_epoch = -1
-            output = run_pcmd(hosts=self.hostlist_clients, command="date +%s")
-            stdout = output[0]["stdout"]
-            self.log.info("date stdout = %s", stdout)
-            current_epoch = stdout[-1]
-
             test_file_suffix = "_{}".format(i)
             i += 1
 
@@ -68,10 +59,17 @@ class POSIXStatTest(IorTestBase):
             except TestFail:
                 self.log.info("ior command failed!")
 
+            # Get current epoch.
+            current_epoch = -1
+            output = run_pcmd(hosts=self.hostlist_clients, command="date +%s")
+            stdout = output[0]["stdout"]
+            self.log.info("date stdout = %s", stdout)
+            current_epoch = stdout[-1]
+
             # Get epoch of the created file.
             creation_epoch = -1
             # As in date command, run stat command in the client node.
-            stat_command = "stat -c%W {}".format(self.ior_cmd.test_file.value)
+            stat_command = "stat -c%Z {}".format(self.ior_cmd.test_file.value)
             output = run_pcmd(hosts=self.hostlist_clients, command=stat_command)
             stdout = output[0]["stdout"]
             self.log.info("stat stdout = %s", stdout)
