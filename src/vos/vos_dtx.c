@@ -2629,17 +2629,18 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		}
 
 		if (rc != 0) {
-			if (rc != -DER_NONEXIST)
+			if (rc != -DER_NONEXIST) {
 				D_ERROR("Fail to remove DTX entry "DF_DTI":"
 					DF_RC"\n",
 					DP_DTI(&dth->dth_xid), DP_RC(rc));
-			else
-				rc = 0;
 
-			dae = dth->dth_ent;
-			if (dae != NULL) {
-				dae->dae_aborted = 1;
-				dae->dae_prepared = 0;
+				dae = dth->dth_ent;
+				if (dae != NULL) {
+					dae->dae_aborted = 1;
+					dae->dae_prepared = 0;
+				}
+			} else {
+				rc = 0;
 			}
 		} else {
 			dae = (struct vos_dtx_act_ent *)riov.iov_buf;
