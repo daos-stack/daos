@@ -194,14 +194,17 @@ crtu_sync_timedwait(struct wfr_status *wfrs, int sec, int line_number)
 	int		rc;
 
 	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	D_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
-		  line_number, rc);
+	if (opts.assert_on_error)
+		D_ASSERTF(rc == 0, "clock_gettime() failed at line %d "
+			  "rc: %d\n",
+			  line_number, rc);
 
 	deadline.tv_sec += sec;
 
 	rc = sem_timedwait(&wfrs->sem, &deadline);
-	D_ASSERTF(rc == 0, "Sync timed out at line %d rc: %d\n",
-		  line_number, rc);
+	if (opts.assert_on_error)
+		D_ASSERTF(rc == 0, "Sync timed out at line %d rc: %d\n",
+			  line_number, rc);
 }
 
 int
