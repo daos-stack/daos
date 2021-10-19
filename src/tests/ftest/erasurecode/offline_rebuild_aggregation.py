@@ -10,7 +10,7 @@ from ec_utils import ErasureCodeIor, check_aggregation_status
 class EcodAggregationOffRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
-        Test Class Description: To validate Erasure code object for offline rebuild
+    Test Class Description: To validate Erasure code object for offline rebuild
                         with different Aggregation mode for Partial strip data.
     :avocado: recursive
     """
