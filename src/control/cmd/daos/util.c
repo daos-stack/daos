@@ -104,18 +104,20 @@ int
 resolve_duns_pool(struct cmd_args_s *ap)
 {
 	int			 rc = 0;
+	char			*path = NULL;
 	char			*dir = NULL;
 	struct dfuse_il_reply	 il_reply = {0};
 
 	if (ap->path == NULL)
 		return -DER_INVAL;
 
-	D_ASPRINTF(dir, "%s", dirname(ap->path));
-	if (dir == NULL)
+	D_ASPRINTF(path, "%s", ap->path);
+	if (path == NULL)
 		return -DER_NOMEM;
+	dir = dirname(path);
 
 	rc = call_dfuse_ioctl(dir, &il_reply);
-	D_FREE(dir);
+	D_FREE(path);
 
 	switch (rc) {
 	case 0:
