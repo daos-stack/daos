@@ -122,7 +122,7 @@ resolve_duns_pool(struct cmd_args_s *ap)
 	switch (rc) {
 	case 0:
 		break;
-	case -ENOTTY: /* can happen if the path is not in a dfuse mount */
+	case ENOTTY: /* can happen if the path is not in a dfuse mount */
 		return -DER_INVAL;
 	default:
 		return daos_errno2der(rc);
