@@ -16,7 +16,7 @@ server_config:
       - FI_SOCKETS_CONN_TIMEOUT=2000
       - DD_MASK=all
     bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
 pool:
   createmode:
     mode_RW:
@@ -24,8 +24,8 @@ pool:
   createset:
     setname: daos_server
   createsize:
-    scm_size: 5000000000
-    nvme_size: 10000000000
+    scm_size: 20% 
+    nvme_size: 50% 
   createsvc:
     svcn: 1
   control_method: dmg
@@ -46,4 +46,4 @@ ior:
       block_size: '104857600'  # 100M
   objectclass:
     SX:
-      dfs_oclass: "SX"
+      dfs_oclass: "EC_2P1GX"

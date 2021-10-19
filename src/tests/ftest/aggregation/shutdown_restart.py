@@ -48,7 +48,7 @@ class IoAggregation(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=daosio,io_aggregation,tx
+        :avocado: tags=daosio,ioaggregation,tx
         """
         # update ior signature option
         self.ior_cmd.signature.update("123")
