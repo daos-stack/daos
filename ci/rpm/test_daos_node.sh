@@ -18,7 +18,11 @@ if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"
   exit 1
 fi
-sudo $YUM -y history rollback last-1
+if ! sudo $YUM -y history undo last; then
+    echo "Error trying to undo previous dnf transaction"
+    $YUM history
+    exit 1
+fi
 sudo $YUM -y install --exclude ompi daos-server-"${DAOS_PKG_VERSION}"
 if rpm -q daos-client; then
   echo "daos-client RPM should not be installed as a dependency of daos-server"

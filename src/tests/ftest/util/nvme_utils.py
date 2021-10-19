@@ -120,7 +120,6 @@ class ServerFillUp(IorTestBase):
             results.put("PASS")
         except (CommandFailure, TestFail) as _error:
             results.put("FAIL")
-            pass
 
     def calculate_ior_block_size(self):
         """Calculate IOR Block size to fill up the Server.
