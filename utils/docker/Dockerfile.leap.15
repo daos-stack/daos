@@ -24,7 +24,7 @@ RUN if [ -n "${REPO_DISTRO}" ]; then                                            
       rm -f /etc/zypp/repos.d/*.repo &&                                                                                                      \
       for repo in opensuse-15.3-{update-oss-x86_64-provo-mirror-proxy,update-non-oss-x86_64-proxy,oss-x86_64-proxy,non-oss-x86_64-proxy}; do \
           zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo                                                                    \
-                ${REPO_URL}$repo/                                                                                                            \
+                ${REPO_URL}$repo/;                                                                                                           \
       done;                                                                                                                                  \
       zypper clean --all;                                                                                                                    \
     fi
