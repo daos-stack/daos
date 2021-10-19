@@ -227,7 +227,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		rc := C.resolve_duns_pool(ap)
 		freeString(ap.path)
 		if err := daosError(rc); err != nil {
-			return errors.Wrapf(err, "failed to resolve pool id from %q", filepath.Dir(cmd.Path))
+			return errors.Wrapf(err, "failed to resolve pool id from %q; use --pool <id>", filepath.Dir(cmd.Path))
 		}
 
 		pu, err := uuidFromC(ap.p_uuid)
