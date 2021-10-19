@@ -652,6 +652,12 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	else
 		init_info.na_init_info.max_contexts = 1;
 
+	if (prov_data->cpg_max_exp_size > 0)
+		init_info.na_init_info.max_expected_size =  prov_data->cpg_max_exp_size;
+
+	if (prov_data->cpg_max_unexp_size > 0)
+		init_info.na_init_info.max_unexpected_size = prov_data->cpg_max_unexp_size;
+
 	init_info.request_post_incr = 0;
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
@@ -1085,6 +1091,10 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	D_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
 
 	rpc_pub = &rpc_priv->crp_pub;
+	if (crt_rpc_completed(rpc_priv)) {
+		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
+		return rc;
+	}
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "entered, hg_cbinfo->ret %d.\n",
 		  hg_cbinfo->ret);
