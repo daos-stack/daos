@@ -1292,10 +1292,9 @@ def create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgri
 def destroy_container(conf, pool, container, valgrind=True):
     """Destroy a container"""
     cmd = ['container', 'destroy', pool, container]
-    rc = run_daos_cmd(conf, cmd, valgrind=valgrind)
+    rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
-    return rc.stdout.decode('utf-8').strip()
+    assert rc.returncode == 0, rc
 
 def check_dfs_tool_output(output, oclass, csize):
     """verify daos fs tool output"""
@@ -1458,10 +1457,11 @@ class posix_tests():
         filename = os.path.join(self.dfuse.dir, 'myfile')
 
         with open(filename, 'w') as fd:
+            time.sleep(1)
             fd.write('hello')
 
         os.truncate(filename, 1024*1024*4)
-        with  open(filename, 'r') as fd:
+        with open(filename, 'r') as fd:
             data = fd.read(5)
             print('_{}_'.format(data))
             assert data == 'hello'
