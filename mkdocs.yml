@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v2.0 - dev
+site_name: DAOS v2.2 - dev
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
@@ -77,7 +77,6 @@ nav:
         - 'Run CaRT Self_test': 'QSG/cartselftest.md'
         - 'Run IOR': 'QSG/runior.md'
         - 'Run mdtest': 'QSG/mdtest.md'
-        - 'Run dbench': 'QSG/dbench.md'
         - 'Datamover test': 'QSG/datamover.md'
         - 'IO500 Setup': 'http://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
     - User Guide:
