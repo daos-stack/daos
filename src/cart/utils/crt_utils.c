@@ -523,14 +523,12 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 				  rc);
 	}
 
-	if (init_opt) {
+	if (init_opt)
 		rc = crt_init_opt(local_group_name, 0, init_opt);
-		D_ASSERTF(rc == 0, "crt_init_opt() failed; rc=%d\n", rc);
-	} else {
+	else
 		rc = crt_init(local_group_name, 0);
-		if (opts.assert_on_error)
-			D_ASSERTF(rc == 0, "crt_init() failed; rc=%d\n", rc);
-	}
+	if (opts.assert_on_error)
+		D_ASSERTF(rc == 0, "crt_init() failed; rc=%d\n", rc);
 
 	rc = crt_context_create(crt_ctx);
 	if (opts.assert_on_error)
