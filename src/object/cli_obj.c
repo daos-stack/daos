@@ -3015,7 +3015,8 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
 		daos_off_t recx_end = recx->recx.rx_idx + recx->recx.rx_nr;
 		daos_epoch_t recx_eph = recx->recx_eph;
 
-		D_DEBUG(DB_TRACE, "current "DF_U64"/"DF_U64"\n", recx_start, recx_end);
+		D_DEBUG(DB_TRACE, "current "DF_U64"/"DF_U64" "DF_X64"\n",
+			recx_start, recx_end, recx_eph);
 		if (end < recx_start) {
 			if (!inserted) {
 				rc = merge_recx_insert(prev == NULL ?
