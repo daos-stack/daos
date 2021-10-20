@@ -1473,11 +1473,10 @@ class posix_tests():
         filename = os.path.join(self.dfuse.dir, 'myfile')
 
         with open(filename, 'w') as fd:
-            time.sleep(1)
             fd.write('hello')
 
         os.truncate(filename, 1024*1024*4)
-        with open(filename, 'r') as fd:
+        with  open(filename, 'r') as fd:
             data = fd.read(5)
             print('_{}_'.format(data))
             assert data == 'hello'

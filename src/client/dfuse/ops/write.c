@@ -37,8 +37,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	sleep(1);
-
 	DFUSE_TRA_UP(ev, oh, "write");
 
 	/* Allocate temporary space for the data whilst they asynchronous

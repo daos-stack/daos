@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <unistd.h>
-
 #include "dfuse_common.h"
 #include "dfuse.h"
 
@@ -112,8 +110,6 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		D_GOTO(err, rc);
 
 	attr->st_ino = ie->ie_stat.st_ino;
-
-	sleep(2);
 
 	/* Update the size as dfuse knows about it for future use, but only if it was set as part
 	 * of this call.  See DAOS-8333
