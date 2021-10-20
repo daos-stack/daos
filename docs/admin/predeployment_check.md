@@ -32,7 +32,7 @@ $ sudo reboot
     To force SPDK to use UIO rather than VFIO at daos_server runtime, set
     'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
     but note that this will require running daos_server as root.
-	
+
 !!! note
 	If VFIO is not enabled, you will run into the issue described in:
 	https://github.com/spdk/spdk/issues/1153
