@@ -67,6 +67,7 @@ extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
 struct pool_hdl {
 	uint64_t	ph_flags;
 	uint64_t	ph_sec_capas;
+	char		ph_machine[MAXHOSTNAMELEN+1];
 };
 
 /*
