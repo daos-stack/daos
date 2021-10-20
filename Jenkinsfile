@@ -659,7 +659,6 @@ pipeline {
                         label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
-                        sh label: 'Get RPM list'
                         unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
