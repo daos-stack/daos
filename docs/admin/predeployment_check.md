@@ -37,7 +37,9 @@ $ sudo reboot
 	If VFIO is not enabled, you will run into the issue described in:
 	https://github.com/spdk/spdk/issues/1153
 	
-	When using RHEL 8.1 with official kernel from distribution (4.18.0-147.el8.x86_64) it is not possible to bind nvme devices to uio_pci_generic driver and due to that to use them within SPDK environment:
+	When using RHEL 8.1 with official kernel from distribution (4.18.0-147.el8.x86_64)
+	it is not possible to bind nvme devices to uio_pci_generic driver and due to that
+	to use them within SPDK environment:
 	
 		[82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
 		[82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
