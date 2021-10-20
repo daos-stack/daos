@@ -38,9 +38,7 @@ class RbldContainerCreate(TestWithServers):
             self.log.info(
                 "%s: Creating container %s/%s in pool %s during rebuild",
                 loop_id, count, qty, pool2.uuid)
-            self.container.append(TestContainer(pool2))
-            self.container[-1].get_params(self)
-            self.container[-1].create()
+            self.container.append(self.get_container(pool2))
             self.container[-1].write_objects()
 
         if count < qty:
@@ -135,11 +133,11 @@ class RbldContainerCreate(TestWithServers):
 
         if use_ior:
             # Get ior params
-            self.job_manager = Mpirun(IorCommand())
+            self.job_manager = Mpirun(IorCommand(), mpitype="mpich")
             self.job_manager.job.get_params(self)
+            self.job_manager.job.test_file.update("/testfile", "test_file")
             self.job_manager.assign_hosts(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
+                self.hostlist_clients, self.workdir)
             self.job_manager.assign_processes(len(self.hostlist_clients))
             self.job_manager.assign_environment(
                 self.job_manager.job.get_default_env("mpirun"))
@@ -201,9 +199,7 @@ class RbldContainerCreate(TestWithServers):
                     self.job_manager.job.dfs_cont.value)
                 self.run_ior(loop_id, self.job_manager)
             else:
-                self.container.append(TestContainer(self.pool[0]))
-                self.container[-1].get_params(self)
-                self.container[-1].create()
+                self.container.append(self.get_container(self.pool[0]))
                 self.log.info(
                     "%s: Writing to pool %s to fill container %s with data",
                     loop_id, self.pool[0].uuid, self.container[-1].uuid)
