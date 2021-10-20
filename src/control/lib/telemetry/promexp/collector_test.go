@@ -232,7 +232,11 @@ func TestPromExp_NewCollector(t *testing.T) {
 		expResult *Collector
 	}{
 		"no sources": {
-			expErr: errors.New("must have > 0 sources"),
+			expResult: &Collector{
+				summary: &prometheus.SummaryVec{
+					MetricVec: &prometheus.MetricVec{},
+				},
+			},
 		},
 		"defaults": {
 			sources: testSrc,
@@ -278,8 +282,10 @@ func TestPromExp_NewCollector(t *testing.T) {
 				cmpopts.IgnoreUnexported(regexp.Regexp{}),
 				cmp.AllowUnexported(Collector{}),
 				cmp.FilterPath(func(p cmp.Path) bool {
-					// Ignore the logger
-					return strings.HasSuffix(p.String(), "log")
+					// Ignore a few specific fields
+					return (strings.HasSuffix(p.String(), "log") ||
+						strings.HasSuffix(p.String(), "sourceMutex") ||
+						strings.HasSuffix(p.String(), "cleanupSource"))
 				}, cmp.Ignore()),
 			}
 			if diff := cmp.Diff(tc.expResult, result, cmpOpts...); diff != "" {

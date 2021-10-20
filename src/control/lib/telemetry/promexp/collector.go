@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/pkg/errors"
@@ -29,6 +30,8 @@ type (
 		summary        *prometheus.SummaryVec
 		ignoredMetrics []*regexp.Regexp
 		sources        []*EngineSource
+		cleanupSource  map[uint32]func()
+		sourceMutex    sync.RWMutex
 	}
 
 	CollectorOpts struct {
@@ -37,6 +40,7 @@ type (
 
 	EngineSource struct {
 		ctx     context.Context
+		tmMutex sync.RWMutex
 		Index   uint32
 		Rank    uint32
 		enabled atm.Bool
@@ -68,17 +72,14 @@ func defaultCollectorOpts() *CollectorOpts {
 }
 
 func NewCollector(log logging.Logger, opts *CollectorOpts, sources ...*EngineSource) (*Collector, error) {
-	if len(sources) == 0 {
-		return nil, errors.New("Collector must have > 0 sources")
-	}
-
 	if opts == nil {
 		opts = defaultCollectorOpts()
 	}
 
 	c := &Collector{
-		log:     log,
-		sources: sources,
+		log:           log,
+		sources:       sources,
+		cleanupSource: make(map[uint32]func()),
 		summary: prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
 				Namespace: "engine",
@@ -189,6 +190,10 @@ func (es *EngineSource) Collect(log logging.Logger, ch chan<- *rankMetric) {
 		log.Error("nil channel")
 		return
 	}
+
+	es.tmMutex.RLock()
+	defer es.tmMutex.RUnlock()
+
 	metrics := make(chan telemetry.Metric)
 	go func() {
 		if err := telemetry.CollectMetrics(es.ctx, metrics); err != nil {
@@ -322,6 +327,46 @@ func getMetricStats(baseName, desc string, m telemetry.Metric) (stats []*metricS
 	return
 }
 
+// AddSource adds an EngineSource to the Collector.
+func (c *Collector) AddSource(es *EngineSource, cleanup func()) {
+	c.sourceMutex.Lock()
+	defer c.sourceMutex.Unlock()
+
+	c.sources = append(c.sources, es)
+	c.cleanupSource[es.Index] = cleanup
+}
+
+// RemoveSource removes an EngineSource with a given index from the Collector.
+func (c *Collector) RemoveSource(engineIdx uint32) {
+	c.sourceMutex.Lock()
+	defer c.sourceMutex.Unlock()
+
+	for i, es := range c.sources {
+		if es.Index == engineIdx {
+			es.Disable()
+			c.sources = append(c.sources[:i], c.sources[i+1:]...)
+
+			// Ensure that EngineSource isn't collecting during cleanup
+			es.tmMutex.Lock()
+			if cleanup, found := c.cleanupSource[engineIdx]; found && cleanup != nil {
+				cleanup()
+			}
+			es.tmMutex.Unlock()
+			break
+		}
+	}
+}
+
+func (c *Collector) getSources() []*EngineSource {
+	c.sourceMutex.RLock()
+	defer c.sourceMutex.RUnlock()
+
+	sourceCopy := make([]*EngineSource, len(c.sources))
+	_ = copy(sourceCopy, c.sources)
+	return sourceCopy
+}
+
+// Collect collects metrics from all EngineSources.
 func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	if c == nil {
 		return
@@ -333,11 +378,11 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 
 	rankMetrics := make(chan *rankMetric)
 	go func(sources []*EngineSource) {
-		for _, source := range c.sources {
+		for _, source := range sources {
 			source.Collect(c.log, rankMetrics)
 		}
 		close(rankMetrics)
-	}(c.sources)
+	}(c.getSources())
 
 	gauges := make(gvMap)
 	counters := make(cvMap)
