@@ -5,6 +5,8 @@
 
 set -uex
 
+rpm -qa
+
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
 if grep /mnt/daos\  /proc/mounts; then
     sudo umount /mnt/daos
