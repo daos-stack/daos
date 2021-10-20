@@ -509,21 +509,21 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 debug') {
+                stage('Build on CentOS 8 debug') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.centos.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild(),
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                " -t ${sanitized_JOB_NAME}-centos8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
+                                                quickBuildDeps('centos8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -536,28 +536,28 @@ pipeline {
                     post {
                         unsuccessful {
                             sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc-debug
+                                      mv config.log config.log-centos8-gcc-debug
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-debug',
+                            archiveArtifacts artifacts: 'config.log-centos8-gcc-debug',
                                              allowEmptyArchive: true
                         }
                     }
                 }
-                stage('Build on CentOS 7 release') {
+                stage('Build on CentOS 8 release') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.centos.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild(),
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                " -t ${sanitized_JOB_NAME}-centos8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
+                                                quickBuildDeps('centos8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                             args '--tmpfs /mnt/daos_0'
                         }
@@ -571,28 +571,28 @@ pipeline {
                     post {
                         unsuccessful {
                             sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc-release
+                                      mv config.log config.log-centos8-gcc-release
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
+                            archiveArtifacts artifacts: 'config.log-centos8-gcc-release',
                                              allowEmptyArchive: true
                         }
                     }
                 }
-                stage('Build on CentOS 7 with Clang debug') {
+                stage('Build on CentOS 8 with Clang debug') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.centos.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild(),
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                " -t ${sanitized_JOB_NAME}-centos8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
+                                                quickBuildDeps('centos8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -605,9 +605,9 @@ pipeline {
                     post {
                         unsuccessful {
                             sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang-debug
+                                      mv config.log config.log-centos8-clang-debug
                                   fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-clang-debug',
+                            archiveArtifacts artifacts: 'config.log-centos8-clang-debug',
                                              allowEmptyArchive: true
                         }
                     }
@@ -659,6 +659,7 @@ pipeline {
                         label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
+                        sh label: 'Get RPM list'
                         unitTest timeout_time: 60,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -688,7 +689,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'centos7-gcc-nlt-memcheck'
+                                         valgrind_stash: 'centos8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: false,
@@ -745,7 +746,7 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/*.log'],
-                                         valgrind_stash: 'centos7-gcc-unit-memcheck'
+                                         valgrind_stash: 'centos8-gcc-unit-memcheck'
                         }
                     }
                 } // stage('Unit Test with memcheck')
@@ -909,7 +910,7 @@ pipeline {
                                 target: 'el8.3',
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
-                } // stage('Test CentOS 7 RPMs')
+                } // stage('Test CentOS 8.3.2011 RPMs') {
                 stage('Test Leap 15 RPMs') {
                     when {
                         beforeAgent true
@@ -979,14 +980,14 @@ pipeline {
                         }
                     }
                 } // stage('Scan Leap 15 RPMs')
-                stage('Fault injection testing') {
+                stage('Fault injection testing on CentOS 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.centos.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true)
@@ -998,7 +999,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
-                        sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
+                        sh (script:"""./utils/docker_nlt.sh --class-name centos8.fault-injection fi""",
                             label: 'Fault injection testing using NLT')
                     }
                     post {
@@ -1018,7 +1019,7 @@ pipeline {
                                                         name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/centos8.fault-injection/'
                         }
                     }
                 } // stage('Fault inection testing')
