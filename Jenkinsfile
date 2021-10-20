@@ -660,6 +660,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 target: 'el8.4',
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
                     }
@@ -679,6 +680,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 target: 'el8.4',
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unitPackages()
@@ -711,6 +713,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 target: 'el8.4',
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -737,6 +740,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 30,
+                                 target: 'el8.4',
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
