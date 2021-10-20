@@ -349,7 +349,6 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		return rc;
 	}
 
-
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_cont_handles, &attr);
@@ -1089,6 +1088,7 @@ evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
 
 	if (!force) {
 		rc = -DER_BUSY;
+		D_WARN("Not evicting handles, "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -1465,7 +1465,6 @@ yield:
 		D_FREE(ec_agg->ea_server_ephs);
 		D_FREE(ec_agg);
 	}
-
 }
 
 static int
