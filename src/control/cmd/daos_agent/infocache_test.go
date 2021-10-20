@@ -41,83 +41,66 @@ func TestAgent_newAttachInfoCache(t *testing.T) {
 			}
 
 			common.AssertEqual(t, log, cache.log, "")
-			common.AssertEqual(t, tc.enabled, cache.IsEnabled(), "IsEnabled()")
-			common.AssertFalse(t, cache.IsCached(), "default state is uncached")
+			common.AssertEqual(t, tc.enabled, cache.enabled.Load(), "cache.enabled")
+			common.AssertFalse(t, cache.initialized.Load(), "default state is uncached")
 		})
 	}
 }
 
-func TestAgent_attachInfoCache_Cache(t *testing.T) {
+func TestAgent_attachInfoCache_Get(t *testing.T) {
+	srvResp := &mgmtpb.GetAttachInfoResp{
+		Status: -1000,
+		RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
+			{Rank: 1, Uri: "firsturi"},
+			{Rank: 2, Uri: "nexturi"},
+		},
+	}
+
 	for name, tc := range map[string]struct {
 		aic       *attachInfoCache
-		input     *mgmtpb.GetAttachInfoResp
-		expCached bool
+		cache     *mgmtpb.GetAttachInfoResp
+		expRemote bool
+		expErr    error
 	}{
-		"nil cache": {},
 		"not enabled": {
-			aic: &attachInfoCache{},
+			aic:       &attachInfoCache{},
+			expRemote: true,
 		},
-		"nil input": {
-			aic: &attachInfoCache{enabled: atm.NewBool(true)},
+		"not cached": {
+			aic:       &attachInfoCache{enabled: atm.NewBool(true)},
+			expRemote: true,
 		},
 		"success": {
-			aic: &attachInfoCache{enabled: atm.NewBool(true)},
-			input: &mgmtpb.GetAttachInfoResp{
-				Status: -1000,
-				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
-					{Rank: 1, Uri: "firsturi"},
-					{Rank: 2, Uri: "nexturi"},
-				},
-			},
-			expCached: true,
+			aic:   &attachInfoCache{enabled: atm.NewBool(true)},
+			cache: srvResp,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tc.aic.Cache(context.TODO(), tc.input)
-
-			common.AssertEqual(t, tc.expCached, tc.aic.IsCached(), "IsCached()")
+			if tc.cache != nil {
+				tc.aic.attachInfo = tc.cache
+				tc.aic.initialized.SetTrue()
+			}
 
 			if tc.aic == nil {
 				return
 			}
 
-			cachedResp, err := tc.aic.GetAttachInfoResp()
-			if tc.expCached {
-				if diff := cmp.Diff(tc.input, cachedResp, common.DefaultCmpOpts()...); diff != "" {
-					t.Fatalf("-want, +got:\n%s", diff)
-				}
-				if err != nil {
-					t.Fatalf("expected no error, got: %s", err.Error())
-				}
-			} else {
-				common.CmpErr(t, NotCachedErr, err)
-				if cachedResp != nil {
-					t.Fatalf("expected nothing cached, got: %+v", cachedResp)
-				}
+			remoteInvoked := atm.NewBool(false)
+			getFn := func(_ context.Context, _ int, _ string) (*mgmtpb.GetAttachInfoResp, error) {
+				remoteInvoked.SetTrue()
+				return srvResp, nil
 			}
 
-		})
-	}
-}
+			cachedResp, gotErr := tc.aic.Get(context.Background(), 0, "", getFn)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+			if diff := cmp.Diff(srvResp, cachedResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
 
-func TestAgent_attachInfoCache_IsEnabled(t *testing.T) {
-	for name, tc := range map[string]struct {
-		aic        *attachInfoCache
-		expEnabled bool
-	}{
-		"nil": {},
-		"not enabled": {
-			aic: &attachInfoCache{},
-		},
-		"enabled": {
-			aic:        &attachInfoCache{enabled: atm.NewBool(true)},
-			expEnabled: true,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			enabled := tc.aic.IsEnabled()
-
-			common.AssertEqual(t, tc.expEnabled, enabled, "IsEnabled()")
+			common.AssertEqual(t, tc.expRemote, remoteInvoked.Load(), "remote invoked")
 		})
 	}
 }

@@ -37,7 +37,7 @@ func newAttachInfoCache(log logging.Logger, enabled bool) *attachInfoCache {
 }
 
 type attachInfoCache struct {
-	mutex sync.RWMutex
+	mutex sync.Mutex
 
 	log         logging.Logger
 	enabled     atm.Bool
@@ -47,59 +47,40 @@ type attachInfoCache struct {
 	attachInfo *mgmtpb.GetAttachInfoResp
 }
 
-// IsEnabled reports whether the cache is enabled.
-func (c *attachInfoCache) IsEnabled() bool {
-	if c == nil {
-		return false
-	}
-
-	return c.enabled.IsTrue()
-}
-
-// IsCached reports whether there is data in the cache.
-func (c *attachInfoCache) IsCached() bool {
-	if c == nil {
-		return false
-	}
-	return c.initialized.IsTrue()
-}
-
-// Cache preserves the results of a GetAttachInfo remote call.
-func (c *attachInfoCache) Cache(ctx context.Context, resp *mgmtpb.GetAttachInfoResp) {
-	if c == nil {
-		return
-	}
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if !c.IsEnabled() {
-		return
-	}
-
-	if resp == nil {
-		return
-	}
-
-	c.attachInfo = resp
-	c.initialized.SetTrue()
-}
-
-// GetAttachInfoResp fetches the cached GetAttachInfoResp.
-func (c *attachInfoCache) GetAttachInfoResp() (*mgmtpb.GetAttachInfoResp, error) {
-	if c == nil {
-		return nil, NotCachedErr
-	}
-
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	if !c.IsCached() {
+func (c *attachInfoCache) getAttachInfoResp() (*mgmtpb.GetAttachInfoResp, error) {
+	if c.initialized.IsFalse() {
 		return nil, NotCachedErr
 	}
 
 	aiCopy := proto.Clone(c.attachInfo)
 	return aiCopy.(*mgmtpb.GetAttachInfoResp), nil
+}
+
+type getAttachInfoFn func(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error)
+
+// Get is responsible for returning a GetAttachInfo response, either from the cache or from
+// the remote server if the cache is disabled.
+func (c *attachInfoCache) Get(ctx context.Context, numaNode int, sys string, getRemote getAttachInfoFn) (*mgmtpb.GetAttachInfoResp, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if c.enabled.IsTrue() && c.initialized.IsTrue() {
+		return c.getAttachInfoResp()
+	}
+
+	attachInfo, err := getRemote(ctx, numaNode, sys)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.enabled.IsFalse() {
+		return attachInfo, nil
+	}
+
+	c.attachInfo = attachInfo
+	c.initialized.SetTrue()
+
+	return c.getAttachInfoResp()
 }
 
 func newLocalFabricCache(log logging.Logger, enabled bool) *localFabricCache {
