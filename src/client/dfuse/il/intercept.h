@@ -52,7 +52,8 @@
 	ACTION(int,     dup2,      (int, int))                                \
 	ACTION(int,     fcntl,     (int, int, ...))                           \
 	ACTION(FILE *,  fdopen,    (int, const char *))                       \
-	ACTION(int,     __fxstat,   (int, int, struct stat *))
+	ACTION(int,     __fxstat,  (int, int, struct stat *))                 \
+	ACTION(int,     mkstemp,   (char *))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \
