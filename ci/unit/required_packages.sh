@@ -11,6 +11,7 @@ if [[ "$distro" = *7 ]]; then
 elif [[ "$distro" = *8 ]]; then
     OPENMPI_VER=""
     PY_MINOR_VER=""
+    COMPAT_HWLOC=compat_hwloc1
 fi
 pkgs="gotestsum openmpi$OPENMPI_VER                \
       hwloc-devel argobots                         \
@@ -24,7 +25,7 @@ pkgs="gotestsum openmpi$OPENMPI_VER                \
       python3$PY_MINOR_VER-junit_xml               \
       python3$PY_MINOR_VER-tabulate numactl        \
       libyaml-devel                                \
-      valgrind-devel patchelf"
+      valgrind-devel patchelf $COMPAT_HWLOC"
 
 if $quick_build; then
     read -r mercury_version < "$distro"-required-mercury-rpm-version
