@@ -11,7 +11,7 @@ if [[ "$distro" = *7 ]]; then
 elif [[ "$distro" = *8 ]]; then
     OPENMPI_VER=""
     PY_MINOR_VER=""
-    COMPAT_HWLOC=compat_hwloc1
+    COMPAT_HWLOC=compat-hwloc1
 fi
 pkgs="gotestsum openmpi$OPENMPI_VER                \
       hwloc-devel argobots                         \
