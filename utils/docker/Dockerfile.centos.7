@@ -86,6 +86,9 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
+RUN yum repolist -v --enablerepo=* --disablerepo=c7-media
+RUN false
+
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
