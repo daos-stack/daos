@@ -5,7 +5,7 @@ network requirements to deploy a DAOS system.
 
 ## Deployment Options
 
-As illustrated in the figure below, a DAOS storage system is deployed 
+As illustrated in the figure below, a DAOS storage system is deployed
 as follows:
 
 -   **Pooled Storage Model**: The DAOS servers can run on dedicated
