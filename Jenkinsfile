@@ -461,6 +461,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
+                                   target: 'el8.4',
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
