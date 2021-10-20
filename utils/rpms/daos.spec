@@ -159,11 +159,11 @@ Requires: ndctl
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
 # When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj1 = 1.11.0-3
+Requires: libpmemobj1 = 1.11.0-3%{?dist}
 %else
 Requires: ipmctl > 02.00.00.3816
 # When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj = 1.11.0-3
+Requires: libpmemobj = 1.11.0-3%{?dist}
 %endif
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
