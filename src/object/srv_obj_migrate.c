@@ -1681,7 +1681,7 @@ migrate_merge_iod_recx(daos_iod_t *dst_iod, daos_epoch_t **p_dst_ephs, daos_recx
 	dst_ephs = p_dst_ephs ? *p_dst_ephs : NULL;
 	D_INIT_LIST_HEAD(&merge_list);
 	for (i = 0; i < new_recxs_nr; i++) {
-		D_DEBUG(DB_REBUILD, "src merge "DF_U64"/"DF_U64" eph "DF_U64"\n",
+		D_DEBUG(DB_REBUILD, "src merge "DF_U64"/"DF_U64" eph "DF_X64"\n",
 			new_recxs[i].rx_idx, new_recxs[i].rx_nr, new_ephs ? new_ephs[i] : 0);
 		rc = merge_recx(&merge_list, new_recxs[i].rx_idx,
 				new_recxs[i].rx_nr, new_ephs ? new_ephs[i] : 0);
@@ -1692,8 +1692,8 @@ migrate_merge_iod_recx(daos_iod_t *dst_iod, daos_epoch_t **p_dst_ephs, daos_recx
 	D_ASSERT(dst_iod != NULL);
 	recxs = dst_iod->iod_recxs;
 	for (i = 0; i < dst_iod->iod_nr; i++) {
-		D_DEBUG(DB_REBUILD, "dst merge "DF_U64"/"DF_U64" eph "DF_U64"\n",
-			recxs[i].rx_idx, recxs[i].rx_nr, dst_ephs ? dst_ephs[i] : 0);
+		D_DEBUG(DB_REBUILD, "dst merge "DF_U64"/"DF_U64" %p eph "DF_X64"\n",
+			recxs[i].rx_idx, recxs[i].rx_nr, dst_ephs, dst_ephs ? dst_ephs[i] : 0);
 		rc = merge_recx(&merge_list, recxs[i].rx_idx, recxs[i].rx_nr,
 				dst_ephs ? dst_ephs[i] : 0);
 		if (rc)
@@ -1720,25 +1720,23 @@ migrate_merge_iod_recx(daos_iod_t *dst_iod, daos_epoch_t **p_dst_ephs, daos_recx
 	}
 
 	i = 0;
-	d_list_for_each_entry_safe(recx, tmp, &merge_list, recx_list) {
+	d_list_for_each_entry(recx, &merge_list, recx_list) {
 		recxs[i] = recx->recx;
 		if (dst_ephs)
 			dst_ephs[i] = recx->recx_eph;
 		i++;
-		D_DEBUG(DB_REBUILD, "merge recx "DF_U64"/"DF_U64"\n",
-			recx->recx.rx_idx, recx->recx.rx_nr);
-		d_list_del(&recx->recx_list);
-		D_FREE(recx);
+		D_DEBUG(DB_REBUILD, "%d merge recx "DF_U64"/"DF_U64" %p "DF_X64"\n",
+			i - 1, recx->recx.rx_idx, recx->recx.rx_nr, dst_ephs,
+			recx->recx_eph);
 	}
 
 	if (dst_iod->iod_recxs != recxs)
 		D_FREE(dst_iod->iod_recxs);
 
-	if (p_dst_ephs && dst_ephs != *p_dst_ephs)
+	if (p_dst_ephs && dst_ephs != *p_dst_ephs) {
 		D_FREE(*p_dst_ephs);
-
-	if (p_dst_ephs)
 		*p_dst_ephs = dst_ephs;
+	}
 
 	dst_iod->iod_recxs = recxs;
 	dst_iod->iod_nr = i;
@@ -1826,7 +1824,8 @@ migrate_insert_recxs_sgl(daos_iod_t *iods, daos_epoch_t **iods_ephs, uint32_t *i
 		D_GOTO(out, rc);
 	}
 
-	rc = migrate_merge_iod_recx(dst_iod, iods_ephs, new_recxs, new_ephs, new_recxs_nr);
+	rc = migrate_merge_iod_recx(dst_iod, iods_ephs ? &iods_ephs[i] : NULL, new_recxs,
+				    new_ephs, new_recxs_nr);
 	if (rc)
 		D_GOTO(out, rc);
 
