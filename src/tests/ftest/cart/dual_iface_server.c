@@ -263,7 +263,8 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		error_exit();
 	}
 
-	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER |
+		      CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		error_exit();

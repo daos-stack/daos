@@ -502,10 +502,8 @@ enum dss_xs_type {
 	DSS_XS_OFFLOAD	= 2,
 	/** pool service, RDB, drpc handler */
 	DSS_XS_SYS	= 3,
-	/** SWIM operations */
-	DSS_XS_SWIM	= 4,
 	/** drpc listener */
-	DSS_XS_DRPC	= 5,
+	DSS_XS_DRPC	= 4,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);

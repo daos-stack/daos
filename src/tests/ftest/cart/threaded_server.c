@@ -111,7 +111,7 @@ int main(int argc, char **argv)
 	rc = d_log_init();
 	assert(rc == 0);
 
-	rc = crt_init("manyserver", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init("manyserver", CRT_FLAG_BIT_SERVER);
 	if (rc != 0) {
 		printf("Could not start server, rc = %d", rc);
 		return -1;

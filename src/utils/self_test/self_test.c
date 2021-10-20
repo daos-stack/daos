@@ -113,7 +113,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 
 	if (listen)
-		init_flags |= (CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+		init_flags |= CRT_FLAG_BIT_SERVER;
 	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
 	if (ret != 0) {
 		D_ERROR("crt_init failed; ret = %d\n", ret);
