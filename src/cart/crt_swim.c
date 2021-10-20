@@ -791,7 +791,6 @@ int crt_swim_init(int crt_ctx_idx)
 	 * crt_rank_self_set, we choose the self incarnation here instead of in
 	 * crt_swim_rank_add.
 	 */
-	crt_swim_csm_lock(csm);
 	csm->csm_incarnation = crt_hlc_get();
 	csm->csm_ctx = swim_init(SWIM_ID_INVALID, &crt_swim_ops, NULL);
 	if (csm->csm_ctx == NULL) {
@@ -869,7 +868,6 @@ cleanup:
 	csm->csm_ctx = NULL;
 	csm->csm_crt_ctx_idx = -1;
 out:
-	crt_swim_csm_unlock(csm);
 	return rc;
 }
 
