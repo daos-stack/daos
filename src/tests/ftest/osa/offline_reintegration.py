@@ -119,6 +119,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     elif (self.test_with_rf is True and val > 0):
                         continue
                     else:
+                        if pool_fillup > 0 and val > 0:
+                            continue
                         output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                                rank[val])
                 else:
@@ -156,6 +158,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 elif (self.test_with_rf is True and val > 0):
                     continue
                 else:
+                    if pool_fillup > 0 and val > 0:
+                        continue
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val])
                 self.print_and_assert_on_rebuild_failure(output)
