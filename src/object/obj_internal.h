@@ -249,16 +249,9 @@ struct migrate_pool_tls {
 	ABT_cond		mpt_inflight_cond;
 	ABT_mutex		mpt_inflight_mutex;
 	int			mpt_inflight_max_ult;
+	uint32_t		mpt_opc;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
-	/* Indicates whether objects on the migration destination should be
-	 * removed prior to migrating new data here. This is primarily useful
-	 * for reintegration to ensure that any data that has adequate replica
-	 * data to reconstruct will prefer the remote data over possibly stale
-	 * existing data. Objects that don't have remote replica data will not
-	 * be removed.
-	 */
-				mpt_del_local_objs:1,
 				mpt_fini:1;
 };
 
