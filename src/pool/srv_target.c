@@ -73,7 +73,9 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
-		D_FREE(child);
+		ABT_eventual_set(child->spc_ref_eventual,
+				 (void *)&child->spc_ref,
+				 sizeof(child->spc_ref));
 	}
 }
 
@@ -202,13 +204,21 @@ pool_child_add_one(void *varg)
 	uuid_copy(child->spc_uuid, arg->pla_uuid);
 	child->spc_map_version = arg->pla_map_version;
 	child->spc_ref = 1; /* 1 for the list */
+
+	rc = ABT_eventual_create(sizeof(child->spc_ref),
+				 &child->spc_ref_eventual);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_vos;
+	}
+
 	child->spc_pool = arg->pla_pool;
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
 	rc = start_gc_ult(child);
 	if (rc != 0)
-		goto out_vos;
+		goto out_eventual;
 
 	rc = ds_start_scrubbing_ult(child);
 	if (rc != 0)
@@ -240,6 +250,8 @@ out_scrub:
 	ds_stop_scrubbing_ult(child);
 out_gc:
 	stop_gc_ult(child);
+out_eventual:
+	ABT_eventual_free(&child->spc_ref_eventual);
 out_vos:
 	vos_pool_close(child->spc_hdl);
 out_free:
@@ -256,6 +268,7 @@ static int
 pool_child_delete_one(void *uuid)
 {
 	struct ds_pool_child *child;
+	int *ref, rc;
 
 	child = ds_pool_child_lookup(uuid);
 	if (child == NULL)
@@ -267,15 +280,20 @@ pool_child_delete_one(void *uuid)
 
 	ds_pool_child_put(child); /* -1 for lookup */
 
-	/*
-	 * FIXME: Need to wait for last reference of ds_pool_child dropped,
-	 * since the ds_pool_child references ds_pool by 'spc_pool' without
-	 * holding ds_pool refcount.
-	 */
+	rc = ABT_eventual_wait(child->spc_ref_eventual, (void **)&ref);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	ABT_eventual_free(&child->spc_ref_eventual);
 
 	/* only stop scrubbing and gc ULTs when all ops ULTs are done */
 	ds_stop_scrubbing_ult(child);
 	stop_gc_ult(child);
+
+	/* ds_pool_child must be freed here to keep
+	 * spc_ref_enventual usage safe
+	 */
+	D_FREE(child);
 
 	return 0;
 }
