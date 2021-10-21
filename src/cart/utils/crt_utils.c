@@ -99,9 +99,7 @@ write_completion_file(void)
 {
 	FILE	*fptr;
 	char	*dir;
-	char	*completion_file;
-	char	*tmp_str = NULL;
-	char	*fname = "/test-servers-completed.txt.";
+	char	*completion_file = NULL;
 	char	pid[6];
 	pid_t	_pid;
 
@@ -112,17 +110,15 @@ write_completion_file(void)
 	D_ASSERTF(dir != NULL,
 		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
 		"option.\n");
-	D_ALLOC(tmp_str, strlen(dir) + strlen(fname) + strlen(pid) + 1);
-	D_ASSERTF(tmp_str != NULL, "Error allocating fname string\n");
-	tmp_str = strcat(dir, "/test-servers-completed.txt.");
-	completion_file = strcat(tmp_str, pid);
+	D_ASPRINTF(completion_file, "%s/test-servers-completed.txt.%s", dir, pid);
+	D_ASSERTF(completion_file != NULL, "Error allocating fname string\n");
 
 	unlink(completion_file);
 	fptr = fopen(completion_file, "w");
 	D_ASSERTF(fptr != NULL, "Error opening completion file for writing.\n");
 	DBG_PRINT("Wrote completion file: %s.\n", completion_file);
 	fclose(fptr);
-	D_FREE(tmp_str);
+	D_FREE(completion_file);
 }
 
 
