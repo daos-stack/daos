@@ -47,8 +47,16 @@ type attachInfoCache struct {
 	attachInfo *mgmtpb.GetAttachInfoResp
 }
 
+func (c *attachInfoCache) isCached() bool {
+	return c.initialized.IsTrue()
+}
+
+func (c *attachInfoCache) isEnabled() bool {
+	return c.enabled.IsTrue()
+}
+
 func (c *attachInfoCache) getAttachInfoResp() (*mgmtpb.GetAttachInfoResp, error) {
-	if c.initialized.IsFalse() {
+	if !c.isCached() {
 		return nil, NotCachedErr
 	}
 
@@ -64,7 +72,7 @@ func (c *attachInfoCache) Get(ctx context.Context, numaNode int, sys string, get
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if c.enabled.IsTrue() && c.initialized.IsTrue() {
+	if c.isEnabled() && c.isCached() {
 		return c.getAttachInfoResp()
 	}
 
@@ -73,7 +81,7 @@ func (c *attachInfoCache) Get(ctx context.Context, numaNode int, sys string, get
 		return nil, err
 	}
 
-	if c.enabled.IsFalse() {
+	if !c.isEnabled() {
 		return attachInfo, nil
 	}
 

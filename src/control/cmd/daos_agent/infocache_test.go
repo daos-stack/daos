@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -41,8 +42,8 @@ func TestAgent_newAttachInfoCache(t *testing.T) {
 			}
 
 			common.AssertEqual(t, log, cache.log, "")
-			common.AssertEqual(t, tc.enabled, cache.enabled.Load(), "cache.enabled")
-			common.AssertFalse(t, cache.initialized.Load(), "default state is uncached")
+			common.AssertEqual(t, tc.enabled, cache.isEnabled(), "isEnabled()")
+			common.AssertFalse(t, cache.isCached(), "default state is uncached")
 		})
 	}
 }
@@ -59,7 +60,9 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 	for name, tc := range map[string]struct {
 		aic       *attachInfoCache
 		cache     *mgmtpb.GetAttachInfoResp
+		expCached bool
 		expRemote bool
+		remoteErr bool
 		expErr    error
 	}{
 		"not enabled": {
@@ -69,10 +72,18 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 		"not cached": {
 			aic:       &attachInfoCache{enabled: atm.NewBool(true)},
 			expRemote: true,
+			expCached: true,
 		},
-		"success": {
-			aic:   &attachInfoCache{enabled: atm.NewBool(true)},
-			cache: srvResp,
+		"cached": {
+			aic:       &attachInfoCache{enabled: atm.NewBool(true)},
+			cache:     srvResp,
+			expCached: true,
+		},
+		"remote fails": {
+			aic:       &attachInfoCache{enabled: atm.NewBool(true)},
+			expRemote: true,
+			remoteErr: true,
+			expErr:    errors.New("no soup for you"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -85,13 +96,21 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 				return
 			}
 
+			numaNode := 42
+			sysName := "snekSezSyss"
 			remoteInvoked := atm.NewBool(false)
-			getFn := func(_ context.Context, _ int, _ string) (*mgmtpb.GetAttachInfoResp, error) {
+			getFn := func(_ context.Context, node int, name string) (*mgmtpb.GetAttachInfoResp, error) {
+				common.AssertEqual(t, numaNode, node, "node was not supplied")
+				common.AssertEqual(t, sysName, name, "name was not supplied")
+
 				remoteInvoked.SetTrue()
+				if tc.remoteErr {
+					return nil, tc.expErr
+				}
 				return srvResp, nil
 			}
 
-			cachedResp, gotErr := tc.aic.Get(context.Background(), 0, "", getFn)
+			cachedResp, gotErr := tc.aic.Get(context.Background(), numaNode, sysName, getFn)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -100,6 +119,7 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
 
+			common.AssertEqual(t, tc.expCached, tc.aic.isCached(), "cache state")
 			common.AssertEqual(t, tc.expRemote, remoteInvoked.Load(), "remote invoked")
 		})
 	}
