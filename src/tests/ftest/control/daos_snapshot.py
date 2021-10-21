@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from daos_utils import DaosCommand
 
 
@@ -117,6 +117,7 @@ class DaosSnapshotTest(TestWithServers):
             pool=self.pool.uuid, cont=self.container.uuid)
         self.assertTrue(not epochs)
 
+    @skipForTicket("DAOS-4691")
     def test_epcrange(self):
         """JIRA ID: DAOS-4872
 
