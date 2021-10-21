@@ -125,9 +125,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->punched_ephs, arg->shards,
-				       arg->count,
-				       /* Delete local objects for reint */
-				       rpt->rt_rebuild_op == RB_OP_REINT);
+				       arg->count, rpt->rt_rebuild_op);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
