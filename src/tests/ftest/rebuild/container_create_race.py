@@ -8,7 +8,6 @@ from apricot import TestWithServers
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand
-from test_utils_container import TestContainer
 
 
 class RbldContainerCreate(TestWithServers):
