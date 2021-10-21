@@ -33,7 +33,7 @@ ior:
   block_size: 16m
   segment_count: 16
   transfer_size: 16m
-  dfs_oclass: EC_2P1G1 
+  dfs_oclass: EC_2P1G1
   dfs_dir_oclass: EC_2P1G1
 test:
   loop_quantity: !mux
