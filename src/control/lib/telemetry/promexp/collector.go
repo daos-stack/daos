@@ -329,11 +329,30 @@ func getMetricStats(baseName, desc string, m telemetry.Metric) (stats []*metricS
 
 // AddSource adds an EngineSource to the Collector.
 func (c *Collector) AddSource(es *EngineSource, cleanup func()) {
+	if es == nil {
+		c.log.Error("attempted to add nil EngineSource")
+		return
+	}
+
 	c.sourceMutex.Lock()
 	defer c.sourceMutex.Unlock()
 
-	c.sources = append(c.sources, es)
-	c.cleanupSource[es.Index] = cleanup
+	// If we attempt to add a duplicate, should overwrite the one that is there.
+	var found bool
+	for i, src := range c.sources {
+		if es.Index == src.Index {
+			found = true
+			c.sources[i] = es
+			break
+		}
+	}
+
+	if !found {
+		c.sources = append(c.sources, es)
+	}
+	if cleanup != nil {
+		c.cleanupSource[es.Index] = cleanup
+	}
 }
 
 // RemoveSource removes an EngineSource with a given index from the Collector.
@@ -352,6 +371,7 @@ func (c *Collector) RemoveSource(engineIdx uint32) {
 				cleanup()
 			}
 			es.tmMutex.Unlock()
+			delete(c.cleanupSource, engineIdx)
 			break
 		}
 	}
