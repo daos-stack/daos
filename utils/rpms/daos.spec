@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -228,6 +228,18 @@ Requires: libpsm_infinipath1
 %description tests
 This is the package needed to run the DAOS test suite
 
+
+%package tests-openmpi
+Summary: The DAOS test suite - tools which need openmpi
+#This is a bit messy and needs some cleanup.  In theory,
+#we should have client tests and server tests in separate
+#packages but some binaries need libraries from both at
+#present.
+Requires: %{name}-tests%{?_isa} = %{version}-%{release}
+
+%description tests-openmpi
+This is the package needed to run the DAOS test suite openmpi tools
+
 %package devel
 Summary: The DAOS development libraries and headers
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
@@ -429,7 +441,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
 %{_bindir}/hello_drpc
-%{_bindir}/jobtest
 %{_libdir}/libdaos_tests.so
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
@@ -437,18 +448,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
 %{_bindir}/vea_stress
-%{_bindir}/daos_perf
-%{_bindir}/vos_perf
-%{_bindir}/daos_racer
 %{_bindir}/evt_ctl
 %{_bindir}/io_conf
 %{_bindir}/rdbt
-%{_bindir}/obj_ctl
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
-%{_bindir}/crt_launch
-%{_bindir}/daos_test
-%{_bindir}/dfs_test
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
@@ -464,6 +466,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
+
+%files tests-openmpi
+%{_bindir}/crt_launch
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_perf
+%{_bindir}/daos_racer
+%{_bindir}/daos_run_io_conf
+%{_bindir}/daos_test
+%{_bindir}/dfs_test
+%{_bindir}/jobtest
+%{_bindir}/obj_ctl
+%{_bindir}/vos_perf
 %{_libdir}/libdts.so
 
 %files devel
@@ -481,6 +495,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Fri Oct 15 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-3
+- Create new daos-tests-openmpi subpackage
+
 * Mon Oct 13 2021 David Quigley <david.quigley@intel.com> 2.1.100-2
 - Add defusedxml as a required dependency for the test package.
 

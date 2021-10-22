@@ -172,21 +172,31 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		}
 
 		dx = dss_get_xstream(DSS_MAIN_XS_ID(tid));
+		D_INFO("creating %s for tgt %d, xs_id %d, xs_nr=%d\n",
+			create_ult ? "thread" : "task", tid, dx->dx_xs_id, xs_nr);
 		if (create_ult)
 			rc = sched_create_thread(dx, collective_func, stream,
 						 ABT_THREAD_ATTR_NULL, NULL,
 						 flags);
-		else
+		else {
 			rc = sched_create_task(dx, collective_func, stream,
 					       NULL, flags);
+		}
 		if (rc != 0) {
+			D_ERROR("failed creating %s for tgt %d, xs_id %d, xs_nr=%d\n",
+				create_ult ? "thread" : "task", tid, dx->dx_xs_id, xs_nr);
 			stream->st_rc = rc;
 			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+		} else {
+			D_INFO("created %s for tgt %d, xs_id %d, xs_nr=%d\n",
+			       create_ult ? "thread" : "task", tid, dx->dx_xs_id, xs_nr);
 		}
 	}
 
+	D_INFO("waiting for tasks with ABT_future_wait()\n");
 	ABT_future_wait(future);
+	D_INFO("done waiting for tasks\n");
 
 	rc = aggregator.at_rc;
 

@@ -5,6 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from pool_test_base import PoolTestBase
+from general_utils import run_pcmd
 
 
 class PoolCreateTests(PoolTestBase):
@@ -66,6 +67,9 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool
         :avocado: tags=pool_create_tests,create_no_space
         """
+        # quick hack, let's see what hwloc-ls shows on each server node
+        run_pcmd(self.server_managers[0].hosts, "hwloc-ls")
+
         # Define three pools to create:
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
@@ -119,6 +123,10 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool
         :avocado: tags=pool_create_tests,create_no_space_loop
         """
+
+        # quick hack, let's see what hwloc-ls shows on each server node
+        run_pcmd(self.server_managers[0].hosts, "hwloc-ls")
+
         # Define three pools to create:
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
