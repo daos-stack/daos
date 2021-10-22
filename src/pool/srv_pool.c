@@ -2569,6 +2569,8 @@ out:
 	return rc;
 }
 
+static bool is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid);
+
 /* CaRT RPC handler for pool container listing
  * Requires a pool handle (except for rebuild).
  */
@@ -5701,11 +5703,33 @@ out_svc:
 	return rc;
 }
 
-bool
+/**
+ * Is \a hdl a "server handle" for \a pool?
+ *
+ * \param[in]	pool	pool
+ * \param[in]	hdl	pool handle UUID
+ *
+ * \return	1	yes
+ *		0	no
+ *		<0	error from the IV fetch
+ */
+int
+ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl)
+{
+	uuid_t	srv_hdl;
+	int	rc;
+
+	rc = ds_pool_iv_srv_hdl_fetch(pool, &srv_hdl, NULL);
+	if (rc != 0)
+		return rc;
+
+	return uuid_compare(pool->sp_uuid, hdl) == 0;
+}
+
+static bool
 is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 {
 	struct ds_pool	*pool;
-	uuid_t		hdl_uuid;
 	int		rc;
 
 	pool = ds_pool_lookup(pool_uuid);
@@ -5715,13 +5739,12 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 		return false;
 	}
 
-	rc = ds_pool_iv_srv_hdl_fetch(pool, &hdl_uuid, NULL);
+	rc = ds_pool_hdl_is_from_srv(pool, poh_uuid);
 	ds_pool_put(pool);
-	if (rc) {
+	if (rc < 0) {
 		D_ERROR(DF_UUID" fetch srv hdl: %d\n", DP_UUID(pool_uuid), rc);
 		return false;
 	}
 
-	return !uuid_compare(poh_uuid, hdl_uuid);
+	return rc ? true : false;
 }
-
