@@ -214,6 +214,7 @@ struct vos_container {
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
 				vc_reindex_cmt_dtx:1;
+	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
 };
 
@@ -322,9 +323,6 @@ extern int vos_evt_feats;
 
 #define VOS_KEY_CMP_UINT64_SET	(BTR_FEAT_UINT_KEY)
 #define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
-#define VOS_OFEAT_SHIFT		48
-#define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
-#define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
 
 /** Iterator ops for objects and OIDs */
 extern struct vos_iter_ops vos_oi_iter_ops;
@@ -805,6 +803,7 @@ struct vos_iterator {
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
+				 it_for_discard:1,
 				 it_for_migration:1,
 				 it_cleanup_stale_dtx:1,
 				 it_ignore_uncommitted:1;
@@ -1060,6 +1059,8 @@ vos_iter_intent(struct vos_iterator *iter)
 {
 	if (iter->it_for_purge)
 		return DAOS_INTENT_PURGE;
+	if (iter->it_for_discard)
+		return DAOS_INTENT_DISCARD;
 	if (iter->it_ignore_uncommitted)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
@@ -1094,8 +1095,8 @@ gc_reserve_space(daos_size_t *rsrvd);
  * Aggregate the creation/punch records in the current entry of the object
  * iterator
  *
- * \param ih[IN]	Iterator handle
- * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param ih[IN]		Iterator handle
+ * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1103,14 +1104,14 @@ gc_reserve_space(daos_size_t *rsrvd);
  *			negative value otherwise
  */
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard);
+oi_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
  * iterator
  *
- * \param ih[IN]	Iterator handle
- * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param ih[IN]		Iterator handle
+ * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1118,7 +1119,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  *			negative value otherwise
  */
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /** Internal bit for initializing iterator from open tree handle */
 #define VOS_IT_KEY_TREE	(1 << 31)

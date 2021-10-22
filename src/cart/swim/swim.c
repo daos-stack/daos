@@ -147,7 +147,10 @@ swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &upds[n].smu_state);
 	if (rc) {
-		SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
+		if (rc == -DER_NONEXIST)
+			SWIM_INFO("%lu: not bootstrapped yet with %lu\n", self_id, id);
+		else
+			SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
 		D_GOTO(out_unlock, rc);
 	}
 	upds[n++].smu_id = id;
@@ -167,8 +170,10 @@ swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
 	if (id != to) {
 		rc = ctx->sc_ops->get_member_state(ctx, to, &upds[n].smu_state);
 		if (rc) {
-			SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", to,
-				   DP_RC(rc));
+			if (rc == -DER_NONEXIST)
+				SWIM_INFO("%lu: not bootstrapped yet with %lu\n", self_id, to);
+			else
+				SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", to, DP_RC(rc));
 			D_GOTO(out_unlock, rc);
 		}
 		upds[n++].smu_id = to;
@@ -289,7 +294,12 @@ swim_member_alive(struct swim_context *ctx, swim_id_t from,
 
 	rc = ctx->sc_ops->get_member_state(ctx, id, &id_state);
 	if (rc) {
-		SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
+		swim_id_t self_id = swim_self_get(ctx);
+
+		if (rc == -DER_NONEXIST)
+			SWIM_INFO("%lu: not bootstrapped yet with %lu\n", self_id, id);
+		else
+			SWIM_ERROR("get_member_state(%lu): "DF_RC"\n", id, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -485,6 +495,9 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now,
 						 id_state.sms_incarnation);
 				D_FREE(item);
 			}
+		} else {
+			if (item->u.si_deadline < ctx->sc_next_event)
+				ctx->sc_next_event = item->u.si_deadline;
 		}
 next_item:
 		item = next;
@@ -529,6 +542,9 @@ swim_ipings_update(struct swim_context *ctx, uint64_t now,
 		if (now > item->u.si_deadline) {
 			TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
 			TAILQ_INSERT_TAIL(&targets, item, si_link);
+		} else {
+			if (item->u.si_deadline < ctx->sc_next_event)
+				ctx->sc_next_event = item->u.si_deadline;
 		}
 		item = next;
 	}
@@ -640,10 +656,38 @@ swim_subgroup_init(struct swim_context *ctx)
 		D_ALLOC_PTR(item);
 		if (item == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		item->si_id = id;
+		item->si_from = ctx->sc_target;
+		item->si_id   = id;
 		TAILQ_INSERT_TAIL(&ctx->sc_subgroup, item, si_link);
 	}
 out:
+	return rc;
+}
+
+int
+swim_member_new_remote(struct swim_context *ctx, swim_id_t id)
+{
+	struct swim_item	*item;
+	int			 rc = 0;
+
+	D_ALLOC_PTR(item);
+	if (item == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	swim_ctx_lock(ctx);
+	if (swim_state_get(ctx) == SCS_BEGIN) {
+		item->si_from = id;
+		item->si_id   = id;
+		TAILQ_INSERT_TAIL(&ctx->sc_subgroup, item, si_link);
+	} else {
+		rc = -DER_BUSY;
+	}
+	swim_ctx_unlock(ctx);
+
+	if (rc)
+		D_FREE(item);
+out:
+	SWIM_INFO("%lu: new remote %lu "DF_RC"\n", swim_self_get(ctx), id, DP_RC(rc));
 	return rc;
 }
 
@@ -828,6 +872,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 	now = swim_now_ms();
 	if (timeout > 0)
 		end = now + timeout;
+	ctx->sc_next_event = now + swim_period_get() / 3;
 
 	if (now > ctx->sc_expect_progress_time &&
 	    0  != ctx->sc_expect_progress_time) {
@@ -873,28 +918,35 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 		switch (ctx_state) {
 		case SCS_BEGIN:
 			if (now > ctx->sc_next_tick_time) {
-				uint64_t delay = target_state.sms_delay * 2;
-				uint64_t ping_timeout = swim_ping_timeout_get();
+				if (TAILQ_EMPTY(&ctx->sc_subgroup)) {
+					uint64_t delay = target_state.sms_delay * 2;
+					uint64_t ping_timeout = swim_ping_timeout_get();
 
-				if (delay < ping_timeout ||
-				    delay > 3 * ping_timeout)
-					delay = ping_timeout;
+					if (delay < ping_timeout ||
+					    delay > 3 * ping_timeout)
+						delay = ping_timeout;
 
-				target_id = ctx->sc_target;
-				sendto_id = ctx->sc_target;
-				send_updates = true;
-				SWIM_INFO("%lu: dping %lu => {%lu %c %lu} "
-					  "delay: %u ms, timeout: %lu ms\n",
-					  ctx->sc_self, ctx->sc_self, sendto_id,
-					  SWIM_STATUS_CHARS[
-						       target_state.sms_status],
-					  target_state.sms_incarnation,
-					  target_state.sms_delay, delay);
+					target_id = ctx->sc_target;
+					sendto_id = ctx->sc_target;
+					send_updates = true;
+					SWIM_INFO("%lu: dping %lu => {%lu %c %lu} "
+						  "delay: %u ms, timeout: %lu ms\n",
+						  ctx->sc_self, ctx->sc_self, sendto_id,
+						  SWIM_STATUS_CHARS[target_state.sms_status],
+						  target_state.sms_incarnation,
+						  target_state.sms_delay, delay);
 
-				ctx->sc_next_tick_time = now
-							 + swim_period_get();
-				ctx->sc_deadline = now + delay;
-				ctx_state = SCS_PINGED;
+					ctx->sc_next_tick_time = now + swim_period_get();
+					ctx->sc_deadline = now + delay;
+					if (ctx->sc_deadline < ctx->sc_next_event)
+						ctx->sc_next_event = ctx->sc_deadline;
+					ctx_state = SCS_PINGED;
+				} else {
+					ctx_state = SCS_TIMEDOUT;
+				}
+			} else {
+				if (ctx->sc_next_tick_time < ctx->sc_next_event)
+					ctx->sc_next_event = ctx->sc_next_tick_time;
 			}
 			break;
 		case SCS_PINGED:
@@ -917,6 +969,10 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 					 */
 					ctx_state = SCS_SELECT;
 				}
+				ctx->sc_next_event = now;
+			} else {
+				if (ctx->sc_deadline < ctx->sc_next_event)
+					ctx->sc_next_event = ctx->sc_deadline;
 			}
 			break;
 		case SCS_TIMEDOUT:
@@ -937,24 +993,47 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			}
 
 			if (item != NULL) {
-				target_id = ctx->sc_target;
+				struct swim_member_state state;
+
+				target_id = item->si_from;
 				sendto_id = item->si_id;
-				send_updates = true;
-
-				SWIM_INFO("%lu: ireq  %lu => {%lu %c %lu} "
-					  "delay: %u ms\n",
-					  ctx->sc_self, sendto_id, target_id,
-					  SWIM_STATUS_CHARS[
-						       target_state.sms_status],
-					  target_state.sms_incarnation,
-					  target_state.sms_delay);
-
-				TAILQ_REMOVE(&ctx->sc_subgroup,
-					     item, si_link);
+				TAILQ_REMOVE(&ctx->sc_subgroup, item, si_link);
 				D_FREE(item);
 
-				item = TAILQ_FIRST(&ctx->sc_subgroup);
-				if (item == NULL) {
+				rc = ctx->sc_ops->get_member_state(ctx, sendto_id, &state);
+				if (rc) {
+					SWIM_ERROR("get_member_state(%lu): "DF_RC"\n",
+						   sendto_id, DP_RC(rc));
+					goto done_item;
+				}
+
+				if (target_id != sendto_id) {
+					/* Send indirect ping request to ALIVE member only */
+					if (state.sms_status != SWIM_MEMBER_ALIVE)
+						goto done_item;
+
+					SWIM_INFO("%lu: ireq  %lu => {%lu %c %lu} "
+						  "delay: %u ms\n",
+						  ctx->sc_self, sendto_id, target_id,
+						  SWIM_STATUS_CHARS[target_state.sms_status],
+								    target_state.sms_incarnation,
+								    target_state.sms_delay);
+				} else {
+					/* Send ping only if this member is not respond yet */
+					if (state.sms_status != SWIM_MEMBER_INACTIVE)
+						goto done_item;
+
+					SWIM_INFO("%lu: dping  %lu => {%lu %c %lu} "
+						  "delay: %u ms\n",
+						  ctx->sc_self, ctx->sc_self, sendto_id,
+						  SWIM_STATUS_CHARS[state.sms_status],
+								    state.sms_incarnation,
+								    state.sms_delay);
+				}
+
+				send_updates = true;
+done_item:
+				if (TAILQ_EMPTY(&ctx->sc_subgroup)) {
 					/* So, just goto next member. */
 					ctx_state = SCS_SELECT;
 				}
@@ -968,6 +1047,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				D_GOTO(out, rc = -DER_SHUTDOWN);
 			}
 
+			if (ctx->sc_next_tick_time < ctx->sc_next_event)
+				ctx->sc_next_event = ctx->sc_next_tick_time;
 			ctx_state = SCS_BEGIN;
 			break;
 		}
@@ -984,6 +1065,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				D_GOTO(out, rc);
 			}
 			send_updates = false;
+		} else if (now + 100 < ctx->sc_next_event) {
+			break;
 		}
 	}
 	rc = (now > end) ? -DER_TIMEDOUT : -DER_CANCELED;
