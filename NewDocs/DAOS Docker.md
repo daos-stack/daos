@@ -1,16 +1,20 @@
 # Using DAOS in a Docker Container
 
-This section describes how to build and run the DAOS service in a Docker container. A minimum of 5GB of DRAM and 16GB of disk space will be required. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
+This artical will how to get started using DAOS containers, it will take you from the build to basic configuration and running of the DAOS service in a Docker container. 
+
+All commands shown here are on 2 Socket Server running Ubuntu 20.0. To perform the steps below, you will need a minimum of 5GB of DRAM and 16GB of disk space. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
+
+## What is DAOS
 
 ## Building a Docker Image
 
-To build the Docker image we can do it one of two ways, from a local clone of the gitrepo or directly from GitHub
+To build the Docker image we can do it one of two ways, from a local clone of the Hithub repo or directly from GitHub
 
 If you prefer a different base than CentOS7, replace the filename "Dockerfile.centos.7" in the command strings below with one of the following"
 - 'Dockerfile.centos.8'
 - 'Dockerfile.ubuntu.20.04'
 
-### 1. Build from local clone
+### 1. Build From Local Clone
 
 ```bash
 git clone https://github.com/daos-stack/daos.git 
@@ -18,7 +22,7 @@ git submodule init; git submodule update
 docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 
-### 2. Build from remote github repo
+### 2. Build From Remote Github Repo
 This creates a CentOS 7 image, fetches the latest DAOS version from GitHub, builds it, and installs it in the image. [here](https://github.com/daos-stack/daos/tree/master/utils/docker)
 
 `docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.7 -t daos`
@@ -29,7 +33,8 @@ Once the image has been created, a container will need to be started to run the 
 
 `docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos`
 
-> Note: If you want to be more selective with the devices that are exported to the container, individual devices should be listed and exported as volume via the -v option. In this case, the hugepages devices should also be added to the command line via -v /dev/hugepages:/dev/hugepages and -v /dev/hugepages-1G:/dev/hugepages-1G
+Optional: - If you want to be more selective with the devices that are exported to the container, individual devices should be listed and exported as volume via the -v option. In this case, the hugepages devices should also be added to the command line.
+`/dev/hugepages:/dev/hugepages and -v /dev/hugepages-1G:/dev/hugepages-1G`
 
 > Warning: If Docker is being run on a non-Linux system (e.g., OSX), -v /dev:/dev should be removed from the command line.
 
