@@ -2432,9 +2432,9 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		     bool full_scan, struct agg_param *agg_param, uint64_t *msec)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
+	struct dtx_handle	 *dth = NULL;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
-	struct dtx_handle	 dth = { 0 };
 	struct dtx_id		 dti = { 0 };
 	struct dtx_epoch	 epoch = { 0 };
 	daos_unit_oid_t		 oid = { 0 };
@@ -2472,15 +2472,14 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		return rc;
 	}
 
-	ec_agg_param->ap_dth = &dth;
+	ec_agg_param->ap_dth = dth;
 	ec_agg_param->ap_obj_skipped = 0;
 
 again:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb,
-			 ec_agg_param, &dth);
-	if (obj_dtx_need_refresh(&dth, rc)) {
-		rc = dtx_refresh(&dth, cont);
+			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, dth);
+	if (obj_dtx_need_refresh(dth, rc)) {
+		rc = dtx_refresh(dth, cont);
 		if (rc == -DER_AGAIN) {
 			anchors.ia_reprobe_co = 0;
 			anchors.ia_reprobe_obj = 0;
@@ -2492,7 +2491,7 @@ again:
 		}
 	}
 
-	dtx_end(&dth, cont, rc);
+	dtx_end(dth, cont, rc);
 
 	if (daos_handle_is_valid(ec_agg_param->ap_agg_entry.ae_obj_hdl)) {
 		dsc_obj_close(ec_agg_param->ap_agg_entry.ae_obj_hdl);

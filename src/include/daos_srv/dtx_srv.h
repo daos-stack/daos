@@ -199,7 +199,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
 		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
-		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh);
+		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	       int result);
@@ -214,7 +214,7 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
-	  struct dtx_memberships *mbs, struct dtx_handle *dth);
+	  struct dtx_memberships *mbs, struct dtx_handle **p_dth);
 int
 dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result);
 int
