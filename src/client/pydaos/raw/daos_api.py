@@ -34,6 +34,11 @@ DaosContPropEnum = enum.Enum(
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
 
+# Value used to determine whether we need to call daos_obj_list_dkey again.
+# This is a value used in daos_anchor_is_eof in daos_api.h. Not sure how to
+# access that method from here, so define it.
+DAOS_ANCHOR_TYPE_EOF = 3
+
 
 class DaosPool():
     """A python object representing a DAOS pool."""
@@ -1143,6 +1148,229 @@ class IORequest():
 
         return result
 
+    @staticmethod
+    def prepare_dkey_ptr(dkey):
+        """Prepare dkey pointer.
+
+        dkey needs to be converted to daos_cref.IOV() in order to pass in to the
+        underlying method.
+
+        Args:
+            dkey (array): dkey.
+
+        Returns:
+            ctypes.pointer: dkey pointer.
+
+        """
+        dkey_ptr = None
+
+        if dkey is not None:
+            dkey_iov = daos_cref.IOV()
+            dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+            dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+            dkey_iov.iov_len = ctypes.sizeof(dkey)
+            dkey_ptr = ctypes.pointer(dkey_iov)
+
+        return dkey_ptr
+
+    def prepare_sgl(self, key_num, key_len):
+        """Prepare the scatter/gather list to store the dkeys obtained.
+
+        Buffer size is set to key_num * key_len.
+
+        Args:
+            key_num (int): Number of keys.
+            key_len (int): Length of each key.
+
+        Returns:
+            array: Buffer that eventually stores the key(s).
+
+        """
+        sgl_iov = daos_cref.IOV()
+        buf_len = key_num * key_len
+        sgl_iov.iov_len = ctypes.c_size_t(buf_len)
+        sgl_iov.iov_buf_len = ctypes.c_size_t(buf_len)
+        buf = ctypes.create_string_buffer(buf_len)
+        sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
+        self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
+        self.sgl.sg_nr = 1
+        self.sgl.sg_nr_out = 0
+
+        return buf
+
+    @staticmethod
+    def collect_keys(key_count, daos_kds, buf):
+        """Get keys from buffer.
+
+        Keys are written contiguously in the buffer. Use the key size
+        set in the kds (key descriptors) object to get the individual keys.
+
+        Args:
+            key_count (int): Number of keys obtained.
+            daos_kds (daos_cref.DaosKeyDescriptor): Key descriptors that
+                contain the length and type of each key.
+            buf (array): Buffer that stores the keys.
+
+        Returns:
+            list: Keys.
+
+        """
+        keys = []
+
+        cur = 0
+        for i in range(key_count):
+            keys.append(buf[cur:cur + daos_kds[i].kd_key_len])
+            cur += daos_kds[i].kd_key_len
+
+        return keys
+
+    def list_dkey(self, obj_handle=None, key_num=5, key_len=512,
+                  txn=daos_cref.DAOS_TX_NONE):
+        """Return dkeys in the object.
+
+        Because the underlying method takes buffer of given size and stores the
+        key(s) in it, the caller of this method should provide size of the
+        buffer. The size is determined by the key_num * key_len. Adjust them
+        according to the number and size of dkeys in the object. If the buffer
+        size is too small, it returns -2012 DER_KEY2BIG.
+
+        The dkeys shouldn't contain \0 at the end. dkeys are usually defined
+        by ctypes.create_string_buffer(). This method adds \0 at the end.
+        However, the underlying method sets dkeys in the buffer up to this
+        termination, so even if there are multiple dkeys, it would only sets the
+        first one. One way to avoid this is to pass in the length of the dkey
+        to create_string_buffer. e.g.,
+
+        from general_utils import create_string_buffer
+        my_dkey = create_string_buffer(value=dkey_val, size=len(dkey_val))
+
+        This way, the buffer size would be the exact size of the key you want
+        to use and the method doesn't add \0 at the end.
+
+        Args:
+            obj_handle (ctypes.c_uint64): Object handle that defines the object
+                to get dkeys from.
+            key_num (int): Number of dkeys expected. Defaults to 5. This is the
+                typical default value used by some of the C object tests.
+            key_len (int): Approximate length of each dkey. Use the longest key
+                size to be safe. Defaults to 512. This is the typical default
+                value used by some of the C object tests.
+            txn (Daos_handle_t): Transaction handle.
+                Defaults to daos_cref.DAOS_TX_NONE. This is the typical default
+                value used in other methods as well as some of the C client and
+                test code.
+
+        Returns:
+            list: dkeys.
+
+        """
+        if obj_handle is None:
+            obj_handle = self.obj.obj_handle
+
+        nr_val = ctypes.c_uint32(key_num)
+
+        # Define the array of ctypes DaosKeyDescriptor.
+        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(
+            daos_cref.DaosKeyDescriptor())
+
+        # Prepare the scatter/gather list to store the dkeys obtained. Use
+        # key_num * key_len for the buffer size.
+        buf = self.prepare_sgl(key_num=key_num, key_len=key_len)
+
+        # One daos_obj_list_dkey call may not obtain all the dkeys. Anchor is
+        # used to determine whether we need to call it again.
+        anchor = daos_cref.Anchor()
+
+        list_dkey_func = self.context.get_function('list-dkey')
+
+        dkeys = []
+
+        while not anchor.da_type == DAOS_ANCHOR_TYPE_EOF:
+            ret = list_dkey_func(
+                obj_handle, txn, ctypes.byref(nr_val),
+                ctypes.byref(daos_kds), ctypes.byref(self.sgl),
+                ctypes.byref(anchor), None)
+
+            if ret != 0:
+                raise DaosApiError(
+                    "list_dkey returned non-zero. RC: {0}".format(ret))
+
+            # No dkeys returned.
+            if nr_val.value == 0:
+                continue
+
+            # The keys are written contiguously in the buffer. Use the key size
+            # set in the kds (key descriptors) object to get the individual
+            # keys.
+            dkeys.extend(
+                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds,
+                buf=buf))
+
+        return dkeys
+
+    def list_akey(self, dkey, obj_handle=None, key_num=5, key_len=512,
+                  txn=daos_cref.DAOS_TX_NONE):
+        """Return akeys from given dkey in the object.
+
+        See list_dkey doc for details.
+
+        Args:
+            obj_handle (ctypes.c_uint64): Object handle that defines the object
+                to get dkeys from.
+            key_num (int): Number of dkeys expected. Defaults to 5. This is the
+                typical default value used by some of the C object tests.
+            key_len (int): Approximate length of each dkey. Use the longest key
+                size to be safe. Defaults to 512. This is the typical default
+                value used by some of the C object tests.
+            txn (Daos_handle_t): Transaction handle.
+                Defaults to daos_cref.DAOS_TX_NONE. This is the typical default
+                value used in other methods as well as some of the C client and
+                test code.
+
+        Returns:
+            list: akeys.
+
+        """
+        if obj_handle is None:
+            obj_handle = self.obj.obj_handle
+
+        dkey_ptr = self.prepare_dkey_ptr(dkey)
+
+        nr_val = ctypes.c_uint32(key_num)
+
+        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(
+            daos_cref.DaosKeyDescriptor())
+
+        buf = self.prepare_sgl(key_num=key_num, key_len=key_len)
+
+        # One daos_obj_list_dkey call may not obtain all the dkeys. Anchor is
+        # used to determine whether we need to call it again.
+        anchor = daos_cref.Anchor()
+
+        list_akey_func = self.context.get_function('list-akey')
+
+        akeys = []
+
+        while not anchor.da_type == DAOS_ANCHOR_TYPE_EOF:
+            ret = list_akey_func(
+                obj_handle, txn, dkey_ptr, ctypes.byref(nr_val),
+                ctypes.byref(daos_kds), ctypes.byref(self.sgl),
+                ctypes.byref(anchor), None)
+
+            if ret != 0:
+                raise DaosApiError(
+                    "list_akey returned non-zero. RC: {0}".format(ret))
+
+            # No akeys returned.
+            if nr_val.value == 0:
+                continue
+
+            akeys.extend(
+                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds,
+                buf=buf))
+
+        return akeys
+
 
 class DaosContProperties(ctypes.Structure):
     # pylint: disable=too-few-public-methods
@@ -2077,8 +2305,10 @@ class DaosContext():
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,
             'init-event':      self.libdaos.daos_event_init,
+            'list-akey':       self.libdaos.daos_obj_list_akey,
             'list-attr':       self.libdaos.daos_cont_list_attr,
             'list-cont-attr':  self.libdaos.daos_cont_list_attr,
+            'list-dkey':       self.libdaos.daos_obj_list_dkey,
             'list-pool-attr':  self.libdaos.daos_pool_list_attr,
             'cont-aggregate':  self.libdaos.daos_cont_aggregate,
             'list-snap':       self.libdaos.daos_cont_list_snap,
