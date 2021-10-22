@@ -150,27 +150,17 @@ int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
-/*
- * TODO: Make the following internal functions of ds_pool after merging in
- * mgmt.
- */
-
-int ds_pool_create(const uuid_t pool_uuid, const char *path,
-		   uuid_t target_uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
-int ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
-		   const d_rank_list_t *rank_list, int ndomains,
+int ds_pool_extend(uuid_t pool_uuid, int ntargets, const d_rank_list_t *rank_list, int ndomains,
 		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
-		       uuid_t target_uuids[], const char *group,
-		       const d_rank_list_t *target_addrs, int ndomains,
-		       const uint32_t *domains, daos_prop_t *prop,
-		       d_rank_list_t *svc_addrs);
+int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
+		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
+		       daos_prop_t *prop, d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
