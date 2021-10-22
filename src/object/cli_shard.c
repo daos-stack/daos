@@ -785,7 +785,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 			}
 		}
 
-		if (conflict && !reasb_req->orr_size_fetch && fetch_rc == 0)
+		if (conflict && !reasb_req->orr_size_fetch)
 			rc = -DER_FETCH_AGAIN;
 
 unlock:
