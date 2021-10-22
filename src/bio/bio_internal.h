@@ -166,10 +166,6 @@ struct bio_dma_buffer {
 	X(bdh_temp_crit_time, "temp/crit_time",				\
 	  "Amount of time the controller operated above crit temp threshold",  \
 	  "minutes", D_TM_COUNTER)					\
-	X(bdh_percent_used, "reliability/percentage_used",		\
-	  "Estimate of the percentage of NVM subsystem life used based on the "\
-	  "actual usage and the manufacturer's prediction of NVM life",	\
-	  "%", D_TM_COUNTER)						\
 	X(bdh_avail_spare, "reliability/avail_spare",			\
 	  "Percentage of remaining spare capacity available",		\
 	  "%", D_TM_COUNTER)						\
