@@ -216,8 +216,7 @@ obj_layout_free(struct dc_object *obj)
 	obj->cob_shards_nr = 0;
 	D_SPIN_UNLOCK(&obj->cob_spin);
 
-	if (layout != NULL)
-		D_FREE(layout);
+	D_FREE(layout);
 }
 
 static void
@@ -228,8 +227,7 @@ obj_free(struct d_hlink *hlink)
 	obj = container_of(hlink, struct dc_object, cob_hlink);
 	D_ASSERT(daos_hhash_link_empty(&obj->cob_hlink));
 	obj_layout_free(obj);
-	if (obj->cob_time_fetch_leader != NULL)
-		D_FREE(obj->cob_time_fetch_leader);
+	D_FREE(obj->cob_time_fetch_leader);
 	D_SPIN_DESTROY(&obj->cob_spin);
 	D_RWLOCK_DESTROY(&obj->cob_lock);
 	D_FREE(obj);
@@ -356,8 +354,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 	if (obj->cob_grp_size > 1 && srv_io_mode == DIM_DTX_FULL_ENABLED &&
 	    old < obj->cob_grp_nr) {
-		if (obj->cob_time_fetch_leader != NULL)
-			D_FREE(obj->cob_time_fetch_leader);
+		D_FREE(obj->cob_time_fetch_leader);
 
 		D_ALLOC_ARRAY(obj->cob_time_fetch_leader, obj->cob_grp_nr);
 		if (obj->cob_time_fetch_leader == NULL)
@@ -449,8 +446,7 @@ obj_auxi_free_failed_tgt_list(struct obj_auxi_args *obj_auxi)
 		return;
 
 	D_FREE(obj_auxi->failed_tgt_list->tl_tgts);
-	D_FREE_PTR(obj_auxi->failed_tgt_list);
-	obj_auxi->failed_tgt_list = NULL;
+	D_FREE(obj_auxi->failed_tgt_list);
 }
 
 static int
@@ -1326,7 +1322,6 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 	int			 cont_rf;	/* cont redun_fac */
 	int			 cont_tf;	/* cont #tolerate failures */
 	int			 rc;
-
 
 	cont_rf = dc_cont_hdl2redunfac(coh);
 	if (cont_rf < 0) {
@@ -3049,9 +3044,8 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
 			inserted = true;
 			if (recx != new_recx) {
 				d_list_del(&recx->recx_list);
-				D_FREE_PTR(recx);
+				D_FREE(recx);
 			}
-
 		}
 		prev = recx;
 	}
@@ -3297,7 +3291,6 @@ obj_shard_list_key_cb(struct shard_auxi_args *shard_auxi,
 			D_FREE(key);
 		if (rc)
 			return rc;
-
 	}
 
 	return 0;
@@ -3696,7 +3689,7 @@ out:
 		d_list_for_each_entry_safe(key, tmp, &iter_arg.merge_list,
 					   key_list) {
 			d_list_del(&key->key_list);
-			D_FREE_PTR(key);
+			D_FREE(key);
 		}
 	} else if (obj_auxi->opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		struct obj_auxi_list_recx *recx;
@@ -3705,7 +3698,7 @@ out:
 		d_list_for_each_entry_safe(recx, tmp, &iter_arg.merge_list,
 					   recx_list) {
 			d_list_del(&recx->recx_list);
-			D_FREE_PTR(recx);
+			D_FREE(recx);
 		}
 	}
 
@@ -3829,7 +3822,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 		idx = obj_auxi->req_tgts.ort_shard_tgts->st_shard /
 			obj_get_grp_size(obj);
-		daos_gettime_coarse(&obj->cob_time_fetch_leader[idx]);
+		rc = daos_gettime_coarse(&obj->cob_time_fetch_leader[idx]);
+		D_ASSERT(rc == 0);
 	}
 
 	/* Check if the pool map needs to refresh */
@@ -4212,7 +4206,6 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	if (csummer_copy == NULL)
 		return -DER_NOMEM;
 
-
 	/** Calc 'd' key checksum */
 	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
 	if (rc != 0) {
@@ -4237,7 +4230,7 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	 * checksum - simulates corruption over network
 	 */
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE_DKEY))
-		((char *) args->dkey->iov_buf)[0]++;
+		((char *)args->dkey->iov_buf)[0]++;
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE_AKEY))
 		((char *)iod_csums[0].ic_akey.cs_csum)[0]++;
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE))
@@ -5239,7 +5232,6 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 		goto comp; /* invalid parameters */
 
 	if (daos_handle_is_valid(args->th)) {
-
 		/* add the operation to DTX and complete immediately */
 		rc = dc_tx_attach(args->th, obj, opc, task);
 		goto comp;

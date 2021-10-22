@@ -729,8 +729,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 
 		/* Check each vector */
 		if (p_sgl->sg_iovs[i].iov_buf_len < size) {
-			if (p_sgl->sg_iovs[i].iov_buf != NULL)
-				D_FREE(p_sgl->sg_iovs[i].iov_buf);
+			D_FREE(p_sgl->sg_iovs[i].iov_buf);
 
 			D_ALLOC(p_sgl->sg_iovs[i].iov_buf, size);
 			/* obj_tls_fini() will free these buffer */
@@ -1555,7 +1554,6 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
 					DP_UOID(orw->orw_oid), rc);
 				goto post;
-
 			}
 		}
 	}
@@ -2234,6 +2232,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
 		unsigned char	*buf = dkey->iov_buf;
+
 		buf[0] += orw->orw_oid.id_shard + 1;
 		orw->orw_dkey_hash = obj_dkey2hash(orw->orw_oid.id_pub, dkey);
 	}
@@ -2350,7 +2349,7 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 			D_GOTO(comp, rc = -DER_IO);
 
 		/* No need re-exec local update */
-		if (dlh != NULL && dlh->dlh_handle.dth_prepared)
+		if (dlh->dlh_handle.dth_prepared)
 			goto comp;
 
 		/* XXX: For non-solo DTX, leader and non-leader will make each
@@ -2771,7 +2770,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	       daos_epoch_t *e_out)
 {
 	vos_iter_param_t	param = { 0 };
-	struct vos_iter_anchors	saved_anchors;
 	struct dss_enum_arg	saved_arg;
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
 	uint32_t		flags = 0;
@@ -2832,7 +2830,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		/* object iteration for rebuild or consistency verification. */
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
-		if (daos_anchor_get_flags(&anchors->ia_dkey) &
+		if (daos_anchor_get_flags(&anchors[0].ia_dkey) &
 		      DIOF_WITH_SPEC_EPOCH) {
 			/* For obj verification case. */
 			param.ip_flags |= VOS_IT_RECX_VISIBLE;
@@ -2857,7 +2855,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	 * 'type' to indicate the anchor is on SV tree or EV tree.
 	 */
 	if (type == VOS_ITER_SINGLE)
-		anchors->ia_sv = anchors->ia_ev;
+		anchors[0].ia_sv = anchors[0].ia_ev;
 	else if (oei->oei_oid.id_shard % 3 == 1 &&
 		 DAOS_FAIL_CHECK(DAOS_VC_LOST_REPLICA))
 		D_GOTO(failed, rc = -DER_NONEXIST);
@@ -2873,7 +2871,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 	}
 
-	saved_anchors = *anchors;
+	anchors[1] = anchors[0];
 	saved_arg = *enum_arg;
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION)
@@ -2888,12 +2886,12 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 
 re_pack:
-	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg,
+	rc = dss_enum_pack(&param, type, recursive, &anchors[0], enum_arg,
 			   vos_iterate, &dth);
 	if (obj_dtx_need_refresh(&dth, rc)) {
 		rc = dtx_refresh(&dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN) {
-			*anchors = saved_anchors;
+			anchors[0] = anchors[1];
 			obj_restore_enum_args(rpc, enum_arg, &saved_arg);
 
 			goto re_pack;
@@ -2922,7 +2920,7 @@ re_pack:
 		rc = rc_tmp;
 
 	if (type == VOS_ITER_SINGLE)
-		anchors->ia_ev = anchors->ia_sv;
+		anchors[0].ia_ev = anchors[0].ia_sv;
 
 	D_DEBUG(DB_IO, ""DF_UOID" iterate "DF_X64"-"DF_X64" type %d tag %d"
 		" rc %d\n", DP_UOID(oei->oei_oid), param.ip_epr.epr_lo,
@@ -2979,7 +2977,6 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 			       DAOS_HDL_INVAL, sgls, idx, NULL);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
-		oeo->oeo_kds.ca_arrays = NULL;
 		oeo->oeo_kds.ca_count = 0;
 	}
 
@@ -2994,7 +2991,7 @@ void
 ds_obj_enum_handler(crt_rpc_t *rpc)
 {
 	struct dss_enum_arg	enum_arg = { 0 };
-	struct vos_iter_anchors	anchors = { 0 };
+	struct vos_iter_anchors	*anchors = NULL;
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;
 	struct obj_io_context	ioc;
@@ -3020,9 +3017,13 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_xs_id,
 		oei->oei_map_ver, ioc.ioc_map_ver);
 
-	anchors.ia_dkey = oei->oei_dkey_anchor;
-	anchors.ia_akey = oei->oei_akey_anchor;
-	anchors.ia_ev = oei->oei_anchor;
+	D_ALLOC_ARRAY(anchors, 2);
+	if (anchors == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	anchors[0].ia_dkey = oei->oei_dkey_anchor;
+	anchors[0].ia_akey = oei->oei_akey_anchor;
+	anchors[0].ia_ev = oei->oei_anchor;
 
 	/* TODO: Transfer the inline_thres from enumerate RPC */
 	enum_arg.inline_thres = 32;
@@ -3066,16 +3067,16 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	/* keep trying until the key_buffer is fully filled or reaching the
 	 * end of the stream.
 	 */
-	rc = obj_local_enum(&ioc, rpc, &anchors, &enum_arg, &epoch);
+	rc = obj_local_enum(&ioc, rpc, anchors, &enum_arg, &epoch);
 	if (rc == 1) /* If the buffer is full, exit and reset failure. */
 		rc = 0;
 
 	if (rc)
 		D_GOTO(out, rc);
 
-	oeo->oeo_dkey_anchor = anchors.ia_dkey;
-	oeo->oeo_akey_anchor = anchors.ia_akey;
-	oeo->oeo_anchor = anchors.ia_ev;
+	oeo->oeo_dkey_anchor = anchors[0].ia_dkey;
+	oeo->oeo_akey_anchor = anchors[0].ia_akey;
+	oeo->oeo_anchor = anchors[0].ia_ev;
 
 	if (enum_arg.eprs)
 		oeo->oeo_eprs.ca_count = enum_arg.eprs_len;
@@ -3102,6 +3103,7 @@ out:
 	}
 	obj_enum_complete(rpc, rc, ioc.ioc_map_ver, epoch);
 	obj_ioc_end(&ioc, rc);
+	D_FREE(anchors);
 }
 
 static void
@@ -3351,7 +3353,7 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 			D_GOTO(comp, rc = -DER_IO);
 
-		if (dlh != NULL && dlh->dlh_handle.dth_prepared)
+		if (dlh->dlh_handle.dth_prepared)
 			goto comp;
 
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc,
@@ -4155,7 +4157,6 @@ out:
 				if (biods[i] != NULL)
 					bio_iod_post(biods[i]);
 			}
-
 		}
 
 		if (iohs != NULL) {
