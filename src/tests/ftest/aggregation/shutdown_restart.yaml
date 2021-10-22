@@ -1,8 +1,9 @@
 hosts:
   test_servers:
     - server-A
+    - server-B
   test_clients:
-    - client-B
+    - client-C
 timeout: 600
 server_config:
   name: daos_server
@@ -32,6 +33,7 @@ pool:
 container:
   type: POSIX
   control_method: daos
+  properties: rf:1
 ior:
   api: "DFS"
   client_processes:
@@ -45,5 +47,5 @@ ior:
       transfer_size: '4K'
       block_size: '104857600'  # 100M
   objectclass:
-    SX:
+    EC_2P1GX:
       dfs_oclass: "EC_2P1GX"
