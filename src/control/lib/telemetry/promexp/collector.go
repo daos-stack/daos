@@ -31,7 +31,7 @@ type (
 		ignoredMetrics []*regexp.Regexp
 		sources        []*EngineSource
 		cleanupSource  map[uint32]func()
-		sourceMutex    sync.RWMutex
+		sourceMutex    sync.RWMutex // To protect sources
 	}
 
 	CollectorOpts struct {
@@ -40,7 +40,7 @@ type (
 
 	EngineSource struct {
 		ctx     context.Context
-		tmMutex sync.RWMutex
+		tmMutex sync.RWMutex // To protect telemetry collection
 		Index   uint32
 		Rank    uint32
 		enabled atm.Bool
@@ -337,19 +337,10 @@ func (c *Collector) AddSource(es *EngineSource, cleanup func()) {
 	c.sourceMutex.Lock()
 	defer c.sourceMutex.Unlock()
 
-	// If we attempt to add a duplicate, should overwrite the one that is there.
-	var found bool
-	for i, src := range c.sources {
-		if es.Index == src.Index {
-			found = true
-			c.sources[i] = es
-			break
-		}
-	}
+	// If we attempt to add a duplicate, remove the old one.
+	c.removeSourceNoLock(es.Index)
 
-	if !found {
-		c.sources = append(c.sources, es)
-	}
+	c.sources = append(c.sources, es)
 	if cleanup != nil {
 		c.cleanupSource[es.Index] = cleanup
 	}
@@ -360,6 +351,10 @@ func (c *Collector) RemoveSource(engineIdx uint32) {
 	c.sourceMutex.Lock()
 	defer c.sourceMutex.Unlock()
 
+	c.removeSourceNoLock(engineIdx)
+}
+
+func (c *Collector) removeSourceNoLock(engineIdx uint32) {
 	for i, es := range c.sources {
 		if es.Index == engineIdx {
 			es.Disable()

@@ -552,8 +552,20 @@ func TestPromExp_Collector_AddSource(t *testing.T) {
 			}
 			collector.AddSource(tc.es, tc.fn)
 
-			if diff := cmp.Diff(tc.expSrc, collector.sources, cmpopts.IgnoreUnexported(EngineSource{})); diff != "" {
-				t.Fatalf("(-want, +got)\n%s", diff)
+			// Ordering changes are possible, so we can't directly compare the structs
+			common.AssertEqual(t, len(tc.expSrc), len(collector.sources), "")
+			for _, exp := range tc.expSrc {
+				found := false
+				for _, actual := range collector.sources {
+					if actual.Index == exp.Index {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					t.Errorf("expected EngineSource %d not found", exp.Index)
+				}
 			}
 
 			var found bool
