@@ -262,7 +262,7 @@ def set_provider_environment(interface, args):
     Args:
         interface (str): the current interface being used.
     """
-    # Temporary override to only enable verbs in certain stages
+    # Temporary code to only enable verbs in certain stages
     tags = [name for tag in args.tags for name in tag.split(",")]
 
     # Use the detected provider if one is not set
@@ -286,11 +286,10 @@ def set_provider_environment(interface, args):
                 # Select the provider - currently use verbs or sockets
                 for line in output_data[0][0]:
                     provider = line.decode("utf-8").replace(":", "")
-                    if "verbs" in provider:
-                        # Temporary override to only enable verbs on HW Large stages
-                        if "hw" in tags and "large" in tags:
-                            detected_provider = "ofi+verbs;ofi_rxm"
-                            break
+                    # Temporary code to only enable verbs on HW Large stages
+                    if "verbs" in provider and "hw" in tags and "large" in tags:
+                        detected_provider = "ofi+verbs;ofi_rxm"
+                        break
                     if "sockets" in provider:
                         detected_provider = "ofi+sockets"
                         break
