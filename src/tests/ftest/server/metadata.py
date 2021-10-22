@@ -335,10 +335,6 @@ class ObjectMetadata(TestWithServers):
         # Setup the thread manager
         thread_manager = ThreadManager(run_ior_loop, self.timeout - 30)
 
-        # Setup the orterun command used to run the ior command
-        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        self.job_manager.assign_processes(processes)
-
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
         for operation in ("write", "read"):
