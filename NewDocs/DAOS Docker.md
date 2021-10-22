@@ -2,20 +2,22 @@
 
 ***
 
-# Using DAOS in a Docker Container
+# Using Distributed Asynchronous Object Storage in a Docker Container
 
-This artical will show to get started using DAOS containers, it will take you from the build to basic configuration and running of the DAOS service in a Docker container. 
+This artical shows how to get started using Distributed Asynchronous Object Storage (DAOS) containers, by taking you through the steps to build, configure and run the DAOS service in a Docker container. 
 
-All commands shown here are on 2 Socket Server running Ubuntu 20.0. To perform the steps below, you will need a minimum of 5GB of DRAM and 16GB of disk space. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
+All commands shown here are on 2 Socket Server running Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DRAM and 16GB of disk space. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
 ## What is DAOS
-
+The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware
 ## Building a Docker Image
 
-To build the Docker image we can do it one of two ways, from a local clone of the Hithub repo or directly from GitHub
+To build the Docker image we can do it one of two ways:
+- local clone of the GitHub repo
+- Directly from GitHub
 
-If you prefer a different base than CentOS7, replace the filename "Dockerfile.centos.7" in the command strings below with one of the following"
-- 'Dockerfile.centos.8'
+If you prefer a different base than CentOS8, replace the filename "Dockerfile.centos.8" in the command strings below with one of the following"
+- 'Dockerfile.centos.7'
 - 'Dockerfile.ubuntu.20.04'
 
 ### 1. Build From Local Clone
@@ -23,13 +25,13 @@ If you prefer a different base than CentOS7, replace the filename "Dockerfile.ce
 ```bash
 git clone https://github.com/daos-stack/daos.git 
 git submodule init; git submodule update
-docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
+docker build  . -f utils/docker/Dockerfile.centos.8 -t daos
 ```
 
 ### 2. Build From Remote Github Repo
-This creates a CentOS 7 image, fetches the latest DAOS version from GitHub, builds it, and installs it in the image. [here](https://github.com/daos-stack/daos/tree/master/utils/docker)
+This creates a CentOS 8 image and fetches the latest DAOS version from [GitHub/daos-stack](https://github.com/daos-stack/daos/tree/master/utils/docker), builds it, and installs it in the image.
 
-`docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.7 -t daos`
+`docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.8 -t daos`
 
 
 ## Docker Setup
@@ -38,6 +40,8 @@ Once the image has been created, a container will need to be started to run the 
 `docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos`
 
 Optional: - If you want to be more selective with the devices that are exported to the container, individual devices should be listed and exported as volume via the -v option. In this case, the hugepages devices should also be added to the command line.
+
+**Note to self need more research here**
 `/dev/hugepages:/dev/hugepages and -v /dev/hugepages-1G:/dev/hugepages-1G`
 
 > Warning: If Docker is being run on a non-Linux system (e.g., OSX), -v /dev:/dev should be removed from the command line.
