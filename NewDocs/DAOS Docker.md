@@ -1,6 +1,10 @@
+**Please note: This is a sample article I am preparing for software.Intel.com, this should only be viewed as a Draft.**
+
+***
+
 # Using DAOS in a Docker Container
 
-This artical will how to get started using DAOS containers, it will take you from the build to basic configuration and running of the DAOS service in a Docker container. 
+This artical will show to get started using DAOS containers, it will take you from the build to basic configuration and running of the DAOS service in a Docker container. 
 
 All commands shown here are on 2 Socket Server running Ubuntu 20.0. To perform the steps below, you will need a minimum of 5GB of DRAM and 16GB of disk space. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
