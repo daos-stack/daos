@@ -240,7 +240,7 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_UNCERTAIN)) {
 			for (i = 0; i < count; i++) {
 				ptr = (int *)dout->do_sub_rets.ca_arrays + i;
-				*ptr = -DER_NONEXIST;
+				*ptr = -DER_TX_UNCERTAIN;
 			}
 
 			D_GOTO(out, rc = 0);
@@ -256,6 +256,16 @@ dtx_handler(crt_rpc_t *rpc)
 			     cont->sc_dtx_resyncing) ||
 			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
 				*ptr = -DER_INPROGRESS;
+
+			/* dtx_id::dti_hlc is client side time stamp. Usually, it is older than
+			 * the time of the DTX being handled on the leader. If it is older than
+			 * the time of next to be aggregated DTX entry, then it may has been
+			 * removed by DTX aggregation. Under such case, return -DER_TX_UNCERTAIN.
+			 */
+			if (*ptr == -DER_NONEXIST &&
+			    dtx_hlc_age2sec(dtis->dti_hlc) > dtx_agg_thd_age_lo)
+				*ptr = -DER_TX_UNCERTAIN;
+
 			if (mbs[i] != NULL)
 				rc1++;
 		}
