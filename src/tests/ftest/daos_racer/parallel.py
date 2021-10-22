@@ -5,7 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 
@@ -16,16 +16,14 @@ class DaosRacerTest(TestWithServers):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-8859")
     def test_parallel(self):
         """JIRA-8445: multi-client daos_racer/consistency checker test.
 
         Test Description:
-            The daos_racer test tool generates a bunch of simultaneous,
-            conflicting I/O requests. After it is run it will verify that all
-            the replicas of a given object are consistent.
-
-            Run daos_racer for 5-10 minutes or so on 3-way replicated object
-            data (at least 6 servers) and verify the object replicas.
+            The daos_racer test tool generates a bunch of simultaneous, conflicting I/O requests. It
+            will test both replicated objects and EC objects and verify the data consistency. The
+            duration will depend on parameters in test yaml configuration file.
 
         Use Cases:
             Running simultaneous, conflicting I/O requests.
