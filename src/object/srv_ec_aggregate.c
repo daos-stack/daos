@@ -90,7 +90,6 @@ struct ec_agg_stripe {
 	daos_off_t	as_stripenum;   /* ordinal of stripe, offset/(k*len) */
 	daos_epoch_t	as_hi_epoch;    /* highest epoch  in stripe          */
 	d_list_t	as_dextents;    /* list of stripe's data extents     */
-	d_list_t	as_hoextents;   /* list of hold-over extents         */
 	daos_off_t	as_stripe_fill; /* amount of stripe covered by data  */
 	unsigned int	as_extent_cnt;  /* number of replica extents         */
 	unsigned int	as_offset;      /* start offset in stripe            */
@@ -291,6 +290,9 @@ agg_clear_extents(struct ec_agg_entry *entry)
 	uint64_t		 tail;
 	bool			 carry_is_hole = false;
 
+	if (entry->ae_cur_stripe.as_extent_cnt == 0)
+		return;
+
 	d_list_for_each_entry_safe(extent, ext_tmp,
 				   &entry->ae_cur_stripe.as_dextents,
 				   ae_link) {
@@ -302,7 +304,7 @@ agg_clear_extents(struct ec_agg_entry *entry)
 
 		d_list_del(&extent->ae_link);
 		entry->ae_cur_stripe.as_extent_cnt--;
-		D_FREE_PTR(extent);
+		D_FREE(extent);
 	}
 
 	entry->ae_cur_stripe.as_offset = 0U;
@@ -431,7 +433,6 @@ agg_prep_sgl(struct ec_agg_entry *entry)
 out:
 	d_sgl_fini(&entry->ae_sgl, true);
 	return rc;
-
 }
 
 /* Determines if an extent overlaps a cell.
@@ -588,10 +589,8 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
 out:
-	if (recxs)
-		D_FREE(recxs);
-	if (sgl.sg_iovs)
-		D_FREE(sgl.sg_iovs);
+	D_FREE(recxs);
+	D_FREE(sgl.sg_iovs);
 	return rc;
 }
 
@@ -700,7 +699,6 @@ ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 out:
 	return rc;
-
 }
 
 /* Driver function for full_stripe encode. Fetches the data and then invokes
@@ -904,10 +902,8 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
 out:
-	if (recxs != NULL)
-		D_FREE(recxs);
-	if (sgl.sg_iovs != NULL)
-		D_FREE(sgl.sg_iovs);
+	D_FREE(recxs);
+	D_FREE(sgl.sg_iovs);
 	return rc;
 }
 
@@ -1130,7 +1126,6 @@ agg_process_partial_stripe_ult(void *arg)
 
 out:
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
-
 }
 
 /* Driver function for partial stripe update. Fetches the data and then invokes
@@ -1468,8 +1463,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 out:
-	if (targets)
-		D_FREE(targets);
+	D_FREE(targets);
 	return rc;
 }
 
@@ -1492,7 +1486,7 @@ agg_process_holes_ult(void *arg)
 	crt_bulk_t		 bulk_hdl = NULL;
 	uint32_t		 len = ec_age2cs(entry);
 	uint64_t		 cell_b = ec_age2cs_b(entry);
-	uint32_t		 k = ec_age2k(entry);
+	uint64_t		 k = ec_age2k(entry);
 	uint32_t		 p = ec_age2p(entry);
 	uint64_t		 ss = entry->ae_cur_stripe.as_stripenum *
 					k * len;
@@ -1692,8 +1686,7 @@ fetch_again:
 	}
 
 out:
-	if (targets)
-		D_FREE(targets);
+	D_FREE(targets);
 	if (rpc)
 		crt_req_decref(rpc);
 	if (bulk_hdl)
@@ -1782,8 +1775,7 @@ ev_out:
 out:
 	D_FREE(stripe_ud.asu_recxs);
 	daos_csummer_free_ic(stripe_ud.asu_csummer, &stripe_ud.asu_iod_csums);
-	if (stripe_ud.asu_csum_iov.iov_buf)
-		D_FREE(stripe_ud.asu_csum_iov.iov_buf);
+	D_FREE(stripe_ud.asu_csum_iov.iov_buf);
 	daos_csummer_destroy(&stripe_ud.asu_csummer);
 	return rc;
 }
@@ -2343,11 +2335,15 @@ out:
 static void
 ec_agg_param_fini(struct ec_agg_param *agg_param)
 {
+	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
+
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_cont_hdl))
 		dsc_cont_close(agg_param->ap_pool_info.api_pool_hdl,
 			       agg_param->ap_pool_info.api_cont_hdl);
 
-	d_sgl_fini(&agg_param->ap_agg_entry.ae_sgl, true);
+	D_ASSERT(agg_entry->ae_sgl.sg_nr == AGG_IOV_CNT || agg_entry->ae_sgl.sg_nr == 0);
+	d_sgl_fini(&agg_entry->ae_sgl, true);
+	agg_clear_extents(agg_entry);
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_pool_hdl))
 		dsc_pool_close(agg_param->ap_pool_info.api_pool_hdl);
 
@@ -2377,7 +2373,6 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_yield_arg		= param;
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
-	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_hoextents);
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
@@ -2434,7 +2429,7 @@ out:
  */
 static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		     bool full_scan, struct agg_param *agg_param)
+		     bool full_scan, struct agg_param *agg_param, uint64_t *msec)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	vos_iter_param_t	 iter_param = { 0 };
@@ -2504,8 +2499,14 @@ again:
 		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (ec_agg_param->ap_obj_skipped)
-		D_ERROR("with skipped obj during aggregation.\n");
+	if (ec_agg_param->ap_obj_skipped) {
+		D_DEBUG(DB_EPC, "with skipped obj during aggregation.\n");
+		/* There is rebuild going no, and we can proceed EC aggregate boundary,
+		 * Let's wait for 5 seconds for another EC aggregation.
+		 */
+		if (msec)
+			*msec = 5 * 1000;
+	}
 
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0)
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
