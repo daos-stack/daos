@@ -68,8 +68,7 @@ class PoolServicesFaultInjection(TestWithServers):
         Due to the nature of how wait_for_rebuild() is coded
         we can only get the last dmg command output.
         """
-        server_to_exclude = randint(0, len(self.hostlist_servers) - 1)
-
+        server_to_exclude = randint(0, len(self.hostlist_servers) - 1) #nosec
         self.pool.exclude([server_to_exclude])
         self.look_missed_request(self.pool.dmg.result.stderr)
 

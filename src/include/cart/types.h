@@ -71,6 +71,8 @@ typedef struct crt_init_options {
 	 */
 	uint32_t	cio_max_expected_size;
 	uint32_t	cio_max_unexpected_size;
+			/** swim crt index */
+	int		cio_swim_crt_idx;
 } crt_init_options_t;
 
 typedef int		crt_status_t;

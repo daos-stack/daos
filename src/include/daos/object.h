@@ -17,15 +17,6 @@
  */
 #define DAOS_EC_PARITY_BIT	(1ULL << 63)
 
-static inline daos_oclass_id_t
-daos_obj_id2class(daos_obj_id_t oid)
-{
-	daos_oclass_id_t ocid;
-
-	ocid = (oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT;
-	return ocid;
-}
-
 static inline daos_ofeat_t
 daos_obj_id2feat(daos_obj_id_t oid)
 {
@@ -42,12 +33,6 @@ daos_obj_id2ver(daos_obj_id_t oid)
 
 	version = (oid.hi & OID_FMT_VER_MASK) >> OID_FMT_VER_SHIFT;
 	return version;
-}
-
-static inline bool
-daos_obj_id_is_nil(daos_obj_id_t oid)
-{
-	return oid.hi == 0 && oid.lo == 0;
 }
 
 /**

@@ -9,7 +9,6 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-from apricot import skipForTicket
 
 
 class OSAOfflineDrain(OSAUtils):
@@ -49,7 +48,7 @@ class OSAOfflineDrain(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets  (target idx : 0-7)
-        n = random.randint(0, 6)
+        n = random.randint(0, 6) #nosec
         target_list.append(n)
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
@@ -169,7 +168,6 @@ class OSAOfflineDrain(OSAUtils):
         self.log.info("Offline Drain : During Aggregation")
         self.run_offline_drain_test(1, data=True)
 
-    @skipForTicket("DAOS-8609")
     def test_osa_offline_drain_oclass(self):
         """Test ID: DAOS-7159
         Test Description: Validate Offline Drain
@@ -200,7 +198,6 @@ class OSAOfflineDrain(OSAUtils):
         self.log.info("Offline Drain : Multiple Pools")
         self.run_offline_drain_test(2, data=True)
 
-    @skipForTicket("DAOS-7186")
     def test_osa_offline_drain_during_rebuild(self):
         """Test ID: DAOS-7159
         Test Description: Validate Offline Drain

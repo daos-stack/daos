@@ -29,6 +29,7 @@
 struct bio_bulk_args {
 	void		*ba_bulk_ctxt;
 	unsigned int	 ba_bulk_perm;
+	unsigned int	 ba_sgl_idx;
 };
 
 /* Cached bulk handle for avoiding expensive MR */
@@ -43,8 +44,14 @@ struct bio_bulk_hdl {
 	unsigned int		 bbh_pg_idx;
 	/* Bulk offset in bytes */
 	unsigned int		 bbh_bulk_off;
+	/* Current used length in bytes (for shared bulk handle) */
+	unsigned int		 bbh_used_bytes;
+	/* Remote bulk handle index */
+	unsigned int		 bbh_remote_idx;
+	/* Reference count */
+	unsigned int		 bbh_inuse;
 	/* Flags */
-	unsigned int		 bbh_inuse:1;
+	unsigned int		 bbh_shareable:1;
 };
 
 /* Bulk handle group, categorized by bulk size */
@@ -159,10 +166,6 @@ struct bio_dma_buffer {
 	X(bdh_temp_crit_time, "temp/crit_time",				\
 	  "Amount of time the controller operated above crit temp threshold",  \
 	  "minutes", D_TM_COUNTER)					\
-	X(bdh_percent_used, "reliability/percentage_used",		\
-	  "Estimate of the percentage of NVM subsystem life used based on the "\
-	  "actual usage and the manufacturer's prediction of NVM life",	\
-	  "%", D_TM_COUNTER)						\
 	X(bdh_avail_spare, "reliability/avail_spare",			\
 	  "Percentage of remaining spare capacity available",		\
 	  "%", D_TM_COUNTER)						\
@@ -372,6 +375,8 @@ struct bio_rsrvd_region {
 	struct bio_dma_chunk	*brr_chk;
 	/* Start page idx within the DMA chunk */
 	unsigned int		 brr_pg_idx;
+	/* Payload offset (from brr_pg_idx) in bytes, used for SCM only */
+	unsigned int		 brr_chk_off;
 	/* Offset within the SPDK blob in bytes */
 	uint64_t		 brr_off;
 	/* End (not included) in bytes */
@@ -513,8 +518,8 @@ void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
 int dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg);
 int iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
-		   unsigned int chk_pg_idx, uint64_t off, uint64_t end,
-		   uint8_t media);
+		   unsigned int chk_pg_idx, unsigned int chk_off, uint64_t off,
+		   uint64_t end, uint8_t media);
 int dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt);
 
 static inline struct bio_dma_buffer *
