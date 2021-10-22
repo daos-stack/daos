@@ -25,6 +25,7 @@ unsigned int cont_per_pool	= 1;
 unsigned int obj_per_cont	= 100;
 unsigned int test_duration	= (2 * 60);		/* 2 mins */
 unsigned int rand_seed;
+bool loading_test;					/* test loading pool */
 
 uint64_t start_ts;
 unsigned int stats_intvl	= 5;			/* seconds */
@@ -41,6 +42,21 @@ enum {
 #define VS_MERGE_CNT_MAX	10		/* extents */
 #define VS_UPD_BLKS_MAX		256		/* 1MB */
 #define VS_AGG_BLKS_MAX		1024		/* 4MB */
+
+struct vs_perf_cntr {
+	uint64_t	vpc_count;		/* sample counter */
+	uint64_t	vpc_tot;		/* total us */
+	uint32_t	vpc_max;		/* max us */
+	uint32_t	vpc_min;		/* min us */
+};
+
+enum {
+	VS_OP_RESERV	= 0,
+	VS_OP_PUBLISH,
+	VS_OP_FREE,
+	VS_OP_MERGE,
+	VS_OP_MAX,
+};
 
 struct vea_stress_list {
 	d_list_t			 vsl_list;		/* vea_resrvd_ext list */
@@ -73,8 +89,27 @@ struct vea_stress_pool {
 	uint64_t			 vsp_tot_blks;		/* total blocks */
 	uint64_t			 vsp_free_blks;		/* free blocks */
 	uint64_t			 vsp_alloc_blks;	/* allocated blocks */
+	struct vs_perf_cntr		 vsp_cntr[VS_OP_MAX];
 	struct vea_stress_cont		 vsp_conts[0];
 };
+
+static void
+vs_counter_inc(struct vs_perf_cntr *cntr, uint64_t ts)
+{
+	uint64_t elapsed = daos_getutime();
+
+	if (elapsed > ts)
+		elapsed -= ts;
+	else
+		elapsed = 0;
+
+	cntr->vpc_count++;
+	cntr->vpc_tot += elapsed;
+	if (cntr->vpc_max < elapsed)
+		cntr->vpc_max = elapsed;
+	if (cntr->vpc_min > elapsed)
+		cntr->vpc_min = elapsed;
+}
 
 static bool
 vs_list_empty(struct vea_stress_list *vs_head)
@@ -262,6 +297,7 @@ vs_update(struct vea_stress_pool *vs_pool)
 	d_list_t		 r_list, a_list;
 	struct vea_resrvd_ext	*rsrvd, *dup;
 	unsigned int		 blk_cnt, rsrv_cnt, alloc_blks = 0;
+	uint64_t		 cur_ts;
 	int			 i, rc;
 
 	vs_cont = pick_update_cont(vs_pool);
@@ -276,11 +312,14 @@ vs_update(struct vea_stress_pool *vs_pool)
 	rsrv_cnt = get_random_count(VS_RSRV_CNT_MAX);
 	for (i = 0; i < rsrv_cnt; i++) {
 		blk_cnt = get_random_count(VS_UPD_BLKS_MAX);
+
+		cur_ts = daos_getutime();
 		rc = vea_reserve(vs_pool->vsp_vsi, blk_cnt, hint, &r_list);
 		if (rc != 0) {
 			fprintf(stderr, "failed to reserve %u blks for io\n", blk_cnt);
 			goto error;
 		}
+		vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERV], cur_ts);
 
 		/*
 		 * Reserved list will be freed on publish, duplicate it to track the
@@ -302,6 +341,7 @@ vs_update(struct vea_stress_pool *vs_pool)
 		alloc_blks += dup->vre_blk_cnt;
 	}
 
+	cur_ts = daos_getutime();
 	rc = umem_tx_begin(&vs_pool->vsp_umm, &vs_pool->vsp_txd);
 	D_ASSERT(rc == 0);
 
@@ -310,6 +350,7 @@ vs_update(struct vea_stress_pool *vs_pool)
 
 	rc = umem_tx_commit(&vs_pool->vsp_umm);
 	D_ASSERT(rc == 0);
+	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_PUBLISH], cur_ts);
 
 	vs_list_insert(&a_list, rsrv_cnt, &vs_obj->vso_alloc_list);
 	vs_obj->vso_alloc_blks += alloc_blks;
@@ -336,15 +377,15 @@ error:
 static int
 vs_reclaim(struct vea_stress_pool *vs_pool)
 {
-	struct vea_resrvd_ext	*rsrvd;
+	struct vea_resrvd_ext	*rsrvd, *tmp;
 	unsigned int		 free_cnt;
+	d_list_t		 f_list;
+	uint64_t		 cur_ts;
 	int			 i, rc;
 
 	D_ASSERT(!vs_list_empty(&vs_pool->vsp_punched_list));
 	free_cnt = get_random_count(VS_FREE_CNT_MAX);
-
-	rc = umem_tx_begin(&vs_pool->vsp_umm, &vs_pool->vsp_txd);
-	D_ASSERT(rc == 0);
+	D_INIT_LIST_HEAD(&f_list);
 
 	for (i = 0; i < free_cnt; i++) {
 		rsrvd = vs_list_pop_one(&vs_pool->vsp_punched_list, 0);
@@ -352,13 +393,24 @@ vs_reclaim(struct vea_stress_pool *vs_pool)
 			D_ASSERT(i > 0);
 			break;
 		}
+		d_list_add_tail(&rsrvd->vre_link, &f_list);
+	}
+
+	cur_ts = daos_getutime();
+	rc = umem_tx_begin(&vs_pool->vsp_umm, &vs_pool->vsp_txd);
+	D_ASSERT(rc == 0);
+
+	d_list_for_each_entry_safe(rsrvd, tmp, &f_list, vre_link) {
+		d_list_del_init(&rsrvd->vre_link);
 		rc = vea_free(vs_pool->vsp_vsi, rsrvd->vre_blk_off, rsrvd->vre_blk_cnt);
 		D_ASSERT(rc == 0);
 		vs_pool->vsp_free_blks += rsrvd->vre_blk_cnt;
 		D_FREE(rsrvd);
 	}
+
 	rc = umem_tx_commit(&vs_pool->vsp_umm);
 	D_ASSERT(rc == 0);
+	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_FREE], cur_ts);
 
 	return rc;
 }
@@ -373,6 +425,7 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 	struct vea_resrvd_ext	*rsrvd, *tmp, *dup;
 	d_list_t		 f_list, r_list, a_list;
 	unsigned int		 merge_cnt, merge_blks = 0;
+	uint64_t		 cur_ts;
 	int			 i, rc;
 
 	/* No non-empty objs */
@@ -409,11 +462,13 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 		return 0;
 
 	/* Reserve blocks for coalesced extent */
+	cur_ts = daos_getutime();
 	rc = vea_reserve(vs_pool->vsp_vsi, merge_blks, hint, &r_list);
 	if (rc != 0) {
 		fprintf(stderr, "failed to reserve %u blks for aggregation\n", merge_blks);
 		return rc;
 	}
+	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERV], cur_ts);
 
 	rsrvd = d_list_entry(r_list.prev, struct vea_resrvd_ext, vre_link);
 	D_ASSERT(rsrvd->vre_blk_cnt == merge_blks);
@@ -428,6 +483,7 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 	dup->vre_blk_cnt = rsrvd->vre_blk_cnt;
 	d_list_add(&dup->vre_link, &a_list);
 
+	cur_ts = daos_getutime();
 	rc = umem_tx_begin(&vs_pool->vsp_umm, &vs_pool->vsp_txd);
 	D_ASSERT(rc == 0);
 
@@ -445,6 +501,7 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 
 	rc = umem_tx_commit(&vs_pool->vsp_umm);
 	D_ASSERT(rc == 0);
+	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_MERGE], cur_ts);
 
 	vs_list_insert(&a_list, 1, &vs_obj->vso_alloc_list);
 	return rc;
@@ -505,7 +562,7 @@ static bool
 vs_stop_run(struct vea_stress_pool *vs_pool, int rc)
 {
 	static uint64_t	last_print_ts;
-	uint64_t	now = daos_wallclock_secs();
+	uint64_t	now = daos_wallclock_secs(), heap_bytes;
 	struct vea_stat	stat;
 	unsigned int	duration = 0;
 	bool		stop;
@@ -527,8 +584,15 @@ vs_stop_run(struct vea_stress_pool *vs_pool, int rc)
 		last_print_ts ? now - last_print_ts : 0);
 	last_print_ts = now;
 
-	fprintf(stdout, "total blks:"DF_12U64" free blks:"DF_12U64" allocated blks:"DF_12U64"\n",
-		vs_pool->vsp_tot_blks, vs_pool->vsp_free_blks, vs_pool->vsp_alloc_blks);
+	ret = pmemobj_ctl_get(vs_pool->vsp_umm.umm_pool, "stats.heap.curr_allocated", &heap_bytes);
+	if (ret) {
+		fprintf(stderr, "failed to get heap usage\n");
+		return stop;
+	}
+
+	fprintf(stdout, "total blks:"DF_12U64" free blks:"DF_12U64" allocated blks:"DF_12U64" "
+		"heap_bytes:"DF_U64"\n", vs_pool->vsp_tot_blks, vs_pool->vsp_free_blks,
+		vs_pool->vsp_alloc_blks, heap_bytes);
 
 	ret = vea_query(vs_pool->vsp_vsi, NULL, &stat);
 	if (ret) {
@@ -676,7 +740,8 @@ vs_setup_pool(void)
 	struct vea_unmap_context unmap_ctxt;
 	struct vea_attr		 attr;
 	struct vea_stat		 stat;
-	int			 rc;
+	uint64_t		 load_time;
+	int			 rc, enable_stats = 1;
 
 	D_ALLOC(vs_pool, vs_arg_size());
 	if (vs_pool == NULL) {
@@ -693,10 +758,24 @@ vs_setup_pool(void)
 	}
 
 	uma.uma_id = UMEM_CLASS_PMEM;
-	unlink(pool_file);
-	uma.uma_pool = pmemobj_create(pool_file, "vea_stress", heap_size, 0666);
-	if (uma.uma_pool == NULL) {
-		fprintf(stderr, "failed to create pmemobj pool\n");
+	if (loading_test) {
+		uma.uma_pool = pmemobj_open(pool_file, "vea_stress");
+		if (uma.uma_pool == NULL) {
+			fprintf(stderr, "failed to open pmemobj pool\n");
+			goto error;
+		}
+	} else {
+		unlink(pool_file);
+		uma.uma_pool = pmemobj_create(pool_file, "vea_stress", heap_size, 0666);
+		if (uma.uma_pool == NULL) {
+			fprintf(stderr, "failed to create pmemobj pool\n");
+			goto error;
+		}
+	}
+
+	rc = pmemobj_ctl_set(uma.uma_pool, "stats.enabled", &enable_stats);
+	if (rc) {
+		fprintf(stderr, "failed to enable pmemobj stats\n");
 		goto error;
 	}
 
@@ -717,13 +796,16 @@ vs_setup_pool(void)
 	vs_pool->vsp_vsd = root_addr;
 	root_addr += sizeof(struct vea_space_df);
 
-	rc = vea_format(&vs_pool->vsp_umm, &vs_pool->vsp_txd, vs_pool->vsp_vsd,
-			VS_BLK_SIZE, 1, /* hdr blks */ pool_capacity, NULL, NULL, false);
-	if (rc) {
-		fprintf(stderr, "failed to format\n");
-		goto error;
+	if (!loading_test) {
+		rc = vea_format(&vs_pool->vsp_umm, &vs_pool->vsp_txd, vs_pool->vsp_vsd,
+				VS_BLK_SIZE, 1, /* hdr blks */ pool_capacity, NULL, NULL, false);
+		if (rc) {
+			fprintf(stderr, "failed to format\n");
+			goto error;
+		}
 	}
 
+	load_time = daos_wallclock_secs();
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&vs_pool->vsp_umm, &vs_pool->vsp_txd, vs_pool->vsp_vsd, &unmap_ctxt,
@@ -732,6 +814,7 @@ vs_setup_pool(void)
 		fprintf(stderr, "failed to load\n");
 		goto error;
 	}
+	load_time = daos_wallclock_secs() - load_time;
 
 	rc = vea_query(vs_pool->vsp_vsi, &attr, &stat);
 	if (rc) {
@@ -743,8 +826,8 @@ vs_setup_pool(void)
 	vs_pool->vsp_free_blks = attr.va_free_blks;
 	D_ASSERT(vs_pool->vsp_tot_blks >= vs_pool->vsp_free_blks);
 	vs_pool->vsp_alloc_blks = vs_pool->vsp_tot_blks - vs_pool->vsp_free_blks;
-	fprintf(stdout, "Loaded pool tot_blks:"DF_U64", free_blks:"DF_U64"\n",
-		vs_pool->vsp_tot_blks, vs_pool->vsp_free_blks);
+	fprintf(stdout, "Loaded pool tot_blks:"DF_U64", free_blks:"DF_U64" in "DF_U64" seconds\n",
+		vs_pool->vsp_tot_blks, vs_pool->vsp_free_blks, load_time);
 
 	rc = vs_setup_conts(vs_pool, root_addr);
 	if (rc) {
@@ -795,6 +878,7 @@ const char vs_stress_options[] =
 "-d <duration>		test duration in seconds\n"
 "-f <pool_file>		pmemobj pool filename\n"
 "-H <heap_size>		allocator heap size\n"
+"-l <load>		test loading existing pool\n"
 "-o <obj_nr>		per container object nr\n"
 "-s <rand_seed>		rand seed\n"
 "-h			help message\n";
@@ -827,6 +911,24 @@ val_unit(uint64_t val, char unit)
 	}
 }
 
+static inline char *
+vs_op2str(unsigned int op)
+{
+	switch (op) {
+	case VS_OP_RESERV:
+		return "reserv";
+	case VS_OP_PUBLISH:
+		return "tx_publish";
+	case VS_OP_FREE:
+		return "tx_free";
+	case VS_OP_MERGE:
+		return "tx_merge";
+	default:
+		break;
+	}
+	return "Unknown";
+}
+
 int main(int argc, char **argv)
 {
 	static struct option long_ops[] = {
@@ -835,6 +937,7 @@ int main(int argc, char **argv)
 		{ "duration",	required_argument,	NULL,	'd' },
 		{ "file",	required_argument,	NULL,	'f' },
 		{ "heap",	required_argument,	NULL,	'H' },
+		{ "load",	no_argument,		NULL,	'l' },
 		{ "obj_nr",	required_argument,	NULL,	'o' },
 		{ "seed",	required_argument,	NULL,	's' },
 		{ "help",	no_argument,		NULL,	'h' },
@@ -842,11 +945,11 @@ int main(int argc, char **argv)
 	};
 	struct vea_stress_pool	*vs_pool;
 	char			*endp;
-	int			 rc;
+	int			 i, rc;
 
 	rand_seed = time(0);
 	memset(pool_file, 0, sizeof(pool_file));
-	while ((rc = getopt_long(argc, argv, "C:c:d:f:H:o:h", long_ops, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "C:c:d:f:H:lo:s:h", long_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'C':
 			pool_capacity = strtoul(optarg, &endp, 0);
@@ -864,6 +967,9 @@ int main(int argc, char **argv)
 		case 'H':
 			heap_size = strtoul(optarg, &endp, 0);
 			heap_size = val_unit(heap_size, *endp);
+			break;
+		case 'l':
+			loading_test = true;
 			break;
 		case 'o':
 			obj_per_cont = atol(optarg);
@@ -904,6 +1010,9 @@ int main(int argc, char **argv)
 		goto fini;
 	}
 
+	if (loading_test)
+		goto teardown;
+
 	srand(rand_seed);
 	start_ts = daos_wallclock_secs();
 	fprintf(stdout, "VEA stress test started (timestamp: "DF_U64")\n", start_ts);
@@ -913,6 +1022,18 @@ int main(int argc, char **argv)
 	else
 		fprintf(stdout, "VEA stress test succeeded\n");
 
+	fprintf(stdout, "\n");
+	fprintf(stdout, "%-11s %-12s %-12s %-10s %-10s %-10s\n",
+		"Operation", "Samples", "Time(us)", "Min(us)", "Max(us)", "Avg(us)");
+	for (i = 0; i < VS_OP_MAX; i++) {
+		struct vs_perf_cntr *cntr = &vs_pool->vsp_cntr[i];
+
+		fprintf(stdout, "%-11s "DF_12U64" "DF_12U64" %-10u %-10u %-10u\n",
+			vs_op2str(i), cntr->vpc_count, cntr->vpc_tot, cntr->vpc_min, cntr->vpc_max,
+			cntr->vpc_count ? (unsigned int)(cntr->vpc_tot / cntr->vpc_count) : 0);
+	}
+
+teardown:
 	vs_teardown_pool(vs_pool);
 fini:
 	vs_fini();

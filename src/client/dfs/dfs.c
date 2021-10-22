@@ -2530,16 +2530,13 @@ lookup_rel_path_loop:
 			if (stbuf) {
 				daos_size_t size;
 
-				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE,
-							 &size, NULL);
+				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size, NULL);
 				if (rc) {
 					daos_array_close(obj->oh, NULL);
-					D_GOTO(err_obj,
-					       rc = daos_der2errno(rc));
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
 				}
 				stbuf->st_size = size;
-				stbuf->st_blocks =
-					(stbuf->st_size + (1 << 9) - 1) >> 9;
+				stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 			}
 			break;
 		}
@@ -2563,8 +2560,7 @@ lookup_rel_path_loop:
 						     flags, &sym, NULL, NULL,
 						     depth + 1);
 				if (rc) {
-					D_DEBUG(DB_TRACE,
-						"Failed to lookup symlink %s\n",
+					D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n",
 						entry.value);
 					D_FREE(entry.value);
 					D_GOTO(err_obj, rc);
@@ -4035,14 +4031,13 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	iod.iod_nr = i;
 
 	if (i == 0)
-		D_GOTO(out_stat, 0);
+		D_GOTO(out_stat, rc = 0);
 
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iovs[0];
 
-	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod,
-			     &sgl, NULL);
+	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update attr (rc = %d)\n", rc);
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
