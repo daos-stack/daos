@@ -3890,7 +3890,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 	    DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		obj_auxi->io_retry = 0;
 
-	if (!obj_auxi->no_retry && (pm_stale || obj_auxi->io_retry)) {
+	if ((!obj_auxi->no_retry || task->dt_result == -DER_FETCH_AGAIN) &&
+	     (pm_stale || obj_auxi->io_retry)) {
 		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, obj_auxi->map_ver_reply);
 		if (rc) {
 			D_ERROR(DF_OID "retry io failed: %d\n", DP_OID(obj->cob_md.omd_id), rc);
@@ -4026,7 +4027,6 @@ obj_comp_cb(tse_task_t *task, void *data)
 			obj_reasb_io_fini(obj_auxi, false);
 		}
 	} else {
-		D_ASSERT(!obj_auxi->no_retry);
 		if (!obj_auxi->ec_in_recov)
 			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
 	}
