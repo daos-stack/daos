@@ -3301,7 +3301,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		pool_tls->mpt_ult_running = 1;
 		migrate_pool_tls_get(pool_tls);
 		rc = dss_ult_create(migrate_ult, pool_tls, DSS_XS_SELF,
-				    0, 0, NULL);
+				    0, MIGRATE_STACK_SIZE, NULL);
 		if (rc) {
 			pool_tls->mpt_ult_running = 0;
 			migrate_pool_tls_put(pool_tls);
