@@ -99,26 +99,21 @@ write_completion_file(void)
 {
 	FILE	*fptr;
 	char	*dir;
-	char	*completion_file;
-	char	*tmp_str;
-	char	pid[6];
-	pid_t	_pid;
-
-	_pid = getpid();
-	sprintf(pid, "%d", _pid);
+	char	*completion_file = NULL;
 
 	dir = getenv("DAOS_TEST_SHARED_DIR");
 	D_ASSERTF(dir != NULL,
 		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
 		"option.\n");
-	tmp_str = strcat(dir, "/test-servers-completed.txt.");
-	completion_file = strcat(tmp_str, pid);
+	D_ASPRINTF(completion_file, "%s/test-servers-completed.txt.%d", dir, getpid());
+	D_ASSERTF(completion_file != NULL, "Error allocating completion_file string\n");
 
 	unlink(completion_file);
 	fptr = fopen(completion_file, "w");
 	D_ASSERTF(fptr != NULL, "Error opening completion file for writing.\n");
 	DBG_PRINT("Wrote completion file: %s.\n", completion_file);
 	fclose(fptr);
+	D_FREE(completion_file);
 }
 
 
@@ -321,7 +316,7 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 	}
 
 	while (1) {
-		rc = fscanf(f, "%d %s", &parsed_rank, parsed_addr);
+		rc = fscanf(f, "%8d %32s", &parsed_rank, parsed_addr);
 		if (rc == EOF) {
 			rc = 0;
 			break;
@@ -519,13 +514,12 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 				  rc);
 	}
 
-	if (init_opt) {
+	if (init_opt)
 		rc = crt_init_opt(local_group_name, 0, init_opt);
-	} else {
+	else
 		rc = crt_init(local_group_name, 0);
-		if (opts.assert_on_error)
-			D_ASSERTF(rc == 0, "crt_init() failed; rc=%d\n", rc);
-	}
+	if (opts.assert_on_error)
+		D_ASSERTF(rc == 0, "crt_init() failed; rc=%d\n", rc);
 
 	rc = crt_context_create(crt_ctx);
 	if (opts.assert_on_error)
