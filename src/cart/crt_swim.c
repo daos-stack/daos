@@ -375,7 +375,12 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 						  &rpc_out->upds.ca_arrays,
 						  &rpc_out->upds.ca_count);
 			upds = rpc_out->upds.ca_arrays;
-			upds[0].smu_state.sms_status = SWIM_MEMBER_ALIVE;
+			if (!rc && upds != NULL && rpc_out->upds.ca_count > 0)
+				upds[0].smu_state.sms_status = SWIM_MEMBER_ALIVE;
+			/*
+			 * The error from this function should be just ignored
+			 * because of it's fine if simulation of valid answer fails.
+			 */
 		} else {
 			D_TRACE_ERROR(rpc, "%lu: %lu => %lu remote failed: "DF_RC"\n",
 				      self_id, from_id, to_id, DP_RC(reply_rc));
