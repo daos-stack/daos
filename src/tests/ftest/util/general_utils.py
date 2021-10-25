@@ -582,7 +582,7 @@ def get_random_string(length, exclude=None, include=None):
 
     random_string = None
     while not isinstance(random_string, str) or random_string in exclude:
-        random_string = "".join(random.choice(include) for _ in range(length))
+        random_string = "".join(random.choice(include) for _ in range(length)) #nosec
     return random_string
 
 

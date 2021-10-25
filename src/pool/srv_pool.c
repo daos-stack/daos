@@ -171,50 +171,6 @@ read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 	return pool_map_create(buf, version, map);
 }
 
-/* Store uuid in file path. */
-static int
-uuid_store(const char *path, const uuid_t uuid)
-{
-	int	fd;
-	int	rc;
-
-	/* Create and open the UUID file. */
-	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		D_ERROR(DF_UUID": failed to create uuid file %s: %d\n",
-			DP_UUID(uuid), path, errno);
-		rc = daos_errno2der(errno);
-		goto out;
-	}
-
-	/* Write the UUID. */
-	rc = write(fd, uuid, sizeof(uuid_t));
-	if (rc != sizeof(uuid_t)) {
-		if (rc != -1)
-			errno = EIO;
-		D_ERROR(DF_UUID": failed to write uuid into %s: %d %d\n",
-			DP_UUID(uuid), path, rc, errno);
-		rc = daos_errno2der(errno);
-		goto out_fd;
-	}
-
-	/* Persist the UUID. */
-	rc = fsync(fd);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to fsync %s: %d\n", DP_UUID(uuid),
-			path, errno);
-		rc = daos_errno2der(errno);
-	}
-
-	/* Free the resource and remove the file on errors. */
-out_fd:
-	close(fd);
-	if (rc != 0)
-		remove(path);
-out:
-	return rc;
-}
-
 static char *
 pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 {
@@ -237,29 +193,6 @@ static char *
 pool_svc_rdb_path(const uuid_t pool_uuid)
 {
 	return pool_svc_rdb_path_common(pool_uuid, "");
-}
-
-/*
- * Called by mgmt module on every storage node belonging to this pool.
- * "path" is the directory under which the VOS and metadata files shall be.
- * "target_uuid" returns the UUID generated for the target on this storage node.
- */
-int
-ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
-{
-	char   *fpath;
-	int	rc;
-
-	uuid_generate(target_uuid);
-
-	/* Store target_uuid in DSM_META_FILE. */
-	D_ASPRINTF(fpath, "%s/%s", path, DSM_META_FILE);
-	if (fpath == NULL)
-		return -DER_NOMEM;
-	rc = uuid_store(fpath, target_uuid);
-	D_FREE(fpath);
-
-	return rc;
 }
 
 /* copy \a prop to \a prop_def (duplicated default prop) */
@@ -425,17 +358,15 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 }
 
 static int
-init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
-		   uint32_t nnodes, uuid_t target_uuids[], const char *group,
-		   const d_rank_list_t *target_addrs, daos_prop_t *prop,
-		   uint32_t ndomains, const uint32_t *domains)
+init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, const char *group,
+		   const d_rank_list_t *ranks, daos_prop_t *prop, uint32_t ndomains,
+		   const uint32_t *domains)
 {
 	uint32_t		version = DS_POOL_MD_VERSION;
-	struct pool_buf	       *map_buf = NULL;
+	struct pool_buf	       *map_buf;
 	uint32_t		map_version = 1;
 	uint32_t		connectable;
 	uint32_t		nhandles = 0;
-	uuid_t		       *uuids;
 	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
@@ -450,32 +381,25 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	}
 
 	/* Generate the pool buffer. */
-	rc = gen_pool_buf(NULL, &map_buf, map_version, ndomains, nnodes,
-			ntargets, domains, target_uuids, target_addrs, &uuids,
-			dss_tgt_nr);
+	rc = gen_pool_buf(NULL /* map */, &map_buf, map_version, ndomains, nnodes, ntargets,
+			  domains, ranks, dss_tgt_nr);
 	if (rc != 0) {
 		D_ERROR("failed to generate pool buf, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_map_buf, rc);
+		goto out;
 	}
 
 	/* Initialize the pool map properties. */
 	rc = write_map_buf(tx, kvs, map_buf, map_version);
 	if (rc != 0) {
 		D_ERROR("failed to write map properties, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_uuids, rc);
-	}
-	d_iov_set(&value, uuids, sizeof(uuid_t) * nnodes);
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_map_uuids, &value);
-	if (rc != 0) {
-		D_ERROR("failed to update map UUIDs, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_uuids, rc);
+		goto out_map_buf;
 	}
 
 	/* Write the optional properties. */
 	rc = pool_prop_write(tx, kvs, prop, true);
 	if (rc != 0) {
 		D_ERROR("failed to write props, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_uuids, rc);
+		goto out_map_buf;
 	}
 
 	/* Write connectable property */
@@ -485,7 +409,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	if (rc != 0) {
 		D_ERROR("failed to write connectable prop, "DF_RC"\n",
 			DP_RC(rc));
-		D_GOTO(out_uuids, rc);
+		goto out_map_buf;
 	}
 
 	/* Write the handle properties. */
@@ -493,7 +417,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_nhandles, &value);
 	if (rc != 0) {
 		D_ERROR("failed to update handle props, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_uuids, rc);
+		goto out_map_buf;
 	}
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
@@ -501,21 +425,16 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	if (rc != 0) {
 		D_ERROR("failed to create handle prop KVS, "DF_RC"\n",
 			DP_RC(rc));
-		D_GOTO(out_uuids, rc);
+		goto out_map_buf;
 	}
 
 	/* Create pool user attributes KVS */
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_attr_user, &attr);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("failed to create user attr KVS, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_uuids, rc);
-	}
 
-out_uuids:
-	D_FREE(uuids);
 out_map_buf:
-	if (map_buf)
-		pool_buf_free(map_buf);
+	pool_buf_free(map_buf);
 out:
 	return rc;
 }
@@ -600,12 +519,10 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
 
 /**
  * Create a (combined) pool(/container) service. This method shall be called on
- * a single storage node in the pool. "target_uuids" shall be an array of the
- * target UUIDs returned by the ds_pool_create() calls.
+ * a single storage node in the pool.
  *
  * \param[in]		pool_uuid	pool UUID
  * \param[in]		ntargets	number of targets in the pool
- * \param[in]		target_uuids	array of \a ntargets target UUIDs
  * \param[in]		group		crt group ID (unused now)
  * \param[in]		target_addrs	list of \a ntargets target ranks
  * \param[in]		ndomains	number of domains the pool spans over
@@ -616,9 +533,8 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
  *					list of pool service replica ranks
  */
 int
-ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
-		   const char *group, const d_rank_list_t *target_addrs,
-		   int ndomains, const uint32_t *domains,
+ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
+		   const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
 		   daos_prop_t *prop, d_rank_list_t *svc_addrs)
 {
 	d_rank_list_t	       *ranks;
@@ -673,8 +589,6 @@ rechoose:
 	uuid_copy(in->pri_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pri_op.pi_hdl);
 	in->pri_ntgts = ntargets;
-	in->pri_tgt_uuids.ca_count = ntargets;
-	in->pri_tgt_uuids.ca_arrays = target_uuids;
 	in->pri_tgt_ranks = (d_rank_list_t *)target_addrs;
 	in->pri_prop = prop;
 	in->pri_ndomains = ndomains;
@@ -1875,8 +1789,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pri_op.pi_uuid), rpc);
 
-	if (in->pri_ntgts != in->pri_tgt_uuids.ca_count ||
-	    in->pri_ntgts != in->pri_tgt_ranks->rl_nr)
+	if (in->pri_ntgts != in->pri_tgt_ranks->rl_nr)
 		D_GOTO(out, rc = -DER_PROTO);
 	if (in->pri_ndomains != in->pri_domains.ca_count)
 		D_GOTO(out, rc = -DER_PROTO);
@@ -1939,10 +1852,9 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_create_root(&tx, &attr);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
-	rc = init_pool_metadata(&tx, &svc->ps_root, in->pri_tgt_uuids.ca_count,
-				in->pri_tgt_uuids.ca_arrays, NULL /* group */,
-				in->pri_tgt_ranks, prop_dup,
-				in->pri_ndomains, in->pri_domains.ca_arrays);
+	rc = init_pool_metadata(&tx, &svc->ps_root, in->pri_ntgts, NULL /* group */,
+				in->pri_tgt_ranks, prop_dup, in->pri_ndomains,
+				in->pri_domains.ca_arrays);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
 	rc = ds_cont_init_metadata(&tx, &svc->ps_root, in->pri_op.pi_uuid);
@@ -3323,8 +3235,7 @@ out:
 }
 
 int
-ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
-	       const d_rank_list_t *rank_list, int ndomains,
+ds_pool_extend(uuid_t pool_uuid, int ntargets, const d_rank_list_t *rank_list, int ndomains,
 	       const uint32_t *domains, d_rank_list_t *svc_ranks)
 {
 	int				rc;
@@ -3355,8 +3266,6 @@ rechoose:
 	uuid_copy(in->pei_op.pi_uuid, pool_uuid);
 	in->pei_ntgts = ntargets;
 	in->pei_ndomains = ndomains;
-	in->pei_tgt_uuids.ca_count = rank_list->rl_nr;
-	in->pei_tgt_uuids.ca_arrays = target_uuids;
 	in->pei_tgt_ranks = (d_rank_list_t *)rank_list;
 	in->pei_domains.ca_count = ndomains;
 	in->pei_domains.ca_arrays = (uint32_t *)domains;
@@ -4528,8 +4437,7 @@ out:
  * any way to specify fault domain at a better level
  */
 static int
-pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
-		uint32_t nnodes, uuid_t target_uuids[],
+pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
 		d_rank_list_t *rank_list, uint32_t ndomains,
 		uint32_t *domains, bool *updated_p,
 		uint32_t *map_version_p, struct rsvc_hint *hint)
@@ -4550,9 +4458,8 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 
 	map_version = pool_map_get_version(map) + 1;
 
-	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes,
-			ntargets, domains, target_uuids, rank_list, NULL,
-			dss_tgt_nr);
+	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
+			  rank_list, dss_tgt_nr);
 	if (rc != 0)
 		D_GOTO(out_map_buf, rc);
 
@@ -4612,10 +4519,8 @@ out_map_buf:
 }
 
 static int
-pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
-		     uint32_t nnodes,
-		     uuid_t target_uuids[], d_rank_list_t *rank_list,
-		     uint32_t ndomains, uint32_t *domains,
+pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
+		     d_rank_list_t *rank_list, uint32_t ndomains, uint32_t *domains,
 		     uint32_t *map_version_p)
 {
 	struct pool_svc		*svc;
@@ -4637,9 +4542,8 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 	 * Extend the pool map directly - this is more complicated than other
 	 * operations which are handled within pool_svc_update_map()
 	 */
-	rc = pool_extend_map(&tx, svc, nnodes, target_uuids,
-			     rank_list, ndomains, domains,
-			     &updated, map_version_p, hint);
+	rc = pool_extend_map(&tx, svc, nnodes, rank_list, ndomains, domains, &updated,
+			     map_version_p, hint);
 
 	if (!updated)
 		D_GOTO(out_lock, rc);
@@ -4678,23 +4582,19 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	struct pool_extend_in	*in = crt_req_get(rpc);
 	struct pool_extend_out	*out = crt_reply_get(rpc);
 	uuid_t			pool_uuid;
-	uuid_t			*target_uuids;
 	d_rank_list_t		rank_list;
 	uint32_t		ndomains;
 	uint32_t		*domains;
 	int			rc;
 
 	uuid_copy(pool_uuid, in->pei_op.pi_uuid);
-	target_uuids = in->pei_tgt_uuids.ca_arrays;
 	rank_list.rl_nr = in->pei_tgt_ranks->rl_nr;
 	rank_list.rl_ranks = in->pei_tgt_ranks->rl_ranks;
 	ndomains = in->pei_ndomains;
 	domains = in->pei_domains.ca_arrays;
 
-	rc = pool_extend_internal(pool_uuid, &out->peo_op.po_hint,
-				  rank_list.rl_nr,
-				  target_uuids, &rank_list, ndomains, domains,
-				  &out->peo_op.po_map_version);
+	rc = pool_extend_internal(pool_uuid, &out->peo_op.po_hint, rank_list.rl_nr, &rank_list,
+				  ndomains, domains, &out->peo_op.po_map_version);
 
 	out->peo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",

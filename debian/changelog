@@ -1,3 +1,9 @@
+daos (2.1.100-2) unstable; urgency=medium
+  [ David Quigley ]
+  * Add defusedxml as a required dependency for the test package.
+
+ -- David Quigley <david.quigley@intel.com> Wed, 13 Oct 2021 010:00:00 +0800
+
 daos (2.1.100-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Switch version to 2.1.100 for 2.2 test builds
