@@ -26,10 +26,10 @@ import argparse
 import tabulate
 import functools
 import traceback
-import subprocess
+import subprocess #nosec
 import junit_xml
 import tempfile
-import pickle
+import pickle #nosec
 import xattr
 from collections import OrderedDict
 import yaml
@@ -1248,12 +1248,14 @@ def run_daos_cmd(conf,
         rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
-def _create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgrind=False):
+def _create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, valgrind=False):
     """Helper function for create_cont"""
 
     cmd = ['container',
-           'create',
-           pool]
+           'create']
+
+    if pool:
+        cmd.append(pool)
 
     if label:
         cmd.extend(['--properties',
@@ -1272,7 +1274,7 @@ def _create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgr
     print(rc.json)
     return rc
 
-def create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgrind=False):
+def create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, valgrind=False):
     """Create a container and return the uuid"""
 
     rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
@@ -1286,7 +1288,7 @@ def create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgri
             destroy_container(conf, pool, label)
             rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
 
-    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
+    assert rc.returncode == 0, rc
     return rc.json['response']['container_uuid']
 
 def destroy_container(conf, pool, container, valgrind=True):
@@ -1476,9 +1478,9 @@ class posix_tests():
                               use_json=True)
             print(rc)
             assert rc.returncode == 0, rc
-            # Don't use JSON here because of https://jira.hpdd.intel.com/browse/DAOS-8330
             rc = run_daos_cmd(self.conf,
-                              ['fs', 'get-attr', '--path', check_path])
+                              ['fs', 'get-attr', '--path', check_path],
+                              use_json=True)
             print(rc)
             assert rc.returncode == 0, rc
 
@@ -1748,7 +1750,7 @@ class posix_tests():
     def test_uns_create(self):
         """Simple test to create a container using a path in dfuse"""
         path = os.path.join(self.dfuse.dir, 'mycont')
-        create_cont(self.conf, pool=self.pool.uuid, path=path, ctype="POSIX")
+        create_cont(self.conf, path=path, ctype="POSIX")
         stbuf = os.stat(path)
         print(stbuf)
         assert stbuf.st_ino < 100
@@ -1898,6 +1900,33 @@ class posix_tests():
         print(os.fstat(ofd.fileno()))
 
         ofd.close()
+
+    @needs_dfuse
+    def test_chmod_ro(self):
+        """Test that chmod and fchmod work correctly with files created read-only
+
+        DAOS-6238"""
+
+        path = self.dfuse.dir
+        fname = os.path.join(path, 'test_file1')
+        ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
+        ns = os.stat(fname)
+        print(ns)
+        os.close(ofd)
+        os.chmod(fname, stat.S_IRUSR)
+        ns = os.stat(fname)
+        print(ns)
+        assert stat.S_IMODE(ns.st_mode) == stat.S_IRUSR
+
+        fname = os.path.join(path, 'test_file2')
+        ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
+        ns = os.stat(fname)
+        print(ns)
+        os.fchmod(ofd, stat.S_IRUSR)
+        os.close(ofd)
+        ns = os.stat(fname)
+        print(ns)
+        assert stat.S_IMODE(ns.st_mode) == stat.S_IRUSR
 
     def test_with_path(self):
         """Test that dfuse starts with path option."""
@@ -2332,13 +2361,6 @@ def run_tests(dfuse):
     except FileExistsError:
         pass
     os.unlink(fname)
-
-    # DAOS-6238
-    fname = os.path.join(path, 'test_file4')
-    ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
-    assert_file_size_fd(ofd, 0)
-    os.close(ofd)
-    os.chmod(fname, stat.S_IRUSR)
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
