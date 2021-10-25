@@ -5,11 +5,12 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 
 
+@skipForTicket("DAOS-8859")
 class DaosRacerTest(TestWithServers):
     """Test cases that utilize the daos_racer tool.
 
