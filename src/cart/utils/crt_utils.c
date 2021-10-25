@@ -316,7 +316,7 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 	}
 
 	while (1) {
-		rc = fscanf(f, "%8d %32s", &parsed_rank, parsed_addr);
+		rc = fscanf(f, "%8d %254s", &parsed_rank, parsed_addr);
 		if (rc == EOF) {
 			rc = 0;
 			break;
