@@ -206,55 +206,6 @@ func TestValidateNetworkConfig(t *testing.T) {
 	}
 }
 
-// ValidateNUMAConfigNonNumaAware verifies that the numa detection successfully executes without error
-// with a topology that has no NUMA devices in it.
-func TestValidateNUMAConfigNonNumaAware(t *testing.T) {
-	for name, tc := range map[string]struct {
-		device   string
-		topology string
-	}{
-		"no NUMA nodes in topology - has devices": {
-			device:   "fake device",
-			topology: "testdata/no-numa-nodes.xml",
-		},
-		"no NUMA nodes in topology with eth0 device": {
-			device:   "eth0",
-			topology: "testdata/no-numa-nodes.xml",
-		},
-		"no NUMA nodes in topology with ib1 device": {
-			device:   "ib1",
-			topology: "testdata/no-numa-nodes.xml",
-		},
-		"no NUMA nodes no devices in topology with fake device": {
-			device:   "fake device",
-			topology: "testdata/no-numa-no-devices.xml",
-		},
-		"no NUMA nodes no devices in topology with eth0 device": {
-			device:   "eth0",
-			topology: "testdata/no-numa-no-devices.xml",
-		},
-		"no NUMA nodes no devices in topology with fake device with ib1 device": {
-			device:   "ib1",
-			topology: "testdata/no-numa-no-devices.xml",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			_, err := os.Stat(tc.topology)
-			AssertEqual(t, err, nil, "unable to load xmlTopology")
-			os.Setenv("HWLOC_XMLFILE", tc.topology)
-			defer os.Unsetenv("HWLOC_XMLFILE")
-
-			netCtx, err := Init(context.Background())
-			defer CleanUp(netCtx)
-			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
-			AssertEqual(t, HasNUMA(netCtx), false, "Unexpected detection of NUMA nodes in provided topology")
-
-			err = ValidateNUMAConfig(netCtx, tc.device, 0)
-			AssertEqual(t, err, nil, "Error on ValidateNUMAConfig")
-		})
-	}
-}
-
 // TestNumaAware verifies that the numa detection successfully executes without error
 // with a standard topology and one without any OS devices in it
 func TestNumaAware(t *testing.T) {
@@ -291,8 +242,6 @@ func TestNumaAware(t *testing.T) {
 
 			if tc.result {
 				AssertEqual(t, HasNUMA(netCtx), tc.result, "Unable to detect NUMA on provided topology")
-			} else {
-				AssertEqual(t, HasNUMA(netCtx), tc.result, "Detected NUMA on non-numa topology")
 			}
 		})
 	}
@@ -336,16 +285,8 @@ func TestGetAffinityForDeviceEdgeCases(t *testing.T) {
 			device:   "lo",
 			topology: "testdata/no-numa-nodes.xml",
 		},
-		"non-numa topology, with OS devices, no network devices, unknown input device": {
-			device:   "bar",
-			topology: "testdata/no-numa-nodes.xml",
-		},
 		"non-numa topology, with no OS devices, known input device": {
 			device:   "lo",
-			topology: "testdata/no-numa-no-devices.xml",
-		},
-		"non-numa topology, with no OS devices, unknown input device": {
-			device:   "bazz",
 			topology: "testdata/no-numa-no-devices.xml",
 		},
 	} {
