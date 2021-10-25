@@ -276,11 +276,14 @@ sched_req_attr_init(struct sched_req_attr *attr, unsigned int type,
 struct sched_request;	/* Opaque schedule request */
 
 /**
- * Get A sched request.
+ * Get a sched request.
  *
  * \param[in] attr	Sched request attributes.
- * \param[in] ult	ULT attached to the sched request,
- *			self ULT will be used when ult == ABT_THREAD_NULL.
+ * \param[in] ult	ULT attached to the sched request, self ULT will be
+ *			used when ult == ABT_THREAD_NULL. If not
+ *			ABT_THREAD_NULL, ult will be freed by sched_req.
+ *			Unnamed ULTs (e.g., from ABT_thread_self) are
+ *			prohibited.
  *
  * \retval		Sched request.
  */
@@ -288,7 +291,8 @@ struct sched_request *
 sched_req_get(struct sched_req_attr *attr, ABT_thread ult);
 
 /**
- * Put A sched request.
+ * Put a sched request. If the associated ULT was passed in by the caller, it
+ * will be freed.
  *
  * \param[in] req	Sched request.
  *
@@ -325,7 +329,8 @@ void sched_req_sleep(struct sched_request *req, uint32_t msec);
 void sched_req_wakeup(struct sched_request *req);
 
 /**
- * Wakeup a sched request attached ULT terminated.
+ * Wakeup a sched request attached ULT terminated. The associated ULT of \a req
+ * must not an unnamed ULT.
  *
  * \param[in] req	Sched request.
  * \param[in] abort	Abort the ULT or not.
