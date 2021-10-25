@@ -14,6 +14,7 @@
 #include <getopt.h>
 #include <sys/queue.h>
 
+#define M_TAG		DM_TAG(TEST)
 #include <gurt/common.h>
 #include <cart/swim.h>
 

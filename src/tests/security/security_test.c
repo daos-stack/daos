@@ -7,6 +7,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define M_TAG		DM_TAG(TEST)
+
 #include <daos_types.h>
 #include <daos_errno.h>
 #include <daos_security.h>

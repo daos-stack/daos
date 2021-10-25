@@ -12,7 +12,8 @@
  * related container metadata.
  */
 
-#define D_LOGFAC DD_FAC(container)
+#define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include <daos_srv/container.h>
 
@@ -2246,7 +2247,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ACL;
-		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
+		DM_ALLOC(M_PROP, prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
 		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
@@ -2323,7 +2324,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ROOTS;
-		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_len);
+		DM_ALLOC(M_PROP, prop->dpp_entries[idx].dpe_val_ptr, value.iov_len);
 		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2533,7 +2534,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		struct daos_prop_entry	*entry, *iv_entry;
 		int			 i;
 
-		D_ALLOC_PTR(iv_prop);
+		DM_ALLOC_PTR(M_PROP, iv_prop);
 		if (iv_prop == NULL)
 			return -DER_NOMEM;
 

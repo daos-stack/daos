@@ -20,6 +20,7 @@
  *                                ds_cont_hdl
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include <daos_srv/container.h>
 #include <daos_srv/security.h>

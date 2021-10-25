@@ -5,6 +5,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(st)
+#define M_TAG		DM_TAG(UTIL)
 
 #include <stdio.h>
 #include <stdlib.h>

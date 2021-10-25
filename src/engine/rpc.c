@@ -6,7 +6,8 @@
 /**
  * server: RPC Utilities
  */
-#define D_LOGFAC       DD_FAC(server)
+#define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(ENG)
 
 #include <daos_srv/daos_engine.h>
 

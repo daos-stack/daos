@@ -8,6 +8,7 @@
  *
  * src/tests/suite/daos_array.c
  */
+#define M_TAG		DM_TAG(TEST)
 
 #include <daos.h>
 #include "daos_test.h"

@@ -18,7 +18,8 @@
  *   - TODO: Collect ntotal, nskipped, and nfailed into a struct test_stat.
  */
 
-#define D_LOGFAC DD_FAC(tests)
+#define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include "vts_io.h"
 #include "vts_array.h"

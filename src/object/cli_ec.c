@@ -9,6 +9,7 @@
  * src/object/cli_ec.c
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(EC)
 
 #include <daos/common.h>
 #include <daos_task.h>
@@ -1836,7 +1837,7 @@ obj_ec_recov_codec_alloc(struct daos_oclass_attr *oca)
 	list_size = roundup(sizeof(uint32_t) * p, 8);
 	err_size = roundup(sizeof(bool) * (k + p), 8);
 
-	D_ALLOC(buf, struct_size + tbl_size + 3 * matrix_size + idx_size +
+	DM_ALLOC(M_EC_RECOV, buf, struct_size + tbl_size + 3 * matrix_size + idx_size +
 		     list_size + err_size);
 	if (buf == NULL)
 		return NULL;
@@ -1877,7 +1878,7 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 	D_MUTEX_LOCK(&reasb_req->orr_mutex);
 	recov_lists = reasb_req->orr_fail->efi_recx_lists;
 	if (recov_lists == NULL) {
-		D_ALLOC_ARRAY(recov_lists, nr);
+		DM_ALLOC_ARRAY(M_EC_RECOV, recov_lists, nr);
 		if (recov_lists == NULL)
 			return -DER_NOMEM;
 		reasb_req->orr_fail->efi_recx_lists = recov_lists;
@@ -1970,13 +1971,13 @@ obj_ec_fail_info_get(struct obj_reasb_req *reasb_req, bool create, uint16_t nr)
 		return fail_info;
 
 	D_ASSERT(nr <= OBJ_EC_MAX_M);
-	D_ALLOC_PTR(fail_info);
+	DM_ALLOC_PTR(M_EC_RECOV, fail_info);
 	if (fail_info == NULL)
 		return NULL;
 	reasb_req->orr_fail = fail_info;
 	reasb_req->orr_fail_alloc = 1;
 
-	D_ALLOC_ARRAY(fail_info->efi_tgt_list, nr);
+	DM_ALLOC_ARRAY(M_EC_RECOV, fail_info->efi_tgt_list, nr);
 	if (fail_info->efi_tgt_list == NULL)
 		return NULL;
 
@@ -2276,7 +2277,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	uint32_t			 i, j, tidx = 0;
 	int				 rc = 0;
 
-	D_ALLOC_ARRAY(fail_info->efi_stripe_sgls, iod_nr);
+	DM_ALLOC_ARRAY(M_EC_RECOV, fail_info->efi_stripe_sgls, iod_nr);
 	if (fail_info->efi_stripe_sgls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	fail_info->efi_stripe_sgls_nr = iod_nr;
@@ -2322,13 +2323,13 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		rc = d_sgl_init(sgl, 1);
 		if (rc)
 			goto out;
-		D_ALLOC(buf, buf_sz);
+		DM_ALLOC(M_EC_RECOV, buf, buf_sz);
 		if (buf == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		d_iov_set(&sgl->sg_iovs[0], buf, buf_sz);
 	}
 
-	D_ALLOC_ARRAY(fail_info->efi_recov_tasks, recx_ep_nr);
+	DM_ALLOC_ARRAY(M_EC_RECOV, fail_info->efi_recov_tasks, recx_ep_nr);
 	if (fail_info->efi_recov_tasks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	fail_info->efi_recov_ntasks = recx_ep_nr;

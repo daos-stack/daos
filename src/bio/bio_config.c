@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
+#define M_TAG		DM_TAG(BIO)
 
 #include <spdk/file.h>
 #include <spdk/util.h>
@@ -552,7 +553,7 @@ bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
 	rc = add_bdevs_to_opts(ctx, bdev_ss, vmd_enabled, opts);
 out:
 	free(ctx->json_data);
-	free(ctx->values);
+	D_FREE(ctx->values);
 	D_FREE(ctx);
 	return rc;
 }

@@ -6,6 +6,8 @@
 /**
  * This is a compile test to ensure that cart can be compiled with -pedantic
  */
+#define M_TAG		DM_TAG(TEST)
+
 #include <cart/api.h>
 #include <cart/iv.h>
 #include <daos_errno.h>

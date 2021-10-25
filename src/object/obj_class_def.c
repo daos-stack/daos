@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(OBJ)
 
 #include "obj_class.h"
 

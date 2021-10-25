@@ -1,3 +1,10 @@
+/**
+ * (C) Copyright 2021 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+#define M_TAG		DM_TAG(VOS_DTX)
+
 #include <daos/common.h>
 #include <daos/btree_class.h>
 #include <daos/btree.h>

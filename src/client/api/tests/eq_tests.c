@@ -11,6 +11,7 @@
  * Author: Liang Zhen  <liang.zhen@intel.com>
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include <pthread.h>
 #include <stdarg.h>

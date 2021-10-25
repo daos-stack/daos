@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define M_TAG		DM_TAG(LIB)
 
 #include <stdio.h>
 #include <fcntl.h>

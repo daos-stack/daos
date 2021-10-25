@@ -3,6 +3,8 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define M_TAG		DM_TAG(TEST)
+
 int main(void)
 {
 #if FAULT_INJECTION

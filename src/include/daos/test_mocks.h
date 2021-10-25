@@ -18,6 +18,11 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <abt.h>
+
+#ifndef M_TAG
+#define M_TAG		DM_TAG(TEST)
+#endif
+
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
 

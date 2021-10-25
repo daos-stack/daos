@@ -7,6 +7,7 @@
  * This file is part of CaRT. It implements CaRT init and finalize related
  * APIs/handling.
  */
+#define M_TAG		DM_TAG(CRT)
 
 #include <malloc.h>
 #include <sys/mman.h>

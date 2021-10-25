@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define M_TAG		DM_TAG(UTIL)
 
 #include <daos/common.h>
 #include <daos/object.h>

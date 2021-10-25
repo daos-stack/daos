@@ -11,6 +11,10 @@
 #ifndef __DAOS_RAS_H__
 #define __DAOS_RAS_H__
 
+#ifndef M_TAG
+#define M_TAG		DM_TAG(ENG)
+#endif
+
 #include <daos_types.h>
 #include <daos/object.h>
 

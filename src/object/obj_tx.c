@@ -9,6 +9,7 @@
  * This module is part of libdaos. It implements the DAOS transaction API.
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(DTX)
 
 #include <daos_task.h>
 #include <daos_types.h>

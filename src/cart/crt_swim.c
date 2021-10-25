@@ -7,6 +7,8 @@
  * This file is part of CaRT. It implements the SWIM integration APIs.
  */
 #define D_LOGFAC	DD_FAC(swim)
+#define M_TAG		DM_TAG(SWIM)
+
 #define CRT_USE_GURT_FAC
 
 #include <ctype.h>

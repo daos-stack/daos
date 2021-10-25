@@ -9,7 +9,8 @@
  * ds_rsvc: Replicated Service Server
  */
 
-#define D_LOGFAC DD_FAC(rsvc)
+#define D_LOGFAC	DD_FAC(rsvc)
+#define M_TAG		DM_TAG(RSVC)
 
 #include <sys/stat.h>
 #include <daos_srv/daos_engine.h>

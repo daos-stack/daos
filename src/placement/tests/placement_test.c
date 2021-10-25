@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  *
  */
+#define M_TAG		DM_TAG(TEST)
 
 #include <daos.h>
 #include "place_obj_common.h"

@@ -15,6 +15,7 @@
 #include <semaphore.h>
 #include <ctype.h>
 
+#define M_TAG		DM_TAG(TEST)
 #include "crt_utils.h"
 #include "test_group_rpc.h"
 #include "test_group_np_common.h"

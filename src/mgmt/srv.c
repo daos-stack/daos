@@ -15,6 +15,7 @@
  * server-side library) and can be unloaded/reloaded.
  */
 #define D_LOGFAC	DD_FAC(mgmt)
+#define M_TAG		DM_TAG(MGMT)
 
 #include <signal.h>
 #include <daos_srv/daos_engine.h>

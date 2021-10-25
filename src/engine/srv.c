@@ -13,7 +13,8 @@
  * - bind execution streams to core/NUMA node
  */
 
-#define D_LOGFAC       DD_FAC(server)
+#define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(ENG)
 
 #include <abt.h>
 #include <daos/common.h>
@@ -320,6 +321,7 @@ dss_srv_handler(void *arg)
 	struct dss_xstream		*dx = (struct dss_xstream *)arg;
 	struct dss_thread_local_storage	*dtc;
 	struct dss_module_info		*dmi;
+	uint64_t			 then = 0;
 	int				 rc;
 	bool				 signal_caller = true;
 
@@ -480,6 +482,7 @@ dss_srv_handler(void *arg)
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
 	signal_caller = false;
+	dm_use_tls_counter();
 	/* main service progress loop */
 	for (;;) {
 		if (dx->dx_comm) {
@@ -496,6 +499,15 @@ dss_srv_handler(void *arg)
 		if (dss_xstream_exiting(dx))
 			break;
 
+		if (dx->dx_xs_id == 0) {
+			uint64_t now = sched_cur_msec();
+
+			/* dump memory consumption every minute */
+			if (now > then + 60 * 1000) {
+				then = now;
+				dm_mem_dump_log();
+			}
+		}
 		ABT_thread_yield();
 	}
 

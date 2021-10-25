@@ -13,6 +13,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(pool)
+#define M_TAG		DM_TAG(POOL)
 
 #include <daos/common.h>
 #include <daos/event.h>

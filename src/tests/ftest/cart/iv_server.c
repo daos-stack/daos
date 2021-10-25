@@ -18,6 +18,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
+#define M_TAG		DM_TAG(TEST)
 #include <gurt/list.h>
 #include <cart/api.h>
 

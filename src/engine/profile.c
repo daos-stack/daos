@@ -7,7 +7,8 @@
  * This file is part of the DAOS server. It implements the DAOS server profile
  * API.
  */
-#define D_LOGFAC       DD_FAC(server)
+#define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(ENG)
 
 #include <abt.h>
 #include <daos/common.h>

@@ -7,6 +7,7 @@
  * dtx: resync DTX status
  */
 #define D_LOGFAC	DD_FAC(dtx)
+#define M_TAG		DM_TAG(DTX)
 
 #include <daos/placement.h>
 #include <daos/pool_map.h>

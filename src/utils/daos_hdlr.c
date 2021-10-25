@@ -9,6 +9,8 @@
  */
 
 #define D_LOGFAC	DD_FAC(client)
+#define M_TAG		DM_TAG(UTIL)
+
 #define ENUM_KEY_BUF		128 /* size of each dkey/akey */
 #define ENUM_LARGE_KEY_BUF	(512 * 1024) /* 512k large key */
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */

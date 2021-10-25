@@ -7,6 +7,7 @@
  * Target Methods
  */
 #define D_LOGFAC	DD_FAC(mgmt)
+#define M_TAG		DM_TAG(MGMT)
 
 #include <sys/stat.h>
 #include <fcntl.h>

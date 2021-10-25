@@ -10,7 +10,8 @@
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 
-#define D_LOGFAC DD_FAC(dfuse)
+#define D_LOGFAC	DD_FAC(dfuse)
+#define M_TAG		DM_TAG(CLI)
 
 #include "dfuse.h"
 

@@ -10,6 +10,7 @@
  * API as well as daos/container.h.
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include <daos/container.h>
 #include <daos/cont_props.h>

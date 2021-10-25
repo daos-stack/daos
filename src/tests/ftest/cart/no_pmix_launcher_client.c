@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <semaphore.h>
+#define M_TAG		DM_TAG(TEST)
 #include <cart/api.h>
 
 #include "crt_utils.h"

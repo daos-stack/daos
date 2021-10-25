@@ -10,6 +10,7 @@
  * Container Server API.
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include <daos_srv/daos_engine.h>
 #include <daos/rpc.h>

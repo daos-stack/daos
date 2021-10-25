@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(common)
+#define M_TAG		DM_TAG(PROP)
 
 #include <daos/cont_props.h>
 #include <daos/common.h>

@@ -7,6 +7,7 @@
  * This file is part of the DAOS server. It implements the server .
  */
 #define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(IV)
 
 #include <abt.h>
 #include <daos/common.h>

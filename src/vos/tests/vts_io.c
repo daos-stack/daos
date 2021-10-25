@@ -11,6 +11,7 @@
  * Author: Vishwanath Venkatesan <vishwanath.venaktesan@intel.com>
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include "vts_io.h"
 #include <daos_api.h>
@@ -950,7 +951,7 @@ io_obj_cache_test(void **state)
 	rc = vos_pool_destroy(po_name, pool_uuid);
 	assert_rc_equal(rc, 0);
 	vos_obj_cache_destroy(occ);
-	free(po_name);
+	D_FREE(po_name);
 }
 
 static void

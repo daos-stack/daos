@@ -9,6 +9,7 @@
  * vos/vos_dtx.c
  */
 #define D_LOGFAC	DD_FAC(vos)
+#define M_TAG		DM_TAG(VOS_DTX)
 
 #include <libpmem.h>
 #include <daos_srv/vos.h>

@@ -7,6 +7,7 @@
  * This file is part of the DAOS profile.
  */
 #define D_LOGFAC	DD_FAC(common)
+#define M_TAG		DM_TAG(LIB)
 
 #include <daos/common.h>
 #include <daos/profile.h>
@@ -265,7 +266,7 @@ daos_profile_dump(struct daos_profile *dp)
 		unlink(path);
 out:
 	if (path != name)
-		free(path);
+		D_FREE(path);
 }
 
 int

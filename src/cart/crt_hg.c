@@ -7,6 +7,7 @@
  * This file is part of CaRT. It implements the main interfaces to mercury.
  */
 #define D_LOGFAC	DD_FAC(hg)
+#define M_TAG		DM_TAG(CRT)
 
 #include "crt_internal.h"
 #include "mercury_util.h"
@@ -872,7 +873,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 	D_ASSERT(opc_info->coi_opc == opc);
 
-	D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
+	DM_ALLOC(M_CRT_RPC, rpc_priv, opc_info->coi_rpc_size);
 	if (unlikely(rpc_priv == NULL)) {
 		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
 		crt_hg_unpack_cleanup(proc);
@@ -1615,10 +1616,10 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	hg_ctx = &ctx->cc_hg_ctx;
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkctx != NULL);
 
-	D_ALLOC_PTR(bulk_cbinfo);
+	DM_ALLOC_PTR(M_CRT_RPC, bulk_cbinfo);
 	if (bulk_cbinfo == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC_PTR(bulk_desc_dup);
+	DM_ALLOC_PTR(M_CRT_RPC, bulk_desc_dup);
 	if (bulk_desc_dup == NULL) {
 		D_FREE(bulk_cbinfo);
 		D_GOTO(out, rc = -DER_NOMEM);

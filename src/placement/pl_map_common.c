@@ -7,6 +7,7 @@
  * src/placement/pl_map_common.c
  */
 #define D_LOGFAC        DD_FAC(placement)
+#define M_TAG		DM_TAG(PL)
 
 #include "pl_map.h"
 

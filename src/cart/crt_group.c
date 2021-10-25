@@ -7,6 +7,7 @@
  * This file is part of CaRT. It implements the main group APIs.
  */
 #define D_LOGFAC	DD_FAC(grp)
+#define M_TAG		DM_TAG(CRT)
 
 #include <sys/types.h>
 #include <sys/stat.h>

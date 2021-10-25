@@ -9,6 +9,7 @@
  * vos/tests/vts_common.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -55,7 +56,7 @@ vts_alloc_gen_fname(char **fname)
 	char *file_name = NULL;
 	int n;
 
-	file_name = malloc(25);
+	D_ALLOC(file_name, 25);
 	if (!file_name)
 		return -ENOMEM;
 	n = snprintf(file_name, 25, VPOOL_NAME);
@@ -160,7 +161,7 @@ vts_ctx_fini(struct vos_test_ctx *tcx)
 		assert_rc_equal(rc, 0);
 		rc = vos_pool_destroy(tcx->tc_po_name, tcx->tc_po_uuid);
 		assert_rc_equal(rc, 0);
-		free(tcx->tc_po_name);
+		D_FREE(tcx->tc_po_name);
 		/* fallthrough */
 	}
 	memset(tcx, 0, sizeof(*tcx));

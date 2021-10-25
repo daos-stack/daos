@@ -11,6 +11,7 @@
 #define PyString_AsString	PyBytes_AsString
 
 #include <Python.h>
+#define M_TAG		DM_TAG(CLI)
 
 #include <daos_errno.h>
 #include <gurt/debug.h>

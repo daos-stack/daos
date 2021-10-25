@@ -9,6 +9,7 @@
  * tests/suite/dfs_test
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include <getopt.h>
 #include "dfs_test.h"

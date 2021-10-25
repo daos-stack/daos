@@ -5,6 +5,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(pool)
+#define M_TAG		DM_TAG(POOL)
 
 #include <daos_srv/vos.h>
 #include <daos_srv/srv_csum.h>

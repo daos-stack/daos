@@ -7,6 +7,7 @@
  * This file is part of CaRT. It implements the main RPC routines.
  */
 #define D_LOGFAC	DD_FAC(rpc)
+#define M_TAG		DM_TAG(CRT_RPC)
 
 #include <semaphore.h>
 

@@ -9,7 +9,9 @@
  *
  * Author: Jeff Olivier <jeffrey.v.olivier@intel.com>
  */
-#define D_LOGFAC DD_FAC(vos)
+#define D_LOGFAC	DD_FAC(vos)
+#define M_TAG		DM_TAG(VOS)
+
 #include <daos/common.h>
 #include <daos_srv/vos.h>
 #include <daos/btree.h>

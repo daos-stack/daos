@@ -7,6 +7,7 @@
  * Container Object ID IV.
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include <abt.h>
 #include <daos_errno.h>

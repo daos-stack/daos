@@ -10,6 +10,7 @@
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
 #define D_LOGFAC	DD_FAC(vos)
+#define M_TAG		DM_TAG(VOS)
 
 #include <daos/common.h>
 #include <daos/btree.h>

@@ -7,6 +7,7 @@
  * ds_cont: Epoch Operations
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>

@@ -9,6 +9,9 @@
 #include <pthread.h>
 #include <string.h>
 #include <stdlib.h>
+
+#define M_TAG		DM_TAG(TEST)
+
 #include <gurt/common.h> /* container_of */
 #include <gurt/atomic.h>
 #include "dfuse_obj_da.h"

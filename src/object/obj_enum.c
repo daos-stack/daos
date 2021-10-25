@@ -8,7 +8,8 @@
  *
  * Enumeration pack & unpack object.
  */
-#define D_LOGFAC DD_FAC(object)
+#define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(OBJ)
 
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>

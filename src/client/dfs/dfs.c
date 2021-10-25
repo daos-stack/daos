@@ -5,6 +5,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(dfs)
+#define M_TAG		DM_TAG(CLI)
 
 #include <fcntl.h>
 #include <sys/stat.h>

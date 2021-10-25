@@ -9,6 +9,7 @@
  * vos/vos_io.c
  */
 #define D_LOGFAC	DD_FAC(vos)
+#define M_TAG		DM_TAG(VOS)
 
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -797,7 +798,7 @@ bsgl_csums_resize(struct vos_io_context *ioc)
 		struct dcs_csum_info *new_infos;
 		uint32_t	 new_nr = dcb_nr * 2;
 
-		D_REALLOC_ARRAY(new_infos, csums, dcb_nr, new_nr);
+		DM_REALLOC_ARRAY(M_CSUM, new_infos, csums, dcb_nr, new_nr);
 		if (new_infos == NULL)
 			return -DER_NOMEM;
 
@@ -2254,11 +2255,11 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
-		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
+		DM_ALLOC_ARRAY(M_VOS_DTX, daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
+		DM_ALLOC_ARRAY(M_VOS_DTX, dces, dth->dth_dti_cos_count);
 		if (dces == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
 

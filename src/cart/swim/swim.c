@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(swim)
+#define M_TAG		DM_TAG(SWIM)
 
 #include "swim_internal.h"
 #include <assert.h>

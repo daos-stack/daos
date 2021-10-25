@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
+#define M_TAG		DM_TAG(BIO)
 
 #include <sys/stat.h>
 #include <unistd.h>

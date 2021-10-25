@@ -14,6 +14,7 @@
 #include <getopt.h>
 #include <semaphore.h>
 
+#define M_TAG		DM_TAG(TEST)
 #include <gurt/common.h>
 #include <gurt/fault_inject.h>
 #include <cart/api.h>

@@ -11,6 +11,10 @@
 #define D_LOGFAC DD_FAC(dfuse)
 #endif
 
+#ifndef M_TAG
+#define M_TAG		DM_TAG(CLI)
+#endif
+
 #include "dfuse_log.h"
 
 #endif /* __DFUSE_COMMON_H__ */

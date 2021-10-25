@@ -7,6 +7,7 @@
  * object client: Module Definitions
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(OBJ)
 
 #include <pthread.h>
 #include <daos/common.h>

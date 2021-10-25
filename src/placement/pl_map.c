@@ -9,6 +9,7 @@
  * src/placement/pl_map.c
  */
 #define D_LOGFAC        DD_FAC(placement)
+#define M_TAG		DM_TAG(PL)
 
 #include "pl_map.h"
 #include <gurt/hash.h>

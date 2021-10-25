@@ -50,6 +50,8 @@
 	ACTION(DB_TRACE, trace, trace, 0, arg)  \
 	/** Memory operations */                \
 	ACTION(DB_MEM,   mem,   mem,   0, arg)  \
+	/** debugging memory (leak) */		\
+	ACTION(DB_DM,	 dmem,	dmem,  0, arg)  \
 	/** Network operations */               \
 	ACTION(DB_NET,   net,   net,   0, arg)  \
 	/** I/O operations */                   \

@@ -13,6 +13,8 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#define M_TAG		DM_TAG(TEST)
+
 #include <daos/tests_lib.h>
 #include <daos/drpc.h>
 #include <daos_pool.h>

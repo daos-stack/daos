@@ -50,6 +50,10 @@
 	} while (0)
 #endif /* FAULT_INJECTION */
 
+#ifndef M_TAG
+#define M_TAG		DM_TAG(TEST)
+#endif
+
 #include <mpi.h>
 #include <daos/debug.h>
 #include <daos/common.h>

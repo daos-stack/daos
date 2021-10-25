@@ -9,6 +9,7 @@
  * tests/suite/daos_base_tx.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include "daos_test.h"
 #include "daos_iotest.h"

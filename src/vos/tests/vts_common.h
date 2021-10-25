@@ -15,6 +15,11 @@
 #include <string.h>
 #include <inttypes.h>
 #include <cmocka.h>
+
+#ifndef M_TAG
+#define M_TAG		DM_TAG(TEST)
+#endif
+
 #include <daos/common.h>
 #include <daos/object.h>
 #include <daos/tests_lib.h>

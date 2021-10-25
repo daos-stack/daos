@@ -47,6 +47,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(EC_AGG)
 
 #include <stddef.h>
 #include <stdio.h>

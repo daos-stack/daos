@@ -8,6 +8,7 @@
  * create object task.
  */
 #define DDSUBSYS	DDFAC(object)
+#define M_TAG		DM_TAG(OBJ)
 
 #include <daos_task.h>
 #include <daos_types.h>

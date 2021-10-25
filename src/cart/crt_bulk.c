@@ -7,6 +7,7 @@
  * This file is part of CaRT. It implements the CaRT bulk related APIs.
  */
 #define D_LOGFAC	DD_FAC(bulk)
+#define M_TAG		DM_TAG(CRT_RPC)
 
 #include "crt_internal.h"
 

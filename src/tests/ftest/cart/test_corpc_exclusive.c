@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
+#define M_TAG		DM_TAG(TEST)
 #include "crt_utils.h"
 
 static d_rank_t my_rank;

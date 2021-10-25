@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+
+#define M_TAG		DM_TAG(TEST)
+
 #include <daos/drpc.h>
 #include "drpc_test.pb-c.h"
 

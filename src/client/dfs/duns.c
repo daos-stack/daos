@@ -8,6 +8,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(duns)
+#define M_TAG		DM_TAG(CLI)
 
 #include <dirent.h>
 #include <libgen.h>

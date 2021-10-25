@@ -8,6 +8,7 @@
  * telemetry: TELEMETRY common logic
  */
 #define D_LOGFAC	DD_FAC(telem)
+#define M_TAG		DM_TAG(GURT)
 
 #include <math.h>
 #include <float.h>

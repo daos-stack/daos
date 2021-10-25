@@ -8,7 +8,8 @@
  * functionality for communicating events to the control plane.
  */
 
-#define D_LOGFAC DD_FAC(server)
+#define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(ENG)
 
 #include <daos/drpc_modules.h>
 #include <daos_srv/ras.h>
@@ -183,7 +184,7 @@ log_event(Shared__RASEvent *evt)
 out:
 	fclose(stream);
 	D_INFO("&&& RAS EVENT%s\n", buf);
-	D_FREE(buf);
+	free(buf);
 }
 
 static int

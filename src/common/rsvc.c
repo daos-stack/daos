@@ -10,6 +10,7 @@
  * mainly about client state and client leader searching.
  */
 #define D_LOGFAC	DD_FAC(common)
+#define M_TAG		DM_TAG(RSVC)
 
 #include <daos/common.h>
 #include <daos/rsvc.h>

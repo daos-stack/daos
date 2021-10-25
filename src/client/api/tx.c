@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(client)
+#define M_TAG		DM_TAG(CLI)
 
 #include <daos/object.h>
 #include <daos/task.h>

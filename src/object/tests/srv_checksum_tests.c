@@ -8,6 +8,8 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <cmocka.h>
+
+#define M_TAG		DM_TAG(TEST)
 #include <daos/test_utils.h>
 #include <daos/checksum.h>
 #include <daos_srv/evtree.h>

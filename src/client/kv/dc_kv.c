@@ -9,6 +9,7 @@
  * src/kv/dc_kv.c
  */
 #define D_LOGFAC	DD_FAC(kv)
+#define M_TAG		DM_TAG(CLI)
 
 #include <daos/common.h>
 #include <daos/tse.h>

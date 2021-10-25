@@ -8,6 +8,7 @@
  * not belong to other parts.
  */
 #define D_LOGFAC	DD_FAC(common)
+#define M_TAG		DM_TAG(LIB)
 
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -194,14 +195,14 @@ daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src)
 		return 0;
 
 	total = dst->sg_nr + src->sg_nr;
-	D_REALLOC_ARRAY(new_iovs, dst->sg_iovs, dst->sg_nr, total);
+	DM_REALLOC_ARRAY(M_IO_ARG, new_iovs, dst->sg_iovs, dst->sg_nr, total);
 	if (new_iovs == NULL)
 		return -DER_NOMEM;
 
 	for (i = dst->sg_nr; i < total; i++) {
 		int idx = i - dst->sg_nr;
 
-		D_ALLOC_NZ(new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
+		DM_ALLOC_NZ(M_IO_ARG, new_iovs[i].iov_buf, src->sg_iovs[idx].iov_buf_len);
 		if (new_iovs[i].iov_buf == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 
@@ -274,8 +275,8 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size)
 	if (sgl->sg_iovs[idx].iov_buf_len >= new_size)
 		return 0;
 
-	D_REALLOC(new_buf, sgl->sg_iovs[idx].iov_buf,
-		  sgl->sg_iovs[idx].iov_buf_len, new_size);
+	DM_REALLOC(M_IO_ARG, new_buf, sgl->sg_iovs[idx].iov_buf,
+		   sgl->sg_iovs[idx].iov_buf_len, new_size);
 	if (new_buf == NULL)
 		return -DER_NOMEM;
 
@@ -414,7 +415,7 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 	D_ASSERT(src->iov_buf_len > 0);
 	D_ASSERT(dst != NULL);
 
-	D_ALLOC(dst->iov_buf, src->iov_buf_len);
+	DM_ALLOC(M_IO_ARG, dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
 		return -DER_NOMEM;
 	dst->iov_buf_len = src->iov_buf_len;
@@ -431,7 +432,7 @@ daos_iov_alloc(d_iov_t *iov, daos_size_t size, bool set_full)
 	D_ASSERT(size > 0);
 
 	memset(iov, 0, sizeof(*iov));
-	D_ALLOC(iov->iov_buf, size);
+	DM_ALLOC(M_IO_ARG, iov->iov_buf, size);
 	if (iov->iov_buf == NULL)
 		return -DER_NOMEM;
 
@@ -734,7 +735,7 @@ daos_recx_alloc(uint32_t nr)
 {
 	daos_recx_t	*recxs;
 
-	D_ALLOC_ARRAY(recxs, nr);
+	DM_ALLOC_ARRAY(M_IO_ARG, recxs, nr);
 	return recxs;
 }
 

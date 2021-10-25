@@ -9,6 +9,7 @@
  * Rebuild service module api.
  */
 #define D_LOGFAC	DD_FAC(rebuild)
+#define M_TAG		DM_TAG(RECOV)
 
 #include <daos/rpc.h>
 #include <daos/pool.h>

@@ -40,6 +40,7 @@
  * implementation. An HLCT tracks the highest HLC timestamp the process has
  * heard of. It never generates any new HLC timestamps.
  */
+#define M_TAG		DM_TAG(CRT)
 
 #include "crt_internal.h"
 #include <gurt/atomic.h>

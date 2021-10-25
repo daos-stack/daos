@@ -7,6 +7,7 @@
  * This file is part of CaRT. It implements the server side of the cart_ctl
  * command line utility.
  */
+#define M_TAG		DM_TAG(CRT)
 
 #include "crt_internal.h"
 #include <gurt/atomic.h>

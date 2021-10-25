@@ -8,6 +8,11 @@
 #define __CMD_DAOS_UTIL_H__
 
 #define D_LOGFAC	DD_FAC(client)
+
+#ifndef M_TAG
+#define M_TAG		DM_TAG(CLI)
+#endif
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif

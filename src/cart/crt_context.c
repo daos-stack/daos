@@ -7,6 +7,7 @@
  * This file is part of CaRT. It implements the CaRT context related APIs.
  */
 #define D_LOGFAC	DD_FAC(rpc)
+#define M_TAG		DM_TAG(CRT)
 
 #include "crt_internal.h"
 

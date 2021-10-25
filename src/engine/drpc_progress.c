@@ -15,6 +15,9 @@
 #include <stdlib.h>
 #include <poll.h>
 #include <errno.h>
+
+#define M_TAG		DM_TAG(ENG)
+
 #include <daos_srv/daos_engine.h>
 #include "drpc_internal.h"
 

@@ -9,6 +9,7 @@
  * vos/tests/vts_gc.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include "vts_io.h"
 #include <daos_api.h>
@@ -587,7 +588,7 @@ gc_teardown(void **state)
 	assert_ptr_equal(args, &gc_args);
 
 	dts_ctx_fini(&args->gc_ctx);
-	free(args->gc_ctx.tsc_pmem_file);
+	D_FREE(args->gc_ctx.tsc_pmem_file);
 
 	memset(&gc_stat, 0, sizeof(gc_stat));
 	memset(args, 0, sizeof(*args));

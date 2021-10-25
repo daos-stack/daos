@@ -11,6 +11,10 @@
 #ifndef __DAOS_TEST_UTILS_H__
 #define __DAOS_TEST_UTILS_H__
 
+#ifndef M_TAG
+#define M_TAG		DM_TAG(TEST)
+#endif
+
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
 

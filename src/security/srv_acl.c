@@ -6,6 +6,9 @@
 
 #include <unistd.h>
 #include <string.h>
+
+#define M_TAG		DM_TAG(SEC)
+
 #include <daos_errno.h>
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>

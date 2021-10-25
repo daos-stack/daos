@@ -7,6 +7,7 @@
  * dtx: DTX common logic
  */
 #define D_LOGFAC	DD_FAC(dtx)
+#define M_TAG		DM_TAG(DTX)
 
 #include <abt.h>
 #include <uuid/uuid.h>

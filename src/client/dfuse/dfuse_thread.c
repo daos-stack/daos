@@ -6,8 +6,10 @@
 
 #include <pthread.h>
 
+#define D_LOGFAC	DD_FAC(dfuse)
+#define M_TAG		DM_TAG(CLI)
+
 #include <fuse3/fuse_lowlevel.h>
-#define D_LOGFAC DD_FAC(dfuse)
 #include "dfuse.h"
 
 struct dfuse_thread {

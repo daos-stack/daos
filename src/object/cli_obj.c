@@ -9,6 +9,7 @@
  * src/object/cli_obj.c
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(OBJ)
 
 #include <daos/object.h>
 #include <daos/container.h>
@@ -412,7 +413,7 @@ obj_auxi_add_failed_tgt(struct obj_auxi_args *obj_auxi, uint32_t tgt)
 	uint32_t			*tgts;
 
 	if (tgt_list == NULL) {
-		D_ALLOC_PTR(tgt_list);
+		DM_ALLOC_PTR(M_RECOV, tgt_list);
 		if (tgt_list == NULL)
 			return -DER_NOMEM;
 		allocated = true;
@@ -805,7 +806,7 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj, daos_
 	buf_size = size_iod + size_sgl + size_oiod + size_recx + size_sorter +
 		   size_singv + size_array + size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN +
 		   size_fetch_stat;
-	D_ALLOC(buf, buf_size);
+	DM_ALLOC(M_IO, buf, buf_size);
 	if (buf == NULL)
 		return -DER_NOMEM;
 
@@ -1134,7 +1135,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 			req_tgts->ort_shard_tgts = NULL;
 		}
 		if (req_tgts->ort_shard_tgts == NULL) {
-			D_ALLOC_ARRAY(req_tgts->ort_shard_tgts, shard_nr);
+			DM_ALLOC_ARRAY(M_IO, req_tgts->ort_shard_tgts, shard_nr);
 			if (req_tgts->ort_shard_tgts == NULL)
 				return -DER_NOMEM;
 		}
@@ -1825,7 +1826,7 @@ obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 	int		 rc = 0;
 
 	D_ASSERTF(nr >= 1, "invalid nr %d.\n", nr);
-	D_ALLOC_ARRAY(bulks, nr);
+	DM_ALLOC_ARRAY(M_IO, bulks, nr);
 	if (bulks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -3049,7 +3050,7 @@ merge_recx_insert(d_list_t *prev, uint64_t offset, uint64_t size, daos_epoch_t e
 {
 	struct obj_auxi_list_recx *new;
 
-	D_ALLOC_PTR(new);
+	DM_ALLOC_PTR(M_IO, new);
 	if (new == NULL)
 		return -DER_NOMEM;
 
@@ -3278,11 +3279,11 @@ merge_key(d_list_t *head, char *key, int key_size)
 		}
 	}
 
-	D_ALLOC_PTR(key_one);
+	DM_ALLOC_PTR(M_IO, key_one);
 	if (key_one == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC(key_one->key.iov_buf, key_size);
+	DM_ALLOC(M_IO, key_one->key.iov_buf, key_size);
 	if (key_one->key.iov_buf == NULL) {
 		D_FREE(key_one);
 		return -DER_NOMEM;
@@ -3331,7 +3332,7 @@ obj_shard_list_key_cb(struct shard_auxi_args *shard_auxi,
 		} else {
 			int left = key_size;
 
-			D_ALLOC(key, key_size);
+			DM_ALLOC(M_IO, key, key_size);
 			if (key == NULL)
 				return -DER_NOMEM;
 
@@ -4688,7 +4689,7 @@ shard_anchor_prep(daos_anchor_t *anchor, int nr)
 	int		i;
 
 	D_ASSERT(anchor->da_sub_anchors == 0);
-	D_ALLOC_ARRAY(sub_anchors, nr);
+	DM_ALLOC_ARRAY(M_IO, sub_anchors, nr);
 	if (sub_anchors == NULL)
 		return -DER_NOMEM;
 
@@ -4780,11 +4781,11 @@ obj_shard_list_prep(daos_obj_list_t *obj_args, struct dc_object *obj,
 
 		seg_size = obj_args->sgl->sg_iovs[0].iov_buf_len / shard_nr;
 
-		D_ALLOC_PTR(shard_arg->la_sgl);
+		DM_ALLOC_PTR(M_IO_ARG, shard_arg->la_sgl);
 		if (shard_arg->la_sgl == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_PTR(shard_iov);
+		DM_ALLOC_PTR(M_IO_ARG, shard_iov);
 		if (shard_iov == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
@@ -5741,7 +5742,7 @@ dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 	D_ASSERTF(obj->cob_grp_nr == nr, "Invalid grp count %u/%u\n",
 		  obj->cob_grp_nr, nr);
 
-	D_ALLOC_ARRAY(dova, reps);
+	DM_ALLOC_ARRAY(M_IO, dova, reps);
 	if (dova == NULL) {
 		D_ERROR(DF_OID" no MEM for verify group, reps %u\n",
 			DP_OID(obj->cob_md.omd_id), reps);

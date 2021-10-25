@@ -7,6 +7,7 @@
  * dtx: DTX RPC
  */
 #define D_LOGFAC	DD_FAC(dtx)
+#define M_TAG		DM_TAG(DTX)
 
 #include <abt.h>
 #include <daos/rpc.h>

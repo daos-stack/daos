@@ -7,6 +7,8 @@
  * This tests a threaded server handling RPCs on a single context
  */
 #include <stdio.h>
+
+#define M_TAG		DM_TAG(TEST)
 #include "threaded_rpc.h"
 
 static int		done;

@@ -7,6 +7,7 @@
  * ds_pool: Pool IV cache
  */
 #define D_LOGFAC	DD_FAC(pool)
+#define M_TAG		DM_TAG(IV)	/* use IV tag */
 
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>

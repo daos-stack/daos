@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#define M_TAG		DM_TAG(ENG)
+
 #include "drpc_handler.h"
 #include <daos/drpc_modules.h>
 

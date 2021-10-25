@@ -8,7 +8,8 @@
  *
  * This file contains the RPC format for rebuild.
  */
-#define D_LOGFAC       DD_FAC(rebuild)
+#define D_LOGFAC	DD_FAC(rebuild)
+#define M_TAG		DM_TAG(RECOV)
 
 #include <daos/object.h>
 #include <daos/rpc.h>

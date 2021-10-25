@@ -7,6 +7,7 @@
  * ds_mgmt: Storage Query Methods
  */
 #define D_LOGFAC	DD_FAC(mgmt)
+#define M_TAG		DM_TAG(MGMT)
 
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
