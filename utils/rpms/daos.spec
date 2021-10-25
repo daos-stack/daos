@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -158,10 +158,12 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-Requires: libpmemobj1 >= 1.11
+# When 1.11.2 is released, we can change this to >= 1.11.2
+Requires: libpmemobj1 = 1.11.0-3suse1500
 %else
 Requires: ipmctl > 02.00.00.3816
-Requires: libpmemobj >= 1.11
+# When 1.11.2 is released, we can change this to >= 1.11.2
+Requires: libpmemobj = 1.11.0-3%{?dist}
 %endif
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
@@ -518,10 +520,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Fri Oct 22 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-3
+* Mon Oct 25 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-4
 - Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
 - Rename daos-tests daos-client-tests and make daos-tests require all
   other test suites to maintain existing behavior
+
+* Wed Oct 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-3
+- Explicitly require 1.11.0-3 of PMDK
 
 * Mon Oct 13 2021 David Quigley <david.quigley@intel.com> 2.1.100-2
 - Add defusedxml as a required dependency for the test package.
