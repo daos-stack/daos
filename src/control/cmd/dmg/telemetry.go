@@ -43,6 +43,7 @@ type telemConfigCmd struct {
 	jsonOutputCmd
 	InstallDir string `long:"install-dir" short:"i" description:"Install directory for telemetry binary"`
 	System     string `long:"system" short:"s" default:"prometheus" description:"Telemetry system to configure"`
+	PromPort   uint   `long:"port" short:"p" default:"9191" description:"Prometheus exporter port"`
 }
 
 func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
@@ -226,19 +227,23 @@ type (
 
 	promCfg struct {
 		Global struct {
-			ScrapeInterval time.Duration `yaml:"scrape_interval"`
-		} `yaml:"global"`
+			ScrapeInterval time.Duration `yaml:"scrape_interval,omitempty"`
+		} `yaml:"global,omitempty"`
 		ScrapeConfigs []*scrapeConfig `yaml:"scrape_configs"`
 	}
 )
 
 func (cmd *telemConfigCmd) loadPromCfg(cfgPath string) (*promCfg, error) {
+	cfg := new(promCfg)
+
 	data, err := ioutil.ReadFile(cfgPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return cfg, nil
+		}
 		return nil, err
 	}
 
-	cfg := &promCfg{}
 	return cfg, yaml.Unmarshal(data, cfg)
 }
 
@@ -247,7 +252,7 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfgPath := path.Join(user.HomeDir, ".prometheus.yml")
+	cfgPath := path.Join(user.HomeDir, "prometheus.yml")
 	promInfo := &installInfo{
 		cfgPath: cfgPath,
 	}
@@ -269,12 +274,16 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 	}
 
 	sc := &staticConfig{}
-	for _, h := range cmd.config.HostList {
+	cfgHosts, err := common.ParseHostList(cmd.config.HostList, 0)
+	if err != nil {
+		return nil, err
+	}
+	for _, h := range cfgHosts {
 		host, _, err := common.SplitPort(h, 0)
 		if err != nil {
 			return nil, err
 		}
-		sc.Targets = append(sc.Targets, host+":9191")
+		sc.Targets = append(sc.Targets, fmt.Sprintf("%s:%d", host, cmd.PromPort))
 	}
 	cfg.ScrapeConfigs = []*scrapeConfig{
 		{
