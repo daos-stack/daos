@@ -21,6 +21,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/srv_csum.h>
+#include <daos_srv/rebuild.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -359,7 +360,7 @@ struct migrate_pool_tls_create_arg {
 	d_rank_list_t *svc_list;
 	uint64_t max_eph;
 	int	version;
-	int	del_local_objs;
+	uint32_t opc;
 };
 
 int
@@ -407,7 +408,7 @@ migrate_pool_tls_create_one(void *data)
 	pool_tls->mpt_root_hdl = DAOS_HDL_INVAL;
 	pool_tls->mpt_max_eph = arg->max_eph;
 	pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
-	pool_tls->mpt_del_local_objs = arg->del_local_objs;
+	pool_tls->mpt_opc = arg->opc;
 	pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE;
 	pool_tls->mpt_inflight_max_ult = MIGRATE_MAX_ULT;
 	pool_tls->mpt_inflight_size = 0;
@@ -431,7 +432,7 @@ out:
 static struct migrate_pool_tls*
 migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 			       uuid_t pool_hdl_uuid, uuid_t co_hdl_uuid,
-			       uint64_t max_eph, int del_local_objs)
+			       uint64_t max_eph, uint32_t opc)
 {
 	struct migrate_pool_tls *tls = NULL;
 	struct migrate_pool_tls_create_arg arg = { 0 };
@@ -458,7 +459,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 	uuid_copy(arg.pool_hdl_uuid, pool_hdl_uuid);
 	uuid_copy(arg.co_hdl_uuid, co_hdl_uuid);
 	arg.version = version;
-	arg.del_local_objs = del_local_objs;
+	arg.opc = opc;
 	arg.max_eph = max_eph;
 	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
 	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
@@ -1420,26 +1421,57 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 }
 
 static int
+migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
+		       struct ds_cont_child **cont_p)
+{
+	struct ds_cont_child	*cont_child = NULL;
+	int			rc;
+
+	*cont_p = NULL;
+	if (tls->mpt_opc == RB_OP_EXTEND || tls->mpt_opc == RB_OP_REINT) {
+		/* For extend and reintegration, it may need create the container */
+		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont_child);
+		if (rc != 0) {
+			if (rc == -DER_SHUTDOWN) {
+				D_DEBUG(DB_REBUILD, DF_UUID "container is being destroyed\n",
+					DP_UUID(cont_uuid));
+				rc = 0;
+			}
+			return rc;
+		}
+	} else {
+		rc = ds_cont_child_lookup(tls->mpt_pool_uuid, cont_uuid, &cont_child);
+		if (rc != 0 || (cont_child && cont_child->sc_stopping)) {
+			if (rc == -DER_NONEXIST || (cont_child && cont_child->sc_stopping)) {
+				D_DEBUG(DB_REBUILD, DF_UUID "container is being destroyed\n",
+					DP_UUID(cont_uuid));
+				rc = 0;
+			}
+
+			if (cont_child)
+				ds_cont_child_put(cont_child);
+			return rc;
+		}
+	}
+
+	*cont_p = cont_child;
+	return rc;
+}
+
+static int
 migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	     daos_size_t data_size)
 {
-	struct ds_cont_child	*cont;
+	struct ds_cont_child	*cont = NULL;
 	struct cont_props	 props;
 	daos_handle_t		 poh = DAOS_HDL_INVAL;
 	daos_handle_t		 coh = DAOS_HDL_INVAL;
 	daos_handle_t		 oh  = DAOS_HDL_INVAL;
 	int			 rc;
 
-	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, mrone->mo_cont_uuid,
-				       &cont);
-	if (rc) {
-		if (rc == -DER_SHUTDOWN) {
-			D_DEBUG(DB_REBUILD, DF_UUID "container is being"
-				" destroyed\n", DP_UUID(mrone->mo_cont_uuid));
-			rc = 0;
-		}
+	rc = migrate_get_cont_child(tls, mrone->mo_cont_uuid, &cont);
+	if (rc || cont == NULL)
 		D_GOTO(out, rc);
-	}
 
 	rc = dsc_pool_open(tls->mpt_pool_uuid, tls->mpt_poh_uuid, 0,
 			   NULL, tls->mpt_pool->spc_pool->sp_map,
@@ -2236,11 +2268,11 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 }
 
 static void
-migrate_obj_punch_one(void *data)
+migrate_obj_punch_ult(void *data)
 {
 	struct migrate_pool_tls *tls;
 	struct iter_obj_arg	*arg = data;
-	struct ds_cont_child	*cont;
+	struct ds_cont_child	*cont = NULL;
 	int			rc;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
@@ -2249,25 +2281,14 @@ migrate_obj_punch_one(void *data)
 		       DP_UUID(arg->pool_uuid));
 		D_GOTO(put, rc = 0);
 	}
+
 	D_DEBUG(DB_REBUILD, "tls %p "DF_UUID" version %d punch "DF_U64" "DF_UOID"\n",
 		tls, DP_UUID(tls->mpt_pool_uuid), arg->version, arg->punched_epoch,
 		DP_UOID(arg->oid));
-	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, arg->cont_uuid, &cont);
-	if (rc != 0 || cont->sc_stopping) {
-		D_DEBUG(DB_REBUILD, DF_UUID" status %d:%d\n", DP_UUID(arg->cont_uuid), rc,
-			cont ? cont->sc_stopping : -1);
 
-		/**
-		 * If the current container is being destroyed, let's
-		 * ignore the failure.
-		 */
-		if (rc == -DER_NONEXIST || (cont != NULL && cont->sc_stopping))
-			rc = 0;
-		if (cont)
-			ds_cont_child_put(cont);
-
+	rc = migrate_get_cont_child(tls, arg->cont_uuid, &cont);
+	if (rc != 0 || cont == NULL)
 		D_GOTO(put, rc);
-	}
 
 	D_ASSERT(arg->punched_epoch != 0);
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->punched_epoch,
@@ -2630,7 +2651,7 @@ ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
 static int
 migrate_obj_punch(struct iter_obj_arg *arg)
 {
-	return dss_ult_create(migrate_obj_punch_one, arg, DSS_XS_VOS,
+	return dss_ult_create(migrate_obj_punch_ult, arg, DSS_XS_VOS,
 			      arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
 }
 
@@ -2641,16 +2662,13 @@ static int
 destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		     daos_unit_oid_t *oid, uuid_t cont_uuid)
 {
-	struct ds_cont_child *cont;
+	struct ds_cont_child *cont = NULL;
 	daos_epoch_range_t   epr;
 	int rc;
 
-	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont);
-	if (rc == -DER_SHUTDOWN) {
-		D_DEBUG(DB_REBUILD, DF_UUID "container is being destroyed\n",
-			DP_UUID(cont_uuid));
-		return 0;
-	}
+	rc = migrate_get_cont_child(tls, cont_uuid, &cont);
+	if (rc != 0 || cont == NULL)
+		return rc;
 
 	if (rc != 0) {
 		D_ERROR("Failed to open cont to clear obj before migrate; pool="
@@ -2700,11 +2718,10 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
  * the data migration itself - instead it iterates akeys/dkeys as a client and
  * schedules the actual data migration on their own ULTs
  *
- * If this is reintegration (mpt_del_local_objs==true), this ULT will be
- * launched on the target where data is stored so that it can be safely deleted
- * prior to migration. If this not reintegration (mpt_del_local_objs==false),
- * this ULT will be launched on a pseudorandom ULT to increase parallelism by
- * spreading the work among many xstreams.
+ * If this is reintegration, this ULT will be launched on the target where data
+ * is stored so that it can be safely deleted prior to migration. If this is not
+ * reintegration, this ULT will be launched on a pseudorandom ULT to increase
+ * parallelism by spreading the work among many xstreams.
  *
  * Note that this ULT is guaranteed to only be spawned once per object per
  * container per migration session (using mpt_migrated_root)
@@ -2725,7 +2742,7 @@ migrate_obj_ult(void *data)
 		D_GOTO(free_notls, rc = 0);
 	}
 
-	if (tls->mpt_del_local_objs) {
+	if (tls->mpt_opc == RB_OP_REINT) {
 		/* Destroy this object ID locally prior to migration */
 		rc = destroy_existing_obj(tls, arg->tgt_idx, &arg->oid,
 					  arg->cont_uuid);
@@ -2775,20 +2792,11 @@ free:
 	tls->mpt_obj_executed_ult++;
 	if (rc == -DER_NONEXIST) {
 		struct ds_cont_child *cont_child = NULL;
-		int ret;
 
-		ret = ds_cont_child_lookup(tls->mpt_pool_uuid, arg->cont_uuid,
-					   &cont_child);
-		if (ret != 0 || cont_child->sc_stopping) {
-			/**
-			 * If the current container is being destroyed, let's
-			 * ignore the -DER_NONEXIST failure.
-			 */
-			D_DEBUG(DB_REBUILD, DF_UUID" status %d:%d\n",
-				DP_UUID(arg->cont_uuid), ret,
-				cont_child ? cont_child->sc_stopping : 0);
+		/* check again to see if the container is being destroyed. */
+		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child);
+		if (cont_child == NULL || cont_child->sc_stopping)
 			rc = 0;
-		}
 
 		if (cont_child)
 			ds_cont_child_put(cont_child);
@@ -2854,7 +2862,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 		       sizeof(*obj_arg->snaps) * cont_arg->snap_cnt);
 	}
 
-	if (cont_arg->pool_tls->mpt_del_local_objs) {
+	if (cont_arg->pool_tls->mpt_opc == RB_OP_REINT) {
 		/* This ULT will need to destroy objects prior to migration. To
 		 * do this it must be scheduled on the xstream where that data
 		 * is stored.
@@ -3256,8 +3264,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	/* Check if the pool tls exists */
 	pool_tls = migrate_pool_tls_lookup_create(pool, migrate_in->om_version,
 						  po_hdl_uuid, co_hdl_uuid,
-						  migrate_in->om_max_eph,
-						  migrate_in->om_del_local_obj);
+						  migrate_in->om_max_eph, migrate_in->om_opc);
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -3423,7 +3430,7 @@ out:
  *				the source shard of the migration, so it
  *				is only used for replicate objects.
  * param cnt [in]		count of objects.
- * param del_local_objs [in]	remove container contents before migrating
+ * param migrate_opc [in]	operation which cause the migration.
  *
  * return			0 if it succeeds, otherwise errno.
  */
@@ -3432,7 +3439,7 @@ ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 		  uuid_t cont_hdl_uuid, uuid_t cont_uuid, int tgt_id,
 		  uint32_t version, uint64_t max_eph, daos_unit_oid_t *oids,
 		  daos_epoch_t *ephs, daos_epoch_t *punched_ephs,
-		  unsigned int *shards, int cnt, int del_local_objs)
+		  unsigned int *shards, int cnt, uint32_t migrate_opc)
 {
 	struct obj_migrate_in	*migrate_in = NULL;
 	struct obj_migrate_out	*migrate_out = NULL;
@@ -3483,7 +3490,7 @@ ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 	migrate_in->om_version = version;
 	migrate_in->om_max_eph = max_eph,
 	migrate_in->om_tgt_idx = index;
-	migrate_in->om_del_local_obj = del_local_objs;
+	migrate_in->om_opc = migrate_opc;
 
 	migrate_in->om_oids.ca_arrays = oids;
 	migrate_in->om_oids.ca_count = cnt;
