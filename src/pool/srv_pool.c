@@ -149,7 +149,7 @@ read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
 	if (rc != 0)
 		return rc;
 	size = pool_buf_size(b->pb_nr);
-	D_ALLOC(*buf, size);
+	DM_ALLOC(M_PROP, *buf, size);
 	if (*buf == NULL)
 		return -DER_NOMEM;
 	memcpy(*buf, b, size);
@@ -655,7 +655,7 @@ pool_svc_name_cb(d_iov_t *id, char **name)
 
 	if (id->iov_len != sizeof(uuid_t))
 		return -DER_INVAL;
-	D_ALLOC(s, DAOS_UUID_STR_SIZE);
+	DM_ALLOC(M_POOL, s, DAOS_UUID_STR_SIZE);
 	if (s == NULL)
 		return -DER_NOMEM;
 	uuid_unparse_lower(id->iov_buf, s);
@@ -689,7 +689,7 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 		goto err;
 	}
 
-	D_ALLOC_PTR(svc);
+	DM_ALLOC_PTR(M_POOL, svc);
 	if (svc == NULL) {
 		rc = -DER_NOMEM;
 		goto err;
@@ -793,7 +793,7 @@ queue_event(struct pool_svc *svc, d_rank_t rank, uint64_t incarnation, enum crt_
 	struct pool_svc_events *events = &svc->ps_events;
 	struct pool_svc_event  *event;
 
-	D_ALLOC_PTR(event);
+	DM_ALLOC_PTR(M_POOL, event);
 	if (event == NULL)
 		return -DER_NOMEM;
 
@@ -1707,7 +1707,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			return rc;
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
-		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
+		DM_ALLOC(M_PROP, prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
 		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
 			return -DER_NOMEM;
 		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
@@ -2512,7 +2512,7 @@ realloc_resp:
 	}
 
 	/* Allocate response buffer */
-	D_ALLOC_ARRAY(resp_cont, resp_ncont);
+	DM_ALLOC_ARRAY(M_PROP, resp_cont, resp_ncont);
 	if (resp_cont == NULL)
 		D_GOTO(out_rpc, rc = -DER_NOMEM);
 
@@ -2726,7 +2726,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		struct daos_prop_entry	*entry, *iv_entry;
 		int			i;
 
-		D_ALLOC_PTR(iv_prop);
+		DM_ALLOC_PTR(M_PROP, iv_prop);
 		if (iv_prop == NULL)
 			D_GOTO(out_lock, rc = -DER_NOMEM);
 
@@ -3804,7 +3804,7 @@ ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 	if (principal_name != NULL) {
 		/* Need to sanitize the incoming string */
 		name_buf_len = DAOS_ACL_MAX_PRINCIPAL_BUF_LEN;
-		D_ALLOC_ARRAY(name_buf, name_buf_len);
+		DM_ALLOC_ARRAY(M_PROP, name_buf, name_buf_len);
 		if (name_buf == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		/* force null terminator in copy */
@@ -4169,7 +4169,7 @@ get_open_handles_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (size_needed > arg->hdls_size) {
 		void *newbuf = NULL;
 
-		D_REALLOC(newbuf, *arg->hdls, arg->hdls_size, size_needed);
+		DM_REALLOC(M_POOL, newbuf, *arg->hdls, arg->hdls_size, size_needed);
 		if (newbuf == NULL)
 			D_GOTO(out_hdl, rc = -DER_NOMEM);
 
@@ -4267,7 +4267,7 @@ ds_pool_get_open_handles(uuid_t pool_uuid, d_iov_t *hdls)
 	 * close enough just reduces the number of reallocations needed during
 	 * iteration
 	 */
-	D_ALLOC(hdls->iov_buf, nhandles * (sizeof(struct pool_iv_conn) + 160));
+	DM_ALLOC(M_PROP, hdls->iov_buf, nhandles * (sizeof(struct pool_iv_conn) + 160));
 	if (hdls->iov_buf == NULL)
 		D_GOTO(out_lock, rc = -DER_NOMEM);
 
@@ -4703,7 +4703,7 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		size_t	hdl_uuids_size_tmp;
 
 		hdl_uuids_size_tmp = arg->eia_hdl_uuids_size * 2;
-		D_ALLOC(hdl_uuids_tmp, hdl_uuids_size_tmp);
+		DM_ALLOC(M_PROP, hdl_uuids_tmp, hdl_uuids_size_tmp);
 		if (hdl_uuids_tmp == NULL)
 			return -DER_NOMEM;
 		memcpy(hdl_uuids_tmp, arg->eia_hdl_uuids,
@@ -4729,7 +4729,7 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 	int			rc;
 
 	arg.eia_hdl_uuids_size = sizeof(uuid_t) * 4;
-	D_ALLOC(arg.eia_hdl_uuids, arg.eia_hdl_uuids_size);
+	DM_ALLOC(M_PROP, arg.eia_hdl_uuids, arg.eia_hdl_uuids_size);
 	if (arg.eia_hdl_uuids == NULL)
 		return -DER_NOMEM;
 	arg.eia_n_hdl_uuids = 0;
@@ -4767,7 +4767,7 @@ validate_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc,
 	}
 
 	/* Assume the entire list is valid */
-	D_ALLOC(valid_list, sizeof(uuid_t) * n_hdl_list);
+	DM_ALLOC(M_PROP, valid_list, sizeof(uuid_t) * n_hdl_list);
 	if (valid_list == NULL)
 		return -DER_NOMEM;
 
@@ -5659,7 +5659,7 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
 	struct pool_map_refresh_ult_arg	*arg;
 	int				rc;
 
-	D_ALLOC_PTR(arg);
+	DM_ALLOC_PTR(M_PROP, arg);
 	if (arg == NULL)
 		return -DER_NOMEM;
 	arg->iua_pool_version = dpc->spc_map_version;

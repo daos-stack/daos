@@ -35,7 +35,7 @@ rebuild_iv_alloc_internal(d_sg_list_t *sgl)
 	if (rc)
 		return rc;
 
-	D_ALLOC(sgl->sg_iovs[0].iov_buf, sizeof(struct rebuild_iv));
+	DM_ALLOC(M_IV, sgl->sg_iovs[0].iov_buf, sizeof(struct rebuild_iv));
 	if (sgl->sg_iovs[0].iov_buf == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 	sgl->sg_iovs[0].iov_buf_len = sizeof(struct rebuild_iv);

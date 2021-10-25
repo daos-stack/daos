@@ -436,11 +436,11 @@ obj_ec_codec_init()
 		return 0;
 
 	oc_ec_codec_nr = ocnr;
-	D_ALLOC_ARRAY(oc_ec_codecs, ocnr);
+	DM_ALLOC_ARRAY(M_EC, oc_ec_codecs, ocnr);
 	if (oc_ec_codecs == NULL)
 		D_GOTO(failed, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(ecc_array, ocnr);
+	DM_ALLOC_ARRAY(M_EC, ecc_array, ocnr);
 	if (ecc_array == NULL)
 		D_GOTO(failed, rc = -DER_NOMEM);
 
@@ -469,10 +469,10 @@ obj_ec_codec_init()
 		}
 		m = k + p;
 		/* 32B needed for data generated for each input coefficient */
-		D_ALLOC(ec_codec->ec_gftbls, k * p * 32);
+		DM_ALLOC(M_EC, ec_codec->ec_gftbls, k * p * 32);
 		if (ec_codec->ec_gftbls == NULL)
 			D_GOTO(failed, rc = -DER_NOMEM);
-		D_ALLOC(encode_matrix, m * k);
+		DM_ALLOC(M_EC, encode_matrix, m * k);
 		if (encode_matrix == NULL)
 			D_GOTO(failed, rc = -DER_NOMEM);
 		ec_codec->ec_en_matrix = encode_matrix;
@@ -755,17 +755,17 @@ obj_class_init(void)
 	if (oc_ident_array)
 		return 0;
 
-	D_ALLOC_ARRAY(oc_ident_array, OC_NR);
+	DM_ALLOC_ARRAY(M_OBJ, oc_ident_array, OC_NR);
 	if (!oc_ident_array)
 		return -DER_NOMEM;
 
-	D_ALLOC_ARRAY(oc_scale_array, OC_NR);
+	DM_ALLOC_ARRAY(M_OBJ, oc_scale_array, OC_NR);
 	if (!oc_scale_array) {
 		rc = -DER_NOMEM;
 		goto failed;
 	}
 
-	D_ALLOC_ARRAY(oc_resil_array, OC_NR);
+	DM_ALLOC_ARRAY(M_OBJ, oc_resil_array, OC_NR);
 	if (!oc_resil_array) {
 		rc = -DER_NOMEM;
 		goto failed;

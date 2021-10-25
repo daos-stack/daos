@@ -1092,7 +1092,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_ALLOC_PTR(cst);
+	DM_ALLOC_PTR(M_CRT, cst);
 	if (cst == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1120,7 +1120,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 
 	if (rank != self) {
 		if (cst == NULL) {
-			D_ALLOC_PTR(cst);
+			DM_ALLOC_PTR(M_CRT, cst);
 			if (cst == NULL)
 				D_GOTO(out_unlock, rc = -DER_NOMEM);
 		}

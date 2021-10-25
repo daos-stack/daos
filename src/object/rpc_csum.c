@@ -70,7 +70,7 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 	}
 
 	if (DECODING(proc_op)) {
-		D_ALLOC(csum->cs_csum, csum->cs_buf_len);
+		DM_ALLOC(M_CSUM, csum->cs_csum, csum->cs_buf_len);
 		if (csum->cs_csum == NULL)
 			return -DER_NOMEM;
 
@@ -121,7 +121,7 @@ crt_proc_struct_dcs_csum_info(crt_proc_t proc, crt_proc_op_t proc_op,
 			*p_csum = NULL;
 			return 0;
 		}
-		D_ALLOC_PTR(*p_csum);
+		DM_ALLOC_PTR(M_CSUM, *p_csum);
 		if (*p_csum == NULL)
 			return -DER_NOMEM;
 		rc = proc_struct_dcs_csum_info(proc, proc_op, *p_csum);
@@ -183,7 +183,7 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	if (DECODING(proc_op)) {
 		PROC(uint32_t, &iod_csum->ic_nr);
-		D_ALLOC_ARRAY(iod_csum->ic_data, iod_csum->ic_nr);
+		DM_ALLOC_ARRAY(M_CSUM, iod_csum->ic_data, iod_csum->ic_nr);
 		if (iod_csum->ic_data == NULL)
 			return -DER_NOMEM;
 		for (i = 0; i < iod_csum->ic_nr; i++) {

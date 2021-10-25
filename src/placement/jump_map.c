@@ -675,7 +675,7 @@ remap_gpu_alloc_one(d_list_t *remap_list, uint8_t *dom_cur_grp_used)
 {
 	struct dom_grp_used	*dgu;
 
-	D_ALLOC_PTR(dgu);
+	DM_ALLOC_PTR(M_PL, dgu);
 	if (dgu == NULL)
 		return NULL;
 
@@ -758,15 +758,15 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	dom_size = (struct pool_domain *)(root->do_targets) - (root) + 1;
 	dom_array_size = dom_size/NBBY + 1;
 	if (dom_array_size > LOCAL_DOM_ARRAY_SIZE) {
-		D_ALLOC_ARRAY(dom_used, dom_array_size);
-		D_ALLOC_ARRAY(dom_occupied, dom_array_size);
+		DM_ALLOC_ARRAY(M_PL, dom_used, dom_array_size);
+		DM_ALLOC_ARRAY(M_PL, dom_occupied, dom_array_size);
 	} else {
 		dom_used = dom_used_array;
 		dom_occupied = dom_occupied_array;
 	}
 
 	if (root->do_target_nr / NBBY + 1 > LOCAL_TGT_ARRAY_SIZE)
-		D_ALLOC_ARRAY(tgts_used, (root->do_target_nr / NBBY) + 1);
+		DM_ALLOC_ARRAY(M_PL, tgts_used, (root->do_target_nr / NBBY) + 1);
 	else
 		tgts_used = tgts_used_array;
 
@@ -783,7 +783,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 
 		if (realloc_grp_used) {
 			realloc_grp_used = false;
-			D_ALLOC_ARRAY(dom_cur_grp_used, dom_array_size);
+			DM_ALLOC_ARRAY(M_PL, dom_cur_grp_used, dom_array_size);
 			if (dom_cur_grp_used == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		} else {
@@ -967,7 +967,7 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	struct pool_domain      *doms;
 	int                     rc;
 
-	D_ALLOC_PTR(jmap);
+	DM_ALLOC_PTR(M_PL, jmap);
 	if (jmap == NULL)
 		return -DER_NOMEM;
 

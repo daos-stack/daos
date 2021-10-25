@@ -62,7 +62,7 @@ obj_gen_dtx_mbs(struct daos_shard_tgt *tgts, bool is_ec, uint32_t *tgt_cnt,
 	D_ASSERT(tgts != NULL);
 
 	size = sizeof(struct dtx_daos_target) * *tgt_cnt;
-	D_ALLOC(mbs, sizeof(*mbs) + size);
+	DM_ALLOC(M_IO, mbs, sizeof(*mbs) + size);
 	if (mbs == NULL)
 		return -DER_NOMEM;
 
@@ -265,7 +265,7 @@ obj_bulk_bypass(d_sg_list_t *sgl, crt_bulk_op_t bulk_op)
 	int		  i;
 
 	if (!dummy_buf) {
-		D_ALLOC(dummy_buf, dummy_buf_len);
+		DM_ALLOC(M_IO, dummy_buf, dummy_buf_len);
 		if (!dummy_buf)
 			return; /* ignore error */
 	}
@@ -572,7 +572,7 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr)
 
 		sizes = orwo->orw_iod_sizes.ca_arrays;
 	} else {
-		D_ALLOC_ARRAY(sizes, iod_nr);
+		DM_ALLOC_ARRAY(M_IO, sizes, iod_nr);
 		if (sizes == NULL)
 			return -DER_NOMEM;
 	}
@@ -625,7 +625,7 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
 	}
 
 	/* return sg_nr_out and data size for sgl */
-	D_ALLOC(orwo->orw_nrs.ca_arrays,
+	DM_ALLOC(M_IO, orwo->orw_nrs.ca_arrays,
 		nrs_count * (sizeof(uint32_t) + sizeof(daos_size_t)));
 	if (orwo->orw_nrs.ca_arrays == NULL)
 		return -DER_NOMEM;
@@ -731,7 +731,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 		if (p_sgl->sg_iovs[i].iov_buf_len < size) {
 			D_FREE(p_sgl->sg_iovs[i].iov_buf);
 
-			D_ALLOC(p_sgl->sg_iovs[i].iov_buf, size);
+			DM_ALLOC(M_IO, p_sgl->sg_iovs[i].iov_buf, size);
 			/* obj_tls_fini() will free these buffer */
 			if (p_sgl->sg_iovs[i].iov_buf == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -900,7 +900,7 @@ obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
 	struct daos_recx_ep		 recx_ep;
 
 	if (recov_lists == NULL) {
-		D_ALLOC_ARRAY(recov_lists, iod_nr);
+		DM_ALLOC_ARRAY(M_EC, recov_lists, iod_nr);
 		if (recov_lists == NULL)
 			return -DER_NOMEM;
 		*recov_lists_ptr = recov_lists;
@@ -1047,7 +1047,7 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod, daos_iod_t *iods)
 		return 0;
 	}
 
-	D_ALLOC_ARRAY(maps, iods_nr);
+	DM_ALLOC_ARRAY(M_IO, maps, iods_nr);
 	if (maps == NULL)
 		return -DER_NOMEM;
 	for (i = 0; i <  iods_nr; i++) {
@@ -1057,7 +1057,7 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod, daos_iod_t *iods)
 		map->iom_nr = bsgl->bs_nr_out - bio_sgl_holes(bsgl);
 
 		/** will be freed in obj_rw_reply */
-		D_ALLOC_ARRAY(map->iom_recxs, map->iom_nr);
+		DM_ALLOC_ARRAY(M_IO, map->iom_recxs, map->iom_nr);
 		if (map->iom_recxs == NULL) {
 			for (r = 0; r < i; r++)
 				D_FREE(maps[r].iom_recxs);
@@ -1184,7 +1184,7 @@ obj_prep_fetch_sgls(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		for (j = 0; j < sgls[i].sg_nr; j++) {
 			d_iov_t *iov = &sgls[i].sg_iovs[j];
 
-			D_ALLOC(iov->iov_buf, iov->iov_buf_len);
+			DM_ALLOC(M_IO, iov->iov_buf, iov->iov_buf_len);
 			if (iov->iov_buf == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
@@ -1221,7 +1221,7 @@ daos_iod_recx_dup(daos_iod_t *iods, uint32_t iod_nr, daos_iod_t **iods_dup_ptr)
 	daos_iod_t	*src, *dst;
 	uint32_t	 i;
 
-	D_ALLOC_ARRAY(iods_dup, iod_nr);
+	DM_ALLOC_ARRAY(M_IO_ARG, iods_dup, iod_nr);
 	if (iods_dup == NULL)
 		return -DER_NOMEM;
 
@@ -1232,7 +1232,7 @@ daos_iod_recx_dup(daos_iod_t *iods, uint32_t iod_nr, daos_iod_t **iods_dup_ptr)
 		if (src->iod_nr == 0 || src->iod_recxs == NULL)
 			continue;
 
-		D_ALLOC_ARRAY(dst->iod_recxs, dst->iod_nr);
+		DM_ALLOC_ARRAY(M_IO_ARG, dst->iod_recxs, dst->iod_nr);
 		if (dst->iod_recxs == NULL) {
 			daos_iod_recx_free(iods_dup, iod_nr);
 			return -DER_NOMEM;
@@ -3035,7 +3035,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 
 	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		oeo->oeo_eprs.ca_count = 0;
-		D_ALLOC(oeo->oeo_eprs.ca_arrays,
+		DM_ALLOC(M_IO, oeo->oeo_eprs.ca_arrays,
 			oei->oei_nr * sizeof(daos_epoch_range_t));
 		if (oeo->oeo_eprs.ca_arrays == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -3044,7 +3044,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		enum_arg.eprs_len = 0;
 
 		oeo->oeo_recxs.ca_count = 0;
-		D_ALLOC(oeo->oeo_recxs.ca_arrays,
+		DM_ALLOC(M_IO, oeo->oeo_recxs.ca_arrays,
 			oei->oei_nr * sizeof(daos_recx_t));
 		if (oeo->oeo_recxs.ca_arrays == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -3060,7 +3060,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 
 		/* Prepare key descriptor buffer */
 		oeo->oeo_kds.ca_count = 0;
-		D_ALLOC(oeo->oeo_kds.ca_arrays,
+		DM_ALLOC(M_IO, oeo->oeo_kds.ca_arrays,
 			oei->oei_nr * sizeof(daos_key_desc_t));
 		if (oeo->oeo_kds.ca_arrays == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -3907,11 +3907,11 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		}
 
 		if (iohs == NULL) {
-			D_ALLOC_ARRAY(iohs, dcde->dcde_write_cnt);
+			DM_ALLOC_ARRAY(M_IO, iohs, dcde->dcde_write_cnt);
 			if (iohs == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
-			D_ALLOC_ARRAY(biods, dcde->dcde_write_cnt);
+			DM_ALLOC_ARRAY(M_IO, biods, dcde->dcde_write_cnt);
 			if (biods == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
@@ -3976,7 +3976,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 		if (dcu->dcu_flags & ORF_CPD_BULK) {
 			if (bulks == NULL) {
-				D_ALLOC_ARRAY(bulks, dcde->dcde_write_cnt);
+				DM_ALLOC_ARRAY(M_IO, bulks, dcde->dcde_write_cnt);
 				if (bulks == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 			}
@@ -4683,11 +4683,11 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 		D_GOTO(reply, rc = -DER_PROTO);
 	}
 
-	D_ALLOC(oco->oco_sub_rets.ca_arrays, sizeof(int32_t) * tx_count);
+	DM_ALLOC(M_IO, oco->oco_sub_rets.ca_arrays, sizeof(int32_t) * tx_count);
 	if (oco->oco_sub_rets.ca_arrays == NULL)
 		D_GOTO(reply, rc = -DER_NOMEM);
 
-	D_ALLOC(oco->oco_sub_epochs.ca_arrays, sizeof(int64_t) * tx_count);
+	DM_ALLOC(M_IO, oco->oco_sub_epochs.ca_arrays, sizeof(int64_t) * tx_count);
 	if (oco->oco_sub_epochs.ca_arrays == NULL)
 		D_GOTO(reply, rc = -DER_NOMEM);
 
@@ -4696,7 +4696,7 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 
 	/* TODO: optimize it if there is only single DTX in the CPD RPC. */
 
-	D_ALLOC_ARRAY(dcas, tx_count);
+	DM_ALLOC_ARRAY(M_IO, dcas, tx_count);
 	if (dcas == NULL)
 		D_GOTO(reply, rc = -DER_NOMEM);
 

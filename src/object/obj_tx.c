@@ -163,7 +163,7 @@ full:
 	else
 		count = (tx->tx_total_slots << 1) - DTX_SUB_WRITE_MAX;
 
-	D_ALLOC_ARRAY(buf, count);
+	DM_ALLOC_ARRAY(M_DTX, buf, count);
 	if (buf == NULL)
 		return -DER_NOMEM;
 
@@ -277,11 +277,11 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	ph = dc_cont_hdl2pool_hdl(coh);
 	D_ASSERT(daos_handle_is_valid(ph));
 
-	D_ALLOC_PTR(tx);
+	DM_ALLOC_PTR(M_DTX, tx);
 	if (tx == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ARRAY(tx->tx_req_cache, DTX_SUB_REQ_DEF);
+	DM_ALLOC_ARRAY(M_DTX, tx->tx_req_cache, DTX_SUB_REQ_DEF);
 	if (tx->tx_req_cache == NULL) {
 		D_FREE(tx);
 		return -DER_NOMEM;
@@ -1051,7 +1051,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (daos_oclass_is_ec(oca)) {
 		struct obj_reasb_req	*reasb_req;
 
-		D_ALLOC_PTR(reasb_req);
+		DM_ALLOC_PTR(M_DTX, reasb_req);
 		if (reasb_req == NULL)
 			return rc = -DER_NOMEM;
 
@@ -1155,7 +1155,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 	oca = obj_get_oca(obj);
 	size = sizeof(*dtr) + sizeof(uint32_t) * obj->cob_grp_size;
-	D_ALLOC(dtr, size);
+	DM_ALLOC(M_DTX, dtr, size);
 	if (dtr == NULL)
 		return -DER_NOMEM;
 
@@ -1166,7 +1166,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		dcu = &dcsr->dcsr_update;
 		reasb_req = dcsr->dcsr_reasb;
 		if (dcu->dcu_flags & ORF_EC && reasb_req->tgt_bitmap != NULL) {
-			D_ALLOC_ARRAY(dcu->dcu_ec_tgts, obj->cob_grp_size);
+			DM_ALLOC_ARRAY(M_DTX, dcu->dcu_ec_tgts, obj->cob_grp_size);
 			if (dcu->dcu_ec_tgts == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1219,7 +1219,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		dtrg = &dtrgs[shard->do_target_id];
 		if (dtrg->dtrg_req_idx == NULL) {
 			/* dtrg->dtrg_req_idx will be released by caller. */
-			D_ALLOC_ARRAY(dtrg->dtrg_req_idx, DTX_SUB_REQ_DEF);
+			DM_ALLOC_ARRAY(M_DTX, dtrg->dtrg_req_idx, DTX_SUB_REQ_DEF);
 			if (dtrg->dtrg_req_idx == NULL) {
 				obj_shard_close(shard);
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1243,7 +1243,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		if ((dtrg->dtrg_read_cnt + dtrg->dtrg_write_cnt) >=
 		    dtrg->dtrg_slot_cnt) {
-			D_ALLOC_ARRAY(dcri, dtrg->dtrg_slot_cnt << 1);
+			DM_ALLOC_ARRAY(M_DTX, dcri, dtrg->dtrg_slot_cnt << 1);
 			if (dcri == NULL) {
 				obj_shard_close(shard);
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1524,7 +1524,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	tgt_cnt = pool_map_target_nr(tx->tx_pool->dp_map);
 	D_ASSERT(tgt_cnt != 0);
 
-	D_ALLOC_ARRAY(dtrgs, tgt_cnt);
+	DM_ALLOC_ARRAY(M_DTX, dtrgs, tgt_cnt);
 	if (dtrgs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1584,19 +1584,19 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 
 	size += sizeof(*ddt) * act_tgt_cnt;
 
-	D_ALLOC_PTR(dcsh);
+	DM_ALLOC_PTR(M_DTX, dcsh);
 	if (dcsh == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC(dcsh->dcsh_mbs, size + sizeof(*dcsh->dcsh_mbs));
+	DM_ALLOC(M_DTX, dcsh->dcsh_mbs, size + sizeof(*dcsh->dcsh_mbs));
 	if (dcsh->dcsh_mbs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(dcdes, act_tgt_cnt);
+	DM_ALLOC_ARRAY(M_DTX, dcdes, act_tgt_cnt);
 	if (dcdes == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(shard_tgts, act_tgt_cnt);
+	DM_ALLOC_ARRAY(M_DTX, shard_tgts, act_tgt_cnt);
 	if (shard_tgts == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2219,7 +2219,7 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 	iod_array = &dcu->dcu_iod_array;
 	iod_array->oia_iod_nr = nr;
 
-	D_ALLOC_ARRAY(iod_array->oia_iods, nr);
+	DM_ALLOC_ARRAY(M_DTX, iod_array->oia_iods, nr);
 	if (iod_array->oia_iods == NULL)
 		D_GOTO(fail, rc = -DER_NOMEM);
 
@@ -2236,7 +2236,7 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 		if (iods[i].iod_recxs == NULL)
 			continue;
 
-		D_ALLOC_ARRAY(iod_array->oia_iods[i].iod_recxs,
+		DM_ALLOC_ARRAY(M_DTX, iod_array->oia_iods[i].iod_recxs,
 			      iods[i].iod_nr);
 		if (iod_array->oia_iods[i].iod_recxs == NULL)
 			D_GOTO(fail, rc = -DER_NOMEM);
@@ -2245,7 +2245,7 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 		       sizeof(daos_recx_t) * iods[i].iod_nr);
 	}
 
-	D_ALLOC_ARRAY(dcsr->dcsr_sgls, nr);
+	DM_ALLOC_ARRAY(M_DTX, dcsr->dcsr_sgls, nr);
 	if (dcsr->dcsr_sgls == NULL)
 		D_GOTO(fail, rc = -DER_NOMEM);
 
@@ -2389,7 +2389,7 @@ dc_tx_add_punch_akeys(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 		goto fail;
 
 	dcp = &dcsr->dcsr_punch;
-	D_ALLOC_ARRAY(dcp->dcp_akeys, nr);
+	DM_ALLOC_ARRAY(M_DTX, dcp->dcp_akeys, nr);
 	if (dcp->dcp_akeys == NULL)
 		D_GOTO(fail, rc = -DER_NOMEM);
 
@@ -2468,7 +2468,7 @@ dc_tx_add_read(struct dc_tx *tx, struct dc_object **obj, int opc,
 		goto done;
 
 	dcr = &dcsr->dcsr_read;
-	D_ALLOC_ARRAY(dcr->dcr_iods, nr);
+	DM_ALLOC_ARRAY(M_DTX, dcr->dcr_iods, nr);
 	if (dcr->dcr_iods == NULL)
 		D_GOTO(fail, rc = -DER_NOMEM);
 
@@ -2644,7 +2644,7 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 		D_ASSERT(iods_or_akeys != NULL);
 
 		if (opc != DAOS_OBJ_RPC_UPDATE) {
-			D_ALLOC_ARRAY(iods, nr);
+			DM_ALLOC_ARRAY(M_DTX, iods, nr);
 			if (iods == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 

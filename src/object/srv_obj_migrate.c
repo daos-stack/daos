@@ -380,7 +380,7 @@ migrate_pool_tls_create_one(void *data)
 		return 0;
 	}
 
-	D_ALLOC_PTR(pool_tls);
+	DM_ALLOC_PTR(M_RECOV, pool_tls);
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -444,7 +444,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 	if (tls)
 		return tls;
 
-	D_ALLOC_PTR(prop);
+	DM_ALLOC_PTR(M_RECOV, prop);
 	if (prop == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -574,7 +574,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		 */
 		void *p;
 
-		D_REALLOC(p, csum_iov_fetch->iov_buf,
+		DM_REALLOC(M_CSUM, p, csum_iov_fetch->iov_buf,
 			  csum_iov_fetch->iov_buf_len, csum_iov_fetch->iov_len);
 		if (p == NULL)
 			return -DER_NOMEM;
@@ -796,7 +796,7 @@ obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
 	D_ASSERT(codec != NULL);
 
 	for (i = 0; i < p && p_bufs[i] == NULL; i++) {
-		D_ALLOC(p_bufs[i], cell_bytes);
+		DM_ALLOC(M_EC, p_bufs[i], cell_bytes);
 		if (p_bufs[i] == NULL)
 			return -DER_NOMEM;
 	}
@@ -917,7 +917,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		size = daos_iods_len(&mrone->mo_iods[i], 1);
-		D_ALLOC(data, size);
+		DM_ALLOC(M_EC, data, size);
 		if (data == NULL)
 			D_GOTO(out, rc =-DER_NOMEM);
 
@@ -1021,7 +1021,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 
 		size = daos_iods_len(&mrone->mo_iods[i], 1);
 		D_ASSERT(size != -1);
-		D_ALLOC(data, size);
+		DM_ALLOC(M_RECOV, data, size);
 		if (data == NULL)
 			D_GOTO(out, rc =-DER_NOMEM);
 
@@ -1703,12 +1703,12 @@ migrate_merge_iod_recx(daos_iod_t *dst_iod, daos_epoch_t **p_dst_ephs, daos_recx
 		nr_recxs++;
 
 	if (nr_recxs > dst_iod->iod_nr) {
-		D_ALLOC_ARRAY(recxs, nr_recxs);
+		DM_ALLOC_ARRAY(M_RECOV, recxs, nr_recxs);
 		if (recxs == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		if (p_dst_ephs != NULL) {
-			D_ALLOC_ARRAY(dst_ephs, nr_recxs);
+			DM_ALLOC_ARRAY(M_RECOV, dst_ephs, nr_recxs);
 			if (dst_ephs == NULL) {
 				D_FREE(recxs);
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1794,7 +1794,7 @@ migrate_insert_recxs_sgl(daos_iod_t *iods, daos_epoch_t **iods_ephs, uint32_t *i
 	if (new_iod->iod_type == DAOS_IOD_SINGLE) {
 		iods[i].iod_recxs = NULL;
 		if (iods_ephs != NULL) {
-			D_ALLOC_ARRAY(iods_ephs[i], 1);
+			DM_ALLOC_ARRAY(M_RECOV, iods_ephs[i], 1);
 			if (iods_ephs[i] == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			iods_ephs[i][0] = new_ephs[0];
@@ -1824,7 +1824,7 @@ rw_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, daos_epoch_t *ephs, d_sg
 
 	if (sgl && mrone->mo_sgls == NULL) {
 		D_ASSERT(mrone->mo_iod_alloc_num > 0);
-		D_ALLOC_ARRAY(mrone->mo_sgls, mrone->mo_iod_alloc_num);
+		DM_ALLOC_ARRAY(M_RECOV, mrone->mo_sgls, mrone->mo_iod_alloc_num);
 		if (mrone->mo_sgls == NULL)
 			return -DER_NOMEM;
 	}
@@ -1926,7 +1926,7 @@ punch_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, daos_epoch_t eph)
 	D_ASSERT(iod->iod_size == 0);
 
 	if (mrone->mo_punch_iods == NULL) {
-		D_ALLOC_ARRAY(mrone->mo_punch_iods, mrone->mo_iod_alloc_num);
+		DM_ALLOC_ARRAY(M_RECOV, mrone->mo_punch_iods, mrone->mo_iod_alloc_num);
 		if (mrone->mo_punch_iods == NULL)
 			return -DER_NOMEM;
 	}
@@ -2060,21 +2060,21 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dss_enum_unpack_io *io)
 		D_GOTO(put, rc = 0);
 	}
 
-	D_ALLOC_PTR(mrone);
+	DM_ALLOC_PTR(M_RECOV, mrone);
 	if (mrone == NULL)
 		D_GOTO(put, rc = -DER_NOMEM);
 
 	D_INIT_LIST_HEAD(&mrone->mo_list);
-	D_ALLOC_ARRAY(mrone->mo_iods, iod_eph_total);
+	DM_ALLOC_ARRAY(M_RECOV, mrone->mo_iods, iod_eph_total);
 	if (mrone->mo_iods == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(mrone->mo_iods_update_ephs, iod_eph_total);
+	DM_ALLOC_ARRAY(M_RECOV, mrone->mo_iods_update_ephs, iod_eph_total);
 	if (mrone->mo_iods_update_ephs == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
 	if (daos_oclass_is_ec(&arg->oc_attr)) {
-		D_ALLOC_ARRAY(mrone->mo_iods_from_parity, iod_eph_total);
+		DM_ALLOC_ARRAY(M_RECOV, mrone->mo_iods_from_parity, iod_eph_total);
 		if (mrone->mo_iods_from_parity == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 	}
@@ -2082,7 +2082,7 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dss_enum_unpack_io *io)
 	mrone->mo_epoch = arg->epr.epr_hi;
 	mrone->mo_obj_punch_eph = obj_punch_eph;
 	mrone->mo_dkey_punch_eph = dkey_punch_eph;
-	D_ALLOC_ARRAY(mrone->mo_akey_punch_ephs, iod_eph_total);
+	DM_ALLOC_ARRAY(M_RECOV, mrone->mo_akey_punch_ephs, iod_eph_total);
 	if (mrone->mo_akey_punch_ephs == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
@@ -2445,7 +2445,7 @@ retry:
 
 			if (buf != stack_buf)
 				D_FREE(buf);
-			D_ALLOC(buf, buf_len);
+			DM_ALLOC(M_RECOV, buf, buf_len);
 			if (buf == NULL) {
 				rc = -DER_NOMEM;
 				break;
@@ -2460,7 +2460,7 @@ retry:
 
 			p_csum->iov_buf_len = p_csum->iov_len;
 			p_csum->iov_len = 0;
-			D_ALLOC(p_csum->iov_buf, p_csum->iov_buf_len);
+			DM_ALLOC(M_RECOV, p_csum->iov_buf, p_csum->iov_buf_len);
 			if (p_csum->iov_buf == NULL) {
 				rc = -DER_NOMEM;
 				break;
@@ -2811,7 +2811,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 
 	D_ASSERT(daos_handle_is_valid(toh));
 
-	D_ALLOC_PTR(obj_arg);
+	DM_ALLOC_PTR(M_RECOV, obj_arg);
 	if (obj_arg == NULL)
 		return -DER_NOMEM;
 
@@ -2824,7 +2824,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	uuid_copy(obj_arg->cont_uuid, cont_arg->cont_uuid);
 	obj_arg->version = cont_arg->pool_tls->mpt_version;
 	if (cont_arg->snaps) {
-		D_ALLOC(obj_arg->snaps,
+		DM_ALLOC(M_RECOV, obj_arg->snaps,
 			sizeof(*cont_arg->snaps) * cont_arg->snap_cnt);
 		if (obj_arg->snaps == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);

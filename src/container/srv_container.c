@@ -161,7 +161,7 @@ ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid, uint64_t id,
 	struct cont_svc	       *svc;
 	int			rc;
 
-	D_ALLOC_PTR(svc);
+	DM_ALLOC_PTR(M_CONT, svc);
 	if (svc == NULL)
 		return -DER_NOMEM;
 	rc = cont_svc_init(svc, pool_uuid, id, rsvc);
@@ -985,7 +985,7 @@ recs_buf_init(struct recs_buf *buf)
 	size_t				tmp_size;
 
 	tmp_size = 4096;
-	D_ALLOC(tmp, tmp_size);
+	DM_ALLOC(M_CONT, tmp, tmp_size);
 	if (tmp == NULL)
 		return -DER_NOMEM;
 
@@ -1015,7 +1015,7 @@ recs_buf_grow(struct recs_buf *buf)
 		size_t				recs_size_tmp;
 
 		recs_size_tmp = buf->rb_recs_size * 2;
-		D_ALLOC(recs_tmp, recs_size_tmp);
+		DM_ALLOC(M_CONT, recs_tmp, recs_size_tmp);
 		if (recs_tmp == NULL)
 			return -DER_NOMEM;
 		memcpy(recs_tmp, buf->rb_recs, buf->rb_recs_size);
@@ -1228,7 +1228,7 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	int			rc = 0;
 	int			i;
 
-	D_ALLOC_PTR(ec_agg);
+	DM_ALLOC_PTR(M_CONT, ec_agg);
 	if (ec_agg == NULL)
 		return -DER_NOMEM;
 
@@ -1238,7 +1238,7 @@ cont_ec_agg_alloc(struct cont_svc *cont_svc, uuid_t cont_uuid,
 	if (node_nr < 0)
 		D_GOTO(out, rc = node_nr);
 
-	D_ALLOC_ARRAY(ec_agg->ea_server_ephs, node_nr);
+	DM_ALLOC_ARRAY(M_CONT, ec_agg->ea_server_ephs, node_nr);
 	if (ec_agg->ea_server_ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1537,7 +1537,7 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	D_ALLOC_PTR(p);
+	DM_ALLOC_PTR(M_CONT, p);
 	if (p == NULL) {
 		D_ERROR("Failed to allocate container descriptor\n");
 		D_GOTO(err, rc = -DER_NOMEM);
@@ -2248,7 +2248,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ACL;
-		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
+		DM_ALLOC(M_PROP, prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf_len);
 		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		memcpy(prop->dpp_entries[idx].dpe_val_ptr, value.iov_buf,
@@ -2325,7 +2325,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_ROOTS;
-		D_ALLOC(prop->dpp_entries[idx].dpe_val_ptr, value.iov_len);
+		DM_ALLOC(M_PROP, prop->dpp_entries[idx].dpe_val_ptr, value.iov_len);
 		if (prop->dpp_entries[idx].dpe_val_ptr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2535,7 +2535,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		struct daos_prop_entry	*entry, *iv_entry;
 		int			 i;
 
-		D_ALLOC_PTR(iv_prop);
+		DM_ALLOC_PTR(M_PROP, iv_prop);
 		if (iv_prop == NULL)
 			return -DER_NOMEM;
 
@@ -3270,7 +3270,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		size_t	realloc_elems = (ap->conts_len == 0) ? 1 :
 					ap->conts_len * 2;
 
-		D_REALLOC_ARRAY(ptr, ap->conts, ap->conts_len, realloc_elems);
+		DM_REALLOC_ARRAY(M_CONT, ptr, ap->conts, ap->conts_len, realloc_elems);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->conts = ptr;

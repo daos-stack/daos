@@ -139,7 +139,7 @@ swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
 	if (id != to)
 		nupds++; /* to */
 
-	D_ALLOC_ARRAY(upds, nupds);
+	DM_ALLOC_ARRAY(M_SWIM, upds, nupds);
 	if (upds == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -272,7 +272,7 @@ swim_updates_notify(struct swim_context *ctx, swim_id_t from, swim_id_t id,
 	/* add this update to recent update list so it will be
 	 * piggybacked on future protocol messages
 	 */
-	D_ALLOC_PTR(item);
+	DM_ALLOC_PTR(M_SWIM, item);
 	if (item != NULL) {
 		item->si_id   = id;
 		item->si_from = from;
@@ -422,7 +422,7 @@ search:
 	}
 
 	/* add to end of suspect list */
-	D_ALLOC_PTR(item);
+	DM_ALLOC_PTR(M_SWIM, item);
 	if (item == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	item->si_id   = id;
@@ -478,7 +478,7 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now,
 				item->si_from = self_id;
 				item->u.si_deadline += swim_ping_timeout_get();
 
-				D_ALLOC_PTR(item);
+				DM_ALLOC_PTR(M_SWIM, item);
 				if (item == NULL)
 					D_GOTO(next_item, rc = -DER_NOMEM);
 				item->si_id   = id;
@@ -626,7 +626,7 @@ swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id,
 		}
 	}
 
-	D_ALLOC_PTR(item);
+	DM_ALLOC_PTR(M_SWIM, item);
 	if (item != NULL) {
 		item->si_id   = to_id;
 		item->si_from = from_id;
@@ -653,7 +653,7 @@ swim_subgroup_init(struct swim_context *ctx)
 		if (id == SWIM_ID_INVALID)
 			D_GOTO(out, rc = 0);
 
-		D_ALLOC_PTR(item);
+		DM_ALLOC_PTR(M_SWIM, item);
 		if (item == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		item->si_from = ctx->sc_target;
@@ -727,7 +727,7 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	}
 
 	/* allocate structure for storing swim context */
-	D_ALLOC_PTR(ctx);
+	DM_ALLOC_PTR(M_SWIM, ctx);
 	if (ctx == NULL)
 		D_GOTO(out, ctx = NULL);
 

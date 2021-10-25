@@ -77,7 +77,7 @@ rebuild_pool_tls_create(uuid_t pool_uuid, uuid_t poh_uuid, uuid_t coh_uuid,
 	rebuild_pool_tls = rebuild_pool_tls_lookup(pool_uuid, ver);
 	D_ASSERT(rebuild_pool_tls == NULL);
 
-	D_ALLOC_PTR(rebuild_pool_tls);
+	DM_ALLOC_PTR(M_RECOV, rebuild_pool_tls);
 	if (rebuild_pool_tls == NULL)
 		return NULL;
 
@@ -113,7 +113,7 @@ rebuild_tls_init(int xs_id, int tgt_id)
 {
 	struct rebuild_tls *tls;
 
-	D_ALLOC_PTR(tls);
+	DM_ALLOC_PTR(M_RECOV, tls);
 	if (tls == NULL)
 		return NULL;
 
@@ -266,7 +266,7 @@ rebuild_status_completed_update(const uuid_t pool_uuid,
 		return 0;
 	}
 
-	D_ALLOC_PTR(rsc);
+	DM_ALLOC_PTR(M_RECOV, rsc);
 	if (rsc == NULL)
 		return -DER_NOMEM;
 
@@ -676,7 +676,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 	int i;
 	int rc = 0;
 
-	D_ALLOC_PTR(rgt);
+	DM_ALLOC_PTR(M_RECOV, rgt);
 	if (rgt == NULL)
 		return -DER_NOMEM;
 
@@ -685,7 +685,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 	if (node_nr < 0)
 		D_GOTO(out, rc = node_nr);
 
-	D_ALLOC_ARRAY(rgt->rgt_servers, node_nr);
+	DM_ALLOC_ARRAY(M_RECOV, rgt->rgt_servers, node_nr);
 	if (rgt->rgt_servers == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1612,7 +1612,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 		return rc == 1 ? 0 : rc;
 
 	/* No existing task was found - allocate a new one and use it */
-	D_ALLOC_PTR(new_task);
+	DM_ALLOC_PTR(M_RECOV, new_task);
 	if (new_task == NULL)
 		return -DER_NOMEM;
 
@@ -2073,7 +2073,7 @@ rpt_create(struct ds_pool *pool, uint32_t pm_ver, uint64_t leader_term,
 	d_rank_t	rank;
 	int		rc;
 
-	D_ALLOC_PTR(rpt);
+	DM_ALLOC_PTR(M_RECOV, rpt);
 	if (rpt == NULL)
 		return -DER_NOMEM;
 

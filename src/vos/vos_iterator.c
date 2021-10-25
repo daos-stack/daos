@@ -819,7 +819,7 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 	vos_iter_param_t	 param = {0};
 	int			 rc;
 
-	D_ALLOC_PTR(anchors);
+	DM_ALLOC_PTR(M_VOS, anchors);
 	if (anchors == NULL)
 		return -DER_NOMEM;
 

@@ -38,7 +38,7 @@ rdb_path_init(rdb_path_t *path)
 	d_iov_t p = {};
 
 	p.iov_buf_len = 128;
-	D_ALLOC(p.iov_buf, p.iov_buf_len);
+	DM_ALLOC(M_RDB, p.iov_buf, p.iov_buf_len);
 	if (p.iov_buf == NULL)
 		return -DER_NOMEM;
 	*path = p;
@@ -72,7 +72,7 @@ rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path)
 	void *buf;
 
 	rdb_path_assert(path);
-	D_ALLOC(buf, path->iov_buf_len);
+	DM_ALLOC(M_RDB, buf, path->iov_buf_len);
 	if (buf == NULL)
 		return -DER_NOMEM;
 	memcpy(buf, path->iov_buf, path->iov_len);
@@ -111,7 +111,7 @@ rdb_path_push(rdb_path_t *path, const d_iov_t *key)
 				return -DER_OVERFLOW;
 			buf_len = min(buf_len * 2, rdb_iov_max);
 		} while (buf_len < path->iov_len + len);
-		D_ALLOC(buf, buf_len);
+		DM_ALLOC(M_RDB, buf, buf_len);
 		if (buf == NULL)
 			return -DER_NOMEM;
 		memcpy(buf, path->iov_buf, path->iov_len);

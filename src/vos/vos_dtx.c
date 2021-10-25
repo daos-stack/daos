@@ -153,7 +153,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	if (dth->dth_share_tbd_count >= DTX_REFRESH_MAX)
 		goto out;
 
-	D_ALLOC(dsp, sizeof(*dsp) + DAE_MBS_DSIZE(dae));
+	DM_ALLOC(M_VOS_DTX, dsp, sizeof(*dsp) + DAE_MBS_DSIZE(dae));
 	if (dsp == NULL) {
 		D_ERROR("Hit uncommitted DTX "DF_DTI" at %d: lid=%d, "
 			"but fail to alloc DRAM.\n",
@@ -825,7 +825,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		}
 	}
 
-	D_ALLOC_PTR(dce);
+	DM_ALLOC_PTR(M_VOS_DTX, dce);
 	if (dce == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1152,7 +1152,7 @@ vos_dtx_append(struct dtx_handle *dth, umem_off_t record, uint32_t type)
 			else
 				count = dae->dae_rec_cap * 2;
 
-			D_ALLOC_ARRAY(rec, count);
+			DM_ALLOC_ARRAY(M_VOS_DTX, rec, count);
 			if (rec == NULL)
 				return -DER_NOMEM;
 
@@ -1745,7 +1745,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 			dae->dae_oids = &dae->dae_oid_inline;
 		} else {
 			size = sizeof(daos_unit_oid_t) * dth->dth_oid_cnt;
-			D_ALLOC_NZ(dae->dae_oids, size);
+			DM_ALLOC_NZ(M_VOS_DTX, dae->dae_oids, size);
 			if (dae->dae_oids == NULL) {
 				/* Not fatal. */
 				D_WARN("No DRAM to store ACT DTX OIDs "
@@ -1823,7 +1823,7 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 	size_t			 size;
 
 	size = sizeof(*tmp) + DAE_MBS_DSIZE(dae);
-	D_ALLOC(tmp, size);
+	DM_ALLOC(M_VOS_DTX, tmp, size);
 	if (tmp == NULL)
 		return NULL;
 
@@ -2144,11 +2144,11 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count, bool *rm_cos)
 
 	D_ASSERT(count > 0);
 
-	D_ALLOC_ARRAY(daes, count);
+	DM_ALLOC_ARRAY(M_VOS_DTX, daes, count);
 	if (daes == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(dces, count);
+	DM_ALLOC_ARRAY(M_VOS_DTX, dces, count);
 	if (dces == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2567,7 +2567,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 				count = DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT;
 				size = sizeof(*dae->dae_records) * count;
 
-				D_ALLOC(dae->dae_records, size);
+				DM_ALLOC(M_VOS_DTX, dae->dae_records, size);
 				if (dae->dae_records == NULL) {
 					dtx_evict_lid(cont, dae);
 					D_GOTO(out, rc = -DER_NOMEM);
@@ -2641,7 +2641,7 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 			continue;
 		}
 
-		D_ALLOC_PTR(dce);
+		DM_ALLOC_PTR(M_VOS_DTX, dce);
 		if (dce == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2883,11 +2883,11 @@ vos_dtx_rsrvd_init(struct dtx_handle *dth)
 		return 0;
 	}
 
-	D_ALLOC_ARRAY(dth->dth_rsrvds, dth->dth_modification_cnt);
+	DM_ALLOC_ARRAY(M_VOS_DTX, dth->dth_rsrvds, dth->dth_modification_cnt);
 	if (dth->dth_rsrvds == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ARRAY(dth->dth_deferred, dth->dth_modification_cnt);
+	DM_ALLOC_ARRAY(M_VOS_DTX, dth->dth_deferred, dth->dth_modification_cnt);
 	if (dth->dth_deferred == NULL) {
 		D_FREE(dth->dth_rsrvds);
 		return -DER_NOMEM;

@@ -45,9 +45,8 @@ snap_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 			if (i_args->sla_index < i_args->sla_count) {
 				void *ptr;
 
-				D_REALLOC_ARRAY(ptr, i_args->sla_buf,
-						i_args->sla_index,
-						i_args->sla_count);
+				DM_REALLOC_ARRAY(M_CONT, ptr, i_args->sla_buf,
+						 i_args->sla_index, i_args->sla_count);
 				if (ptr == NULL)
 					return -DER_NOMEM;
 				i_args->sla_buf = ptr;

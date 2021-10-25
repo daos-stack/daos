@@ -326,7 +326,7 @@ bulk_chunk_populate(struct bio_dma_chunk *chk, struct bio_bulk_group *bbg,
 	int			 i, tot_bulks, rc;
 
 	if (chk->bdc_bulks == NULL) {
-		D_ALLOC_ARRAY(chk->bdc_bulks, bio_chk_sz);
+		DM_ALLOC_ARRAY(M_BIO, chk->bdc_bulks, bio_chk_sz);
 		if (chk->bdc_bulks == NULL)
 			return -DER_NOMEM;
 
@@ -572,7 +572,7 @@ bulk_iod_init(struct bio_desc *biod)
 		max_bulks += bsgl->bs_nr_out;
 	}
 
-	D_ALLOC_ARRAY(biod->bd_bulk_hdls, max_bulks);
+	DM_ALLOC_ARRAY(M_BIO, biod->bd_bulk_hdls, max_bulks);
 	if (biod->bd_bulk_hdls == NULL) {
 		D_ERROR("Failed to allocate bulk handle array\n");
 		return -DER_NOMEM;
@@ -744,11 +744,11 @@ bulk_cache_create(struct bio_dma_buffer *bdb)
 	D_ASSERT(bbc->bbc_grps == NULL);
 	D_INIT_LIST_HEAD(&bbc->bbc_grp_lru);
 
-	D_ALLOC_ARRAY(bbc->bbc_grps, BIO_BULK_GRPS_MAX);
+	DM_ALLOC_ARRAY(M_BIO, bbc->bbc_grps, BIO_BULK_GRPS_MAX);
 	if (bbc->bbc_grps == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ARRAY(bbc->bbc_sorted, BIO_BULK_GRPS_MAX);
+	DM_ALLOC_ARRAY(M_BIO, bbc->bbc_sorted, BIO_BULK_GRPS_MAX);
 	if (bbc->bbc_sorted == NULL) {
 		D_FREE(bbc->bbc_grps);
 		bbc->bbc_grps = NULL;

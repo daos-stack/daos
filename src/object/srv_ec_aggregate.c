@@ -357,7 +357,7 @@ agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 	int	 rc = 0;
 
 	if (align_data) {
-		D_ALIGNED_ALLOC(buf, 32, ent_buf_len);
+		DM_ALIGNED_ALLOC(M_EC_AGG, buf, 32, ent_buf_len);
 		if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -365,7 +365,7 @@ agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 		D_FREE(sgl->sg_iovs[iov_entry].iov_buf);
 		sgl->sg_iovs[iov_entry].iov_buf = buf;
 	} else {
-		D_REALLOC_NZ(buf, sgl->sg_iovs[iov_entry].iov_buf, ent_buf_len);
+		DM_REALLOC_NZ(M_EC_AGG, buf, sgl->sg_iovs[iov_entry].iov_buf, ent_buf_len);
 		 if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -394,7 +394,7 @@ agg_prep_sgl(struct ec_agg_entry *entry)
 	int		 rc = 0;
 
 	if (entry->ae_sgl.sg_nr == 0) {
-		D_ALLOC_ARRAY(entry->ae_sgl.sg_iovs, AGG_IOV_CNT);
+		DM_ALLOC_ARRAY(M_EC_AGG, entry->ae_sgl.sg_iovs, AGG_IOV_CNT);
 		if (entry->ae_sgl.sg_iovs == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -547,7 +547,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	unsigned int		 i, j;
 	int			 rc = 0;
 
-	D_ALLOC_ARRAY(recxs, cell_cnt);
+	DM_ALLOC_ARRAY(M_EC_AGG, recxs, cell_cnt);
 	if (recxs == NULL)
 		return -DER_NOMEM;
 
@@ -566,7 +566,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	iod.iod_nr	= cell_cnt;
 	iod.iod_recxs	= recxs;
 
-	D_ALLOC_ARRAY(sgl.sg_iovs, cell_cnt);
+	DM_ALLOC_ARRAY(M_EC_AGG, sgl.sg_iovs, cell_cnt);
 	if (sgl.sg_iovs == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
@@ -846,7 +846,7 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 	uint32_t		 i, j;
 	int			 rc = 0;
 
-	D_ALLOC_ARRAY(recxs, is_recalc ? cell_cnt : cell_cnt + 1);
+	DM_ALLOC_ARRAY(M_EC_AGG, recxs, is_recalc ? cell_cnt : cell_cnt + 1);
 	if (recxs == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
@@ -871,7 +871,7 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 		recxs[cell_cnt].rx_nr = len;
 	}
 
-	D_ALLOC_ARRAY(sgl.sg_iovs, cell_cnt + 1);
+	DM_ALLOC_ARRAY(M_EC_AGG, sgl.sg_iovs, cell_cnt + 1);
 	if (sgl.sg_iovs == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
@@ -1570,7 +1570,7 @@ fetch_again:
 			 */
 			void *tmp_ptr;
 
-			D_REALLOC(tmp_ptr, csum_iov_fetch->iov_buf,
+			DM_REALLOC(M_EC_AGG, tmp_ptr, csum_iov_fetch->iov_buf,
 				  csum_iov_fetch->iov_buf_len,
 				  csum_iov_fetch->iov_len);
 			if (tmp_ptr == NULL)
@@ -1706,7 +1706,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	int			 tid, rc = 0;
 	int			*status;
 
-	D_ALLOC_ARRAY(stripe_ud.asu_recxs,
+	DM_ALLOC_ARRAY(M_EC_AGG, stripe_ud.asu_recxs,
 		      entry->ae_cur_stripe.as_extent_cnt + 1);
 	if (stripe_ud.asu_recxs == NULL) {
 		rc = -DER_NOMEM;
@@ -1904,7 +1904,7 @@ agg_extent_add(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 	int			rc = 0;
 
 	/* Add the extent to the entry, for the current stripe */
-	D_ALLOC_PTR(extent);
+	DM_ALLOC_PTR(M_EC_AGG, extent);
 	if (extent == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

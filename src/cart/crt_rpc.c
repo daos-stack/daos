@@ -435,9 +435,9 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	}
 
 	if (forward)
-		D_ALLOC(rpc_priv, opc_info->coi_input_offset);
+		DM_ALLOC(M_CRT_RPC, rpc_priv, opc_info->coi_input_offset);
 	else
-		D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
+		DM_ALLOC(M_CRT_RPC, rpc_priv, opc_info->coi_rpc_size);
 	if (rpc_priv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

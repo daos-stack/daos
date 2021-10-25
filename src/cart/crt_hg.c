@@ -80,7 +80,7 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 	D_SPIN_UNLOCK(&hg_pool->chp_lock);
 
 	while (prepost) {
-		D_ALLOC_PTR(hdl);
+		DM_ALLOC_PTR(M_CRT, hdl);
 		if (hdl == NULL) {
 			rc = -DER_NOMEM;
 			break;
@@ -224,7 +224,7 @@ crt_hg_pool_put(struct crt_rpc_priv *rpc_priv)
 	D_ASSERT(rpc_priv->crp_hg_hdl != HG_HANDLE_NULL);
 
 	if (rpc_priv->crp_hdl_reuse == NULL) {
-		D_ALLOC_PTR(hdl);
+		DM_ALLOC_PTR(M_CRT, hdl);
 		if (hdl == NULL)
 			D_GOTO(out, 0);
 		D_INIT_LIST_HEAD(&hdl->chh_link);
@@ -807,7 +807,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 	D_ASSERT(opc_info->coi_opc == opc);
 
-	D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
+	DM_ALLOC(M_CRT, rpc_priv, opc_info->coi_rpc_size);
 	if (unlikely(rpc_priv == NULL)) {
 		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
 		crt_hg_unpack_cleanup(proc);
@@ -1341,7 +1341,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		buf_sizes = buf_sizes_stack;
 	} else {
 		allocate = true;
-		D_ALLOC_ARRAY(buf_sizes, sgl->sg_nr);
+		DM_ALLOC_ARRAY(M_CRT, buf_sizes, sgl->sg_nr);
 		if (buf_sizes == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -1352,7 +1352,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		buf_ptrs = NULL;
 	} else {
 		if (allocate) {
-			D_ALLOC_ARRAY(buf_ptrs, sgl->sg_nr);
+			DM_ALLOC_ARRAY(M_CRT, buf_ptrs, sgl->sg_nr);
 			if (buf_ptrs == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		} else {
@@ -1433,11 +1433,11 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 		buf_sizes = buf_sizes_stack;
 		buf_ptrs = buf_ptrs_stack;
 	} else {
-		D_ALLOC_ARRAY(buf_sizes, bulk_sgnum);
+		DM_ALLOC_ARRAY(M_CRT, buf_sizes, bulk_sgnum);
 		if (buf_sizes == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(buf_ptrs, bulk_sgnum);
+		DM_ALLOC_ARRAY(M_CRT, buf_ptrs, bulk_sgnum);
 		if (buf_ptrs == NULL) {
 			D_FREE(buf_sizes);
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -1551,10 +1551,10 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	hg_ctx = &ctx->cc_hg_ctx;
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkctx != NULL);
 
-	D_ALLOC_PTR(bulk_cbinfo);
+	DM_ALLOC_PTR(M_CRT, bulk_cbinfo);
 	if (bulk_cbinfo == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC_PTR(bulk_desc_dup);
+	DM_ALLOC_PTR(M_CRT, bulk_desc_dup);
 	if (bulk_desc_dup == NULL) {
 		D_FREE(bulk_cbinfo);
 		D_GOTO(out, rc = -DER_NOMEM);

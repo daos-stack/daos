@@ -150,7 +150,7 @@ iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info)
 
 	/** Make sure the csum buffer is big enough ... resize if needed */
 	if (iov->iov_buf == NULL) {
-		D_ALLOC(iov->iov_buf, size_needed);
+		DM_ALLOC(M_OBJ, iov->iov_buf, size_needed);
 		if (iov->iov_buf == NULL)
 			return -DER_NOMEM;
 		iov->iov_buf_len = size_needed;
@@ -160,7 +160,7 @@ iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info)
 		size_t	 new_size = max(iov->iov_buf_len * 2,
 					      iov->iov_len + size_needed);
 
-		D_REALLOC(p, iov->iov_buf, iov->iov_buf_len, new_size);
+		DM_REALLOC(M_OBJ, p, iov->iov_buf, iov->iov_buf_len, new_size);
 		if (p == NULL)
 			return -DER_NOMEM;
 		iov->iov_buf = p;
@@ -401,7 +401,7 @@ csummer_alloc_csum_info(struct daos_csummer *csummer,
 	chunksize = daos_csummer_get_rec_chunksize(csummer, rsize);
 	csum_nr = daos_recx_calc_chunks(*recx, rsize, chunksize);
 
-	D_ALLOC(result, sizeof(*result) + csum_len * csum_nr);
+	DM_ALLOC(M_OBJ, result, sizeof(*result) + csum_len * csum_nr);
 	if (result == NULL)
 		return -DER_NOMEM;
 
@@ -486,7 +486,7 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct dss_enum_arg *arg,
 			ent->ie_recx.rx_idx -
 			ent->ie_orig_recx.rx_idx;
 
-		D_ALLOC(data_to_verify.iov_buf, orig_data_len);
+		DM_ALLOC(M_OBJ, data_to_verify.iov_buf, orig_data_len);
 		if (data_to_verify.iov_buf == NULL)
 			return -DER_NOMEM;
 
@@ -759,7 +759,7 @@ grow_array(void **arrayp, size_t elem_size, int old_len, int new_len)
 	void *p;
 
 	D_ASSERTF(old_len < new_len, "%d < %d\n", old_len, new_len);
-	D_REALLOC(p, *arrayp, elem_size * old_len, elem_size * new_len);
+	DM_REALLOC(M_OBJ, p, *arrayp, elem_size * old_len, elem_size * new_len);
 	if (p == NULL)
 		return -DER_NOMEM;
 	*arrayp = p;

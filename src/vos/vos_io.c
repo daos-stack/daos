@@ -267,7 +267,7 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 	if (vos_dedup_lookup(pool, csum, csum_len, NULL))
 		return;
 
-	D_ALLOC_PTR(entry);
+	DM_ALLOC_PTR(M_VOS, entry);
 	if (entry == NULL) {
 		D_ERROR("Failed to allocate dedup entry\n");
 		return;
@@ -275,7 +275,7 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 	D_INIT_LIST_HEAD(&entry->de_link);
 
 	D_ASSERT(csum_len != 0);
-	D_ALLOC(entry->de_csum_buf, csum_len);
+	DM_ALLOC(M_VOS, entry->de_csum_buf, csum_len);
 	if (entry->de_csum_buf == NULL) {
 		D_ERROR("Failed to allocate csum buf "DF_U64"\n", csum_len);
 		D_FREE(entry);
@@ -464,7 +464,7 @@ vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
 		return 0;
 
 	D_ASSERT(ioc->ic_dedup_bsgls == NULL);
-	D_ALLOC_ARRAY(ioc->ic_dedup_bsgls, ioc->ic_iod_nr);
+	DM_ALLOC_ARRAY(M_VOS, ioc->ic_dedup_bsgls, ioc->ic_iod_nr);
 	if (ioc->ic_dedup_bsgls == NULL)
 		return -DER_NOMEM;
 
@@ -477,7 +477,7 @@ vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
 	}
 
 	D_ASSERT(buf_idx > 0);
-	D_ALLOC_ARRAY(ioc->ic_dedup_bufs, buf_idx);
+	DM_ALLOC_ARRAY(M_VOS, ioc->ic_dedup_bufs, buf_idx);
 	if (ioc->ic_dedup_bufs == NULL) {
 		D_FREE(ioc->ic_dedup_bsgls);
 		return -DER_NOMEM;
@@ -562,7 +562,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 		total_acts += iod->iod_nr;
 	}
 
-	D_ALLOC_ARRAY(ioc->ic_umoffs, total_acts);
+	DM_ALLOC_ARRAY(M_VOS, ioc->ic_umoffs, total_acts);
 	if (ioc->ic_umoffs == NULL)
 		return -DER_NOMEM;
 
@@ -571,7 +571,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 
 	size = sizeof(*ioc->ic_rsrvd_scm) +
 		sizeof(struct pobj_action) * total_acts;
-	D_ALLOC(ioc->ic_rsrvd_scm, size);
+	DM_ALLOC(M_VOS, ioc->ic_rsrvd_scm, size);
 	if (ioc->ic_rsrvd_scm == NULL)
 		return -DER_NOMEM;
 
@@ -581,7 +581,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 		return 0;
 
 	/** Reserve enough space for any deferred actions */
-	D_ALLOC(scm, size);
+	DM_ALLOC(M_VOS, scm, size);
 	if (scm == NULL) {
 		D_FREE(ioc->ic_rsrvd_scm);
 		return -DER_NOMEM;
@@ -635,7 +635,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		goto error;
 	}
 
-	D_ALLOC_PTR(ioc);
+	DM_ALLOC_PTR(M_VOS, ioc);
 	if (ioc == NULL)
 		return -DER_NOMEM;
 
@@ -717,7 +717,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	ioc->ic_biov_csums_nr = 1;
 	ioc->ic_biov_csums_at = 0;
-	D_ALLOC_ARRAY(ioc->ic_biov_csums, ioc->ic_biov_csums_nr);
+	DM_ALLOC_ARRAY(M_VOS, ioc->ic_biov_csums, ioc->ic_biov_csums_nr);
 	if (ioc->ic_biov_csums == NULL) {
 		rc = -DER_NOMEM;
 		goto error;
@@ -773,7 +773,7 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	if (iov_at == iov_nr - 1) {
 		struct bio_iov *biovs;
 
-		D_REALLOC_ARRAY(biovs, bsgl->bs_iovs, iov_nr, iov_nr * 2);
+		DM_REALLOC_ARRAY(M_VOS, biovs, bsgl->bs_iovs, iov_nr, iov_nr * 2);
 		if (biovs == NULL)
 			return -DER_NOMEM;
 
@@ -797,7 +797,7 @@ bsgl_csums_resize(struct vos_io_context *ioc)
 		struct dcs_csum_info *new_infos;
 		uint32_t	 new_nr = dcb_nr * 2;
 
-		D_REALLOC_ARRAY(new_infos, csums, dcb_nr, new_nr);
+		DM_REALLOC_ARRAY(M_CSUM, new_infos, csums, dcb_nr, new_nr);
 		if (new_infos == NULL)
 			return -DER_NOMEM;
 
@@ -935,7 +935,7 @@ save_recx(struct vos_io_context *ioc, uint64_t rx_idx, uint64_t rx_nr,
 	struct daos_recx_ep		 recx_ep;
 
 	if (ioc->ic_recx_lists == NULL) {
-		D_ALLOC_ARRAY(ioc->ic_recx_lists, ioc->ic_iod_nr);
+		DM_ALLOC_ARRAY(M_VOS, ioc->ic_recx_lists, ioc->ic_iod_nr);
 		if (ioc->ic_recx_lists == NULL)
 			return -DER_NOMEM;
 	}
@@ -2252,11 +2252,11 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
-		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
+		DM_ALLOC_ARRAY(M_VOS_DTX, daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
+		DM_ALLOC_ARRAY(M_VOS_DTX, dces, dth->dth_dti_cos_count);
 		if (dces == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
 

@@ -126,7 +126,7 @@ rdb_raft_clone_ae(struct rdb *db, const msg_appendentries_t *ae, msg_appendentri
 	else if (ae_new->n_entries > db->d_ae_max_entries)
 		ae_new->n_entries = db->d_ae_max_entries;
 
-	D_ALLOC_ARRAY(ae_new->entries, ae_new->n_entries);
+	DM_ALLOC_ARRAY(M_RDB, ae_new->entries, ae_new->n_entries);
 	if (ae_new->entries == NULL)
 		return -DER_NOMEM;
 	for (i = 0; i < ae_new->n_entries; i++) {
@@ -148,7 +148,7 @@ rdb_raft_clone_ae(struct rdb *db, const msg_appendentries_t *ae, msg_appendentri
 			break;
 		}
 
-		D_ALLOC(e_new->data.buf, e_new->data.len);
+		DM_ALLOC(M_RDB, e_new->data.buf, e_new->data.len);
 		if (e_new->data.buf == NULL) {
 			rdb_raft_fini_ae(ae_new);
 			return -DER_NOMEM;
@@ -236,7 +236,7 @@ rdb_raft_add_node(struct rdb *db, d_rank_t rank)
 	d_rank_t		 self;
 	int			 rc = 0;
 
-	D_ALLOC_PTR(dnode);
+	DM_ALLOC_PTR(M_RDB, dnode);
 	if (dnode == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	rc = crt_group_rank(NULL, &self);
@@ -465,12 +465,12 @@ rdb_raft_cb_send_installsnapshot(raft_server_t *raft, void *arg,
 	 */
 	kds.iov_buf_len = 4 * 1024;
 	kds.iov_len = 0;
-	D_ALLOC(kds.iov_buf, kds.iov_buf_len);
+	DM_ALLOC(M_RDB, kds.iov_buf, kds.iov_buf_len);
 	if (kds.iov_buf == NULL)
 		goto err_rpc;
 	data.iov_buf_len = 1 * 1024 * 1024;
 	data.iov_len = 0;
-	D_ALLOC(data.iov_buf, data.iov_buf_len);
+	DM_ALLOC(M_RDB, data.iov_buf, data.iov_buf_len);
 	if (data.iov_buf == NULL)
 		goto err_kds;
 
@@ -599,7 +599,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 	rc = crt_bulk_get_len(in->isi_kds, &kds->iov_buf_len);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	kds->iov_len = kds->iov_buf_len;
-	D_ALLOC(kds->iov_buf, kds->iov_buf_len);
+	DM_ALLOC(M_RDB, kds->iov_buf, kds->iov_buf_len);
 	if (kds->iov_buf == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
@@ -607,7 +607,7 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 	rc = crt_bulk_get_len(in->isi_data, &data->iov_buf_len);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	data->iov_len = data->iov_buf_len;
-	D_ALLOC(data->iov_buf, data->iov_buf_len);
+	DM_ALLOC(M_RDB, data->iov_buf, data->iov_buf_len);
 	if (data->iov_buf == NULL) {
 		rc = -DER_NOMEM;
 		goto out_kds;
@@ -1840,7 +1840,7 @@ rdb_raft_register_result(struct rdb *db, uint64_t index, void *buf)
 	struct rdb_raft_result *result;
 	int			rc;
 
-	D_ALLOC_PTR(result);
+	DM_ALLOC_PTR(M_RDB, result);
 	if (result == NULL)
 		return -DER_NOMEM;
 	result->drr_index = index;

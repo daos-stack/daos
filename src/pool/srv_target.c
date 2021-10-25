@@ -188,7 +188,7 @@ pool_child_add_one(void *varg)
 
 	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(arg->pla_uuid));
 
-	D_ALLOC_PTR(child);
+	DM_ALLOC_PTR(M_POOL, child);
 	if (child == NULL)
 		return -DER_NOMEM;
 
@@ -333,7 +333,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(key));
 
-	D_ALLOC_PTR(pool);
+	DM_ALLOC_PTR(M_POOL, pool);
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
 
@@ -923,7 +923,7 @@ pool_query_xs_arg_alloc(struct dss_stream_arg_type *xs, void *agg_arg)
 {
 	struct pool_query_xs_arg	*x_arg, *a_arg = agg_arg;
 
-	D_ALLOC_PTR(x_arg);
+	DM_ALLOC_PTR(M_POOL, x_arg);
 	if (x_arg == NULL)
 		return -DER_NOMEM;
 
@@ -1071,7 +1071,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 		return 0;
 	}
 
-	D_ALLOC_PTR(hdl);
+	DM_ALLOC_PTR(M_POOL, hdl);
 	if (hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1294,7 +1294,7 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		/* Since the map has been updated successfully, so let's
 		 * ignore the dtx resync failure for now.
 		 */
-		D_ALLOC_PTR(arg);
+		DM_ALLOC_PTR(M_POOL, arg);
 		if (arg == NULL)
 			D_GOTO(out, rc);
 

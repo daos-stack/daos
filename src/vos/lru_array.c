@@ -74,7 +74,7 @@ lrua_array_alloc_one(struct lru_array *array, struct lru_sub *sub)
 	uint32_t		 idx;
 
 	rec_size = sizeof(*entry) + array->la_payload_size;
-	D_ALLOC(sub->ls_table, rec_size * nr_ents);
+	DM_ALLOC(M_VOS_LRU, sub->ls_table, rec_size * nr_ents);
 	if (sub->ls_table == NULL)
 		return -DER_NOMEM;
 
@@ -272,7 +272,7 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent, uint32_t nr_arrays,
 
 	*arrayp = NULL;
 
-	D_ALLOC(array, sizeof(*array) +
+	DM_ALLOC(M_VOS_LRU, array, sizeof(*array) +
 		(sizeof(array->la_sub[0]) * nr_arrays));
 	if (array == NULL)
 		return -DER_NOMEM;
