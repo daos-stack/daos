@@ -216,7 +216,7 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 		return -DER_UNINIT;
 	}
 
-	D_ALLOC_PTR(vsi);
+	DM_ALLOC_PTR(M_VEA, vsi);
 	if (vsi == NULL)
 		return -DER_NOMEM;
 
@@ -298,7 +298,7 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 	D_ASSERT(vsi != NULL);
 	D_ASSERT(resrvd_list != NULL);
 
-	D_ALLOC_PTR(resrvd);
+	DM_ALLOC_PTR(M_VEA, resrvd);
 	if (resrvd == NULL)
 		return -DER_NOMEM;
 
@@ -525,7 +525,7 @@ vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt)
 	struct free_commit_cb_arg *fca;
 	int rc;
 
-	D_ALLOC_PTR(fca);
+	DM_ALLOC_PTR(M_VEA, fca);
 	if (fca == NULL)
 		return -DER_NOMEM;
 
@@ -600,7 +600,7 @@ vea_hint_load(struct vea_hint_df *phd, struct vea_hint_context **thc)
 	D_ASSERT(thc != NULL);
 	struct vea_hint_context *hint_ctxt;
 
-	D_ALLOC_PTR(hint_ctxt);
+	DM_ALLOC_PTR(M_VEA, hint_ctxt);
 	if (hint_ctxt == NULL)
 		return -DER_NOMEM;
 

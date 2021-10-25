@@ -303,7 +303,7 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 {
 	struct evt_list_entry	*ents;
 
-	D_ALLOC_ARRAY(ents, new_size);
+	DM_ALLOC_ARRAY(M_VOS, ents, new_size);
 	if (ents == NULL)
 		return -DER_NOMEM;
 
@@ -1120,7 +1120,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	D_ASSERT(root != NULL);
 
-	D_ALLOC_PTR(tcx);
+	DM_ALLOC_PTR(M_VOS, tcx);
 	if (tcx == NULL)
 		return -DER_NOMEM;
 
@@ -2299,7 +2299,7 @@ evt_data_loss_add(d_list_t *head, struct evt_rect *rect)
 {
 	struct evt_data_loss_item	*edli;
 
-	D_ALLOC_PTR(edli);
+	DM_ALLOC_PTR(M_VOS, edli);
 	if (edli != NULL) {
 		edli->edli_rect = *rect;
 		d_list_add(&edli->edli_link, head);

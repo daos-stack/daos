@@ -99,7 +99,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 		}
 	}
 
-	D_ALLOC_PTR(remote_arg);
+	DM_ALLOC_PTR(M_IO, remote_arg);
 	if (remote_arg == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -214,7 +214,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	D_ASSERT(idx < dlh->dlh_sub_cnt);
 	sub = &dlh->dlh_subs[idx];
 	shard_tgt = &sub->dss_tgt;
-	D_ALLOC_PTR(remote_arg);
+	DM_ALLOC_PTR(M_IO, remote_arg);
 	if (remote_arg == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -309,11 +309,11 @@ ds_obj_cpd_clone_reqs(struct dtx_leader_handle *dlh, struct daos_shard_tgt *tgt,
 	int				 i;
 
 	count = dcde_parent->dcde_read_cnt + dcde_parent->dcde_write_cnt;
-	D_ALLOC_ARRAY(dcsr, count);
+	DM_ALLOC_ARRAY(M_IO, dcsr, count);
 	if (dcsr == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC(dcde, sizeof(*dcde) +
+	DM_ALLOC(M_IO, dcde, sizeof(*dcde) +
 		sizeof(struct daos_cpd_req_idx) * count);
 	if (dcde == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -412,19 +412,19 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	sub = &dlh->dlh_subs[idx];
 	shard_tgt = &sub->dss_tgt;
 
-	D_ALLOC_PTR(head_dcs);
+	DM_ALLOC_PTR(M_IO, head_dcs);
 	if (head_dcs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_PTR(dcsr_dcs);
+	DM_ALLOC_PTR(M_IO, dcsr_dcs);
 	if (dcsr_dcs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_PTR(dcde_dcs);
+	DM_ALLOC_PTR(M_IO, dcde_dcs);
 	if (dcde_dcs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_PTR(remote_arg);
+	DM_ALLOC_PTR(M_IO, remote_arg);
 	if (remote_arg == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

@@ -25,7 +25,7 @@ dtx_tls_init(int xs_id, int tgt_id)
 	struct dtx_tls  *tls;
 	int              rc;
 
-	D_ALLOC_PTR(tls);
+	DM_ALLOC_PTR(M_DTX, tls);
 	if (tls == NULL)
 		return NULL;
 
@@ -76,7 +76,7 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 
 	D_ASSERT(tgt_id >= 0);
 
-	D_ALLOC_PTR(metrics);
+	DM_ALLOC_PTR(M_DTX, metrics);
 	if (metrics == NULL)
 		return NULL;
 
@@ -231,7 +231,7 @@ dtx_handler(crt_rpc_t *rpc)
 		if (count > DTX_REFRESH_MAX)
 			D_GOTO(out, rc = -DER_PROTO);
 
-		D_ALLOC(dout->do_sub_rets.ca_arrays, sizeof(int32_t) * count);
+		DM_ALLOC(M_DTX, dout->do_sub_rets.ca_arrays, sizeof(int32_t) * count);
 		if (dout->do_sub_rets.ca_arrays == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 

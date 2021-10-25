@@ -64,7 +64,7 @@ ds_iv_class_register(unsigned int class_id, struct crt_iv_ops *crt_ops,
 	if (!found) {
 		struct crt_iv_class *new_iv_class;
 
-		D_ALLOC(new_iv_class, (crt_iv_class_nr + 1) *
+		DM_ALLOC(M_IV, new_iv_class, (crt_iv_class_nr + 1) *
 				       sizeof(*new_iv_class));
 		if (new_iv_class == NULL)
 			return -DER_NOMEM;
@@ -83,7 +83,7 @@ ds_iv_class_register(unsigned int class_id, struct crt_iv_ops *crt_ops,
 		crt_iv_class_id = crt_iv_class_nr - 1;
 	}
 
-	D_ALLOC_PTR(class);
+	DM_ALLOC_PTR(M_IV, class);
 	if (class == NULL)
 		return -DER_NOMEM;
 
@@ -297,7 +297,7 @@ iv_entry_alloc(struct ds_iv_ns *ns, struct ds_iv_class *class,
 	struct ds_iv_entry *entry;
 	int			 rc;
 
-	D_ALLOC_PTR(entry);
+	DM_ALLOC_PTR(M_IV, entry);
 	if (entry == NULL)
 		return -DER_NOMEM;
 
@@ -596,7 +596,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_ALLOC_PTR(priv_entry);
+	DM_ALLOC_PTR(M_IV, priv_entry);
 	if (priv_entry == NULL) {
 		class->iv_class_ops->ivc_ent_put(entry, priv);
 		D_GOTO(out, rc);
@@ -748,7 +748,7 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 	if (ns)
 		return -DER_EXIST;
 
-	D_ALLOC_PTR(ns);
+	DM_ALLOC_PTR(M_IV, ns);
 	if (ns == NULL)
 		return -DER_NOMEM;
 
@@ -1071,7 +1071,7 @@ retry:
 		struct sync_comp_cb_arg *arg = NULL;
 
 		/* Register asynchronous sync(lazy mode) callback */
-		D_ALLOC_PTR(arg);
+		DM_ALLOC_PTR(M_IV, arg);
 		if (arg == NULL)
 			return -DER_NOMEM;
 

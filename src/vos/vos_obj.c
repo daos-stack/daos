@@ -154,7 +154,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	int			 i;
 	int			 rc;
 
-	D_ALLOC_PTR(info);
+	DM_ALLOC_PTR(M_VOS, info);
 	if (info == NULL)
 		return -DER_NOMEM;
 
@@ -258,7 +258,7 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	struct vos_ilog_info	*info;
 	int			 rc;
 
-	D_ALLOC_PTR(info);
+	DM_ALLOC_PTR(M_VOS, info);
 	if (info == NULL)
 		return -DER_NOMEM;
 	vos_ilog_fetch_init(info);
@@ -362,11 +362,11 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
-		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
+		DM_ALLOC_ARRAY(M_VOS_DTX, daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
+		DM_ALLOC_ARRAY(M_VOS_DTX, dces, dth->dth_dti_cos_count);
 		if (dces == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
@@ -1386,7 +1386,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	daos_epoch_t		 bound;
 	int			 rc;
 
-	D_ALLOC_PTR(oiter);
+	DM_ALLOC_PTR(M_VOS, oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
 
@@ -1580,7 +1580,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	int			 rc = 0;
 	uint32_t		 options;
 
-	D_ALLOC_PTR(oiter);
+	DM_ALLOC_PTR(M_VOS, oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
 

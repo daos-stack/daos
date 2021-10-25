@@ -331,7 +331,7 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 			else
 				new_size *= 2;
 		} while (len > new_size - tx->dt_entry_len);
-		D_ALLOC(new_buf, new_size);
+		DM_ALLOC(M_RDB, new_buf, new_size);
 		if (new_buf == NULL)
 			return -DER_NOMEM;
 		if (tx->dt_entry_len > 0)

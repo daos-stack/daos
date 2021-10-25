@@ -118,12 +118,12 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 
 	*ts_tablep = NULL;
 
-	D_ALLOC_PTR(ts_table);
+	DM_ALLOC_PTR(M_VOS_TS, ts_table);
 	if (ts_table == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ARRAY(ts_table->tt_misses,
-		      OBJ_MISS_SIZE + DKEY_MISS_SIZE + AKEY_MISS_SIZE);
+	DM_ALLOC_ARRAY(M_VOS_TS, ts_table->tt_misses,
+		       OBJ_MISS_SIZE + DKEY_MISS_SIZE + AKEY_MISS_SIZE);
 	if (ts_table->tt_misses == NULL) {
 		rc = -DER_NOMEM;
 		goto free_table;
@@ -284,7 +284,7 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 	size = VOS_TS_TYPE_AKEY + akey_nr;
 	array_size = size * sizeof((*ts_set)->ts_entries[0]);
 
-	D_ALLOC(*ts_set, sizeof(**ts_set) + array_size);
+	DM_ALLOC(M_VOS_TS, *ts_set, sizeof(**ts_set) + array_size);
 	if (*ts_set == NULL)
 		return -DER_NOMEM;
 

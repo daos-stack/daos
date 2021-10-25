@@ -188,7 +188,7 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	    DTX_CLEANUP_THD_AGE_LO)
 		return 1;
 
-	D_ALLOC(dsp, sizeof(*dsp) + ent->ie_dtx_mbs_dsize);
+	DM_ALLOC(M_DTX, dsp, sizeof(*dsp) + ent->ie_dtx_mbs_dsize);
 	if (dsp == NULL)
 		return -DER_NOMEM;
 
@@ -836,7 +836,7 @@ dtx_insert_oid(struct dtx_handle *dth, daos_unit_oid_t *oid, bool touch_leader)
 	if (dth->dth_oid_cnt == dth->dth_oid_cap) {
 		daos_unit_oid_t		*oid_array;
 
-		D_ALLOC_ARRAY(oid_array, dth->dth_oid_cap << 1);
+		DM_ALLOC_ARRAY(M_DTX, oid_array, dth->dth_oid_cap << 1);
 		if (oid_array == NULL)
 			return -DER_NOMEM;
 
@@ -932,7 +932,7 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash)
 
 		/* 4 slots by default to hold rename case. */
 		dth->dth_oid_cap = 4;
-		D_ALLOC_ARRAY(dth->dth_oid_array, dth->dth_oid_cap);
+		DM_ALLOC_ARRAY(M_DTX, dth->dth_oid_array, dth->dth_oid_cap);
 		if (dth->dth_oid_array == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1003,7 +1003,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 
 	if (tgt_cnt > 0) {
 		dlh->dlh_future = ABT_FUTURE_NULL;
-		D_ALLOC_ARRAY(dlh->dlh_subs, tgt_cnt);
+		DM_ALLOC_ARRAY(M_DTX, dlh->dlh_subs, tgt_cnt);
 		if (dlh->dlh_subs == NULL)
 			return -DER_NOMEM;
 
@@ -1191,7 +1191,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	D_ASSERT(dth->dth_mbs != NULL);
 
 	size = sizeof(*dte) + sizeof(*mbs) + dth->dth_mbs->dm_data_size;
-	D_ALLOC(dte, size);
+	DM_ALLOC(M_DTX, dte, size);
 	if (dte == NULL) {
 		dth->dth_sync = 1;
 		goto sync;
@@ -1476,7 +1476,7 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 	}
 
 	if (new_pool) {
-		D_ALLOC_PTR(dbpa);
+		DM_ALLOC_PTR(M_DTX, dbpa);
 		if (dbpa == NULL)
 			return -DER_NOMEM;
 
@@ -1485,7 +1485,7 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 		dbpa->dbpa_pool = cont->sc_pool;
 	}
 
-	D_ALLOC_PTR(dbca);
+	DM_ALLOC_PTR(M_DTX, dbca);
 	if (dbca == NULL) {
 		if (new_pool)
 			D_FREE(dbpa);
@@ -1724,7 +1724,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	if (dlh->dlh_sub_cnt == 0)
 		goto exec;
 
-	D_ALLOC_PTR(ult_arg);
+	DM_ALLOC_PTR(M_DTX, ult_arg);
 	if (ult_arg == NULL)
 		return -DER_NOMEM;
 	ult_arg->func	= func;

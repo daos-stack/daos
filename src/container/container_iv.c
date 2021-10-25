@@ -62,7 +62,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_ALLOC(entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
+	DM_ALLOC(M_IV, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 	if (entry->iv_value.sg_iovs[0].iov_buf == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -226,7 +226,7 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 		D_GOTO(out, rc);
 
 	D_ASSERT(snap_cnt >= 0);
-	D_ALLOC(iv_entry, cont_iv_snap_ent_size(snap_cnt));
+	DM_ALLOC(M_IV, iv_entry, cont_iv_snap_ent_size(snap_cnt));
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -358,7 +358,7 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 		D_GOTO(out, rc);
 
 	entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
-	D_ALLOC(iv_entry, entry_size);
+	DM_ALLOC(M_IV, iv_entry, entry_size);
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -613,7 +613,7 @@ cont_iv_value_alloc(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	if (rc)
 		return rc;
 
-	D_ALLOC(entry, civ_key->entry_size);
+	DM_ALLOC(M_IV, entry, civ_key->entry_size);
 	if (entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -753,7 +753,7 @@ cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
 	uint64_t		snap_cnt = INIT_SNAP_CNT;
 retry:
 	iv_entry_size = cont_iv_snap_ent_size(snap_cnt);
-	D_ALLOC(iv_entry, iv_entry_size);
+	DM_ALLOC(M_IV, iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		return -DER_NOMEM;
 
@@ -777,7 +777,7 @@ retry:
 	}
 
 	if (snapshots != NULL) {
-		D_ALLOC(*snapshots,
+		DM_ALLOC(M_IV, *snapshots,
 		      sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
 		if (*snapshots == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
@@ -805,7 +805,7 @@ cont_iv_snapshots_update(void *ns, uuid_t cont_uuid, uint64_t *snapshots,
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
 	iv_entry_size = cont_iv_snap_ent_size(snap_count);
-	D_ALLOC(iv_entry, iv_entry_size);
+	DM_ALLOC(M_IV, iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		return -DER_NOMEM;
 
@@ -1172,7 +1172,7 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_ROOTS:
 			roots = &iv_prop->cip_roots;
-			D_ALLOC(prop_entry->dpe_val_ptr, sizeof(*roots));
+			DM_ALLOC(M_PROP, prop_entry->dpe_val_ptr, sizeof(*roots));
 			if (!prop_entry->dpe_val_ptr)
 				D_GOTO(out, rc = -DER_NOMEM);
 			memcpy(prop_entry->dpe_val_ptr, roots, sizeof(*roots));
@@ -1209,7 +1209,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
 	iv_entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
-	D_ALLOC(iv_entry, iv_entry_size);
+	DM_ALLOC(M_IV, iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		return -DER_NOMEM;
 
@@ -1248,7 +1248,7 @@ cont_iv_prop_fetch_ult(void *data)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
 	iv_entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
-	D_ALLOC(iv_entry, iv_entry_size);
+	DM_ALLOC(M_IV, iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

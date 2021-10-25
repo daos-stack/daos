@@ -289,7 +289,7 @@ static int
 ilog_ctx_create(struct umem_instance *umm, struct ilog_root *root,
 		const struct ilog_desc_cbs *cbs, struct ilog_context **lctxp)
 {
-	D_ALLOC_PTR(*lctxp);
+	DM_ALLOC_PTR(M_VOS, *lctxp);
 	if (*lctxp == NULL) {
 		D_ERROR("Could not allocate memory for open incarnation log\n");
 		return -DER_NOMEM;
@@ -1167,7 +1167,7 @@ prepare_entries(struct ilog_entries *entries, struct ilog_array_cache *cache)
 	if (cache->ac_nr <= priv->ip_alloc_size)
 		goto done;
 
-	D_ALLOC_ARRAY(statuses, cache->ac_nr);
+	DM_ALLOC_ARRAY(M_VOS, statuses, cache->ac_nr);
 	if (statuses == NULL)
 		return -DER_NOMEM;
 
@@ -1537,7 +1537,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	ilog_log2cache(lctx, &cache);
 
 	if (priv->ip_removals == NULL) {
-		D_ALLOC_ARRAY(priv->ip_removals, cache.ac_nr);
+		DM_ALLOC_ARRAY(M_VOS, priv->ip_removals, cache.ac_nr);
 		if (priv->ip_removals == NULL)
 			return -DER_NOMEM;
 	}

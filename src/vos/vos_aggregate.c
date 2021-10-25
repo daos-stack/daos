@@ -515,7 +515,7 @@ csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,
 	int		 i;
 
 	if (new_len > cur_len) {
-		D_REALLOC_NZ(buffer, *csum_bufp, new_len);
+		DM_REALLOC_NZ(M_CSUM, buffer, *csum_bufp, new_len);
 		if (buffer == NULL)
 			return -DER_NOMEM;
 	} else
@@ -539,7 +539,7 @@ allocate_rmv_ent(const struct evt_extent *ext, daos_epoch_t epoch, uint16_t mino
 {
 	struct agg_rmv_ent *rm_ent;
 
-	D_ALLOC_PTR(rm_ent);
+	DM_ALLOC_PTR(M_VOS, rm_ent);
 	if (rm_ent == NULL)
 		return NULL;
 
@@ -724,7 +724,7 @@ prepare_segments(struct agg_merge_window *mw)
 
 	seg_max = MAX((mw->mw_lgc_cnt + mw->mw_phy_cnt), 200);
 	if (io->ic_seg_max < seg_max) {
-		D_REALLOC_ARRAY_NZ(lgc_seg, io->ic_segs, seg_max);
+		DM_REALLOC_ARRAY_NZ(M_VOS, lgc_seg, io->ic_segs, seg_max);
 		if (lgc_seg == NULL)
 			return -DER_NOMEM;
 
@@ -961,8 +961,7 @@ csum_append_added_segs(struct bio_sglist *bsgl, unsigned int added_segs)
 	void		*buffer;
 	unsigned int	 i, add_idx = bsgl->bs_nr;
 
-	D_REALLOC_ARRAY(buffer, bsgl->bs_iovs, bsgl->bs_nr,
-			bsgl->bs_nr + added_segs);
+	DM_REALLOC_ARRAY(M_VOS, buffer, bsgl->bs_iovs, bsgl->bs_nr, bsgl->bs_nr + added_segs);
 	if (buffer == NULL)
 		return -DER_NOMEM;
 	bsgl->bs_iovs = buffer;
@@ -1121,8 +1120,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		void *buffer;
 
 		/* An array of recalc structs (one per output segment). */
-		D_REALLOC_ARRAY(buffer, io->ic_csum_recalcs,
-				io->ic_csum_recalc_cnt, seg_count);
+		DM_REALLOC_ARRAY(M_VOS, buffer, io->ic_csum_recalcs,
+				 io->ic_csum_recalc_cnt, seg_count);
 		if (buffer == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1200,8 +1199,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	if (io->ic_buf_len < buf_max + buf_add) {
 		void *buffer;
 
-		D_REALLOC(buffer, io->ic_buf, io->ic_buf_len,
-			  buf_max + buf_add);
+		DM_REALLOC(M_VOS, buffer, io->ic_buf, io->ic_buf_len, buf_max + buf_add);
 		if (buffer == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -1297,7 +1295,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		size = sizeof(*io->ic_rsrvd_scm) *
 			sizeof(*scm_exts) * scm_max;
 
-		D_REALLOC_Z(rsrvd_scm, io->ic_rsrvd_scm, size);
+		DM_REALLOC_Z(M_VOS, rsrvd_scm, io->ic_rsrvd_scm, size);
 		if (rsrvd_scm == NULL)
 			return -DER_NOMEM;
 
@@ -1715,7 +1713,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 {
 	struct agg_phy_ent *phy_ent;
 
-	D_ALLOC_PTR(phy_ent);
+	DM_ALLOC_PTR(M_VOS, phy_ent);
 	if (phy_ent == NULL)
 		return NULL;
 
@@ -1776,7 +1774,7 @@ enqueue_lgc_ent(struct agg_merge_window *mw, struct evt_extent *lgc_ext,
 	if (cnt == max) {
 		unsigned int new_max = max ? max * 2 : 10;
 
-		D_REALLOC_ARRAY(lgc_ent, mw->mw_lgc_ents, max, new_max);
+		DM_REALLOC_ARRAY(M_VOS, lgc_ent, mw->mw_lgc_ents, max, new_max);
 		if (lgc_ent == NULL)
 			return -DER_NOMEM;
 
@@ -2489,7 +2487,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
 		  epr->epr_lo, epr->epr_hi);
 
-	D_ALLOC_PTR(ad);
+	DM_ALLOC_PTR(M_VOS, ad);
 	if (ad == NULL)
 		return -DER_NOMEM;
 
@@ -2570,7 +2568,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
 		  epr->epr_lo, epr->epr_hi);
 
-	D_ALLOC_PTR(ad);
+	DM_ALLOC_PTR(M_VOS, ad);
 	if (ad == NULL)
 		return -DER_NOMEM;
 

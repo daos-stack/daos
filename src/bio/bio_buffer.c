@@ -33,7 +33,7 @@ dma_alloc_chunk(unsigned int cnt)
 	int rc;
 
 	D_ASSERT(bytes > 0);
-	D_ALLOC_PTR(chunk);
+	DM_ALLOC_PTR(M_BIO, chunk);
 	if (chunk == NULL) {
 		D_ERROR("Failed to allocate chunk\n");
 		return NULL;
@@ -119,7 +119,7 @@ dma_buffer_create(unsigned int init_cnt)
 	struct bio_dma_buffer *buf;
 	int rc;
 
-	D_ALLOC_PTR(buf);
+	DM_ALLOC_PTR(M_BIO, buf);
 	if (buf == NULL)
 		return NULL;
 
@@ -181,7 +181,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt,
 	D_ASSERT(ctxt != NULL && ctxt->bic_umem != NULL);
 	D_ASSERT(sgl_cnt != 0);
 
-	D_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
+	DM_ALLOC(M_BIO, biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
 	if (biod == NULL)
 		return NULL;
 
@@ -505,7 +505,7 @@ iod_add_chunk(struct bio_desc *biod, struct bio_dma_chunk *chk)
 		int size = sizeof(struct bio_dma_chunk *);
 		unsigned new_cnt = cnt + 10;
 
-		D_ALLOC_ARRAY(chunks, new_cnt);
+		DM_ALLOC_ARRAY(M_BIO, chunks, new_cnt);
 		if (chunks == NULL)
 			return -DER_NOMEM;
 
@@ -540,7 +540,7 @@ iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 		int size = sizeof(struct bio_rsrvd_region);
 		unsigned new_cnt = cnt + 20;
 
-		D_ALLOC_ARRAY(rgs, new_cnt);
+		DM_ALLOC_ARRAY(M_BIO, rgs, new_cnt);
 		if (rgs == NULL)
 			return -DER_NOMEM;
 
@@ -862,7 +862,7 @@ rw_completion(void *cb_arg, int err)
 
 	/* Report all NVMe IO errors */
 	if (err != 0) {
-		D_ALLOC_PTR(mem);
+		DM_ALLOC_PTR(M_BIO, mem);
 		if (mem == NULL)
 			goto skip_media_error;
 		mem->mem_err_type = (biod->bd_type == BIO_IOD_TYPE_UPDATE) ?

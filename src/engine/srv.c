@@ -320,6 +320,7 @@ dss_srv_handler(void *arg)
 	struct dss_xstream		*dx = (struct dss_xstream *)arg;
 	struct dss_thread_local_storage	*dtc;
 	struct dss_module_info		*dmi;
+	uint64_t			 then = 0;
 	int				 rc;
 	bool				 signal_caller = true;
 
@@ -491,6 +492,14 @@ dss_srv_handler(void *arg)
 		if (dss_xstream_exiting(dx))
 			break;
 
+		if (dx->dx_xs_id == 0) {
+			uint64_t now = sched_cur_msec();
+
+			if (now > then + DAOS_DM_INTV * 1000) {
+				then = now;
+				dm_mem_dump_log();
+			}
+		}
 		ABT_thread_yield();
 	}
 

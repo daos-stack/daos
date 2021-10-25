@@ -63,11 +63,11 @@ dtx_resync_commit(struct ds_cont_child *cont,
 
 	D_ASSERT(drh->drh_count >= count);
 
-	D_ALLOC_ARRAY(dtes, count);
+	DM_ALLOC_ARRAY(M_DTX, dtes, count);
 	if (dtes == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ARRAY(dcks, count);
+	DM_ALLOC_ARRAY(M_DTX, dcks, count);
 	if (dcks == NULL) {
 		D_FREE(dtes);
 		return -DER_NOMEM;
@@ -361,7 +361,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	ABT_rwlock_unlock(pool->sp_lock);
 	D_ASSERT(tgt_cnt != 0);
 
-	D_ALLOC_ARRAY(tgt_array, tgt_cnt);
+	DM_ALLOC_ARRAY(M_DTX, tgt_array, tgt_cnt);
 	if (tgt_array == NULL)
 		D_GOTO(out, err = -DER_NOMEM);
 
@@ -493,7 +493,7 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	D_ASSERT(ent->ie_dtx_tgt_cnt > 0);
 
 	size = sizeof(*dre) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize;
-	D_ALLOC(dre, size);
+	DM_ALLOC(M_DTX, dre, size);
 	if (dre == NULL)
 		return -DER_NOMEM;
 

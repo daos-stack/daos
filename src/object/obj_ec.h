@@ -411,7 +411,7 @@ obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 	}
 #endif
 	if ((flags & OBJ_SIOD_SINGV) == 0) {
-		D_ALLOC_ARRAY(oiod->oiod_siods, tgt_nr);
+		DM_ALLOC_ARRAY(M_EC, oiod->oiod_siods, tgt_nr);
 		if (oiod->oiod_siods == NULL)
 			return -DER_NOMEM;
 	}
@@ -482,7 +482,7 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 		D_ASSERT(stripe_nr >= 1);
 		if (stripe_nr == 1)
 			continue;
-		D_ALLOC_ARRAY(new_recx, stripe_nr + iod->iod_nr - 1);
+		DM_ALLOC_ARRAY(M_IO_ARG, new_recx, stripe_nr + iod->iod_nr - 1);
 		if (new_recx == NULL)
 			return -DER_NOMEM;
 		for (j = 0; j < i; j++)

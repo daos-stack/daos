@@ -69,7 +69,7 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_oid));
 
-	D_ALLOC_PTR(obj);
+	DM_ALLOC_PTR(M_OBJ, obj);
 	if (!obj)
 		D_GOTO(failed, rc = -DER_NOMEM);
 
