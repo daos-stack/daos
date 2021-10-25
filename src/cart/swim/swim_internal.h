@@ -100,7 +100,6 @@ struct swim_context {
 
 	uint64_t		 sc_default_ping_timeout;
 	uint64_t		 sc_expect_progress_time;
-	uint64_t		 sc_last_success_time;
 	uint64_t		 sc_next_tick_time;
 	uint64_t		 sc_next_event;
 	uint64_t		 sc_deadline;
