@@ -194,10 +194,8 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 	}
 
 	rc = dfuse_send_to_fg(0);
-	if (rc != -DER_SUCCESS) {
+	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
-		return rc;
-	}
 
 	/* Blocking */
 	if (dfuse_info->di_threaded)
