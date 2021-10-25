@@ -1247,12 +1247,14 @@ def run_daos_cmd(conf,
         rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
-def _create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgrind=False):
+def _create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, valgrind=False):
     """Helper function for create_cont"""
 
     cmd = ['container',
-           'create',
-           pool]
+           'create']
+
+    if pool:
+        cmd.append(pool)
 
     if label:
         cmd.extend(['--properties',
@@ -1271,7 +1273,7 @@ def _create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgr
     print(rc.json)
     return rc
 
-def create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgrind=False):
+def create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, valgrind=False):
     """Create a container and return the uuid"""
 
     rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
@@ -1285,7 +1287,7 @@ def create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgri
             destroy_container(conf, pool, label)
             rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
 
-    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
+    assert rc.returncode == 0, rc
     return rc.json['response']['container_uuid']
 
 def destroy_container(conf, pool, container, valgrind=True):
@@ -1747,7 +1749,7 @@ class posix_tests():
     def test_uns_create(self):
         """Simple test to create a container using a path in dfuse"""
         path = os.path.join(self.dfuse.dir, 'mycont')
-        create_cont(self.conf, pool=self.pool.uuid, path=path, ctype="POSIX")
+        create_cont(self.conf, path=path, ctype="POSIX")
         stbuf = os.stat(path)
         print(stbuf)
         assert stbuf.st_ino < 100
