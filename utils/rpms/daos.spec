@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -481,6 +481,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Mon Oct 25 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-3
+- Fix name of daos serialize package
+
 * Mon Oct 13 2021 David Quigley <david.quigley@intel.com> 2.1.100-2
 - Add defusedxml as a required dependency for the test package.
 

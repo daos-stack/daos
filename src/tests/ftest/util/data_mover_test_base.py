@@ -266,7 +266,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.execute_cmd(cmd)
 
         # mount small tmpfs filesystem on posix path, using size required sudo
-        # add mount_dir to mounted list for use when umounting 
+        # add mount_dir to mounted list for use when umounting
         if mount_dir:
             self.mounted_posix_test_paths.append(path)
             self.execute_cmd("sudo mount -t tmpfs none '{}' -o size=128M".format(path))
@@ -832,6 +832,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # First, initialize a new fs copy command
         self.fs_copy_cmd = FsCopy(self.daos_cmd, self.log)
+
+        # set preserve-props path if it was used in test case
+        if self.preserve_props_path:
+            self.fs_copy_cmd.set_fs_copy_params(preserve_props=self.preserve_props_path)
 
         # Set the source params
         if src_type == "POSIX":
