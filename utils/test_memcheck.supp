@@ -163,7 +163,8 @@
    ...
    fun:?alloc
    ...
-   fun:opal_libevent2022_event_base_loop
+   obj:*libevent*.so*
+   fun:*event_base_loop
    ...
 }
 {
