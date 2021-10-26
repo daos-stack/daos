@@ -26,6 +26,7 @@ If you prefer a different base than CentOS8, replace the filename "Dockerfile.ce
 ```bash
 git clone https://github.com/daos-stack/daos.git 
 git submodule init; git submodule update
+cd daos
 docker build  . -f utils/docker/Dockerfile.centos.8 -t daos
 ```
 
