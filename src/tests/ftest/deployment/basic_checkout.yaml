@@ -6,25 +6,12 @@ hosts:
     - server-D
     - server-E
     - server-F
-    - server-G
-    - server-H
-    - server-I
-    - server-J
-    - server-K
-    - server-L
-    - server-M
-    - server-N
-    - server-O
-    - server-P
   test_clients:
-    - client-E
-    - client-F
     - client-G
-    - client-H
 timeout: 700
 server_config:
     name: daos_server
-    provider: ofi+tcp;ofi_rxm
+#    provider: ofi+tcp;ofi_rxm
     servers:
         bdev_class: nvme
         bdev_list: ["0000:83:00.0"]
@@ -88,9 +75,9 @@ ior:
       - "EC_4P2G1"
       - "EC_4P2G8"
       - "EC_4P2GX"
-      - "EC_8P2G1"
-      - "EC_8P2G8"
-      - "EC_8P2GX"
+#      - "EC_8P2G1"
+#      - "EC_8P2G8"
+#      - "EC_8P2GX"
     dm:
       dm_ior_options: ["-w -k", "5", "1M", "1G", "EC_2P2G1", "EC_2P2GX", "/testFile", "1"]
 mdtest:

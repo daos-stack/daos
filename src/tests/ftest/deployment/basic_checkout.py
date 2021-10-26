@@ -5,11 +5,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from ior_small import IorSmall
-from mdtest_small import MdtestSmall
-from autotest import ContainerAutotestTest
-from ior_smoke import EcodIor
-from large_file import DmvrPosixLargeFile
+from ior.small import IorSmall
+from mdtest.small import MdtestSmall
+from container.autotest import ContainerAutotestTest
+from erasurecode.ior_smoke import EcodIor
+from datamover.large_file import DmvrPosixLargeFile
 
 class BasicCheckout(IorSmall, MdtestSmall, ContainerAutotestTest, EcodIor):
     # pylint: disable=too-many-ancestors
@@ -25,6 +25,7 @@ class BasicCheckout(IorSmall, MdtestSmall, ContainerAutotestTest, EcodIor):
         Test Description: Bundles four tests into one and run in the
                           following sequence - ior_small, mdtest_small,
                           ec_smoke and autotest.
+        :avocado: tags=hw,large
         :avocado: tags=installation,basiccheckout
         """
         # local param
@@ -55,6 +56,7 @@ class BasicCheckoutDm(DmvrPosixLargeFile):
         Test Description: Datamover test to check connection and datamover
                           functionality with Lustre fs on newly installed
                           server nodes.
+        :avocado: tags=hw,large
         :avocado: tags=installation,basiccheckout
         """
         # local param
