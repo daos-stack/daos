@@ -39,12 +39,12 @@ class TestWithScrubber(IorTestBase):
             IO data. The counters should increase from initial value.
 
         Args:
-            initial_metrics (dict): a dictionary of host keys linked to a list of metric names.
-            final_metrics (dict): a dictionary of host keys linked to a list of metric names.
+            initial_metrics (dict): Initial metrics dictionary before testing.
+            final_metrics (dict): Final metrics dictionary after testing is complete.
 
             Returns:
-                status (bool): True if all metric value changed, False if any metrics value doesn't 
-                increment or change.
+                status (bool): True :  if all metric value changed.
+                False: if any metrics value doesn't increment or change.
         """
         self.log.info("Verifying the scrubber metrics values")
         status = True
@@ -104,7 +104,7 @@ class TestWithScrubber(IorTestBase):
             pool (object): Pool object
             cont (object): Container object within the pool.
             fail_on_warning (bool, optional): [description]. Defaults to True.
-        
+
         Returns:
             status(bool) : True (Srubber working), False(Scrubber not working)
         """
