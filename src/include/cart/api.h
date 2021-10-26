@@ -1722,8 +1722,8 @@ crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
 int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
-typedef void
-(*crt_progress_cb) (crt_context_t ctx, void *arg);
+typedef int64_t
+(*crt_progress_cb) (crt_context_t ctx, int64_t timeout, void *arg);
 
 /**
  * Register a callback function which will be called inside crt_progress()

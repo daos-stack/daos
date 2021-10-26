@@ -24,8 +24,8 @@ import os
 import sys
 import errno
 import distro
-import subprocess
-from subprocess import PIPE, Popen
+import subprocess #nosec
+from subprocess import PIPE, Popen #nosec
 from SCons.Script import WhereIs
 
 class _env_module(): # pylint: disable=invalid-name

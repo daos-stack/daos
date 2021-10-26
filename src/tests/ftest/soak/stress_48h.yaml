@@ -47,6 +47,7 @@ server_config:
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
                 - DAOS_MC_CAP=1024
+                - ABT_THREAD_STACKSIZE=32768
         1:
             pinned_numa_node: 1
             nr_xs_helpers: 1
@@ -62,6 +63,7 @@ server_config:
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
                 - DAOS_MC_CAP=1024
+                - ABT_THREAD_STACKSIZE=32768
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server
@@ -106,6 +108,7 @@ soak_stress:
         - mdtest_stress
         - vpic_stress
         - lammps_stress
+    ignore_soak_errors: False
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO

@@ -133,7 +133,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
     if name is None or nodecount is None or cmds is None:
         raise SlurmFailed("Bad parameters passed for slurm script.")
     if uniq is None:
-        uniq = random.randint(1, 100000)
+        uniq = random.randint(1, 100000) #nosec
 
     if not os.path.exists(path):
         os.makedirs(path)
