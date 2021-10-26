@@ -179,8 +179,9 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			expErr: errors.New("nil NUMAFabric"),
 		},
 		"empty": {
-			nf:         newNUMAFabric(nil),
-			expResults: []*FabricInterface{DefaultFabricInterface},
+			nf:          newNUMAFabric(nil),
+			netDevClass: netdetect.Loopback,
+			expErr:      errors.New("no suitable fabric interface"),
 		},
 		"type not found": {
 			nf: &NUMAFabric{
@@ -442,7 +443,7 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 			expResult:           map[int][]*FabricInterface{},
 			possibleDefaultNUMA: []int{0},
 		},
-		"skip lo": {
+		"include lo": {
 			input: []*netdetect.FabricScan{
 				{
 					Provider:    "ofi+sockets",
@@ -451,9 +452,10 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 					NetDevClass: netdetect.Ether,
 				},
 				{
-					Provider:   "ofi+sockets",
-					DeviceName: "lo",
-					NUMANode:   1,
+					Provider:    "ofi+sockets",
+					DeviceName:  "lo",
+					NUMANode:    1,
+					NetDevClass: netdetect.Loopback,
 				},
 			},
 			expResult: map[int][]*FabricInterface{
@@ -461,6 +463,10 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 					{
 						Name:        "test0",
 						NetDevClass: netdetect.Ether,
+					},
+					{
+						Name:        "lo",
+						NetDevClass: netdetect.Loopback,
 					},
 				},
 			},

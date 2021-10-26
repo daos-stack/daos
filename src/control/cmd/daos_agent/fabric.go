@@ -39,12 +39,6 @@ func (f *FabricInterface) String() string {
 	return fmt.Sprintf("%s%s (%s)", f.Name, dom, netdetect.DevClassName(f.NetDevClass))
 }
 
-// DefaultFabricInterface is the one used if no devices are found on the system.
-var DefaultFabricInterface = &FabricInterface{
-	Name:   "lo",
-	Domain: "lo",
-}
-
 // FabricDevClassManual is a wildcard netDevClass that indicates the device was
 // supplied by the user.
 const FabricDevClassManual = uint32(1 << 31)
@@ -124,11 +118,6 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32) (*FabricInterfa
 
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
-
-	if n.getNumNUMANodes() == 0 {
-		n.log.Infof("No fabric interfaces found, using default interface %q", DefaultFabricInterface.Name)
-		return DefaultFabricInterface, nil
-	}
 
 	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass)
 	if err == nil {
@@ -255,10 +244,6 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan []*netdete
 	fabric := newNUMAFabric(log)
 
 	for _, fs := range scan {
-		if fs.DeviceName == "lo" {
-			continue
-		}
-
 		newIF := &FabricInterface{
 			Name:        fs.DeviceName,
 			NetDevClass: fs.NetDevClass,

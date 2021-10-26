@@ -213,9 +213,10 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 					NetDevClass: netdetect.Ether,
 				},
 				{
-					Provider:   "ofi+sockets",
-					DeviceName: "lo",
-					NUMANode:   1,
+					Provider:    "ofi+sockets",
+					DeviceName:  "lo",
+					NUMANode:    1,
+					NetDevClass: netdetect.Loopback,
 				},
 				{
 					Provider:    "ofi+verbs",
@@ -247,6 +248,10 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 						{
 							Name:        "test0",
 							NetDevClass: netdetect.Ether,
+						},
+						{
+							Name:        "lo",
+							NetDevClass: netdetect.Loopback,
 						},
 					},
 				},
