@@ -349,7 +349,6 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		return rc;
 	}
 
-
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_cont_handles, &attr);
@@ -1465,7 +1464,6 @@ yield:
 		D_FREE(ec_agg->ea_server_ephs);
 		D_FREE(ec_agg);
 	}
-
 }
 
 static int
@@ -3289,14 +3287,17 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		return rc;
 	}
 	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop);
+	cont_put(cont);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_prop_read() failed, "DF_RC"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		return rc;
 	}
 	strncpy(cinfo->pci_label, prop->dpp_entries[0].dpe_str,
 		DAOS_PROP_LABEL_MAX_LEN);
 	cinfo->pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
+	daos_prop_free(prop);
 	return 0;
 }
 
