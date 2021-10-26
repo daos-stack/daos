@@ -292,8 +292,7 @@ def set_provider_environment(interface, args):
                 for line in output_data[0][0]:
                     provider = line.decode("utf-8").replace(":", "")
                     # Temporary code to only enable verbs on HW Large stages
-                    if "verbs" in provider and "hw" in tags and (
-                            "large" in tags or "small" in tags):
+                    if "verbs" in provider:
                         detected_provider = "ofi+verbs;ofi_rxm"
                         break
                     if "sockets" in provider:
