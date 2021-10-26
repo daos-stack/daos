@@ -14,7 +14,7 @@ The Distributed Asynchronous Object Storage (DAOS) is an open-source object stor
 ## Building a Docker Image
 
 To build the Docker image we can do it one of two ways:
-- Local clone of the GitHub repo
+- Local clone of the [GitHub DAOS repo](https://github.com/daos-stack/daos.git)
 - Directly from GitHub
 
 If you prefer a different base than CentOS8, replace the filename "Dockerfile.centos.8" in the command strings below with one of the following"
