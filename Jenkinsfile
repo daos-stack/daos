@@ -822,10 +822,11 @@ pipeline {
                     }
                     post {
                       always {
-                            functionalTestPostV2()
+                            echo functionalTestPostV2()
                             unitTestPost artifacts: ['valgrind_logs/*'],
                                          testResults: 'Functional*on*CentOS*8*with*Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
-                                         valgrind_stash: 'centos7-gcc-cart-memcheck'
+                                         valgrind_stash: 'centos7-gcc-cart-memcheck',
+                                         skip_post_script: true
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: false,
