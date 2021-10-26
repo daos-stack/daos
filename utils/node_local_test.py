@@ -2832,20 +2832,20 @@ def run_in_fg(server, conf):
 
     run_daos_cmd(conf,
                  ['container', 'set-attr',
-                  pool.uuid, container,
+                  pool.label, container,
                   '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
                  show_stdout=True)
 
     t_dir = os.path.join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
+    print('export PATH={}:$PATH'.format(os.path.join(conf['PREFIX'], 'bin')))
     print('export LD_PRELOAD={}'.format(os.path.join(conf['PREFIX'], 'lib64', 'libioil.so')))
     print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
     print('export D_IL_REPORT=-1')
-    print('daos container create --type POSIX {} --path {}/uns-link'.format(pool.uuid, t_dir))
-    print('cd {}/uns-link'.format(t_dir))
+    print('daos container create --type POSIX --path {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos cont list {}'.format(pool.uuid))
+    print('daos cont list {}'.format(pool.label))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
