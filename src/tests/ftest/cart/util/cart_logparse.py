@@ -328,6 +328,10 @@ class LogLine():
         """Return True if line is record of fault injection"""
         return self._is_type(['fault_id'], trace=False)
 
+    def is_fi_site_mem(self):
+        """Return True if line is record of fault injection for memory allocation"""
+        return self._is_type(['fault_id', '0,'], trace=False)
+
     def is_fi_alloc_fail(self):
         """Return True if line is showing failed memory allocation"""
         return self._is_type(['out', 'of', 'memory'], trace=False)
