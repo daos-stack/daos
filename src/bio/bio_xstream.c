@@ -85,7 +85,16 @@ bio_spdk_env_init(void)
 	spdk_log_set_print_level(SPDK_LOG_ERROR);
 
 	spdk_env_opts_init(&opts);
-	opts.name = "daos";
+	opts.name = "daos_engine";
+
+	rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
+	if (rc != 0) {
+		D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
+			DP_RC(rc));
+		if (opts.pci_allowed != NULL)
+			D_FREE(opts.pci_allowed);
+		return rc;
+	}
 
 	/*
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
@@ -103,7 +112,7 @@ bio_spdk_env_init(void)
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
 	spdk_unaffinitize_thread();
@@ -113,9 +122,10 @@ bio_spdk_env_init(void)
 		rc = -DER_INVAL;
 		D_ERROR("Failed to init SPDK thread lib, "DF_RC"\n", DP_RC(rc));
 		spdk_env_fini();
-		return rc;
 	}
-
+out:
+	if (opts.pci_allowed != NULL)
+		D_FREE(opts.pci_allowed);
 	return rc;
 }
 
@@ -1011,6 +1021,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	bool			 assigned = false;
 	int			 rc;
 
+	D_ASSERT(!ctxt->bxc_ready);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
@@ -1134,6 +1145,7 @@ retry:
 		rc = -DER_NOMEM;
 		goto out;
 	}
+	ctxt->bxc_ready = 1;
 
 out:
 	D_ASSERT(dev_info != NULL);
@@ -1157,6 +1169,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt == NULL)
 		return;
 
+	ctxt->bxc_ready = 0;
 	if (ctxt->bxc_io_channel != NULL) {
 		spdk_bs_free_io_channel(ctxt->bxc_io_channel);
 		ctxt->bxc_io_channel = NULL;

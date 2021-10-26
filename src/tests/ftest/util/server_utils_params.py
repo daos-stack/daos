@@ -358,7 +358,7 @@ class DaosServerYamlParameters(YamlParameters):
             #           - CRT_CTX_NUM=8
             self.targets = BasicParameter(None, 8)
             self.first_core = BasicParameter(None, 0)
-            self.nr_xs_helpers = BasicParameter(None, 16)
+            self.nr_xs_helpers = BasicParameter(None, 4)
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.pinned_numa_node = BasicParameter(None)
@@ -452,6 +452,12 @@ class DaosServerYamlParameters(YamlParameters):
             if self.using_dcpm:
                 self.log.debug("Ignoring the scm_size when scm_class is 'dcpm'")
                 self.scm_size.update(None, "scm_size")
+
+            # Include fault injection settings if configured
+            if test.fault_injection.fault_file:
+                fault_setting = "D_FI_CONFIG={}".format(test.fault_injection.fault_file)
+                if fault_setting not in self.env_vars.value:
+                    self.env_vars.update(fault_setting, "env_vars", True)
 
         @property
         def using_nvme(self):

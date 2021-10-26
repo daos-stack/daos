@@ -148,7 +148,7 @@ class TestPool(TestDaosApiBase):
 
         """
         uuid = None
-        if self.pool:
+        if self.pool and self.pool.uuid:
             uuid = self.pool.get_uuid_str()
         return uuid
 

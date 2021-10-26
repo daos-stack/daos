@@ -1210,6 +1210,8 @@ cont_ec_agg_lookup(struct cont_svc *cont_svc, uuid_t cont_uuid)
 	struct cont_ec_agg *ec_agg;
 
 	d_list_for_each_entry(ec_agg, &cont_svc->cs_ec_agg_list, ea_list) {
+		if (ec_agg->ea_deleted)
+			continue;
 		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) == 0)
 			return ec_agg;
 	}
@@ -1260,14 +1262,6 @@ out:
 }
 
 static void
-cont_ec_agg_destroy(struct cont_ec_agg *ec_agg)
-{
-	d_list_del(&ec_agg->ea_list);
-	D_FREE(ec_agg->ea_server_ephs);
-	D_FREE(ec_agg);
-}
-
-static void
 cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid)
 {
 	struct cont_ec_agg	*ec_agg;
@@ -1276,7 +1270,10 @@ cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid)
 	if (ec_agg == NULL)
 		return;
 
-	cont_ec_agg_destroy(ec_agg);
+	/* Set ea_deleted flag to destroy it inside cont_agg_eph_leader_ult()
+	 * to avoid list iteration broken.
+	 */
+	ec_agg->ea_deleted = 1;
 }
 
 /**
@@ -1320,7 +1317,7 @@ retry:
 				DF_CONT"\n", rank, eph,
 				DP_CONT(pool_uuid, cont_uuid));
 			retried = true;
-			cont_ec_agg_destroy(ec_agg);
+			ec_agg->ea_deleted = 1;
 			goto retry;
 		} else {
 			D_WARN("rank %u eph "DF_U64" does not exist for "
@@ -1398,10 +1395,16 @@ cont_agg_eph_leader_ult(void *arg)
 			goto yield;
 		}
 
-		d_list_for_each_entry(ec_agg, &svc->cs_ec_agg_list,
-				      ea_list) {
+		d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list) {
 			daos_epoch_t min_eph = DAOS_EPOCH_MAX;
 			int	     i;
+
+			if (ec_agg->ea_deleted) {
+				d_list_del(&ec_agg->ea_list);
+				D_FREE(ec_agg->ea_server_ephs);
+				D_FREE(ec_agg);
+				continue;
+			}
 
 			for (i = 0; i < ec_agg->ea_servers_num; i++) {
 				d_rank_t rank = ec_agg->ea_server_ephs[i].rank;
@@ -1457,8 +1460,12 @@ yield:
 	D_DEBUG(DF_DSMS, DF_UUID": stop eph ult: rc %d\n",
 		DP_UUID(svc->cs_pool_uuid), rc);
 
-	d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list)
-		cont_ec_agg_destroy(ec_agg);
+	d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list) {
+		d_list_del(&ec_agg->ea_list);
+		D_FREE(ec_agg->ea_server_ephs);
+		D_FREE(ec_agg);
+	}
+
 }
 
 static int
@@ -2753,6 +2760,32 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
 		return 0;
 
+	/* Insert new label into cs_uuids KVS, fail if already in use */
+	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
+	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
+	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
+	if (rc != -DER_NONEXIST) {
+		if (rc != 0) {
+			D_ERROR(DF_UUID": lookup label (%s) failed: "DF_RC"\n",
+				DP_UUID(cont->c_uuid), in_lbl, DP_RC(rc));
+			return rc;	/* other lookup failure */
+		}
+		D_ERROR(DF_UUID": non-unique label (%s) matches different "
+			"container "DF_UUID"\n", DP_UUID(cont->c_uuid),
+			in_lbl, DP_UUID(match_cuuid));
+		return -DER_EXIST;
+	}
+
+	d_iov_set(&val, cont->c_uuid, sizeof(uuid_t));
+	rc = rdb_tx_update(tx, &cont->c_svc->cs_uuids, &key, &val);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": update cs_uuids failed: "DF_RC"\n",
+			DP_UUID(cont->c_uuid), DP_RC(rc));
+		return rc;
+	}
+	D_DEBUG(DB_MD, DF_UUID": inserted new label in cs_uuids KVS: %s\n",
+		DP_UUID(cont->c_uuid), in_lbl);
+
 	/* Remove old label from cs_uuids KVS, if applicable */
 	d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
@@ -2770,34 +2803,9 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 				DP_UUID(cont->c_uuid), old_lbl, DP_RC(rc));
 			return rc;
 		}
-		D_DEBUG(DB_MD, DF_UUID": deleted label: %s\n",
+		D_DEBUG(DB_MD, DF_UUID": deleted original label in cs_uuids KVS: %s\n",
 			DP_UUID(cont->c_uuid), old_lbl);
 	}
-
-	/* Insert new label into cs_uuids KVS, fail if already in use */
-	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
-	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
-	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
-	if (rc != -DER_NONEXIST) {
-		if (rc != 0) {
-			D_ERROR(DF_UUID": lookup label (%s) failed: "DF_RC"\n",
-				DP_UUID(cont->c_uuid), in_lbl, DP_RC(rc));
-			return rc;	/* other lookup failure */
-		}
-		D_ERROR(DF_UUID": non-unique label (%s) matches different "
-			"container "DF_UUID"\n", DP_UUID(cont->c_uuid),
-			in_lbl, DP_UUID(match_cuuid));
-		return -DER_EXIST;
-	}
-	d_iov_set(&val, cont->c_uuid, sizeof(uuid_t));
-	rc = rdb_tx_update(tx, &cont->c_svc->cs_uuids, &key, &val);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": update cs_uuids failed: "DF_RC"\n",
-			DP_UUID(cont->c_uuid), DP_RC(rc));
-		return rc;
-	}
-	D_DEBUG(DB_MD, DF_UUID": inserted label %s in cs_uuids KVS\n",
-		DP_UUID(cont->c_uuid), in_lbl);
 
 	return 0;
 }

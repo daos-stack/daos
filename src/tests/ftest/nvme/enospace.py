@@ -10,7 +10,6 @@ import threading
 from nvme_utils import ServerFillUp
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
-from apricot import skipForTicket
 from mpio_utils import MpioUtils
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
@@ -42,8 +41,8 @@ class NvmeEnospace(ServerFillUp):
 
     def verify_enspace_log(self, der_nospace_err_count):
         """
-        Function to verify there are no other error except DER_NOSPACE
-        in client log and also DER_NOSPACE count is higher.
+        Function to verify there are no other error except DER_NOSPACE and
+        DER_NO_HDL in client log.Verify DER_NOSPACE count is higher.
 
         args:
             expected_err_count(int): Expected DER_NOSPACE count from client log.
@@ -52,10 +51,15 @@ class NvmeEnospace(ServerFillUp):
         self.der_nospace_count, self.other_errors_count = error_count(
             "-1007", self.hostlist_clients, self.client_log)
 
-        #Check there are no other errors in log file
-        if self.other_errors_count > 0:
+        #Get the DER_NO_HDL and other error count from log
+        der_nohdl_count, other_nohdl_err = error_count(
+            "-1002", self.hostlist_clients, self.client_log)
+
+        #Check there are no other errors in log file except DER_NO_HDL
+        if self.other_errors_count != der_nohdl_count:
             self.fail('Found other errors, count {} in client log {}'
-                      .format(self.other_errors_count, self.client_log))
+                      .format(int(self.other_errors_count-other_nohdl_err),
+                              self.client_log))
         #Check the DER_NOSPACE error count is higher if not test will FAIL
         if self.der_nospace_count < der_nospace_err_count:
             self.fail('Expected DER_NOSPACE should be > {} and Found {}'
@@ -73,6 +77,7 @@ class NvmeEnospace(ServerFillUp):
         #Destroy all the containers
         for _cont in containers:
             kwargs["cont"] = _cont
+            kwargs["force"] = True
             self.daos_cmd.container_destroy(**kwargs)
 
     def ior_bg_thread(self, results):
@@ -212,7 +217,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7018")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -274,7 +278,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7018")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -302,17 +305,17 @@ class NvmeEnospace(ServerFillUp):
         #Repeat the test in loop.
         for _loop in range(10):
             print("-------enospc_time_fg Loop--------- {}".format(_loop))
+            print(self.pool.pool_percentage_used())
             #Run IOR to fill the pool.
             self.run_enospace_with_bg_job()
             #Delete all the containers
             self.delete_all_containers()
             #Delete container will take some time to release the space
-            time.sleep(60)
+            time.sleep(120)
 
         #Run last IO
         self.start_ior_load(storage='SCM', percent=1)
 
-    @skipForTicket("DAOS-5403")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 
@@ -354,7 +357,6 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
-    @skipForTicket("DAOS-7018")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 
