@@ -10,8 +10,8 @@ ENV:
     - test_servers_CRT_CTX_NUM: "0"
     - test_clients_CRT_CTX_NUM: "0"
 env_CRT_PHY_ADDR_STR: !mux
-  ofi_sockets:
-    CRT_PHY_ADDR_STR: "ofi+sockets"
+  ofi_tcp:
+    CRT_PHY_ADDR_STR: "ofi+tcp;ofi_rxm"
 env_CRT_CTX_SHARE_ADDR: !mux
   no_sep:
     env: no_sep
