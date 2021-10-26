@@ -251,7 +251,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         """Test ID: DAOS-7160
         Test Description: Drain rank after with less pool space.
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=all,full_regression,hw,medium,ib2
         :avocado: tags=osa,offline_drain_full
         :avocado: tags=offline_drain_with_less_pool_space
         """

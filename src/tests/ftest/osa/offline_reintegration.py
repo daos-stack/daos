@@ -328,7 +328,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         """Test ID: DAOS-7160
         Test Description: Reintegrate rank will less pool space.
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=all,full_regression,hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_full
         :avocado: tags=offline_reintegrate_with_less_pool_space
         """
