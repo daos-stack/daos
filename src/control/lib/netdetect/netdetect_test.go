@@ -210,24 +210,13 @@ func TestValidateNetworkConfig(t *testing.T) {
 // with a standard topology and one without any OS devices in it
 func TestNumaAware(t *testing.T) {
 	for name, tc := range map[string]struct {
-		result   bool
 		topology string
 	}{
 		"no devices in topology": {
-			result:   true,
 			topology: "testdata/gcp_topology.xml",
 		},
 		"devices in topology": {
-			result:   true,
 			topology: "testdata/boro-84.xml",
-		},
-		"devices in topology no NUMA nodes": {
-			result:   false,
-			topology: "testdata/no-numa-nodes.xml",
-		},
-		"no devices in topology no NUMA nodes": {
-			result:   false,
-			topology: "testdata/no-numa-no-devices.xml",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -240,9 +229,7 @@ func TestNumaAware(t *testing.T) {
 			defer CleanUp(netCtx)
 			AssertEqual(t, err, nil, "Failed to initialize NetDetectContext")
 
-			if tc.result {
-				AssertEqual(t, HasNUMA(netCtx), tc.result, "Unable to detect NUMA on provided topology")
-			}
+			AssertTrue(t, HasNUMA(netCtx), "Unable to detect NUMA on provided topology")
 		})
 	}
 }
