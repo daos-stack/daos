@@ -148,8 +148,6 @@ get_self_uri(struct host *h, int rank)
 {
 	char		*uri;
 	crt_context_t	ctx;
-	char		*p;
-	int		len;
 	int		rc;
 	char		*str_port = NULL;
 
@@ -178,28 +176,8 @@ get_self_uri(struct host *h, int rank)
 		D_GOTO(out, rc);
 	}
 
-	len = strlen(uri);
-
 	strncpy(h->self_uri, uri, URI_MAX-1);
-
-	/* Find port number - first from the end number separated by :*/
-	/* URIs have a form of: ofi+sockets://10.8.1.55:48259 */
-	p = uri+len;
-	while (*p != ':') {
-		p--;
-		if (p == uri)
-			break;
-	}
-
-	/* If port-based provider, parse port out */
-	if (p != uri) {
-		/* p points to ":" of ip:port string */
-		p++;
-		h->ofi_port = atoi(p);
-	} else {
-		/* For non-port based providers, use original port set */
-		h->ofi_port = atoi(str_port);
-	}
+	h->ofi_port = atoi(str_port);
 
 	D_FREE(uri);
 
