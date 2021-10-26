@@ -1,27 +1,27 @@
 hosts:
   test_servers:
     - server-A
-    - server-B
   test_clients:
     - client-A
 timeout: 1800
 server_config:
   name: daos_server
   servers:
-    targets: 4
+    targets: 1
 pool:
   name: daos_server
-  scm_size: 10G
+  scm_size: 20G
   control_method: dmg
 container:
   type: POSIX
   control_method: daos
   
 ior:
-  block_size: 1M
-  transfer_sizes: [256B, 512K, 1M]
-  iorwriteflags:
+  block_size: 4M
+  transfer_sizes: [1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 256K, 512K, 1M, 2M, 4M]
+  repetitions: 1
+  iorupdateflags:
     F: "-w -W -k -G 1"
-  iorreadflags:
+  iorfetchflags:
     F: "-r -R -G 1"
-  dfs_oclass: "RP_2GX"
+  dfs_oclass: "SX"

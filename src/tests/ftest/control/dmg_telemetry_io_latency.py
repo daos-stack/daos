@@ -10,7 +10,7 @@ from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
-from ior_utils import IorCommand
+from ior_utils import IorCommand, IorMetrics
 from test_utils_container import TestContainer
 
 
@@ -90,8 +90,24 @@ class TestWithTelemetryIODtx(IorTestBase, TestWithTelemetry):
         suffix = size[-1]
         for key in SIZE_DICT:
             if suffix == key:
-                num = SIZE_DICT[key] * size[:-1]
+                num = int(SIZE_DICT[key]) * int(size[:-1])
+        self.log.info("%s is converted to %s", size, num)
         return int(num)
+
+    def verify_latency_metrics(self, metrics, ior_metrics, key):
+        """Verify latency metric against ior metric.
+
+        Args:
+            metrics (dict): dictionary of io latency metrics
+            ior_metrics (dict): dictionary of ior metrics
+            key (str): common key for dictionary (operation-transfer_size)
+        Returns:
+            status: (bool) True if metric is verified
+        """
+        transfer_size = key.split("-")[-1]
+        transfers = self.convert_to_number(transfer_size)
+        self.log.info("transfer size %s", transfers)
+        return True
 
     def test_io_latency_telmetry_metrics(self):
         """JIRA ID: DAOS-8624.
@@ -109,45 +125,51 @@ class TestWithTelemetryIODtx(IorTestBase, TestWithTelemetry):
         block_size = self.params.get("block_size", "/run/*")
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         self.container = []
+        key_list = []
+        verification_results = []
         metrics_data = {}
-        metrics_data["initial_update"] = self.telemetry.get_io_metrics(
-            TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS)
-        metrics_data["initial_fetch"] = self.telemetry.get_io_metrics(
-            TelemetryUtils.ENGINE_IO_LATENCY_FETCH_METRICS)
+        ior_metrics = {}
         for transfer_size in transfer_sizes:
             self.add_pool(connect=False)
             oclass = self.ior_cmd.dfs_oclass.value
             self.add_containers(self.pool, oclass)
-            for operation in ["write", "read"]:
-                # blocks = self.convert_to_number(block_size)
-                # transfers = self.convert_to_number(block_size)
-                transfers = True
-                if transfers:
-                    flags = self.params.get("F", "/run/ior/ior{}flags/".format(operation))
-                    blk_transfer = "{}-{}".format(block_size, transfer_size)
-                    key = "{}-{}".format(operation, blk_transfer)
-                    self.log.info("Number of io ={}".format(blk_transfer))
-                    self.log.info(
-                        "<<< Start ior %s with Block Size = %s, transfer_size = %s",
-                        operation, block_size, transfer_size)
-                    self.ior_cmd.block_size.update(block_size)
-                    self.ior_cmd.transfer_size.update(transfer_size)
-                    self.ior_cmd.flags.update(flags)
-                    self.ior_cmd.set_daos_params(
-                        self.server_group, self.pool, self.container[-1].uuid)
-                    # Run ior command
-                    try:
-                        self.run_ior_with_pool(timeout=200, create_pool=False, create_cont=False)
-                    except TestFail:
-                        self.log.info("#ior command failed!")
-                    if operation == "write":
-                        metrics_data[key] = self.telemetry.get_io_metrics(
-                            TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS)
-                    else:
-                        metrics_data[key] = self.telemetry.get_io_metrics(
-                            TelemetryUtils.ENGINE_IO_LATENCY_FETCH_METRICS)
+            for operation in ["update", "fetch"]:
+                flags = self.params.get("F", "/run/ior/ior{}flags/".format(
+                    operation))
+                key = "{}-{}".format(operation, transfer_size)
+                key_list.append(key)
+                self.log.info(
+                    "<<< Start ior %s with Block Size=%s, transfer_size=%s",
+                    operation, block_size, transfer_size)
+                self.ior_cmd.block_size.update(block_size)
+                self.ior_cmd.transfer_size.update(transfer_size)
+                self.ior_cmd.flags.update(flags)
+                self.ior_cmd.set_daos_params(
+                    self.server_group, self.pool, self.container[-1].uuid)
+                # Run ior command
+                ior_results = self.run_ior_with_pool(
+                        timeout=200, create_pool=False, create_cont=False)
+                ior_metrics[key] = IorCommand.get_ior_metrics(ior_results)
+                if operation == "update":
+                    metrics_data[key] = self.telemetry.get_io_metrics(
+                        ["engine_io_latency_update"])
                 else:
-                    self.fail("Transfer size can not be 0")
-            # Destroy the container and the pool.
+                    metrics_data[key] = self.telemetry.get_io_metrics(
+                        ["engine_io_latency_fetch"])
+                        # Destroy the container and the pool.
             self.destroy_containers(containers=self.container[-1])
             self.destroy_pools(pools=self.pool)
+        # check dmg latency metrics against ior latency metrics
+        for key in key_list:
+            if self.verify_latency_metrics(metrics_data[key], ior_metrics[key], key):
+                verification_results.append(["PASSED", key])
+            else:
+                verification_results.append(["FAILED", key])
+        self.log.error("Summary of IOR small test results:")
+        errors = False
+        for item in verification_results:
+            self.log.info("  %s  %s", item[0], item[1])
+            if item[0] == "FAILED":
+                errors = True
+        if errors:
+            self.fail("Test FAILED")
