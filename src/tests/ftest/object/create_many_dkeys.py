@@ -89,8 +89,10 @@ class CreateManyDkeys(TestWithServers):
         Test Description: Test many of dkeys in same object.
         Use Cases: 1. large key counts
                    2. space reclamation after destroy
-        :avocado: tags=all,full,small,object,many_dkeys
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=object,many_dkeys
         """
         self.prepare_pool()
         no_of_dkeys = self.params.get("number_of_dkeys", '/run/dkeys/')
