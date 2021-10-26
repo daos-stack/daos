@@ -47,7 +47,7 @@ dfuse:
 mdtest:
   client_processes:
     np: 30
-  num_of_files_dirs: 33334      # creating total of 1M files
+  num_of_files_dirs: 33334     # creating total of 1M files
   test_dir: "/"
   iteration: 1
   dfs_destroy: False
