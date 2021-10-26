@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.1-1%{?dist}
+%global mercury_version 2.1.0~rc2-1%{?dist}
 %global libfabric_version 1.13.2~rc1-1
 %global __python %{__python3}
 
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -483,6 +483,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Mon Oct 25 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-4
+- Update mercury to v2.1.0rc2
+
 * Wed Oct 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-3
 - Explicitly require 1.11.0-3 of PMDK
 

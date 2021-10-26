@@ -72,12 +72,10 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 
 	if (num_allowed_failures >= num_failed)
 		return 0;
-	else {
-		D_ERROR("Domain contains %d failed "
-			"components, allows at most %d", num_failed,
-			num_allowed_failures);
-		return -DER_INVAL;
-	}
+
+	D_ERROR("Domain contains %d failed components, allows at most %d",
+		num_failed, num_allowed_failures);
+	return -DER_INVAL;
 }
 
 static int
@@ -348,7 +346,6 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 			DP_UUID(pool_uuid), rc);
 		return rc;
 	}
-
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
@@ -1089,6 +1086,7 @@ evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
 
 	if (!force) {
 		rc = -DER_BUSY;
+		D_WARN("Not evicting handles, "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -1465,7 +1463,6 @@ yield:
 		D_FREE(ec_agg->ea_server_ephs);
 		D_FREE(ec_agg);
 	}
-
 }
 
 static int
@@ -3616,8 +3613,6 @@ out:
 	out->co_rc = rc;
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
-
-	return;
 }
 
 int
