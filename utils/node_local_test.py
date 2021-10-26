@@ -1419,8 +1419,7 @@ class posix_tests():
     def test_cont_list(self):
         """Test daos container list"""
 
-        rc = run_daos_cmd(self.conf,
-                          ['container', 'list', self.pool.id()])
+        rc = run_daos_cmd(self.conf, ['container', 'list', self.pool.id()])
         assert rc.returncode == 0, rc
 
     def test_cache(self):

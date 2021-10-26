@@ -40,8 +40,8 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
  * if there are more failures for that domain type then allowed restrict
  * container opening.
  *
- * \param pmap  [in]    The pool map referenced by the container.
- * \param props [in]    The container properties, used to get redundancy factor
+ * \param[in] pmap      The pool map referenced by the container.
+ * \param[in] props     The container properties, used to get redundancy factor
  *                      and level.
  *
  * \return	0 if the container meets the requirements, negative error code
