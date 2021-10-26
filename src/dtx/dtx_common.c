@@ -41,14 +41,15 @@ struct dtx_batched_cont_args {
 	d_list_t			 dbca_sys_link;
 	/* Link to dtx_batched_pool_args::dbpa_cont_list. */
 	d_list_t			 dbca_pool_link;
-	uint64_t			 dbca_gen;
-	int				 dbca_refs;
-	uint32_t			 dbca_deregister:1;
+	uint64_t			 dbca_agg_gen;
 	struct sched_request		*dbca_cleanup_req;
 	struct sched_request		*dbca_commit_req;
 	struct sched_request		*dbca_agg_req;
 	struct ds_cont_child		*dbca_cont;
 	struct dtx_batched_pool_args	*dbca_pool;
+	int				 dbca_refs;
+	uint32_t			 dbca_reg_gen;
+	uint32_t			 dbca_deregister:1;
 };
 
 struct dtx_cleanup_stale_cb_args {
@@ -232,8 +233,9 @@ dtx_cleanup_stale(void *arg)
 		D_WARN("Failed to scan stale DTX entry for "
 		       DF_UUID": "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));
 
+	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
 	while (!dss_ult_exiting(dbca->dbca_cleanup_req) &&
-	       !d_list_empty(&dcsca.dcsca_list)) {
+	       !d_list_empty(&dcsca.dcsca_list) && dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
 		if (dcsca.dcsca_count > DTX_REFRESH_MAX) {
 			count = DTX_REFRESH_MAX;
 			dcsca.dcsca_count -= DTX_REFRESH_MAX;
@@ -275,7 +277,9 @@ dtx_aggregate(void *arg)
 	if (dbca->dbca_agg_req == NULL)
 		goto out;
 
-	while (!dss_ult_exiting(dbca->dbca_agg_req)) {
+	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
+	while (!dss_ult_exiting(dbca->dbca_agg_req) &&
+	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
 		struct dtx_stat		stat = { 0 };
 		int			rc;
 
@@ -327,10 +331,10 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 				    dbca_pool_link);
 
 		/* Finish this cycle scan. */
-		if (dbca->dbca_gen == dtx_agg_gen)
+		if (dbca->dbca_agg_gen == dtx_agg_gen)
 			break;
 
-		dbca->dbca_gen = dtx_agg_gen;
+		dbca->dbca_agg_gen = dtx_agg_gen;
 		d_list_move_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 
 		if (dbca->dbca_deregister)
@@ -475,7 +479,9 @@ dtx_batched_commit_one(void *arg)
 	if (dbca->dbca_commit_req == NULL)
 		goto out;
 
-	while (!dss_ult_exiting(dbca->dbca_commit_req)) {
+	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
+	while (!dss_ult_exiting(dbca->dbca_commit_req) &&
+		dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
 		struct dtx_entry	**dtes = NULL;
 		struct dtx_cos_key	 *dcks = NULL;
 		struct dtx_stat		  stat = { 0 };
@@ -484,13 +490,22 @@ dtx_batched_commit_one(void *arg)
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, NULL,
 					    DAOS_EPOCH_MAX, &dtes, &dcks);
-		if (cnt <= 0)
+		if (cnt == 0)
 			break;
+
+		if (cnt < 0) {
+			D_WARN("Fail to fetch committable for "DF_UUID": "DF_RC"\n",
+			       DP_UUID(cont->sc_uuid), DP_RC(cnt));
+			break;
+		}
 
 		rc = dtx_commit(cont, dtes, dcks, cnt, true);
 		dtx_free_committable(dtes, dcks, cnt);
-		if (rc != 0)
+		if (rc != 0) {
+			D_WARN("Fail to batched commit %d entries for "DF_UUID": "DF_RC"\n",
+			       cnt, DP_UUID(cont->sc_uuid), DP_RC(rc));
 			break;
+		}
 
 		dtx_stat(cont, &stat);
 
@@ -1398,14 +1413,13 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 	struct ds_cont_child	*cont = dbca->dbca_cont;
 	struct dtx_stat		 stat = { 0 };
 	uint64_t		 total = 0;
-	uint32_t		 gen = cont->sc_dtx_batched_gen;
 	int			 cnt;
 	int			 rc = 0;
 
 	dtx_stat(cont, &stat);
 
-	/* gen != cont->sc_dtx_batched_gen means someone reopen the cont. */
-	while (gen == cont->sc_dtx_batched_gen && rc >= 0) {
+	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
+	while (dbca->dbca_reg_gen == cont->sc_dtx_batched_gen && rc >= 0) {
 		struct dtx_entry	**dtes = NULL;
 		struct dtx_cos_key	 *dcks = NULL;
 
@@ -1443,7 +1457,7 @@ dtx_batched_commit_register(struct ds_cont_child *cont)
 	d_list_t			*pool_head;
 	d_list_t			*cont_head;
 	struct dtx_batched_pool_args	*dbpa;
-	struct dtx_batched_cont_args	*dbca;
+	struct dtx_batched_cont_args	*dbca = NULL;
 	struct umem_attr		 uma;
 	int				 rc;
 	bool				 new_pool = true;
@@ -1524,7 +1538,7 @@ add:
 	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;
 	dbca->dbca_pool = dbpa;
-	dbca->dbca_gen = dtx_agg_gen;
+	dbca->dbca_agg_gen = dtx_agg_gen;
 	d_list_add_tail(&dbca->dbca_sys_link, cont_head);
 	d_list_add_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 	if (new_pool)
@@ -1533,6 +1547,8 @@ add:
 out:
 	cont->sc_closing = 0;
 	cont->sc_dtx_batched_gen++;
+	if (dbca != NULL)
+		dbca->dbca_reg_gen = cont->sc_dtx_batched_gen;
 
 	return 0;
 }
