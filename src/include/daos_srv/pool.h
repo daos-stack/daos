@@ -121,6 +121,7 @@ struct ds_pool_child {
 	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
+	ABT_eventual	spc_ref_eventual;
 
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
