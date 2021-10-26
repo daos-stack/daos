@@ -191,11 +191,16 @@ get_self_uri(struct host *h, int rank)
 			break;
 	}
 
-	/* Replace : with space */
-	*p = ' ';
+	/* If port-based provider, parse port out */
+	if (p != uri) {
+		/* p points to ":" of ip:port string */
+		p++;
+		h->ofi_port = atoi(p);
+	} else {
+		/* For non-port based providers, use original port set */
+		h->ofi_port = atoi(str_port);
+	}
 
-	p++;
-	h->ofi_port = atoi(p);
 	D_FREE(uri);
 
 	rc = crt_context_destroy(ctx, 1);
