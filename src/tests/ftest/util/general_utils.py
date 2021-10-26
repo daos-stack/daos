@@ -582,7 +582,7 @@ def get_random_string(length, exclude=None, include=None):
 
     random_string = None
     while not isinstance(random_string, str) or random_string in exclude:
-        random_string = "".join(random.choice(include) for _ in range(length))
+        random_string = "".join(random.choice(include) for _ in range(length)) #nosec
     return random_string
 
 
@@ -1265,3 +1265,19 @@ def report_errors(test, errors):
         test.fail(error_msg)
 
     test.log.info("No errors detected.")
+
+
+def percent_change(val1, val2):
+    """Calculate percent change between two values as a decimal.
+
+    Args:
+        val1 (float): first value.
+        val2 (float): second value.
+
+    Returns:
+        float: decimal percent change.
+
+    """
+    if val1 and val2:
+        return (float(val2) - float(val1)) / float(val1)
+    return 0.0

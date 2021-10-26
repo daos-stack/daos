@@ -24,7 +24,7 @@ The top-level KVS stores the pool map, security attributes such as the UID, GID 
 
 #### Pool / Pool Service Creation
 
-Pool creation is driven entirely by the Management Service since it requires special privileges for steps related to allocation of storage and querying of fault domains. After formatting all the targets, the Target component calls `ds_pool_create` of the Pool Module on each target, which simply generates a new UUID for the current target and stores it in the `DSM_META_FILE`. At this point the management module passes the control to the pool module by calling the`ds_pool_svc_create`, which initializes service replication on the selected subset of nodes for the combined Pool and Container Service. The Pool module now sends a `POOL_CREATE` request to the service leader which creates the service database; the list of targets and their fault domains are then converted into the initial version of the pool map and stored in the pool service, along with other initial pool metadata.
+Pool creation is driven entirely by the Management Service since it requires special privileges for steps related to allocation of storage and querying of fault domains. After formatting all the targets, the management module passes the control to the pool module by calling the`ds_pool_svc_create`, which initializes service replication on the selected subset of nodes for the combined Pool and Container Service. The Pool module now sends a `POOL_CREATE` request to the service leader which creates the service database; the list of targets and their fault domains are then converted into the initial version of the pool map and stored in the pool service, along with other initial pool metadata.
 
 <a id="9.3.2"></a>
 
