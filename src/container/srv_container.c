@@ -72,12 +72,10 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 
 	if (num_allowed_failures >= num_failed)
 		return 0;
-	else {
-		D_ERROR("Domain contains %d failed "
-			"components, allows at most %d", num_failed,
-			num_allowed_failures);
-		return -DER_INVAL;
-	}
+
+	D_ERROR("Domain contains %d failed components, allows at most %d",
+		num_failed, num_allowed_failures);
+	return -DER_INVAL;
 }
 
 static int
@@ -1088,6 +1086,7 @@ evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
 
 	if (!force) {
 		rc = -DER_BUSY;
+		D_WARN("Not evicting handles, "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -3617,8 +3616,6 @@ out:
 	out->co_rc = rc;
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
-
-	return;
 }
 
 int

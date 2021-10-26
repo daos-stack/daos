@@ -1,3 +1,15 @@
+daos (2.1.100-4) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update mercury to v2.1.0rc2
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Mon, 25 Oct 2021 010:00:01 -0100
+
+daos (2.1.100-3) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Explicitly require 1.11.0-3 of PMDK
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 20 Oct 2021 010:00:01 -0100
+
 daos (2.1.100-2) unstable; urgency=medium
   [ David Quigley ]
   * Add defusedxml as a required dependency for the test package.
