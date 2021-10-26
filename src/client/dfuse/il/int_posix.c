@@ -423,13 +423,11 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	errno = 0;
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
-		int err = errno;
+		rc = errno;
 
-		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-				  err, strerror(err));
-
+		DFUSE_LOG_WARNING("ioctl call on %d failed: %d (%s)", fd, rc, strerror(rc));
 		D_FREE(iov.iov_buf);
-		return err;
+		return rc;
 	}
 
 	iov.iov_buf_len = hsd_reply.fsr_dobj_size;
@@ -440,7 +438,7 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 				  iov,
 				  &entry->fd_dfsoh);
 	if (rc)
-		DFUSE_LOG_WARNING("Failed to use dfs object handle %d", rc);
+		DFUSE_LOG_WARNING("Failed to use dfs object handle: %d (%s)", rc, strerror(rc));
 
 	D_FREE(iov.iov_buf);
 
@@ -635,7 +633,7 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 			      0,
 			      iov, &cont->ioc_dfs);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use dfs handle %d", rc);
+		DFUSE_LOG_WARNING("Failed to use dfs handle: %d (%s)", rc, strerror(rc));
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -776,7 +774,7 @@ open_cont:
 			D_GOTO(shrink, rc = rcb);
 		}
 	} else if (rc != 0) {
-		D_ERROR("ioil_fetch_cont_handles() failed, %d\n", rc);
+		D_ERROR("ioil_fetch_cont_handles() failed: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(shrink, rc);
 	}
 
