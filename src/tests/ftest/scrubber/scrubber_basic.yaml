@@ -3,7 +3,7 @@ hosts:
     - server-A
     - server-B
   test_clients:
-    - client-A
+    - client-C
 timeout: 150
 setup:
   start_servers_once: False
@@ -56,6 +56,7 @@ pool:
   control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
+  properties: "scrub:continuous,scrub-freq:1,scrub-cred:10"
 container:
   type: POSIX
   control_method: daos
@@ -70,7 +71,7 @@ ior:
   dfs_destroy: False
   iorflags:
     ior_flags:
-      - "-v -W -w -r -R"
+      - "-v -W -w -r -R -k"
     ior_api:
       - DFS
     transfer_block_size:

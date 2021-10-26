@@ -31,6 +31,33 @@ class TestWithScrubber(IorTestBase):
         self.dmg_cmd = self.get_dmg_command()
         self.sc_pool = None
         self.sc_container = None
+        self.initial_metrics = {}
+        self.final_metrics = {}
+
+    def verify_scrubber_metrics_value(self, initial_metrics, final_metrics):
+        """ Compare the initial metrics value to final value after
+            IO data. The counters should increase from initial value.
+
+        Args:
+            initial_metrics (dict): a dictionary of host keys linked to a list of metric names.
+            final_metrics (dict): a dictionary of host keys linked to a list of metric names.
+
+            Returns:
+                status (bool): True if all metric value changed, False if any metrics value doesn't 
+                increment or change.
+        """
+        self.log.info("Verifying the scrubber metrics values")
+        status = True
+        self.log.info("Initial Metrics Information")
+        self.log.info("===========================")
+        self.log.info(initial_metrics)
+        self.log.info("Final Metrics Information")
+        self.log.info("=========================")
+        self.log.info(final_metrics)
+        # If both initial and final metrics are same, return false.
+        if initial_metrics == final_metrics:
+            status = False
+        return status
 
     def create_pool_cont_with_scrubber(self, pool_prop=None, cont_prop=None):
         """Create a pool with container with scrubber enabled.
@@ -41,7 +68,18 @@ class TestWithScrubber(IorTestBase):
             cont_prop (str, optional): container properties string.
                 Defaults to None.
         """
-        self.add_pool()
+        # If pool_prop is None, don't use anything from YAML file.
+        # If cont_prop is None, don't use  the information from YAML file.
+        # Use some of the default values provided in scrubber testbase file.
+        # Testing scenario : Create a pool and container without properties
+        # and update them at runtime.
+        if pool_prop is None:
+            self.add_pool(create=False, connect=False)
+            self.pool.properties.value = pool_prop
+            self.pool.create()
+            self.pool.connect()
+        else:
+            self.add_pool()
         self.add_container(pool=self.pool, create=False)
         if pool_prop is None:
             pool_prop = "scrub:continuous,scrub-freq:1,scrub-cred:10"
@@ -66,8 +104,12 @@ class TestWithScrubber(IorTestBase):
             pool (object): Pool object
             cont (object): Container object within the pool.
             fail_on_warning (bool, optional): [description]. Defaults to True.
+        
+        Returns:
+            status(bool) : True (Srubber working), False(Scrubber not working)
         """
-        self.scrubber.get_csum_total_metrics()
+        status = False
+        self.initial_metrics = self.scrubber.get_csum_total_metrics()
         self.pool = pool
         self.container = cont
         # Print the pool properties
@@ -89,4 +131,7 @@ class TestWithScrubber(IorTestBase):
         process.start()
         # Wait for the thread to finish
         process.join()
-        self.scrubber.get_csum_total_metrics()
+        self.final_metrics = self.scrubber.get_csum_total_metrics()
+        # Just make sure scrubber is working here.
+        status = self.verify_scrubber_metrics_value(self.initial_metrics, self.final_metrics)
+        return status

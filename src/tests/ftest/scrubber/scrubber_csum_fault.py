@@ -30,15 +30,24 @@ class TestWithScrubberFault(TestWithScrubber):
         transfer_block_size = self.params.get("transfer_block_size",
                                               '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
+        pool_prop = self.params.get("properties", '/run/pool/*')
+        cont_prop = self.params.get("properties", '/run/container/*')
+        initial_metrics = {}
+        final_metrics = {}
         self.ior_cmd.api.update(apis[0])
         self.ior_cmd.flags.update(flags[0], "ior.flags")
         self.ior_cmd.dfs_oclass.update(obj_class[0])
         self.ior_cmd.dfs_dir_oclass.update(obj_class[0])
-        self.create_pool_cont_with_scrubber()
-        self.scrubber.get_scrub_corrupt_metrics()
+        self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
+        initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
         for test in transfer_block_size:
             self.ior_cmd.transfer_size.update(test[0])
             self.ior_cmd.block_size.update(test[1])
         self.run_ior_and_check_scruber_status(pool=self.sc_pool, cont=self.sc_container)
-        self.scrubber.get_scrub_corrupt_metrics()
+        final_metrics = self.scrubber.get_scrub_corrupt_metrics()
+        status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
+        if status is False:
+            self.log.info("------Test Failed-----")
+            self.log.info("---No metrics value change----")
+            self.fail("------Test Failed-----")
         self.log.info("------Test passed------")

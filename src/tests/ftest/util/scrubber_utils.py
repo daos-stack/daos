@@ -20,7 +20,6 @@ class ScrubberUtils(TelemetryUtils):
         """
         TEST_METRICS = "engine_pool_scrubber_scrubber_started"
         info = self.get_metrics(TEST_METRICS)
-        self.log.info(info)
         return info
 
     def get_scrub_corrupt_metrics(self):
@@ -29,9 +28,8 @@ class ScrubberUtils(TelemetryUtils):
         Returns:
             info (dict): scrubber corrupt metrics.
         """
-        CORRUPT_METRICS = "engine_pool_scrubber_corruption_current"
+        CORRUPT_METRICS = "engine_pool_scrubber_corruption_total"
         info = self.get_metrics(CORRUPT_METRICS)
-        self.log.info(info)
         return info
 
     def get_csum_total_metrics(self):
@@ -43,5 +41,4 @@ class ScrubberUtils(TelemetryUtils):
         """
         CSUM_METRICS = "engine_pool_scrubber_csums_total"
         info = self.get_metrics(CSUM_METRICS)
-        self.log.info(info)
         return info
