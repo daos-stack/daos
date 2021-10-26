@@ -10,13 +10,13 @@ from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 
 
-@skipForTicket("DAOS-8859")
 class DaosRacerTest(TestWithServers):
     """Test cases that utilize the daos_racer tool.
 
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-8845")
     def test_parallel(self):
         """JIRA-8445: multi-client daos_racer/consistency checker test.
 
