@@ -14,7 +14,6 @@ from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from command_utils import CommandFailure
 from io_utilities import DirTree
-from apricot import skipForTicket
 
 
 class Cmd(DfuseTestBase):
@@ -43,7 +42,6 @@ class Cmd(DfuseTestBase):
         """
         self._test_findcmd()
 
-    @skipForTicket("DAOS-6530")
     def test_find_perf(self):
         """Jira ID: DAOS-5563.
 
@@ -55,7 +53,7 @@ class Cmd(DfuseTestBase):
             The test will fail if DAOS performance is lower than the
             challenger performance.
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,manual
         :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,dfuse
         :avocado: tags=findcmd_perf
@@ -203,12 +201,12 @@ class Cmd(DfuseTestBase):
             self.log.info(
                 "Running sample number %d of %d", i + 1, samples)
 
-            prefix = random.randrange(containers - 1)
-            suffix = random.randrange(needles - 1)
+            prefix = random.randrange(containers - 1) #nosec
+            suffix = random.randrange(needles - 1) #nosec
             file_name = "t{:05d}_*_{:05d}.needle".format(prefix, suffix)
             _search_needles(file_name, "unique_file", 1)
 
-            number = random.randrange(needles - 1)
+            number = random.randrange(needles - 1) #nosec
             file_name = "*_{:05d}.needle".format(number)
             _search_needles(file_name, "same_suffix", containers)
 
@@ -299,7 +297,7 @@ class Cmd(DfuseTestBase):
         with the prefix value.
         """
         letters = string.ascii_lowercase + string.digits
-        random_name = "".join(random.choice(letters) for _ in range(8))
+        random_name = "".join(random.choice(letters) for _ in range(8)) #nosec
 
         return os.path.join(root, "{}{}".format(prefix, random_name))
 

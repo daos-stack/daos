@@ -1395,7 +1395,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", 1,
 			  DAOS_COND_DKEY_INSERT, &entry);
 	if (rc && rc != EEXIST) {
-		D_ERROR("Failed to insert root entry, %d\n", rc);
+		D_ERROR("Failed to insert root entry: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_super, rc);
 	}
 
@@ -1657,7 +1657,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	strcpy(dfs->root.name, "/");
 	rc = open_dir(dfs, NULL, amode | S_IFDIR, 0, &root_dir, 1, &dfs->root);
 	if (rc) {
-		D_ERROR("Failed to open root object, %d\n", rc);
+		D_ERROR("Failed to open root object: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_super, rc);
 	}
 
@@ -2536,16 +2536,13 @@ lookup_rel_path_loop:
 			if (stbuf) {
 				daos_size_t size;
 
-				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE,
-							 &size, NULL);
+				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size, NULL);
 				if (rc) {
 					daos_array_close(obj->oh, NULL);
-					D_GOTO(err_obj,
-					       rc = daos_der2errno(rc));
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
 				}
 				stbuf->st_size = size;
-				stbuf->st_blocks =
-					(stbuf->st_size + (1 << 9) - 1) >> 9;
+				stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 			}
 			break;
 		}
@@ -2569,8 +2566,7 @@ lookup_rel_path_loop:
 						     flags, &sym, NULL, NULL,
 						     depth + 1);
 				if (rc) {
-					D_DEBUG(DB_TRACE,
-						"Failed to lookup symlink %s\n",
+					D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n",
 						entry.value);
 					D_FREE(entry.value);
 					D_GOTO(err_obj, rc);
@@ -4042,14 +4038,13 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	iod.iod_nr = i;
 
 	if (i == 0)
-		D_GOTO(out_stat, 0);
+		D_GOTO(out_stat, rc = 0);
 
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iovs[0];
 
-	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod,
-			     &sgl, NULL);
+	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update attr (rc = %d)\n", rc);
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
