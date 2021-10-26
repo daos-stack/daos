@@ -165,6 +165,9 @@ def set_test_environment(args):
         # Get the default provider if CRT_PHY_ADDR_STR is not set
         set_provider_environment(os.environ["DAOS_TEST_FABRIC_IFACE"], args)
 
+        # Update other env definitions
+        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
+
         # Set the default location for daos log files written during testing
         # if not already defined.
         if "DAOS_TEST_LOG_DIR" not in os.environ:
@@ -841,6 +844,7 @@ def get_vmd_replacement(args):
 
     return ",".join(devices), vmd_include_flag
 
+
 def get_vmd_address_backed_nvme(host_list, value):
     """Find valid VMD address which has backing NVMe.
 
@@ -876,6 +880,7 @@ def get_vmd_address_backed_nvme(host_list, value):
             value.remove(device)
 
     return value
+
 
 def find_pci_address(value):
     """Find PCI addresses in the specified string.
