@@ -122,7 +122,7 @@ class Dfuse(DfuseCommand):
                 if retcode == 0:
                     check_mounted.add(host)
                 else:
-                    command = "cat /proc/mounts | grep dfuse"
+                    command = "grep 'dfuse {}' /proc/mounts" .format(self.mount_dir.value)
                     retcodes = pcmd([host], command, expect_rc=None)
                     for ret_code, host_names in list(retcodes.items()):
                         for node in host_names:

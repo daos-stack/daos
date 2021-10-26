@@ -653,7 +653,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 
 	if (spi->spi_space_pressure != SCHED_SPACE_PRESS_NONE &&
 	    spi->spi_space_pressure != orig_pressure) {
-		D_INFO("XS(%d): pool:"DF_UUID" is under %d presure, "
+		D_INFO("XS(%d): pool:"DF_UUID" is under %d pressure, "
 		       "SCM: tot["DF_U64"], sys["DF_U64"], free["DF_U64"] "
 		       "NVMe: tot["DF_U64"], sys["DF_U64"], free["DF_U64"]\n",
 		       dx->dx_xs_id, DP_UUID(spi->spi_pool_id),
