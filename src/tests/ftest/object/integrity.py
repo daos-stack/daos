@@ -101,7 +101,7 @@ class ObjectDataValidation(TestWithServers):
         except DaosApiError as excep:
             #initial container get_new_tx failed, skip rest of the test
             self.fail("##container get_new_tx failed: {}".format(excep))
-        invalid_transaction = new_transaction + random.randint(1000, 383838)
+        invalid_transaction = new_transaction + random.randint(1000, 383838) #nosec
         self.log.info("==new_transaction=     %s", new_transaction)
         self.log.info("==invalid_transaction= %s", invalid_transaction)
         self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,

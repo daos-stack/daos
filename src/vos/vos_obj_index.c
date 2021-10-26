@@ -676,7 +676,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog,
-				&oiter->oit_epr, iter->it_for_discard, range_discard, NULL,
+				&oiter->oit_epr, iter->it_for_discard, false, NULL,
 				&oiter->oit_ilog_info);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */

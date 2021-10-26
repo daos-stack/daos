@@ -200,7 +200,7 @@ rpc_err_init(void)
 	rc = d_log_init();
 	assert(rc == 0);
 
-	flag = rpc_err.re_is_service ? CRT_FLAG_BIT_SERVER : 0;
+	flag = rpc_err.re_is_service ? (CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE) : 0;
 	rc = crt_init(rpc_err.re_local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
