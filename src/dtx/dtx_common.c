@@ -112,22 +112,37 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 	if (dbca->dbca_cleanup_req != NULL) {
 		if (!dbca->dbca_cleanup_done)
 			sched_req_wait(dbca->dbca_cleanup_req, true);
-		D_ASSERT(dbca->dbca_cleanup_done);
-		sched_req_put(dbca->dbca_cleanup_req);
+		/* dtx_batched_commit might put it while we were waiting. */
+		if (dbca->dbca_cleanup_req != NULL) {
+			D_ASSERT(dbca->dbca_cleanup_done);
+			sched_req_put(dbca->dbca_cleanup_req);
+			dbca->dbca_cleanup_req = NULL;
+			dbca->dbca_cleanup_done = 0;
+		}
 	}
 
 	if (dbca->dbca_commit_req != NULL) {
 		if (!dbca->dbca_commit_done)
 			sched_req_wait(dbca->dbca_commit_req, true);
-		D_ASSERT(dbca->dbca_commit_done);
-		sched_req_put(dbca->dbca_commit_req);
+		/* dtx_batched_commit might put it while we were waiting. */
+		if (dbca->dbca_commit_req != NULL) {
+			D_ASSERT(dbca->dbca_commit_done);
+			sched_req_put(dbca->dbca_commit_req);
+			dbca->dbca_commit_req = NULL;
+			dbca->dbca_commit_done = 0;
+		}
 	}
 
 	if (dbca->dbca_agg_req != NULL) {
 		if (!dbca->dbca_agg_done)
 			sched_req_wait(dbca->dbca_agg_req, true);
-		D_ASSERT(dbca->dbca_agg_done);
-		sched_req_put(dbca->dbca_agg_req);
+		/* Just to be safe... */
+		if (dbca->dbca_agg_req != NULL) {
+			D_ASSERT(dbca->dbca_agg_done);
+			sched_req_put(dbca->dbca_agg_req);
+			dbca->dbca_agg_req = NULL;
+			dbca->dbca_agg_done = 0;
+		}
 	}
 
 	/* dtx_batched_commit() ULT may hold the last reference on the dbca. */

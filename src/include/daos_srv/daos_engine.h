@@ -281,7 +281,7 @@ struct sched_request;	/* Opaque schedule request */
  * \param[in] attr	Sched request attributes.
  * \param[in] ult	ULT attached to the sched request, self ULT will be
  *			used when ult == ABT_THREAD_NULL. If not
- *			ABT_THREAD_NULL, ult will be freed by sched_req.
+ *			ABT_THREAD_NULL, ult will be freed by sched_req_put.
  *			Unnamed ULTs (e.g., from ABT_thread_self) are
  *			prohibited.
  *
