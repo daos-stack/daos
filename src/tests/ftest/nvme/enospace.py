@@ -135,19 +135,19 @@ class NvmeEnospace(ServerFillUp):
         #Fill 75% more of SCM pool,Aggregation is Enabled so NVMe space will be
         #start filling
         print('Starting main IOR load')
-        self.start_ior_load(storage='SCM', percent=75)
+        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
         print(self.pool.pool_percentage_used())
 
         #Fill 50% more of SCM pool,Aggregation is Enabled so NVMe space will be
         #filled
-        self.start_ior_load(storage='SCM', percent=50)
+        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
         print(self.pool.pool_percentage_used())
 
         #Fill 60% more of SCM pool, now NVMe will be Full so data will not be
         #moved to NVMe but it will start filling SCM. SCM size will be going to
         #full and this command expected to fail with DER_NOSPACE
         try:
-            self.start_ior_load(storage='SCM', percent=60)
+            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=60)
             self.fail('This test suppose to FAIL because of DER_NOSPACE'
                       'but it got Passed')
         except TestFail as _error:
@@ -250,7 +250,7 @@ class NvmeEnospace(ServerFillUp):
             time.sleep(60)
 
         #Run last IO
-        self.start_ior_load(storage='SCM', percent=1)
+        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
     def test_enospace_time_with_bg(self):
         """Jira ID: DAOS-4756.
@@ -315,7 +315,7 @@ class NvmeEnospace(ServerFillUp):
             time.sleep(120)
 
         #Run last IO
-        self.start_ior_load(storage='SCM', percent=1)
+        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
     @skipForTicket("DAOS-8896")
     def test_performance_storage_full(self):
@@ -336,9 +336,9 @@ class NvmeEnospace(ServerFillUp):
         #Write the IOR Baseline and get the Read BW for later comparison.
         print(self.pool.pool_percentage_used())
         #Write First
-        self.start_ior_load(storage='SCM', percent=1)
+        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
         #Read the baseline data set
-        self.start_ior_load(storage='SCM', operation='Read', percent=1)
+        self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
         baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         print("IOR Baseline Read MiB {}".format(max_mib_baseline))
@@ -348,7 +348,7 @@ class NvmeEnospace(ServerFillUp):
 
         #Read the same container which was written at the beginning.
         self.container.uuid = baseline_cont_uuid
-        self.start_ior_load(storage='SCM', operation='Read', percent=1)
+        self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
         print("IOR Latest Read MiB {}".format(max_mib_latest))
 
@@ -392,13 +392,13 @@ class NvmeEnospace(ServerFillUp):
         for _loop in range(10):
             print("-------enospc_no_aggregation Loop--------- {}".format(_loop))
             #Fill 75% of SCM pool
-            self.start_ior_load(storage='SCM', percent=40)
+            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
 
             print(self.pool.pool_percentage_used())
 
             try:
                 #Fill 10% more to SCM ,which should Fail because no SCM space
-                self.start_ior_load(storage='SCM', percent=40)
+                self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
                 self.fail('This test suppose to fail because of DER_NOSPACE'
                           'but it got Passed')
             except TestFail as _error:
@@ -423,4 +423,4 @@ class NvmeEnospace(ServerFillUp):
                           format(pool_usage['scm']))
 
         #Run last IO
-        self.start_ior_load(storage='SCM', percent=1)
+        self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)

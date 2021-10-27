@@ -75,6 +75,9 @@ class EcodAggregationOff(ErasureCodeIor):
                 # Read single IOR
                 self.ior_read_single_dataset(oclass, sizes)
 
+                # Increase the container UUID count and read the latest data.
+                self.cont_number += 1
+
     def test_ec_aggregation_time(self):
         """Jira ID: DAOS-7325.
 
