@@ -166,7 +166,7 @@ pipeline {
                defaultValue: 'ci_nvme3',
                description: 'Label to use for 3 node NVMe tests')
         string(name: 'CI_NVME_5_LABEL',
-               defaultValue: 'ci_nvme5',
+               defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node NVMe tests')
         string(name: 'CI_NVME_9_LABEL',
                defaultValue: 'ci_nvme9',
