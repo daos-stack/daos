@@ -89,7 +89,7 @@ class IorTestBase(DfuseTestBase):
             pool.set_query_data()
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
-                          test_file="daos:testFile", create_pool=True,
+                          test_file="daos:/testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
                           mount_dir=None, out_queue=None, env=None):
@@ -105,7 +105,7 @@ class IorTestBase(DfuseTestBase):
             test_file_suffix (str, optional): suffix to add to the end of the
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
-                "daos:testFile". Is ignored when using POSIX through DFUSE.
+                "daos:/testFile". Is ignored when using POSIX through DFUSE.
             create_pool (bool, optional): If it is true, create pool and
                 container else just run the ior. Defaults to True.
             create_cont (bool, optional): Create new container. Default is True
@@ -492,7 +492,7 @@ class IorTestBase(DfuseTestBase):
 
         return result
 
-    def _execute_command(self, command, fail_on_err=True, display_output=True):
+    def _execute_command(self, command, fail_on_err=True, display_output=True, hosts=None):
         """Execute the command on all client hosts.
 
         Optionally verify if the command returns a non zero return code.
@@ -513,8 +513,9 @@ class IorTestBase(DfuseTestBase):
                 values indicating which hosts yielded the return code.
 
         """
-        result = pcmd(
-            self.hostlist_clients, command, verbose=display_output, timeout=300)
+        if hosts is None:
+            hosts = self.hostlist_clients
+        result = pcmd(hosts, command, verbose=display_output, timeout=300)
         if 0 not in result and fail_on_err:
             hosts = [str(
                 nodes) for code, nodes in list(

@@ -552,6 +552,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_DEBUG(DB_TRACE, "destroy context (idx %d, force %d), "
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
+		if (i > 5)
+			D_ERROR("destroy context (idx %d, force %d) "
+				"takes too long time. This is attempt %d of %d.\n",
+				ctx->cc_idx, force, i, CRT_SWIM_FLUSH_ATTEMPTS);
 		/* Flush SWIM RPC already sent */
 		rc = crt_context_flush(crt_ctx, timeout_sec);
 		if (rc)
@@ -927,29 +931,30 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
 		swim_id_t		 self_id = swim_self_get(csm->csm_ctx);
 
+		if (crt_ctx->cc_last_unpack_hlc > csm->csm_last_unpack_hlc)
+			csm->csm_last_unpack_hlc = crt_ctx->cc_last_unpack_hlc;
+
 		/*
-		 * Check for network idle in SWIM context.
+		 * Check for network idle in all contexts.
 		 * If the time passed from last received RPC till now is more
 		 * than 2/3 of suspicion timeout suspends eviction.
 		 * The max_delay should be less suspicion timeout to guarantee
 		 * the already suspected members will not be expired.
 		 */
-		if (crt_ctx->cc_idx == csm->csm_crt_ctx_idx &&
-		    crt_ctx->cc_last_unpack_hlc != 0 &&
-		    self_id != SWIM_ID_INVALID) {
-			uint64_t delay = crt_hlc2msec(crt_hlc_get() -
-						   crt_ctx->cc_last_unpack_hlc);
+		if (self_id != SWIM_ID_INVALID && csm->csm_alive_count > 2) {
+			uint64_t hlc1 = csm->csm_last_unpack_hlc;
+			uint64_t hlc2 = crt_hlc_get();
+			uint64_t delay = crt_hlc2msec(hlc2 - hlc1);
 			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
 
 			if (delay > max_delay) {
 				D_ERROR("Network outage detected (idle during "
 					"%lu.%lu sec >  maximum allowed "
-					"%lu.%lu sec). Suspend SWIM eviction "
-					"until network stabilized.\n",
+					"%lu.%lu sec).\n",
 					delay / 1000, delay % 1000,
 					max_delay / 1000, max_delay % 1000);
-				crt_swim_suspend_all();
-				crt_ctx->cc_last_unpack_hlc = 0;
+				swim_net_glitch_update(csm->csm_ctx, self_id, delay);
+				csm->csm_last_unpack_hlc = hlc2;
 			}
 		}
 	}

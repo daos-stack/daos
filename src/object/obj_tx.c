@@ -1775,6 +1775,10 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	crt_endpoint_t			 tgt_ep;
 	int				 rc;
 
+	if (tx->tx_pm_ver != 0 && tx->tx_pm_ver != dc_pool_get_version(tx->tx_pool) &&
+	    (tx->tx_retry || tx->tx_read_cnt > 0))
+		D_GOTO(out, rc = -DER_TX_RESTART);
+
 	if (!tx->tx_retry) {
 		rc = dc_tx_commit_prepare(tx, task);
 		if (rc != 0) {
