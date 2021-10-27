@@ -1,10 +1,22 @@
-daos (2.1.100-3) unstable; urgency=medium
+daos (2.1.100-5) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
   * Rename daos-tests daos-client-tests and make daos-tests require all
     other test suites to maintain existing behavior
 
- -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 22 Oct 2021 10:04:15 -0400
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 26 Oct 2021 22:52:40 -0400
+
+daos (2.1.100-4) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update mercury to v2.1.0rc2
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Mon, 25 Oct 2021 010:00:01 -0100
+
+daos (2.1.100-3) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Explicitly require 1.11.0-3 of PMDK
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 20 Oct 2021 010:00:01 -0100
 
 daos (2.1.100-2) unstable; urgency=medium
   [ David Quigley ]

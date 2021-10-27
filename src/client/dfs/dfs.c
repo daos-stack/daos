@@ -1395,7 +1395,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", 1,
 			  DAOS_COND_DKEY_INSERT, &entry);
 	if (rc && rc != EEXIST) {
-		D_ERROR("Failed to insert root entry, %d\n", rc);
+		D_ERROR("Failed to insert root entry: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_super, rc);
 	}
 
@@ -1657,7 +1657,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	strcpy(dfs->root.name, "/");
 	rc = open_dir(dfs, NULL, amode | S_IFDIR, 0, &root_dir, 1, &dfs->root);
 	if (rc) {
-		D_ERROR("Failed to open root object, %d\n", rc);
+		D_ERROR("Failed to open root object: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_super, rc);
 	}
 

@@ -170,6 +170,8 @@ struct dtx_stat {
 	uint32_t	dtx_cont_cmt_count;
 	/* pool-based committed DTX entries count. */
 	uint32_t	dtx_pool_cmt_count;
+	/* The epoch for the most new DTX entry that is aggregated. */
+	uint64_t	dtx_newest_aggregated;
 };
 
 enum dtx_flags {
