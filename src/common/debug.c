@@ -212,7 +212,6 @@ DP_UUID(const void *uuid)
 
 #ifndef DAOS_BUILD_RELEASE
 #define DF_KEY_MAX		8
-#define DF_KEY_STR_SIZE		64
 
 static __thread int thread_key_buf_idx;
 static __thread char thread_key_buf[DF_KEY_MAX][DF_KEY_STR_SIZE];
@@ -225,10 +224,10 @@ daos_key2str(daos_key_t *key)
 	if (!key->iov_buf || key->iov_len == 0) {
 		strcpy(buf, "<NULL>");
 	} else {
-		int len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
-		int i;
-		char *akey = key->iov_buf;
-		bool can_print = true;
+		size_t	len = min(key->iov_len + 1, DF_KEY_STR_SIZE - 1);
+		char	*akey = key->iov_buf;
+		bool	can_print = true;
+		int	i;
 
 		for (i = 0 ; i < len ; i++) {
 			if (akey[i] == '\0')
@@ -238,11 +237,17 @@ daos_key2str(daos_key_t *key)
 				break;
 			}
 		}
-		if (can_print) {
-			strncpy(buf, key->iov_buf, len);
-			buf[len] = 0;
-		} else {
-			strcpy(buf, "????");
+
+		if (can_print)
+			snprintf(buf, len, "%s", (char *)key->iov_buf);
+		else
+			sprintf(buf, "????");
+
+		/* Let's try to output the real value of uint64_t */
+		if (key->iov_len == sizeof(uint64_t)) {
+			/* Make sure there is enough space */
+			D_ASSERTF(strlen(buf) + 32 < DF_KEY_STR_SIZE, "%zu\n", strlen(buf));
+			sprintf(buf + strlen(buf), " uint64:"DF_U64, *(uint64_t *)key->iov_buf);
 		}
 	}
 	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;

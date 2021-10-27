@@ -153,10 +153,11 @@ char *DP_UUID(const void *uuid);
 #define DP_KEY(key)		(int)((key)->iov_len)
 #else
 char *daos_key2str(daos_key_t *key);
+#define DF_KEY_STR_SIZE		64
 
 #define DF_KEY			"[%d] '%.*s'"
 #define DP_KEY(key)		(int)(key)->iov_len,	\
-				(int)(key)->iov_len,	\
+				DF_KEY_STR_SIZE,	\
 				daos_key2str(key)
 #endif
 
