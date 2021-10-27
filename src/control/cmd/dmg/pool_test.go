@@ -301,6 +301,11 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --properties=scrub:continuous,scrub-freq:1,scrub-cred:10", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
+					Properties: []*control.PoolProperty{
+						propWithVal("scrub", "continuous"),
+						propWithVal("scrub-cred", "10"),
+						propWithVal("scrub-freq", "1"),
+					},
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
 					Ranks:     []system.Rank{},
