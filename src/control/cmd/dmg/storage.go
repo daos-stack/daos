@@ -56,10 +56,15 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth || cmd.NvmeMeta),
 	}
 	req.SetHostList(cmd.hostlist)
+
+	cmd.log.Debugf("storage scan request: %+v", req)
+
 	resp, err := control.StorageScan(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
+
+	cmd.log.Debugf("storage scan response: %+v", resp.HostStorage)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, resp.Errors())

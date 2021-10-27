@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -231,74 +230,56 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 	return sb.prepare(req, user.Lookup, detectVMD, cleanHugePages)
 }
 
-// canAccessBdevs evaluates if any specified Bdevs are not accessible.
-//
-// Specified Bdevs can be VMD addresses.
-//
-// Return any device addresses missing from the discovered bdevs and ok set to true
-// if no devices are missing.
-func canAccessBdevs(cfgBdevs []string, discoveredBdevs storage.NvmeControllers) ([]string, bool) {
+// groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
+// to only those devices discovered and in device list and confirm that the devices specified in
+// the device list have all been discovered.
+func groomDiscoveredBdevs(req storage.BdevScanRequest, discovered storage.NvmeControllers) (storage.NvmeControllers, error) {
+	// if empty device list, return all discovered controllers
+	if len(req.DeviceList) == 0 {
+		return discovered, nil
+	}
+
 	var missing []string
+	out := make(storage.NvmeControllers, 0)
+	vmds := make(map[string]storage.NvmeControllers)
 
-	for _, pciAddr := range cfgBdevs {
-		var found bool
+	// store discovered VMD backing devices under vmd address key
+	for _, ctrlr := range discovered {
+		vmdAddr, isVMDBackingAddr := backingAddrToVMD(ctrlr.PciAddr)
+		if isVMDBackingAddr {
+			vmds[vmdAddr] = append(vmds[vmdAddr], ctrlr)
+		}
+	}
 
-		for _, ctrlr := range discoveredBdevs {
-			if ctrlr.PciAddr == pciAddr {
+	for _, want := range req.DeviceList {
+		found := false
+		for _, got := range discovered {
+			// check if discovered ctrlr is in device list
+			if got.PciAddr == want {
+				out = append(out, got)
 				found = true
 				break
 			}
 		}
+
+		if !found && req.VMDEnabled {
+			// check if discovered ctrlr is backing devices for vmd in device list
+			if backing, exists := vmds[want]; exists {
+				out = append(out, backing...)
+				found = true
+			}
+		}
+
 		if !found {
-			missing = append(missing, pciAddr)
+			missing = append(missing, want)
 		}
 	}
 
-	return missing, len(missing) == 0
-}
-
-// checkCfgBdevsExist performs validation on NVMe returned from initial scan.
-func checkCfgBdevsExist(log logging.Logger, bdevs storage.NvmeControllers, engineStorage map[uint32]*storage.Config, vmdEnabled bool) error {
-	if len(engineStorage) == 0 {
-		return nil
+	if len(missing) > 0 {
+		return nil, FaultBdevNotFound(missing...)
 	}
 
-	for idx, storageCfg := range engineStorage {
-		for _, tierCfg := range storageCfg.Tiers {
-			if !tierCfg.IsBdev() || len(tierCfg.Bdev.DeviceList) == 0 {
-				continue
-			}
-			cfgBdevs := tierCfg.Bdev.DeviceList
-
-			// If VMD devices have been prepared, enabled will be set in the scanRequest by
-			// the BdevAdminForwarder.
-			if vmdEnabled {
-				msg := fmt.Sprintf("vmd detected, checking addresses (input %v, existing %v)",
-					cfgBdevs, bdevs)
-
-				dl, err := substVMDAddrs(cfgBdevs, bdevs)
-				if err != nil {
-					return err
-				}
-				log.Debugf("check bdev cfg for engine-%d: %s: new %s", idx, msg, dl)
-				cfgBdevs = dl
-			}
-
-			// fail if config specified nvme devices are inaccessible
-			missing, ok := canAccessBdevs(cfgBdevs, bdevs)
-			if !ok {
-				if vmdEnabled {
-					log.Debugf("bdevs %v specified in config not found, "+
-						"check vmd addresses have associated backing devices",
-						missing)
-				}
-
-				return FaultBdevNotFound(missing...)
-			}
-		}
-	}
-
-	return nil
+	return out, nil
 }
 
 // Scan discovers NVMe controllers accessible by SPDK.
@@ -319,12 +300,17 @@ func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 		return nil, errors.Wrap(err, "failed to discover nvme")
 	}
 
-	if err := checkCfgBdevsExist(sb.log, discoveredBdevs, req.EngineStorage, req.VMDEnabled); err != nil {
-		return nil, errors.Wrap(err, "validate engine config bdevs")
+	outBdevs, err := groomDiscoveredBdevs(req, discoveredBdevs)
+	if err != nil {
+		return nil, err
+	}
+	if len(outBdevs) != len(discoveredBdevs) {
+		sb.log.Debugf("scan bdevs filtered, in: %v, out: %v (devlist %v)", discoveredBdevs,
+			outBdevs, req.DeviceList)
 	}
 
 	return &storage.BdevScanResponse{
-		Controllers: discoveredBdevs,
+		Controllers: outBdevs,
 		VMDEnabled:  req.VMDEnabled,
 	}, nil
 }
