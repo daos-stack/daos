@@ -1490,9 +1490,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			D_GOTO(err_iotask, rc);
 		}
 
-		D_DEBUG(DB_IO, "DKEY IOD "DF_U64": idx = %d\t num_records = %zu"
-			"\t record_i = %d\n",
-			dkey_val, (int)array_idx, num_records, (int)record_i);
+		D_DEBUG(DB_IO, "DKEY IOD "DF_U64": idx = "DF_U64"\t num_records = %zu"
+			"\t record_i = "DF_U64"\n", dkey_val, array_idx, num_records,
+			record_i);
 
 		/** allocate params for this dkey io */
 		D_ALLOC_PTR(params);

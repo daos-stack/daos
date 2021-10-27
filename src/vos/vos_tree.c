@@ -1085,6 +1085,8 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	if (krecp != NULL)
 		*krecp = krec;
  out:
+	D_CDEBUG(rc == 0, DB_TRACE, DB_IO, "prepare tree, flags=%x, tclass=%d %d\n",
+		 flags, tclass, rc);
 	return rc;
 }
 
