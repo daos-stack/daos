@@ -2212,7 +2212,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 		       daos_key_t *akey, daos_recx_t *recx,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       struct dtx_id *dti, unsigned int *map_ver,
-		       daos_handle_t th, tse_task_t *task)
+		       unsigned int req_map_ver, daos_handle_t th, tse_task_t *task)
 {
 	struct dc_pool			*pool = NULL;
 	struct obj_query_key_in		*okqi;
@@ -2264,7 +2264,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 	okqi = crt_req_get(req);
 	D_ASSERT(okqi != NULL);
 
-	okqi->okqi_map_ver		= *map_ver;
+	okqi->okqi_map_ver		= req_map_ver;
 	okqi->okqi_epoch		= epoch->oe_value;
 	okqi->okqi_epoch_first		= epoch->oe_first;
 	okqi->okqi_api_flags		= flags;
