@@ -17,7 +17,6 @@
 RDB_STRING_KEY(ds_pool_prop_, version);
 RDB_STRING_KEY(ds_pool_prop_, map_version);
 RDB_STRING_KEY(ds_pool_prop_, map_buffer);
-RDB_STRING_KEY(ds_pool_prop_, map_uuids);
 RDB_STRING_KEY(ds_pool_prop_, label);
 RDB_STRING_KEY(ds_pool_prop_, acl);
 RDB_STRING_KEY(ds_pool_prop_, space_rb);
@@ -27,15 +26,12 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
+RDB_STRING_KEY(ds_pool_prop_, handles);
+RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
+RDB_STRING_KEY(ds_pool_attr_, user);
 RDB_STRING_KEY(ds_pool_prop_, scrub_sched);
 RDB_STRING_KEY(ds_pool_prop_, scrub_freq);
 RDB_STRING_KEY(ds_pool_prop_, scrub_cred);
-/** pool handle KVS */
-RDB_STRING_KEY(ds_pool_prop_, handles);
-RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
-
-/** user attributed KVS */
-RDB_STRING_KEY(ds_pool_attr_, user);
 
 /** default properties, should cover all optional pool properties */
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
