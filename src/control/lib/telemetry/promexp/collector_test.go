@@ -10,13 +10,16 @@ package promexp
 
 import (
 	"context"
+	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -286,6 +289,110 @@ func TestPromExp_NewCollector(t *testing.T) {
 				t.Fatalf("(-want, +got)\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestPromExp_Collector_Prune(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
+	testRank := uint32(123)
+	telemetry.InitTestMetricsProducer(t, int(testIdx), 4096)
+	defer telemetry.CleanupTestMetricsProducer(t)
+
+	staticMetrics := telemetry.TestMetricsMap{
+		telemetry.MetricTypeGauge: &telemetry.TestMetric{
+			Name: "test/gauge",
+			Cur:  42.42,
+		},
+		telemetry.MetricTypeDirectory: &telemetry.TestMetric{
+			Name: "test/pool",
+		},
+	}
+
+	pu := uuid.New()
+	poolLink := telemetry.TestMetricsMap{
+		telemetry.MetricTypeLink: &telemetry.TestMetric{
+			Name: fmt.Sprintf("test/pool/%s", pu),
+		},
+	}
+	poolCtr := telemetry.TestMetricsMap{
+		telemetry.MetricTypeCounter: &telemetry.TestMetric{
+			Name: fmt.Sprintf("test/pool/%s/counter1", pu),
+			Cur:  1,
+		},
+	}
+
+	engSrc, cleanup, err := NewEngineSource(context.Background(), testIdx, testRank)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	defaultCollector, err := NewCollector(log, nil, engSrc)
+	if err != nil {
+		t.Fatalf("failed to create collector: %s", err.Error())
+	}
+
+	getMetrics := func(t *testing.T) (names []string) {
+		resultChan := make(chan prometheus.Metric)
+
+		go defaultCollector.Collect(resultChan)
+
+		done := false
+		for !done {
+			select {
+			case <-time.After(500 * time.Millisecond):
+				done = true
+			case _ = <-resultChan:
+			}
+		}
+
+		engSrc.rmSchema.mu.Lock()
+		for m := range engSrc.rmSchema.rankMetrics {
+			_, name := extractLabels(m)
+			names = append(names, name)
+		}
+		engSrc.rmSchema.mu.Unlock()
+
+		sort.Strings(names)
+		return
+	}
+
+	expNames := func(maps ...telemetry.TestMetricsMap) []string {
+		unique := map[string]struct{}{}
+		for _, m := range maps {
+			for t, m := range m {
+				if t != telemetry.MetricTypeDirectory && t != telemetry.MetricTypeLink {
+					_, name := extractLabels(m.FullPath())
+					unique[name] = struct{}{}
+				}
+			}
+		}
+
+		names := []string{}
+		for u := range unique {
+			names = append(names, u)
+		}
+		sort.Strings(names)
+		return names
+	}
+
+	telemetry.AddTestMetrics(t, staticMetrics)
+	telemetry.AddTestMetrics(t, poolLink)
+	telemetry.AddTestMetrics(t, poolCtr)
+
+	expected := expNames(staticMetrics, poolLink, poolCtr)
+	if diff := cmp.Diff(expected, getMetrics(t)); diff != "" {
+		t.Fatalf("before prune: (-want, +got)\n%s", diff)
+	}
+
+	telemetry.RemoveTestMetrics(t, poolLink)
+
+	expected = expNames(staticMetrics)
+	if diff := cmp.Diff(expected, getMetrics(t)); diff != "" {
+		t.Fatalf("after prune: (-want, +got)\n%s", diff)
 	}
 }
 
