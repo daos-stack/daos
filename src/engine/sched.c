@@ -505,7 +505,7 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 
 static struct sched_request *
 req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
-	void (*func)(void *), void *arg, ABT_thread ult, bool own)
+	void (*func)(void *), void *arg, ABT_thread ult, bool owned)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi;
@@ -538,7 +538,7 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	req->sr_arg	= arg;
 	req->sr_ult	= ult;
 	req->sr_abort	= 0;
-	req->sr_owned	= (own ? 1 : 0);
+	req->sr_owned	= (owned ? 1 : 0);
 	req->sr_pool_info = spi;
 
 	return req;
@@ -1150,7 +1150,7 @@ struct sched_request *
 sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
-	bool			 own;
+	bool			 owned;
 	struct sched_request	*req;
 	int			 rc;
 
@@ -1165,7 +1165,7 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 			return NULL;
 		}
 		ult = self;
-		own = false;
+		owned = false;
 	} else {
 		ABT_bool unnamed;
 
@@ -1182,10 +1182,10 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 			D_ERROR("Unnamed threads are not supported\n");
 			return NULL;
 		}
-		own = true;
+		owned = true;
 	}
 
-	req = req_get(dx, attr, NULL, NULL, ult, own);
+	req = req_get(dx, attr, NULL, NULL, ult, owned);
 	if (req != NULL && attr->sra_type == SCHED_REQ_GC)
 		req->sr_pool_info->spi_gc_ults++;
 
