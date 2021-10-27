@@ -5,7 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 
@@ -16,7 +16,6 @@ class DaosRacerTest(TestWithServers):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-8845")
     def test_parallel(self):
         """JIRA-8445: multi-client daos_racer/consistency checker test.
 
