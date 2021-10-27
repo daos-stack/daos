@@ -602,6 +602,7 @@ dtx_batched_commit(void *arg)
 		dbca = d_list_entry(dmi->dmi_dtx_batched_cont_list.next,
 				    struct dtx_batched_cont_args,
 				    dbca_sys_link);
+		dtx_get_dbca(dbca);
 		cont = dbca->dbca_cont;
 		d_list_move_tail(&dbca->dbca_sys_link,
 				 &dmi->dmi_dtx_batched_cont_list);
@@ -674,6 +675,8 @@ dtx_batched_commit(void *arg)
 				}
 			}
 		}
+
+		dtx_put_dbca(dbca);
 
 check:
 		if (dss_xstream_exiting(dmi->dmi_xstream))
