@@ -42,10 +42,9 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	}
 
 	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags,
-		     &oh->doh_obj);
+	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags, &oh->doh_obj);
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(free, rc);
 
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
@@ -72,19 +71,27 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * O_TRUNC flag, we need to truncate the file manually.
 	 */
 	if (fi->flags & O_TRUNC) {
-		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0,
-			       DFS_MAX_FSIZE);
+		rc = dfs_punch(ie->ie_dfs->dfs_ns, ie->ie_obj, 0, DFS_MAX_FSIZE);
 		if (rc)
-			D_GOTO(err, rc);
+			D_GOTO(release, rc);
 	}
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
 	return;
+release:
+	{
+		int rc2;
+
+		do {
+			rc2 = dfs_release(oh->doh_obj);
+		} while (rc2 == ENOMEM);
+	}
+free:
+	D_FREE(oh);
 err:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	D_FREE(oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
@@ -94,7 +101,10 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int			rc;
 
-	rc = dfs_release(oh->doh_obj);
+	do {
+		rc = dfs_release(oh->doh_obj);
+	} while (rc == ENOMEM);
+
 	if (rc == 0)
 		DFUSE_REPLY_ZERO(oh, req);
 	else

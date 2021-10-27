@@ -253,6 +253,9 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode, name);
 
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+
+	dfuse_ino_check(fs_handle);
+
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);

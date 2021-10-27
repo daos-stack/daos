@@ -47,6 +47,10 @@ struct dfuse_projection_info {
 	/** Semaphore to signal event waiting for async thread */
 	sem_t				dpi_sem;
 	pthread_t			dpi_thread;
+
+	pthread_mutex_t			dpi_free_mutex;
+	d_list_t			dpi_free_ino;
+
 	bool				dpi_shutdown;
 };
 
@@ -243,6 +247,9 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 #define DFUSE_XATTR_PREFIX "user.dfuse"
 
 /* dfuse_core.c */
+
+void
+dfuse_ino_check(struct dfuse_projection_info *fs_handle);
 
 /* Setup internal structures */
 int

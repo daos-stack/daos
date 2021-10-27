@@ -397,6 +397,88 @@ d_hash_table_ops_t cont_hops = {
 	.hop_rec_free		= ch_free,
 };
 
+/*
+ * Deferred error handling for inodes
+ */
+void
+dfuse_ino_drop(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
+{
+	int rc;
+
+	if (ie->ie_obj) {
+		rc = dfs_release(ie->ie_obj);
+		if (rc == 0) {
+			D_FREE(ie);
+			return;
+		}
+		DFUSE_TRA_ERROR(ie, "dfs_release() failed: %d (%s)", rc, strerror(rc));
+	} else {
+		D_FREE(ie);
+		return;
+	}
+
+	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
+
+	d_list_add_tail(&ie->ie_htl, &fs_handle->dpi_free_ino);
+
+	D_MUTEX_UNLOCK(&fs_handle->dpi_free_mutex);
+}
+
+void
+dfuse_ino_check(struct dfuse_projection_info *fs_handle)
+{
+	struct dfuse_inode_entry *ie;
+	int rc;
+
+	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
+
+	ie = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_inode_entry, ie_htl);
+
+	if (ie) {
+		rc = dfs_release(ie->ie_obj);
+		if (rc == 0) {
+			D_FREE(ie);
+		} else {
+			DFUSE_TRA_ERROR(ie, "dfs_release() failed: %d (%s)", rc, strerror(rc));
+			d_list_add_tail(&ie->ie_htl, &fs_handle->dpi_free_ino);
+		}
+	}
+
+	D_MUTEX_UNLOCK(&fs_handle->dpi_free_mutex);
+}
+
+int
+dfuse_ino_check_all(struct dfuse_projection_info *fs_handle)
+{
+	struct dfuse_inode_entry	*ie;
+	int				rc = -DER_SUCCESS;
+	int				rc2;
+	d_list_t			tmp_list;
+
+	D_INIT_LIST_HEAD(&tmp_list);
+
+	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
+
+	while ((ie = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_inode_entry, ie_htl)))
+	{
+		rc2 = dfs_release(ie->ie_obj);
+		if (rc2 == 0) {
+			D_FREE(ie);
+		} else {
+			d_list_add(&ie->ie_htl, &tmp_list);
+			rc = rc2;
+		}
+	}
+
+	d_list_splice(&tmp_list, &fs_handle->dpi_free_ino);
+
+	D_MUTEX_UNLOCK(&fs_handle->dpi_free_mutex);
+
+	if (rc)
+		DFUSE_TRA_ERROR(fs_handle, "Failed to flush free inodes, %d", rc);
+	return rc;
+}
+
 /* Return a pool connection by label.
  *
  * Only used for command line parsing, so does not check for existing pools
@@ -989,6 +1071,12 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
+	D_INIT_LIST_HEAD(&fs_handle->dpi_free_ino);
+
+	rc = D_MUTEX_INIT(&fs_handle->dpi_free_mutex, NULL);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err_mutex, rc);
+
 	rc = daos_eq_create(&fs_handle->dpi_eq);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err_iht, rc);
@@ -1003,6 +1091,8 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 err_eq:
 	daos_eq_destroy(fs_handle->dpi_eq, DAOS_EQ_DESTROY_FORCE);
+err_mutex:
+	D_MUTEX_DESTROY(&fs_handle->dpi_free_mutex);
 err_iht:
 	d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
 err_pt:
@@ -1016,8 +1106,10 @@ void
 dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	       struct dfuse_inode_entry *ie)
 {
-	int	rc;
-	int	ref = atomic_load_relaxed(&ie->ie_ref);
+	struct dfuse_cont	*dfc = NULL;
+	int			ref;
+
+	ref = atomic_load_relaxed(&ie->ie_ref);
 
 	DFUSE_TRA_DEBUG(ie,
 			"closing, inode %#lx ref %u, name '%s', parent %#lx",
@@ -1025,28 +1117,23 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 
 	D_ASSERT(ref == 0);
 
-	if (ie->ie_obj) {
-		rc = dfs_release(ie->ie_obj);
-		if (rc == ENOMEM)
-			rc = dfs_release(ie->ie_obj);
-		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
-					strerror(rc));
-		}
-	}
+	if (ie->ie_root)
+		dfc = ie->ie_dfs;
 
-	if (ie->ie_root) {
-		struct dfuse_cont	*dfc = ie->ie_dfs;
-		struct dfuse_pool	*dfp = dfc->dfs_dfp;
+	dfuse_ino_drop(fs_handle, ie);
+	ie = NULL;
 
-		DFUSE_TRA_INFO(ie, "Closing poh %d coh %d",
+	if (dfc) {
+		struct dfuse_pool *dfp = dfc->dfs_dfp;
+
+		dfuse_ino_check_all(fs_handle);
+
+		DFUSE_TRA_INFO(dfc, "Closing poh %d coh %d",
 			       daos_handle_is_valid(dfp->dfp_poh),
 			       daos_handle_is_valid(dfc->dfs_coh));
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
-
-	D_FREE(ie);
 }
 
 int
@@ -1245,6 +1332,8 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 
 	sem_destroy(&fs_handle->dpi_sem);
 
+	dfuse_ino_check_all(fs_handle);
+
 	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 
 	DFUSE_TRA_INFO(fs_handle, "Flush complete: "DF_RC, DP_RC(rc));
@@ -1276,6 +1365,10 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes", refs, handles);
 
 	d_hash_table_traverse(&fs_handle->dpi_pool_table, dfuse_pool_close_cb, NULL);
+
+	dfuse_ino_check_all(fs_handle);
+
+	D_MUTEX_DESTROY(&fs_handle->dpi_free_mutex);
 
 	return 0;
 }

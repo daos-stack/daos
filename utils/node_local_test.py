@@ -998,6 +998,32 @@ class DFuse():
         self.valgrind = None
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
+        self._fi_file = None
+        self._env = get_base_env()
+
+    def enable_fi(self):
+
+        fc = {}
+
+        # Tell dfuse_launch_fuse to enable fault injection only as fuse is mounted.
+        # Enable faults with a 1/200 chance, and only one fault.
+        fc['fault_config'] = [{'id': 100,
+                               'probability_x': 1,
+                               'probability_y': 1,
+                               'err_code': -1001,
+                               'max_faults': 1},
+                              {'id': 0,
+                               'probability_x': 0,
+                               'probability_y': 200}]
+        fc['seed'] = int(time.time())
+
+        # pylint: disable=consider-using-with
+        self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_', suffix='.yaml')
+
+        self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
+        self._fi_file.flush()
+
+        self._env['D_FI_CONFIG'] = self._fi_file.name
 
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
@@ -1005,10 +1031,8 @@ class DFuse():
 
         pre_inode = os.stat(self.dir).st_ino
 
-        my_env = get_base_env()
-
         if self.conf.args.dfuse_debug:
-            my_env['D_LOG_MASK'] = self.conf.args.dfuse_debug
+            self._env['D_LOG_MASK'] = self.conf.args.dfuse_debug
 
         if v_hint is None:
             v_hint = get_inc_id()
@@ -1019,10 +1043,10 @@ class DFuse():
                                                delete=False)
         self.log_file = log_file.name
 
-        my_env['D_LOG_FILE'] = self.log_file
-        my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
+        self._env['D_LOG_FILE'] = self.log_file
+        self._env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
         if self.conf.args.dtx == 'yes':
-            my_env['DFS_USE_DTX'] = '1'
+            self._env['DFS_USE_DTX'] = '1'
 
         self.valgrind = ValgrindHelper(self.conf, v_hint)
         if self.conf.args.memcheck == 'no':
@@ -1057,7 +1081,7 @@ class DFuse():
         if self.container:
             cmd.extend(['--container', self.container])
         print('Running {}'.format(' '.join(cmd)))
-        self._sp = subprocess.Popen(cmd, env=my_env)
+        self._sp = subprocess.Popen(cmd, env=self._env)
         print('Started dfuse at {}'.format(self.dir))
         print('Log file is {}'.format(self.log_file))
 
@@ -1123,7 +1147,11 @@ class DFuse():
             run_log_test = False
         self._sp = None
         if run_log_test:
-            log_test(self.conf, self.log_file)
+            if self._fi_file:
+                skip_fi = True
+            else:
+                skip_fi = False
+            log_test(self.conf, self.log_file, skip_fi=skip_fi)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -1340,6 +1368,7 @@ def needs_dfuse(method):
                            caching=caching,
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container_label)
+        #self.dfuse.enable_fi()
         self.dfuse.start(v_hint=self.test_name)
         try:
             rc = method(self)
@@ -1563,6 +1592,29 @@ class posix_tests():
     #@needs_dfuse
     #def test_readdir_300(self):
     #    self.readdir_test(300, test_all=False)
+
+    @needs_dfuse
+    def x_test_many_files(self):
+        """Test creating many files
+
+        Creates and unlinks the same file many times"""
+
+        fc = 0
+        error_count = 0
+        while fc < 5000:
+            try:
+                fname = os.path.join(self.dfuse.dir, 'test_file')
+                fd = open(fname, 'w')
+                fd.close()
+                os.unlink(fname)
+                #print('created file {}'.format(fc))
+            except OSError as e:
+                #print('Error creating file {} {}'.format(fc, e.errno))
+                error_count += 1
+                if e.errno != 12:
+                    raise
+            fc += 1
+        print('Created {} files {:.2f}'.format(fc, error_count/fc))
 
     def readdir_test(self, count, test_all=False):
         """Run a rudimentary readdir test"""

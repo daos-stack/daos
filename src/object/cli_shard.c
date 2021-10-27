@@ -335,8 +335,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 					DF_OID"): "DF_RC"\n",
 					DP_OID(orw->orw_oid.id_pub),
 					DP_RC(rc));
-				if (iovs_alloc != NULL)
-					D_FREE(iovs_alloc);
+				D_FREE(iovs_alloc);
 				break;
 			}
 		}
@@ -347,8 +346,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
-		if (iovs_alloc != NULL)
-			D_FREE(iovs_alloc);
+		D_FREE(iovs_alloc);
 		if (rc != 0) {
 			bool			 is_ec_obj;
 
@@ -672,7 +670,6 @@ dc_shard_csum_report(tse_task_t *task, crt_endpoint_t *tgt_ep, crt_rpc_t *rpc)
 	crt_req_addref(rpc);
 	return crt_req_send(csum_rpc, csum_report_cb, rpc);
 }
-
 
 static bool
 dc_shard_singv_size_conflict(struct daos_oclass_attr *oca, daos_size_t old_size,
@@ -1661,7 +1658,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
 		 **/
-		D_ERROR("RPC %d failed: %d\n", opc, ret);
+		D_ERROR("RPC %d failed: "DF_RC"\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 

@@ -182,10 +182,25 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 	 * error paths.  This testing is harder if we allow the mount to happen, so for the
 	 * purposes of the test allow dfuse to cleanly return and exit at this point.  An
 	 * added advantage here is that it allows us to run dfuse startup tests in docker
-	 * containers, without the fuse devices present
+	 * containers, without the fuse devices present.
+	 *
+	 * Alternatively, if fa_err_code is set then use the to enable the injection of random
+	 * faults later on.
 	 */
-	if (D_SHOULD_FAIL(start_fault_attr))
-		return -DER_SUCCESS;
+	if (D_SHOULD_FAIL(start_fault_attr)) {
+		if (start_fault_attr->fa_err_code == 0) {
+			return -DER_SUCCESS;
+		} else {
+			struct d_fault_attr_t *d_fault_mem = NULL;
+			struct d_fault_attr_t fault_copy;
+
+			d_fault_mem = d_fault_attr_lookup(0);
+
+			fault_copy = *d_fault_mem;
+			fault_copy.fa_probability_x = 1;
+			d_fault_attr_set(0, fault_copy);
+		}
+	}
 
 	rc = fuse_session_mount(dfuse_info->di_session,	dfuse_info->di_mountpoint);
 	if (rc != 0) {

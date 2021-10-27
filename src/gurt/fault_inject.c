@@ -284,8 +284,8 @@ one_fault_attr_parse(yaml_parser_t *parser)
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
-		key_str = (char *) first.data.scalar.value;
-		val_str = (const char *) second.data.scalar.value;
+		key_str = (char *)first.data.scalar.value;
+		val_str = (const char *)second.data.scalar.value;
 		val = strtoul(val_str, NULL, 0);
 		if (!strcmp(key_str, id)) {
 			D_DEBUG(DB_ALL, "id: %lu\n", val);
@@ -399,7 +399,7 @@ seed_parse(yaml_parser_t *parser)
 	if (event.type != YAML_SCALAR_EVENT)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	val_str = (const char *) event.data.scalar.value;
+	val_str = (const char *)event.data.scalar.value;
 	d_fault_inject_seed = strtoul(val_str, NULL, 10);
 
 out:
@@ -507,13 +507,13 @@ d_fault_inject_init(void)
 			continue;
 		}
 
-		if (!strncmp((char *) event.data.scalar.value,
+		if (!strncmp((char *)event.data.scalar.value,
 			     "fault_config", strlen("fault_config") + 1)) {
 			rc = fault_attr_parse(&parser);
 			if (rc != DER_SUCCESS)
 				D_ERROR("fault_attr_parse() failed. rc %d\n",
 					rc);
-		} else if (!strncmp((char *) event.data.scalar.value,
+		} else if (!strncmp((char *)event.data.scalar.value,
 				    "seed", strlen("seed") + 1)) {
 			rc = seed_parse(&parser);
 			if (rc != DER_SUCCESS)
@@ -576,7 +576,6 @@ d_fault_inject_fini()
 
 	return rc;
 }
-
 
 int
 d_fault_inject_enable(void)
@@ -652,9 +651,12 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 			D_GOTO(out, rc = false);
 	}
 
-	if (fault_attr->fa_probability_y != 0 &&
-	    fault_attr->fa_probability_x <=
-	    nrand48(fault_attr->fa_rand_state) % fault_attr->fa_probability_y)
+	if (fault_attr->fa_probability_y == 0)
+		D_GOTO(out, rc = false);
+
+	if (fault_attr->fa_probability_x != fault_attr->fa_probability_y &&
+		fault_attr->fa_probability_x <=
+		nrand48(fault_attr->fa_rand_state) % fault_attr->fa_probability_y)
 		D_GOTO(out, rc = false);
 
 	fault_attr->fa_num_faults++;

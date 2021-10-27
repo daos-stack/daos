@@ -118,7 +118,13 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	return;
 release:
-	dfs_release(oh->doh_obj);
+	{
+		int rc2;
+
+		do {
+			rc2 = dfs_release(oh->doh_obj);
+		} while (rc2 == ENOMEM);
+	}
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(oh);

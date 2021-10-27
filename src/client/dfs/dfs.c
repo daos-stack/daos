@@ -665,29 +665,32 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		break;
 	case S_IFREG:
 	{
-		daos_handle_t file_oh;
+		if (obj) {
+			rc = daos_array_get_size(obj->oh, th, &size, NULL);
+			if (rc)
+				return daos_der2errno(rc);
+		} else {
+			daos_handle_t file_oh;
 
-		rc = daos_array_open_with_attr(dfs->coh, entry.oid, th,
-					       DAOS_OO_RO, 1, entry.chunk_size ?
-					       entry.chunk_size :
-					       dfs->attr.da_chunk_size,
-					       &file_oh, NULL);
-		if (rc) {
-			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
-				rc);
-			return daos_der2errno(rc);
+			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th,
+						       DAOS_OO_RO, 1, entry.chunk_size ?
+						       entry.chunk_size : dfs->attr.da_chunk_size,
+						       &file_oh, NULL);
+			if (rc) {
+				D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+
+			rc = daos_array_get_size(file_oh, th, &size, NULL);
+			if (rc) {
+				daos_array_close(file_oh, NULL);
+				return daos_der2errno(rc);
+			}
+
+			rc = daos_array_close(file_oh, NULL);
+			if (rc)
+				return daos_der2errno(rc);
 		}
-
-		rc = daos_array_get_size(file_oh, th, &size, NULL);
-		if (rc) {
-			daos_array_close(file_oh, NULL);
-			return daos_der2errno(rc);
-		}
-
-		rc = daos_array_close(file_oh, NULL);
-		if (rc)
-			return daos_der2errno(rc);
-
 		/*
 		 * TODO - this is not accurate since it does not account for
 		 * sparse files or file metadata or xattributes.
@@ -912,7 +915,7 @@ fopen:
 	if (flags & O_TRUNC) {
 		rc = daos_array_set_size(file->oh, th, 0, NULL);
 		if (rc) {
-			D_ERROR("Failed to truncate file (%d)\n", rc);
+			D_ERROR("Failed to truncate file "DF_RC"\n", DP_RC(rc));
 			daos_array_close(file->oh, NULL);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
@@ -2909,8 +2912,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 					       dfs->attr.da_chunk_size,
 					       &obj->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() Failed (%d)\n",
-				rc);
+			D_ERROR("daos_array_open_with_attr() Failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 
@@ -2922,8 +2924,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 						 NULL);
 			if (rc) {
 				daos_array_close(obj->oh, NULL);
-				D_ERROR("daos_array_get_size() Failed (%d)\n",
-					rc);
+				D_ERROR("daos_array_get_size() Failed "DF_RC"\n", DP_RC(rc));
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
 			stbuf->st_size = size;
@@ -4724,7 +4725,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 				    NULL, NULL);
 	}
 	if (rc) {
-		D_ERROR("Failed to fetch xattr %s (%d)\n", name, rc);
+		D_ERROR("Failed to fetch xattr %s "DF_RC"\n", name, DP_RC(rc));
 		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
