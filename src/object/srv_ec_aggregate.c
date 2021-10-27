@@ -2380,7 +2380,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 
 	arg.param = agg_param;
 	arg.eventual = eventual;
-	rc = dss_ult_periodic(agg_iv_ult, &arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_periodic(agg_iv_ult, &arg, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(free_eventual, rc = dss_abterr2der(rc));
 
