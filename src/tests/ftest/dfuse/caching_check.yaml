@@ -2,8 +2,9 @@ hosts:
     test_servers:
         - server-A
         - server-B
+        - server-C
     test_clients:
-        - client-C
+        - client-D
 timeout: 240
 server_config:
     name: daos_server
