@@ -24,6 +24,8 @@ from xml.etree.ElementTree import Element, SubElement, tostring #nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
+import gzip
+import shutil
 
 # Graft some functions from xml.etree into defusedxml etree.
 ET.Element = Element
@@ -2105,6 +2107,9 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 "Not creating stacktrace".format(gdb_output))
             return_status = False
         print("Removing {}".format(corefile_fqpn))
+        with open(corefile_fqpn, "rb") as corefile_in:
+            with gzip.open(corefile_fqpn + ".gz", "wb") as corefile_out:
+                shutil.copyfileobj(corefile_in, corefile_out)
         os.unlink(corefile_fqpn)
 
     return return_status
