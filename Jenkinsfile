@@ -1050,7 +1050,7 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_3_LABEL
+                        label "wolf-134_nvme3"
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
