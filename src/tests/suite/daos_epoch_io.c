@@ -342,9 +342,9 @@ daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
 		 char **rbuf, daos_size_t *rbuf_size)
 {
 	print_message("add rank %u\n", op->ae_arg.ua_rank);
-	test_rebuild_wait(&arg, 1);
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			  op->ae_arg.ua_rank);
+	test_rebuild_wait(&arg, 1);
 	return 0;
 }
 
@@ -365,6 +365,7 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 				    op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 	}
 
+	test_rebuild_wait(&arg, 1);
 	daos_cont_status_clear(arg->coh, NULL);
 	return 0;
 }
