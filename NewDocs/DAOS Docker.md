@@ -17,8 +17,8 @@ To build the Docker image we can do it one of two ways:
 - Local clone of the [GitHub DAOS repo](https://github.com/daos-stack/daos.git)
 - Directly from GitHub
 
-If you prefer a different base than CentOS8, replace the filename "Dockerfile.centos.8" in the command strings below with one of the following"
-- 'Dockerfile.centos.7'
+If you prefer a different base than CentOS7, replace the filename "Dockerfile.centos.7" in the command strings below with one of the following"
+- 'Dockerfile.centos.8'
 - 'Dockerfile.ubuntu.20.04'
 
 ### 1. Build From Local Clone
@@ -27,41 +27,74 @@ If you prefer a different base than CentOS8, replace the filename "Dockerfile.ce
 git clone https://github.com/daos-stack/daos.git 
 git submodule init; git submodule update
 cd daos
-docker build  . -f utils/docker/Dockerfile.centos.8 -t daos
+docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 
 ### 2. Build From Remote Github Repo
-This creates a CentOS 8 image and fetches the latest DAOS version from [GitHub/daos-stack](https://github.com/daos-stack/daos/tree/master/utils/docker), builds it, and installs it in the image.
+This creates a CentOS 7 image and fetches the latest DAOS version from [GitHub/daos-stack](https://github.com/daos-stack/daos/tree/master/utils/docker), builds it, and installs it in the image.
 
-`docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.8 -t daos`
+`docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.7 -t daos`
 
 
 ## Docker Setup
-Once the image has been created, a container will need to be started to run the DAOS service:
+Once the image has been created, a container will need to be started to run the DAOS service. 
 
-`docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos`
+### Setting Hugepages
+At this stage depending on how hugepages is configured you may or may not get errors, so for consistency we will configure hugepages before running the docker image:
 
-Optional: - If you want to be more selective with the devices that are exported to the container, individual devices should be listed and exported as volume via the -v option. In this case, the hugepages devices should also be added to the command line.
+```bash
+echo 1024 | sudo tee /proc/sys/vm/nr_hugepages
+cat /proc/meminfo | grep Huge
+```
 
-**Note to self need more research here**
+This should provide an output similar to:
 
-`/dev/hugepages:/dev/hugepages and -v /dev/hugepages-1G:/dev/hugepages-1G`
+```bash
+AnonHugePages:         0 kB
+ShmemHugePages:        0 kB
+FileHugePages:         0 kB
+HugePages_Total:    1024
+HugePages_Free:     1024
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:         2097152 kB
+```
+### Starting the Docker Container
+Now we need to start the docker container, by invoking 'docker run'
 
-> Warning: If Docker is being run on a non-Linux system (e.g., OSX), -v /dev:/dev should be removed from the command line.
+`sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages:/dev/hugepages daos`
 
-The daos_server_local.yml configuration file sets up a simple local DAOS system with a single server instance running in the container. By default, it uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp. The storage size can be changed in the yaml file if necessary.
+Alternatively you can use 1G hugepages or no Hugepages as well
+
+`sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages-1G:/dev/hugepages-1G'
+
+`sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev`
+
+> Warning: If Docker is being run on a non Linux system, the "-v" parameter should be removed from the command line.
+** `docker run -it -d --privileged --cap-add=ALL --name server'
 
 ## Start the DAOS Servoce
+The daos_server_local.yml configuration file sets up a simple local DAOS system with a single server instance running in the container. By default, it uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp. The storage size can be changed in the yaml file if necessary.
+
 The DAOS service can be started in the docker container as follows:
 
 `docker exec server daos_server start -o /home/daos/daos/utils/config/examples/daos_server_local.yml`
 
-> Note: Please make sure that the uio_pci_generic module is loaded on the host.
+> Note: Please make sure that the uio_pci_generic module is loaded on the host. **Need to research**
 
 ## Format the DAOS storage
 Once started, the DAOS server waits for the administrator to format the system. This can be triggered in a different shell, using the following command:
 
-`docker exec server dmg -i storage format`
+`sudo docker exec server dmg -i storage format`
+This should provide an output similar to:
+
+```bash
+Format Summary:
+  Hosts     SCM Devices NVMe Devices
+  -----     ----------- ------------
+  localhost 1           1
+```
 
 ## Next Steps:
 If all the above steps are done, we now have a complete Docker instance established, we now need to look at pool creation using the DAOS Admin Tool
