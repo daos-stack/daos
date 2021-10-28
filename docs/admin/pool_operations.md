@@ -163,6 +163,9 @@ set aside depends on the size of the target and may take up 2+ GB.
 Therefore, Out of space conditions may occur even while pool query may not
 show min approaching zero.
 
+!!! caution
+    When space reserving is disabled for tiny pools, it may not function if the pool is filled up, since destroy/punch also requires additional space in a versioned storage.
+
 The example below shows a rebuild in progress and NVMe space allocated.
 
 ```bash
