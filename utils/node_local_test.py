@@ -954,6 +954,8 @@ class ValgrindHelper():
 
         cmd.append('--error-exitcode=42')
 
+        cmd.append('--num-callers=20')
+
         cmd.extend(['--xml=yes',
                     '--xml-file={}'.format(self._xml_file)])
         return cmd
