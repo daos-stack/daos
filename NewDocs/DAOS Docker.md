@@ -6,7 +6,7 @@
 
 This artical shows how to get started using Distributed Asynchronous Object Storage (DAOS) containers, by taking you through the steps to build, configure and run the DAOS service in a Docker container. 
 
-All commands shown here are on two Socket Server running Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DRAM and 16GB of disk space. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
+All commands shown here are on two socket Cascade Lake server running Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DRAM and 16GB of disk space. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
 ## What is DAOS
 The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware.
