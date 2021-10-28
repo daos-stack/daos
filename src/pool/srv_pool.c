@@ -2174,8 +2174,7 @@ out_map_version:
 	out->pco_op.po_map_version = ds_pool_get_version(svc->ps_pool);
 	if (map_buf)
 		D_FREE(map_buf);
-	if (machine)
-		D_FREE(machine);
+	D_FREE(machine);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -4709,7 +4708,7 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	/* If we specified a machine name as a filter check before we do the realloc */
 	if (arg->eia_machine) {
-		struct pool_hdl	*hdl = (struct pool_hdl *)val->iov_buf;
+		struct pool_hdl	*hdl = val->iov_buf;
 
 		if (strncmp(arg->eia_machine, hdl->ph_machine, sizeof(hdl->ph_machine)) != 0) {
 			return 0;
@@ -4930,7 +4929,7 @@ out:
  * \param[in]	destroy		If true the evict request is a destroy request
  * \param[in]	force		If true and destroy is true request all handles
  *				be forcibly evicted
- * \param[in]
+ * \param[in]   machine		Hostname to use as filter for evicting handles
  * \param[out]	count		Number of handles evicted
  *
  * \return	0		Success
