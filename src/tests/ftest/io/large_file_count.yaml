@@ -33,21 +33,21 @@ largefilecount:
     - SX
     - EC_2P1GX
 ior:
-  np: 48
+  np: 30
   dfs_destroy: False
   flags: "-v -D 300 -W -w -r -R -F"
   test_file: /testFile
   repetitions: 1
   transfer_size: '1M'
-  block_size: '6G'
+  block_size: '7G'
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
   disable_caching: True
 
 mdtest:
   client_processes:
-    np: 48
-  num_of_files_dirs: 20833     # creating total of 1M files
+    np: 30
+  num_of_files_dirs: 33334     # creating total of 1M files
   test_dir: "/"
   iteration: 1
   dfs_destroy: False
