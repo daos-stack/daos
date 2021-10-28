@@ -4040,7 +4040,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to update attr (rc = %d)\n", rc);
+		D_ERROR("Failed to update attr "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 

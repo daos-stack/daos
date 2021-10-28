@@ -914,6 +914,12 @@ class ValgrindHelper():
         self.src_dir = '{}/'.format(os.path.realpath(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+    def get_file_size(self):
+        if self._xml_file:
+            return os.stat(self._xml_file).st_size
+        else:
+            return None
+
     def get_cmd_prefix(self):
         """Return the command line prefix"""
 
@@ -1090,8 +1096,17 @@ class DFuse():
         print('Started dfuse at {}'.format(self.dir))
         print('Log file is {}'.format(self.log_file))
 
+        def _get_ino():
+            """Helper function to return inode number of directory"""
+            try:
+                return os.stat(self.dir).st_ino
+            except OSError as e:
+                if e.errno != 12:
+                    raise
+            return None
+
         total_time = 0
-        while os.stat(self.dir).st_ino == pre_inode:
+        while _get_ino() == pre_inode:
             print('Dfuse not started, waiting...')
             try:
                 ret = self._sp.wait(timeout=1)
@@ -1369,7 +1384,37 @@ def needs_dfuse(method):
                            caching=caching,
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container_label)
-        #self.dfuse.enable_fi()
+        self.dfuse.start(v_hint=self.test_name)
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
+        return rc
+
+    return _helper
+
+def needs_dfuse_with_error(method):
+    """Decorator function for starting dfuse under posix_tests class
+
+    Runs every test twice, once with caching enabled, and once with
+    caching disabled.
+    """
+    @functools.wraps(method)
+    def _helper(self):
+        if self.call_index == 0:
+            caching=True
+            self.needs_more = True
+            self.test_name = '{}_with_caching'.format(method.__name__)
+        else:
+            caching=False
+
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           caching=caching,
+                           pool=self.pool.dfuse_mount_name(),
+                           container=self.container_label)
+        self.dfuse.enable_fi()
         self.dfuse.start(v_hint=self.test_name)
         try:
             rc = method(self)
@@ -1594,27 +1639,36 @@ class posix_tests():
     #def test_readdir_300(self):
     #    self.readdir_test(300, test_all=False)
 
-    @needs_dfuse
-    def x_test_many_files(self):
+    @needs_dfuse_with_error
+    def test_many_files(self):
         """Test creating many files
 
         Creates and unlinks the same file many times"""
 
+        pre_size = self.dfuse.valgrind.get_file_size()
+
+        count = 5000
+        if self.dfuse.valgrind.use_valgrind:
+            count = 1000
+
         fc = 0
         error_count = 0
-        while fc < 5000:
+        while fc < count:
             try:
                 fname = os.path.join(self.dfuse.dir, 'test_file')
                 with open(fname, 'w') as fd:
-                    pass
+                    fd.write('hello')
                 os.unlink(fname)
-                #print('created file {}'.format(fc))
+                print('created file {}'.format(fc))
             except OSError as e:
-                #print('Error creating file {} {}'.format(fc, e.errno))
+                print('Error creating file {} {}'.format(fc, e.errno))
                 error_count += 1
                 if e.errno != 12:
                     raise
             fc += 1
+            if self.dfuse.valgrind.get_file_size() != pre_size:
+                print('Probable valgrind errors')
+                break
         print('Created {} files {:.2f}'.format(fc, error_count/fc))
 
     def readdir_test(self, count, test_all=False):

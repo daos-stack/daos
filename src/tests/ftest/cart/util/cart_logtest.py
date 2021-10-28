@@ -494,10 +494,8 @@ class LogTest():
                         if pointer in old_regions:
                             show_line(old_regions[pointer][0], 'ERROR',
                                       'double-free allocation point')
-                            show_line(old_regions[pointer][1], 'ERROR',
-                                      '1st double-free location')
-                            show_line(line, 'ERROR',
-                                      '2nd double-free location')
+                            show_line(old_regions[pointer][1], 'ERROR', '1st double-free location')
+                            show_line(line, 'ERROR', '2nd double-free location')
                         else:
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
@@ -512,19 +510,19 @@ class LogTest():
                             # come from a realloc() call.
                             exp_sz = regions[old_pointer].calloc_size()
                             if old_size not in (0, exp_sz, new_size):
-                                show_line(line, 'HIGH',
-                                          'realloc used invalid old size')
+                                show_line(line, 'HIGH', 'realloc used invalid old size')
                             memsize.subtract(exp_sz)
                     regions[new_pointer] = line
                     memsize.add(new_size)
                     if old_pointer not in (new_pointer, '(nil)'):
                         if old_pointer in regions:
-                            old_regions[old_pointer] = [regions[old_pointer],
-                                                        line]
+                            old_regions[old_pointer] = [regions[old_pointer], line]
                             del regions[old_pointer]
+                            if old_pointer in active_desc:
+                                active_desc[new_pointer] = active_desc[old_pointer]
+                                del active_desc[old_pointer]
                         else:
-                            show_line(line, 'NORMAL',
-                                      'realloc of unknown memory')
+                            show_line(line, 'NORMAL', 'realloc of unknown memory')
                             err_count += 1
 
         del active_desc['root']
