@@ -112,7 +112,7 @@ class MfuCommandBase(ExecutableCommand):
 
         Args:
             processes: Number of processes for the command.
-            job_manager: Job manager variable to set/assign  
+            job_manager: Job manager variable to set/assign
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
