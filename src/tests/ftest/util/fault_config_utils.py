@@ -231,7 +231,7 @@ class FaultInjection():
     def __init__(self):
         super().__init__()
         self._hosts = []
-        self._fault_file = None
+        self.fault_file = None
         self._test_dir = None
         self._fault_list = []
 
@@ -259,7 +259,7 @@ class FaultInjection():
 
         os.environ["D_FI_CONFIG"] = fi_config
 
-        self._fault_file = fi_config
+        self.fault_file = fi_config
 
     def start(self, fault_list, test_dir):
         """Create the fault injection file to inject DAOS faults.
@@ -283,7 +283,7 @@ class FaultInjection():
         """
         if self._fault_list:
             self._hosts = hosts
-            distribute_files(self._hosts, self._fault_file, self._fault_file)
+            distribute_files(self._hosts, self.fault_file, self.fault_file)
 
     def stop(self):
         """Remove the fault injection file created during testing.
@@ -292,10 +292,11 @@ class FaultInjection():
         """
         # Remove the fault injection files on the hosts.
         error_list = []
-        rm_command = "{} rm -f {}".format(
-                        get_clush_command(self._hosts, "-S -v", True), self._fault_file)
+        commands = ["rm -f {}".format(self.fault_file)]
+        if self._hosts:
+            commands.insert(0, get_clush_command(self._hosts, "-S -v", True))
         try:
-            run_command(rm_command, verbose=True, raise_exception=False)
+            run_command(" ".join(commands), verbose=True, raise_exception=False)
         except DaosTestError as error:
             error_list.append(error)
         return error_list

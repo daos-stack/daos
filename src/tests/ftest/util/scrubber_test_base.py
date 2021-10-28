@@ -29,8 +29,8 @@ class TestWithScrubber(IorTestBase):
                                       self.server_managers[0].hosts)
         self.daos_cmd = self.get_daos_command()
         self.dmg_cmd = self.get_dmg_command()
-        self.sc_pool = None
-        self.sc_container = None
+        self.pool = None
+        self.container = None
         self.initial_metrics = {}
         self.final_metrics = {}
 
@@ -92,9 +92,7 @@ class TestWithScrubber(IorTestBase):
                 self.pool.set_property(value[0], value[1])
         self.container.properties.value = cont_prop
         self.container.create()
-        self.sc_pool = self.pool
-        self.sc_container = self.container
-        values = "Pool : {} Container: {}".format(self.sc_pool, self.sc_container)
+        values = "Pool : {} Container: {}".format(self.pool, self.container)
         self.log.info(values)
 
     def run_ior_and_check_scruber_status(self, pool, cont, fail_on_warning=True):

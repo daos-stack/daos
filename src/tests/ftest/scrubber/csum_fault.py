@@ -43,7 +43,7 @@ class TestWithScrubberFault(TestWithScrubber):
         for test in transfer_block_size:
             self.ior_cmd.transfer_size.update(test[0])
             self.ior_cmd.block_size.update(test[1])
-        self.run_ior_and_check_scruber_status(pool=self.sc_pool, cont=self.sc_container)
+        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
         if status is False:
