@@ -14,6 +14,7 @@
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 #define LIBSERIALIZE		"libdaos_serialize.so"
+#define NUM_SERIALIZE_PROPS	15
 
 #include <stdio.h>
 #include <dirent.h>
@@ -2062,9 +2063,9 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	daos_prop_t	*props = NULL;
 	daos_prop_t	*prop_acl = NULL;
 	daos_prop_t	*props_merged = NULL;
-	uint32_t        total_props = 15;
+	uint32_t        total_props = NUM_SERIALIZE_PROPS;
 	/* minimum number of properties that are always allocated/used to start count */
-	int             prop_index = 15;
+	int             prop_index = NUM_SERIALIZE_PROPS;
 
 	if (get_oid)
 		total_props++;
