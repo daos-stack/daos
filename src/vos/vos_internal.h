@@ -126,6 +126,11 @@ agg_reserve_space(daos_size_t *rsrvd)
 	rsrvd[DAOS_MEDIA_NVME]	+= size;
 }
 
+struct vos_pool_metrics {
+	void	*vp_vea_metrics;
+	/* TODO: add more metrics for VOS */
+};
+
 /**
  * VOS pool (DRAM)
  */
@@ -165,6 +170,7 @@ struct vos_pool {
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
+	struct vos_metrics	*vp_metrics;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
 };
@@ -258,33 +264,6 @@ struct vos_dtx_act_ent {
 					 dae_prepared:1,
 					 dae_resent:1;
 };
-
-#ifdef VOS_STANDALONE
-#define VOS_TIME_START(start, op)		\
-do {						\
-	if (vos_tls_get()->vtl_dp == NULL)	\
-		break;				\
-	start = daos_get_ntime();		\
-} while (0)
-
-#define VOS_TIME_END(start, op)			\
-do {						\
-	struct daos_profile *dp;		\
-	int time_msec;				\
-						\
-	dp = vos_tls_get()->vtl_dp;		\
-	if ((dp) == NULL || start == 0)		\
-		break;				\
-	time_msec = (daos_get_ntime() - start)/1000; \
-	daos_profile_count(dp, op, time_msec);	\
-} while (0)
-
-#else
-
-#define VOS_TIME_START(start, op) D_TIME_START(start, op)
-#define VOS_TIME_END(start, op) D_TIME_END(start, op)
-
-#endif
 
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
 #define DAE_OID(dae)		((dae)->dae_base.dae_oid)
