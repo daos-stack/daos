@@ -1369,7 +1369,7 @@ def needs_dfuse(method):
                            caching=caching,
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container_label)
-        self.dfuse.enable_fi()
+        #self.dfuse.enable_fi()
         self.dfuse.start(v_hint=self.test_name)
         try:
             rc = method(self)
@@ -1595,7 +1595,7 @@ class posix_tests():
     #    self.readdir_test(300, test_all=False)
 
     @needs_dfuse
-    def test_many_files(self):
+    def x_test_many_files(self):
         """Test creating many files
 
         Creates and unlinks the same file many times"""
