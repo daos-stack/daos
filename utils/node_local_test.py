@@ -1293,10 +1293,19 @@ def create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, v
 def destroy_container(conf, pool, container, valgrind=True):
     """Destroy a container"""
     cmd = ['container', 'destroy', pool, container]
-    rc = run_daos_cmd(conf, cmd, valgrind=valgrind)
-    print('rc is {}'.format(rc))
-    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
-    return rc.stdout.decode('utf-8').strip()
+    rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True)
+    print(rc)
+    if rc.returncode == 1 and rc.json['status'] == -1012:
+        # This shouldn't happen but can on unclean shutdown, file it as a test failure so it does
+        # not get lost, however destroy the container and attempt to continue.
+        # DAOS-8860
+        conf.wf.add_test_case('destroy_container_{}/{}'.format(pool, container),
+                              failure='Failed to destroy container',
+                              output=rc)
+        cmd = ['container', 'destroy', '--force', pool, container]
+        rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True)
+        print(rc)
+    assert rc.returncode == 0, rc
 
 def check_dfs_tool_output(output, oclass, csize):
     """verify daos fs tool output"""
@@ -1332,9 +1341,11 @@ def needs_dfuse(method):
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container_label)
         self.dfuse.start(v_hint=self.test_name)
-        rc = method(self)
-        if self.dfuse.stop():
-            self.fatal_errors = True
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
         return rc
 
     return _helper
@@ -1350,9 +1361,11 @@ def needs_dfuse_single(method):
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__, single_threaded=True)
-        rc = method(self)
-        if self.dfuse.stop():
-            self.fatal_errors = True
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
         return rc
     return _helper
 
@@ -1366,9 +1379,11 @@ def needs_dfuse_with_cache(method):
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
-        rc = method(self)
-        if self.dfuse.stop():
-            self.fatal_errors = True
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
         return rc
     return _helper
 
