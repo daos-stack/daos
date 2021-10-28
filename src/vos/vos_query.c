@@ -456,7 +456,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	daos_epoch_t		 bound;
 	daos_epoch_range_t	 dkey_epr;
 	struct vos_punch_record	 dkey_punch;
-	daos_otype_t		 obj_type;
+	enum daos_otype_t	 obj_type;
 	daos_epoch_range_t	 obj_epr = {0};
 	struct vos_ts_set	 akey_save = {0};
 	struct vos_ts_set	 dkey_save = {0};

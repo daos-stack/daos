@@ -18,8 +18,8 @@
 #define NUM_SEGS	4
 
 static daos_size_t chunk_size = 16;
-static daos_otype_t type = DAOS_OT_ARRAY;
-static daos_otype_t typeb = DAOS_OT_ARRAY_BYTE;
+static enum daos_otype_t type = DAOS_OT_ARRAY;
+static enum daos_otype_t typeb = DAOS_OT_ARRAY_BYTE;
 
 static void simple_array_mgmt(void **state);
 static void contig_mem_contig_arr_io(void **state);

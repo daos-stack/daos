@@ -222,9 +222,10 @@ struct pl_obj_layout;
 
 int obj_class_init(void);
 void obj_class_fini(void);
-struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv);
-int daos_obj_set_oid_by_class(daos_obj_id_t *oid, daos_otype_t type, daos_oclass_id_t cid,
-			      uint32_t args);
+struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv,
+					       uint32_t *nr_grps);
+int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
+			      daos_oclass_id_t cid, uint32_t args);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
@@ -293,7 +294,7 @@ daos_oclass_is_ec(struct daos_oclass_attr *oca)
 }
 
 static inline void
-daos_obj_set_oid(daos_obj_id_t *oid, daos_otype_t type,
+daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
 		 enum daos_obj_redun ord, uint32_t nr_grps,
 		 uint32_t args)
 {
@@ -328,7 +329,7 @@ daos_oid_is_oit(daos_obj_id_t oid)
 /**
  * For backward compatibility purpose
  */
-static inline daos_otype_t
+static inline enum daos_otype_t
 daos_obj_feat2type(daos_ofeat_t feat)
 {
 	if (feat == (DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64))
@@ -427,7 +428,7 @@ void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 
 int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
-				daos_obj_id_t *oid, daos_otype_t type,
+				daos_obj_id_t *oid, enum daos_otype_t type,
 				daos_oclass_id_t cid, daos_oclass_hints_t hints,
 				uint32_t args);
 

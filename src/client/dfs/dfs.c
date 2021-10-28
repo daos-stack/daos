@@ -285,8 +285,8 @@ check_tx(daos_handle_t th, int rc)
 static int
 oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 {
-	daos_otype_t	type = 0;
-	int		rc;
+	enum daos_otype_t type = 0;
+	int rc;
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */

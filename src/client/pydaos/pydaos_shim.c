@@ -339,7 +339,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 	unsigned int		otype;
 	struct pydaos_df	entry;
 	daos_obj_id_t		oid = {0, };
-	daos_otype_t		type;
+	enum daos_otype_t	type;
 	int			rc;
 
 	/* Parse arguments */

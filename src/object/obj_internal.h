@@ -462,7 +462,7 @@ struct dc_obj_verify_args {
 };
 
 int dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-		  daos_otype_t otype, daos_oclass_hints_t hints,
+		  enum daos_otype_t otype, daos_oclass_hints_t hints,
 		  enum daos_obj_redun *ord, uint32_t *nr);
 
 

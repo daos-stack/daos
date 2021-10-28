@@ -47,7 +47,7 @@ extern "C" {
 #define OID_FMT_META_MASK	(OID_FMT_META_MAX << OID_FMT_META_SHIFT)
 
 /** DAOS object type */
-typedef enum {
+enum daos_otype_t {
 	/** default object type, multi-level KV with hashed [ad]keys */
 	DAOS_OT_MULTI_HASHED	= 0,
 
@@ -101,20 +101,20 @@ typedef enum {
 	 * reserved: Block device
 	 * DAOS_OT_BDEV	= 96,
 	 */
-} daos_otype_t;
+};
 
-static inline daos_otype_t
+static inline enum daos_otype_t
 daos_obj_id2type(daos_obj_id_t oid)
 {
 	uint64_t type;
 
 	type = (oid.hi & OID_FMT_TYPE_MASK) >> OID_FMT_TYPE_SHIFT;
 
-	return (daos_otype_t)type;
+	return (enum daos_otype_t)type;
 }
 
 static inline bool
-daos_is_dkey_lexical_type(daos_otype_t type)
+daos_is_dkey_lexical_type(enum daos_otype_t type)
 {
 	switch (type) {
 	case DAOS_OT_MULTI_LEXICAL:
@@ -133,7 +133,7 @@ daos_is_dkey_lexical(daos_obj_id_t oid)
 }
 
 static inline bool
-daos_is_akey_lexical_type(daos_otype_t type)
+daos_is_akey_lexical_type(enum daos_otype_t type)
 {
 	switch (type) {
 	case DAOS_OT_MULTI_LEXICAL:
@@ -151,7 +151,7 @@ daos_is_akey_lexical(daos_obj_id_t oid)
 }
 
 static inline bool
-daos_is_dkey_uint64_type(daos_otype_t type)
+daos_is_dkey_uint64_type(enum daos_otype_t type)
 {
 	switch (type) {
 	case DAOS_OT_MULTI_UINT64:
@@ -174,7 +174,7 @@ daos_is_dkey_uint64(daos_obj_id_t oid)
 }
 
 static inline bool
-daos_is_akey_uint64_type(daos_otype_t type)
+daos_is_akey_uint64_type(enum daos_otype_t type)
 {
 	switch (type) {
 	case DAOS_OT_MULTI_UINT64:
@@ -193,7 +193,7 @@ daos_is_akey_uint64(daos_obj_id_t oid)
 }
 
 static inline bool
-daos_is_flatkv_type(daos_otype_t type)
+daos_is_flatkv_type(enum daos_otype_t type)
 {
 	switch (type) {
 	case DAOS_OT_KV_HASHED:
@@ -216,7 +216,7 @@ daos_is_flatkv(daos_obj_id_t oid)
 }
 
 static inline bool
-daos_is_array_type(daos_otype_t type)
+daos_is_array_type(enum daos_otype_t type)
 {
 	switch (type) {
 	case DAOS_OT_ARRAY:
@@ -232,13 +232,13 @@ daos_is_array_type(daos_otype_t type)
 static inline bool
 daos_is_array(daos_obj_id_t oid)
 {
-	daos_otype_t type = daos_obj_id2type(oid);
+	enum daos_otype_t type = daos_obj_id2type(oid);
 
 	return daos_is_array_type(type);
 }
 
 static inline bool
-daos_is_kv_type(daos_otype_t type)
+daos_is_kv_type(enum daos_otype_t type)
 {
 	switch (type) {
 	case DAOS_OT_KV_HASHED:
@@ -254,7 +254,7 @@ daos_is_kv_type(daos_otype_t type)
 static inline bool
 daos_is_kv(daos_obj_id_t oid)
 {
-	daos_otype_t type = daos_obj_id2type(oid);
+	enum daos_otype_t type = daos_obj_id2type(oid);
 
 	return daos_is_kv_type(type);
 }
@@ -497,7 +497,7 @@ daos_obj_id2class(daos_obj_id_t oid)
 	ord = (enum daos_obj_redun)((oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT);
 	nr_grps = (oid.hi & OID_FMT_META_MASK) >> OID_FMT_META_SHIFT;
 
-	return (ord << 24) | nr_grps;
+	return (ord << OC_REDUN_SHIFT) | nr_grps;
 }
 
 static inline bool
@@ -561,7 +561,7 @@ enum {
  */
 int
 daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
-		      daos_otype_t type, daos_oclass_id_t cid,
+		      enum daos_otype_t type, daos_oclass_id_t cid,
 		      daos_oclass_hints_t hints, uint32_t args);
 
 /**
@@ -1158,7 +1158,7 @@ daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
 		       daos_oclass_hints_t hints, uint32_t args);
 int
 daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
-		       daos_otype_t type, daos_oclass_id_t cid,
+		       enum daos_otype_t type, daos_oclass_id_t cid,
 		       daos_oclass_hints_t hints, uint32_t args);
 enum {
 	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
@@ -1197,7 +1197,7 @@ enum {
 #define daos_obj_generate_oid daos_obj_generate_oid_cpp
 static inline int
 daos_obj_generate_oid_cpp(daos_handle_t coh, daos_obj_id_t *oid,
-			  daos_otype_t type, daos_oclass_id_t cid,
+			  enum daos_otype_t type, daos_oclass_id_t cid,
 			  daos_oclass_hints_t hints, uint32_t args)
 {
 	return daos_obj_generate_oid2(coh, oid, type, cid, hints, args);

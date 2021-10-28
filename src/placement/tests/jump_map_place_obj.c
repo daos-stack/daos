@@ -976,13 +976,12 @@ all_healthy(void **state)
 	for (i = 0; i < num_test_oc; ++i) {
 		struct daos_oclass_attr *oa;
 		daos_obj_id_t oid;
-		int	grp_sz;
-		int	grp_nr;
+		int grp_sz;
+		uint32_t grp_nr;
 
 		gen_oid(&oid, 0, 0, object_classes[i]);
-		oa = daos_oclass_attr_find(oid, NULL);
+		oa = daos_oclass_attr_find(oid, NULL, &grp_nr);
 		grp_sz = daos_oclass_grp_size(oa);
-		grp_nr = daos_oclass_grp_nr(oa, NULL);
 
 		/* skip those gigantic layouts for saving time */
 		if (grp_sz != DAOS_OBJ_REPL_MAX &&

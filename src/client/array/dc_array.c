@@ -184,7 +184,7 @@ create_handle_cb(tse_task_t *task, void *data)
 {
 	daos_array_create_t	*args = *((daos_array_create_t **)data);
 	struct dc_array		*array;
-	daos_otype_t		type;
+	enum daos_otype_t	type;
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
@@ -714,7 +714,7 @@ dc_array_open(tse_task_t *task)
 	tse_task_t		*open_task = NULL, *fetch_task = NULL;
 	daos_obj_open_t		*open_args;
 	struct md_params	*params;
-	daos_otype_t		otype;
+	enum daos_otype_t	otype;
 	int			rc;
 
 	if (args->open_with_attr)

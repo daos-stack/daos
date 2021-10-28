@@ -16,7 +16,7 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
-static daos_otype_t type = DAOS_OT_KV_HASHED;
+static enum daos_otype_t type = DAOS_OT_KV_HASHED;
 
 static void simple_put_get(void **state);
 

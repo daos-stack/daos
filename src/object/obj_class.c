@@ -19,7 +19,8 @@ static int oc_ident_array_sz;
 static int oc_scale_array_sz;
 static int oc_resil_array_sz;
 
-static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id);
+static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id,
+					       uint32_t *nr_grps);
 static struct daos_obj_class  *oclass_scale2cl(struct daos_oclass_attr *ca);
 static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
@@ -29,12 +30,12 @@ static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
  * please don't directly use ec.e_len.
  */
 struct daos_oclass_attr *
-daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv)
+daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv, uint32_t *nr_grps)
 {
 	struct daos_obj_class	*oc;
 
 	/* see daos_objid_generate */
-	oc = oclass_ident2cl(daos_obj_id2class(oid));
+	oc = oclass_ident2cl(daos_obj_id2class(oid), nr_grps);
 	if (!oc) {
 		D_DEBUG(DB_PL, "Unknown object class %u for "DF_OID"\n",
 			(unsigned int)daos_obj_id2class(oid), DP_OID(oid));
@@ -48,18 +49,19 @@ daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv)
 }
 
 int
-daos_obj_set_oid_by_class(daos_obj_id_t *oid, daos_otype_t type, daos_oclass_id_t cid,
-			  uint32_t args)
+daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
+			  daos_oclass_id_t cid, uint32_t args)
 {
 	struct daos_obj_class	*oc;
+	uint32_t nr_grps;
 
-	oc = oclass_ident2cl(cid);
+	oc = oclass_ident2cl(cid, &nr_grps);
 	if (!oc) {
 		D_DEBUG(DB_PL, "Unknown object class %u\n", (unsigned int)cid);
 		return -DER_INVAL;
 	}
 
-	daos_obj_set_oid(oid, type, oc->oc_redun, oc->oc_attr.ca_grp_nr, args);
+	daos_obj_set_oid(oid, type, oc->oc_redun, nr_grps, args);
 
 	return 0;
 }
@@ -68,13 +70,18 @@ int
 daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 {
 	struct daos_obj_class   *oc;
+	uint32_t nr_grps;
 
-	oc = oclass_ident2cl(oc_id);
+	oc = oclass_ident2cl(oc_id, &nr_grps);
 	if (!oc) {
 		strcpy(str, "UNKNOWN");
 		return -1;
 	}
-	strcpy(str, oc->oc_name);
+	if (nr_grps == oc->oc_grp_nr)
+		strcpy(str, oc->oc_name);
+	else
+	/* update oc_name according to nr_grps */
+		strcpy(str, "UNKNOWN");
 	return 0;
 }
 
@@ -154,7 +161,7 @@ dc_oclass_list(daos_handle_t coh, struct daos_oclass_list *clist,
 bool
 daos_oclass_is_valid(daos_oclass_id_t oc_id)
 {
-	return (oclass_ident2cl(oc_id) != NULL) ? true : false;
+	return (oclass_ident2cl(oc_id, NULL) != NULL) ? true : false;
 }
 
 /**
@@ -174,16 +181,18 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 {
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	 ca;
-	int			 grp_size;
+	int grp_size;
+	uint32_t nr_grps;
 
 	D_ASSERT(target_nr > 0);
 	D_ASSERT(domain_nr > 0);
 
-	oc = oclass_ident2cl(oc_id);
+	oc = oclass_ident2cl(oc_id, &nr_grps);
 	if (!oc)
 		return -DER_INVAL;
 
 	memcpy(&ca, &oc->oc_attr, sizeof(ca));
+	ca.ca_grp_nr = nr_grps;
 	if (oc_id == OC_RP_XSF) {
 		D_ASSERT(ca.ca_resil_degree == DAOS_OBJ_RESIL_MAX);
 		D_ASSERT(ca.ca_rp_nr == DAOS_OBJ_REPL_MAX);
@@ -204,15 +213,14 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 		ca.ca_grp_nr = max(1, (target_nr / grp_size));
 		oc = oclass_scale2cl(&ca);
 		*ord = oc->oc_redun;
-		*nr = oc->oc_grp_nr;
+		*nr = ca.ca_grp_nr;
 		oc_id = oc->oc_id;
 		goto out;
 	}
 	*ord = oc->oc_redun;
-	*nr = oc->oc_grp_nr;
-	
+	*nr = ca.ca_grp_nr;
 out:
-	if (oc_id < (OR_RP_1 << 24)) {
+	if (oc_id < (OR_RP_1 << OC_REDUN_SHIFT)) {
 		*ord = 0;
 		*nr = oc_id;
 	}
@@ -448,10 +456,48 @@ oc_sop_ident_cmp_key(void *array, int i, uint64_t key)
 	return 0;
 }
 
+
 static daos_sort_ops_t	oc_ident_sort_ops = {
 	.so_swap	= oc_sop_swap,
 	.so_cmp		= oc_sop_ident_cmp,
 	.so_cmp_key	= oc_sop_ident_cmp_key,
+};
+
+static inline enum daos_obj_redun
+daos_oclass_id2redun(daos_oclass_id_t oc_id)
+{
+	return (oc_id >> 24);
+}
+
+static int
+oc_sop_redun_cmp(void *array, int a, int b)
+{
+	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
+
+	if (ocs[a]->oc_redun > ocs[b]->oc_redun)
+		return 1;
+	if (ocs[a]->oc_redun < ocs[b]->oc_redun)
+		return -1;
+	return 0;
+}
+
+static int
+oc_sop_redun_cmp_key(void *array, int i, uint64_t key)
+{
+	struct daos_obj_class **ocs = (struct daos_obj_class **)array;
+	daos_oclass_id_t id  = (daos_oclass_id_t)key;
+
+	if (daos_oclass_id2redun(ocs[i]->oc_id) > daos_oclass_id2redun(id))
+		return 1;
+	if (daos_oclass_id2redun(ocs[i]->oc_id) < daos_oclass_id2redun(id))
+		return -1;
+	return 0;
+}
+
+static daos_sort_ops_t	oc_redun_sort_ops = {
+	.so_swap	= oc_sop_swap,
+	.so_cmp		= oc_sop_redun_cmp,
+	.so_cmp_key	= oc_sop_redun_cmp_key,
 };
 
 static int
@@ -561,7 +607,7 @@ static daos_sort_ops_t	oc_scale_sort_ops = {
 
 /* find object class by ID */
 static struct daos_obj_class *
-oclass_ident2cl(daos_oclass_id_t oc_id)
+oclass_ident2cl(daos_oclass_id_t oc_id, uint32_t *nr_grps)
 {
 	int	idx;
 
@@ -570,22 +616,41 @@ oclass_ident2cl(daos_oclass_id_t oc_id)
 
 	idx = daos_array_find(oc_ident_array, oc_ident_array_sz, oc_id,
 			      &oc_ident_sort_ops);
+	if (idx >= 0) {
+		if (nr_grps)
+			*nr_grps = oc_ident_array[idx]->oc_grp_nr;
+
+		return oc_ident_array[idx];
+	}
+
+	if (oc_id < (OR_RP_1 << OC_REDUN_SHIFT))
+		return NULL;
+
+	idx = daos_array_find(oc_ident_array, oc_ident_array_sz, oc_id,
+			      &oc_redun_sort_ops);
 	if (idx < 0)
 		return NULL;
+
+	if (nr_grps) {
+		/* should not happen */
+		if ((oc_ident_array[idx]->oc_redun << OC_REDUN_SHIFT) >= oc_id)
+			return NULL;
+		*nr_grps = oc_id -
+			(oc_ident_array[idx]->oc_redun << OC_REDUN_SHIFT);
+	}
 
 	return oc_ident_array[idx];
 }
 
 int
 dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-	      daos_otype_t otype, daos_oclass_hints_t hints,
+	      enum daos_otype_t otype, daos_oclass_hints_t hints,
 	      enum daos_obj_redun *ord, uint32_t *nr)
 {
 	uint16_t shd;
 	uint16_t rdd;
 	uint32_t grp_size;
 	uint32_t grp_nr;
-	int idx;
 
 	rdd = hints & DAOS_OCH_RDD_MASK;
 	shd = hints & DAOS_OCH_SHD_MASK;
@@ -708,13 +773,6 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 	} else {
 		*nr = grp_nr;
 	}
-
-	/* Todo this should be removed */
-	idx = daos_array_find_le(oc_ident_array, oc_ident_array_sz, *ord << 24 | *nr,
-				 &oc_ident_sort_ops);
-	if (idx < 0 || oc_ident_array[idx]->oc_redun != *ord)
-		return -DER_INVAL;
-	*nr = oc_ident_array[idx]->oc_grp_nr;
 
 	return 0;
 }

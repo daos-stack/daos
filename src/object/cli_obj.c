@@ -455,12 +455,14 @@ obj_init_oca(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oca;
 	bool			 priv;
+	uint32_t		 nr_grps;
 
-	oca = daos_oclass_attr_find(obj->cob_md.omd_id, &priv);
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id, &priv, &nr_grps);
 	if (!oca)
 		return -DER_INVAL;
 
 	obj->cob_oca = *oca;
+	obj->cob_oca.ca_grp_nr = nr_grps;
 	if (daos_oclass_is_ec(oca) && !priv) {
 		struct cont_props	props;
 
@@ -5734,7 +5736,7 @@ daos_dc_obj2id(void *ptr, daos_obj_id_t *id)
 
 int
 daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
-		      daos_otype_t in, daos_oclass_id_t cid,
+		      enum daos_otype_t in, daos_oclass_id_t cid,
 		      daos_oclass_hints_t hints, uint32_t args)
 {
 	daos_ofeat_t	feat = (daos_ofeat_t)in;
@@ -5750,8 +5752,8 @@ daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
 		       daos_ofeat_t feat, daos_oclass_id_t cid,
 		       daos_oclass_hints_t hints, uint32_t args)
 {
-	return daos_obj_generate_oid(coh, oid, (daos_otype_t)feat, cid, hints,
-				     args);
+	return daos_obj_generate_oid(coh, oid, (enum daos_otype_t)feat, cid,
+				     hints, args);
 }
 
 /**
@@ -5760,8 +5762,8 @@ daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
  */
 int
 daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
-		      daos_otype_t type, daos_oclass_id_t cid,
-		      daos_oclass_hints_t hints, uint32_t args)
+		       enum daos_otype_t type, daos_oclass_id_t cid,
+		       daos_oclass_hints_t hints, uint32_t args)
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
@@ -5807,7 +5809,7 @@ daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
 
 int
 daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
-			    daos_obj_id_t *oid, daos_otype_t type,
+			    daos_obj_id_t *oid, enum daos_otype_t type,
 			    daos_oclass_id_t cid, daos_oclass_hints_t hints,
 			    uint32_t args)
 {
@@ -5850,7 +5852,7 @@ daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
 	int			rc;
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
-	daos_otype_t		type = daos_obj_feat2type(ofeats);
+	enum daos_otype_t	type = daos_obj_feat2type(ofeats);
 
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);
@@ -5871,5 +5873,5 @@ daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
 	if (rc)
 		return 0;
 
-	return (ord << 24) | nr_grp;
+	return (ord << OC_REDUN_SHIFT) | nr_grp;
 }

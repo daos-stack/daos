@@ -162,7 +162,7 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, d_iov_t *iov)
 void
 rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 {
-	daos_otype_t type = DAOS_OT_MULTI_HASHED;
+	enum daos_otype_t type = DAOS_OT_MULTI_HASHED;
 
 	uoid->id_pub.lo = oid & ~RDB_OID_CLASS_MASK;
 	uoid->id_pub.hi = 0;

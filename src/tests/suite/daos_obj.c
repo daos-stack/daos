@@ -4125,7 +4125,7 @@ compare_oclass(daos_handle_t coh, daos_obj_id_t oid, daos_oclass_id_t ecid)
 
 static int
 check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
-	     daos_otype_t type, enum daos_obj_resil res, unsigned int nr,
+	     enum daos_otype_t type, enum daos_obj_resil res, unsigned int nr,
 	     daos_oclass_id_t ecid)
 {
 	daos_obj_id_t		oid;
@@ -4140,7 +4140,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	assert_rc_equal(rc, 0);
 
 	cid = daos_obj_id2class(oid);
-	attr = daos_oclass_attr_find(oid, NULL);
+	attr = daos_oclass_attr_find(oid, NULL, NULL);
 	if (!attr) {
 		rc = -EINVAL;
 		goto out;
@@ -4187,7 +4187,7 @@ oclass_auto_setting(void **state)
 	struct pl_map_attr	attr;
 	daos_oclass_id_t	ecidx, ecid1;
 	daos_prop_t             *prop = NULL;
-	daos_otype_t		feat_kv, feat_array, feat_byte_array;
+	enum daos_otype_t	feat_kv, feat_array, feat_byte_array;
 	int			rc;
 
 	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);

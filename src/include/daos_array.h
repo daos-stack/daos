@@ -70,7 +70,7 @@ static inline int
 daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, daos_oclass_id_t cid,
 			daos_oclass_hints_t hints, uint32_t args)
 {
-	daos_otype_t type;
+	enum daos_otype_t type;
 
 	type = DAOS_OT_ARRAY_ATTR;
 

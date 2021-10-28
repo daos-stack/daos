@@ -948,7 +948,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 		/* Step-1: find the btree attributes and create btree */
 		if (tclass == VOS_BTR_DKEY) {
-			daos_otype_t	type;
+			enum daos_otype_t type;
 
 			/* Check and setup the akey key compare bits */
 			type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
@@ -1199,8 +1199,8 @@ obj_tree_init(struct vos_object *obj)
 
 	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
-		uint64_t	tree_feats	= 0;
-		daos_otype_t	type;
+		uint64_t tree_feats = 0;
+		enum daos_otype_t type;
 
 		D_DEBUG(DB_DF, "Create btree for object\n");
 
