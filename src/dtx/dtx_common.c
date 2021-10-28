@@ -998,7 +998,7 @@ out:
  * \param tgt_cnt	[IN]	number of targets.
  * \param flags		[IN]	See dtx_flags.
  * \param mbs		[IN]	DTX participants information.
- * \param p_dlh		[OUT]	Pointer to the DTX handle.
+ * \param dth		[OUT]	Pointer to the DTX handle.
  *
  * \return			Zero on success, negative value if error.
  */
@@ -1008,26 +1008,25 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
 		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
-		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh)
+		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh)
 {
-	struct dtx_leader_handle	*dlh;
-	struct dtx_handle		*dth;
-	int				 rc;
-	int				 i;
+	struct dtx_handle	*dth = &dlh->dlh_handle;
+	int			 rc;
+	int			 i;
 
-	D_ALLOC(dlh, sizeof(*dlh) + sizeof(struct dtx_sub_status) * tgt_cnt);
-	if (dlh == NULL)
-		return -DER_NOMEM;
+	memset(dlh, 0, sizeof(*dlh));
 
 	if (tgt_cnt > 0) {
 		dlh->dlh_future = ABT_FUTURE_NULL;
-		dlh->dlh_subs = (struct dtx_sub_status *)(dlh + 1);
+		D_ALLOC_ARRAY(dlh->dlh_subs, tgt_cnt);
+		if (dlh->dlh_subs == NULL)
+			return -DER_NOMEM;
+
 		for (i = 0; i < tgt_cnt; i++)
 			dlh->dlh_subs[i].dss_tgt = tgts[i];
 		dlh->dlh_sub_cnt = tgt_cnt;
 	}
 
-	dth = &dlh->dlh_handle;
 	rc = dtx_handle_init(dti, coh, epoch, sub_modification_cnt, pm_ver,
 			     leader_oid, dti_cos, dti_cos_cnt, mbs, true,
 			     (flags & DTX_SOLO) ? true : false,
@@ -1044,9 +1043,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		DP_UOID(*leader_oid), dti_cos_cnt, flags, DP_RC(rc));
 
 	if (rc != 0)
-		D_FREE(dlh);
-	else
-		*p_dlh = dlh;
+		D_FREE(dlh->dlh_subs);
 
 	return rc;
 }
@@ -1305,8 +1302,8 @@ out:
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
 	}
 
+	D_FREE(dlh->dlh_subs);
 	D_FREE(dth->dth_oid_array);
-	D_FREE(dlh);
 
 	return result;
 }
@@ -1325,7 +1322,7 @@ out:
  * \param dti_cos_cnt	[IN]	The @dti_cos array size.
  * \param flags		[IN]	See dtx_flags.
  * \param mbs		[IN]	DTX participants information.
- * \param p_dth		[OUT]	Pointer to the DTX handle.
+ * \param dth		[OUT]	Pointer to the DTX handle.
  *
  * \return			Zero on success, negative value if error.
  */
@@ -1334,14 +1331,9 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
-	  struct dtx_memberships *mbs, struct dtx_handle **p_dth)
+	  struct dtx_memberships *mbs, struct dtx_handle *dth)
 {
-	struct dtx_handle	*dth;
-	int			 rc;
-
-	D_ALLOC(dth, sizeof(*dth));
-	if (dth == NULL)
-		return -DER_NOMEM;
+	int	rc;
 
 	rc = dtx_handle_init(dti, coh, epoch, sub_modification_cnt,
 			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs,
@@ -1357,11 +1349,6 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 		DP_DTI(dti), sub_modification_cnt,
 		dth->dth_ver, dti_cos_cnt, flags, DP_RC(rc));
 
-	if (rc != 0)
-		D_FREE(dth);
-	else
-		*p_dth = dth;
-
 	return rc;
 }
 
@@ -1373,7 +1360,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 	dtx_shares_fini(dth);
 
 	if (daos_is_zero_dti(&dth->dth_xid))
-		goto out;
+		return result;
 
 	if (result < 0) {
 		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
@@ -1410,11 +1397,9 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
-	vos_dtx_rsrvd_fini(dth);
-
-out:
 	D_FREE(dth->dth_oid_array);
-	D_FREE(dth);
+
+	vos_dtx_rsrvd_fini(dth);
 
 	return result;
 }
