@@ -304,7 +304,7 @@ agg_clear_extents(struct ec_agg_entry *entry)
 
 		d_list_del(&extent->ae_link);
 		entry->ae_cur_stripe.as_extent_cnt--;
-		D_FREE_PTR(extent);
+		D_FREE(extent);
 	}
 
 	entry->ae_cur_stripe.as_offset = 0U;
@@ -433,7 +433,6 @@ agg_prep_sgl(struct ec_agg_entry *entry)
 out:
 	d_sgl_fini(&entry->ae_sgl, true);
 	return rc;
-
 }
 
 /* Determines if an extent overlaps a cell.
@@ -590,10 +589,8 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
 out:
-	if (recxs)
-		D_FREE(recxs);
-	if (sgl.sg_iovs)
-		D_FREE(sgl.sg_iovs);
+	D_FREE(recxs);
+	D_FREE(sgl.sg_iovs);
 	return rc;
 }
 
@@ -702,7 +699,6 @@ ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 out:
 	return rc;
-
 }
 
 /* Driver function for full_stripe encode. Fetches the data and then invokes
@@ -906,10 +902,8 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
 out:
-	if (recxs != NULL)
-		D_FREE(recxs);
-	if (sgl.sg_iovs != NULL)
-		D_FREE(sgl.sg_iovs);
+	D_FREE(recxs);
+	D_FREE(sgl.sg_iovs);
 	return rc;
 }
 
@@ -1132,7 +1126,6 @@ agg_process_partial_stripe_ult(void *arg)
 
 out:
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
-
 }
 
 /* Driver function for partial stripe update. Fetches the data and then invokes
@@ -1470,8 +1463,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 out:
-	if (targets)
-		D_FREE(targets);
+	D_FREE(targets);
 	return rc;
 }
 
@@ -1494,7 +1486,7 @@ agg_process_holes_ult(void *arg)
 	crt_bulk_t		 bulk_hdl = NULL;
 	uint32_t		 len = ec_age2cs(entry);
 	uint64_t		 cell_b = ec_age2cs_b(entry);
-	uint32_t		 k = ec_age2k(entry);
+	uint64_t		 k = ec_age2k(entry);
 	uint32_t		 p = ec_age2p(entry);
 	uint64_t		 ss = entry->ae_cur_stripe.as_stripenum *
 					k * len;
@@ -1694,8 +1686,7 @@ fetch_again:
 	}
 
 out:
-	if (targets)
-		D_FREE(targets);
+	D_FREE(targets);
 	if (rpc)
 		crt_req_decref(rpc);
 	if (bulk_hdl)
@@ -1784,8 +1775,7 @@ ev_out:
 out:
 	D_FREE(stripe_ud.asu_recxs);
 	daos_csummer_free_ic(stripe_ud.asu_csummer, &stripe_ud.asu_iod_csums);
-	if (stripe_ud.asu_csum_iov.iov_buf)
-		D_FREE(stripe_ud.asu_csum_iov.iov_buf);
+	D_FREE(stripe_ud.asu_csum_iov.iov_buf);
 	daos_csummer_destroy(&stripe_ud.asu_csummer);
 	return rc;
 }
@@ -2390,7 +2380,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 
 	arg.param = agg_param;
 	arg.eventual = eventual;
-	rc = dss_ult_periodic(agg_iv_ult, &arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_periodic(agg_iv_ult, &arg, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(free_eventual, rc = dss_abterr2der(rc));
 
@@ -2442,9 +2432,9 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		     bool full_scan, struct agg_param *agg_param, uint64_t *msec)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
+	struct dtx_handle	 *dth = NULL;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
-	struct dtx_handle	 dth = { 0 };
 	struct dtx_id		 dti = { 0 };
 	struct dtx_epoch	 epoch = { 0 };
 	daos_unit_oid_t		 oid = { 0 };
@@ -2482,15 +2472,14 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		return rc;
 	}
 
-	ec_agg_param->ap_dth = &dth;
+	ec_agg_param->ap_dth = dth;
 	ec_agg_param->ap_obj_skipped = 0;
 
 again:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb,
-			 ec_agg_param, &dth);
-	if (obj_dtx_need_refresh(&dth, rc)) {
-		rc = dtx_refresh(&dth, cont);
+			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, dth);
+	if (obj_dtx_need_refresh(dth, rc)) {
+		rc = dtx_refresh(dth, cont);
 		if (rc == -DER_AGAIN) {
 			anchors.ia_reprobe_co = 0;
 			anchors.ia_reprobe_obj = 0;
@@ -2502,7 +2491,7 @@ again:
 		}
 	}
 
-	dtx_end(&dth, cont, rc);
+	dtx_end(dth, cont, rc);
 
 	if (daos_handle_is_valid(ec_agg_param->ap_agg_entry.ae_obj_hdl)) {
 		dsc_obj_close(ec_agg_param->ap_agg_entry.ae_obj_hdl);

@@ -2198,6 +2198,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	struct umem_instance		*umm;
 	struct vos_dtx_blob_df		*dbd;
 	struct vos_dtx_blob_df		*tmp;
+	uint64_t			 epoch;
 	umem_off_t			 dbd_off;
 	int				 rc;
 	int				 i;
@@ -2208,6 +2209,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	cont_df = cont->vc_cont_df;
 	dbd_off = cont_df->cd_dtx_committed_head;
 	umm = vos_cont2umm(cont);
+	epoch = cont_df->cd_newest_aggregated;
 
 	dbd = umem_off2ptr(umm, dbd_off);
 	if (dbd == NULL || dbd->dbd_count == 0)
@@ -2228,6 +2230,8 @@ vos_dtx_aggregate(daos_handle_t coh)
 		d_iov_t				 kiov;
 
 		dce_df = &dbd->dbd_committed_data[i];
+		if (epoch < dce_df->dce_epoch)
+			epoch = dce_df->dce_epoch;
 		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
 		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
@@ -2237,6 +2241,18 @@ vos_dtx_aggregate(daos_handle_t coh)
 				UMOFF_P(dbd_off), DP_RC(rc));
 			goto out;
 		}
+	}
+
+	if (epoch != cont_df->cd_newest_aggregated) {
+		rc = umem_tx_add_ptr(umm, &cont_df->cd_newest_aggregated,
+				     sizeof(cont_df->cd_newest_aggregated));
+		if (rc != 0) {
+			D_ERROR("Failed to refresh epoch for DTX aggregation "UMOFF_PF": "DF_RC"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			goto out;
+		}
+
+		cont_df->cd_newest_aggregated = epoch;
 	}
 
 	tmp = umem_off2ptr(umm, dbd->dbd_next);
@@ -2330,6 +2346,7 @@ cmt:
 	stat->dtx_first_cmt_blob_time_up = 0;
 	stat->dtx_first_cmt_blob_time_lo = 0;
 	cont_df = cont->vc_cont_df;
+	stat->dtx_newest_aggregated = cont_df->cd_newest_aggregated;
 
 	if (!umoff_is_null(cont_df->cd_dtx_committed_head)) {
 		struct umem_instance		*umm = vos_cont2umm(cont);
@@ -2629,17 +2646,18 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		}
 
 		if (rc != 0) {
-			if (rc != -DER_NONEXIST)
+			if (rc != -DER_NONEXIST) {
 				D_ERROR("Fail to remove DTX entry "DF_DTI":"
 					DF_RC"\n",
 					DP_DTI(&dth->dth_xid), DP_RC(rc));
-			else
-				rc = 0;
 
-			dae = dth->dth_ent;
-			if (dae != NULL) {
-				dae->dae_aborted = 1;
-				dae->dae_prepared = 0;
+				dae = dth->dth_ent;
+				if (dae != NULL) {
+					dae->dae_aborted = 1;
+					dae->dae_prepared = 0;
+				}
+			} else {
+				rc = 0;
 			}
 		} else {
 			dae = (struct vos_dtx_act_ent *)riov.iov_buf;

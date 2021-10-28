@@ -66,7 +66,7 @@ class MultipleContainerDelete(IorTestBase):
 
         self.log.info("Verifying SCM space is recovered")
         self.log.info("%d == %d", final_scm_fs, initial_scm_fs)
-        # Uncomment the below verification once DAOS-3849 is fixed
+        # Uncomment the below verification once DAOS-8643 is fixed
         # self.assertTrue(final_scm_fs == initial_scm_fs)
 
     def get_pool_space(self):

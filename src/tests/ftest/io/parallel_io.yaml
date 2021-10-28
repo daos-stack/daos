@@ -2,8 +2,9 @@ hosts:
   test_servers:
     - server-A
     - server-B
+    - server-C
   test_clients:
-    - client-C
+    - client-D
 timeout: 600
 server_config:
   name: daos_server
@@ -47,7 +48,7 @@ ior:
     transfer_size: '25M'
     block_size: '26214400'    # 25M
     objectclass:
-        oclass_SX:
-          dfs_oclass: "SX"
+        oclass_EC_2P1GX:
+          dfs_oclass: "EC_2P1GX"
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"

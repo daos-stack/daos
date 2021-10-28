@@ -125,9 +125,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
 				       arg->ephs, arg->punched_ephs, arg->shards,
-				       arg->count,
-				       /* Delete local objects for reint */
-				       rpt->rt_rebuild_op == RB_OP_REINT);
+				       arg->count, rpt->rt_rebuild_op);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
@@ -660,10 +658,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct rebuild_scan_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
+	struct dtx_handle		*dth = NULL;
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
-	struct dtx_handle		dth = { 0 };
 	struct dtx_id			dti = { 0 };
 	struct dtx_epoch		epoch = { 0 };
 	daos_unit_oid_t			oid = { 0 };
@@ -709,8 +707,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		param.ip_flags |= VOS_IT_PUNCHED;
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, NULL, arg, &dth);
-	dtx_end(&dth, NULL, rc);
+			 rebuild_obj_scan_cb, NULL, arg, dth);
+	dtx_end(dth, NULL, rc);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
@@ -815,7 +813,7 @@ rebuild_scan_leader(void *data)
 	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
 		ABT_thread_yield();
 
-	rc = dss_thread_collective(rebuild_scanner, rpt, 0);
+	rc = dss_thread_collective(rebuild_scanner, rpt, DSS_ULT_DEEP_STACK);
 	if (rc)
 		D_GOTO(out, rc);
 
