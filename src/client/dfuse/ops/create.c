@@ -77,8 +77,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc);
 
 	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(dfs->dfs_ns, oh->doh_obj, O_RDWR,
-		     &ie->ie_obj);
+	rc = dfs_dup(dfs->dfs_ns, oh->doh_obj, O_RDWR, &ie->ie_obj);
 	if (rc)
 		D_GOTO(release, rc);
 
@@ -110,21 +109,15 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	dfuse_compute_inode(dfs, &ie->ie_oid,
-			    &ie->ie_stat.st_ino);
+	dfuse_compute_inode(dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);
 
 	return;
 release:
-	{
-		int rc2;
-
-		do {
-			rc2 = dfs_release(oh->doh_obj);
-		} while (rc2 == ENOMEM);
-	}
+	dfuse_dfs_release(fs_handle, oh, oh->doh_obj);
+	oh = NULL;
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(oh);

@@ -397,60 +397,82 @@ d_hash_table_ops_t cont_hops = {
 	.hop_rec_free		= ch_free,
 };
 
-/*
- * Deferred error handling for inodes
+/** Release a dfs object, and free associated memory region.
+ *
+ * If the call to dfs_release fails then realloc the ptr to a new descriptor type, and keep the
+ * dfs object for later retry.
  */
 void
-dfuse_ino_drop(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
+dfuse_dfs_release(struct dfuse_projection_info *fs_handle, void *ptr, dfs_obj_t *obj)
 {
-	int rc;
+	struct dfuse_dfs_list	*ddl;
+	int			rc;
 
-	if (ie->ie_obj) {
-		rc = dfs_release(ie->ie_obj);
-		if (rc == 0) {
-			D_FREE(ie);
-			return;
-		}
-		DFUSE_TRA_ERROR(ie, "dfs_release() failed: %d (%s)", rc, strerror(rc));
-	} else {
-		D_FREE(ie);
+	rc = dfs_release(obj);
+	if (rc == 0) {
+		D_FREE(ptr);
 		return;
 	}
+	DFUSE_TRA_ERROR(ptr, "dfs_release() failed: %d (%s)", rc, strerror(rc));
+
+	D_REALLOC(ddl, ptr, 0, sizeof(*ddl));
+
+	/* If the realloc failed (and it shouldn't because the new structure is smaller) then just
+	 * use the larger memory region anyway
+	 */
+	if (ddl == NULL)
+		ddl = ptr;
+
+	ddl->ddl_obj = obj;
 
 	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
 
-	d_list_add_tail(&ie->ie_htl, &fs_handle->dpi_free_ino);
+	d_list_add_tail(&ddl->ddl_list, &fs_handle->dpi_free_ino);
 
 	D_MUTEX_UNLOCK(&fs_handle->dpi_free_mutex);
 }
 
+/* Attempt to release at most one stale dfs object.
+ *
+ * Retry a previously failed call to dfs_release on an object, if there are any on the free list.
+ * If the retry fails again then put it back on the tail of the list so objects will be cycled
+ * through.
+ */
 void
-dfuse_ino_check(struct dfuse_projection_info *fs_handle)
+dfuse_release_check(struct dfuse_projection_info *fs_handle)
 {
-	struct dfuse_inode_entry *ie;
+	struct dfuse_dfs_list	*ddl;
 	int rc;
+
+	/* Do an initial check without taking the mutex */
+	if (d_list_empty(&fs_handle->dpi_free_ino))
+		return;
 
 	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
 
-	ie = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_inode_entry, ie_htl);
+	ddl = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_dfs_list, ddl_list);
 
-	if (ie) {
-		rc = dfs_release(ie->ie_obj);
+	if (ddl) {
+		rc = dfs_release(ddl->ddl_obj);
 		if (rc == 0) {
-			D_FREE(ie);
+			D_FREE(ddl);
 		} else {
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: %d (%s)", rc, strerror(rc));
-			d_list_add_tail(&ie->ie_htl, &fs_handle->dpi_free_ino);
+			DFUSE_TRA_ERROR(ddl, "dfs_release() failed: %d (%s)", rc, strerror(rc));
+			d_list_add_tail(&ddl->ddl_list, &fs_handle->dpi_free_ino);
 		}
 	}
 
 	D_MUTEX_UNLOCK(&fs_handle->dpi_free_mutex);
 }
 
+/* Flush all dfs objects
+ *
+ * This is useful before shutdown, or when disconnecting from pools or containers.
+ */
 int
-dfuse_ino_check_all(struct dfuse_projection_info *fs_handle)
+dfuse_release_check_all(struct dfuse_projection_info *fs_handle)
 {
-	struct dfuse_inode_entry	*ie;
+	struct dfuse_dfs_list		*ddl;
 	int				rc = -DER_SUCCESS;
 	int				rc2;
 	d_list_t			tmp_list;
@@ -459,13 +481,13 @@ dfuse_ino_check_all(struct dfuse_projection_info *fs_handle)
 
 	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
 
-	while ((ie = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_inode_entry, ie_htl)))
-	{
-		rc2 = dfs_release(ie->ie_obj);
+	while ((ddl = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_dfs_list, ddl_list))) {
+		rc2 = dfs_release(ddl->ddl_obj);
 		if (rc2 == 0) {
-			D_FREE(ie);
+			D_FREE(ddl);
 		} else {
-			d_list_add(&ie->ie_htl, &tmp_list);
+			DFUSE_TRA_ERROR(ddl, "dfs_release() failed: %d (%s)", rc2, strerror(rc2));
+			d_list_add(&ddl->ddl_list, &tmp_list);
 			rc = rc2;
 		}
 	}
@@ -1117,16 +1139,25 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 
 	D_ASSERT(ref == 0);
 
+	if (ie->ie_obj == NULL) {
+		D_FREE(ie);
+		return;
+	}
+
 	if (ie->ie_root)
 		dfc = ie->ie_dfs;
 
-	dfuse_ino_drop(fs_handle, ie);
+	/* Drop the dfs object.  This will try to close it, but if it fails it'll save it to a free
+	 * list for retry later
+	 */
+	dfuse_dfs_release(fs_handle, ie, ie->ie_obj);
 	ie = NULL;
 
 	if (dfc) {
 		struct dfuse_pool *dfp = dfc->dfs_dfp;
 
-		dfuse_ino_check_all(fs_handle);
+		/* Flush the free list of dfs descriptors to drop any references on the container */
+		dfuse_release_check_all(fs_handle);
 
 		DFUSE_TRA_INFO(dfc, "Closing poh %d coh %d",
 			       daos_handle_is_valid(dfp->dfp_poh),
@@ -1332,7 +1363,7 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 
 	sem_destroy(&fs_handle->dpi_sem);
 
-	dfuse_ino_check_all(fs_handle);
+	dfuse_release_check_all(fs_handle);
 
 	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 
@@ -1366,7 +1397,7 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 
 	d_hash_table_traverse(&fs_handle->dpi_pool_table, dfuse_pool_close_cb, NULL);
 
-	dfuse_ino_check_all(fs_handle);
+	dfuse_release_check_all(fs_handle);
 
 	D_MUTEX_DESTROY(&fs_handle->dpi_free_mutex);
 

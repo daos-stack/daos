@@ -269,7 +269,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	return;
 
 out_release:
-	dfs_release(ie->ie_obj);
+	dfuse_dfs_release(fs_handle, ie, ie->ie_obj);
+	ie = NULL;
 out_free:
 	D_FREE(ie);
 out:

@@ -102,6 +102,20 @@ struct dfuse_obj_hdl {
 	uint32_t			doh_anchor_index;
 };
 
+/** Structure to hold old, but not completed dfs entries
+ *
+ * dfs_release() can fail, so rather than drop descriptors when this happens maintain a list of
+ * dfs objects to retry release on at a later time.  See the dfuse_dfs_release() and
+ * dfuse_release_check() functions for this.
+ *
+ * This structure is made by reallocing a different datatype smaller so there is no failure
+ * point here, and it means that either inodes or open files can be added to the same list.
+ */
+struct dfuse_dfs_list {
+	d_list_t	ddl_list;
+	dfs_obj_t	*ddl_obj;
+};
+
 struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name, mode_t mode,
@@ -248,8 +262,13 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 
 /* dfuse_core.c */
 
+/* Release a dfs object */
 void
-dfuse_ino_check(struct dfuse_projection_info *fs_handle);
+dfuse_dfs_release(struct dfuse_projection_info *fs_handle, void *ptr, dfs_obj_t *obj);
+
+/* Retry one previously flushed dfs objects */
+void
+dfuse_release_check(struct dfuse_projection_info *fs_handle);
 
 /* Setup internal structures */
 int

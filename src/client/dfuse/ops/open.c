@@ -81,13 +81,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	return;
 release:
-	{
-		int rc2;
-
-		do {
-			rc2 = dfs_release(oh->doh_obj);
-		} while (rc2 == ENOMEM);
-	}
+	dfuse_dfs_release(fs_handle, oh, oh->doh_obj);
+	oh = NULL;
 free:
 	D_FREE(oh);
 err:
@@ -98,16 +93,17 @@ err:
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int			rc;
 
-	do {
-		rc = dfs_release(oh->doh_obj);
-	} while (rc == ENOMEM);
+	rc = dfs_release(oh->doh_obj);
 
-	if (rc == 0)
+	if (rc == 0) {
 		DFUSE_REPLY_ZERO(oh, req);
-	else
+		D_FREE(oh);
+	} else {
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	D_FREE(oh);
+		dfuse_dfs_release(fs_handle, oh, oh->doh_obj);
+	}
 }

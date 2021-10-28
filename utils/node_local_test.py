@@ -1002,7 +1002,11 @@ class DFuse():
         self._env = get_base_env()
 
     def enable_fi(self):
+        """Turn on fault injection for dfuse
 
+        This uses two fault injections IDs, one to introduce memory allocation faults during
+        runtime, and one to only enable this at mount time, not setup time.
+        """
         fc = {}
 
         # Tell dfuse_launch_fuse to enable fault injection only as fuse is mounted.
@@ -1081,6 +1085,7 @@ class DFuse():
         if self.container:
             cmd.extend(['--container', self.container])
         print('Running {}'.format(' '.join(cmd)))
+        # pylint: disable=consider-using-with
         self._sp = subprocess.Popen(cmd, env=self._env)
         print('Started dfuse at {}'.format(self.dir))
         print('Log file is {}'.format(self.log_file))
@@ -1147,11 +1152,7 @@ class DFuse():
             run_log_test = False
         self._sp = None
         if run_log_test:
-            if self._fi_file:
-                skip_fi = True
-            else:
-                skip_fi = False
-            log_test(self.conf, self.log_file, skip_fi=skip_fi)
+            log_test(self.conf, self.log_file, skip_fi=bool(self._fi_file))
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -1368,7 +1369,7 @@ def needs_dfuse(method):
                            caching=caching,
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container_label)
-        #self.dfuse.enable_fi()
+        self.dfuse.enable_fi()
         self.dfuse.start(v_hint=self.test_name)
         try:
             rc = method(self)
@@ -1594,7 +1595,7 @@ class posix_tests():
     #    self.readdir_test(300, test_all=False)
 
     @needs_dfuse
-    def x_test_many_files(self):
+    def test_many_files(self):
         """Test creating many files
 
         Creates and unlinks the same file many times"""
@@ -1604,8 +1605,8 @@ class posix_tests():
         while fc < 5000:
             try:
                 fname = os.path.join(self.dfuse.dir, 'test_file')
-                fd = open(fname, 'w')
-                fd.close()
+                with open(fname, 'w') as fd:
+                    pass
                 os.unlink(fname)
                 #print('created file {}'.format(fc))
             except OSError as e:

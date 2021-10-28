@@ -48,14 +48,18 @@ void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 		    struct fuse_file_info *fi)
 {
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int			rc;
 
-	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
-		DFUSE_REPLY_ZERO(oh, req);
-	else
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(oh->doh_dre);
-	D_FREE(oh);
+
+	rc = dfs_release(oh->doh_obj);
+	if (rc == 0) {
+		DFUSE_REPLY_ZERO(oh, req);
+		D_FREE(oh);
+	} else {
+		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+		dfuse_dfs_release(fs_handle, oh, oh->doh_obj);
+	}
 };
