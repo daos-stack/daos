@@ -2088,6 +2088,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             cmd = [
                 "gdb", "-cd={}".format(daos_cores_dir),
                 "-ex", "set pagination off",
+                "-ex", "info sharedlibrary",
                 "-ex", "thread apply all bt full",
                 "-ex", "detach",
                 "-ex", "quit",
