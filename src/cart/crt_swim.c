@@ -357,6 +357,9 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 		      rpc_out->upds.ca_count, self_id, from_id, to_id,
 		      DP_RC(cb_info->cci_rc), DP_RC(rpc_out->rc));
 
+	if (self_id == SWIM_ID_INVALID)
+		D_GOTO(out, rc = -DER_UNINIT);
+
 	if (cb_info->cci_rc && to_id == ctx->sc_target)
 		ctx->sc_deadline = 0;
 
@@ -425,7 +428,8 @@ static int crt_swim_send_request(struct swim_context *ctx, swim_id_t id,
 	int			 ctx_idx = csm->csm_crt_ctx_idx;
 	int			 rc;
 
-	rpc_type = (id == to) ? SWIM_RPC_PING : SWIM_RPC_IREQ;
+	if (self_id == SWIM_ID_INVALID)
+		D_GOTO(out, rc = -DER_UNINIT);
 
 	crt_ctx = crt_context_lookup(ctx_idx);
 	if (crt_ctx == CRT_CONTEXT_NULL) {
@@ -437,6 +441,7 @@ static int crt_swim_send_request(struct swim_context *ctx, swim_id_t id,
 	ep.ep_rank = (d_rank_t)to;
 	ep.ep_tag  = ctx_idx;
 
+	rpc_type = (id == to) ? SWIM_RPC_PING : SWIM_RPC_IREQ;
 	opc = CRT_PROTO_OPC(CRT_OPC_SWIM_BASE, CRT_OPC_SWIM_VERSION, rpc_type);
 	rc = crt_req_create(crt_ctx, &ep, opc, &rpc);
 	if (rc) {
@@ -545,6 +550,9 @@ static swim_id_t crt_swim_get_dping_target(struct swim_context *ctx)
 	swim_id_t		 id;
 	uint32_t		 count = 0;
 
+	if (self_id == SWIM_ID_INVALID)
+		D_GOTO(out, id = SWIM_ID_INVALID);
+
 	D_ASSERT(csm->csm_target != NULL);
 
 	crt_swim_csm_lock(csm);
@@ -562,6 +570,7 @@ static swim_id_t crt_swim_get_dping_target(struct swim_context *ctx)
 		 csm->csm_target->cst_state.sms_status == SWIM_MEMBER_DEAD);
 out_unlock:
 	crt_swim_csm_unlock(csm);
+out:
 	if (id != SWIM_ID_INVALID)
 		D_DEBUG(DB_TRACE, "select dping target: %lu => {%lu %c %lu}\n",
 			self_id, id, SWIM_STATUS_CHARS[
@@ -580,6 +589,9 @@ static swim_id_t crt_swim_get_iping_target(struct swim_context *ctx)
 	swim_id_t		 id;
 	uint32_t		 count = 0;
 
+	if (self_id == SWIM_ID_INVALID)
+		D_GOTO(out, id = SWIM_ID_INVALID);
+
 	D_ASSERT(csm->csm_target != NULL);
 
 	crt_swim_csm_lock(csm);
@@ -597,6 +609,7 @@ static swim_id_t crt_swim_get_iping_target(struct swim_context *ctx)
 		 csm->csm_target->cst_state.sms_status != SWIM_MEMBER_ALIVE);
 out_unlock:
 	crt_swim_csm_unlock(csm);
+out:
 	if (id != SWIM_ID_INVALID)
 		D_DEBUG(DB_TRACE, "select iping target: %lu => {%lu %c %lu}\n",
 			self_id, id, SWIM_STATUS_CHARS[
@@ -650,6 +663,7 @@ static int crt_swim_get_member_state(struct swim_context *ctx,
 	struct crt_swim_target	*cst;
 	int			 rc = -DER_NONEXIST;
 
+	D_ASSERT(state != NULL);
 	crt_swim_csm_lock(csm);
 	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
 		if (cst->cst_id == id) {
@@ -672,6 +686,7 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 	struct crt_swim_target	*cst;
 	int			 rc = -DER_NONEXIST;
 
+	D_ASSERT(state != NULL);
 	if (state->sms_status == SWIM_MEMBER_SUSPECT)
 		state->sms_delay += swim_ping_timeout_get();
 
@@ -705,6 +720,7 @@ static void crt_swim_new_incarnation(struct swim_context *ctx,
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	uint64_t		 incarnation = crt_hlc_get();
 
+	D_ASSERT(state != NULL);
 	D_ASSERTF(id == swim_self_get(ctx), DF_U64" == "DF_U64"\n",
 		  id, swim_self_get(ctx));
 	crt_swim_csm_lock(csm);
