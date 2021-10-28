@@ -1,5 +1,5 @@
 **Please note: This is a sample article I am preparing for software.Intel.com, this should only be viewed as a Draft.**
-
+**Original version is located here: https://docs.daos.io/admin/installation/#daos-in-docker"
 ***
 
 # Using Distributed Asynchronous Object Storage in a Docker Container
