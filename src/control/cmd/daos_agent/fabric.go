@@ -110,6 +110,14 @@ func (n *NUMAFabric) getNumNUMANodes() int {
 	return len(n.numaMap)
 }
 
+func (n *NUMAFabric) getTotalNumDevices() int {
+	total := 0
+	for _, devs := range n.numaMap {
+		total += len(devs)
+	}
+	return total
+}
+
 // GetDevice selects the next available interface device on the requested NUMA node.
 func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32) (*FabricInterface, error) {
 	if n == nil {
@@ -119,12 +127,24 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32) (*FabricInterfa
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
+	// If the only device is the loopback, it may not match the server's requested type, but
+	// we can try it anyway, in case the server is listening on the same machine.
+	if n.getTotalNumDevices() == 1 {
+		if fi, err := n.getDeviceFromNUMA(0, netdetect.Loopback); err == nil {
+			if netDevClass != netdetect.Loopback {
+				n.log.Errorf("%s is the only fabric interface available, requested type=%s",
+					fi.String(), netdetect.DevClassName(netDevClass))
+			}
+			return fi, nil
+		}
+	}
+
 	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass)
 	if err == nil {
 		return fi, nil
 	}
 
-	fi, err = n.findOnRemoteNUMA(netDevClass)
+	fi, err = n.findOnAnyNUMA(netDevClass)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +210,7 @@ func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
 	return n.numaMap[numaNode][idx]
 }
 
-func (n *NUMAFabric) findOnRemoteNUMA(netDevClass uint32) (*FabricInterface, error) {
+func (n *NUMAFabric) findOnAnyNUMA(netDevClass uint32) (*FabricInterface, error) {
 	numNodes := n.getNumNUMANodes()
 	for i := 0; i < numNodes; i++ {
 		numa := (n.defaultNumaNode + i) % numNodes

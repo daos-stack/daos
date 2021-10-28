@@ -183,6 +183,30 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			netDevClass: netdetect.Loopback,
 			expErr:      errors.New("no suitable fabric interface"),
 		},
+		"loopback only": {
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "lo",
+							NetDevClass: netdetect.Loopback,
+						},
+					},
+				},
+			},
+			node:        0,
+			netDevClass: netdetect.Ether,
+			expResults: []*FabricInterface{
+				{
+					Name:        "lo",
+					NetDevClass: netdetect.Loopback,
+				},
+				{
+					Name:        "lo",
+					NetDevClass: netdetect.Loopback,
+				},
+			},
+		},
 		"type not found": {
 			nf: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
