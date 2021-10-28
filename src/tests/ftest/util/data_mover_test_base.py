@@ -175,7 +175,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # cleanup shared paths (only runs on one node in job)
         if self.posix_shared_test_paths:
-            command = "rm -rf {}".format(self._get_posix_test_path_string(path=self.posix_shared_test_paths))
+            shared_path_strs = self._get_posix_test_path_string(path=self.posix_shared_test_paths)
+            command = "rm -rf {}".format(shared_path_strs)
             try:
 	        # only call rm on one client since this is cleaning up shared dir
                 self._execute_command(command, hosts=self.hostlist_clients[0:1])
