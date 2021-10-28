@@ -145,6 +145,10 @@ struct vos_pool {
 	struct umem_attr	vp_uma;
 	/** memory class instance of the pool */
 	struct umem_instance	vp_umm;
+	/** Base mapped address of pool file */
+	void			*vp_base;
+	/** Size of pool file */
+	uint64_t		vp_size;
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
 	/** GC statistics of this pool */
