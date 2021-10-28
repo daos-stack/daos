@@ -2041,7 +2041,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	rc = daos_task_create(opc, tse_task2sched(task), 0, NULL, &io_task);
 	if (rc) {
 		D_ERROR("daos_task_create() failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err, rc);
+		D_GOTO(free, rc);
 	}
 
 	p_args = daos_task_get_args(io_task);
@@ -2052,7 +2052,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
 				       sizeof(params));
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(free, rc);
 
 	rc = tse_task_register_deps(task, 1, &io_task);
 	if (rc)
@@ -2063,8 +2063,10 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 		D_GOTO(err, rc);
 
 	return rc;
-err:
+
+free:
 	D_FREE(params);
+err:
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2442,7 +2444,10 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 					   adjust_array_size_cb, &props,
 					   sizeof(props));
 		if (rc) {
+#if 0
+			/* This is causing a use-after-free issue */
 			tse_task_complete(task, rc);
+#endif
 			return rc;
 		}
 

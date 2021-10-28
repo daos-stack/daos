@@ -915,10 +915,10 @@ class ValgrindHelper():
             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     def get_file_size(self):
+        """ Return the size of the xml file."""
         if self._xml_file:
             return os.stat(self._xml_file).st_size
-        else:
-            return None
+        return None
 
     def get_cmd_prefix(self):
         """Return the command line prefix"""
@@ -1006,6 +1006,7 @@ class DFuse():
             os.mkdir(self.dir)
         self._fi_file = None
         self._env = get_base_env()
+        self._env['D_LOG_FLUSH'] = 'DEBUG'
 
     def enable_fi(self):
         """Turn on fault injection for dfuse
