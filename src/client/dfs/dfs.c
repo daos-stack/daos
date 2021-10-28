@@ -4621,7 +4621,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	/** Open parent object and insert xattr in the entry of the object */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
 	if (rc)
-		D_GOTO(out, rc = daos_der2errno(rc));
+		D_GOTO(free, rc = daos_der2errno(rc));
 
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
@@ -4655,8 +4655,9 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	}
 
 out:
-	D_FREE(xname);
 	daos_obj_close(oh, NULL);
+free:
+	D_FREE(xname);
 	return rc;
 }
 
@@ -4778,7 +4779,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	/** Open parent object and remove xattr from the entry of the object */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
 	if (rc)
-		D_GOTO(out, rc = daos_der2errno(rc));
+		D_GOTO(free, rc = daos_der2errno(rc));
 
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
@@ -4794,8 +4795,9 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	}
 
 out:
-	D_FREE(xname);
 	daos_obj_close(oh, NULL);
+free:
+	D_FREE(xname);
 	return rc;
 }
 
