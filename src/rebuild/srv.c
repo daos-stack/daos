@@ -629,7 +629,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			 rs->rs_size, rs->rs_done, rs->rs_errno,
 			 rs->rs_fail_rank, rs->rs_seconds);
 
-		D_DEBUG(DB_REBUILD, "%s", sbuf);
+		D_INFO("%s", sbuf);
 		if (rs->rs_done || rebuild_gst.rg_abort || rgt->rgt_abort) {
 			D_PRINT("%s", sbuf);
 			break;
@@ -1320,7 +1320,7 @@ iv_stop:
 try_reschedule:
 	if (rgt == NULL || !is_rebuild_global_done(rgt) ||
 	    rgt->rgt_status.rs_errno != 0 ||
-	    task->dst_rebuild_op == RB_OP_REINT) {
+	    task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND) {
 		daos_rebuild_opc_t opc = task->dst_rebuild_op;
 		int ret;
 
@@ -1335,7 +1335,7 @@ try_reschedule:
 		/* If reintegrate succeeds, schedule reclaim */
 		if (rgt && is_rebuild_global_done(rgt) &&
 		    rgt->rgt_status.rs_errno == 0 &&
-		    opc == RB_OP_REINT)
+		    (opc == RB_OP_REINT || opc == RB_OP_EXTEND))
 			opc = RB_OP_RECLAIM;
 
 		ret = ds_rebuild_schedule(pool, task->dst_map_ver,
@@ -2004,7 +2004,7 @@ rebuild_tgt_status_check_ult(void *arg)
 			}
 		}
 
-		D_DEBUG(DB_REBUILD, "ver %d obj "DF_U64" rec "DF_U64" size "
+		D_INFO("ver %d obj "DF_U64" rec "DF_U64" size "
 			DF_U64" scan done %d pull done %d scan gl done %d"
 			" gl done %d status %d\n",
 			rpt->rt_rebuild_ver, iv.riv_obj_count,
