@@ -181,7 +181,7 @@ func (c *localFabricCache) setCache(nf *NUMAFabric) {
 }
 
 // GetDevices fetches an appropriate fabric device from the cache.
-func (c *localFabricCache) GetDevice(numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (c *localFabricCache) GetDevice(numaNode int, netDevClass uint32, requireDomain bool) (*FabricInterface, error) {
 	if c == nil {
 		return nil, NotCachedErr
 	}
@@ -192,5 +192,5 @@ func (c *localFabricCache) GetDevice(numaNode int, netDevClass uint32) (*FabricI
 	if !c.IsCached() {
 		return nil, NotCachedErr
 	}
-	return c.localNUMAFabric.GetDevice(numaNode, netDevClass)
+	return c.localNUMAFabric.GetDevice(numaNode, netDevClass, requireDomain)
 }

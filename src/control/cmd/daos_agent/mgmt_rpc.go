@@ -7,7 +7,6 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"strings"
 
@@ -130,6 +129,10 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	return proto.Marshal(resp)
 }
 
+func providerIsVerbs(provider string) bool {
+	return strings.HasPrefix(provider, verbsProvider)
+}
+
 func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
 	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
 	if err != nil {
@@ -137,7 +140,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass)
+	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass, providerIsVerbs(resp.ClientNetHint.Provider))
 	if err != nil {
 		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
 			netdetect.DevClassName(resp.ClientNetHint.NetDevClass), err.Error())
@@ -146,12 +149,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 
 	resp.ClientNetHint.Interface = fabricIF.Name
 	resp.ClientNetHint.Domain = fabricIF.Name
-	if strings.HasPrefix(resp.ClientNetHint.Provider, verbsProvider) {
-		if fabricIF.Domain == "" {
-			mod.log.Errorf("domain is required for verbs provider, none found on interface %s", fabricIF.Name)
-			return nil, fmt.Errorf("no domain on interface %s", fabricIF.Name)
-		}
-
+	if fabricIF.Domain != "" {
 		resp.ClientNetHint.Domain = fabricIF.Domain
 		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
@@ -201,9 +199,9 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 	return pbResp, nil
 }
 
-func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32, requireDomain bool) (*FabricInterface, error) {
 	if mod.fabricInfo.IsCached() {
-		return mod.fabricInfo.GetDevice(numaNode, netDevClass)
+		return mod.fabricInfo.GetDevice(numaNode, netDevClass, requireDomain)
 	}
 
 	netCtx, err := netdetect.Init(ctx)
@@ -218,7 +216,7 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 	}
 	mod.fabricInfo.CacheScan(netCtx, result)
 
-	return mod.fabricInfo.GetDevice(numaNode, netDevClass)
+	return mod.fabricInfo.GetDevice(numaNode, netDevClass, requireDomain)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

@@ -171,6 +171,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nf          *NUMAFabric
 		node        int
+		needDomain  bool
 		netDevClass uint32
 		expErr      error
 		expResults  []*FabricInterface
@@ -403,6 +404,84 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			netDevClass: netdetect.Infiniband,
 			expErr:      FabricNotFoundErr(netdetect.Infiniband),
 		},
+		"need domain": {
+			needDomain: true,
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "t1",
+							NetDevClass: netdetect.Ether,
+						},
+						{
+							Name:        "t2",
+							Domain:      "t2_dom",
+							NetDevClass: netdetect.Ether,
+						},
+					},
+					1: {
+						{
+							Name:        "t3",
+							Domain:      "t3_dom",
+							NetDevClass: netdetect.Ether,
+						},
+					},
+				},
+			},
+			node:        0,
+			netDevClass: netdetect.Ether,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					Domain:      "t2_dom",
+					NetDevClass: netdetect.Ether,
+				},
+				{
+					Name:        "t2",
+					Domain:      "t2_dom",
+					NetDevClass: netdetect.Ether,
+				},
+				{
+					Name:        "t2",
+					Domain:      "t2_dom",
+					NetDevClass: netdetect.Ether,
+				},
+			},
+		},
+		"need domain from other numa": {
+			needDomain: true,
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "t1",
+							NetDevClass: netdetect.Ether,
+						},
+					},
+					1: { // interface with domain is on other numa node
+						{
+							Name:        "t2",
+							Domain:      "t2_dom",
+							NetDevClass: netdetect.Ether,
+						},
+					},
+				},
+			},
+			node:        0,
+			netDevClass: netdetect.Ether,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					Domain:      "t2_dom",
+					NetDevClass: netdetect.Ether,
+				},
+				{
+					Name:        "t2",
+					Domain:      "t2_dom",
+					NetDevClass: netdetect.Ether,
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -416,7 +495,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 
 			var results []*FabricInterface
 			for i := 0; i < tc.nf.NumDevices(tc.node)+1; i++ {
-				result, err := tc.nf.GetDevice(tc.node, tc.netDevClass)
+				result, err := tc.nf.GetDevice(tc.node, tc.netDevClass, tc.needDomain)
 				common.CmpErr(t, tc.expErr, err)
 				if tc.expErr != nil {
 					return

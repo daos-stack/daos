@@ -117,7 +117,7 @@ func (n *NUMAFabric) getNumNUMANodes() int {
 }
 
 // GetDevice selects the next available interface device on the requested NUMA node.
-func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32, requireDomain bool) (*FabricInterface, error) {
 	if n == nil {
 		return nil, errors.New("nil NUMAFabric")
 	}
@@ -130,12 +130,12 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32) (*FabricInterfa
 		return DefaultFabricInterface, nil
 	}
 
-	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass)
+	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass, requireDomain)
 	if err == nil {
 		return fi, nil
 	}
 
-	fi, err = n.findOnRemoteNUMA(netDevClass)
+	fi, err = n.findOnRemoteNUMA(netDevClass, requireDomain)
 	if err != nil {
 		return nil, err
 	}
@@ -145,13 +145,19 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32) (*FabricInterfa
 	return fiCopy, nil
 }
 
-func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32, requireDomain bool) (*FabricInterface, error) {
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
 
 		if fabricIF.NetDevClass != netDevClass && fabricIF.NetDevClass != FabricDevClassManual {
 			n.log.Debugf("Excluding device: %s, network device class: %s. Does not match requested network device class: %s",
 				fabricIF.Name, netdetect.DevClassName(fabricIF.NetDevClass), netdetect.DevClassName(netDevClass))
+			continue
+		}
+
+		if requireDomain && fabricIF.Domain == "" {
+			n.log.Debugf("Excluding device: %s, network device class: %s. No domain",
+				fabricIF.Name, netdetect.DevClassName(fabricIF.NetDevClass))
 			continue
 		}
 
@@ -201,11 +207,11 @@ func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
 	return n.numaMap[numaNode][idx]
 }
 
-func (n *NUMAFabric) findOnRemoteNUMA(netDevClass uint32) (*FabricInterface, error) {
+func (n *NUMAFabric) findOnRemoteNUMA(netDevClass uint32, requireDomain bool) (*FabricInterface, error) {
 	numNodes := n.getNumNUMANodes()
 	for i := 0; i < numNodes; i++ {
 		numa := (n.defaultNumaNode + i) % numNodes
-		fi, err := n.getDeviceFromNUMA(numa, netDevClass)
+		fi, err := n.getDeviceFromNUMA(numa, netDevClass, requireDomain)
 		if err == nil {
 			// Start the search on this node next time
 			n.defaultNumaNode = numa
