@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       6%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -516,7 +516,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Mon Oct 28 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-6
+* Mon Oct 28 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-5
 - Fix name of daos serialize package
 
 * Mon Oct 25 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-4

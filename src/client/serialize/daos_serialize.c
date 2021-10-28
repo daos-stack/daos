@@ -782,6 +782,8 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 			/* label doesn't already exist so deserialize */
 			deserialize_label = true;
 			close_cont = false;
+			/* reset rc */
+			rc = 0;
 		} else if (rc != 0) {
 			D_GOTO(out, rc);
 		}  else {
@@ -1124,9 +1126,11 @@ deserialize_attrs(hid_t file_id, uint64_t *_num_attrs,
 	*_buffers = buffers;
 	*_sizes = sizes;
 out:
-	D_FREE(names);
-	D_FREE(buffers);
-	D_FREE(sizes);
+	if (rc != 0) {
+		D_FREE(names);
+		D_FREE(buffers);
+		D_FREE(sizes);
+	}
 	D_FREE(attr_data);
 	if (dset > 0)
 		H5Dclose(dset);

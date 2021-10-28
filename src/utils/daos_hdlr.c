@@ -1959,13 +1959,13 @@ dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char **
 	}
 
 	/* Allocate arrays for attribute names, buffers, and sizes */
-	names = calloc(num_attrs, sizeof(char *));
+	D_ALLOC(names, num_attrs * sizeof(char *));
 	if (names == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	sizes = calloc(num_attrs, sizeof(size_t));
+	D_ALLOC(sizes, num_attrs * sizeof(size_t));
 	if (sizes == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	buffers = calloc(num_attrs, sizeof(void *));
+	D_ALLOC(buffers, num_attrs * sizeof(void *));
 	if (buffers == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1977,7 +1977,7 @@ dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char **
 			/* end of buf reached but no end of string, ignoring */
 			break;
 		}
-		names[i] = strndup(name_buf + cur_size, name_len + 1);
+		D_STRNDUP(names[i], name_buf + cur_size, name_len + 1);
 		cur_size += name_len + 1;
 	}
 
@@ -1990,7 +1990,7 @@ dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char **
 
 	/* Allocate space for each value */
 	for (i = 0; i < num_attrs; i++) {
-		buffers[i] = calloc(sizes[i], sizeof(size_t));
+		D_ALLOC(buffers[i], sizes[i] * sizeof(size_t));
 		if (buffers[i] == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -2275,10 +2275,9 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 			DH_PERROR_DER(ap, rc, "Failed to set user attributes");
 			D_GOTO(out, rc);
 		}
+		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	}
 out:
-	if (num_attrs > 0)
-		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	return rc;
 }
 
