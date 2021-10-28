@@ -112,7 +112,7 @@ ior_smoke:
         - POSIX
         - HDF5
         - HDF5-VOL
-    test_file: daos:testFile
+    test_file: daos:/testFile
     flags: -v -w -W -r -R -k -F
     block_size:
         - '64M'

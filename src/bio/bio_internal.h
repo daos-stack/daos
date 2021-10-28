@@ -166,10 +166,6 @@ struct bio_dma_buffer {
 	X(bdh_temp_crit_time, "temp/crit_time",				\
 	  "Amount of time the controller operated above crit temp threshold",  \
 	  "minutes", D_TM_COUNTER)					\
-	X(bdh_percent_used, "reliability/percentage_used",		\
-	  "Estimate of the percentage of NVM subsystem life used based on the "\
-	  "actual usage and the manufacturer's prediction of NVM life",	\
-	  "%", D_TM_COUNTER)						\
 	X(bdh_avail_spare, "reliability/avail_spare",			\
 	  "Percentage of remaining spare capacity available",		\
 	  "%", D_TM_COUNTER)						\
@@ -611,7 +607,7 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
-/* b<o_config.c */
+/* bio_config.c */
 int bio_add_allowed_alloc(const char *json_config_file,
 			  struct spdk_env_opts *opts);
 #endif /* __BIO_INTERNAL_H__ */

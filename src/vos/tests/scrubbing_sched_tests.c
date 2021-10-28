@@ -255,7 +255,7 @@ when_sched_continuous_credits_1__sleeps_and_yield_appropriately(void **state)
 		.tst_scrub_sched = DAOS_SCRUB_SCHED_CONTINUOUS,
 		.tst_scrub_cred = 1,
 		.tst_pool_last_csum_calcs = 10,
-		.tst_pool_csum_calcs = 0,
+		.tst_pool_csum_calcs = 1,
 		.tst_already_run_sec = 0,
 		.tst_scrub_freq_sec = 10,
 		});
@@ -264,13 +264,11 @@ when_sched_continuous_credits_1__sleeps_and_yield_appropriately(void **state)
 	assert_int_equal(1, test_sleep_fn_call_count);
 
 	/* simulate 1 second passing and 1 csum calculated */
-	ctx.sc_pool_start_scrub.tv_sec--;
 	ctx.sc_pool_csum_calcs++;
 	run_yield_or_sleep_while_running(&ctx);
 	assert_int_equal(2, test_sleep_fn_call_count);
 
 	/* simulate 1 second passing and 1 csum calculated */
-	ctx.sc_pool_start_scrub.tv_sec--;
 	ctx.sc_pool_csum_calcs++;
 	run_yield_or_sleep_while_running(&ctx);
 	assert_int_equal(3, test_sleep_fn_call_count);

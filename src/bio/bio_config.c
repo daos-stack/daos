@@ -205,9 +205,8 @@ opts_add_pci_addr(struct spdk_env_opts *opts, char *traddr)
 		return 0;
 
 	D_REALLOC_ARRAY(tmp2, tmp1, count, count + 1);
-	if (tmp2 == NULL) {
+	if (tmp2 == NULL)
 		return -DER_NOMEM;
-	}
 
 	*list = tmp2;
 	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
@@ -225,10 +224,9 @@ read_file(const char *filename, size_t *size)
 	FILE *file = fopen(filename, "r");
 	void *data;
 
-	if (file == NULL) {
+	if (file == NULL)
 		/* errno is set by fopen */
 		return NULL;
-	}
 
 	data = spdk_posix_file_load(file, size);
 	fclose(file);
@@ -334,6 +332,10 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 	while (key != NULL) {
 		if (spdk_json_strequal(key, "traddr")) {
 			traddr = spdk_json_strdup(json_value(key));
+			if (traddr == NULL) {
+				rc = -DER_NOMEM;
+				goto out;
+			}
 
 			D_INFO("Adding transport address '%s' to SPDK allowed list", traddr);
 
@@ -400,9 +402,8 @@ add_bdevs_to_opts(struct json_config_ctx *ctx, struct spdk_json_val *bdev_ss, bo
 
 	while (ctx->config_it != NULL) {
 		rc = load_bdev_subsystem_config(ctx, vmd_enabled, opts);
-		if (rc != 0) {
+		if (rc != 0)
 			goto out;
-		}
 
 		/* Move on to next subsystem config*/
 		ctx->config_it = spdk_json_next(ctx->config_it);
@@ -416,9 +417,9 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 {
 	int	rc = 0;
 
-	if (vmd_ss == NULL) {
+	if (vmd_ss == NULL)
 		goto out;
-	}
+
 	D_ASSERT(vmd_enabled != NULL);
 
 	/* Capture subsystem name and config array */
@@ -437,9 +438,8 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 
 	while (ctx->config_it != NULL) {
 		rc = load_vmd_subsystem_config(ctx, vmd_enabled);
-		if (rc != 0) {
+		if (rc != 0)
 			goto out;
-		}
 
 		/* Move on to next subsystem config*/
 		ctx->config_it = spdk_json_next(ctx->config_it);
@@ -461,19 +461,16 @@ bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
 	D_ASSERT(opts != NULL);
 
 	D_ALLOC_PTR(ctx);
-	if (!ctx) {
+	if (ctx == NULL)
 		return -DER_NOMEM;
-	}
 
 	rc = read_config(json_config_file, ctx);
-	if (rc) {
-		D_ERROR("config read failed");
+	if (rc != 0)
 		goto out;
-	}
 
 	/* Capture subsystems array */
 	rc = spdk_json_find_array(ctx->values, "subsystems", NULL, &ctx->subsystems);
-	if (rc) {
+	if (rc < 0) {
 		D_ERROR("No 'subsystems' key JSON configuration file.");
 		rc = -DER_INVAL;
 		goto out;
@@ -513,9 +510,8 @@ bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
 	}
 
 	rc = check_vmd_status(ctx, vmd_ss, &vmd_enabled);
-	if (rc) {
+	if (rc != 0)
 		goto out;
-	}
 
 	rc = add_bdevs_to_opts(ctx, bdev_ss, vmd_enabled, opts);
 out:
