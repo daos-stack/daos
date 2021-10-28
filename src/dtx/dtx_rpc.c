@@ -743,8 +743,12 @@ out:
 	if (rc1 == -DER_NONEXIST)
 		rc1 = 0;
 
-	if (child != ABT_THREAD_NULL)
-		ABT_thread_free(&child);
+	if (child != ABT_THREAD_NULL) {
+		int rc_tmp;
+
+		rc_tmp = ABT_thread_free(&child);
+		D_ASSERTF(rc_tmp == ABT_SUCCESS, "%d\n", rc_tmp);
+	}
 
 	if (dra.dra_future != ABT_FUTURE_NULL) {
 		rc2 = dtx_req_wait(&dra);

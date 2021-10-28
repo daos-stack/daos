@@ -57,7 +57,8 @@ struct sched_request {
 	uint64_t		 sr_enqueue_ts;
 	unsigned int		 sr_abort:1,
 				 /* sr_ult is sched_request-owned */
-				 sr_owned:1;
+				 sr_owned:1,
+				 sr_unnamed:1;
 };
 
 bool		sched_prio_disabled;
@@ -509,6 +510,7 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi;
+	ABT_bool		 unnamed = ABT_FALSE;
 	struct sched_request	*req;
 	int			 rc;
 
@@ -519,6 +521,14 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 		if (spi == NULL) {
 			D_ERROR("XS(%d): get pool info "DF_UUID" failed.\n",
 				dx->dx_xs_id, DP_UUID(attr->sra_pool_id));
+			return NULL;
+		}
+	}
+
+	if (ult != ABT_THREAD_NULL) {
+		rc = ABT_thread_is_unnamed(ult, &unnamed);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("Failed to get thread type: %d\n", rc);
 			return NULL;
 		}
 	}
@@ -539,6 +549,7 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	req->sr_ult	= ult;
 	req->sr_abort	= 0;
 	req->sr_owned	= (owned ? 1 : 0);
+	req->sr_unnamed	= (unnamed == ABT_TRUE ? 1 : 0);
 	req->sr_pool_info = spi;
 
 	return req;
@@ -1087,6 +1098,7 @@ sched_req_wait(struct sched_request *req, bool abort)
 	int	rc;
 
 	D_ASSERT(req != NULL);
+	D_ASSERT(!req->sr_unnamed);
 	if (abort) {
 		req->sr_abort = 1;
 		sched_req_wakeup(req);
@@ -1203,6 +1215,7 @@ sched_req_put(struct sched_request *req)
 	D_ASSERT(d_list_empty(&req->sr_link));
 	if (req->sr_owned) {
 		/* We are responsible for freeing a req-owned ULT. */
+		D_ASSERT(!req->sr_unnamed);
 		rc = ABT_thread_free(&req->sr_ult);
 		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 	} else {
