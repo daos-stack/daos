@@ -500,7 +500,7 @@ degrade_ec_partial_update_agg(void **state)
 }
 
 static void
-degrade_ec_agg(void **state)
+degrade_ec_agg1(void **state)
 {
 	test_arg_t	*arg = *state;
 	struct ioreq	req;
@@ -563,6 +563,178 @@ degrade_ec_agg(void **state)
 	}
 	free(data);
 	free(verify_data);
+}
+
+static void
+degraded_ec_agg_test(test_arg_t *arg, struct ec_ext *exts, int ext_nr)
+{
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	daos_recx_t	recx;
+	struct ec_ext	range = {0};
+	d_rank_t	p_rank;
+	d_rank_t	d_rank;
+	daos_off_t	data_off;
+	int		stripe_nr;
+	int		stripe_sz;
+	int		i;
+	char		*data;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	/* convert these extents to the overall range of them */
+	ec_exts2range(exts, ext_nr, &range);
+	assert_true(range.e_end - range.e_start > 0);
+
+	stripe_sz = EC_CELL_SIZE * 4; /* ec(4+1) */
+	stripe_nr = ((range.e_end - range.e_start) + stripe_sz - 1) / stripe_sz;
+
+	/* align the range start offset with the stripe boundary */
+	range.e_start -= range.e_start % stripe_sz;
+
+	data = (char *)malloc(stripe_sz * stripe_nr);
+	assert_true(data != NULL);
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	for (i = 0; i < ext_nr; i++) {
+		ec_ext2recx(&exts[i], &recx);
+
+		data_off = recx.rx_idx - range.e_start;
+		memset(&data[data_off], 'A' + i, recx.rx_nr);
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     &data[data_off], recx.rx_nr, &req);
+	}
+
+	print_message("Sleep 10 seconds and start EC aggregation\n");
+	sleep(10);
+	p_rank = get_rank_by_oid_shard(arg, oid, 4); /* parity rank */
+	d_rank = get_rank_by_oid_shard(arg, oid, 2); /* data rank */
+
+	daos_debug_set_params(arg->group, p_rank, DMG_KEY_FAIL_LOC,
+			      DAOS_FORCE_EC_AGG | DAOS_FAIL_ALWAYS, 0, NULL);
+	/* EC aggregation should be running already */
+	sleep(1);
+	/* Both EC aggregation and rebuild are running */
+	rebuild_pools_ranks(&arg, 1, &d_rank, 1, false);
+
+	/* clear the fail_loc */
+	daos_debug_set_params(arg->group, p_rank, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+
+	print_message("sleep 30 seconds");
+	sleep(30);
+
+	/* Trigger VOS aggregation */
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, NULL, NULL, 0, 0,
+				       DAOS_FORCE_EC_AGG);
+	for (i = 0; i < ext_nr; i++) {
+		ec_ext2recx(&exts[i], &recx);
+
+		data_off = recx.rx_idx - range.e_start;
+		ec_verify_parity_data(&req, "d_key", "a_key", recx.rx_idx, recx.rx_nr,
+				      &data[data_off], DAOS_TX_NONE, true);
+	}
+	free(data);
+}
+
+/* partial writes which composes a full stripe */
+static struct ec_ext ec_exts_1[] = {
+	{
+		.e_start	= 0,
+		.e_end		= (1024 << 10),
+	},
+	{
+		.e_start	= (1024 << 10),
+		.e_end		= (2048 << 10),
+	},
+	{ /* begin of the shard being killed */
+		.e_start	= (2048 << 10),
+		.e_end		= (2048 << 10) + (16 << 10),
+	},
+	{
+		.e_start	= (2048 << 10) - (8 << 10),
+		.e_end		= (2048 << 10) + (256 << 10),
+	},
+	{
+		.e_start	= (2048 << 10) + (256 << 10),
+		.e_end		= (2048 << 10) + (512 << 10),
+	},
+	{
+		.e_start	= (2048 << 10) + (400 << 10),
+		.e_end		= (2048 << 10) + (768 << 10),
+	},
+	{
+		.e_start	= (2048 << 10) + (700 << 10),
+		.e_end		= (3072 << 10),
+	}, /* end of the shard being killed */
+	{
+		.e_start	= (3072 << 10),
+		.e_end		= (4096 << 10),
+	},
+};
+
+static void
+degrade_ec_agg2(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	/* small partial writes and local EC aggregation on parity target */
+	degraded_ec_agg_test(arg, ec_exts_1, ARRAY_SIZE(ec_exts_1));
+}
+
+/* two full stripes, some partial overwrites */
+static struct ec_ext ec_exts_2[] = {
+	{	/* two full stripes */
+		.e_start	= 0,
+		.e_end		= (8 << 20),
+	},
+	/* overwrites */
+	{
+		.e_start	= (1 << 20),
+		.e_end		= (1 << 20) + (256 << 10),
+	},
+	{
+		.e_start	= (2 << 20),
+		.e_end		= (2 << 20) + (16 << 10),
+	},
+	{
+		.e_start	= (2 << 20) - (8 << 10),
+		.e_end		= (2 << 20) + (256 << 10),
+	},
+	{
+		.e_start	= (2 << 20) + (256 << 10),
+		.e_end		= (2 << 20) + (512 << 10),
+	},
+	{
+		.e_start	= (6 << 20) + (4 << 10),
+		.e_start	= (6 << 20) + (128 << 10),
+	},
+	{
+		.e_start	= (6 << 20) + (96 << 10),
+		.e_start	= (6 << 20) + (256 << 10),
+	},
+	{
+		.e_start	= (6 << 20) + (768 << 10),
+		.e_start	= (6 << 20) + (800 << 10),
+	},
+	{
+		.e_start	= (7 << 20) + (256 << 10),
+		.e_start	= (7 << 20) + (300 << 10),
+	},
+};
+
+static void
+degrade_ec_agg3(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	/* full stripe write and  partial overwrites, EC aggregation */
+	degraded_ec_agg_test(arg, ec_exts_2, ARRAY_SIZE(ec_exts_2));
 }
 
 static void
@@ -667,12 +839,16 @@ static const struct CMUnitTest degrade_tests[] = {
 	 test_teardown},
 	{"DEGRADE23: degrade io with multi-containers and aggregation",
 	 degrade_multi_conts_agg, degrade_sub_setup, test_teardown},
-	{"DEGRADE24: degrade ec aggregation partial update",
+	{"DEGRADE24: degrade ec aggregation: partial update",
 	 degrade_ec_partial_update_agg, degrade_sub_setup, test_teardown},
 	{"DEGRADE25: degrade ec aggregation",
-	 degrade_ec_agg, degrade_sub_setup, test_teardown},
+	 degrade_ec_agg1, degrade_sub_setup, test_teardown},
 	{"DEGRADE26: degrade ec update",
 	 degrade_ec_update, degrade_sub_setup, test_teardown},
+	{"DEGRADE27: degrade ec aggregation: overlapped partial writes",
+	 degrade_ec_agg2, degrade_sub_setup, test_teardown},
+	{"DEGRADE28: degrade ec aggregation: overlapped partial overwrites",
+	 degrade_ec_agg3, degrade_sub_setup, test_teardown},
 };
 
 int
