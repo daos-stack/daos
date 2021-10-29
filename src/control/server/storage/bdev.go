@@ -252,10 +252,9 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList    []string
-		EngineStorage map[uint32]*Config // to validate against
-		VMDEnabled    bool
-		BypassCache   bool
+		DeviceList  []string
+		VMDEnabled  bool
+		BypassCache bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.
