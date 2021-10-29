@@ -2443,8 +2443,9 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		rc = tse_task_register_cbs(task, NULL, NULL, 0,
 					   adjust_array_size_cb, &props,
 					   sizeof(props));
-		if (rc)
+		if (rc) {
 			return rc;
+		}
 
 		rc = tse_task_reinit(task);
 		if (rc) {
