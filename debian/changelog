@@ -1,3 +1,11 @@
+daos (2.1.100-5) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
+  * Rename daos-tests daos-client-tests and make daos-tests require all
+    other test suites to maintain existing behavior
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 26 Oct 2021 22:52:40 -0400
+
 daos (2.1.100-4) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Update mercury to v2.1.0rc2
