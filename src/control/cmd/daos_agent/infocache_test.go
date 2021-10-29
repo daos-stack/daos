@@ -238,20 +238,24 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 						{
 							Name:        "test1",
 							NetDevClass: netdetect.Infiniband,
+							Providers:   []string{"ofi+verbs"},
 						},
 						{
 							Name:        "test2",
 							NetDevClass: netdetect.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 					1: {
 						{
 							Name:        "test0",
 							NetDevClass: netdetect.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
 							Name:        "lo",
 							NetDevClass: netdetect.Loopback,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
@@ -292,11 +296,13 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Name:        "test1",
 							NetDevClass: netdetect.Infiniband,
 							Domain:      "test1_alias",
+							Providers:   []string{"ofi+verbs"},
 						},
 						{
 							Name:        "test2",
 							NetDevClass: netdetect.Ether,
 							Domain:      "test2_alias",
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 					2: {
@@ -304,6 +310,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Name:        "test0",
 							NetDevClass: netdetect.Ether,
 							Domain:      "test0_alias",
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},

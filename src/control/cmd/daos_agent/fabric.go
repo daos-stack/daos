@@ -29,6 +29,7 @@ type FabricInterface struct {
 	Name        string
 	Domain      string
 	NetDevClass uint32
+	Providers   []string
 }
 
 func (f *FabricInterface) String() string {
@@ -37,6 +38,22 @@ func (f *FabricInterface) String() string {
 		dom = "/" + f.Domain
 	}
 	return fmt.Sprintf("%s%s (%s)", f.Name, dom, netdetect.DevClassName(f.NetDevClass))
+}
+
+// AddProvider adds a provider to the FabricInterface.
+func (f *FabricInterface) AddProvider(provider string) {
+	if f == nil || provider == "" {
+		return
+	}
+
+	for _, p := range f.Providers {
+		// Avoid adding duplicates
+		if p == provider {
+			return
+		}
+	}
+
+	f.Providers = append(f.Providers, provider)
 }
 
 // FabricDevClassManual is a wildcard netDevClass that indicates the device was
@@ -154,6 +171,22 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32) (*FabricInterfa
 	return fiCopy, nil
 }
 
+// Find finds a specific fabric device by name.
+func (n *NUMAFabric) Find(name string) (*FabricInterface, error) {
+	if n == nil {
+		return nil, errors.New("nil NUMAFabric")
+	}
+
+	for _, devs := range n.numaMap {
+		for _, fi := range devs {
+			if fi.Name == name {
+				return fi, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("fabric interface %q not found", name)
+}
+
 func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32) (*FabricInterface, error) {
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
@@ -264,9 +297,15 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan []*netdete
 	fabric := newNUMAFabric(log)
 
 	for _, fs := range scan {
+		if curIF, err := fabric.Find(fs.DeviceName); err == nil {
+			curIF.AddProvider(fs.Provider)
+			continue
+		}
+
 		newIF := &FabricInterface{
 			Name:        fs.DeviceName,
 			NetDevClass: fs.NetDevClass,
+			Providers:   []string{fs.Provider},
 		}
 
 		if getDevAlias != nil {
