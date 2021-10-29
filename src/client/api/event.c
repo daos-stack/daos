@@ -712,7 +712,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	struct eq_progress_arg	epa;
 	int			rc;
 
-	if (n_events == 0)
+	if (n_events == 0 || events == NULL)
 		return -DER_INVAL;
 
 	/** look up private eq */
