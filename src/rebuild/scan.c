@@ -303,7 +303,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 		 * reclaim is not being scheduled in the previous failure reintegration,
 		 * so let's ignore duplicate shards(DER_EXIST) in this case.
 		 */
-		if (rpt->rt_rebuild_op == RB_OP_REINT) {
+		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND) {
 			D_DEBUG(DB_REBUILD, DF_UUID" found duplicate "DF_UOID" %d\n",
 				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
 			rc = 0;
@@ -513,6 +513,12 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	oc_attr = daos_oclass_attr_find(oid.id_pub, NULL);
+	if (oc_attr == NULL) {
+		D_INFO(DF_UUID" skip invalid "DF_UOID"\n", DP_UUID(rpt->rt_pool_uuid),
+		       DP_UOID(oid));
+		D_GOTO(out, rc = 0);
+	}
+
 	grp_size = daos_oclass_grp_size(oc_attr);
 
 	dc_obj_fetch_md(oid.id_pub, &md);
@@ -658,10 +664,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct rebuild_scan_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
+	struct dtx_handle		*dth = NULL;
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
-	struct dtx_handle		dth = { 0 };
 	struct dtx_id			dti = { 0 };
 	struct dtx_epoch		epoch = { 0 };
 	daos_unit_oid_t			oid = { 0 };
@@ -707,8 +713,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		param.ip_flags |= VOS_IT_PUNCHED;
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, NULL, arg, &dth);
-	dtx_end(&dth, NULL, rc);
+			 rebuild_obj_scan_cb, NULL, arg, dth);
+	dtx_end(dth, NULL, rc);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
