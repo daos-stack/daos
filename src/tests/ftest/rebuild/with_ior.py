@@ -6,7 +6,6 @@
 """
 
 
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
 
 
@@ -20,7 +19,6 @@ class RbldWithIOR(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
         """Jira ID: DAOS-951.
 
@@ -31,7 +29,10 @@ class RbldWithIOR(IorTestBase):
           -- single pool, single client performing continuous read/write/verify
              sequence while failure/rebuild is triggered in another process
 
-        :avocado: tags=all,daily_regression,small,pool,rebuild,rebuildwithior
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=pool,rebuild
+        :avocado: tags=rebuildwithior
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
