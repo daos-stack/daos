@@ -633,9 +633,7 @@ class DaosServer():
             engine['storage'][0]['scm_mount'] = '{}_{}'.format(
                 ref_engine['storage'][0]['scm_mount'], idx)
             scyaml['engines'].append(engine)
-        self._yaml_file = tempfile.NamedTemporaryFile(
-            prefix='nlt-server-config-',
-            suffix='.yaml')
+        self._yaml_file = tempfile.NamedTemporaryFile(prefix='nlt-server-config-', suffix='.yaml')
 
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
@@ -2848,13 +2846,18 @@ def run_in_fg(server, conf):
     if not container:
         container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
 
-    dfuse = DFuse(server, conf, pool=pool.uuid, caching=False)
+    dfuse = DFuse(server, conf, pool=pool.uuid, caching=True)
     dfuse.start()
 
     run_daos_cmd(conf,
                  ['container', 'set-attr',
                   pool.label, container,
-                  '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
+                  '--attr', 'dfuse-direct-io-disable', '--value', 'off'],
+                 show_stdout=True)
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool.label, container,
+                  '--attr', 'dfuse-data-cache', '--value', 'off'],
                  show_stdout=True)
 
     t_dir = os.path.join(dfuse.dir, container)

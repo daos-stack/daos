@@ -1043,7 +1043,6 @@ dfuse_openat(int dirfd, const char *pathname, int flags, ...)
 	return fd;
 }
 
-
 DFUSE_PUBLIC int
 dfuse_mkstemp(char *template)
 {
@@ -1063,6 +1062,7 @@ dfuse_mkstemp(char *template)
 	}
 
 	status = DFUSE_IO_BYPASS;
+
 	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_EXCL | O_RDWR, status)) {
 		DFUSE_LOG_DEBUG("open(template=%s) interception not possible",
 				template);

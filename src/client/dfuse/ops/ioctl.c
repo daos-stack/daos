@@ -86,8 +86,7 @@ handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
 	if (rc)
 		D_GOTO(free, rc = daos_der2errno(rc));
 
@@ -119,8 +118,7 @@ handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 		D_GOTO(err, rc = ENOMEM);
 
 	/* Firstly sample the size */
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
@@ -128,8 +126,9 @@ handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	/* XXX: Check this? */
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
+
 	errno = 0;
 	fd = mkstemp(fname);
 	if (fd == -1)
@@ -187,10 +186,10 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	d_iov_t			iov = {};
 	int			rc;
 
+	/* Handle directory */
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
-				  &iov);
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -244,8 +243,7 @@ handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
-				  &iov);
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
 		D_GOTO(err, rc);
 
