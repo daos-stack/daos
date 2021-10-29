@@ -1095,11 +1095,6 @@ vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
 		return 0; /* nothing to reclaim for this pool */
 
 	tls->vtl_gc_running++;
-	/*
-	 * Pause flushing free extents in VEA aging buffer, otherwise,
-	 * there'll be way more fragments to be processed.
-	 */
-	vos_pool_ctl(poh, VOS_PO_CTL_VEA_PLUG);
 
 	while (1) {
 		int	creds = GC_CREDS_PRIV;
@@ -1126,9 +1121,6 @@ vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
 			break;
 		}
 	}
-
-	/* Unplug and make the freed extents available immediately. */
-	vos_pool_ctl(poh, VOS_PO_CTL_VEA_UNPLUG);
 
 	if (total != 0) /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
