@@ -6,7 +6,8 @@
 
 This article shows how to get started using Distributed Asynchronous Object Storage (DAOS) containers by taking you through the steps to build, configure and run the DAOS service in a Docker container. 
 
-All commands shown here are on a two-socket Cascade Lake server running a new install of Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DRAM and 16GB of disk space. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
+All commands shown here are on a two-socket Cascade Lake server running a new install of Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DDR and 16GB of storage. 
+On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
 ## What is DAOS
 The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware.
@@ -31,7 +32,7 @@ docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 
 ### 2. Build From Remote Github Repo
-In this step, we create a CentOS 7 image and fetches the latest DAOS version from [GitHub/daos-stack](https://github.com/daos-stack/daos/tree/master/utils/docker), builds it, and installs it in the image.
+In this step, we create a CentOS 7 image and fetches the latest DAOS version from [GitHub/daos-stack](https://github.com/daos-stack/daos/tree/master/utils/docker), builds it, and install it in the image.
 
 `docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.7 -t daos`
 
@@ -40,7 +41,7 @@ In this step, we create a CentOS 7 image and fetches the latest DAOS version fro
 Once the image has been created, a container will need to be started to run the DAOS service. 
 
 ### Setting Hugepages
-At this stage, depending on how hugepages is configured on your system, you may get errors when the `docker run` command is issued. So for this demonstration we will configure hugepages before issueing the `docker run` command:
+At this stage, depending on how hugepages are configured on your system, you may get errors when the `docker run` command is issued. So for this demonstration, we will configure hugepages before issuing the `docker run` command:
 
 We set the hugepages by using the following commands
 ```bash
@@ -65,7 +66,7 @@ Hugetlb:         2097152 kB
 For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages)
 
 ### Starting the Docker Container
-Now we need to start the docker container by invoking "docker run" command
+Now we need to start the docker container by invoking the "docker run" command
 
 `sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages:/dev/hugepages daos`
 
@@ -94,7 +95,7 @@ Once started, the DAOS server waits for the administrator to format the system. 
 
 `sudo docker exec server dmg -i storage format`
 
-This should provide an output similar to:
+This command should provide an output similar to:
 
 ```bash
 Format Summary:
