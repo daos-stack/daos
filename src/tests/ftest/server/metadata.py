@@ -50,6 +50,26 @@ class ObjectMetadata(TestWithServers):
     # Number of created containers that should not be possible
     CREATED_CONTAINERS_LIMIT = 3500
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a TestWithServers object."""
+        super().__init__(*args, **kwargs)
+        self.ior_managers = []
+
+    def pre_tear_down(self):
+        """Tear down steps to optionally run before tearDown().
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        error_list = []
+        if self.ior_managers:
+            self.test_log.info("Stopping IOR job managers")
+            error_list = self._stop_managers(self.ior_managers, "IOR job manager")
+        else:
+            self.log.debug("no pre-teardown steps defined")
+        return error_list
+
     def create_pool(self):
         """Create a pool and display the svc ranks."""
         self.add_pool()
@@ -348,15 +368,15 @@ class ObjectMetadata(TestWithServers):
                     "F", "/run/ior/ior{}flags/".format(operation))
 
                 # Define the job manager for the IOR command
-                manager = Orterun(ior_cmd)
-                manager.tmpdir.update(self.test_dir, "orterun.tmpdir")
-                env = ior_cmd.get_default_env(str(manager))
-                manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-                manager.assign_processes(processes)
-                manager.assign_environment(env)
+                self.ior_managers.append(Orterun(ior_cmd))
+                self.ior_managers[-1].tmpdir_base.update(self.test_dir, "orterun.tmpdir_base")
+                env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
+                self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
+                self.ior_managers[-1].assign_processes(processes)
+                self.ior_managers[-1].assign_environment(env)
 
                 # Add a thread for these IOR arguments
-                thread_manager.add(manager=manager, uuids=list_of_uuid_lists[index])
+                thread_manager.add(manager=self.ior_managers[-1], uuids=list_of_uuid_lists[index])
                 self.log.info(
                     "Created %s thread %s with container uuids %s", operation,
                     index, list_of_uuid_lists[index])
