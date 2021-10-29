@@ -286,7 +286,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 					return defaultMessage, nil
 				},
 			},
-			expErr: context.DeadlineExceeded,
+			expErr: errors.New("timed out"),
 		},
 		"parent context canceled": {
 			withCancel: func() *ctxCancel {
