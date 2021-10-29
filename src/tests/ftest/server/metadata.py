@@ -374,6 +374,7 @@ class ObjectMetadata(TestWithServers):
                 self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
                 self.ior_managers[-1].assign_processes(processes)
                 self.ior_managers[-1].assign_environment(env)
+                self.ior_managers[-1].verbose = False
 
                 # Add a thread for these IOR arguments
                 thread_manager.add(manager=self.ior_managers[-1], uuids=list_of_uuid_lists[index])
