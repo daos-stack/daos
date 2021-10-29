@@ -37,14 +37,18 @@ const (
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
 
-var defConfigCmpOpts = []cmp.Option{
-	cmpopts.IgnoreUnexported(
-		security.CertificateConfig{},
-	),
-	cmpopts.IgnoreFields(Server{}, "Path"),
-	cmpopts.IgnoreFields(engine.Config{}, "GetNetDevCls", "ValidateProvider",
-		"GetIfaceNumaNode"),
-}
+var (
+	defConfigCmpOpts = []cmp.Option{
+		cmpopts.IgnoreUnexported(
+			security.CertificateConfig{},
+		),
+		cmpopts.IgnoreFields(Server{}, "Path"),
+	}
+
+	defHugePageInfo = &HugePageInfo{
+		PageSizeKb: 2048,
+	}
+)
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
 // lines in order to verify parsing of all available params.
@@ -136,11 +140,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				for _, eCfg := range configA.Engines {
-					eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-				}
-				err = configA.Validate(context.TODO(), log)
+				err = configA.Validate(context.TODO(), log, defHugePageInfo.PageSizeKb)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -159,11 +159,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				for _, eCfg := range configB.Engines {
-					eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-				}
-				err = configB.Validate(context.TODO(), log)
+				err = configB.Validate(context.TODO(), log, defHugePageInfo.PageSizeKb)
 			}
 
 			if err != nil {
@@ -200,7 +196,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithEnableVMD(true).     // vmd disabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
-		WithNrHugePages(4096).
+		WithNrHugePages(0).      // hugepages auto-calculated by default
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
@@ -288,10 +284,36 @@ func TestServerConfig_Constructed(t *testing.T) {
 }
 
 func TestServerConfig_Validation(t *testing.T) {
+	testDir, cleanup := CreateTestDir(t)
+	defer cleanup()
+
+	// First, load a config based on the server config with all options uncommented.
+	testFile := filepath.Join(testDir, sConfigUncomment)
+	uncommentServerConfig(t, testFile)
+	config, err := mockConfigFromFile(t, testFile)
+	if err != nil {
+		t.Fatalf("failed to load %s: %s", testFile, err)
+	}
+
+	dupeCfg := func(in *Server) *Server {
+		out := new(Server)
+		*out = *in
+
+		*out.TransportConfig = *in.TransportConfig
+		copy(out.Servers, in.Servers)
+		copy(out.Engines, in.Engines)
+		copy(out.BdevExclude, in.BdevExclude)
+		copy(out.BdevInclude, in.BdevInclude)
+		copy(out.AccessPoints, in.AccessPoints)
+
+		return out
+	}
+
 	noopExtra := func(c *Server) *Server { return c }
 
 	for name, tt := range map[string]struct {
 		extraConfig func(c *Server) *Server
+		expConfig   *Server
 		expErr      error
 	}{
 		"example config": {},
@@ -455,6 +477,67 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigHelperStreamCountMismatch(1, 4, 0, 9),
 		},
+		"insufficient hugepages": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugePages(2048).
+					WithEngines(
+						engine.NewConfig().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmClass("ram").
+									WithScmRamdiskSize(1).
+									WithScmMountPoint("/foo"),
+								storage.NewTierConfig().
+									WithBdevClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
+							).
+							WithFabricInterfacePort(1234).
+							WithFabricInterface("eth0").
+							WithTargetCount(8),
+					)
+			},
+			expErr: FaultConfigInsufficientHugePages(4096, 2048),
+		},
+		"calculated hugepages": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugePages(0).
+					WithEngines(
+						engine.NewConfig().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmClass("ram").
+									WithScmRamdiskSize(1).
+									WithScmMountPoint("/foo"),
+								storage.NewTierConfig().
+									WithBdevClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
+							).
+							WithFabricInterfacePort(1234).
+							WithFabricInterface("eth0").
+							WithTargetCount(8),
+					)
+			},
+			expConfig: dupeCfg(config).
+				WithAccessPoints("hostname1:10001").
+				WithNrHugePages(4096).
+				WithEngines(
+					engine.NewConfig().
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithBdevClass("nvme").
+								WithBdevDeviceList("0000:81:00.0"),
+						).
+						WithStorageConfigOutputPath("/foo/daos_nvme.conf").
+						WithStorageVosEnv("NVME").
+						WithFabricInterfacePort(1234).
+						WithFabricInterface("eth0").
+						WithTargetCount(8),
+				),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -464,26 +547,17 @@ func TestServerConfig_Validation(t *testing.T) {
 				tt.extraConfig = noopExtra
 			}
 
-			testDir, cleanup := CreateTestDir(t)
-			defer cleanup()
-
-			// First, load a config based on the server config with all options uncommented.
-			testFile := filepath.Join(testDir, sConfigUncomment)
-			uncommentServerConfig(t, testFile)
-			config, err := mockConfigFromFile(t, testFile)
-			if err != nil {
-				t.Fatalf("failed to load %s: %s", testFile, err)
-			}
-
 			// Apply extra config test case
-			config = tt.extraConfig(config)
+			dupe := tt.extraConfig(dupeCfg(config))
 
-			for _, eCfg := range config.Engines {
-				eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-					WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
+			CmpErr(t, tt.expErr, dupe.Validate(context.TODO(), log, defHugePageInfo.PageSizeKb))
+			if tt.expErr != nil || tt.expConfig == nil {
+				return
 			}
 
-			CmpErr(t, tt.expErr, config.Validate(context.TODO(), log))
+			if diff := cmp.Diff(tt.expConfig, dupe, defConfigCmpOpts...); diff != "" {
+				t.Fatalf("unexpected config after validation (-want, +got): %s", diff)
+			}
 		})
 	}
 }
@@ -756,12 +830,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			}
 			config = tt.extraConfig(config)
 
-			for _, eCfg := range config.Engines {
-				eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-					WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-			}
-
-			CmpErr(t, tt.expValidateErr, config.Validate(context.TODO(), log))
+			CmpErr(t, tt.expValidateErr, config.Validate(context.TODO(), log, defHugePageInfo.PageSizeKb))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -960,7 +1029,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(context.TODO(), log)
+			gotErr := conf.Validate(context.TODO(), log, defHugePageInfo.PageSizeKb)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}

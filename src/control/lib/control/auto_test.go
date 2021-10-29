@@ -419,6 +419,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 	withSingleSSD := newMockHostResponses(t, "nvmeSingle")
 	withSSDs := newMockHostResponses(t, "withSpaceUsage")
 	noSSDsOnNUMA1 := newMockHostResponses(t, "noNvmeOnNuma1")
+	diffHpSizes := dualHostResp("withSpaceUsage", "1gbHugepages")
 
 	for name, tc := range map[string]struct {
 		engineCount   int
@@ -551,6 +552,19 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				noSSDsOnNUMA1.getNUMAPMEMs(t, 1),
 			},
 			expSSDs: [][]string{{}, {}},
+		},
+		"different hugepage sizes": {
+			engineCount:   2,
+			hostResponses: diffHpSizes,
+			expPMems: [][]string{
+				engineCfgWithSSDs(t, 0).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
+			},
+			expSSDs: [][]string{
+				engineCfgWithSSDs(t, 0).Storage.Tiers.BdevConfigs()[0].Bdev.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Tiers.BdevConfigs()[0].Bdev.DeviceList,
+			},
+			expErr: errors.New("not consistent"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -853,7 +867,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{
 				0: &coreCounts{16, 7}, 1: &coreCounts{15, 6},
 			},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(7680).WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(15872).WithEngines(
 				defaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
@@ -983,8 +997,9 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				numaIfaces:  tc.numaIfaces,
 			}
 			sd := &storageDetails{
-				numaPMems: tc.numaPMems,
-				numaSSDs:  tc.numaSSDs,
+				hugePageSize: 2048,
+				numaPMems:    tc.numaPMems,
+				numaSSDs:     tc.numaSSDs,
 			}
 
 			gotCfg, gotErr := genConfig(context.TODO(), log, mockEngineCfg,

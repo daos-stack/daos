@@ -34,9 +34,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
-	err := cfg.Validate(ctx, log)
-	if err != nil {
+func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, hpi *common.HugePageInfo) (*system.FaultDomain, error) {
+	if err := cfg.Validate(ctx, log, hpi.PageSizeKb); err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
@@ -210,10 +209,10 @@ func (srv *server) initNetwork(ctx context.Context) error {
 	return nil
 }
 
-func (srv *server) initStorage() error {
+func (srv *server) initStorage(hpi *common.HugePageInfo) error {
 	defer srv.logDuration(track("time to init storage"))
 
-	if err := prepBdevStorage(srv, iommuDetected(), common.GetHugePageInfo); err != nil {
+	if err := prepBdevStorage(srv, iommuDetected(), hpi); err != nil {
 		return err
 	}
 
@@ -425,7 +424,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	ctx = ctxNetdetect
 	defer netdetect.CleanUp(ctx)
 
-	faultDomain, err := processConfig(ctx, log, cfg)
+	hpi, err := common.GetHugePageInfo()
+	if err != nil {
+		return err
+	}
+
+	faultDomain, err := processConfig(ctx, log, cfg, hpi)
 	if err != nil {
 		return err
 	}
@@ -444,7 +448,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return err
 	}
 
-	if err := srv.initStorage(); err != nil {
+	if err := srv.initStorage(hpi); err != nil {
 		return err
 	}
 
