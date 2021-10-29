@@ -177,6 +177,18 @@ class DaosServerCommand(YamlCommand):
             engine_values = self.yaml.get_engine_values(name)
         return engine_values
 
+    def __str__(self):
+
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+
+            str: the command with all the defined parameters
+
+        """
+
+        return " ".join(["numactl --cpunodebind=1", super().__str__()])
+
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 

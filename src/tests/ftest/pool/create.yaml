@@ -14,15 +14,25 @@ timeouts:
   test_create_max_pool: 300
   test_create_no_space: 300
   test_create_no_space_loop: 2160
+setup:
+  server_manager_class: Orterun
 server_config:
   name: daos_server
+  control_log_mask: DEBUG
   servers:
     0:
+      pinned_numa_node: 0
       bdev_class: nvme
       bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+      log_mask: DEBUG,MEM=ERR,SWIM=ERR
+      env_vars:
+        # DD_MASK all except mem
+        - DD_MASK=any,trace,net,io,md,pl,mgmt,epc,df,rebuild,sec,csum,dsms,any
+        - DAOS_SCHED_WATCHDOG_ALL=1
+        # - DAOS_SCHED_RELAX_MODE=disabled
 pool_1:
   name: daos_server
   control_method: dmg
