@@ -5,7 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from vol_test_base import VolTestBase
-from general_utils import get_job_manager_class
+from general_utils import get_job_manager_class, run_pcmd
 
 
 class DaosVol(VolTestBase):
@@ -38,6 +38,17 @@ class DaosVol(VolTestBase):
         :avocado: tags=hdf5,vol,volunit,volmpich
         :avocado: tags=DAOS_5610
         """
+
+
+        # quick hack, let's see what ib0 and ib1 interfaces & link status look like
+        run_pcmd(self.server_managers[0].hosts + self.hostlist_clients, "dmesg|egrep 'ib0.*becomes ready|ib1.*becomes ready'")
+        run_pcmd(self.server_managers[0].hosts + self.hostlist_clients, "/usr/sbin/ip link show ib0")
+        run_pcmd(self.server_managers[0].hosts + self.hostlist_clients, "/usr/sbin/ip link show ib1")
+        run_pcmd(self.server_managers[0].hosts + self.hostlist_clients, "dmesg|egrep 'ib0.*becomes ready|ib1.*becomes ready'")
+        run_pcmd(self.server_managers[0].hosts + self.hostlist_clients, "/sbin/ifconfig ib0")
+        run_pcmd(self.server_managers[0].hosts + self.hostlist_clients, "/sbin/ifconfig ib1")
+        run_pcmd(self.server_managers[0].hosts + self.hostlist_clients, "dmesg|egrep 'ib0.*becomes ready|ib1.*becomes ready'")
+
         self.job_manager = get_job_manager_class("Mpirun", None, False, "mpich")
         self.set_job_manager_timeout()
         self.run_test(

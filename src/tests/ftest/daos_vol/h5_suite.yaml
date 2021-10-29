@@ -8,6 +8,8 @@ job_manager_timeout: 900
 server_config:
     name: daos_server
     servers:
+        pinned_numa_node: 1
+        fabric_iface: ib1
         bdev_class: nvme
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
         scm_class: dcpm
@@ -24,21 +26,21 @@ container:
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
 daos_vol_tests:  !mux
-    test1:
-        testname: h5_partest_t_shapesame
-        client_processes: 6
+    #test1:
+    #    testname: h5_partest_t_shapesame
+    #    client_processes: 6
     test2:
         testname: h5vl_test_parallel
         client_processes: 6
     test3:
         testname: h5vl_test
         client_processes: 1
-    test4:
-        testname: h5_test_testhdf5
-        client_processes: 1
-    test5:
-        testname: h5_partest_testphdf5
-        client_processes: 6
+    #test4:
+    #    testname: h5_test_testhdf5
+    #    client_processes: 1
+    #test5:
+    #    testname: h5_partest_testphdf5
+    #    client_processes: 6
     test6:
         testname: h5daos_test_map
         client_processes: 1
@@ -48,6 +50,6 @@ daos_vol_tests:  !mux
     test8:
         testname: h5daos_test_oclass
         client_processes: 1
-    test9:
-        testname: h5daos_test_metadata_parallel -U -u
-        client_processes: 6
+    #test9:
+    #    testname: h5daos_test_metadata_parallel -U -u
+    #    client_processes: 6
