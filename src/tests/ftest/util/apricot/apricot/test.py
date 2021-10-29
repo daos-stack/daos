@@ -717,7 +717,7 @@ class TestWithServers(TestWithoutServers):
             self.job_manager = get_job_manager_class(
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
             self.set_job_manager_timeout()
-            self.job_manager.tmpdir.update(self.test_dir, "tmpdir")
+            self.job_manager.tmpdir_base.update(self.test_dir, "tmpdir_base")
 
         # Mark the end of setup
         self.log.info("=" * 100)
