@@ -238,4 +238,40 @@ struct test_op_record {
 	};
 };
 
+/* extent, test parameter */
+struct ec_ext {
+	/* start offset */
+	uint64_t	e_start;
+	/* end offset + 1, just easier for defining input */
+	uint64_t	e_end;
+};
+
+static inline void
+ec_ext2recx(struct ec_ext *ext, daos_recx_t *recx)
+{
+	recx->rx_idx	= ext->e_start;
+	recx->rx_nr	= ext->e_end - ext->e_start;
+}
+
+/* convert an array of extents to the overall range of them */
+static inline void
+ec_exts2range(struct ec_ext *exts, int ext_nr, struct ec_ext *range)
+{
+	int	i;
+
+	for (i = 0; i < ext_nr; i++) {
+		/* valid extent */
+		assert_true(exts[i].e_start < exts[i].e_end);
+
+		if (i == 0)
+			*range = exts[i];
+
+		if (range->e_start > exts[i].e_start)
+			range->e_start = exts[i].e_start;
+
+		if (range->e_end < exts[i].e_end)
+			range->e_end = exts[i].e_end;
+	}
+}
+
 #endif

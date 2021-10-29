@@ -472,6 +472,169 @@ ec_partial_update_agg(void **state)
 	free(verify_data);
 }
 
+/* Submit a set of EC writes(defined by ec_ext), these writes should eventually
+ * compose one or N stripes, then wait for aggregation and verify these writes
+ * have been aggregated (no more replicated data in parity shard), also check
+ * if aggregated data are still correct.
+ */
+static void
+overlapped_update_agg(test_arg_t *arg, struct ec_ext *exts, int ext_nr)
+{
+	struct ioreq	req;
+	daos_recx_t	recx;
+	daos_obj_id_t	oid;
+	struct ec_ext	range = {0};
+	daos_off_t	data_off;
+	int		stripe_nr;
+	int		stripe_sz;
+	int		i;
+	char		*data;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+
+	/* Assuming object class is ec(2+1):
+	 * - these extents should have no gap (can overlap)
+	 * - they can compose N stripes (no misaligned header or tail).
+	 */
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
+	stripe_sz = EC_CELL_SIZE * 2;
+	/* convert all extents to the overall range */
+	ec_exts2range(exts, ext_nr, &range);
+
+	/* should be N stripes (no misaligned header or tail), so local aggregation
+	 * can actually do something.
+	 */
+	assert_true((range.e_start % stripe_sz == 0) && (range.e_end % stripe_sz == 0));
+
+	stripe_nr = (range.e_end - range.e_start) / stripe_sz;
+	/* at least one stripe */
+	assert_true(stripe_nr >= 1);
+
+	/* allocate buffer for the whole range */
+	data = (char *)malloc(stripe_nr * stripe_sz);
+	assert_true(data != NULL);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/* submit all the partially overlapped overwrites */
+	for (i = 0; i < ext_nr; i++) {
+		ec_ext2recx(&exts[i], &recx);
+		data_off = recx.rx_idx - range.e_start;
+		memset(&data[data_off], 'a' + i, recx.rx_nr);
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     &data[data_off], recx.rx_nr, &req);
+	}
+
+	/* trigger EC aggregation on partiy shards */
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+				       stripe_sz * stripe_nr, DAOS_FORCE_EC_AGG);
+	for (i = 0; i < ext_nr; i++) {
+		ec_ext2recx(&exts[i], &recx);
+
+		data_off = recx.rx_idx - range.e_start;
+		ec_verify_parity_data(&req, "d_key", "a_key", recx.rx_idx, recx.rx_nr,
+				      &data[data_off], DAOS_TX_NONE, true);
+	}
+
+	ioreq_fini(&req);
+	free(data);
+}
+
+/* a set of overlapped extents, one full stripe (cell_size=1MB) */
+static struct ec_ext ec_exts_1[] = {
+	{
+		.e_start	= 0,
+		.e_end		= (4 << 10) - 64,
+	},
+	{
+		.e_start	= (2 << 10) + 16,
+		.e_end		= (8 << 10) - 64,
+	},
+	{
+		.e_start	= (4 << 10) + 16,
+		.e_end		= (16 << 10) - 64,
+	},
+	{
+		.e_start	= (8 << 10) + 16,
+		.e_end		= (32 << 10) - 64,
+	},
+	{
+		.e_start	= (16 << 10) + 16,
+		.e_end		= (64 << 10) - 64,
+	},
+	{
+		.e_start	= (32 << 10) + 16,
+		.e_end		= (128 << 10) - 64,
+	},
+	{
+		.e_start	= (64 << 10) + 16,
+		.e_end		= (256 << 10) - 64,
+	},
+	{
+		.e_start	= (128 << 10) + 16,
+		.e_end		= (512 << 10) - 64,
+	},
+	{
+		.e_start	= (256 << 10) + 16,
+		.e_end		= (1024 << 10) - 64,
+	},
+	{
+		.e_start	= (768 << 10) + 16,
+		.e_end		= (1536 << 10) - 64,
+	},
+	{
+		.e_start	= (1024 << 10) + 16,
+		.e_end		= (2048 << 10), /* reach end of stripe */
+	},
+};
+
+static void
+ec_overlapped_update_agg1(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	overlapped_update_agg(arg, ec_exts_1, ARRAY_SIZE(ec_exts_1));
+}
+
+/* a set of overlapped extents, some of them cross stripe boundary,
+ * and a large write covers more than a full stripe.
+ */
+static struct ec_ext ec_exts_2[] = {
+	{
+		.e_start	= 0,
+		.e_end		= (512 << 10) - 1024,
+	},
+	{
+		.e_start	= (256 << 10) + 1024,
+		.e_end		= (1024 << 10) + 1024, /* cross cell boundary */
+	},
+	{
+		.e_start	= (1024 << 10) - 2048,
+		.e_end		= (2048 << 10) + 2048, /* cross stripe boundary */
+	},
+	{
+		.e_start	= (2048 << 10) - 2048, /* cross stripe boundary */
+		.e_end		= (3072 << 10),
+	},
+	{	/* fully overwrite previous extent, larger than one stripe */
+		.e_start	= (2048 << 10) - 4096,
+		.e_end		= (4096 << 10),		/* end of the second stripe */
+	},
+};
+
+static void
+ec_overlapped_update_agg2(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	overlapped_update_agg(arg, ec_exts_2, ARRAY_SIZE(ec_exts_2));
+}
+
 static void
 ec_cross_cell_partial_update_agg(void **state)
 {
@@ -1505,29 +1668,32 @@ static const struct CMUnitTest ec_tests[] = {
 	 ec_full_partial_update_agg, async_disable, test_case_teardown},
 	{"EC6: ec partial and full update then aggregation",
 	 ec_partial_full_update_agg, async_disable, test_case_teardown},
-	{"EC7: ec file size check on parity",
+	{"EC7: ec partially overlapped update and aggregation",
+	 ec_overlapped_update_agg1, async_disable, test_case_teardown},
+	{"EC8: ec partially overlapped multi-stripe update and aggregation",
+	 ec_overlapped_update_agg2, async_disable, test_case_teardown},
+	{"EC9: ec file size check on parity",
 	 dfs_ec_check_size, async_disable, test_case_teardown},
-	{"EC8: ec file size check on non-parity",
+	{"EC10: ec file size check on non-parity",
 	 dfs_ec_check_size_nonparity, async_disable, test_case_teardown},
-	{"EC9: ec aggregation failed",
+	{"EC11: ec aggregation failed",
 	 ec_agg_fail, async_disable, test_case_teardown},
-	{"EC10: ec aggregation peer update failed",
+	{"EC12: ec aggregation peer update failed",
 	 ec_agg_peer_fail, async_disable, test_case_teardown},
-	{"EC11: ec single-value array mixed IO",
+	{"EC13: ec single-value array mixed IO",
 	 ec_singv_array_mixed_io, async_disable, test_case_teardown},
-	{"EC12: ec full stripe snapshot",
+	{"EC14: ec full stripe snapshot",
 	 ec_full_stripe_snapshot, async_disable, test_case_teardown},
-	{"EC13: ec partial stripe snapshot",
+	{"EC15: ec partial stripe snapshot",
 	 ec_partial_stripe_snapshot, async_disable, test_case_teardown},
-	{"EC14: ec partial stripe cross boundary snapshot",
-	 ec_partial_stripe_cross_boundry_snapshot, async_disable,
-	 test_case_teardown},
-	{"EC15: ec punch and check_size", ec_punch_check_size, async_disable,
-	 test_case_teardown},
-	{"EC16: ec single-value overwrite", ec_singv_overwrite, async_disable,
-	 test_case_teardown},
-	{"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
-	 test_case_teardown},
+	{"EC16: ec partial stripe cross boundary snapshot",
+	 ec_partial_stripe_cross_boundry_snapshot, async_disable, test_case_teardown},
+	{"EC17: ec punch and check_size",
+	 ec_punch_check_size, async_disable, test_case_teardown},
+	{"EC18: ec single-value overwrite",
+	 ec_singv_overwrite, async_disable, test_case_teardown},
+	{"EC19: ec single-value different size fetch",
+	 ec_singv_diff_size_fetch, async_disable, test_case_teardown},
 };
 
 int
