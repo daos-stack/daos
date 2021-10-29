@@ -1656,7 +1656,7 @@ class posix_tests():
 
         count = 5000
         if self.dfuse.valgrind.use_valgrind:
-            count = 1000
+            count = 2000
 
         fc = 0
         error_count = 0
