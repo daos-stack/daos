@@ -142,14 +142,14 @@ pool_hop_free(struct d_ulink *hlink)
 	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
-	if (pool->vp_base != NULL) {
-		rc = munlock(pool->vp_base, pool->vp_size);
+	if (pool->vp_size != 0) {
+		rc = munlock((void *)pool->vp_umm.umm_base, pool->vp_size);
 		if (rc != 0)
-			D_WARN("Failed to unlock pool memory: errno=%d (%s)\n", errno,
-			       strerror(errno));
+			D_WARN("Failed to unlock pool memory at "DF_X64": errno=%d (%s)\n",
+			       pool->vp_umm.umm_base, errno, strerror(errno));
 		else
-			D_DEBUG(DB_MGMT, "Unlocked VOS pool memory: "DF_U64" bytes at %p\n",
-				pool->vp_size, pool->vp_base);
+			D_DEBUG(DB_MGMT, "Unlocked VOS pool memory: "DF_U64" bytes at "DF_X64"\n",
+				pool->vp_size, pool->vp_umm.umm_base);
 	}
 	if (pool->vp_uma.uma_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
@@ -630,68 +630,53 @@ vos_register_slabs(struct umem_attr *uma)
 	return 0;
 }
 
-#define LINE_SIZE 256
+enum {
+	/** Memory locking flag not initialized */
+	LM_FLAG_UNINIT,
+	/** Memory locking disabled */
+	LM_FLAG_DISABLED,
+	/** Memory locking enabled */
+	LM_FLAG_ENABLED
+};
+
 static void
 lock_pool_memory(struct vos_pool *pool)
 {
+	static		 int lock_mem = LM_FLAG_UNINIT;
 	struct rlimit	 rlim;
-	FILE		*maps = fopen("/proc/self/maps", "r");
-	uintptr_t	 addr1, addr2;
-	uintptr_t	 pool_base = (uintptr_t)pool->vp_pool_df;
-	char		*tok, *save;
-	char		 buf[LINE_SIZE];
 	int		 rc;
 
-	if (maps == NULL) {
-		D_WARN("Could not open /proc/self/maps to lock pool memory: errno=%d (%s)\n",
-		       errno, strerror(errno));
-		return;
-	}
-
-	rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
-	if (rc != 0) {
-		D_WARN("getrlimit() failed; errno=%d (%s)\n", errno, strerror(errno));
-		return;
-	}
-
-	if (rlim.rlim_cur != RLIM_INFINITY || rlim.rlim_max != RLIM_INFINITY) {
-		D_WARN("Infinite rlimit not detected, not locking VOS pool memory\n");
-		return;
-	}
-
-	while (fgets(buf, LINE_SIZE, maps) != NULL) {
-		tok = strtok_r(buf, "-", &save);
-
-		if (tok == NULL)
-			continue;
-
-		addr1 = strtoull(tok, NULL, 16);
-
-		tok = strtok_r(NULL, " ", &save);
-
-		if (tok == NULL)
-			continue;
-
-		addr2 = strtoull(tok, NULL, 16);
-
-		if (addr1 > pool_base || addr2 < pool_base)
-			continue; /* Not the right map */
-
-		rc = mlock((void *)addr1, addr2 - addr1);
+	if (lock_mem == LM_FLAG_UNINIT) {
+		rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
 		if (rc != 0) {
-			D_WARN("Could not lock memory for VOS pool at %p; errno=%d (%s)\n",
-			       (void *)addr1, errno, strerror(errno));
+			D_WARN("getrlimit() failed; errno=%d (%s)\n", errno, strerror(errno));
+			lock_mem = LM_FLAG_DISABLED;
 			return;
 		}
 
-		/* Only save the size if the locking was successful */
-		pool->vp_base = (void *)addr1;
-		pool->vp_size = addr2 - addr1;
-		D_DEBUG(DB_MGMT, "Locking VOS pool in memory "DF_U64" bytes at %p\n", pool->vp_size,
-			pool->vp_base);
+		if (rlim.rlim_cur != RLIM_INFINITY || rlim.rlim_max != RLIM_INFINITY) {
+			D_WARN("Infinite rlimit not detected, not locking VOS pool memory\n");
+			lock_mem = LM_FLAG_DISABLED;
+			return;
+		}
 
-		break;
+		lock_mem = LM_FLAG_ENABLED;
 	}
+
+	if (lock_mem == LM_FLAG_DISABLED)
+		return;
+
+	rc = mlock((void *)pool->vp_umm.umm_base, pool->vp_pool_df->pd_scm_sz);
+	if (rc != 0) {
+		D_WARN("Could not lock memory for VOS pool at "DF_X64"; errno=%d (%s)\n",
+		       pool->vp_umm.umm_base, errno, strerror(errno));
+		return;
+	}
+
+	/* Only save the size if the locking was successful */
+	pool->vp_size = pool->vp_pool_df->pd_scm_sz;
+	D_DEBUG(DB_MGMT, "Locking VOS pool in memory "DF_U64" bytes at "DF_X64"\n", pool->vp_size,
+		pool->vp_umm.umm_base);
 }
 
 /*
