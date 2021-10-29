@@ -236,7 +236,7 @@ class Orterun(JobManager):
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
-        self.tmpdir = FormattedParameter("--tmpdir {}", None)
+        self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -341,6 +341,7 @@ class Mpirun(JobManager):
         self.envlist = FormattedParameter("-envlist {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
+        self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
         self.mpitype = mpitype
 
     def assign_hosts(self, hosts, path=None, slots=None):

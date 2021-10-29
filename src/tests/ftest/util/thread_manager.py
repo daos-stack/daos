@@ -4,10 +4,52 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from concurrent.futures import ThreadPoolExecutor, as_completed, CancelledError, TimeoutError
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from logging import getLogger
 
 from avocado.utils.process import CmdResult
+
+
+class ThreadResult():
+    """Class containing the results of a method executed by the ThreadManager class."""
+
+    def __init__(self, id, passed, args, result):
+        """Initialize a ThreadResult object.
+
+        Args:
+            id (int): the thread id for this result
+            passed (bool): whether the thread completed or raised an exception
+            args (dict): the arguments passed to the thread method
+            result (object): the object returned by the thread method
+        """
+        self.id = id
+        self.passed = passed
+        self.args = args
+        self.result = result
+
+    def __str__(self):
+        """Return the string respresentation of this object.
+
+        Returns:
+            str: the string respresentation of this object
+
+        """
+        info = ["Thread {} results:".format(self.id), "  args: {}".format(self.args), "  result:"]
+        if isinstance(self.result, CmdResult):
+            info.append("    command:     {}".format(self.result.command))
+            info.append("    exit_status: {}".format(self.result.exit_status))
+            info.append("    duration:    {}".format(self.result.duration))
+            info.append("    interrupted: {}".format(self.result.interrupted))
+            info.append("    stdout:")
+            for line in self.result.stdout_text.splitlines():
+                info.append("      {}".format(line))
+            info.append("    stderr:")
+            for line in self.result.stderr_text.splitlines():
+                info.append("      {}".format(line))
+        else:
+            for line in str(self.result).splitlines():
+                info.append("    {}".format(line))
+        return "\n".join(info)
 
 
 class ThreadManager():
@@ -24,6 +66,7 @@ class ThreadManager():
         self.method = method
         self.timeout = timeout
         self.job_kwargs = []
+        self.futures = {}
 
     @property
     def qty(self):
@@ -43,59 +86,57 @@ class ThreadManager():
         """Asynchronously run the method as a thread for each set of method arguments.
 
         Returns:
-            dict: a dictionary of lists of results returned by each thread under either a "PASS" or
-                "FAIL" key
+            list: a list of ThreadResults for the execution of each method.
 
         """
-        results = {"PASS": [], "FAIL": []}
+        results = []
         with ThreadPoolExecutor() as thread_executor:
             self.log.info("Submitting %d threads ...", len(self.job_kwargs))
-            futures = {thread_executor.submit(self.method, **kwargs) for kwargs in self.job_kwargs}
-            for future in as_completed(futures, self.timeout):
-                try:
-                    results["PASS"].append(future.result())
-                except CancelledError as error:
-                    results["FAIL"].append("{} was cancelled: {}".format(future, error))
-                except TimeoutError as error:
-                    results["FAIL"].append("{} timed out: {}".format(future, error))
-                except Exception as error:
-                    results["FAIL"].append("{} failed with an exception: {}".format(future, error))
+            futures = {
+                thread_executor.submit(self.method, **kwargs): index
+                for index, kwargs in enumerate(self.job_kwargs)}
+            try:
+                for future in as_completed(futures, self.timeout):
+                    id = futures[future]
+                    try:
+                        results.append(
+                            ThreadResult(id, True, self.job_kwargs[id], future.result()))
+                    except Exception as error:
+                        results.append(ThreadResult(id, False, self.job_kwargs[id], str(error)))
+            except TimeoutError as error:
+                for future in futures:
+                    if not future.done():
+                        results.append(ThreadResult(id, False, self.job_kwargs[id], str(error)))
         return results
 
-    def check_results(self, results):
+    def check(self, results):
         """Display the results from self.run() and indicate if any threads failed.
 
         Args:
-            results (dict): results return from self.run()
+            results (list): a list of ThreadResults from self.run()
 
         Returns:
-            bool: True if any threads failed; false otherwise.
+            bool: True if all threads passed; false otherwise.
 
         """
-        for key in sorted(results):
-            self.log.info("Results from threads that %sED", key)
-            for entry in results[key]:
-                if isinstance(entry, CmdResult):
-                    self.log.info(" command: %s", entry.command)
-                    self.log.info(
-                        " exit_status: %s, duration: %s, interrupted: %s",
-                        entry.exit_status, entry.duration, str(entry.interrupted))
-                    self.log.info(" stdout:")
-                    for line in entry.stdout_text.splitlines():
-                        self.log.info("    %s", line)
-                    self.log.info(" stderr:")
-                    for line in entry.stderr_text.splitlines():
-                        self.log.info("    %s", line)
-                else:
-                    for line in str(entry).splitlines():
-                        self.log.info(" %s", line)
-        return len(results["FAIL"]) > 0
+        failed = []
+        self.log.info("Results from threads that passed:")
+        for result in results:
+            if result.passed:
+                self.log.info(str(result.display))
+            else:
+                failed.append(result)
+        if failed:
+            self.log.info("Results from threads that passed:")
+            for result in failed:
+                self.log.info(str(result.display))
+        return len(failed) > 0
 
     def check_run(self):
         """Run the threads and check thr result.
 
         Returns:
-            bool: True if any threads failed; false otherwise.
+            bool: True if all threads passed; false otherwise.
 
         """
-        return self.check_results(self.run())
+        return self.check(self.run())
