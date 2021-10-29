@@ -112,7 +112,7 @@ Locate the container ID in the output and copy it, then run the following comman
 
 `sudo docker commit [CONTAINER_ID] [new_image_name]`
 
-You will now see in your list of images, your new_image_name
+You will now see in your list of images, including your new_image_name
 
 `sudo docker images`
 
