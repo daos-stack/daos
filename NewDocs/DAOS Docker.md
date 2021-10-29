@@ -6,7 +6,7 @@
 
 This article shows how to get started using Distributed Asynchronous Object Storage (DAOS) containers by taking you through the steps to build, configure and run the DAOS service in a Docker container. 
 
-All commands shown here are on a two-socket Cascade Lake server running Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DRAM and 16GB of disk space. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
+All commands shown here are on a two-socket Cascade Lake server running a new install of Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DRAM and 16GB of disk space. On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
 ## What is DAOS
 The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware.
@@ -40,8 +40,9 @@ In this step, we create a CentOS 7 image and fetches the latest DAOS version fro
 Once the image has been created, a container will need to be started to run the DAOS service. 
 
 ### Setting Hugepages
-At this stage, depending on how hugepages is configured, you may or may not get errors, so for consistency, we will configure hugepages before running the docker image:
+At this stage, depending on how hugepages is configured on your system, you may get errors when the `docker run` command is issued. So for this demonstration we will configure hugepages before issueing the `docker run` command:
 
+We set the hugepages by using the following commands
 ```bash
 echo 1024 | sudo tee /proc/sys/VM/nr_hugepages
 cat /proc/meminfo | grep Huge
@@ -60,8 +61,11 @@ HugePages_Surp:        0
 Hugepagesize:       2048 kB
 Hugetlb:         2097152 kB
 ```
+
+For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages)
+
 ### Starting the Docker Container
-Now we need to start the docker container by invoking "docker run"
+Now we need to start the docker container by invoking "docker run" command
 
 `sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages:/dev/hugepages daos`
 
@@ -71,15 +75,17 @@ Alternatively, you can use 1G hugepages or no Hugepages as well.
 
 `sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev`
 
-> Warning: If Docker is being run on a non-Linux system, the "-v" parameter should be removed from the command line.
+> Warning: If Docker is being run on a non-Linux system, the "-v" parameter should be removed from the command line. Example:
 `docker run -it -d --privileged --cap-add=ALL --name server`
 
-## Start the DAOS Servoce
-The daos_server_local.yml configuration file sets up a simple local DAOS system with a single server instance running in the container. By default, it uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp. The storage size can be changed in the yaml file if necessary.
+## Start the DAOS Service
+Now that the Daos Docker image is running, we need to enable the DAOS Service 
 
 The DAOS service can be started in the docker container as follows:
 
 `docker exec server daos_server start -o /home/daos/daos/utils/config/examples/daos_server_local.yml`
+
+> The daos_server_local.yml configuration file sets up a simple local DAOS system with a single server instance running in the container. By default, it uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp. The storage size can be changed in the yaml file if necessary.
 
 > Note: Please make sure that the uio_pci_generic module is loaded on the host. **Need to research**
 
@@ -96,6 +102,18 @@ Format Summary:
   -----     ----------- ------------
   localhost 1           1
 ```
+## Saving the Docker changes (optional)
+Now that we have started the service and formatted the storage, you may want to save the changes at this point. You do that by running the following commands:
+
+`sudo docker ps -a`
+
+Locate the container ID in the output and copy it, then run the following command:
+
+`sudo docker commit [CONTAINER_ID] [new_image_name]`
+
+You will now see in your list of images, your new_image_name
+
+`sudo docker images`
 
 ## Next Steps:
 If all the above steps are done, we now have a complete Docker instance established, and we now need to look at pool creation using the DAOS Admin Tool
