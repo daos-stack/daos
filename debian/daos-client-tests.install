@@ -1,0 +1,17 @@
+usr/lib/daos/TESTING/*
+usr/bin/hello_drpc
+usr/bin/acl_dump_test
+usr/bin/agent_tests
+usr/bin/common_test
+usr/bin/drpc_engine_test
+usr/bin/drpc_test
+usr/bin/job_tests
+usr/bin/eq_tests
+usr/bin/security_test
+usr/bin/io_conf
+usr/bin/fault_status
+usr/lib64/libdaos_tests.so
+etc/daos/fault-inject-cart.yaml
+# For avocado tests
+usr/lib/daos/.build_vars.json
+usr/lib/daos/.build_vars.sh
