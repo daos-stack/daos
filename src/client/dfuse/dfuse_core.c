@@ -476,12 +476,16 @@ dfuse_release_check_all(struct dfuse_projection_info *fs_handle)
 	int				rc = -DER_SUCCESS;
 	int				rc2;
 	d_list_t			tmp_list;
+	int				count = 0;
+	int				fcount = 0;
 
 	D_INIT_LIST_HEAD(&tmp_list);
 
 	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
 
 	while ((ddl = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_dfs_list, ddl_list))) {
+		count++;
+
 		rc2 = dfs_release(ddl->ddl_obj);
 		if (rc2 == 0) {
 			D_FREE(ddl);
@@ -489,6 +493,7 @@ dfuse_release_check_all(struct dfuse_projection_info *fs_handle)
 			DFUSE_TRA_ERROR(ddl, "dfs_release() failed: %d (%s)", rc2, strerror(rc2));
 			d_list_add(&ddl->ddl_list, &tmp_list);
 			rc = rc2;
+			fcount++;
 		}
 	}
 
@@ -496,8 +501,9 @@ dfuse_release_check_all(struct dfuse_projection_info *fs_handle)
 
 	D_MUTEX_UNLOCK(&fs_handle->dpi_free_mutex);
 
+	DFUSE_TRA_INFO(fs_handle, "Released %d/%d descriptors\n", count - fcount, count);
 	if (rc)
-		DFUSE_TRA_ERROR(fs_handle, "Failed to flush free inodes, %d", rc);
+		DFUSE_TRA_ERROR(fs_handle, "Failed to flush free inodes: %d (%s)", rc, strerror(rc));
 	return rc;
 }
 
@@ -1397,7 +1403,14 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 
 	d_hash_table_traverse(&fs_handle->dpi_pool_table, dfuse_pool_close_cb, NULL);
 
-	dfuse_release_check_all(fs_handle);
+	rc = dfuse_release_check_all(fs_handle);
+
+	/* On shutdown there can be lots of handles closed with no calls to dfuse_release_check so
+	 * this iteration of release_check_all may have to do a lot of work, therefore re-try it
+	 * on failure.
+	 */
+	if (rc)
+		dfuse_release_check_all(fs_handle);
 
 	D_MUTEX_DESTROY(&fs_handle->dpi_free_mutex);
 

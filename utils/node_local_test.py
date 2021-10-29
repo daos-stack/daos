@@ -1008,7 +1008,6 @@ class DFuse():
             os.mkdir(self.dir)
         self._fi_file = None
         self._env = get_base_env()
-        self._env['D_LOG_FLUSH'] = 'DEBUG'
 
     def enable_fi(self):
         """Turn on fault injection for dfuse
@@ -1037,6 +1036,11 @@ class DFuse():
         self._fi_file.flush()
 
         self._env['D_FI_CONFIG'] = self._fi_file.name
+
+        # Use a minimal set of flags to ensure full memory tracing.
+        self._env['D_LOG_MASK'] = 'DEBUG'
+        self._env['DD_MASK'] = 'mem'
+        del self._env['DD_SUBSYS']
 
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
@@ -1657,14 +1661,18 @@ class posix_tests():
         fc = 0
         error_count = 0
         while fc < count:
+            if fc % 100 == 0:
+                print('Iteration {}'.format(fc))
             try:
-                fname = os.path.join(self.dfuse.dir, 'test_file')
-                with open(fname, 'w') as fd:
+                fname = os.path.join(self.dfuse.dir, 'test_file.{}'.format(fc))
+                with open(fname, 'w+') as fd:
                     fd.write('hello')
+                    fd.seek(0)
+                    fd.read(100)
                 os.unlink(fname)
-                print('created file {}'.format(fc))
+                #print('created file {}'.format(fc))
             except OSError as e:
-                print('Error creating file {} {}'.format(fc, e.errno))
+                #print('Error creating file {} {}'.format(fc, e.errno))
                 error_count += 1
                 if e.errno != 12:
                     raise

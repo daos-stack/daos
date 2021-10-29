@@ -866,10 +866,18 @@ restart:
 				  (!dfs->use_dtx || oexcl) ?
 				  DAOS_COND_DKEY_INSERT : 0, entry);
 		if (rc == EEXIST && !oexcl) {
+			int rc2;
+
 			/** just try refetching entry to open the file */
-			daos_array_close(file->oh, NULL);
+			rc2 = daos_array_close(file->oh, NULL);
+			if (rc2 == -DER_NOMEM)
+				daos_array_close(file->oh, NULL);
 		} else if (rc) {
-			daos_array_close(file->oh, NULL);
+			int rc2;
+
+			rc2 = daos_array_close(file->oh, NULL);
+			if (rc2 == -DER_NOMEM)
+				daos_array_close(file->oh, NULL);
 			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n",
 				file->name, rc);
 			D_GOTO(out, rc);
@@ -2923,7 +2931,11 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size,
 						 NULL);
 			if (rc) {
-				daos_array_close(obj->oh, NULL);
+				int rc2;
+
+				rc2 = daos_array_close(obj->oh, NULL);
+				if (rc2 == -DER_NOMEM)
+					daos_array_close(obj->oh, NULL);
 				D_ERROR("daos_array_get_size() Failed "DF_RC"\n", DP_RC(rc));
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
@@ -3392,12 +3404,13 @@ read_cb(tse_task_t *task, void *data)
 	struct dfs_read_params	*params;
 	int			rc = task->dt_result;
 
+	params = daos_task_get_priv(task);
+
 	if (rc != 0) {
-		D_ERROR("Failed to read from array object (%d)\n", rc);
+		D_ERROR("Failed to read from array object "DF_RC"\n", DP_RC(rc));
+		D_FREE(params);
 		return rc;
 	}
-
-	params = daos_task_get_priv(task);
 	D_ASSERT(params != NULL);
 
 	*params->read_size = params->arr_iod.arr_nr_read;
