@@ -7,6 +7,7 @@
 This article shows how to get started using Distributed Asynchronous Object Storage (DAOS) containers by taking you through the steps to build, configure and run the DAOS service in a Docker container. 
 
 All commands shown here are on a two-socket Cascade Lake server running a new install of Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DDR and 16GB of storage. 
+
 On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
 ## What is DAOS
