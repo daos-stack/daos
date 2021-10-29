@@ -425,7 +425,7 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger) (err error) {
+func (cfg *Server) Validate(log logging.Logger, hpi *common.HugePageInfo) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -445,7 +445,11 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return errors.New("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
 	}
 
+	cfgTargets := 0
+	var cfgHasBdevs bool
 	for idx, ec := range cfg.Engines {
+		cfgTargets += ec.TargetCount
+
 		if ec.LegacyStorage.WasDefined() {
 			log.Infof("engine %d: Legacy storage configuration detected. Please migrate to new-style storage configuration.", idx)
 			var tierCfgs storage.TierConfigs
@@ -480,6 +484,25 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 			}
 			ec.WithStorage(tierCfgs...)
 			ec.LegacyStorage = engine.LegacyStorage{}
+		}
+
+		if ec.Storage.Tiers.CfgHasBdevs() {
+			cfgHasBdevs = true
+		}
+	}
+
+	if cfgHasBdevs {
+		minHugePages, err := common.CalcMinHugePages(hpi, cfgTargets)
+		if err != nil {
+			return err
+		}
+
+		// If the config doesn't specify hugepages, use the minimum.
+		// Otherwise, validate that the configured amount is sufficient.
+		if cfg.NrHugepages == 0 {
+			cfg.NrHugepages = minHugePages
+		} else if cfg.NrHugepages < minHugePages {
+			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
 		}
 	}
 

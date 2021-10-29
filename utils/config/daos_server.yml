@@ -170,12 +170,13 @@
 ## Number of hugepages to allocate for use by NVMe SSDs
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. This indicates the number to be used for each spawned
-## I/O Engines, so the total will be this number * number of I/O Engines.
+## through SPDK. Note that each target requires 1 GB of hugepage space, so
+## this value needs to represent the total amount of hugespace required for
+## all targets across all engines, divided by the system hugepage size.
+## If not set here, an appropriate value will be automatically calculated.
 ## Default system hugepage size will be used.
 #
-## default: 4096
-#nr_hugepages: 4096
+#nr_hugepages: 16384
 #
 #
 ## Force specific debug mask for daos_server (control plane).

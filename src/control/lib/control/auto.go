@@ -115,7 +115,13 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	cfg, err := genConfig(req.Log, req.AccessPoints, nd, sd, ccs)
+	// FIXME: This should come from the remote server
+	hpi, err := common.GetHugePageInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := genConfig(req.Log, req.AccessPoints, nd, sd, ccs, hpi)
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +561,7 @@ func defaultEngineCfg(idx int) *engine.Config {
 
 // genConfig generates server config file from details of available network,
 // storage and CPU hardware.
-func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
+func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap, hpi *common.HugePageInfo) (*config.Server, error) {
 	// basic sanity checks
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
@@ -607,29 +613,21 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		engines = append(engines, engineCfg)
 	}
 
-	// determine a reasonable amount of hugepages to use
-	hugepage_info, err := common.GetHugePageInfo()
+	numTargets := 0
+	for _, e := range engines {
+		numTargets += e.TargetCount
+	}
+	reqHugePages, err := common.CalcMinHugePages(hpi, numTargets)
 	if err != nil {
-		return nil, errors.New("unable to read system hugepage info")
+		return nil, errors.Wrap(err, "unable to calculate minimum hugepages")
 	}
-	hugepage_size := hugepage_info.PageSizeKb >> 10
-	if hugepage_size == 0 {
-		return nil, errors.New("unable to read system hugepage size")
-	}
-	max_nrTgts := 0
-	for i := 0; i < nd.engineCount; i++ {
-		if ccs[i].nrTgts > max_nrTgts {
-			max_nrTgts = ccs[i].nrTgts
-		}
-	}
-	nr_hugepages := (minDMABuffer * max_nrTgts) / hugepage_size
 
 	cfg := config.DefaultServer().
 		WithAccessPoints(accessPoints...).
 		WithFabricProvider(engines[0].Fabric.Provider).
 		WithEngines(engines...).
 		WithControlLogFile(defaultControlLogFile).
-		WithNrHugePages(nr_hugepages)
+		WithNrHugePages(reqHugePages)
 
-	return cfg, cfg.Validate(log)
+	return cfg, cfg.Validate(log, hpi)
 }

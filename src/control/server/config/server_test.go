@@ -46,6 +46,10 @@ var (
 		),
 		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn", "Path"),
 	}
+
+	defHugePageInfo = &HugePageInfo{
+		PageSizeKb: 2048,
+	}
 )
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
@@ -159,7 +163,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log)
+				err = configA.Validate(log, defHugePageInfo)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -181,7 +185,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log)
+				err = configB.Validate(log, defHugePageInfo)
 			}
 
 			if err != nil {
@@ -220,7 +224,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithEnableVMD(true).     // vmd disabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
-		WithNrHugePages(4096).
+		WithNrHugePages(16384).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
@@ -471,7 +475,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			config = tt.extraConfig(config)
 
-			CmpErr(t, tt.expErr, config.Validate(log))
+			CmpErr(t, tt.expErr, config.Validate(log, defHugePageInfo))
 		})
 	}
 }
@@ -612,6 +616,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
 					engine.NewConfig().
+						WithTargetCount(1).
 						WithFabricInterface("ib0").
 						WithFabricInterfacePort(20000).
 						WithStorage(
@@ -692,7 +697,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			config = tt.extraConfig(config)
 			log.Debugf("%+v", config)
 
-			CmpErr(t, tt.expValidateErr, config.Validate(log))
+			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -786,6 +791,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithLogFile("a").
 			WithFabricInterface("a").
 			WithFabricInterfacePort(42).
+			WithTargetCount(1).
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmClass("ram").
@@ -798,6 +804,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithLogFile("b").
 			WithFabricInterface("b").
 			WithFabricInterfacePort(42).
+			WithTargetCount(1).
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmClass("ram").
@@ -895,7 +902,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log)
+			gotErr := conf.Validate(log, defHugePageInfo)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}

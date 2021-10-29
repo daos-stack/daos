@@ -34,9 +34,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
-	err := cfg.Validate(log)
-	if err != nil {
+func processConfig(log *logging.LeveledLogger, cfg *config.Server, hpi *common.HugePageInfo) (*system.FaultDomain, error) {
+	if err := cfg.Validate(log, hpi); err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
@@ -210,10 +209,10 @@ func (srv *server) initNetwork(ctx context.Context) error {
 	return nil
 }
 
-func (srv *server) initStorage() error {
+func (srv *server) initStorage(hpi *common.HugePageInfo) error {
 	defer srv.logDuration(track("time to init storage"))
 
-	if err := prepBdevStorage(srv, iommuDetected(), common.GetHugePageInfo); err != nil {
+	if err := prepBdevStorage(srv, iommuDetected(), hpi); err != nil {
 		return err
 	}
 
@@ -412,7 +411,12 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *config.Server) error {
-	faultDomain, err := processConfig(log, cfg)
+	hpi, err := common.GetHugePageInfo()
+	if err != nil {
+		return err
+	}
+
+	faultDomain, err := processConfig(log, cfg, hpi)
 	if err != nil {
 		return err
 	}
@@ -436,7 +440,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return err
 	}
 
-	if err := srv.initStorage(); err != nil {
+	if err := srv.initStorage(hpi); err != nil {
 		return err
 	}
 

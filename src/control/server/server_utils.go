@@ -161,7 +161,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) error {
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := storage.BdevPrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
@@ -176,9 +176,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 
 	hasBdevs := cfgHasBdevs(srv.cfg)
 	if hasBdevs {
-		// The config value is intended to be per-engine, so we need to adjust
-		// based on the number of engines.
-		prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
+		prepReq.HugePageCount = srv.cfg.NrHugepages
 
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
@@ -207,31 +205,27 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		}
 	}
 
-	hugePages, err := hpiGetter()
-	if err != nil {
-		return errors.Wrap(err, "unable to read system hugepage info")
+	if !hasBdevs {
+		// If no bdevs are configured, we're done.
+		return nil
 	}
 
-	if hasBdevs {
-		// Double-check that we got the requested number of huge pages after prepare.
-		if hugePages.Free < prepReq.HugePageCount {
-			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
-		}
+	// Double-check that we got the requested number of huge pages after prepare.
+	if hpi.Free < prepReq.HugePageCount {
+		return FaultInsufficientFreeHugePages(hpi.Free, prepReq.HugePageCount)
 	}
+
+	// Calculate mem_size per I/O engine (in MB)
+	pageSizeMb := hpi.PageSizeKb >> 10
+	memSizeMb := (hpi.Free / len(srv.cfg.Engines)) * pageSizeMb
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeMb, pageSizeMb)
 
 	for _, engineCfg := range srv.cfg.Engines {
-		// Calculate mem_size per I/O engine (in MB)
-		PageSizeMb := hugePages.PageSizeKb >> 10
-		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
-		engineCfg.MemSize *= PageSizeMb
+		engineCfg.MemSize = memSizeMb
 		// Pass hugepage size, do not assume 2MB is used
-		engineCfg.HugePageSz = PageSizeMb
-		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
+		engineCfg.HugePageSz = pageSizeMb
 		// Warn if hugepages are not enough to sustain average
-		// I/O workload (~1GB), ignore warning if only using SCM backend
-		if !hasBdevs {
-			continue
-		}
+		// I/O workload (~1GB).
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
 			srv.log.Errorf("Not enough hugepages are allocated!")
 		}
