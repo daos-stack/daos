@@ -332,7 +332,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	 *         1	[0,   0 us]
 	 *         2	[0,  16 us]
 	 *         3	[0,  64 us]
-	 *         4	[0, 128 us]
+	 *         4	[0, 256 us]
 	 *       ...	...
 	 *        10	[0,  ~1  s]
 	 *        11	[0,  ~1  s]
@@ -917,12 +917,13 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	/* Need to refresh the local pool map. */
-	if (tx->tx_pm_ver < oco->oco_map_version) {
+	if (tx->tx_pm_ver < oco->oco_map_version || daos_crt_network_error(rc) ||
+	    rc == -DER_TIMEDOUT || rc == -DER_EXCLUDED || rc == -DER_STALE) {
 		struct daos_cpd_sub_req		*dcsr;
 
 		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
 		rc1 = obj_pool_query_task(tse_task2sched(task), dcsr->dcsr_obj,
-					  &pool_task);
+					  oco->oco_map_version, &pool_task);
 		if (rc1 != 0) {
 			D_ERROR("Failed to refresh the pool map: "
 				DF_RC", original error: "DF_RC"\n",
@@ -941,7 +942,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_MUTEX_UNLOCK(&tx->tx_lock);
 			locked = false;
 
-			dc_task_schedule(pool_task, true);
+			tse_task_schedule(pool_task, true);
 		}
 
 		D_GOTO(out, rc = -DER_TX_RESTART);
@@ -960,24 +961,28 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_ERROR("Failed to add dependency on pool query: "
 				DF_RC", original error: "DF_RC"\n",
 				DP_RC(rc1), DP_RC(rc));
-			dc_task_decref(pool_task);
-			tx->tx_status = TX_ABORTED;
-
-			D_GOTO(out, rc = rc1);
-		}
-	} else {
-		rc1 = dc_task_resched(task);
-		if (rc1 != 0) {
-			D_ERROR("Failed to re-init task (%p): "
-				DF_RC", original error: "DF_RC"\n",
-				task, DP_RC(rc1), DP_RC(rc));
+			dc_pool_abandon_map_refresh_task(pool_task);
 			tx->tx_status = TX_ABORTED;
 
 			D_GOTO(out, rc = rc1);
 		}
 	}
 
-	D_GOTO(out, rc = 0);
+	rc1 = dc_task_resched(task);
+	if (rc1 != 0) {
+		D_ERROR("Failed to re-init task (%p): "DF_RC", original error: "
+			DF_RC"\n", task, DP_RC(rc1), DP_RC(rc));
+		if (pool_task != NULL)
+			dc_pool_abandon_map_refresh_task(pool_task);
+		tx->tx_status = TX_ABORTED;
+
+		D_GOTO(out, rc = rc1);
+	}
+
+	if (pool_task != NULL)
+		tse_task_schedule(pool_task, true);
+
+	rc = 0;
 
 out:
 	if (locked)
@@ -1055,7 +1060,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		 * dc_tx_cleanup().
 		 */
 		dcsr->dcsr_reasb = reasb_req;
-		rc = obj_reasb_req_init(dcsr->dcsr_reasb,
+		rc = obj_reasb_req_init(dcsr->dcsr_reasb, obj,
 					dcu->dcu_iod_array.oia_iods,
 					dcsr->dcsr_nr, oca);
 		if (rc != 0)
@@ -1177,6 +1182,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
+			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
@@ -1396,7 +1402,12 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 	d_list_for_each_entry_safe(dtr, next, dtr_list, dtr_link) {
 		if (dc_tx_same_rdg(&leader->dtr_group, &dtr->dtr_group)) {
 			d_list_del(&dtr->dtr_link);
-			D_FREE(dtr);
+			if (leader->dtr_group.drg_flags & DGF_RDONLY) {
+				D_FREE(leader);
+				leader = dtr;
+			} else {
+				D_FREE(dtr);
+			}
 		}
 	}
 
@@ -1527,7 +1538,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			if (rc < 0)
 				goto out;
 
-			if (rc > (OBJ_BULK_LIMIT >> 2)) {
+			if (rc > (DAOS_BULK_LIMIT >> 2)) {
 				rc = tx_bulk_prepare(dcsr, task);
 				if (rc != 0)
 					goto out;
@@ -1614,7 +1625,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		if (!obj_is_ec(obj))
+		if (!obj_is_ec(obj) && act_grp_cnt == 1)
 			mbs->dm_flags |= DMF_SRDG_REP;
 
 		/* If there is only one redundancy group to be modified,
@@ -1763,6 +1774,10 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	struct tx_commit_cb_args	 tcca;
 	crt_endpoint_t			 tgt_ep;
 	int				 rc;
+
+	if (tx->tx_pm_ver != 0 && tx->tx_pm_ver != dc_pool_get_version(tx->tx_pool) &&
+	    (tx->tx_retry || tx->tx_read_cnt > 0))
+		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	if (!tx->tx_retry) {
 		rc = dc_tx_commit_prepare(tx, task);

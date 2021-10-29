@@ -94,7 +94,9 @@ bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 {
 	struct media_error_msg	*mem;
 
-	D_ALLOC_PTR(mem);
+	if (bxc->bxc_blobstore == NULL)
+		return;
+	D_ALLOC_PTR(mem); /* mem is freed in bio_media_error */
 	if (mem == NULL)
 		return;
 	mem->mem_bs		= bxc->bxc_blobstore;
@@ -254,11 +256,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	cmd.cdw10 |= SPDK_NVME_LOG_ERROR;
 	cmd.cdw11 = numdu;
 	cdata = dev_health->bdh_ctrlr_buf;
-	if (cdata->elpe >= NVME_MAX_ERROR_LOG_PAGES) {
-		D_ERROR("Device error log page size exceeds buffer size\n");
-		dev_health->bdh_inflights--;
-		goto out;
-	}
 	ep_buf_sz = ep_sz * (cdata->elpe + 1);
 
 	/*
@@ -372,7 +369,7 @@ populate_intel_smart_stats(struct bio_dev_health *bdh)
 			atb = isp->attributes[i];
 			/* divide raw value by 1024 to derive the percentage */
 			stats->media_wear_raw =
-				extend_to_uint64(atb.raw_value, 6) >> 10;
+					extend_to_uint64(atb.raw_value, 6);
 			d_tm_set_counter(bdh->bdh_media_wear_raw,
 					 stats->media_wear_raw);
 		}
@@ -532,8 +529,8 @@ get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 
 	/* Store Intel SMART stats in in-memory health state log. */
-	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
-	populate_intel_smart_stats(dev_health);
+	if (dev_health->bdh_vendor_id == SPDK_PCI_VID_INTEL)
+		populate_intel_smart_stats(dev_health);
 
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
@@ -593,13 +590,13 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 
 	/* Store device health info in in-memory health state log. */
-	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
+	dev_health->bdh_health_state.timestamp = daos_wallclock_secs();
 	populate_health_stats(dev_health);
 
 	/* Prep NVMe command to get SPDK Intel NVMe SSD Smart Attributes */
 	if (dev_health->bdh_vendor_id != SPDK_PCI_VID_INTEL) {
 		get_spdk_intel_smart_log_completion(bdev_io, true, ctxt);
-		goto out;
+		return;
 	}
 	page_sz = sizeof(struct spdk_nvme_intel_smart_information_page);
 	numd = page_sz / sizeof(uint32_t) - 1u;
@@ -728,7 +725,7 @@ collect_raw_health_data(struct bio_xs_context *ctxt)
 }
 
 void
-bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass)
+bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_dev_health	*dev_health;
 	struct bio_blobstore	*bbs;
@@ -761,7 +758,7 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass)
 		D_ERROR("State transition on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	if (!bypass)
+	if (!bypass_health_collect())
 		collect_raw_health_data(ctxt);
 }
 
@@ -819,6 +816,9 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 
 	D_ASSERT(bb != NULL);
 	D_ASSERT(bdev_name != NULL);
+
+	if (bypass_health_collect())
+		return 0;
 
 	hp_sz = sizeof(struct spdk_nvme_health_information_page);
 	bb->bb_dev_health.bdh_health_buf = spdk_dma_zmalloc(hp_sz, 0, NULL);

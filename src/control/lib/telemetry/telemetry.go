@@ -39,17 +39,22 @@ const (
 	MetricTypeStatsGauge MetricType = C.D_TM_STATS_GAUGE
 	MetricTypeSnapshot   MetricType = C.D_TM_TIMER_SNAPSHOT
 	MetricTypeTimestamp  MetricType = C.D_TM_TIMESTAMP
+	MetricTypeDirectory  MetricType = C.D_TM_DIRECTORY
+	MetricTypeLink       MetricType = C.D_TM_LINK
 
 	BadUintVal  = ^uint64(0)
 	BadFloatVal = float64(BadUintVal)
 	BadIntVal   = int64(BadUintVal >> 1)
 	BadDuration = time.Duration(BadIntVal)
+
+	pathSep = '/'
 )
 
 type (
 	Metric interface {
 		Path() string
 		Name() string
+		FullPath() string
 		Type() MetricType
 		Desc() string
 		Units() string
@@ -124,6 +129,17 @@ func findNode(hdl *handle, name string) (*C.struct_d_tm_node_t, error) {
 	return node, nil
 }
 
+func splitFullName(fullName string) (string, string) {
+	tokens := strings.Split(fullName, "/")
+	if len(tokens) == 1 {
+		return "", tokens[0]
+	}
+
+	name := tokens[len(tokens)-1]
+	path := strings.Join(tokens[:len(tokens)-1], "/")
+	return name, path
+}
+
 func (mb *metricBase) Type() MetricType {
 	return MetricTypeUnknown
 }
@@ -146,6 +162,14 @@ func (mb *metricBase) Name() string {
 	}
 
 	return *mb.name
+}
+
+func (mb *metricBase) FullPath() string {
+	if mb == nil || mb.handle == nil || mb.node == nil {
+		return "<nil>"
+	}
+
+	return mb.Path() + string(pathSep) + mb.Name()
 }
 
 func (mb *metricBase) fillMetadata() {
@@ -300,14 +324,94 @@ func Detach(ctx context.Context) {
 	}
 }
 
-func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan<- Metric) {
+type Schema struct {
+	mu      sync.RWMutex
+	metrics map[string]Metric
+	seen    map[string]struct{}
+}
+
+func (s *Schema) setSeen(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.seen[id] = struct{}{}
+}
+
+func (s *Schema) Prune() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k := range s.metrics {
+		if _, found := s.seen[k]; !found {
+			delete(s.metrics, k)
+		}
+	}
+	s.seen = make(map[string]struct{}) // reset for the next time
+}
+
+func splitId(id string) (string, string) {
+	i := len(id) - 1
+	for i >= 0 && id[i] != pathSep {
+		i--
+	}
+
+	name := id[i+1:]
+	// Trim trailing separator.
+	if id[i] == pathSep {
+		i--
+	}
+
+	return id[:i+1], name
+}
+
+func (s *Schema) Add(hdl *handle, id string, typ C.int, node *C.struct_d_tm_node_t) Metric {
+	s.setSeen(id)
+	s.mu.RLock()
+	if m, found := s.metrics[id]; found {
+		s.mu.RUnlock()
+		return m
+	}
+	s.mu.RUnlock()
+
+	var m Metric
+	path, name := splitId(id)
+	switch {
+	case typ == C.D_TM_GAUGE:
+		m = newGauge(hdl, path, &name, node)
+	case typ == C.D_TM_STATS_GAUGE:
+		m = newStatsGauge(hdl, path, &name, node)
+	case typ == C.D_TM_COUNTER:
+		m = newCounter(hdl, path, &name, node)
+	case typ == C.D_TM_TIMESTAMP:
+		m = newTimestamp(hdl, path, &name, node)
+	case (typ & C.D_TM_TIMER_SNAPSHOT) != 0:
+		m = newSnapshot(hdl, path, &name, node)
+	case (typ & C.D_TM_DURATION) != 0:
+		m = newDuration(hdl, path, &name, node)
+	default:
+		return nil
+	}
+	s.mu.Lock()
+	s.metrics[id] = m
+	s.mu.Unlock()
+
+	return m
+}
+
+func NewSchema() *Schema {
+	return &Schema{
+		metrics: make(map[string]Metric),
+		seen:    make(map[string]struct{}),
+	}
+
+}
+
+func visit(hdl *handle, s *Schema, node *C.struct_d_tm_node_t, pathComps []string, out chan<- Metric) {
 	var next *C.struct_d_tm_node_t
 
 	if node == nil {
 		return
 	}
-	path := strings.Join(pathComps, "/")
 	name := C.GoString(C.d_tm_get_name(hdl.ctx, node))
+	id := strings.Join(append(pathComps, name), string(pathSep))
 
 	cType := node.dtn_type
 
@@ -315,36 +419,28 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 	case cType == C.D_TM_DIRECTORY:
 		next = C.d_tm_get_child(hdl.ctx, node)
 		if next != nil {
-			visit(hdl, next, append(pathComps, name), out)
+			visit(hdl, s, next, append(pathComps, name), out)
 		}
-	case cType == C.D_TM_GAUGE:
-		out <- newGauge(hdl, path, &name, node)
-	case cType == C.D_TM_STATS_GAUGE:
-		out <- newStatsGauge(hdl, path, &name, node)
-	case cType == C.D_TM_COUNTER:
-		out <- newCounter(hdl, path, &name, node)
-	case cType == C.D_TM_TIMESTAMP:
-		out <- newTimestamp(hdl, path, &name, node)
-	case (cType & C.D_TM_TIMER_SNAPSHOT) != 0:
-		out <- newSnapshot(hdl, path, &name, node)
-	case (cType & C.D_TM_DURATION) != 0:
-		out <- newDuration(hdl, path, &name, node)
 	case cType == C.D_TM_LINK:
 		next = C.d_tm_follow_link(hdl.ctx, node)
 		if next != nil {
 			// link leads to a directory with the same name
-			visit(hdl, next, pathComps, out)
+			visit(hdl, s, next, pathComps, out)
 		}
 	default:
+		m := s.Add(hdl, id, cType, node)
+		if m != nil {
+			out <- m
+		}
 	}
 
 	next = C.d_tm_get_sibling(hdl.ctx, node)
 	if next != nil && next != node {
-		visit(hdl, next, pathComps, out)
+		visit(hdl, s, next, pathComps, out)
 	}
 }
 
-func CollectMetrics(ctx context.Context, out chan<- Metric) error {
+func CollectMetrics(ctx context.Context, s *Schema, out chan<- Metric) error {
 	defer close(out)
 
 	hdl, err := getHandle(ctx)
@@ -359,9 +455,8 @@ func CollectMetrics(ctx context.Context, out chan<- Metric) error {
 	}
 
 	node := hdl.root
-
 	var pathComps []string
-	visit(hdl, node, pathComps, out)
+	visit(hdl, s, node, pathComps, out)
 
 	return nil
 }

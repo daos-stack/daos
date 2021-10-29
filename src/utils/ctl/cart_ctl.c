@@ -17,7 +17,12 @@
 /* for crt_register_proto_fi() */
 #include "crt_internal.h"
 
-#include "tests_common.h"
+#include "crt_utils.h"
+
+#include <daos/agent.h>
+#include <daos/mgmt.h>
+#include "svc.pb-c.h"
+
 
 /* max number of ranks that can be queried at once */
 #define CRT_CTL_MAX		1024
@@ -105,6 +110,7 @@ struct ctl_g {
 	bool				 cg_no_wait_for_ranks;
 	char				*cg_log_msg;
 	bool				 cg_log_msg_set;
+	bool				 cg_use_daos_agent_env;
 };
 
 static struct ctl_g ctl_gdata;
@@ -253,7 +259,7 @@ print_usage_msg(const char *msg)
 	printf("\noptions:\n");
 	printf("--group-name name\n");
 	printf("\tspecify the name of the remote group\n");
-	printf("--cfg_path\n");
+	printf("--cfg_path path\n");
 	printf("\tPath to group config file\n");
 	printf("--rank start-end,start-end,rank,rank\n");
 	printf("\tspecify target ranks; 'all' specifies every known rank\n");
@@ -263,6 +269,8 @@ print_usage_msg(const char *msg)
 	printf("\tdon't perform 'wait for ranks' sync\n");
 	printf("-m 'log_message'\n");
 	printf("\tSpecify log message to be sent to remote server\n");
+	printf("--use_daos_agent_env\n");
+	printf("\tSet OFI and CRT_* vars through daos_agent\n");
 }
 
 static int
@@ -272,30 +280,44 @@ parse_args(int argc, char **argv)
 	int		opt;
 	int		rc = 0;
 
+	ctl_gdata.cg_use_daos_agent_env = false;
+
 	if (argc <= 2) {
 		print_usage_msg("Wrong number of args\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (strcmp(argv[1], "get_uri_cache") == 0)
+	if (strcmp(argv[1], "get_uri_cache") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_GET_URI_CACHE;
-	else if (strcmp(argv[1], "list_ctx") == 0)
+	} else if (strcmp(argv[1], "list_ctx") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_LIST_CTX;
-	else if (strcmp(argv[1], "get_hostname") == 0)
+	} else if (strcmp(argv[1], "get_hostname") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_GET_HOSTNAME;
-	else if (strcmp(argv[1], "get_pid") == 0)
+	} else if (strcmp(argv[1], "get_pid") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_GET_PID;
-	else if (strcmp(argv[1], "enable_fi") == 0)
+	} else if (strcmp(argv[1], "enable_fi") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_ENABLE_FI;
-	else if (strcmp(argv[1], "disable_fi") == 0)
+	} else if (strcmp(argv[1], "disable_fi") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_DISABLE_FI;
-	else if (strcmp(argv[1], "set_fi_attr") == 0)
+	} else if (strcmp(argv[1], "set_fi_attr") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_SET_FI_ATTR;
-	else if (strcmp(argv[1], "set_log") == 0)
+	} else if (strcmp(argv[1], "set_log") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_LOG_SET;
-	else if (strcmp(argv[1], "add_log_msg") == 0)
+	} else if (strcmp(argv[1], "add_log_msg") == 0) {
+		/* avoid checkpatch warning */
 		ctl_gdata.cg_cmd_code = CMD_LOG_ADD_MSG;
-	else {
+	} else if (strcmp(argv[1], "use_daos_agent_env") == 0) {
+		/* avoid checkpatch warning */
+		ctl_gdata.cg_use_daos_agent_env = true;
+	} else {
 		print_usage_msg("Invalid command\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -310,11 +332,12 @@ parse_args(int argc, char **argv)
 		{"log_mask", required_argument, 0, 'l'},
 		{"no_sync", optional_argument, 0, 'n'},
 		{"message", required_argument, 0, 'm'},
+		{"use_daos_agent_env", no_argument, 0, 'u'},
 		{0, 0, 0, 0},
 	};
 
 	while (1) {
-		opt = getopt_long(argc, argv, "g:r:a:p:l:m:n", long_options,
+		opt = getopt_long(argc, argv, "g:r:a:p:l:m:nu", long_options,
 				  &option_index);
 		if (opt == -1)
 			break;
@@ -347,6 +370,9 @@ parse_args(int argc, char **argv)
 		case 'm':
 			ctl_gdata.cg_log_msg = optarg;
 			ctl_gdata.cg_log_msg_set = true;
+			break;
+		case 'u':
+			ctl_gdata.cg_use_daos_agent_env = true;
 			break;
 		default:
 			break;
@@ -570,9 +596,10 @@ ctl_init()
 			DF_RC"\n", DP_RC(rc));
 	}
 
-	tc_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
-			   &rank_list, &ctl_gdata.cg_crt_ctx,
-			   &ctl_gdata.cg_tid, 1, true, NULL);
+	crtu_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
+			     &rank_list, &ctl_gdata.cg_crt_ctx,
+			     &ctl_gdata.cg_tid, 1, true, NULL,
+			     ctl_gdata.cg_use_daos_agent_env);
 
 	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);
@@ -584,8 +611,8 @@ ctl_init()
 	 * 150 - total timeout
 	 */
 	if (!ctl_gdata.cg_no_wait_for_ranks) {
-		rc = tc_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
-				       0, 1, 5, 150);
+		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
+					 0, 1, 5, 150);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			D_GOTO(out, rc);
@@ -662,9 +689,9 @@ ctl_init()
 			D_GOTO(out, rc);
 		}
 
-		rc = tc_sem_timedwait(&ctl_gdata.cg_num_reply, 61, __LINE__);
+		rc = crtu_sem_timedwait(&ctl_gdata.cg_num_reply, 61, __LINE__);
 		if (rc != 0) {
-			D_ERROR("tc_sem_timedwait failed, rc = %d\n", rc);
+			D_ERROR("crtu_sem_timedwait failed, rc = %d\n", rc);
 			D_GOTO(out, rc);
 		}
 	}
@@ -680,7 +707,7 @@ ctl_init()
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	tc_progress_stop();
+	crtu_progress_stop();
 
 	rc = pthread_join(ctl_gdata.cg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
@@ -691,6 +718,9 @@ ctl_init()
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
+	if (ctl_gdata.cg_use_daos_agent_env) {
+		dc_mgmt_fini();
+	}
 	d_log_fini();
 
 out:
@@ -708,7 +738,15 @@ main(int argc, char **argv)
 	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, 40, false, false);
+	crtu_test_init(0, 40, false, false);
+
+	if (ctl_gdata.cg_use_daos_agent_env) {
+		rc = dc_agent_init();
+		if (rc != 0) {
+			fprintf(stderr, "dc_agent_init() failed. rc: %d\n", rc);
+			return rc;
+		}
+	}
 
 	rc = ctl_init();
 	if (rc)

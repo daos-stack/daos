@@ -9,11 +9,13 @@ def scons():
 
     denv = env.Clone()
 
+    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
+
     prereqs.require(denv, 'protobufc', 'hwloc')
 
     #pylint: disable=invalid-name
     pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
-                            'smd.pb-c.c', 'cont.pb-c.c'])
+                            'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c'])
     #pylint: enable=invalid-name
     common = denv.SharedObject(['rpc.c']) + pb
 

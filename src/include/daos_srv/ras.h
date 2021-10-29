@@ -47,6 +47,7 @@
 	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")	\
 	X(RAS_POOL_DF_INCOMPAT,						\
 	  "pool_durable_format_incompatible")				\
+	X(RAS_POOL_DEFER_DESTROY,	"pool_destroy_deferred")	\
 	X(RAS_CONT_DF_INCOMPAT,						\
 	  "container_durable_format_incompatible")			\
 	X(RAS_RDB_DF_INCOMPAT,						\
@@ -122,6 +123,7 @@ ras_sev2str(ras_sev_t severity)
  * \param[in] sev	Event instance severity.
  * \param[in] hwid	(Optional) Hardware component involved.
  * \param[in] rank	(Optional) DAOS rank involved.
+ * \param[in] inc	(Optional) Incarnation of DAOS rank involved.
  * \param[in] jobid	(Optional) Client job involved.
  * \param[in] pool	(Optional) DAOS pool involved.
  * \param[in] cont	(Optional) DAOS container involved.
@@ -133,8 +135,8 @@ ras_sev2str(ras_sev_t severity)
  */
 void __attribute__((weak))
 ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
-		    char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
-		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
+		    char *hwid, d_rank_t *rank, uint64_t *inc, char *jobid,
+		    uuid_t *pool, uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
 		    char *data);
 
 /**
@@ -143,10 +145,10 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
  * with a '$' to indicate so. See ds_notify_ras_event for parameter
  * documentation.
  */
-void
+void __attribute__((weak, __format__(__printf__, 13, 14)))
 ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
-		     d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
-		     daos_obj_id_t *objid, char *ctlop, char *data,
+		     d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
+		     uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data,
 		     const char *fmt, ...);
 
 /**
@@ -164,11 +166,12 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl);
 /**
  * Notify control plane that swim has detected a dead rank.
  *
- * \param[in] rank	Rank that was marked dead.
+ * \param[in] rank		Rank that was marked dead.
+ * \param[in] incarnation	Incarnation of rank that was marked dead.
  *
  * \retval		Zero on success, non-zero otherwise.
  */
 int
-ds_notify_swim_rank_dead(d_rank_t rank);
+ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation);
 
 #endif /* __DAOS_RAS_H_ */

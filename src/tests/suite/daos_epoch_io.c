@@ -364,6 +364,8 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 				    arg->dmg_config,
 				    op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 	}
+
+	daos_cont_status_clear(arg->coh, NULL);
 	return 0;
 }
 
@@ -403,7 +405,7 @@ static int
 test_cb_noop(test_arg_t *arg, struct test_op_record *op,
 	     char **rbuf, daos_size_t *rbuf_size)
 {
-	return -DER_NOSYS;
+	return 0;
 }
 
 struct test_op_dict op_dict[] = {
@@ -497,7 +499,7 @@ cmd_line_get(FILE *fp, char *line)
 
 	D_ASSERT(line != NULL && fp != NULL);
 	do {
-		if (fgets(line, CMD_LINE_LEN_MAX, fp) == NULL)
+		if (fgets(line, CMD_LINE_LEN_MAX - 1, fp) == NULL)
 			return -DER_ENOENT;
 		for (p = line; isspace(*p); p++)
 			;
@@ -1158,9 +1160,9 @@ static int
 cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 	       struct test_op_record **op)
 {
-	char			 cmd[CMD_LINE_LEN_MAX] = { 0 };
+	char			 cmd[CMD_LINE_LEN_MAX + 1] = { 0 };
 	struct test_op_record	*op_rec = NULL;
-	char			*argv[CMD_LINE_ARGC_MAX] = { 0 };
+	char			*argv[CMD_LINE_ARGC_MAX + 1] = { 0 };
 	char			*dkey = NULL;
 	char			*akey = NULL;
 	size_t			 cmd_size;
@@ -1458,7 +1460,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 {
 	struct test_op_record	*op = NULL;
 	FILE			*fp;
-	char			 cmd_line[CMD_LINE_LEN_MAX] = {};
+	char			 cmd_line[CMD_LINE_LEN_MAX - 1] = {};
 	int			 rc = 0;
 	/*Array for snapshot epoch*/
 	daos_epoch_t		sn_epoch[DTS_MAX_EPOCH_TIMES] = {};
@@ -1475,17 +1477,19 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 		return daos_errno2der(errno);
 	}
 
+	int line_nr = 0;
+
 	do {
 		size_t	cmd_size;
 
-		memset(cmd_line, 0, CMD_LINE_LEN_MAX);
+		memset(cmd_line, 0, CMD_LINE_LEN_MAX - 1);
 		if (cmd_line_get(fp, cmd_line) != 0)
 			break;
 
-		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX);
+		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX - 1);
 		if (cmd_size == 0)
 			continue;
-		if (cmd_size >= CMD_LINE_LEN_MAX) {
+		if (cmd_size >= CMD_LINE_LEN_MAX - 1) {
 			print_message("bad cmd_line, exit.\n");
 			break;
 		}
@@ -1497,6 +1501,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 
 		if (op != NULL) {
 			op->snap_epoch = &sn_epoch[op->tx];
+			print_message("will run cmd_line %s, line_nr %d\n", cmd_line, ++line_nr);
 			rc = cmd_line_run(arg, op);
 			if (rc) {
 				print_message("run cmd_line %s failed, "

@@ -56,6 +56,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         # It is up to individual test to enable it.
         self.test_with_rf = False
         self.test_with_blank_node = False
+        self.test_with_snapshot = False
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):
@@ -381,7 +382,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.container.properties.value = cont_prop
 
     def set_cont_class_properties(self, oclass="S1"):
-        """Update the container class to match the IOR object
+        """Update the container class to match the IOR/Mdtest object
         class. Fix the rf factor based on object replica value.
         Also, remove the redundancy factor for S type
         object class.
@@ -441,9 +442,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         while not out_queue.empty():
             out_queue.get(block=True)
 
-    def run_ior_thread(self, action, oclass, test,
-                       single_cont_read=True,
-                       fail_on_warning=True):
+    def run_ior_thread(self, action, oclass, test, single_cont_read=True,
+                       fail_on_warning=True, pool=None):
         """Start the IOR thread for either writing or
         reading data to/from a container.
         Args:
@@ -458,7 +458,15 @@ class OSAUtils(MdtestBase, IorTestBase):
             fail_on_warning (bool)  : Test terminates
                                       for IOR warnings.
                                       Defaults to True.
+            pool (TestPool): Pool to run ior on. Defaults to None.
+
         """
+        # Intermediate (between correct and hack) implementation for allowing a
+        # pool to be passed in. Needs to be fixed by making the pool argument
+        # required.
+        if pool is None:
+            pool = self.pool
+
         self.cleanup_queue()
         if action == "Write":
             flags = self.ior_w_flags
@@ -467,7 +475,7 @@ class OSAUtils(MdtestBase, IorTestBase):
 
         # Add a thread for these IOR arguments
         process = threading.Thread(target=self.ior_thread,
-                                   kwargs={"pool": self.pool,
+                                   kwargs={"pool": pool,
                                            "oclass": oclass,
                                            "test": test,
                                            "flags": flags,
@@ -546,14 +554,17 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         # Create container only
         self.mdtest_cmd.dfs_destroy = False
+        create_container = 0
         if self.container is None:
             self.add_container(self.pool, create=False)
-            self.mdtest_cmd.dfs_oclass.update(oclass)
-            self.set_cont_class_properties(self.mdtest_cmd.dfs_oclass)
-            if self.test_with_checksum is False:
-                tmp = self.get_object_replica_value(self.mdtest_cmd.dfs_oclass)
-                rf_value = "rf:{}".format(tmp - 1)
-                self.update_cont_properties(rf_value)
+            create_container = 1
+        self.mdtest_cmd.dfs_oclass.update(oclass)
+        self.set_cont_class_properties(oclass)
+        if self.test_with_checksum is False:
+            tmp = self.get_object_replica_value(oclass)
+            rf_value = "rf:{}".format(tmp - 1)
+            self.update_cont_properties(rf_value)
+        if create_container == 1:
             self.container.create()
         job_manager = self.get_mdtest_job_manager_command(self.manager)
         job_manager.job.dfs_cont.update(self.container.uuid)

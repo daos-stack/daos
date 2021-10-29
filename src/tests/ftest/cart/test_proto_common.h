@@ -28,6 +28,7 @@ struct test_global_t {
 	sem_t			 tg_token_to_proceed;
 	bool			 tg_use_cfg;
 	bool			 tg_save_cfg;
+	bool			 tg_use_daos_agent_env;
 	char			*tg_cfg_path;
 	uint32_t		 tg_num_proto;
 };
@@ -112,7 +113,7 @@ shutdown_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	DBG_PRINT("server set shutdown flag.\n");
 }
 
@@ -284,6 +285,7 @@ test_parse_args(int argc, char **argv)
 	};
 
 	test.tg_use_cfg = true;
+	test.tg_use_daos_agent_env = false;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:s:p:u:h", long_options,

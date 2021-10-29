@@ -11,9 +11,8 @@ from apricot import TestWithServers
 from command_utils import ExecutableCommand
 from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
-
-from test_utils_pool import TestPool
 from job_manager_utils import Orterun
+
 
 class IoConfGen(ExecutableCommand):
     """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
@@ -86,7 +85,7 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
         filename (string): Filename (with/without path) for
                            creating the data set.
     """
-    rand_ofs_end = random.randint(1, record_size - 1)
+    rand_ofs_end = random.randint(1, record_size - 1) #nosec
     rand_ofs_start = rand_ofs_end - 1
     file_data = (
         "test_lvl daos",
@@ -122,8 +121,7 @@ class IoConfTestBase(TestWithServers):
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
         avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
         self.testfile = os.path.join(avocao_tmp_dir, 'testfile')
         self.dmg = self.get_dmg_command()

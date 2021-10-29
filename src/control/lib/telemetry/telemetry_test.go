@@ -18,7 +18,7 @@ import (
 )
 
 func TestTelemetry_Init(t *testing.T) {
-	producerID := 123
+	producerID := NextTestID()
 	InitTestMetricsProducer(t, producerID, 2048)
 	defer CleanupTestMetricsProducer(t)
 
@@ -63,7 +63,7 @@ func TestTelemetry_Init(t *testing.T) {
 }
 
 func TestTelemetry_Detach(t *testing.T) {
-	producerID := 123
+	producerID := NextTestID()
 	InitTestMetricsProducer(t, producerID, 2048)
 	defer CleanupTestMetricsProducer(t)
 
@@ -118,8 +118,6 @@ func teardownCtxReal(_ *testing.T, ctx context.Context) {
 }
 
 func TestTelemetry_GetRank(t *testing.T) {
-	producerID := 42
-
 	rankHdl := &handle{
 		rank: new(uint32),
 	}
@@ -160,6 +158,7 @@ func TestTelemetry_GetRank(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			producerID := NextTestID()
 			InitTestMetricsProducer(t, producerID, 2048)
 			defer CleanupTestMetricsProducer(t)
 
@@ -186,8 +185,6 @@ func TestTelemetry_GetRank(t *testing.T) {
 }
 
 func TestTelemetry_CollectMetrics(t *testing.T) {
-	producerID := 777
-
 	testMetrics := TestMetricsMap{
 		MetricTypeCounter: &TestMetric{
 			Name: "collect_test/my_counter",
@@ -196,6 +193,12 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 		MetricTypeGauge: &TestMetric{
 			Name: "collect_test/my_gauge",
 			Cur:  2020,
+		},
+		MetricTypeStatsGauge: &TestMetric{
+			Name: "collect_test/my_stats_gauge",
+			Cur:  4242,
+			min:  10,
+			max:  5000,
 		},
 		MetricTypeTimestamp: &TestMetric{
 			Name: "ts",
@@ -251,6 +254,7 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			producerID := NextTestID()
 			InitTestMetricsProducer(t, producerID, 2048)
 			defer CleanupTestMetricsProducer(t)
 
@@ -281,7 +285,8 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 				wg.Done()
 			}()
 
-			err := CollectMetrics(ctx, ch)
+			s := NewSchema()
+			err := CollectMetrics(ctx, s, ch)
 
 			common.CmpErr(t, tc.expErr, err)
 

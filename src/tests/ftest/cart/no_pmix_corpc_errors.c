@@ -16,7 +16,7 @@
 #include <semaphore.h>
 #include <cart/api.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 
 static int g_ret_code;
 
@@ -25,9 +25,9 @@ static int g_ret_code;
 
 #define NUM_SERVER_CTX 8
 
-#define RPC_DECLARE(name)						\
-	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
-	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)
+#define RPC_DECLARE(name)					\
+	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)	\
+	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)	\
 
 enum {
 	RPC_SET_ERR_CODE = CRT_PROTO_OPC(MY_BASE, MY_VER, 0),
@@ -84,7 +84,7 @@ handler_shutdown(crt_rpc_t *rpc)
 	DBG_PRINT("Shutdown handler called!\n");
 	crt_reply_send(rpc);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	return 0;
 }
 static int
@@ -178,7 +178,7 @@ verify_corpc(crt_context_t ctx, crt_group_t *grp, int exp_rc)
 		assert(0);
 	}
 
-	tc_sem_timedwait(&wait_info.sem, 10, __LINE__);
+	crtu_sem_timedwait(&wait_info.sem, 10, __LINE__);
 
 	if (wait_info.rc != exp_rc) {
 		D_ERROR("Expected %d got %d\n", exp_rc, wait_info.rc);
@@ -241,7 +241,7 @@ set_error(crt_context_t ctx, crt_group_t *grp,
 		assert(0);
 	}
 
-	tc_sem_timedwait(&wait_info.sem, 10, __LINE__);
+	crtu_sem_timedwait(&wait_info.sem, 10, __LINE__);
 }
 
 int main(int argc, char **argv)
@@ -249,6 +249,7 @@ int main(int argc, char **argv)
 	crt_group_t		*grp;
 	crt_context_t		crt_ctx[NUM_SERVER_CTX];
 	pthread_t		progress_thread[NUM_SERVER_CTX];
+	struct test_options	*opts = crtu_get_opts();
 	int			i, k;
 	char			*my_uri;
 	char			*env_self_rank;
@@ -268,14 +269,13 @@ int main(int argc, char **argv)
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(my_rank, 20, true, true);
+	crtu_test_init(my_rank, 20, true, true);
 
 	rc = d_log_init();
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -301,13 +301,21 @@ int main(int argc, char **argv)
 		}
 
 		rc = pthread_create(&progress_thread[i], 0,
-				tc_progress_fn, &crt_ctx[i]);
+				    crtu_progress_fn, &crt_ctx[i]);
 		assert(rc == 0);
 
 		rc = crt_context_register_rpc_task(crt_ctx[i],
 				rpc_callback, NULL, NULL);
 		if (rc != 0) {
 			D_ERROR("register_rpc_task failed; rc=%d\n", rc);
+			assert(0);
+		}
+	}
+
+	if (opts->is_swim_enabled) {
+		rc = crt_swim_init(0);
+		if (rc != 0) {
+			D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
 			assert(0);
 		}
 	}
@@ -328,10 +336,10 @@ int main(int argc, char **argv)
 	}
 
 	/* load group info from a config file and delete file upon return */
-	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
-					true);
+	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
+				       true);
 	if (rc != 0) {
-		D_ERROR("tc_load_group_from_file() failed; rc=%d\n", rc);
+		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
@@ -396,16 +404,10 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = tc_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
-			NUM_SERVER_CTX, 10, 100.0);
+	rc = crtu_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
+				 NUM_SERVER_CTX, 10, 100.0);
 	if (rc != 0) {
 		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
-	rc = crt_swim_init(0);
-	if (rc != 0) {
-		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
@@ -468,13 +470,13 @@ int main(int argc, char **argv)
 			D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 			assert(0);
 		}
-		tc_sem_timedwait(&sem, 10, __LINE__);
+		crtu_sem_timedwait(&sem, 10, __LINE__);
 	}
 
 	d_rank_list_free(s_list);
 	d_rank_list_free(p_list);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	sem_destroy(&sem);
 
 	DBG_PRINT("All tesst succeeded\n");

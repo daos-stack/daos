@@ -135,7 +135,7 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_STRNDUP_S(ptr, s)						\
 	do {								\
 		_Static_assert(sizeof(s) != sizeof(void *) ||		\
-			__builtin_types_compatible_p(typeof(s), typeof("1234567")), \
+			__builtin_types_compatible_p(__typeof__(s), __typeof__("1234567")), \
 	"D_STRNDUP_S cannot be used with this type");			\
 		(ptr) = d_strndup(s, sizeof(s));			\
 		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
@@ -154,11 +154,13 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALPATH(ptr, path)						\
 	do {								\
 		int _size;						\
+		void *_ptr;						\
 		(ptr) = d_realpath((path), NULL);			\
-		_size = (ptr) != NULL ?					\
-			strnlen((ptr), PATH_MAX + 1) + 1 : 0;		\
-		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,		\
-			      0, #ptr, 0);				\
+		_ptr = (ptr);						\
+		_size = strnlen((ptr), PATH_MAX + 1) + 1 ;		\
+		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	0, #ptr, 0); \
+		if (((ptr) == NULL) && _ptr != NULL)			\
+			errno = ENOMEM;					\
 	} while (0)
 
 #define D_ALIGNED_ALLOC(ptr, alignment, size)				\
@@ -428,6 +430,7 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 
 void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
+int d_getenv_uint64_t(const char *env, uint64_t *val);
 int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void d_free_string(struct d_string_buffer_t *buf);
 

@@ -51,7 +51,9 @@ enum daos_module_id {
 	DAOS_RDBT_MODULE	= 8, /** rdb test */
 	DAOS_SEC_MODULE		= 9, /** security framework */
 	DAOS_DTX_MODULE		= 10, /** DTX */
-	DAOS_MAX_MODULE		= 64, /** Size of uint64_t see dmg profile */
+
+	DAOS_NR_MODULE		= 11, /** number of defined modules */
+	DAOS_MAX_MODULE		= 64  /** Size of uint64_t see dmg profile */
 };
 
 enum daos_rpc_flags {
@@ -91,7 +93,7 @@ enum daos_rpc_type {
 };
 
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
-#define DAOS_TGT0_OFFSET		(1)
+#define DAOS_TGT0_OFFSET		(2)
 /** The cart context index of target index */
 #define DAOS_IO_CTX_ID(tgt_idx)		((tgt_idx) + DAOS_TGT0_OFFSET)
 
@@ -111,6 +113,8 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	case DAOS_REQ_IO:
 	case DAOS_REQ_TGT:
 		return DAOS_IO_CTX_ID(tgt_idx);
+	case DAOS_REQ_SWIM:
+		return 1;
 	/* target tag 0 is to handle below requests */
 	case DAOS_REQ_MGMT:
 	case DAOS_REQ_POOL:
@@ -119,7 +123,6 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	case DAOS_REQ_REBUILD:
 	case DAOS_REQ_IV:
 	case DAOS_REQ_BCAST:
-	case DAOS_REQ_SWIM:
 		return 0;
 	default:
 		D_ASSERTF(0, "bad req_type %d.\n", req_type);

@@ -329,8 +329,8 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 	      const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
 	      int expected_rc, struct entries *entries)
 {
-	struct ilog_entry	*entry;
 	struct desc		*desc;
+	struct ilog_entry	 entry;
 	struct ilog_entries	 ilog_entries;
 	int			 idx;
 	int			 rc = 0;
@@ -351,7 +351,7 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 	idx = 0;
 	if (verbose)
 		print_message("Checking log\n");
-	ilog_foreach_entry(&ilog_entries, entry) {
+	ilog_foreach_entry(&ilog_entries, &entry) {
 		if (idx == entries->entry_count) {
 			print_message("Too many entries in ilog\n");
 			rc = -DER_MISC;
@@ -361,23 +361,23 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 		if (verbose) {
 			print_message("epoch="DF_U64" tx_id=%d punch="
 				      DF_BOOL "\n",
-				      entry->ie_id.id_epoch,
-				      entry->ie_id.id_tx_id,
-				      DP_BOOL(ilog_is_punch(entry)));
+				      entry.ie_id.id_epoch,
+				      entry.ie_id.id_tx_id,
+				      DP_BOOL(ilog_is_punch(&entry)));
 			print_message("expected epoch="DF_U64" punch="
 				      DF_BOOL "\n", desc->epoch,
 				      DP_BOOL(desc->punch));
 		}
 
-		if (desc->epoch != entry->ie_id.id_epoch) {
+		if (desc->epoch != entry.ie_id.id_epoch) {
 			print_message("Epoch mismatch "DF_U64" != "DF_U64"\n",
-				      desc->epoch, entry->ie_id.id_epoch);
+				      desc->epoch, entry.ie_id.id_epoch);
 			wrong_epoch++;
 		}
-		if (desc->punch != ilog_is_punch(entry)) {
+		if (desc->punch != ilog_is_punch(&entry)) {
 			print_message("Punch mismatch " DF_BOOL " != " DF_BOOL
 				      "\n", DP_BOOL(desc->punch),
-				      DP_BOOL(ilog_is_punch(entry)));
+				      DP_BOOL(ilog_is_punch(&entry)));
 			wrong_punch++;
 		}
 
@@ -868,7 +868,7 @@ ilog_test_aggregate(void **state)
 	commit_all();
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, false, 0, 0,
 			    &ilents);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -892,7 +892,7 @@ ilog_test_aggregate(void **state)
 
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, false, 0, 0,
 			    &ilents);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -907,7 +907,7 @@ ilog_test_aggregate(void **state)
 	version_cache_fetch(&version_cache, loh, true);
 	commit_all();
 	epr.epr_hi = 7;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, false, 0, 0,
 			    &ilents);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate log entry\n");
@@ -984,7 +984,7 @@ ilog_test_discard(void **state)
 	commit_all();
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, false, 0, 0,
 			    &ilents);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -1007,7 +1007,7 @@ ilog_test_discard(void **state)
 	commit_all();
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, false, 0, 0,
 			    &ilents);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate ilog\n");
@@ -1025,7 +1025,7 @@ ilog_test_discard(void **state)
 	commit_all();
 
 	epr.epr_hi = 7;
-	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
+	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, false, 0, 0,
 			    &ilents);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate ilog\n");

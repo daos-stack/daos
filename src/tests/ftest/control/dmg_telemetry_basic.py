@@ -118,17 +118,17 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         data = self.telemetry.get_container_metrics()
         for host in data:
             self.metrics["open_count"][host] = \
-                data[host]["engine_container_ops_open_total"]
+                data[host]["engine_pool_ops_cont_open"]
             self.metrics["active_count"][host] = \
-                data[host]["engine_container_ops_open_active"]
+                data[host]["engine_pool_container_handles"]
             self.metrics["close_count"][host] = \
-                data[host]["engine_container_ops_close_total"]
+                data[host]["engine_pool_ops_cont_close"]
             self.metrics["destroy_count"][host] = \
-                data[host]["engine_container_ops_destroy_total"]
+                data[host]["engine_pool_ops_cont_destroy"]
 
         # Create a number of containers and verify metrics
         for loop in range(1, container_qty + 1):
-            self.create_container(random.choice([True, False]))
+            self.create_container(random.choice([True, False])) #nosec
             self.log.info(
                 "Container %s/%s: After create()", loop, container_qty)
             self.check_metrics()

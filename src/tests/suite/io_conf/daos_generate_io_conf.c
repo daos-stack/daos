@@ -243,7 +243,13 @@ update_single(int index, uint64_t eph, struct extent *extents,
 	records[index].records[0].type = SINGLE;
 	records[index].records[0].single.value = value;
 
-	if (value % 2 != 0) {
+	/* always add "--snap" to make each epoch readable, without it possibly generate such
+	 * cmds -
+	 * update --tx 0 --single --value 114
+	 * punch --tx 6
+	 * fetch --tx 0 --single --value 114   (data verification fails here)
+	 */
+	if (1 || value % 2 != 0) {
 		records[index].records[0].snap = true;
 		sprintf(output_buf,
 			"update --tx %" PRId64 " --snap --single --value %d\n",
@@ -344,13 +350,20 @@ static int fetch_single(int index, uint64_t eph, struct extent *extents,
 
 int choose_op(int index, int max_operation)
 {
+	int idx;
+
 	if (index == 0)
 		return UPDATE_ARRAY;
 
 	/* FIXME: it should be able to specify the percentage
 	 * of each operation to generate the special workload.
+	 *
+	 * PUNCH_ARRAY is not well supported now.
 	 */
-	return rand() % max_operation;
+	idx = rand() % max_operation;
+	if (idx == PUNCH_ARRAY)
+		idx--;
+	return idx;
 }
 
 struct operation {

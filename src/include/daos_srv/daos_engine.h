@@ -74,7 +74,10 @@ struct dss_thread_local_storage {
 };
 
 enum dss_module_tag {
-	DAOS_SERVER_TAG	= 1 << 0,
+	DAOS_SYS_TAG	= 1 << 0, /** only run on system xstream */
+	DAOS_TGT_TAG	= 1 << 1, /** only run on target xstream */
+	DAOS_OFF_TAG	= 1 << 2, /** only run on offload/helper xstream */
+	DAOS_SERVER_TAG	= 0xff,	  /** run on all xstream */
 };
 
 /* The module key descriptor for each xstream */
@@ -194,10 +197,12 @@ struct dss_module_info {
 	/* the cart context id */
 	int			dmi_ctx_id;
 	uint32_t		dmi_dtx_batched_started:1;
-	d_list_t		dmi_dtx_batched_list;
+	d_list_t		dmi_dtx_batched_cont_list;
+	d_list_t		dmi_dtx_batched_pool_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
-	struct sched_request	*dmi_dtx_req;
+	struct sched_request	*dmi_dtx_cmt_req;
+	struct sched_request	*dmi_dtx_agg_req;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -355,6 +360,29 @@ int sched_req_space_check(struct sched_request *req);
  */
 void sched_cond_wait(ABT_cond cond, ABT_mutex mutex);
 
+/**
+ * Get current monotonic time in milli-seconds.
+ */
+uint64_t sched_cur_msec(void);
+
+/**
+ * Get current schedule sequence, by comparing the results of two
+ * sched_cur_seq() calls, we can tell if an ULT was yielding between
+ * these two calls.
+ */
+uint64_t sched_cur_seq(void);
+
+/**
+ * Get current ULT/Task execution time. The execution time is the elapsed
+ * time since current ULT/Task was scheduled last time.
+ *
+ * \param[out]	msecs		executed time in milli-second
+ * \param[in]	ult_name	ULT name (optional)
+ *
+ * \retval			-DER_NOSYS or 0 on success.
+ */
+int sched_exec_time(uint64_t *msecs, const char *ult_name);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
@@ -395,6 +423,23 @@ struct dss_module_ops {
 int srv_profile_stop();
 int srv_profile_start(char *path, int avg);
 
+struct dss_module_metrics {
+	/* Indicate where the keys should be instantiated */
+	enum dss_module_tag dmm_tags;
+
+	/**
+	 * allocate metrics with path to ephemeral shmem for to the
+	 * newly-created pool
+	 */
+	void	*(*dmm_init)(const char *path, int tgt_id);
+	void	 (*dmm_fini)(void *data);
+
+	/**
+	 * Get the number of metrics allocated by this module in total (including all targets).
+	 */
+	int	 (*dmm_nr_metrics)(void);
+};
+
 /**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name
@@ -408,34 +453,37 @@ int srv_profile_start(char *path, int avg);
  */
 struct dss_module {
 	/* Name of the module */
-	const char		 *sm_name;
+	const char			*sm_name;
 	/* Module id see enum daos_module_id */
-	int			  sm_mod_id;
+	int				sm_mod_id;
 	/* Module version */
-	int			  sm_ver;
+	int				sm_ver;
 	/* Module facility bitmask, can be feature bits like DSS_FAC_LOAD_CLI */
-	uint64_t		  sm_facs;
+	uint64_t			sm_facs;
 	/* key of local thread storage */
-	struct dss_module_key	 *sm_key;
+	struct dss_module_key		*sm_key;
 	/* Initialization function, invoked just after successful load */
-	int			(*sm_init)(void);
+	int				(*sm_init)(void);
 	/* Finalization function, invoked just before module unload */
-	int			(*sm_fini)(void);
+	int				(*sm_fini)(void);
 	/* Setup function, invoked after starting progressing */
-	int			(*sm_setup)(void);
+	int				(*sm_setup)(void);
 	/* Cleanup function, invoked before stopping progressing */
-	int			(*sm_cleanup)(void);
+	int				(*sm_cleanup)(void);
 	/* Whole list of RPC definition for request sent by nodes */
-	struct crt_proto_format	 *sm_proto_fmt;
+	struct crt_proto_format		*sm_proto_fmt;
 	/* The count of RPCs which are dedicated for client nodes only */
-	uint32_t		  sm_cli_count;
+	uint32_t			sm_cli_count;
 	/* RPC handler of these RPC, last entry of the array must be empty */
-	struct daos_rpc_handler	 *sm_handlers;
+	struct daos_rpc_handler		*sm_handlers;
 	/* dRPC handlers, for unix socket comm, last entry must be empty */
-	struct dss_drpc_handler	 *sm_drpc_handlers;
+	struct dss_drpc_handler		*sm_drpc_handlers;
 
 	/* Different module operation */
-	struct dss_module_ops	*sm_mod_ops;
+	struct dss_module_ops		*sm_mod_ops;
+
+	/* Per-pool metrics (optional) */
+	struct dss_module_metrics	*sm_metrics;
 };
 
 /**
@@ -454,8 +502,10 @@ enum dss_xs_type {
 	DSS_XS_OFFLOAD	= 2,
 	/** pool service, RDB, drpc handler */
 	DSS_XS_SYS	= 3,
+	/** SWIM operations */
+	DSS_XS_SWIM	= 4,
 	/** drpc listener */
-	DSS_XS_DRPC	= 4,
+	DSS_XS_DRPC	= 5,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -463,6 +513,8 @@ int dss_parameters_set(unsigned int key_id, uint64_t value);
 enum dss_ult_flags {
 	/* Periodically created ULTs */
 	DSS_ULT_FL_PERIODIC	= (1 << 0),
+	/* Use DSS_DEEP_STACK_SZ as the stack size */
+	DSS_ULT_DEEP_STACK	= (1 << 1),
 };
 
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
@@ -562,7 +614,15 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 int dss_task_collective(int (*func)(void *), void *arg, unsigned int flags);
 int dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags);
 
+/**
+ * Loaded module management metholds
+ */
 struct dss_module *dss_module_get(int mod_id);
+void dss_module_fini_metrics(enum dss_module_tag tag, void **metrics);
+int dss_module_init_metrics(enum dss_module_tag tag, void **metrics,
+			    const char *path, int tgt_id);
+int dss_module_nr_pool_metrics(void);
+
 /* Convert Argobots errno to DAOS ones. */
 static inline int
 dss_abterr2der(int abt_errno)
@@ -585,7 +645,7 @@ enum dss_rpc_cntr_id {
 /** RPC counter */
 struct dss_rpc_cntr {
 	/**
-	 * starting wall-clock time, it can be used to calculate average
+	 * starting monotonic time, it can be used to calculate average
 	 * workload.
 	 */
 	uint64_t		rc_stime;
@@ -685,10 +745,6 @@ typedef int (*iter_copy_data_cb_t)(daos_handle_t ih,
 				   vos_iter_entry_t *it_entry,
 				   d_iov_t *iov_out);
 struct dss_enum_arg {
-	bool			fill_recxs;	/* type == S||R */
-	bool			chk_key2big;
-	bool			need_punch;	/* need to pack punch epoch */
-	bool			obj_punched;    /* object punch is packed   */
 	daos_epoch_range_t     *eprs;
 	struct daos_csummer    *csummer;
 	int			eprs_cap;
@@ -715,6 +771,11 @@ struct dss_enum_arg {
 	int			rnum;		/* records num (type == S||R) */
 	daos_size_t		rsize;		/* record size (type == S||R) */
 	daos_unit_oid_t		oid;		/* for unpack */
+	uint32_t		fill_recxs:1,	/* type == S||R */
+				chk_key2big:1,
+				need_punch:1,	/* need to pack punch epoch */
+				obj_punched:1,	/* object punch is packed   */
+				size_query:1;	/* Only query size */
 };
 
 struct dtx_handle;
@@ -758,7 +819,7 @@ struct dss_enum_unpack_io {
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	daos_epoch_t		*ui_rec_punch_ephs;
-	daos_epoch_t		*ui_rec_min_ephs;
+	daos_epoch_t		**ui_recx_ephs;
 	int			 ui_iods_cap;
 	int			 ui_iods_top;
 	int			*ui_recxs_caps;
@@ -811,7 +872,8 @@ int
 ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
 		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  unsigned int *shards, int cnt, int clear_conts);
+		  daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
+		  unsigned int migrate_opc);
 void
 ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
 

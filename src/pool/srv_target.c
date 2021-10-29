@@ -26,6 +26,7 @@
 
 #include <daos_srv/pool.h>
 
+#include <gurt/telemetry_producer.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/pool.h>
@@ -33,7 +34,6 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
-#include <gurt/telemetry_producer.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -72,7 +72,10 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_ASSERT(d_list_empty(&child->spc_list));
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
 		vos_pool_close(child->spc_hdl);
-		D_FREE(child);
+		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
+		ABT_eventual_set(child->spc_ref_eventual,
+				 (void *)&child->spc_ref,
+				 sizeof(child->spc_ref));
 	}
 }
 
@@ -188,53 +191,72 @@ pool_child_add_one(void *varg)
 
 	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tgt_id,
 			      &path);
-	if (rc != 0) {
-		D_FREE(child);
-		return rc;
-	}
+	if (rc != 0)
+		goto out_free;
 
 	rc = vos_pool_open(path, arg->pla_uuid, 0, &child->spc_hdl);
 
 	D_FREE(path);
 
-	if (rc != 0) {
-		D_FREE(child);
-		return rc;
-	}
+	if (rc != 0)
+		goto out_free;
 
 	uuid_copy(child->spc_uuid, arg->pla_uuid);
 	child->spc_map_version = arg->pla_map_version;
 	child->spc_ref = 1; /* 1 for the list */
+
+	rc = ABT_eventual_create(sizeof(child->spc_ref),
+				 &child->spc_ref_eventual);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_vos;
+	}
+
 	child->spc_pool = arg->pla_pool;
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
 	rc = start_gc_ult(child);
-	if (rc != 0) {
-		D_FREE(child);
-		return rc;
-	}
+	if (rc != 0)
+		goto out_eventual;
 
 	rc = ds_start_scrubbing_ult(child);
+	if (rc != 0)
+		goto out_gc;
+
+	/* initialize metrics on the target xstream for each module */
+	rc = dss_module_init_metrics(DAOS_TGT_TAG, child->spc_metrics,
+				     arg->pla_pool->sp_path, info->dmi_tgt_id);
 	if (rc != 0) {
-		D_FREE(child);
-		return rc;
+		D_ERROR(DF_UUID ": failed to initialize module metrics for pool"
+			"." DF_RC "\n", DP_UUID(child->spc_uuid), DP_RC(rc));
+		goto out_scrub;
 	}
 
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
+
 	/* Load all containers */
 	rc = ds_cont_child_start_all(child);
-	if (rc) {
-		d_list_del_init(&child->spc_list);
-		ds_cont_child_stop_all(child);
-		stop_gc_ult(child);
-		ds_stop_scrubbing_ult(child);
-		vos_pool_close(child->spc_hdl);
-		D_FREE(child);
-		return rc;
-	}
+	if (rc)
+		goto out_list;
 
 	return 0;
+
+out_list:
+	d_list_del_init(&child->spc_list);
+	ds_cont_child_stop_all(child);
+	dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
+out_scrub:
+	ds_stop_scrubbing_ult(child);
+out_gc:
+	stop_gc_ult(child);
+out_eventual:
+	ABT_eventual_free(&child->spc_ref_eventual);
+out_vos:
+	vos_pool_close(child->spc_hdl);
+out_free:
+	D_FREE(child);
+	return rc;
 }
 
 /*
@@ -246,6 +268,7 @@ static int
 pool_child_delete_one(void *uuid)
 {
 	struct ds_pool_child *child;
+	int *ref, rc;
 
 	child = ds_pool_child_lookup(uuid);
 	if (child == NULL)
@@ -259,11 +282,16 @@ pool_child_delete_one(void *uuid)
 
 	ds_pool_child_put(child); /* -1 for lookup */
 
-	/*
-	 * FIXME: Need to wait for last reference of ds_pool_child dropped,
-	 * since the ds_pool_child references ds_pool by 'spc_pool' without
-	 * holding ds_pool refcount.
+	rc = ABT_eventual_wait(child->spc_ref_eventual, (void **)&ref);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	ABT_eventual_free(&child->spc_ref_eventual);
+	/* ds_pool_child must be freed here to keep
+	 * spc_ref_enventual usage safe
 	 */
+	D_FREE(child);
+
 	return 0;
 }
 
@@ -344,6 +372,14 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err_group;
 	}
 
+	/** set up ds_pool metrics */
+	rc = ds_pool_metrics_start(pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to set up ds_pool metrics: %d\n",
+			DP_UUID(key), rc);
+		goto err_iv_ns;
+	}
+
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
@@ -351,12 +387,14 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
 			DP_UUID(key), DP_RC(rc));
-		goto err_iv_ns;
+		goto err_metrics;
 	}
 
 	*link = &pool->sp_entry;
 	return 0;
 
+err_metrics:
+	ds_pool_metrics_stop(pool);
 err_iv_ns:
 	ds_iv_ns_put(pool->sp_iv_ns);
 err_group:
@@ -403,6 +441,9 @@ pool_free_ref(struct daos_llink *llink)
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
+
+	/** release metrics */
+	ds_pool_metrics_stop(pool);
 
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
@@ -465,7 +506,7 @@ ds_pool_lookup(const uuid_t uuid)
 
 	pool = pool_obj(llink);
 	if (pool->sp_stopping) {
-		D_ERROR(DF_UUID": is in stopping\n", DP_UUID(uuid));
+		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
 		ds_pool_put(pool);
 		return NULL;
 	}
@@ -540,7 +581,7 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 		return 0;
 
 	rc = dss_ult_create(tgt_ec_eph_query_ult, pool, DSS_XS_SYS, 0,
-			    131072, &ec_eph_query_ult);
+			    DSS_DEEP_STACK_SZ, &ec_eph_query_ult);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed create ec eph equery ult: %d\n",
 			DP_UUID(pool->sp_uuid), rc);
@@ -599,7 +640,6 @@ ds_pool_start(uuid_t uuid)
 	struct ds_pool			*pool;
 	struct daos_llink		*llink;
 	struct ds_pool_create_arg	arg = {};
-	struct ds_pool_metrics		*metrics = NULL;
 	int				rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
@@ -626,26 +666,16 @@ ds_pool_start(uuid_t uuid)
 		return rc;
 	}
 
-	/*
-	 * Init this pool's metrics so it's here in case pool resources want
-	 * to add their own metrics ASAP.
-	 */
-	ds_pool_metrics_start(uuid);
-	metrics = ds_pool_metrics_get(uuid);
-	if (metrics != NULL)
-		d_tm_record_timestamp(metrics->pm_started_timestamp);
-
 	/* Start it by creating the ds_pool object and hold the reference. */
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t), &arg,
 			       &llink);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start pool: %d\n", DP_UUID(uuid),
 			rc);
-		D_GOTO(failure_metrics, rc);
+		return rc;
 	}
 
 	pool = pool_obj(llink);
-	pool->sp_metrics = metrics;
 
 	rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS,
 			    0, 0, NULL);
@@ -671,8 +701,6 @@ failure_ult:
 	pool_fetch_hdls_ult_abort(pool);
 failure_pool:
 	ds_pool_put(pool);
-failure_metrics:
-	ds_pool_metrics_stop(uuid);
 	return rc;
 }
 
@@ -700,8 +728,6 @@ ds_pool_stop(uuid_t uuid)
 	ds_migrate_abort(pool->sp_uuid, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
-
-	ds_pool_metrics_stop(uuid);
 }
 
 /* ds_pool_hdl ****************************************************************/
@@ -1343,4 +1369,56 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
 	return 0;
+}
+
+/**
+ * Query the cached pool map. If the cached version is <= in->tmi_map_version,
+ * the pool map will not be transferred to the client.
+ */
+void
+ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_query_map_in   *in = crt_req_get(rpc);
+	struct pool_tgt_query_map_out  *out = crt_reply_get(rpc);
+	struct ds_pool_hdl	       *hdl;
+	struct ds_pool		       *pool;
+	struct pool_buf		       *buf;
+	unsigned int			version;
+	int				rc;
+
+	D_DEBUG(DB_TRACE, DF_UUID": handling rpc %p\n",
+		DP_UUID(in->tmi_op.pi_uuid), rpc);
+
+	hdl = ds_pool_hdl_lookup(in->tmi_op.pi_hdl);
+	if (hdl == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
+
+	/* Inefficient; better invent some zero-copy IV APIs. */
+	pool = hdl->sph_pool;
+	ABT_rwlock_rdlock(pool->sp_lock);
+	version = (pool->sp_map == NULL ? 0 : pool_map_get_version(pool->sp_map));
+	if (version <= in->tmi_map_version) {
+		rc = 0;
+		ABT_rwlock_unlock(pool->sp_lock);
+		goto out_hdl;
+	}
+	rc = pool_buf_extract(pool->sp_map, &buf);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc != 0)
+		goto out_hdl;
+
+	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
+				      &out->tmo_map_buf_size);
+
+	D_FREE(buf);
+out_hdl:
+	out->tmo_op.po_map_version = version;
+	ds_pool_hdl_put(hdl);
+out:
+	out->tmo_op.po_rc = rc;
+	D_DEBUG(DB_TRACE, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->tmi_op.pi_uuid), rpc, DP_RC(out->tmo_op.po_rc));
+	crt_reply_send(rpc);
 }

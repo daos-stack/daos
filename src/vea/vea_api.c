@@ -88,7 +88,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	 * Extent block count is represented by uint32_t, make sure the
 	 * largest extent won't overflow.
 	 */
-	if (tot_blks >= UINT32_MAX) {
+	if (tot_blks > UINT32_MAX) {
 		D_ERROR("Capacity "DF_U64" is too large.\n", capacity);
 		return -DER_INVAL;
 	}
@@ -308,10 +308,7 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 	/* Get hint offset */
 	hint_get(hint, &resrvd->vre_hint_off);
 
-migrate:
-	/* Trigger free extents migration */
-	migrate_free_exts(vsi, false);
-
+retry:
 	/* Reserve from hint offset */
 	rc = reserve_hint(vsi, blk_cnt, resrvd);
 	if (rc != 0)
@@ -339,7 +336,9 @@ migrate:
 	if (rc == -DER_NOSPACE && retry) {
 		vsi->vsi_agg_time = 0; /* force free extents migration */
 		retry = false;
-		goto migrate;
+		/* Trigger free extents migration */
+		migrate_free_exts(vsi, false);
+		goto retry;
 	} else if (rc != 0) {
 		goto error;
 	}
@@ -373,6 +372,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	uint64_t		 seq_max = 0, seq_min = 0;
 	uint64_t		 off_c = 0, off_p = 0;
 	uint64_t		 cur_time;
+	unsigned int		 seq_cnt = 0;
 	int			 rc = 0;
 
 	if (d_list_empty(resrvd_list))
@@ -398,6 +398,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 			D_ASSERT(seq_min < resrvd->vre_hint_seq);
 		}
 
+		seq_cnt++;
 		seq_max = resrvd->vre_hint_seq;
 		off_p = resrvd->vre_blk_off + resrvd->vre_blk_cnt;
 
@@ -427,8 +428,8 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	}
 
 	rc = publish ? hint_tx_publish(vsi->vsi_umem, hint, off_p, seq_min,
-				       seq_max) :
-		       hint_cancel(hint, off_c, seq_min, seq_max);
+				       seq_max, seq_cnt) :
+		       hint_cancel(hint, off_c, seq_min, seq_max, seq_cnt);
 error:
 	d_list_for_each_entry_safe(resrvd, tmp, resrvd_list, vre_link) {
 		d_list_del_init(&resrvd->vre_link);

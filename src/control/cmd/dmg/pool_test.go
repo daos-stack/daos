@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -39,10 +38,8 @@ func createACLFile(t *testing.T, dir string, acl *control.AccessControlList) str
 }
 
 func TestPoolCommands(t *testing.T) {
-	testScmSizeStr := "512GiB"
-	testScmSize := 549755813888
-	testNvmeSizeStr := "512GB"
-	testNvmeSize := 512000000000
+	testSizeStr := "512GiB"
+	testSize := 549755813888
 	eUsr, err := user.Current()
 	if err != nil {
 		t.Fatal(err)
@@ -92,6 +89,81 @@ func TestPoolCommands(t *testing.T) {
 
 	runCmdTests(t, []cmdTest{
 		{
+			"Pool create with extra argument",
+			fmt.Sprintf("pool create --size %s foo bar", testSizeStr),
+			"",
+			errors.New("unexpected"),
+		},
+		{
+			"Create pool with label prop and flag",
+			fmt.Sprintf("pool create --label foo --size %s --properties label:foo", testSizeStr),
+			"",
+			errors.New("can't set label property"),
+		},
+		{
+			"Create pool with label prop and argument",
+			fmt.Sprintf("pool create --size %s --properties label:foo foo", testSizeStr),
+			"",
+			errors.New("can't set label property"),
+		},
+		{
+			"Create pool with invalid label",
+			fmt.Sprintf("pool create --size %s alfalfa!", testSizeStr),
+			"",
+			errors.New("invalid label"),
+		},
+		{
+			"Create pool with label argument",
+			fmt.Sprintf("pool create --size %s foo", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
+					Properties: []*control.PoolProperty{
+						propWithVal("label", "foo"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with label flag",
+			fmt.Sprintf("pool create --size %s --label foo", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
+					Properties: []*control.PoolProperty{
+						propWithVal("label", "foo"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with label property",
+			fmt.Sprintf("pool create --size %s --properties label:foo", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
+					Properties: []*control.PoolProperty{
+						propWithVal("label", "foo"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Create pool with missing arguments",
 			"pool create",
 			"",
@@ -99,41 +171,35 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with incompatible arguments (auto nvme-size)",
-			fmt.Sprintf("pool create --size %s --nvme-size %s", testScmSizeStr, testScmSizeStr),
+			fmt.Sprintf("pool create --size %s --nvme-size %s", testSizeStr, testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible arguments (auto scm-size)",
-			fmt.Sprintf("pool create --size %s --scm-size %s", testScmSizeStr, testScmSizeStr),
+			fmt.Sprintf("pool create --size %s --scm-size %s", testSizeStr, testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible rank arguments (auto)",
-			fmt.Sprintf("pool create --size %s --nranks 16 --ranks 1,2,3", testScmSizeStr),
+			fmt.Sprintf("pool create --size %s --nranks 16 --ranks 1,2,3", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with invalid scm-ratio (auto)",
-			fmt.Sprintf("pool create --size %s --scm-ratio 200", testScmSizeStr),
+			"Create pool with invalid tier-ratio (auto)",
+			fmt.Sprintf("pool create --size %s --tier-ratio 200", testSizeStr),
 			"",
-			errors.New("1-100"),
+			errors.New("0-100"),
 		},
 		{
-			"Create pool with incompatible arguments (manual)",
-			fmt.Sprintf("pool create --scm-size %s --nranks 42", testScmSizeStr),
-			"",
-			errors.New("may not be mixed"),
-		},
-		{
-			"Create pool with minimal arguments",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testScmSizeStr),
+			"Create pool with single tier-ratio (auto)",
+			fmt.Sprintf("pool create --size %s --tier-ratio 10", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					ScmBytes:   uint64(testScmSize),
-					NumSvcReps: 3,
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.1, 0.9},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []system.Rank{},
@@ -142,12 +208,32 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Create pool with auto storage parameters",
-			fmt.Sprintf("pool create --size %s --scm-ratio 2 --nranks 8", testScmSizeStr),
+			"Create pool with incompatible arguments (manual)",
+			fmt.Sprintf("pool create --scm-size %s --nranks 42", testSizeStr),
+			"",
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with minimal arguments",
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					TotalBytes: uint64(testScmSize),
-					ScmRatio:   0.02,
+					NumSvcReps: 3,
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
+					TierBytes:  []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with auto storage parameters",
+			fmt.Sprintf("pool create --size %s --tier-ratio 2,98 --nranks 8", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.02, 0.98},
 					NumRanks:   8,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
@@ -157,90 +243,56 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Create pool with all arguments",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --acl-file %s",
-				testScmSizeStr, testNvmeSizeStr, testACLFile),
-			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
-					ScmBytes:   uint64(testScmSize),
-					NvmeBytes:  uint64(testNvmeSize),
-					NumSvcReps: 3,
-					User:       "foo@",
-					UserGroup:  "bar@",
-					Ranks:      []system.Rank{},
-					ACL:        testACL,
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Create pool with raw byte count size args",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --acl-file %s",
-				strconv.Itoa(testScmSize), strconv.Itoa(testNvmeSize), testACLFile),
-			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
-					ScmBytes:   uint64(testScmSize),
-					NvmeBytes:  uint64(testNvmeSize),
-					NumSvcReps: 3,
-					User:       "foo@",
-					UserGroup:  "bar@",
-					Ranks:      []system.Rank{},
-					ACL:        testACL,
-				}),
-			}, " "),
-			nil,
-		},
-		{
 			"Create pool with user and group domains",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testScmSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					User:       "foo@home",
 					UserGroup:  "bar@home",
 					Ranks:      []system.Rank{},
+					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with user but no group",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testScmSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					User:       "foo@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []system.Rank{},
+					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with group but no user",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testScmSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  "foo@",
 					Ranks:      []system.Rank{},
+					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with invalid ACL file",
-			fmt.Sprintf("pool create --scm-size %s --acl-file /not/a/real/file", testScmSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --acl-file /not/a/real/file", testSizeStr),
 			"",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
 			"Create pool with empty ACL file",
-			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testScmSizeStr, testEmptyFile),
+			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testSizeStr, testEmptyFile),
 			"",
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
@@ -249,7 +301,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
 			strings.Join([]string{
 				printRequest(t, &control.PoolExcludeReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					Targetidx: []uint32{1},
 				}),
@@ -261,7 +313,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
 			strings.Join([]string{
 				printRequest(t, &control.PoolExcludeReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					Targetidx: []uint32{1, 2, 3},
 				}),
@@ -273,7 +325,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
 			strings.Join([]string{
 				printRequest(t, &control.PoolExcludeReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					Targetidx: []uint32{},
 				}),
@@ -285,7 +337,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
 			strings.Join([]string{
 				printRequest(t, &control.PoolDrainReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					Targetidx: []uint32{1},
 				}),
@@ -297,7 +349,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
 			strings.Join([]string{
 				printRequest(t, &control.PoolDrainReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					Targetidx: []uint32{1, 2, 3},
 				}),
@@ -309,7 +361,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool drain 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
 			strings.Join([]string{
 				printRequest(t, &control.PoolDrainReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					Targetidx: []uint32{},
 				}),
@@ -328,7 +380,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool extend 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1"),
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
-					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Ranks: []system.Rank{1},
 				}),
 			}, " "),
@@ -339,7 +391,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool extend 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --ranks=1,2,3"),
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
-					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Ranks: []system.Rank{1, 2, 3},
 				}),
 			}, " "),
@@ -350,7 +402,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
 			strings.Join([]string{
 				printRequest(t, &control.PoolReintegrateReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					Targetidx: []uint32{1},
 				}),
@@ -362,7 +414,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1,2,3",
 			strings.Join([]string{
 				printRequest(t, &control.PoolReintegrateReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					Targetidx: []uint32{1, 2, 3},
 				}),
@@ -374,7 +426,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool reintegrate 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0",
 			strings.Join([]string{
 				printRequest(t, &control.PoolReintegrateReq{
-					UUID:      "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Rank:      0,
 					Targetidx: []uint32{},
 				}),
@@ -386,7 +438,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool destroy 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
 				printRequest(t, &control.PoolDestroyReq{
-					UUID:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Force: true,
 				}),
 			}, " "),
@@ -397,7 +449,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool evict 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
 				printRequest(t, &control.PoolEvictReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
 			nil,
@@ -423,7 +475,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:foo,space_rb:42",
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*control.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
@@ -437,7 +489,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:foo,space_rb:42",
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*control.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
@@ -451,7 +503,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --name label --value foo",
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
-					UUID:       "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID:         "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*control.PoolProperty{propWithVal("label", "foo")},
 				}),
 			}, " "),
@@ -486,7 +538,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label",
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetPropReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Properties: []*control.PoolProperty{
 						propWithVal("label", ""),
 					},
@@ -499,7 +551,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool get-acl 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetACLReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
 			nil,
@@ -509,7 +561,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool get-acl 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --verbose",
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetACLReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
 			nil,
@@ -519,7 +571,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool get-acl 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile /foo/bar/acl.txt",
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetACLReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
 			errors.New("open /foo/bar/acl.txt: no such file or directory"),
@@ -529,7 +581,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool get-acl 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", testExistingFile),
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetACLReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
 			errors.New(fmt.Sprintf("file already exists: %s", testExistingFile)),
@@ -539,7 +591,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool get-acl 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", testWriteOnlyFile),
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetACLReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
 			errors.New(fmt.Sprintf("file already exists: %s", testWriteOnlyFile)),
@@ -549,7 +601,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool get-acl 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s --force", testExistingFile),
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetACLReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
 			nil,
@@ -559,7 +611,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool get-acl 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --outfile %s", filepath.Join(testNoPermDir, "out.txt")),
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetACLReq{
-					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
 			errors.New(fmt.Sprintf("open %s: permission denied", filepath.Join(testNoPermDir, "out.txt"))),
@@ -581,8 +633,8 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool overwrite-acl 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
 			strings.Join([]string{
 				printRequest(t, &control.PoolOverwriteACLReq{
-					UUID: "12345678-1234-1234-1234-1234567890ab",
-					ACL:  testACL,
+					ID:  "12345678-1234-1234-1234-1234567890ab",
+					ACL: testACL,
 				}),
 			}, " "),
 			nil,
@@ -616,8 +668,8 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool update-acl 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
 			strings.Join([]string{
 				printRequest(t, &control.PoolUpdateACLReq{
-					UUID: "12345678-1234-1234-1234-1234567890ab",
-					ACL:  testACL,
+					ID:  "12345678-1234-1234-1234-1234567890ab",
+					ACL: testACL,
 				}),
 			}, " "),
 			nil,
@@ -627,8 +679,8 @@ func TestPoolCommands(t *testing.T) {
 			"pool update-acl 12345678-1234-1234-1234-1234567890ab --entry A::user@:rw",
 			strings.Join([]string{
 				printRequest(t, &control.PoolUpdateACLReq{
-					UUID: "12345678-1234-1234-1234-1234567890ab",
-					ACL:  &control.AccessControlList{Entries: []string{"A::user@:rw"}},
+					ID:  "12345678-1234-1234-1234-1234567890ab",
+					ACL: &control.AccessControlList{Entries: []string{"A::user@:rw"}},
 				}),
 			}, " "),
 			nil,
@@ -644,7 +696,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool delete-acl 12345678-1234-1234-1234-1234567890ab --principal OWNER@",
 			strings.Join([]string{
 				printRequest(t, &control.PoolDeleteACLReq{
-					UUID:      "12345678-1234-1234-1234-1234567890ab",
+					ID:        "12345678-1234-1234-1234-1234567890ab",
 					Principal: "OWNER@",
 				}),
 			}, " "),
@@ -655,7 +707,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool query 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					UUID: "12345678-1234-1234-1234-1234567890ab",
+					ID: "12345678-1234-1234-1234-1234567890ab",
 				}),
 			}, " "),
 			nil,
@@ -664,11 +716,8 @@ func TestPoolCommands(t *testing.T) {
 			"Query pool with Label",
 			"pool query test_label",
 			strings.Join([]string{
-				printRequest(t, &control.PoolResolveIDReq{
-					HumanID: "test_label",
-				}),
 				printRequest(t, &control.PoolQueryReq{
-					UUID: defaultPoolUUID,
+					ID: "test_label",
 				}),
 			}, " "),
 			nil,
@@ -765,9 +814,8 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 				},
 			},
 			queryResp: &mgmtpb.PoolQueryResp{
-				Uuid: common.MockUUID(1),
-				Scm:  &mgmtpb.StorageUsageStats{},
-				Nvme: &mgmtpb.StorageUsageStats{},
+				Uuid:      common.MockUUID(1),
+				TierStats: []*mgmtpb.StorageUsageStats{{}},
 			},
 		},
 		"list pools query failure": {

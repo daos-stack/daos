@@ -12,13 +12,15 @@ SRC = ['cart_ctl.c']
 
 def scons():
     """scons function"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'cart_utils_objs')
 
     tenv = env.Clone(LIBS=[])
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread'])
-    prereqs.require(tenv, 'mercury')
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'daos', 'daos_common'])
+    tenv.AppendUnique(CPPPATH=[Dir('../../../src/mgmt').srcnode()])
 
-    ctl = daos_build.program(tenv, SRC)
+    prereqs.require(tenv, 'mercury', 'protobufc')
+
+    ctl = daos_build.program(tenv, [SRC, cart_utils_objs])
     tenv.Install(os.path.join("$PREFIX", 'bin'), ctl)
 
 if __name__ == "SCons.Script":

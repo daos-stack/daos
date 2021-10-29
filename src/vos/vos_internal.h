@@ -72,8 +72,6 @@ D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 #define DTX_BTREE_ORDER	23	/* Order for DTX tree */
 #define VEA_TREE_ODR		20	/* Order of a VEA tree */
 
-#define DAOS_VOS_VERSION 1
-
 extern struct dss_module_key vos_module_key;
 
 #define VOS_POOL_HHASH_BITS 10 /* Up to 1024 pools */
@@ -167,6 +165,8 @@ struct vos_pool {
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
+	/* The count of committed DTXs for the whole pool. */
+	uint32_t		 vp_dtx_committed_count;
 };
 
 /**
@@ -191,16 +191,10 @@ struct vos_container {
 	struct btr_root		vc_dtx_active_btr;
 	/** The root of the B+ tree for committed DTXs. */
 	struct btr_root		vc_dtx_committed_btr;
-	/* The global list for committed DTXs. */
-	d_list_t		vc_dtx_committed_list;
-	/* The temporary list for committed DTXs during re-index. */
-	d_list_t		vc_dtx_committed_tmp_list;
 	/* The list for active DTXs, roughly ordered in time. */
 	d_list_t		vc_dtx_act_list;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
-	/* The items count in vc_dtx_committed_tmp_list. */
-	uint32_t		vc_dtx_committed_tmp_count;
 	/** Index for timestamp lookup */
 	uint32_t		*vc_ts_idx;
 	/** Direct pointer to the VOS container */
@@ -220,6 +214,7 @@ struct vos_container {
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
 				vc_reindex_cmt_dtx:1;
+	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
 };
 
@@ -260,7 +255,8 @@ struct vos_dtx_act_ent {
 					 dae_committed:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
-					 dae_prepared:1;
+					 dae_prepared:1,
+					 dae_resent:1;
 };
 
 #ifdef VOS_STANDALONE
@@ -309,17 +305,17 @@ do {						\
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
-	/* Link into vos_conter::vc_dtx_committed_list */
-	d_list_t			 dce_committed_link;
 	struct vos_dtx_cmt_ent_df	 dce_base;
 
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
-					 dce_invalid:1;
+					 dce_invalid:1,
+					 dce_resent:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
+#define DCE_HANDLE_TIME(dce)	((dce)->dce_base.dce_handle_time)
 
 extern int vos_evt_feats;
 
@@ -327,9 +323,6 @@ extern int vos_evt_feats;
 
 #define VOS_KEY_CMP_UINT64_SET	(BTR_FEAT_UINT_KEY)
 #define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
-#define VOS_OFEAT_SHIFT		48
-#define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
-#define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
 
 /** Iterator ops for objects and OIDs */
 extern struct vos_iter_ops vos_oi_iter_ops;
@@ -495,16 +488,19 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_prepared(struct dtx_handle *dth);
+vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count, daos_epoch_t epoch, bool *rm_cos,
+			int count, daos_epoch_t epoch,
+			bool resent, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces);
 void
-vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
-		    struct vos_dtx_cmt_ent **dces, int count, bool abort);
+vos_dtx_post_handle(struct vos_container *cont,
+		    struct vos_dtx_act_ent **daes,
+		    struct vos_dtx_cmt_ent **dces,
+		    int count, bool abort, bool rollback);
 
 /**
  * Establish indexed active DTX table in DRAM.
@@ -807,6 +803,7 @@ struct vos_iterator {
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
+				 it_for_discard:1,
 				 it_for_migration:1,
 				 it_cleanup_stale_dtx:1,
 				 it_ignore_uncommitted:1;
@@ -1062,6 +1059,8 @@ vos_iter_intent(struct vos_iterator *iter)
 {
 	if (iter->it_for_purge)
 		return DAOS_INTENT_PURGE;
+	if (iter->it_for_discard)
+		return DAOS_INTENT_DISCARD;
 	if (iter->it_ignore_uncommitted)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
@@ -1096,8 +1095,8 @@ gc_reserve_space(daos_size_t *rsrvd);
  * Aggregate the creation/punch records in the current entry of the object
  * iterator
  *
- * \param ih[IN]	Iterator handle
- * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param ih[IN]		Iterator handle
+ * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1105,14 +1104,14 @@ gc_reserve_space(daos_size_t *rsrvd);
  *			negative value otherwise
  */
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard);
+oi_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
  * iterator
  *
- * \param ih[IN]	Iterator handle
- * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param ih[IN]		Iterator handle
+ * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1120,7 +1119,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  *			negative value otherwise
  */
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /** Internal bit for initializing iterator from open tree handle */
 #define VOS_IT_KEY_TREE	(1 << 31)

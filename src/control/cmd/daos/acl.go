@@ -117,7 +117,7 @@ func (cmd *containerOverwriteACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -154,7 +154,7 @@ func (cmd *containerUpdateACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func (cmd *containerDeleteACLCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ type containerGetACLCmd struct {
 }
 
 func (cmd *containerGetACLCmd) Execute(args []string) error {
-	cleanup, err := cmd.resolveAndConnect(nil)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, nil)
 	if err != nil {
 		return err
 	}
@@ -294,7 +294,7 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}

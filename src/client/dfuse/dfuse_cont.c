@@ -61,7 +61,8 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 		}
 
 		uuid_copy(dfc->dfs_cont, cont);
-		dfuse_set_default_cont_cache_values(dfc);
+		if (fs_handle->dpi_info->di_caching)
+			dfuse_set_default_cont_cache_values(dfc);
 	}
 
 	rc = dfuse_cont_open(fs_handle, dfp, &cont, &dfc);
@@ -116,7 +117,6 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_name[NAME_MAX] = '\0';
 
 	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfc;

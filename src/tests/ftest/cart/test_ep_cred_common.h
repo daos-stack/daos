@@ -37,6 +37,7 @@ struct test_global_t {
 	int			 tg_send_queue_front;
 	bool			 tg_use_cfg;
 	bool			 tg_save_cfg;
+	bool			 tg_use_daos_agent_env;
 	char			*tg_cfg_path;
 };
 
@@ -79,7 +80,6 @@ ping_hdlr_1(crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 }
 
-
 static void
 shutdown_handler(crt_rpc_t *rpc_req)
 {
@@ -90,7 +90,7 @@ shutdown_handler(crt_rpc_t *rpc_req)
 
 	crt_reply_send(rpc_req);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	DBG_PRINT("server set shutdown flag.\n");
 }
 
@@ -143,6 +143,7 @@ test_parse_args(int argc, char **argv)
 	};
 
 	test.tg_use_cfg = true;
+	test.tg_use_daos_agent_env = false;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:b:c:p:u:fhsq", long_options,

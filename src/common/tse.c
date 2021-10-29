@@ -269,6 +269,20 @@ tse_task_decref(tse_task_t *task)
 	D_FREE(task);
 }
 
+static void
+tse_task_decref_free_locked(tse_task_t *task)
+{
+	struct tse_task_private *dtp = tse_task2priv(task);
+	bool			zombie;
+
+	zombie = tse_task_decref_locked(dtp);
+	if (!zombie)
+		return;
+
+	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
+	D_FREE(task);
+}
+
 void
 tse_sched_fini(tse_sched_t *sched)
 {
@@ -370,8 +384,14 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 	if (dtp->dtp_completed)
 		return;
 
-	if (!dtp->dtp_running)
-		return;
+	/*
+	 * if completing a task that never started, we need to bump inflight tasks in scheduler
+	 * before adding it to tail of completed list.
+	 */
+	if (!dtp->dtp_running) {
+		tse_sched_priv_addref_locked(dsp);
+		dsp->dsp_inflight++;
+	}
 
 	dtp->dtp_running = 0;
 	dtp->dtp_completing = 0;
@@ -591,9 +611,8 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 }
 
 /**
- * Check the task in the complete list, dependent task
- * status check, schedule status update etc. The task
- * will be moved to fini list after this
+ * Check the task in the complete list, dependent task status check, schedule status update etc. The
+ * task will be moved to fini list after this.
  **/
 static int
 tse_task_post_process(tse_task_t *task)
@@ -657,7 +676,7 @@ tse_task_post_process(tse_task_t *task)
 			 */
 			if (!done) {
 				/* -1 for tlink (addref by add_dependent) */
-				tse_task_decref_locked(dtp_tmp);
+				tse_task_decref_free_locked(task_tmp);
 				continue;
 			}
 
@@ -665,7 +684,7 @@ tse_task_post_process(tse_task_t *task)
 		}
 
 		/* -1 for tlink (addref by add_dependent) */
-		tse_task_decref_locked(dtp_tmp);
+		tse_task_decref_free_locked(task_tmp);
 	}
 
 	D_ASSERT(dsp->dsp_inflight > 0);
@@ -849,7 +868,7 @@ tse_task_complete(tse_task_t *task, int ret)
 		if (done)
 			tse_task_complete_locked(dtp, dsp);
 	} else {
-		tse_task_decref_locked(dtp);
+		tse_task_decref_free_locked(task);
 	}
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
@@ -868,6 +887,8 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	struct tse_task_private  *dtp = tse_task2priv(task);
 	struct tse_task_private  *dep_dtp = tse_task2priv(dep);
 	struct tse_task_link	  *tlink;
+
+	D_ASSERT(task != dep);
 
 	if (dtp->dtp_sched != dep_dtp->dtp_sched) {
 		D_ERROR("Two tasks should belong to the same scheduler.\n");

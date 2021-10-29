@@ -16,16 +16,16 @@
 #include <semaphore.h>
 #include <cart/api.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 
 #define MY_BASE 0x010000000
 #define MY_VER  0
 
 #define NUM_SERVER_CTX 8
 
-#define RPC_DECLARE(name)						\
-	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
-	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)
+#define RPC_DECLARE(name)					\
+	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)	\
+	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)	\
 
 enum {
 	RPC_PING = CRT_PROTO_OPC(MY_BASE, MY_VER, 0),
@@ -113,7 +113,7 @@ handler_shutdown(crt_rpc_t *rpc)
 	DBG_PRINT("Shutdown handler called!\n");
 	crt_reply_send(rpc);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	return 0;
 }
 static int
@@ -288,6 +288,7 @@ int main(int argc, char **argv)
 	crt_group_t		*grp;
 	crt_context_t		crt_ctx[NUM_SERVER_CTX];
 	pthread_t		progress_thread[NUM_SERVER_CTX];
+	struct test_options	*opts = crtu_get_opts();
 	d_rank_list_t		*mod_ranks;
 	char			*uris[10];
 	d_rank_list_t		*mod_prim_ranks;
@@ -313,14 +314,13 @@ int main(int argc, char **argv)
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(my_rank, 20, true, true);
+	crtu_test_init(my_rank, 20, true, true);
 
 	rc = d_log_init();
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -352,8 +352,16 @@ int main(int argc, char **argv)
 		}
 
 		rc = pthread_create(&progress_thread[i], 0,
-				tc_progress_fn, &crt_ctx[i]);
+				    crtu_progress_fn, &crt_ctx[i]);
 		assert(rc == 0);
+	}
+
+	if (opts->is_swim_enabled) {
+		rc = crt_swim_init(0);
+		if (rc != 0) {
+			D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+			assert(0);
+		}
 	}
 
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
@@ -372,22 +380,16 @@ int main(int argc, char **argv)
 	}
 
 	/* load group info from a config file and delete file upon return */
-	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
-					true);
+	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
+				       true);
 	if (rc != 0) {
-		D_ERROR("tc_load_group_from_file() failed; rc=%d\n", rc);
+		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
 			my_uri, grp_cfg_file);
 	D_FREE(my_uri);
-
-	rc = crt_swim_init(0);
-	if (rc != 0) {
-		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
-		assert(0);
-	}
 
 	rc = crt_group_size(NULL, &grp_size);
 	if (rc != 0) {
@@ -523,8 +525,8 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = tc_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
-			NUM_SERVER_CTX, 10, 100.0);
+	rc = crtu_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
+				 NUM_SERVER_CTX, 10, 100.0);
 	if (rc != 0) {
 		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 		assert(0);
@@ -576,7 +578,7 @@ int main(int argc, char **argv)
 				D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 				assert(0);
 			}
-			tc_sem_timedwait(&sem, 10, __LINE__);
+			crtu_sem_timedwait(&sem, 10, __LINE__);
 			DBG_PRINT("RPC to rank=%d finished\n", rank);
 		}
 	}
@@ -599,7 +601,7 @@ int main(int argc, char **argv)
 		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 		assert(0);
 	}
-	tc_sem_timedwait(&sem, 10, __LINE__);
+	crtu_sem_timedwait(&sem, 10, __LINE__);
 	DBG_PRINT("CORRPC to secondary group finished\n");
 
 	/* Send shutdown RPC to all nodes except for self */
@@ -629,7 +631,7 @@ int main(int argc, char **argv)
 			D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 			assert(0);
 		}
-		tc_sem_timedwait(&sem, 10, __LINE__);
+		crtu_sem_timedwait(&sem, 10, __LINE__);
 	}
 	D_FREE(rank_list->rl_ranks);
 	D_FREE(rank_list);
@@ -802,7 +804,7 @@ int main(int argc, char **argv)
 	d_rank_list_free(mod_prim_ranks);
 	d_rank_list_free(mod_sec_ranks);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	sem_destroy(&sem);
 
 	DBG_PRINT("All tesst succeeded\n");

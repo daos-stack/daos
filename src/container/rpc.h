@@ -24,7 +24,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_CONT_VERSION 4
+#define DAOS_CONT_VERSION 6
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -179,7 +179,10 @@ CRT_RPC_DECLARE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL,
 
 #define DAOS_OSEQ_CONT_OPEN	/* output fields */		 \
 	((struct cont_op_out)	(coo_op)		CRT_VAR) \
-	((daos_prop_t)		(coo_prop)		CRT_PTR)
+	((daos_prop_t)		(coo_prop)		CRT_PTR) \
+	((daos_epoch_t)		(coo_lsnapshot)		CRT_VAR) \
+	((uint32_t)		(coo_snap_count)	CRT_VAR) \
+	((uint32_t)		(coo_pad)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
@@ -246,8 +249,10 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 /** Add more items to query when needed */
 #define DAOS_OSEQ_CONT_QUERY	/* output fields */		 \
 	((struct cont_op_out)	(cqo_op)		CRT_VAR) \
-	((daos_epoch_t)		(cqo_hae)		CRT_VAR) \
-	((daos_prop_t)		(cqo_prop)		CRT_PTR)
+	((daos_prop_t)		(cqo_prop)		CRT_PTR) \
+	((daos_epoch_t)		(cqo_lsnapshot)		CRT_VAR) \
+	((uint32_t)		(cqo_snap_count)	CRT_VAR) \
+	((uint32_t)		(cqo_pad)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 
@@ -346,6 +351,9 @@ struct cont_tgt_close_rec {
 	daos_epoch_t	tcr_hce;
 };
 
+/* TODO: more tgt query information ; and decide if tqo_hae is needed at all
+ * (e.g., CONT_QUERY cqo_hae has been removed).
+ */
 #define DAOS_ISEQ_TGT_QUERY	/* input fields */		 \
 	((uuid_t)		(tqi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(tqi_cont_uuid)		CRT_VAR)

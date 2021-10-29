@@ -10,13 +10,16 @@ package promexp
 
 import (
 	"context"
+	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -26,7 +29,7 @@ import (
 )
 
 func TestPromexp_NewEngineSource(t *testing.T) {
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
@@ -37,14 +40,14 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 		expResult *EngineSource
 	}{
 		"bad idx": {
-			idx:    testIdx + 1,
+			idx:    (1 << 31),
 			expErr: errors.New("failed to init"),
 		},
 		"success": {
 			idx:  testIdx,
 			rank: 123,
 			expResult: &EngineSource{
-				Index: testIdx,
+				Index: uint32(testIdx),
 				Rank:  123,
 			},
 		},
@@ -69,11 +72,11 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 }
 
 func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
-	testIdx := uint32(42)
-	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
+	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
-	es, cleanup, err := NewEngineSource(context.Background(), testIdx, 2)
+	es, cleanup, err := NewEngineSource(context.Background(), uint32(testIdx), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +130,7 @@ func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 }
 
 func TestPromExp_EngineSource_Collect(t *testing.T) {
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -188,7 +191,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 			for {
 				done := false
 				select {
-				case <-time.After(50 * time.Millisecond):
+				case <-time.After(500 * time.Millisecond):
 					done = true
 				case m := <-tc.resultChan:
 					gotMetrics = append(gotMetrics, m)
@@ -201,15 +204,15 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 
 			common.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "wrong number of metrics returned")
 			for _, got := range gotMetrics {
-				common.AssertEqual(t, testRank, got.r, "wrong rank")
-				expM, ok := tc.expMetrics[got.m.Type()]
+				common.AssertEqual(t, testRank, got.rank, "wrong rank")
+				expM, ok := tc.expMetrics[got.metric.Type()]
 				if !ok {
-					t.Fatalf("metric type %d not expected", got.m.Type())
+					t.Fatalf("metric type %d not expected", got.metric.Type())
 				}
 
 				tokens := strings.Split(expM.Name, "/")
 				expName := tokens[len(tokens)-1]
-				common.AssertEqual(t, expName, got.m.Name(), "unexpected name")
+				common.AssertEqual(t, expName, got.metric.Name(), "unexpected name")
 			}
 		})
 	}
@@ -232,7 +235,11 @@ func TestPromExp_NewCollector(t *testing.T) {
 		expResult *Collector
 	}{
 		"no sources": {
-			expErr: errors.New("must have > 0 sources"),
+			expResult: &Collector{
+				summary: &prometheus.SummaryVec{
+					MetricVec: &prometheus.MetricVec{},
+				},
+			},
 		},
 		"defaults": {
 			sources: testSrc,
@@ -278,8 +285,10 @@ func TestPromExp_NewCollector(t *testing.T) {
 				cmpopts.IgnoreUnexported(regexp.Regexp{}),
 				cmp.AllowUnexported(Collector{}),
 				cmp.FilterPath(func(p cmp.Path) bool {
-					// Ignore the logger
-					return strings.HasSuffix(p.String(), "log")
+					// Ignore a few specific fields
+					return (strings.HasSuffix(p.String(), "log") ||
+						strings.HasSuffix(p.String(), "sourceMutex") ||
+						strings.HasSuffix(p.String(), "cleanupSource"))
 				}, cmp.Ignore()),
 			}
 			if diff := cmp.Diff(tc.expResult, result, cmpOpts...); diff != "" {
@@ -289,11 +298,115 @@ func TestPromExp_NewCollector(t *testing.T) {
 	}
 }
 
+func TestPromExp_Collector_Prune(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
+	testRank := uint32(123)
+	telemetry.InitTestMetricsProducer(t, int(testIdx), 4096)
+	defer telemetry.CleanupTestMetricsProducer(t)
+
+	staticMetrics := telemetry.TestMetricsMap{
+		telemetry.MetricTypeGauge: &telemetry.TestMetric{
+			Name: "test/gauge",
+			Cur:  42.42,
+		},
+		telemetry.MetricTypeDirectory: &telemetry.TestMetric{
+			Name: "test/pool",
+		},
+	}
+
+	pu := uuid.New()
+	poolLink := telemetry.TestMetricsMap{
+		telemetry.MetricTypeLink: &telemetry.TestMetric{
+			Name: fmt.Sprintf("test/pool/%s", pu),
+		},
+	}
+	poolCtr := telemetry.TestMetricsMap{
+		telemetry.MetricTypeCounter: &telemetry.TestMetric{
+			Name: fmt.Sprintf("test/pool/%s/counter1", pu),
+			Cur:  1,
+		},
+	}
+
+	engSrc, cleanup, err := NewEngineSource(context.Background(), testIdx, testRank)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	defaultCollector, err := NewCollector(log, nil, engSrc)
+	if err != nil {
+		t.Fatalf("failed to create collector: %s", err.Error())
+	}
+
+	getMetrics := func(t *testing.T) (names []string) {
+		resultChan := make(chan prometheus.Metric)
+
+		go defaultCollector.Collect(resultChan)
+
+		done := false
+		for !done {
+			select {
+			case <-time.After(500 * time.Millisecond):
+				done = true
+			case _ = <-resultChan:
+			}
+		}
+
+		engSrc.rmSchema.mu.Lock()
+		for m := range engSrc.rmSchema.rankMetrics {
+			_, name := extractLabels(m)
+			names = append(names, name)
+		}
+		engSrc.rmSchema.mu.Unlock()
+
+		sort.Strings(names)
+		return
+	}
+
+	expNames := func(maps ...telemetry.TestMetricsMap) []string {
+		unique := map[string]struct{}{}
+		for _, m := range maps {
+			for t, m := range m {
+				if t != telemetry.MetricTypeDirectory && t != telemetry.MetricTypeLink {
+					_, name := extractLabels(m.FullPath())
+					unique[name] = struct{}{}
+				}
+			}
+		}
+
+		names := []string{}
+		for u := range unique {
+			names = append(names, u)
+		}
+		sort.Strings(names)
+		return names
+	}
+
+	telemetry.AddTestMetrics(t, staticMetrics)
+	telemetry.AddTestMetrics(t, poolLink)
+	telemetry.AddTestMetrics(t, poolCtr)
+
+	expected := expNames(staticMetrics, poolLink, poolCtr)
+	if diff := cmp.Diff(expected, getMetrics(t)); diff != "" {
+		t.Fatalf("before prune: (-want, +got)\n%s", diff)
+	}
+
+	telemetry.RemoveTestMetrics(t, poolLink)
+
+	expected = expNames(staticMetrics)
+	if diff := cmp.Diff(expected, getMetrics(t)); diff != "" {
+		t.Fatalf("after prune: (-want, +got)\n%s", diff)
+	}
+}
+
 func TestPromExp_Collector_Collect(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 4096)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -350,6 +463,10 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				"engine_timer_stamp",
 				"engine_timer_snapshot",
 				"engine_timer_duration",
+				"engine_timer_duration_min",
+				"engine_timer_duration_max",
+				"engine_timer_duration_mean",
+				"engine_timer_duration_stddev",
 			},
 		},
 		"ignore some metrics": {
@@ -365,17 +482,13 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 			go tc.collector.Collect(tc.resultChan)
 
 			gotMetrics := []prometheus.Metric{}
-			for {
-				done := false
+			done := false
+			for !done {
 				select {
-				case <-time.After(50 * time.Millisecond):
+				case <-time.After(500 * time.Millisecond):
 					done = true
 				case m := <-tc.resultChan:
 					gotMetrics = append(gotMetrics, m)
-				}
-
-				if done {
-					break
 				}
 			}
 
@@ -416,54 +529,60 @@ func TestPromExp_extractLabels(t *testing.T) {
 			input:   "ID: 2_stat",
 			expName: "stat",
 		},
-		"io target": {
-			input:   "io_3_latency",
-			expName: "io_latency",
-			expLabels: labelMap{
-				"target": "3",
-			},
-		},
 		"io latency B": {
-			input:   "io_fetch_latency_16B",
-			expName: "io_fetch_latency",
+			input:   "io_latency_fetch_16B",
+			expName: "io_latency_fetch",
 			expLabels: labelMap{
 				"size": "16B",
 			},
 		},
 		"io latency KB": {
-			input:   "io_update_latency_128KB",
-			expName: "io_update_latency",
+			input:   "io_latency_update_128KB",
+			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "128KB",
 			},
 		},
 		"io latency MB": {
-			input:   "io_fetch_latency_256MB",
-			expName: "io_fetch_latency",
+			input:   "io_latency_update_256MB",
+			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "256MB",
 			},
 		},
 		"io latency >size": {
-			input:   "io_update_latency_GT4MB",
-			expName: "io_update_latency",
+			input:   "io_latency_update_GT4MB",
+			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "GT4MB",
 			},
 		},
-		"net rank and context": {
-			input:   "net_15_128_stat",
+		"net rank": {
+			input:   "net_15_stat",
 			expName: "net_stat",
 			expLabels: labelMap{
-				"rank":    "15",
-				"context": "128",
+				"rank": "15",
 			},
 		},
-		"pool current UUID": {
-			input:   "pool_current_11111111_2222_3333_4444_555555555555_info",
+		"pool UUID": {
+			input:   "pool_11111111_2222_3333_4444_555555555555_info",
 			expName: "pool_info",
 			expLabels: labelMap{
 				"pool": "11111111-2222-3333-4444-555555555555",
+			},
+		},
+		"target": {
+			input:   "io_update_latency_tgt_1",
+			expName: "io_update_latency",
+			expLabels: labelMap{
+				"target": "1",
+			},
+		},
+		"context": {
+			input:   "failed_addr_ctx_1",
+			expName: "failed_addr",
+			expLabels: labelMap{
+				"context": "1",
 			},
 		},
 	} {
@@ -478,6 +597,187 @@ func TestPromExp_extractLabels(t *testing.T) {
 					t.Fatalf("key %q was not expected", key)
 				}
 				common.AssertEqual(t, expVal, val, "incorrect value")
+			}
+		})
+	}
+}
+
+func TestPromExp_Collector_AddSource(t *testing.T) {
+	testSrc := func() []*EngineSource {
+		return []*EngineSource{
+			{Index: 1},
+			{Index: 2},
+			{Index: 3},
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		startSrc   []*EngineSource
+		es         *EngineSource
+		fn         func()
+		expSrc     []*EngineSource
+		expAddedFn bool
+	}{
+		"nil EngineSource": {
+			startSrc: testSrc(),
+			fn:       func() {},
+			expSrc:   testSrc(),
+		},
+		"nil func": {
+			es:     &EngineSource{},
+			expSrc: []*EngineSource{{}},
+		},
+		"add to empty": {
+			es:         &EngineSource{},
+			fn:         func() {},
+			expSrc:     []*EngineSource{{}},
+			expAddedFn: true,
+		},
+		"add to existing list": {
+			startSrc:   testSrc(),
+			es:         &EngineSource{},
+			fn:         func() {},
+			expSrc:     append(testSrc(), &EngineSource{}),
+			expAddedFn: true,
+		},
+		"add as duplicate": {
+			startSrc:   testSrc(),
+			es:         testSrc()[1],
+			fn:         func() {},
+			expSrc:     testSrc(),
+			expAddedFn: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			collector, err := NewCollector(log, nil, tc.startSrc...)
+			if err != nil {
+				t.Fatalf("failed to set up collector: %s", err)
+			}
+			collector.AddSource(tc.es, tc.fn)
+
+			// Ordering changes are possible, so we can't directly compare the structs
+			common.AssertEqual(t, len(tc.expSrc), len(collector.sources), "")
+			for _, exp := range tc.expSrc {
+				found := false
+				for _, actual := range collector.sources {
+					if actual.Index == exp.Index {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					t.Errorf("expected EngineSource %d not found", exp.Index)
+				}
+			}
+
+			var found bool
+			if tc.es != nil {
+				_, found = collector.cleanupSource[tc.es.Index]
+			}
+			common.AssertEqual(t, tc.expAddedFn, found, "")
+		})
+	}
+}
+
+func TestPromExp_Collector_RemoveSource(t *testing.T) {
+	badCleanup := func() {
+		t.Fatal("wrong cleanup function called")
+	}
+
+	var goodCleanupCalled int
+	goodCleanup := func() {
+		goodCleanupCalled++
+	}
+
+	for name, tc := range map[string]struct {
+		startSrc         []*EngineSource
+		startCleanup     map[uint32]func()
+		idx              uint32
+		expSrc           []*EngineSource
+		expCleanupKeys   []uint32
+		expCleanupCalled int
+	}{
+		"not found": {
+			startSrc: []*EngineSource{
+				{Index: 1},
+			},
+			startCleanup: map[uint32]func(){
+				1: badCleanup,
+			},
+			idx: 42,
+			expSrc: []*EngineSource{
+				{Index: 1},
+			},
+			expCleanupKeys: []uint32{1},
+		},
+		"success": {
+			startSrc: []*EngineSource{
+				{Index: 1},
+				{Index: 2},
+				{Index: 3},
+			},
+			startCleanup: map[uint32]func(){
+				1: badCleanup,
+				2: goodCleanup,
+				3: badCleanup,
+			},
+			idx: 2,
+			expSrc: []*EngineSource{
+				{Index: 1},
+				{Index: 3},
+			},
+			expCleanupKeys:   []uint32{1, 3},
+			expCleanupCalled: 1,
+		},
+		"remove engine with no cleanup": {
+			startSrc: []*EngineSource{
+				{Index: 1},
+				{Index: 2},
+				{Index: 3},
+			},
+			startCleanup: map[uint32]func(){
+				1: badCleanup,
+				3: badCleanup,
+			},
+			idx: 2,
+			expSrc: []*EngineSource{
+				{Index: 1},
+				{Index: 3},
+			},
+			expCleanupKeys: []uint32{1, 3},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			collector, err := NewCollector(log, nil, tc.startSrc...)
+			if err != nil {
+				t.Fatalf("failed to set up collector: %s", err)
+			}
+
+			collector.cleanupSource = tc.startCleanup
+			goodCleanupCalled = 0
+
+			collector.RemoveSource(tc.idx)
+
+			if diff := cmp.Diff(tc.expSrc, collector.sources, cmpopts.IgnoreUnexported(EngineSource{})); diff != "" {
+				t.Fatalf("(-want, +got)\n%s", diff)
+			}
+
+			common.AssertEqual(t, tc.expCleanupCalled, goodCleanupCalled, "")
+
+			common.AssertEqual(t, len(tc.expCleanupKeys), len(collector.cleanupSource), "")
+			for _, key := range tc.expCleanupKeys {
+				fn, found := collector.cleanupSource[key]
+				common.AssertTrue(t, found, fmt.Sprintf("expected to find %d in cleanup map", key))
+				if fn == nil {
+					t.Fatal("cleanup function was nil")
+				}
 			}
 		})
 	}

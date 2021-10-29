@@ -40,6 +40,8 @@
 #define FOREACH_SINGLE_INTERCEPT(ACTION)                                      \
 	ACTION(int,     fclose,    (FILE *))                                  \
 	ACTION(int,     close,     (int))                                     \
+	ACTION(int,     __open64_2, (const char *, int))                      \
+	ACTION(int,     __open_2, (const char *, int))                        \
 	ACTION(ssize_t, read,      (int, void *, size_t))                     \
 	ACTION(ssize_t, write,     (int, const void *, size_t))               \
 	ACTION(ssize_t, readv,     (int, const struct iovec *, int))          \
@@ -48,8 +50,10 @@
 	ACTION(int,     fdatasync, (int))                                     \
 	ACTION(int,     dup,       (int))                                     \
 	ACTION(int,     dup2,      (int, int))                                \
-	ACTION(int,     fcntl,     (int fd, int cmd, ...))                    \
-	ACTION(FILE *,  fdopen,    (int, const char *))
+	ACTION(int,     fcntl,     (int, int, ...))                           \
+	ACTION(FILE *,  fdopen,    (int, const char *))                       \
+	ACTION(int,     __fxstat,  (int, int, struct stat *))                 \
+	ACTION(int,     mkstemp,   (char *))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \
@@ -78,7 +82,7 @@
 								 #name);    \
 		if (__real_ ## name == NULL) {                              \
 			fprintf(stderr,                                     \
-				"libioil couldn't map " #name "\n");       \
+				"libioil couldn't map " #name "\n");        \
 			exit(1);                                            \
 		}                                                           \
 	} while (0);

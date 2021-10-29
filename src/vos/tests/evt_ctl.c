@@ -520,7 +520,7 @@ ts_list_rect(void)
 	daos_handle_t		 ih;
 	int			 i;
 	char			*arg;
-	int			 rc;
+	int			 rc, rc2;
 	int			 options = 0;
 	bool			 probe = true;
 
@@ -641,8 +641,9 @@ skip_probe:
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
- out:
-	evt_iter_finish(ih);
+out:
+	rc2 = evt_iter_finish(ih);
+	assert_rc_equal(rc2, 0);
 }
 
 #define TS_VAL_CYCLE	4
@@ -897,8 +898,7 @@ copy_exp_val_to_array(int flag, int **evtdata,
 		if (flag == EVT_ITER_VISIBLE) {
 			val[epoch] = evtdata[epoch][epoch];
 			 count++;
-		} else if ((flag == EVT_ITER_COVERED) ||
-		(flag == (EVT_ITER_COVERED))) {
+		} else if (flag == EVT_ITER_COVERED) {
 			for (offset = epoch; offset >= 1; offset--) {
 				if (evtdata[offset][epoch+incr] != 0) {
 					val[count] =

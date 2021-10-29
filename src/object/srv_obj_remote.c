@@ -230,7 +230,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	if (opc_get(parent_req->cr_opc) == DAOS_OBJ_RPC_PUNCH)
 		opc = DAOS_OBJ_RPC_TGT_PUNCH;
-	else if (opc_get(parent_req->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS)
+	else if (opc_get(parent_req->cr_opc) == DAOS_OBJ_RPC_PUNCH_DKEYS)
 		opc = DAOS_OBJ_RPC_TGT_PUNCH_DKEYS;
 	else
 		opc = DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
@@ -244,7 +244,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	opi_parent = crt_req_get(parent_req);
 	opi = crt_req_get(req);
 	*opi = *opi_parent;
-	opi->opi_oid.id_shard = shard_tgt->st_shard;
+	opi->opi_oid.id_shard = shard_tgt->st_shard_id;
 	uuid_copy(opi->opi_co_hdl, opi_parent->opi_co_hdl);
 	uuid_copy(opi->opi_co_uuid, opi_parent->opi_co_uuid);
 	opi->opi_shard_tgts.ca_count = opi_parent->opi_shard_tgts.ca_count;

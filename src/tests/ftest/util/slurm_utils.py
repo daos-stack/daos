@@ -133,7 +133,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
     if name is None or nodecount is None or cmds is None:
         raise SlurmFailed("Bad parameters passed for slurm script.")
     if uniq is None:
-        uniq = random.randint(1, 100000)
+        uniq = random.randint(1, 100000) #nosec
 
     if not os.path.exists(path):
         os.makedirs(path)
@@ -287,7 +287,7 @@ def srun_str(hosts, cmd, srun_params=None):
     return str(cmd)
 
 
-def srun(hosts, cmd, srun_params=None):
+def srun(hosts, cmd, srun_params=None, timeout=30):
     """Run srun cmd on slurm partition.
 
     Args:
@@ -302,7 +302,7 @@ def srun(hosts, cmd, srun_params=None):
     """
     cmd = srun_str(hosts, cmd, srun_params)
     try:
-        result = run_command(cmd, timeout=30)
+        result = run_command(cmd, timeout)
     except DaosTestError as error:
         result = None
         raise SlurmFailed("srun failed : {}".format(error)) from error

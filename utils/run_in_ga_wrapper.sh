@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 IMAGE=$(docker images --all --filter label=DAOS=true --quiet | tail -n 1)
 
 docker run --name build-post \

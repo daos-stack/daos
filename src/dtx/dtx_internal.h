@@ -13,6 +13,8 @@
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 #include <daos/btree.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /*
  * RPC operation codes
@@ -53,48 +55,83 @@ enum dtx_operation {
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
-/* The age unit is second. */
-
-/* If the DTX entries are not more than this count threshold,
- * then no need DTX aggregation.
- *
- * XXX: This threshold should consider the real SCM size. But
- *	it cannot be too small; otherwise, handing resent RPC
- *	make hit uncertain case and got failure -DER_EP_OLD.
- */
-#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 20)
-
-/* The count threshold for triggerring DTX aggregation. */
-#define DTX_AGG_THRESHOLD_CNT_UPPER	((DTX_AGG_THRESHOLD_CNT_LOWER >> 1) * 3)
-
-/* The time threshold for triggerring DTX aggregation. If the oldest
- * DTX in the DTX table exceeds such threshold, it will trigger DTX
- * aggregation locally.
- */
-#define DTX_AGG_THRESHOLD_AGE_UPPER	120
-
-/* If DTX aggregation is triggered, then the DTXs with older ages than
- * this threshold will be aggregated.
- *
- * XXX: It cannot be too small; otherwise, handing resent RPC
- *	make hit uncertain case and got failure -DER_EP_OLD.
- */
-#define DTX_AGG_THRESHOLD_AGE_LOWER	90
-
 /* The time threshold for triggerring DTX cleanup of stale entries.
  * If the oldest active DTX exceeds such threshold, it will trigger
  * DTX cleanup locally.
  */
-#define DTX_CLEANUP_THRESHOLD_AGE_UPPER	60
+#define DTX_CLEANUP_THD_AGE_UP	60
 
 /* If DTX cleanup for stale entries is triggered, then the DTXs with
  * older ages than this threshold will be cleanup.
  */
-#define DTX_CLEANUP_THRESHOLD_AGE_LOWER	45
+#define DTX_CLEANUP_THD_AGE_LO	45
+
+/* The count threshold (per pool) for triggerring DTX aggregation. */
+#define DTX_AGG_THD_CNT_MAX	(1 << 24)
+#define DTX_AGG_THD_CNT_MIN	(1 << 20)
+#define DTX_AGG_THD_CNT_DEF	((1 << 19) * 7)
+
+/* If the total committed DTX entries count for the pool exceeds
+ * such threshold, it will trigger DTX aggregation locally.
+ *
+ * XXX: It is controlled via the environment "DTX_AGG_THD_CNT".
+ *	This threshold should consider the real SCM size. But
+ *	it cannot be too small; otherwise, handing resent RPC
+ *	make hit uncertain case and got failure -DER_EP_OLD.
+ */
+extern uint32_t dtx_agg_thd_cnt_up;
+
+/* If DTX aggregation is triggered, then current DTX aggregation
+ * will not stop until the committed DTX entries count for the
+ * pool down to such threshold.
+ */
+extern uint32_t dtx_agg_thd_cnt_lo;
+
+/* The age unit is second. */
+#define DTX_AGG_THD_AGE_MAX	1830
+#define DTX_AGG_THD_AGE_MIN	210
+#define DTX_AGG_THD_AGE_DEF	630
+
+/* The time threshold for triggerring DTX aggregation. If the oldest
+ * DTX in the DTX table exceeds such threshold, it will trigger DTX
+ * aggregation locally.
+ *
+ * XXX: It is controlled via the environment "DTX_AGG_THD_AGE".
+ *	It cannot be too small; otherwise, handing resent RPC
+ *	make hit uncertain case and got failure -DER_EP_OLD.
+ */
+extern uint32_t dtx_agg_thd_age_up;
+
+/* If DTX aggregation is triggered, then the DTXs with older ages than
+ * this threshold will be aggregated.
+ */
+extern uint32_t dtx_agg_thd_age_lo;
+
+struct dtx_pool_metrics {
+	struct d_tm_node_t	*dpm_batched_degree;
+	struct d_tm_node_t	*dpm_batched_total;
+	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT];
+};
+
+/*
+ * DTX TLS
+ */
+struct dtx_tls {
+	struct d_tm_node_t	*dt_committable;
+};
+
+extern struct dss_module_key dtx_module_key;
+
+static inline struct dtx_tls *
+dtx_tls_get(void)
+{
+	return dss_module_key_get(dss_tls_get(), &dtx_module_key);
+}
 
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
+extern uint64_t dtx_agg_gen;
 
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
@@ -113,7 +150,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count);
+	       struct dtx_cos_key *dcks, int count, bool helper);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 

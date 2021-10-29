@@ -59,7 +59,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
    */
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint)
+		struct pool_target *tgt, bool for_reint, void *data)
 {
 	struct failed_shard *f_new;
 
@@ -71,6 +71,7 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_shard_idx = shard_idx;
 	f_new->fs_fseq = tgt->ta_comp.co_fseq;
 	f_new->fs_status = tgt->ta_comp.co_status;
+	f_new->fs_data = data;
 
 	D_DEBUG(DB_PL, "tgt %u status %u reint %s\n", tgt->ta_comp.co_id,
 		tgt->ta_comp.co_status, for_reint ? "yes" : "no");
@@ -242,6 +243,11 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 	if (!spare_avail)
 		goto next_fail;
 
+	if (is_extending != NULL &&
+	    (spare_tgt->ta_comp.co_status == PO_COMP_ST_UP ||
+	     spare_tgt->ta_comp.co_status == PO_COMP_ST_DRAIN))
+		*is_extending = true;
+
 	/* The selected spare target is down as well */
 	if (!pool_target_avail(spare_tgt, allow_status)) {
 		D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
@@ -296,10 +302,6 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		D_DEBUG(DB_PL, "failed shard ("DF_FAILEDSHARD") added to "
 			       "remamp_list\n", DP_FAILEDSHARD(*f_shard));
 		remap_add_one(remap_list, f_shard);
-		if (is_extending != NULL &&
-		    (spare_tgt->ta_comp.co_status == PO_COMP_ST_UP ||
-		     spare_tgt->ta_comp.co_status == PO_COMP_ST_DRAIN))
-			*is_extending = true;
 
 		/* Continue with the failed shard has minimal fseq */
 		if ((*current) == remap_list) {

@@ -17,15 +17,6 @@
  */
 #define DAOS_EC_PARITY_BIT	(1ULL << 63)
 
-static inline daos_oclass_id_t
-daos_obj_id2class(daos_obj_id_t oid)
-{
-	daos_oclass_id_t ocid;
-
-	ocid = (oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT;
-	return ocid;
-}
-
 static inline daos_ofeat_t
 daos_obj_id2feat(daos_obj_id_t oid)
 {
@@ -42,12 +33,6 @@ daos_obj_id2ver(daos_obj_id_t oid)
 
 	version = (oid.hi & OID_FMT_VER_MASK) >> OID_FMT_VER_SHIFT;
 	return version;
-}
-
-static inline bool
-daos_obj_id_is_nil(daos_obj_id_t oid)
-{
-	return oid.hi == 0 && oid.lo == 0;
 }
 
 /**
@@ -474,6 +459,7 @@ int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
+int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
 
 int dc_tx_open(tse_task_t *task);
 int dc_tx_commit(tse_task_t *task);
@@ -519,6 +505,10 @@ enum daos_io_flags {
 	DIOF_FOR_EC_AGG		= 0x80,
 	/* The operation is for EC snapshot recovering */
 	DIOF_EC_RECOV_SNAP	= 0x100,
+	/* Only recover from parity */
+	DIOF_EC_RECOV_FROM_PARITY = 0x200,
+	/* Force fetch/list to do degraded enumeration/fetch */
+	DIOF_FOR_FORCE_DEGRADE = 0x400,
 };
 
 /**
@@ -711,9 +701,8 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 			list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_ERROR("[["DF_X64","DF_X64"], "DF_X64"]  ",
-				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
-				recx_ep->re_ep);
+			D_ERROR("[type %d, ["DF_X64","DF_X64"], "DF_X64"]  ", recx_ep->re_type,
+				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep);
 		}
 		D_ERROR("\n");
 	}

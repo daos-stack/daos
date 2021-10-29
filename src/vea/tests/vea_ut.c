@@ -333,7 +333,6 @@ static void
 ut_free(void **state)
 {
 	struct vea_ut_args *args = *state;
-	struct vea_hint_context *h_ctxt;
 	struct vea_resrvd_ext *ext;
 	d_list_t *r_list;
 	uint64_t blk_off;
@@ -361,17 +360,8 @@ ut_free(void **state)
 	print_message("persistent free extents:\n");
 	vea_dump(args->vua_vsi, false);
 
-	/* wait for free extents expire */
-	print_message("wait for %d seconds ...\n", VEA_MIGRATE_INTVL);
-	sleep(VEA_MIGRATE_INTVL);
-	/* call reserve to trigger free extents migration */
-	r_list = &args->vua_resrvd_list[0];
-	h_ctxt = args->vua_hint_ctxt[0];
-	rc = vea_reserve(args->vua_vsi, 1, h_ctxt, r_list);
-	assert_rc_equal(rc, 0);
-
-	rc = vea_cancel(args->vua_vsi, h_ctxt, r_list);
-	assert_int_equal(rc, 0);
+	/* call vea_flush to trigger free extents migration */
+	vea_flush(args->vua_vsi, false);
 
 	r_list = &args->vua_alloc_list;
 	d_list_for_each_entry(ext, r_list, vre_link) {
@@ -1026,6 +1016,7 @@ ut_interleaved_ops(void **state)
 	 * 6. reserve A, reserve B, publish B, cancel A
 	 * 7. reserve A, reserve B, cancel A, cancel B
 	 * 8. reserve A, reserve B, cancel B, cancel A
+	 * 9. reserve A, reserve B, reserve C, publish B, publish A & C
 	 **/
 	block_count = 2;
 	r_list_a = &args.vua_resrvd_list[0];
@@ -1128,6 +1119,24 @@ ut_interleaved_ops(void **state)
 	assert_int_equal(rc, 0);
 	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_a);
 	assert_int_equal(rc, 0);
+
+	/* Case 9 */
+	block_count = 2;
+	/* Reserve A */
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_rc_equal(rc, 0);
+	/* Reserve B */
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_rc_equal(rc, 0);
+	/* Reserve C */
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_rc_equal(rc, 0);
+	/* Publish B */
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
+	assert_rc_equal(rc, 0);
+	/* Publish A & C */
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
+	assert_rc_equal(rc, 0);
 
 	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);

@@ -167,6 +167,17 @@
    ...
 }
 {
+   libevent
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   obj:*libevent*.so*
+   fun:*event_base_loop
+   ...
+}
+{
    libopen-rte leak
    Memcheck:Leak
    match-leak-kinds: all
@@ -225,5 +236,29 @@
    fun:__libc_freeres
    fun:_vgnU_freeres
    fun:__run_exit_handlers
+   ...
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:hg_dlog_mkcount32
+   fun:na_ofi_domain_open
+   fun:na_ofi_initialize
+   fun:NA_Initialize_opt
+   fun:hg_core_init
+   fun:HG_Core_init_opt
+   fun:HG_Init_opt
+   ...
+}
+{
+   Tcp provider with ofi rxm
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   obj:*
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_tsend
    ...
 }

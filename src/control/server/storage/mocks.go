@@ -14,6 +14,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -164,7 +165,9 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 	idx := common.GetIndex(varIdx...)
 
 	return &ScmMountPoint{
+		Class:      ClassDcpm,
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
+		DeviceList: []string{fmt.Sprintf("pmem%d", idx)},
 		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
 		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
 	}
@@ -182,4 +185,12 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 		NumaNode:    uint32(idx),
 		Size:        uint64(humanize.TByte) * uint64(idx+1),
 	}
+}
+
+func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
+	p := DefaultProvider(log, idx, engineStorage)
+	p.Sys = sys
+	p.Scm = scm
+	p.bdev = bdev
+	return p
 }

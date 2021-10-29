@@ -6,8 +6,6 @@
 /**
  * Thread local storage for vos
  * vos/vos_tls.h
- *
- * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
 
 #ifndef __VOS_TLS_H__
@@ -21,6 +19,8 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/dtx_srv.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /* Forward declarations */
 struct vos_ts_table;
@@ -62,6 +62,7 @@ struct vos_tls {
 		uint64_t		 vtl_hash;
 		bool			 vtl_hash_set;
 	};
+	struct d_tm_node_t		 *vtl_committed;
 };
 
 struct bio_xs_context *vos_xsctxt_get(void);
@@ -173,5 +174,19 @@ vos_hash_get(const void *buf, uint64_t len)
 
 	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
 }
+
+#ifdef VOS_STANDALONE
+static inline uint64_t
+vos_sched_seq(void)
+{
+	return 0;
+}
+#else
+static inline uint64_t
+vos_sched_seq(void)
+{
+	return sched_cur_seq();
+}
+#endif
 
 #endif /* __VOS_TLS_H__ */
