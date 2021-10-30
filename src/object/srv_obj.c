@@ -2211,7 +2211,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
 	daos_key_t			*dkey = &orw->orw_dkey;
 	struct obj_io_context		 ioc;
-	struct dtx_handle                dth = { 0 };
+	struct dtx_handle               *dth = NULL;
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
 	uint32_t			 tgt_cnt;
@@ -2315,7 +2315,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	 * Pre-allocate DTX entry for handling resend under such case.
 	 */
 
-	rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth,
+	rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, dth,
 			  (orw->orw_bulks.ca_arrays != NULL ||
 			   orw->orw_bulks.ca_count != 0) ? true : false);
 	if (rc != 0)
@@ -2323,7 +2323,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			DP_RC(rc));
 
 out:
-	rc = dtx_end(&dth, ioc.ioc_coc, rc);
+	if (dth != NULL)
+		rc = dtx_end(dth, ioc.ioc_coc, rc);
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
@@ -2451,7 +2452,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in		*orw = crt_req_get(rpc);
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
-	struct dtx_leader_handle	dlh;
+	struct dtx_leader_handle	*dlh = NULL;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc = { 0 };
 	uint32_t			flags = 0;
@@ -2461,6 +2462,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
 	struct dtx_id			*dti_cos = NULL;
+	struct obj_pool_metrics		*opm;
 	int				dti_cos_cnt;
 	uint32_t			tgt_cnt;
 	uint32_t			version = 0;
@@ -2498,7 +2500,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
 
 	if (obj_rpc_is_fetch(rpc)) {
-		struct dtx_handle dth = {0};
+		struct dtx_handle	*dth;
 
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
@@ -2517,14 +2519,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (orw->orw_flags & ORF_DTX_REFRESH)
 			dtx_flags |= DTX_FORCE_REFRESH;
 
-		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
-			       orw->orw_map_ver, &orw->orw_oid,
-			       NULL, 0, dtx_flags, NULL, &dth);
-		if (rc != 0)
-			goto out;
-
-		rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth, false);
-		rc = dtx_end(&dth, ioc.ioc_coc, rc);
+		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0, orw->orw_map_ver,
+			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
+		if (rc == 0) {
+			rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, dth, false);
+			rc = dtx_end(dth, ioc.ioc_coc, rc);
+		}
 
 		D_GOTO(out, rc);
 	}
@@ -2546,16 +2546,16 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (orw->orw_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
+	opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		daos_epoch_t		 e;
-		struct obj_pool_metrics	*opm;
 
 		dtx_flags |= DTX_RESEND;
+		d_tm_inc_counter(opm->opm_update_resent, 1);
 
 again1:
-		opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
-		d_tm_inc_counter(opm->opm_update_resent, 1);
 		e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2644,10 +2644,10 @@ again2:
 	exec_arg.start = orw->orw_start_shard;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(&dlh, obj_tgt_update, NULL, NULL, &exec_arg);
+	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, NULL, &exec_arg);
 
 	/* Stop the distributed transaction */
-	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -2678,6 +2678,7 @@ again2:
 	case -DER_AGAIN:
 		orw->orw_flags |= ORF_RESEND;
 		need_abort = true;
+		d_tm_inc_counter(opm->opm_update_retry, 1);
 		goto again1;
 	default:
 		break;
@@ -2772,13 +2773,13 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	vos_iter_param_t	param = { 0 };
 	struct dss_enum_arg	saved_arg;
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
+	struct dtx_handle	*dth = NULL;
 	uint32_t		flags = 0;
 	int			opc = opc_get(rpc->cr_opc);
 	int			type;
 	int			rc;
 	int			rc_tmp;
 	bool			recursive = false;
-	struct dtx_handle	dth = {0};
 	struct dtx_epoch	epoch = {0};
 
 	if (oei->oei_flags & ORF_ENUM_WITHOUT_EPR) {
@@ -2886,10 +2887,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 
 re_pack:
-	rc = dss_enum_pack(&param, type, recursive, &anchors[0], enum_arg,
-			   vos_iterate, &dth);
-	if (obj_dtx_need_refresh(&dth, rc)) {
-		rc = dtx_refresh(&dth, ioc->ioc_coc);
+	rc = dss_enum_pack(&param, type, recursive, &anchors[0], enum_arg, vos_iterate, dth);
+	if (obj_dtx_need_refresh(dth, rc)) {
+		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN) {
 			anchors[0] = anchors[1];
 			obj_restore_enum_args(rpc, enum_arg, &saved_arg);
@@ -2915,7 +2915,7 @@ re_pack:
 	}
 
 	/* dss_enum_pack may return 1. */
-	rc_tmp = dtx_end(&dth, ioc->ioc_coc, rc > 0 ? 0 : rc);
+	rc_tmp = dtx_end(dth, ioc->ioc_coc, rc > 0 ? 0 : rc);
 	if (rc_tmp != 0)
 		rc = rc_tmp;
 
@@ -3200,7 +3200,7 @@ out:
 void
 ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 {
-	struct dtx_handle		 dth = { 0 };
+	struct dtx_handle		*dth = NULL;
 	struct obj_io_context		 ioc;
 	struct obj_punch_in		*opi;
 	struct dtx_memberships		*mbs = NULL;
@@ -3275,7 +3275,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_IO);
 
 	/* non-leader local RPC handler, do not need pin the DTX entry.  */
-	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, &dth, false);
+	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, dth, false);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
 			 DB_IO, DLOG_ERR,
@@ -3284,7 +3284,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 
 out:
 	/* Stop the local transaction */
-	rc = dtx_end(&dth, ioc.ioc_coc, rc);
+	if (dth != NULL)
+		rc = dtx_end(dth, ioc.ioc_coc, rc);
 	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
@@ -3375,7 +3376,7 @@ comp:
 void
 ds_obj_punch_handler(crt_rpc_t *rpc)
 {
-	struct dtx_leader_handle	dlh;
+	struct dtx_leader_handle	*dlh = NULL;
 	struct obj_punch_in		*opi;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc = { 0 };
@@ -3520,11 +3521,11 @@ again2:
 	exec_arg.flags = flags;
 
 	/* Execute the operation on all shards */
-	rc = dtx_leader_exec_ops(&dlh, obj_tgt_punch, obj_punch_agg_cb,
+	rc = dtx_leader_exec_ops(dlh, obj_tgt_punch, obj_punch_agg_cb,
 				 &opi->opi_api_flags, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -3577,8 +3578,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct obj_query_key_out	*okqo;
 	daos_key_t			*dkey;
 	daos_key_t			*akey;
+	struct dtx_handle		*dth = NULL;
 	struct obj_io_context		 ioc;
-	struct dtx_handle		 dth = {0};
 	struct dtx_epoch		 epoch = {0};
 	uint32_t			 query_flags;
 	unsigned int			 cell_size = 0;
@@ -3639,18 +3640,18 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
 			       okqi->okqi_epoch, dkey, akey, query_recx,
-			       cell_size, stripe_size, &dth);
+			       cell_size, stripe_size, dth);
 	if (rc == 0 && (query_flags & VOS_GET_RECX_EC)) {
 		okqo->okqo_recx = ec_recx[0];
 		okqo->okqo_recx_parity = ec_recx[1];
 		okqo->okqo_recx_punched = ec_recx[2];
-	} else if (obj_dtx_need_refresh(&dth, rc)) {
-		rc = dtx_refresh(&dth, ioc.ioc_coc);
+	} else if (obj_dtx_need_refresh(dth, rc)) {
+		rc = dtx_refresh(dth, ioc.ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto re_query;
 	}
 
-	rc = dtx_end(&dth, ioc.ioc_coc, rc);
+	rc = dtx_end(dth, ioc.ioc_coc, rc);
 
 failed:
 	obj_reply_set_status(rpc, rc);
@@ -4220,7 +4221,7 @@ again:
 static int
 ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 {
-	struct dtx_handle		 dth = { 0 };
+	struct dtx_handle		*dth = NULL;
 	struct obj_cpd_in		*oci = crt_req_get(rpc);
 	struct daos_cpd_sub_head	*dcsh = ds_obj_cpd_get_dcsh(rpc, 0);
 	struct daos_cpd_disp_ent	*dcde = ds_obj_cpd_get_dcde(rpc, 0, 0);
@@ -4288,17 +4289,16 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, &dth,
-				    dth.dth_modification_cnt > 0 ?
-				    true : false);
+	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, dth,
+				    dth->dth_modification_cnt > 0 ? true : false);
 
 	/* For the case of only containing read sub operations, we will
 	 * generate DTX entry for DTX recovery. Similarly for noop case.
 	 */
-	if (rc == 0 && (dth.dth_modification_cnt == 0 || !dth.dth_active))
-		rc = vos_dtx_pin(&dth, true);
+	if (rc == 0 && (dth->dth_modification_cnt == 0 || !dth->dth_active))
+		rc = vos_dtx_pin(dth, true);
 
-	rc = dtx_end(&dth, ioc->ioc_coc, rc);
+	rc = dtx_end(dth, ioc->ioc_coc, rc);
 
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
@@ -4409,7 +4409,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 static void
 ds_obj_dtx_leader(struct daos_cpd_args *dca)
 {
-	struct dtx_leader_handle	 dlh;
+	struct dtx_leader_handle	*dlh = NULL;
 	struct ds_obj_exec_arg		 exec_arg;
 	struct obj_cpd_in		*oci = crt_req_get(dca->dca_rpc);
 	struct obj_cpd_out		*oco = crt_reply_get(dca->dca_rpc);
@@ -4541,10 +4541,10 @@ again:
 	exec_arg.flags = flags;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(&dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
+	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(&dlh, dca->dca_ioc->ioc_coc, rc);
+	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coc, rc);
 
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART &&

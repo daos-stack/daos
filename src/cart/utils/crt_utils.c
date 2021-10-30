@@ -316,7 +316,7 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 	}
 
 	while (1) {
-		rc = fscanf(f, "%8d %32s", &parsed_rank, parsed_addr);
+		rc = fscanf(f, "%8d %254s", &parsed_rank, parsed_addr);
 		if (rc == EOF) {
 			rc = 0;
 			break;
@@ -497,7 +497,6 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 {
 	char		*grp_cfg_file;
 	uint32_t	 grp_size;
-	int		 attach_retries = opts.num_attach_retries;
 	int		 rc = 0;
 
 	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
@@ -531,10 +530,16 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 
 	if (!use_daos_agent_env) {
 		if (use_cfg) {
-			while (attach_retries-- > 0) {
+			/*
+			 * DAOS-8839: change retries to infinite to allow valgrind
+			 * enough time to start servers up. Instead rely on test
+			 * timeout for cases when attach file is not there due to
+			 * server bug/issue.
+			 */
+			while (1) {
 				rc = crt_group_attach(srv_group_name, grp);
 				if (rc == 0)
-				break;
+					break;
 				sleep(1);
 			}
 			if (opts.assert_on_error) {
