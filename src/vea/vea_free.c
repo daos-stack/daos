@@ -392,6 +392,8 @@ struct vea_unmap_extent {
 	d_list_t		vue_link;
 };
 
+#define MAX_FLUSH_FRAGS	2000
+
 void
 migrate_end_cb(void *data, bool noop)
 {
@@ -401,7 +403,7 @@ migrate_end_cb(void *data, bool noop)
 	struct vea_unmap_extent	*vue, *tmp_vue;
 	d_list_t		 unmap_list;
 	uint64_t		 cur_time = 0;
-	int			 rc;
+	int			 rc, frags = 0;
 
 	if (noop)
 		return;
@@ -466,6 +468,8 @@ migrate_end_cb(void *data, bool noop)
 				break;
 			}
 		}
+		if (frags >= MAX_FLUSH_FRAGS)
+			break;
 	}
 
 	/* Update aggregation time before yield */

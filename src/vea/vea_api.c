@@ -309,6 +309,9 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 	hint_get(hint, &resrvd->vre_hint_off);
 
 retry:
+	/* Trigger free extents migration */
+	migrate_free_exts(vsi, false);
+
 	/* Reserve from hint offset */
 	rc = reserve_hint(vsi, blk_cnt, resrvd);
 	if (rc != 0)
@@ -336,8 +339,6 @@ retry:
 	if (rc == -DER_NOSPACE && retry) {
 		vsi->vsi_agg_time = 0; /* force free extents migration */
 		retry = false;
-		/* Trigger free extents migration */
-		migrate_free_exts(vsi, false);
 		goto retry;
 	} else if (rc != 0) {
 		goto error;
@@ -730,16 +731,17 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 	return 0;
 }
 
-void
-vea_flush(struct vea_space_info *vsi, bool plug)
+int
+vea_flush(struct vea_space_info *vsi, bool force)
 {
 	D_ASSERT(vsi != NULL);
 
-	if (plug) {
-		vsi->vsi_agg_time = UINT64_MAX;
-		return;
-	}
+	if (d_list_empty(&vsi->vsi_agg_lru))
+		return 0;
 
-	vsi->vsi_agg_time = 0;
+	if (force)
+		vsi->vsi_agg_time = 0;
 	migrate_free_exts(vsi, false);
+
+	return 1;
 }
