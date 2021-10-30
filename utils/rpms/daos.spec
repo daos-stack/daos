@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -203,13 +203,16 @@ Requires: fuse < 3, fuse3-libs >= 3.4.2
 This is the package needed to run a DAOS client
 
 %package tests
+Summary: The entire DAOS test suite
+Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+
+%description tests
+This is the package is a metapackage to install all of the test packages
+
+%package client-tests
 Summary: The DAOS test suite
-#This is a bit messy and needs some cleanup.  In theory,
-#we should have client tests and server tests in separate
-#packages but some binaries need libraries from both at
-#present.
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
-Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
 Requires: python36-distro
 Requires: python36-tabulate
@@ -227,8 +230,29 @@ Requires: attr
 Requires: libpsm_infinipath1
 %endif
 
-%description tests
-This is the package needed to run the DAOS test suite
+%description client-tests
+This is the package needed to run the DAOS test suite (client tests)
+
+%package client-tests-openmpi
+Summary: The DAOS client test suite - tools which need openmpi
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+
+%description client-tests-openmpi
+This is the package needed to run the DAOS client test suite openmpi tools
+
+%package server-tests
+Summary: The DAOS server test suite (server tests)
+Requires: %{name}-server%{?_isa} = %{version}-%{release}
+
+%description server-tests
+This is the package needed to run the DAOS server test suite (server tests)
+
+%package server-tests-openmpi
+Summary: The DAOS server test suite - tools which need openmpi
+Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
+
+%description server-tests-openmpi
+This is the package needed to run the DAOS server test suite openmpi tools
 
 %package devel
 Summary: The DAOS development libraries and headers
@@ -427,30 +451,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
 
-%files tests
+%files client-tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
 %{_bindir}/hello_drpc
-%{_bindir}/jobtest
 %{_libdir}/libdaos_tests.so
-%{_bindir}/jump_pl_map
-%{_bindir}/ring_pl_map
-%{_bindir}/pl_bench
-%{_bindir}/smd_ut
-%{_bindir}/vea_ut
-%{_bindir}/vea_stress
-%{_bindir}/daos_perf
-%{_bindir}/vos_perf
-%{_bindir}/daos_racer
-%{_bindir}/evt_ctl
 %{_bindir}/io_conf
-%{_bindir}/rdbt
-%{_bindir}/obj_ctl
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
-%{_bindir}/crt_launch
-%{_bindir}/daos_test
-%{_bindir}/dfs_test
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
@@ -459,15 +465,39 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/eq_tests
 %{_bindir}/job_tests
 %{_bindir}/security_test
-%{_bindir}/srv_checksum_tests
-%{_bindir}/pool_scrubbing_tests
-%{_bindir}/vos_tests
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
+
+%files client-tests-openmpi
+%{_bindir}/crt_launch
+%{_bindir}/daos_perf
+%{_bindir}/daos_racer
+%{_bindir}/daos_test
+%{_bindir}/dfs_test
+%{_bindir}/jobtest
 %{_libdir}/libdts.so
+
+%files server-tests
+%{_bindir}/evt_ctl
+%{_bindir}/jump_pl_map
+%{_bindir}/pl_bench
+%{_bindir}/rdbt
+%{_bindir}/ring_pl_map
+%{_bindir}/smd_ut
+%{_bindir}/srv_checksum_tests
+%{_bindir}/pool_scrubbing_tests
+%{_bindir}/vea_ut
+%{_bindir}/vos_tests
+%{_bindir}/vea_stress
+
+%files server-tests-openmpi
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_run_io_conf
+%{_bindir}/obj_ctl
+%{_bindir}/vos_perf
 
 %files devel
 %{_includedir}/*
@@ -483,7 +513,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files daos_serialize
 %{_libdir}/libdaos_serialize.so
 
+%files tests
+# No files in a meta-package
+
 %changelog
+* Tue Oct 26 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-5
+- Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
+- Rename daos-tests daos-client-tests and make daos-tests require all
+  other test suites to maintain existing behavior
+
 * Mon Oct 25 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-4
 - Update mercury to v2.1.0rc2
 

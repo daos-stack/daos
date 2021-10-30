@@ -1416,6 +1416,12 @@ class posix_tests():
         """Mark a test method as failed"""
         raise NLTestFail
 
+    def test_cont_list(self):
+        """Test daos container list"""
+
+        rc = run_daos_cmd(self.conf, ['container', 'list', self.pool.id()])
+        assert rc.returncode == 0, rc
+
     def test_cache(self):
         """Test with caching enabled"""
 
