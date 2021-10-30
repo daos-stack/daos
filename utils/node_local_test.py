@@ -3722,9 +3722,8 @@ def run(wf, args):
                 wf_client.close()
 
             if fi_test_dfuse:
-                # We cannot yet run dfuse inside docker containers and some of the failure modes
-                # aren't well handled so continue to run the dfuse fault injection test on real
-                # hardware.
+                # We cannot yet run dfuse inside docker containers and some of the failure modes aren't
+                # well handled so continue to run the dfuse fault injection test on real hardware.
 
                 # Read-via-IL test, requires dfuse.
                 fatal_errors.add_result(test_alloc_fail_cat(server, conf))
