@@ -628,10 +628,10 @@ class DaosServer():
                      '--insecure',
                      '--runtime_dir', self.agent_dir,
                      '--logfile', self.agent_log.name,
-                     '--debug=net']
+                     '--debug', 'net']
 
-        # if not self.conf.args.server_debug:
-        #     agent_cmd.append('--debug')
+        if not self.conf.args.server_debug:
+            agent_cmd.append('--debug')
 
         self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir
