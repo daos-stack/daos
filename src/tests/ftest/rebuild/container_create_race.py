@@ -1,6 +1,5 @@
 """
   (C) Copyright 2020-2021 Intel Corporation.
-
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from avocado.core.exceptions import TestFail
@@ -8,28 +7,23 @@ from apricot import TestWithServers
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand
-from test_utils_container import TestContainer
 
 
 class RbldContainerCreate(TestWithServers):
     """Rebuild with container creation test cases.
-
     Test Class Description:
         These rebuild tests verify the ability to create additional containers
         while rebuild is ongoing.
-
     :avocado: recursive
     """
 
     def add_containers_during_rebuild(self, loop_id, qty, pool1, pool2):
         """Add containers to a pool while rebuild is still in progress.
-
         Args:
             loop_id (str): loop identification string
             qty (int): the number of containers to create
             pool1 (TestPool): pool used to determine if rebuild is complete
             pool2 (TestPool): pool used to add containers
-
         """
         count = 0
         while not pool1.rebuild_complete() and count < qty:
@@ -38,9 +32,7 @@ class RbldContainerCreate(TestWithServers):
             self.log.info(
                 "%s: Creating container %s/%s in pool %s during rebuild",
                 loop_id, count, qty, pool2.uuid)
-            self.container.append(TestContainer(pool2))
-            self.container[-1].get_params(self)
-            self.container[-1].create()
+            self.container.append(self.get_container(pool2))
             self.container[-1].write_objects()
 
         if count < qty:
@@ -50,7 +42,6 @@ class RbldContainerCreate(TestWithServers):
 
     def run_ior(self, loop_id, mpirun):
         """Run the ior command defined by the specified ior command object.
-
         Args:
             loop_id (str): loop identification string
             mpirun (Mpirun): mpirun command object to run ior
@@ -70,15 +61,12 @@ class RbldContainerCreate(TestWithServers):
 
     def access_container(self, loop_id, index, message):
         """Open and close the specified container.
-
         Args:
             loop_id (str): loop identification string
             index (int): index of the daos container object to open/close
             message (str): additional text describing the container
-
         Returns:
             bool: was the opening and closing of the container successful
-
         """
         status = True
         self.log.info(
@@ -97,7 +85,6 @@ class RbldContainerCreate(TestWithServers):
 
     def test_rebuild_container_create(self):
         """Jira ID: DAOS-1168.
-
         Test Description:
             Configure 4 servers and 1 client with 1 or 2 pools and a pool
             service leader quantity of 2.  Add 1 container to the first pool
@@ -109,13 +96,11 @@ class RbldContainerCreate(TestWithServers):
             pool info indicates the correct number of rebuilt objects and
             records.  Also confirm that all 1000 additional containers created
             during rebuild are accessible.
-
         Use Cases:
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
-
         :avocado: tags=all,full_regression
-        :avocado: tags=medium
+        :avocado: tags=hw,large
         :avocado: tags=rebuild,rebuild_cont_create
         """
         # Get test params
@@ -135,11 +120,11 @@ class RbldContainerCreate(TestWithServers):
 
         if use_ior:
             # Get ior params
-            self.job_manager = Mpirun(IorCommand())
+            self.job_manager = Mpirun(IorCommand(), mpitype="mpich")
             self.job_manager.job.get_params(self)
+            self.job_manager.job.test_file.update("/testfile", "test_file")
             self.job_manager.assign_hosts(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
+                self.hostlist_clients, self.workdir)
             self.job_manager.assign_processes(len(self.hostlist_clients))
             self.job_manager.assign_environment(
                 self.job_manager.job.get_default_env("mpirun"))
@@ -201,9 +186,7 @@ class RbldContainerCreate(TestWithServers):
                     self.job_manager.job.dfs_cont.value)
                 self.run_ior(loop_id, self.job_manager)
             else:
-                self.container.append(TestContainer(self.pool[0]))
-                self.container[-1].get_params(self)
-                self.container[-1].create()
+                self.container.append(self.get_container(self.pool[0]))
                 self.log.info(
                     "%s: Writing to pool %s to fill container %s with data",
                     loop_id, self.pool[0].uuid, self.container[-1].uuid)
