@@ -5,10 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
-
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 class RbldWithIOR(IorTestBase):
