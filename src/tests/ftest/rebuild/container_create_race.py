@@ -206,7 +206,7 @@ class RbldContainerCreate(TestWithServers):
             self.server_managers[0].stop_ranks([rank], self.d_log)
 
             # Wait for rebuild to start
-            self.pool[0].wait_for_rebuild(True, 1)
+            self.pool[0].wait_for_rebuild(True)
 
             # Create additional containers in the last pool
             start_index = len(self.container)
@@ -214,7 +214,7 @@ class RbldContainerCreate(TestWithServers):
                 loop_id, cont_qty, self.pool[0], self.pool[-1])
 
             # Confirm rebuild completes
-            self.pool[0].wait_for_rebuild(False, 1)
+            self.pool[0].wait_for_rebuild(False)
 
             # Check the pool info
             info_checks[0]["pi_ndisabled"] += targets
