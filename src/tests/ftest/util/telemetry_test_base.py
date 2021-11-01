@@ -159,7 +159,7 @@ class TestWithTelemetry(TestWithServers):
         return output
 
     @staticmethod
-    def verify_stats(enum_metrics, metric_suffix, test_latency, num_targets):
+    def verify_stats(enum_metrics, metric_suffix, test_latency):
         """Verify the statistical correctness of the min, max, mean, stddev.
 
         See get_min_max_mean_stddev() for sample.
@@ -175,13 +175,14 @@ class TestWithTelemetry(TestWithServers):
             enum_metrics (dict): get_min_max_mean_stddev() output.
             metric_suffix (str): Metric suffix.
             test_latency (bool): Whether this validation is for latency.
-            num_targets (int): Number of targets.
 
         Returns:
             list: Errors.
 
         """
         errors = []
+
+        num_targets = len(enum_metrics["min"])
 
         min_list = enum_metrics["min"]
         max_list = enum_metrics["max"]
