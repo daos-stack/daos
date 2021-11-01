@@ -850,7 +850,7 @@ class DaosServer():
     def _make_pool(self):
         """Create a DAOS pool"""
 
-        size = 1024*2
+        size = 1024*4
 
         rc = self.run_dmg(['pool',
                            'create',
