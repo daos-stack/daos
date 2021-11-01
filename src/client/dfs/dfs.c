@@ -672,10 +672,9 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		} else {
 			daos_handle_t file_oh;
 
-			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th,
-						       DAOS_OO_RO, 1, entry.chunk_size ?
-						       entry.chunk_size : dfs->attr.da_chunk_size,
-						       &file_oh, NULL);
+			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
+						       entry.chunk_size ? entry.chunk_size :
+						       dfs->attr.da_chunk_size, &file_oh, NULL);
 			if (rc) {
 				D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);

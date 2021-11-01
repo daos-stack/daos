@@ -1298,7 +1298,7 @@ check_short_read_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		D_ERROR("Array Read Failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_params, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_ASSERT(params);
@@ -1383,7 +1383,7 @@ next:
 		/** memset all holes to 0 */
 		params->array_size = UINT64_MAX;
 		rc = process_iomap(params, args);
-		D_GOTO(err_params, rc);
+		D_GOTO(out, rc);
 	}
 
 	/** Schedule the get size to properly check for short reads */
@@ -1396,11 +1396,11 @@ next:
 
 	rc = tse_task_register_comp_cb(task, set_short_read_cb, NULL, 0);
 	if (rc)
-		D_GOTO(err_params, rc);
+		D_GOTO(out, rc);
 
 	return rc;
 
-err_params:
+out:
 	D_FREE(params);
 	tse_task_complete(task, rc);
 	return rc;
@@ -1468,8 +1468,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	 * callback of that task).
 	 */
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array) {
-		rc = daos_task_create(DAOS_OPC_ARRAY_GET_SIZE,
-				      tse_task2sched(task), 0, NULL,
+		rc = daos_task_create(DAOS_OPC_ARRAY_GET_SIZE, tse_task2sched(task), 0, NULL,
 				      &stask);
 		if (rc)
 			D_GOTO(err_task, rc);
@@ -1802,17 +1801,11 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				D_GOTO(err_iotask, rc);
 			}
 
-			tse_task_list_sched(&io_task_list, false);
-			rc = tse_task_schedule(stask, false);
-			if (rc != 0) {
-				D_FREE(sparams);
-				D_GOTO(err_iotask, rc);
-			}
+			tse_task_list_add(stask, &io_task_list);
 		}
-	} else {
-		tse_task_list_sched(&io_task_list, false);
 	}
 
+	tse_task_list_sched(&io_task_list, false);
 	array_decref(array);
 	tse_sched_progress(tse_task2sched(task));
 	return 0;
@@ -2063,7 +2056,6 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 		D_GOTO(err, rc);
 
 	return rc;
-
 free:
 	D_FREE(params);
 err:
@@ -2443,9 +2435,8 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		rc = tse_task_register_cbs(task, NULL, NULL, 0,
 					   adjust_array_size_cb, &props,
 					   sizeof(props));
-		if (rc) {
+		if (rc)
 			return rc;
-		}
 
 		rc = tse_task_reinit(task);
 		if (rc) {
