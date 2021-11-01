@@ -275,18 +275,23 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	uid_t			uid;
 	gid_t			gid;
 
-	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x", cmd);
-
 	if (cmd == TCGETS) {
 		DFUSE_TRA_DEBUG(oh, "Ignoring TCGETS ioctl");
 		D_GOTO(out_err, rc = ENOTTY);
 	}
 
+	if (cmd == TIOCGPGRP) {
+		DFUSE_TRA_DEBUG(oh, "Ignoring TIOCGPGRP ioctl");
+		D_GOTO(out_err, rc = ENOTTY);
+	}
+
 	/* Check the IOCTl type is correct */
 	if (_IOC_TYPE(cmd) != DFUSE_IOCTL_TYPE) {
-		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented");
+		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented cmd=%#x", cmd);
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
+
+	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x", cmd);
 
 	if (cmd == DFUSE_IOCTL_IL) {
 		if (out_bufsz < sizeof(struct dfuse_il_reply))
