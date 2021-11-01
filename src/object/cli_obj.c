@@ -76,6 +76,7 @@ struct obj_auxi_args {
 	 * ec_in_recov -- a EC recovery task
 	 */
 	uint32_t			 io_retry:1,
+					 io_task_reinited:1,
 					 args_initialized:1,
 					 to_leader:1,
 					 spec_shard:1,
@@ -1623,6 +1624,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			D_ERROR("Failed to re-init task (%p)\n", task);
 			D_GOTO(err, rc);
 		}
+		obj_auxi->io_task_reinited = 1;
 	} else if (obj_auxi->spec_shard || obj_auxi->spec_group) {
 		/* If the RPC sponsor specifies shard or group, we will NOT
 		 * reschedule the IO, but not prevent the pool map refresh.
@@ -2552,19 +2554,21 @@ shard_task_sched(tse_task_t *task, void *arg)
 				shard_auxi->shard, task->dt_result, target,
 				map_ver, shard_auxi->target,
 				shard_auxi->map_ver, task);
-			rc = tse_task_reinit(task);
-			if (rc != 0)
-				goto out;
-
-			rc = tse_task_register_deps(obj_task, 1, &task);
-			if (rc != 0)
-				goto out;
 
 			if (!obj_auxi->req_tgts.ort_srv_disp)
 				shard_auxi_set_param(shard_auxi, map_ver,
 					shard_auxi->shard, target,
 					&sched_arg->tsa_epoch,
 					shard_auxi->ec_tgt_idx);
+
+			rc = tse_task_register_deps(obj_task, 1, &task);
+			if (rc != 0)
+				goto out;
+
+			rc = tse_task_reinit(task);
+			if (rc != 0)
+				goto out;
+
 			sched_arg->tsa_scheded = true;
 		}
 	} else {
@@ -3890,6 +3894,16 @@ obj_comp_cb(tse_task_t *task, void *data)
 	    DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		obj_auxi->io_retry = 0;
 
+	if (obj_auxi->io_retry) {
+		if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+			obj_auxi->reasb_req.orr_iom_tgt_nr = 0;
+			obj_io_set_new_shard_task(obj_auxi);
+		}
+		if (!obj_auxi->ec_in_recov)
+			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
+	}
+
+	obj_auxi->io_task_reinited = 0;
 	if ((!obj_auxi->no_retry || task->dt_result == -DER_FETCH_AGAIN) &&
 	     (pm_stale || obj_auxi->io_retry)) {
 		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, obj_auxi->map_ver_reply);
@@ -3899,7 +3913,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 	}
 
-	if (!obj_auxi->io_retry) {
+	if (!obj_auxi->io_task_reinited) {
 		struct obj_ec_fail_info	*fail_info;
 		bool new_tgt_fail = false;
 		d_list_t *head = &obj_auxi->shard_task_head;
@@ -4026,9 +4040,6 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 			obj_reasb_io_fini(obj_auxi, false);
 		}
-	} else {
-		if (!obj_auxi->ec_in_recov)
-			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
 	}
 
 	obj_decref(obj);
@@ -5327,16 +5338,12 @@ shard_query_key_task(tse_task_t *task)
 	tse_task_stack_push_data(task, &args->kqa_dkey_hash,
 				 sizeof(args->kqa_dkey_hash));
 	api_args = args->kqa_api_args;
-	/* let's set the current pool map version in the req to
-	 * avoid ESTALE.
-	 */
-	args->kqa_auxi.obj_auxi->map_ver_reply =
-			args->kqa_auxi.obj_auxi->map_ver_req;
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, args->kqa_coh_uuid,
 				    args->kqa_cont_uuid, &args->kqa_dti,
 				    &args->kqa_auxi.obj_auxi->map_ver_reply,
+				    args->kqa_auxi.obj_auxi->map_ver_req,
 				    th, task);
 
 	obj_shard_close(obj_shard);
@@ -5465,12 +5472,11 @@ dc_obj_query_key(tse_task_t *api_task)
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = api_task;
 
-	D_DEBUG(DB_IO, "Object Key Query "DF_OID" start %u\n",
-		DP_OID(obj->cob_md.omd_id), shard_first);
+	D_DEBUG(DB_IO, "Object Key Query "DF_OID" start %u map %u\n",
+		DP_OID(obj->cob_md.omd_id), shard_first, map_ver);
 
 	head = &obj_auxi->shard_task_head;
 
-	/* for retried obj IO, reuse the previous shard tasks and resched it */
 	if (obj_auxi->io_retry && obj_auxi->args_initialized) {
 		/* For distributed transaction, check whether TX pool
 		 * map is stale or not, if stale, restart the TX.
@@ -5487,6 +5493,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		tse_task_list_traverse(head, shard_task_remove, NULL);
 		D_ASSERT(d_list_empty(head));
 		obj_auxi->args_initialized = 0;
+		obj_auxi->new_shard_tasks = 1;
 	}
 
 	D_ASSERT(!obj_auxi->args_initialized);
@@ -5508,6 +5515,9 @@ dc_obj_query_key(tse_task_t *api_task)
 								coh_uuid, cont_uuid);
 				if (rc)
 					D_GOTO(out_task, rc);
+
+				D_DEBUG(DB_IO, DF_OID" try leader %d for group %d.\n",
+					DP_OID(obj->cob_md.omd_id), leader, i);
 				continue;
 			}
 
