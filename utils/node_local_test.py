@@ -164,6 +164,7 @@ class WarningsFactory():
                  post=False,
                  post_error=False,
                  check=None):
+        # pylint: disable=consider-using-with
         self._fd = open(filename, 'w')
         self.filename = filename
         self.post = post
@@ -374,9 +375,8 @@ def load_conf(args):
         file_self = os.path.dirname(file_self)
         if file_self == '/':
             raise Exception('build file not found')
-    ofh = open(json_file, 'r')
-    conf = json.load(ofh)
-    ofh.close()
+    with open(json_file, 'r') as ofh:
+        conf = json.load(ofh)
     return NLTConf(conf, args)
 
 def get_base_env(clean=False):
@@ -457,6 +457,7 @@ class DaosServer():
         self.valgrind = valgrind
         self._agent = None
         self.engines = conf.args.engine_count
+        # pylint: disable=consider-using-with
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        dir=conf.tmp_dir,
@@ -578,16 +579,13 @@ class DaosServer():
                              '--undef-value-errors=no']
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
-            fd = open(os.path.join(self._io_server_dir.name,
-                                   'daos_engine'), 'w')
-            fd.write('#!/bin/sh\n')
-            fd.write('export PATH=$REAL_PATH\n')
-            fd.write('exec valgrind {} daos_engine "$@"\n'.format(
-                ' '.join(valgrind_args)))
-            fd.close()
+            mock_engine = os.path.join(self._io_server_dir.name, 'daos_engine')
 
-            os.chmod(os.path.join(self._io_server_dir.name, 'daos_engine'),
-                     stat.S_IXUSR | stat.S_IRUSR)
+            with open(mock_engine, 'w') as fd:
+                fd.write('#!/bin/sh\n')
+                fd.write('export PATH=$REAL_PATH\n')
+                fd.write('exec valgrind {} daos_engine "$@"\n'.format(' '.join(valgrind_args)))
+            os.chmod(mock_engine, stat.S_IXUSR | stat.S_IRUSR)
 
             server_env['REAL_PATH'] = '{}:{}'.format(
                 os.path.join(self.conf['PREFIX'], 'bin'), server_env['PATH'])
@@ -633,8 +631,8 @@ class DaosServer():
             engine['storage'][0]['scm_mount'] = '{}_{}'.format(
                 ref_engine['storage'][0]['scm_mount'], idx)
             scyaml['engines'].append(engine)
+        # pylint: disable=consider-using-with
         self._yaml_file = tempfile.NamedTemporaryFile(prefix='nlt-server-config-', suffix='.yaml')
-
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
 
@@ -3773,8 +3771,9 @@ def run(wf, args):
                 wf_client.close()
 
             if fi_test_dfuse:
-                # We cannot yet run dfuse inside docker containers and some of the failure modes aren't
-                # well handled so continue to run the dfuse fault injection test on real hardware.
+                # We cannot yet run dfuse inside docker containers and some of the failure modes
+                # aren't well handled so continue to run the dfuse fault injection test on real
+                # hardware.
 
                 # Read-via-IL test, requires dfuse.
                 fatal_errors.add_result(test_alloc_fail_cat(server, conf))
