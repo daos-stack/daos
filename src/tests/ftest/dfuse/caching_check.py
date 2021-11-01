@@ -35,7 +35,7 @@ class CachingCheck(IorTestBase):
             higher than with caching disabled.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusecachingcheck
         """

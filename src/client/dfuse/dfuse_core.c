@@ -32,23 +32,17 @@ dfuse_progress_thread(void *arg)
 			if (rc == EINTR)
 				continue;
 
-			DFUSE_TRA_ERROR(fs_handle,
-					"Error from sem_wait: %d", rc);
+			DFUSE_TRA_ERROR(fs_handle, "Error from sem_wait: %d", rc);
 		}
 
 		if (fs_handle->dpi_shutdown)
 			return NULL;
 
-		rc = daos_eq_poll(fs_handle->dpi_eq, 1,
-				  DAOS_EQ_WAIT,
-				1,
-				&dev);
-
+		rc = daos_eq_poll(fs_handle->dpi_eq, 1, DAOS_EQ_WAIT, 1, &dev);
 		if (rc == 1) {
+			daos_event_fini(dev);
 			ev = container_of(dev, struct dfuse_event, de_ev);
-
 			ev->de_complete_cb(ev);
-
 			D_FREE(ev);
 		}
 	}
