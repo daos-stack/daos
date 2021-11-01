@@ -63,6 +63,8 @@ struct vos_tls {
 		bool			 vtl_hash_set;
 	};
 	struct d_tm_node_t		 *vtl_committed;
+	struct d_tm_node_t		 *vtl_objs;
+	struct d_tm_node_t		 *vtl_active_dtx;
 };
 
 struct bio_xs_context *vos_xsctxt_get(void);

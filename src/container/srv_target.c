@@ -23,6 +23,7 @@
 
 #include <daos_srv/container.h>
 #include <daos_srv/security.h>
+#include <gurt/telemetry_producer.h>
 
 #include <daos/checksum.h>
 #include <daos/rpc.h>
@@ -691,6 +692,7 @@ static int
 cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		     struct daos_llink **link)
 {
+	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_child	*cont;
 	int			rc;
 
@@ -728,6 +730,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		  offsetof(struct ds_cont_child, sc_pool_uuid));
 	uuid_copy(cont->sc_uuid, co_uuid);
 	uuid_copy(cont->sc_pool_uuid, po_uuid);
+	d_tm_inc_gauge(tls->dt_conts, 1);
 
 	/* prevent aggregation till snapshot iv refreshed */
 	cont->sc_aggregation_max = 0;
@@ -752,6 +755,7 @@ out:
 static void
 cont_child_free_ref(struct daos_llink *llink)
 {
+	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_child *cont = cont_child_obj(llink);
 
 	D_ASSERT(cont->sc_pool != NULL);
@@ -760,6 +764,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 
+	d_tm_dec_gauge(tls->dt_conts, 1);
 	vos_cont_close(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
 	daos_csummer_destroy(&cont->sc_csummer);

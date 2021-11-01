@@ -268,7 +268,9 @@ dtx_act_ent_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		  d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct vos_dtx_act_ent	*dae = val_iov->iov_buf;
+	struct vos_tls	*tls = vos_tls_get();
 
+	d_tm_inc_gauge(tls->vtl_active_dtx, 1);
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, dae);
 
 	return 0;
@@ -279,10 +281,12 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 		 void *args)
 {
 	struct vos_dtx_act_ent	*dae;
+	struct vos_tls	*tls = vos_tls_get();
 
 	dae = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	rec->rec_off = UMOFF_NULL;
 
+	d_tm_dec_gauge(tls->vtl_active_dtx, 1);
 	if (dae != NULL)
 		d_list_del_init(&dae->dae_link);
 

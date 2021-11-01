@@ -39,6 +39,7 @@ struct cont_pool_metrics {
 struct dsm_tls {
 	struct daos_lru_cache  *dt_cont_cache;
 	struct d_hash_table	dt_cont_hdl_hash;
+	struct d_tm_node_t	*dt_conts;
 };
 
 extern struct dss_module_key cont_module_key;

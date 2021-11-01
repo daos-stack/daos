@@ -359,8 +359,8 @@ error:
 }
 
 static int
-bulk_grp_grow(struct bio_dma_buffer *bdb, struct bio_bulk_group *bbg,
-	      struct bio_bulk_args *arg)
+bulk_grp_grow(struct bio_xs_context *xs, struct bio_dma_buffer *bdb,
+	      struct bio_bulk_group *bbg, struct bio_bulk_args *arg)
 {
 	struct bio_dma_chunk	*chk;
 	int			 rc;
@@ -371,7 +371,7 @@ bulk_grp_grow(struct bio_dma_buffer *bdb, struct bio_bulk_group *bbg,
 
 	/* Grow DMA buffer when not reaching DMA upper bound */
 	if (bdb->bdb_tot_cnt < bio_chk_cnt_max) {
-		rc = dma_buffer_grow(bdb, 1);
+		rc = dma_buffer_grow(xs, bdb, 1);
 		if (rc == 0)
 			goto populate;
 	}
@@ -518,7 +518,7 @@ bulk_get_hdl(struct bio_desc *biod, struct bio_iov *biov, unsigned int pg_cnt,
 	if (!d_list_empty(&bbg->bbg_idle_bulks))
 		goto done;
 
-	rc = bulk_grp_grow(bdb, bbg, arg);
+	rc = bulk_grp_grow(biod->bd_ctxt->bic_xs_ctxt, bdb, bbg, arg);
 	if (rc) {
 		D_ERROR("Failed to grow bulk grp (%u pages) "DF_RC"\n",
 			pg_cnt, DP_RC(rc));

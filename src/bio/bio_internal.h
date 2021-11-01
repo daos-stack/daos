@@ -74,6 +74,8 @@ struct bio_dma_chunk {
 	d_list_t	 bdc_link;
 	/* Base pointer of the chunk address */
 	void		*bdc_ptr;
+	/* chunk size in bytes */
+	uint64_t	bdc_bytes;
 	/* Page offset (4K page) to unused fraction */
 	unsigned int	 bdc_pg_idx;
 	/* Being used by how many I/O descriptors */
@@ -351,6 +353,8 @@ struct bio_xs_context {
 	struct bio_blobstore	*bxc_blobstore;
 	struct spdk_io_channel	*bxc_io_channel;
 	struct bio_dma_buffer	*bxc_dma_buf;
+	struct d_tm_node_t	*bxc_dma_metrics;
+	struct d_tm_node_t	*bxc_inflight_metrics;
 	d_list_t		 bxc_io_ctxts;
 	unsigned int		 bxc_ready:1;	/* xstream setup finished */
 };
@@ -512,15 +516,15 @@ void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
 bool bypass_health_collect(void);
 
 /* bio_buffer.c */
-void dma_buffer_destroy(struct bio_dma_buffer *buf);
-struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt);
+void dma_buffer_destroy(struct bio_xs_context *xs, struct bio_dma_buffer *buf);
+struct bio_dma_buffer *dma_buffer_create(struct bio_xs_context *xs, unsigned int init_cnt);
 void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
 int dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg);
 int iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 		   unsigned int chk_pg_idx, unsigned int chk_off, uint64_t off,
 		   uint64_t end, uint8_t media);
-int dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt);
+int dma_buffer_grow(struct bio_xs_context *xs, struct bio_dma_buffer *buf, unsigned int cnt);
 
 static inline struct bio_dma_buffer *
 iod_dma_buf(struct bio_desc *biod)

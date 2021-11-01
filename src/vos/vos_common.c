@@ -417,6 +417,19 @@ vos_tls_init(int xs_id, int tgt_id)
 		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
 		       DP_RC(rc));
 
+	rc = d_tm_add_metric(&tls->vtl_objs, D_TM_STATS_GAUGE,
+			     "Number of vos object", "entries",
+			     "io/obj/tgt_%u", tgt_id);
+	if (rc)
+		D_WARN("Failed to create vos obj: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&tls->vtl_active_dtx, D_TM_STATS_GAUGE,
+			     "Number of active dtx", "entries",
+			     "io/dtx/active/tgt_%u", tgt_id);
+	if (rc)
+		D_WARN("Failed to create active dtx: "DF_RC"\n", DP_RC(rc));
+
+
 	return tls;
 failed:
 	vos_tls_fini(tls);

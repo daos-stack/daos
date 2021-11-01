@@ -12,6 +12,7 @@
 #define D_LOGFAC	DD_FAC(container)
 
 #include <daos_srv/daos_engine.h>
+#include <gurt/telemetry_producer.h>
 #include <daos/rpc.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -116,6 +117,12 @@ dsm_tls_init(int xs_id, int tgt_id)
 		D_FREE(tls);
 		return NULL;
 	}
+
+	rc = d_tm_add_metric(&tls->dt_conts, D_TM_STATS_GAUGE,
+			     "Number of container", "entries",
+			     "container/container/tgt_%u", tgt_id);
+	if (rc)
+		D_WARN("Failed to create container metrics: "DF_RC"\n", DP_RC(rc));
 
 	return tls;
 }

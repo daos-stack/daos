@@ -1243,7 +1243,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	}
 
 	if (ctxt->bxc_dma_buf != NULL) {
-		dma_buffer_destroy(ctxt->bxc_dma_buf);
+		dma_buffer_destroy(ctxt, ctxt->bxc_dma_buf);
 		ctxt->bxc_dma_buf = NULL;
 	}
 
@@ -1264,9 +1264,21 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_tgt_id = tgt_id;
 
+	rc = d_tm_add_metric(&ctxt->bxc_dma_metrics, D_TM_STATS_GAUGE,
+			     "DMA buffer allocated in bytes", "entries",
+			     "io/dma_bytes/tgt_%u", tgt_id);
+	if (rc)
+		D_WARN("Failed to create dma_bytes: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctxt->bxc_inflight_metrics, D_TM_STATS_GAUGE,
+			     "inflight dma metrics", "entries",
+			     "io/dma_inflight/tgt_%u", tgt_id);
+	if (rc)
+		D_WARN("Failed to create dma_bytes: "DF_RC"\n", DP_RC(rc));
+
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (!bio_nvme_configured()) {
-		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+		ctxt->bxc_dma_buf = dma_buffer_create(ctxt, bio_chk_cnt_init);
 		if (ctxt->bxc_dma_buf == NULL) {
 			D_FREE(ctxt);
 			*pctxt = NULL;
@@ -1342,7 +1354,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	if (rc)
 		goto out;
 
-	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+	ctxt->bxc_dma_buf = dma_buffer_create(ctxt, bio_chk_cnt_init);
 	if (ctxt->bxc_dma_buf == NULL) {
 		D_ERROR("failed to initialize dma buffer\n");
 		rc = -DER_NOMEM;

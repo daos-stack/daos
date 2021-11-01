@@ -10,12 +10,14 @@
 #include "bio_internal.h"
 
 static void
-dma_free_chunk(struct bio_dma_chunk *chunk)
+dma_free_chunk(struct bio_xs_context *xs, struct bio_dma_chunk *chunk)
 {
 	D_ASSERT(chunk->bdc_ptr != NULL);
 	D_ASSERT(chunk->bdc_pg_idx == 0);
 	D_ASSERT(chunk->bdc_ref == 0);
 	D_ASSERT(d_list_empty(&chunk->bdc_link));
+
+	d_tm_dec_gauge(xs->bxc_dma_metrics, chunk->bdc_bytes);
 
 	if (bio_nvme_configured())
 		spdk_dma_free(chunk->bdc_ptr);
@@ -26,7 +28,7 @@ dma_free_chunk(struct bio_dma_chunk *chunk)
 }
 
 static struct bio_dma_chunk *
-dma_alloc_chunk(unsigned int cnt)
+dma_alloc_chunk(struct bio_xs_context *xs, unsigned int cnt)
 {
 	struct bio_dma_chunk *chunk;
 	ssize_t bytes = (ssize_t)cnt << BIO_DMA_PAGE_SHIFT;
@@ -46,7 +48,9 @@ dma_alloc_chunk(unsigned int cnt)
 		if (rc)
 			chunk->bdc_ptr = NULL;
 	}
+	chunk->bdc_bytes = bytes;
 
+	d_tm_inc_gauge(xs->bxc_dma_metrics, bytes);
 	if (chunk->bdc_ptr == NULL) {
 		D_ERROR("Failed to allocate %u pages DMA buffer\n", cnt);
 		D_FREE(chunk);
@@ -58,7 +62,7 @@ dma_alloc_chunk(unsigned int cnt)
 }
 
 static void
-dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
+dma_buffer_shrink(struct bio_xs_context *xs, struct bio_dma_buffer *buf, unsigned int cnt)
 {
 	struct bio_dma_chunk *chunk, *tmp;
 
@@ -67,7 +71,7 @@ dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 			break;
 
 		d_list_del_init(&chunk->bdc_link);
-		dma_free_chunk(chunk);
+		dma_free_chunk(xs, chunk);
 
 		D_ASSERT(buf->bdb_tot_cnt > 0);
 		buf->bdb_tot_cnt--;
@@ -76,7 +80,7 @@ dma_buffer_shrink(struct bio_dma_buffer *buf, unsigned int cnt)
 }
 
 int
-dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
+dma_buffer_grow(struct bio_xs_context *xs, struct bio_dma_buffer *buf, unsigned int cnt)
 {
 	struct bio_dma_chunk *chunk;
 	int i, rc = 0;
@@ -84,7 +88,7 @@ dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
 	D_ASSERT((buf->bdb_tot_cnt + cnt) <= bio_chk_cnt_max);
 
 	for (i = 0; i < cnt; i++) {
-		chunk = dma_alloc_chunk(bio_chk_sz);
+		chunk = dma_alloc_chunk(xs, bio_chk_sz);
 		if (chunk == NULL) {
 			rc = -DER_NOMEM;
 			break;
@@ -98,13 +102,13 @@ dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt)
 }
 
 void
-dma_buffer_destroy(struct bio_dma_buffer *buf)
+dma_buffer_destroy(struct bio_xs_context *xs, struct bio_dma_buffer *buf)
 {
 	D_ASSERT(d_list_empty(&buf->bdb_used_list));
 	D_ASSERT(buf->bdb_active_iods == 0);
 
 	bulk_cache_destroy(buf);
-	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
+	dma_buffer_shrink(xs, buf, buf->bdb_tot_cnt);
 
 	D_ASSERT(buf->bdb_tot_cnt == 0);
 	ABT_mutex_free(&buf->bdb_mutex);
@@ -114,7 +118,7 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 }
 
 struct bio_dma_buffer *
-dma_buffer_create(unsigned int init_cnt)
+dma_buffer_create(struct bio_xs_context *xs, unsigned int init_cnt)
 {
 	struct bio_dma_buffer *buf;
 	int rc;
@@ -149,9 +153,9 @@ dma_buffer_create(unsigned int init_cnt)
 		return NULL;
 	}
 
-	rc = dma_buffer_grow(buf, init_cnt);
+	rc = dma_buffer_grow(xs, buf, init_cnt);
 	if (rc != 0) {
-		dma_buffer_destroy(buf);
+		dma_buffer_destroy(xs, buf);
 		return NULL;
 	}
 
@@ -272,7 +276,7 @@ iod_release_buffer(struct bio_desc *biod)
 			chunk->bdc_type);
 
 		if (dma_chunk_is_huge(chunk)) {
-			dma_free_chunk(chunk);
+			dma_free_chunk(biod->bd_ctxt->bic_xs_ctxt, chunk);
 		} else if (chunk->bdc_ref == 0) {
 			chunk->bdc_pg_idx = 0;
 			D_ASSERT(bdb->bdb_used_cnt[chunk->bdc_type] > 0);
@@ -463,7 +467,8 @@ iod_last_region(struct bio_desc *biod)
 }
 
 static int
-chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_dma_chunk **chk_ptr)
+chunk_get_idle(struct bio_xs_context *xs, struct bio_dma_buffer *bdb,
+	       struct bio_dma_chunk **chk_ptr)
 {
 	struct bio_dma_chunk *chk;
 	int rc;
@@ -471,7 +476,7 @@ chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_dma_chunk **chk_ptr)
 	if (d_list_empty(&bdb->bdb_idle_list)) {
 		/* Try grow buffer first */
 		if (bdb->bdb_tot_cnt < bio_chk_cnt_max) {
-			rc = dma_buffer_grow(bdb, 1);
+			rc = dma_buffer_grow(xs, bdb, 1);
 			if (rc == 0)
 				goto done;
 		}
@@ -710,14 +715,14 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	 * be high contention over the SPDK huge page cache.
 	 */
 	if (pg_cnt > bio_chk_sz) {
-		chk = dma_alloc_chunk(pg_cnt);
+		chk = dma_alloc_chunk(biod->bd_ctxt->bic_xs_ctxt, pg_cnt);
 		if (chk == NULL)
 			return -DER_NOMEM;
 
 		chk->bdc_type = biod->bd_chk_type;
 		rc = iod_add_chunk(biod, chk);
 		if (rc) {
-			dma_free_chunk(chk);
+			dma_free_chunk(biod->bd_ctxt->bic_xs_ctxt, chk);
 			return rc;
 		}
 		bio_iov_set_raw_buf(biov, chk->bdc_ptr + pg_off);
@@ -789,7 +794,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	 * Switch to another idle chunk, if there isn't any idle chunk
 	 * available, grow buffer.
 	 */
-	rc = chunk_get_idle(bdb, &chk);
+	rc = chunk_get_idle(biod->bd_ctxt->bic_xs_ctxt, bdb, &chk);
 	if (rc) {
 		if (rc == -DER_AGAIN) {
 			D_ERROR("DMA buffer isn't sufficient to sustain "
@@ -1001,6 +1006,7 @@ dma_rw(struct bio_desc *biod)
 	biod->bd_result = 0;
 	biod->bd_ctxt->bic_inflight_dmas++;
 
+	d_tm_inc_gauge(xs_ctxt->bxc_inflight_metrics, 1);
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	D_DEBUG(DB_IO, "DMA start, type:%d\n", biod->bd_type);
 
@@ -1025,6 +1031,7 @@ dma_rw(struct bio_desc *biod)
 			ABT_eventual_wait(biod->bd_dma_done, NULL);
 	}
 
+	d_tm_dec_gauge(xs_ctxt->bxc_inflight_metrics, 1);
 	biod->bd_ctxt->bic_inflight_dmas--;
 	D_DEBUG(DB_IO, "DMA done, type:%d\n", biod->bd_type);
 }

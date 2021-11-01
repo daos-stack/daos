@@ -3281,7 +3281,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* non-leader local RPC handler, do not need pin the DTX entry.  */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, &dth, false);
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART || rc == -DER_NONEXIST,
 			 DB_IO, DLOG_ERR,
 			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
 			 DP_RC(rc));
