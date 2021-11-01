@@ -1,0 +1,8 @@
+hosts:
+  test_servers:
+    - wolf-179
+    - wolf-189
+timeout: 300
+server_config:
+  name: daos_server
+check_remote_root_access: False
