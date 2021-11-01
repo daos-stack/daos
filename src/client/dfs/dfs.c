@@ -113,10 +113,16 @@ struct dfs_obj {
 	};
 };
 
+enum {
+	DFS_NONE = 0,
+	DFS_MOUNT,
+	DFS_MOUNT_ALL,
+};
+
 /** dfs struct that is instantiated for a mounted DFS namespace */
 struct dfs {
 	/** flag to indicate whether the dfs is mounted */
-	bool			mounted;
+	int			mounted;
 	/** flag to indicate whether dfs is mounted with balanced mode (DTX) */
 	bool			use_dtx;
 	/** lock for threadsafety */
@@ -1190,7 +1196,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 
 	/** check if SB info exists */
 	if (iods[0].iod_size == 0) {
-		D_ERROR("SB does not exist.\n");
+		D_DEBUG(DB_ALL, "SB does not exist.\n");
 		D_GOTO(err, rc = ENOENT);
 	}
 
@@ -1508,6 +1514,135 @@ out_prop:
 }
 
 int
+dfs_connect(const char *pool, const char *cont, int flags, dfs_attr_t *attr, dfs_t **_dfs)
+{
+	daos_handle_t	poh = {0};
+	daos_handle_t	coh = {0};
+	dfs_t		*dfs = NULL;
+	int		amode, cmode;
+	int		rc;
+
+	if (_dfs == NULL)
+		return EINVAL;
+
+	amode = (flags & O_ACCMODE);
+
+	/** Connect to pool */
+	rc = daos_pool_connect(pool, NULL, (amode == O_RDWR) ? DAOS_PC_RW : DAOS_PC_RO, &poh,
+			       NULL, NULL);
+	if (rc) {
+		D_ERROR("Failed to connect to pool %s "DF_RC"\n", pool, DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	cmode = (amode == O_RDWR) ? DAOS_COO_RW : DAOS_COO_RO;
+
+	rc = daos_cont_open(poh, cont, cmode, &coh, NULL, NULL);
+	if (rc == -DER_NONEXIST && (flags & O_CREAT)) {
+		uuid_t	cuuid;
+
+		rc = dfs_cont_create_with_label(poh, cont, attr, &cuuid, &coh, &dfs);
+		/** if someone got there first, re-open */
+		if (rc == EEXIST) {
+			rc = daos_cont_open(poh, cont, cmode, &coh, NULL, NULL);
+			if (rc) {
+				D_ERROR("Failed to open container %s "DF_RC"\n", cont, DP_RC(rc));
+				D_GOTO(out, rc = daos_der2errno(rc));
+			}
+
+			/*
+			 * It could be that someone has created the container but has not created
+			 * the SB yet, so keep trying to mount.
+			 */
+			do {
+				rc = dfs_mount(poh, coh, amode, &dfs);
+			} while (rc == ENOENT);
+			if (rc) {
+				D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
+				D_GOTO(out, rc);
+			}
+		} else if (rc) {
+			D_ERROR("Failed to create DFS container: %d\n", rc);
+		}
+	} else if (rc == 0) {
+		do {
+			rc = dfs_mount(poh, coh, amode, &dfs);
+		} while (rc == ENOENT);
+		if (rc) {
+			D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
+			D_GOTO(out, rc);
+		}
+	} else {
+		D_ERROR("Failed to open container %s "DF_RC"\n", cont, DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	dfs->mounted = DFS_MOUNT_ALL;
+	*_dfs = dfs;
+out:
+	if (rc) {
+		int	rc2;
+
+		if (dfs) {
+			rc2 = dfs_umount(dfs);
+			if (rc2)
+				D_ERROR("dfs_umount() Failed %d\n", rc2);
+		}
+		if (daos_handle_is_valid(coh)) {
+			rc2 = daos_cont_close(coh, NULL);
+			if (rc2)
+				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+		}
+		if (daos_handle_is_valid(poh)) {
+			rc2 = daos_pool_disconnect(poh, NULL);
+			if (rc2)
+				D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+		}
+	}
+	return rc;
+}
+
+int
+dfs_disconnect(dfs_t *dfs)
+{
+	daos_handle_t	poh;
+	daos_handle_t	coh;
+	int		rc;
+
+	if (dfs->mounted != DFS_MOUNT_ALL) {
+		D_ERROR("DFS is not mounted with dfs_connect() or dfs_global2local_all()\n");
+		return EINVAL;
+	}
+
+	/** store pool and container handles before umounted dfs */
+	poh.cookie = dfs->poh.cookie;
+	coh.cookie = dfs->coh.cookie;
+
+	/** set mounted flag MOUNT to be able to just umount */
+	dfs->mounted = DFS_MOUNT;
+	rc = dfs_umount(dfs);
+	if (rc) {
+		D_ERROR("dfs_umount() Failed %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_cont_close(coh, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	rc = daos_pool_disconnect(poh, NULL);
+	if (rc) {
+		D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+out:
+	return rc;
+}
+
+int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
 	dfs_t			*dfs;
@@ -1658,7 +1793,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			dfs->oid.hi = 0;
 	}
 
-	dfs->mounted = true;
+	dfs->mounted = DFS_MOUNT;
 	*_dfs = dfs;
 	daos_prop_free(prop);
 	return rc;
@@ -1679,6 +1814,10 @@ dfs_umount(dfs_t *dfs)
 {
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
+	if (dfs->mounted != DFS_MOUNT) {
+		D_ERROR("DFS is not mounted with dfs_mount() or dfs_global2local()\n");
+		return EINVAL;
+	}
 
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
@@ -1904,13 +2043,159 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
-	dfs->mounted = true;
+	dfs->mounted = DFS_MOUNT;
 	*_dfs = dfs;
 
 	return rc;
 err_dfs:
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
+	return rc;
+}
+
+int
+dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
+{
+	d_iov_t		pool_hdl = { NULL, 0, 0 };
+	d_iov_t		cont_hdl = { NULL, 0, 0 };
+	d_iov_t		dfs_hdl = { NULL, 0, 0 };
+	daos_size_t	total_size;
+	char		*ptr;
+	int		rc = 0;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	if (glob == NULL) {
+		D_ERROR("Invalid parameter, NULL glob pointer.\n");
+		return EINVAL;
+	}
+
+	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0)) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len"
+			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
+			glob->iov_buf_len, glob->iov_len);
+		return EINVAL;
+	}
+
+	rc = daos_pool_local2global(dfs->poh, &pool_hdl);
+	if (rc)
+		return daos_der2errno(rc);
+
+	rc = daos_cont_local2global(dfs->coh, &cont_hdl);
+	if (rc)
+		return daos_der2errno(rc);
+
+	rc = dfs_local2global(dfs, &dfs_hdl);
+	if (rc)
+		return rc;
+
+	total_size = pool_hdl.iov_buf_len + cont_hdl.iov_buf_len + dfs_hdl.iov_buf_len +
+		sizeof(daos_size_t) * 3;
+
+	if (glob->iov_buf == NULL) {
+		glob->iov_buf_len = total_size;
+		return 0;
+	}
+
+	ptr = glob->iov_buf;
+
+	*((daos_size_t *) ptr) = pool_hdl.iov_buf_len;
+	ptr += sizeof(daos_size_t);
+	pool_hdl.iov_buf = ptr;
+	pool_hdl.iov_len = pool_hdl.iov_buf_len;
+	rc = daos_pool_local2global(dfs->poh, &pool_hdl);
+	if (rc)
+		return daos_der2errno(rc);
+	ptr += pool_hdl.iov_buf_len;
+
+	*((daos_size_t *) ptr) = cont_hdl.iov_buf_len;
+	ptr += sizeof(daos_size_t);
+	cont_hdl.iov_buf = ptr;
+	cont_hdl.iov_len = cont_hdl.iov_buf_len;
+	rc = daos_cont_local2global(dfs->coh, &cont_hdl);
+	if (rc)
+		return daos_der2errno(rc);
+	ptr += cont_hdl.iov_buf_len;
+
+	*((daos_size_t *) ptr) = dfs_hdl.iov_buf_len;
+	ptr += sizeof(daos_size_t);
+	dfs_hdl.iov_buf = ptr;
+	dfs_hdl.iov_len = dfs_hdl.iov_buf_len;
+	rc = dfs_local2global(dfs, &dfs_hdl);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+int
+dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
+{
+	char		*ptr;
+	d_iov_t		pool_hdl = { NULL, 0, 0 };
+	d_iov_t		cont_hdl = { NULL, 0, 0 };
+	d_iov_t		dfs_hdl = { NULL, 0, 0 };
+	daos_handle_t	poh, coh;
+	dfs_t		*dfs;
+	int		rc = 0;
+
+	if (_dfs == NULL)
+		return EINVAL;
+
+	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, "
+			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
+		return EINVAL;
+	}
+
+	ptr = (char *)glob.iov_buf;
+
+	pool_hdl.iov_buf_len = *((daos_size_t *) ptr);
+	ptr += sizeof(daos_size_t);
+	pool_hdl.iov_buf = ptr;
+	pool_hdl.iov_len = pool_hdl.iov_buf_len;
+	rc = daos_pool_global2local(pool_hdl, &poh);
+	if (rc)
+		D_GOTO(out, rc = daos_der2errno(rc));
+	ptr += pool_hdl.iov_buf_len;
+
+	cont_hdl.iov_buf_len = *((daos_size_t *) ptr);
+	ptr += sizeof(daos_size_t);
+	cont_hdl.iov_buf = ptr;
+	cont_hdl.iov_len = cont_hdl.iov_buf_len;
+	rc = daos_cont_global2local(poh, cont_hdl, &coh);
+	if (rc)
+		D_GOTO(out, rc = daos_der2errno(rc));
+	ptr += cont_hdl.iov_buf_len;
+
+	dfs_hdl.iov_buf_len = *((daos_size_t *) ptr);
+	ptr += sizeof(daos_size_t);
+	dfs_hdl.iov_buf = ptr;
+	dfs_hdl.iov_len = dfs_hdl.iov_buf_len;
+	rc = dfs_global2local(poh, coh, flags, dfs_hdl, &dfs);
+	if (rc)
+		D_GOTO(out, rc);
+	dfs->mounted = DFS_MOUNT_ALL;
+
+	*_dfs = dfs;
+out:
+	if (rc) {
+		int rc2;
+
+		if (daos_handle_is_valid(coh)) {
+			rc2 = daos_cont_close(coh, NULL);
+			if (rc2)
+				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+		}
+
+		if (daos_handle_is_valid(poh)) {
+			rc2 = daos_pool_disconnect(poh, NULL);
+			if (rc2)
+				D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+		}
+	}
 	return rc;
 }
 
@@ -3367,17 +3652,17 @@ read_cb(tse_task_t *task, void *data)
 	struct dfs_read_params	*params;
 	int			rc = task->dt_result;
 
-	if (rc != 0) {
-		D_ERROR("Failed to read from array object (%d)\n", rc);
-		return rc;
-	}
-
 	params = daos_task_get_priv(task);
 	D_ASSERT(params != NULL);
 
-	*params->read_size = params->arr_iod.arr_nr_read;
-	D_FREE(params);
+	if (rc != 0) {
+		D_ERROR("Failed to read from array object (%d)\n", rc);
+		D_GOTO(out, rc);
+	}
 
+	*params->read_size = params->arr_iod.arr_nr_read;
+out:
+	D_FREE(params);
 	return rc;
 }
 

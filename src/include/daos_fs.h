@@ -87,6 +87,34 @@ typedef struct {
 } dfs_obj_info_t;
 
 /**
+ * Mount a DFS namespace over the specified pool and container. The container can be optionally
+ * created if it doesn't exist, and O_CREAT is passed in flags. The handle must be release using
+ * dfs_disconnect() and not dfs_mount(). Using the latter in this case will leak open handles for
+ * the pool and container.
+ *
+ * \param[in]	pool	Pool label.
+ * \param[in]	cont	Container label.
+ * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR, O_CREAT)
+ * \param[in]	attr	Optional set of properties and attributes to set on the container.
+ *			Pass NULL to use default.
+ * \param[out]	dfs	Pointer to the DFS mount.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_connect(const char *pool, const char *cont, int flags, dfs_attr_t *attr, dfs_t **dfs);
+
+/**
+ * Unmount the DFS namespace, close the container and disconnect from the pool.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_disconnect(dfs_t *dfs);
+
+/**
  * Create a DFS container with the POSIX property layout set.  Optionally set attributes for hints
  * on the container.
  *
@@ -195,6 +223,34 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob);
 int
 dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 		 dfs_t **dfs);
+
+/**
+ * Convert a local dfs mount including the pool and container handles to global representation data
+ * which can be shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is returned through
+ * glob->iov_buf_len.  This function does not involve any communication and does not block.
+ *
+ * \param[in]	dfs	valid dfs mount to be shared
+ * \param[out]	glob	pointer to iov of the buffer to store mount information
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_local2global_all(dfs_t *dfs, d_iov_t *glob);
+
+/**
+ * Create a dfs mount from global representation data. This has to be closed with dfs_disconnect()
+ * since the pool and container connections are established with it.
+ *
+ * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR). If 0, inherit flags
+ *			of serialized DFS handle.
+ * \param[in]	glob	Global (shared) representation of a collective handle to be extracted.
+ * \param[out]	dfs	Returned dfs mount
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_global2local_all(int flags, d_iov_t glob, dfs_t **dfs);
 
 /**
  * Optionally set a prefix on the dfs mount where all paths passed to dfs_lookup
