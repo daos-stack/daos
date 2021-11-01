@@ -9,6 +9,7 @@ timeout: 1110
 job_manager_timeout: 300
 setup:
   start_servers_once: False
+skip_add_log_msg: True
 server_config:
   name: daos_server
   engines_per_host: 2

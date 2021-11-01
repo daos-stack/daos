@@ -10,6 +10,7 @@ timeouts:
   test_osa_offline_reintegrate_with_less_pool_space: 1300
 setup:
   start_servers_once: False
+skip_add_log_msg: True
 server_config:
   name: daos_server
   engines_per_host: 2
