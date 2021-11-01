@@ -8,7 +8,6 @@ package main
 
 import (
 	"net"
-	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -129,10 +128,6 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	return proto.Marshal(resp)
 }
 
-func providerIsVerbs(provider string) bool {
-	return strings.HasPrefix(provider, verbsProvider)
-}
-
 func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
 	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
 	if err != nil {
@@ -140,7 +135,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass, providerIsVerbs(resp.ClientNetHint.Provider))
+	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass, resp.ClientNetHint.Provider)
 	if err != nil {
 		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
 			netdetect.DevClassName(resp.ClientNetHint.NetDevClass), err.Error())
@@ -185,9 +180,9 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 	return pbResp, nil
 }
 
-func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32, requireDomain bool) (*FabricInterface, error) {
+func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32, provider string) (*FabricInterface, error) {
 	if mod.fabricInfo.IsCached() {
-		return mod.fabricInfo.GetDevice(numaNode, netDevClass, requireDomain)
+		return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 	}
 
 	netCtx, err := netdetect.Init(ctx)
@@ -203,7 +198,7 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 
 	mod.fabricInfo.CacheScan(netCtx, result)
 
-	return mod.fabricInfo.GetDevice(numaNode, netDevClass, requireDomain)
+	return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

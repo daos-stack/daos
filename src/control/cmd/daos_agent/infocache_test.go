@@ -458,7 +458,7 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 		lfc         *localFabricCache
 		numaNode    int
 		netDevClass uint32
-		needDomain  bool
+		provider    string
 		expDevice   *FabricInterface
 		expErr      error
 	}{
@@ -482,7 +482,7 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 		"domain required": {
 			lfc:         newTestFabricCache(t, nil, populatedCache),
 			numaNode:    2,
-			needDomain:  true,
+			provider:    "ofi+verbs",
 			netDevClass: netdetect.Ether,
 			expDevice: &FabricInterface{
 				Name:        "test7",
@@ -502,7 +502,11 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 				}
 			}
 
-			dev, err := tc.lfc.GetDevice(tc.numaNode, tc.netDevClass, tc.needDomain)
+			if tc.provider == "" {
+				tc.provider = "ofi+sockets"
+			}
+
+			dev, err := tc.lfc.GetDevice(tc.numaNode, tc.netDevClass, tc.provider)
 
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expDevice, dev); diff != "" {
