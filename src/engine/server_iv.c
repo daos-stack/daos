@@ -858,6 +858,8 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 		d_list_del(&entry->iv_link);
 		iv_entry_free(entry);
 	}
+
+	D_INFO(DF_UUID" ns stopped\n", DP_UUID(ns->iv_pool_uuid));
 }
 
 unsigned int
