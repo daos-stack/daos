@@ -123,13 +123,13 @@ class ThreadManager():
         self.log.info("Results from threads that passed:")
         for result in results:
             if result.passed:
-                self.log.info(str(result.display))
+                self.log.info(str(result))
             else:
                 failed.append(result)
         if failed:
-            self.log.info("Results from threads that passed:")
+            self.log.info("Results from threads that failed:")
             for result in failed:
-                self.log.info(str(result.display))
+                self.log.info(str(result))
         return len(failed) > 0
 
     def check_run(self):
