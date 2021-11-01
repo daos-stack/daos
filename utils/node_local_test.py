@@ -3879,7 +3879,7 @@ def main():
     parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')
     parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
-    parser.add_argument('--dtx', action='store_true')
+    parser.add_argument('--dtx', action='store_true', default=True)
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='?')
     args = parser.parse_args()
