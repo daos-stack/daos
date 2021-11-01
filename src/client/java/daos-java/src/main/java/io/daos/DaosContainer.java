@@ -187,13 +187,13 @@ public class DaosContainer extends Shareable implements Closeable {
     Set<String> nameSet = new HashSet<>();
     boolean truncated = true;
     while (truncated) {
-      ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(totalSize + 4);
+      ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(totalSize + 8);
       try {
-        buffer.writeInt(totalSize);
+        buffer.writeLong(totalSize);
         buffer.writerIndex(buffer.capacity());
         DaosClient.daosListContAttrs(contPtr, buffer.memoryAddress());
         buffer.readerIndex(0);
-        int actualSize = buffer.readInt();
+        long actualSize = buffer.readLong();
         if (actualSize <= totalSize) {
           parseNameBuffer(buffer, actualSize, nameSet);
           truncated = false;
@@ -209,7 +209,7 @@ public class DaosContainer extends Shareable implements Closeable {
     return nameSet;
   }
 
-  private void parseNameBuffer(ByteBuf buffer, int actualSize, Set<String> nameSet)
+  private void parseNameBuffer(ByteBuf buffer, long actualSize, Set<String> nameSet)
       throws UnsupportedEncodingException {
     byte terminator = '\0';
     int count = 0;

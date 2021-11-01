@@ -10,7 +10,6 @@
 import os
 import json
 import re
-from tempfile import TemporaryDirectory
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
@@ -18,7 +17,7 @@ from avocado.utils.distro import detect
 from avocado.core import exceptions
 from ast import literal_eval
 
-import fault_config_utils
+from fault_config_utils import FaultInjection
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
@@ -28,7 +27,7 @@ from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing, run_command
+    get_default_config_file, pcmd, get_file_listing
 from logger_utils import TestLogger
 from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
@@ -77,6 +76,8 @@ class Test(avocadoTest):
 
         # Define a test ID using the test_* method name
         self.test_id = self.get_test_name()
+
+        self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
 
         # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
         # Any unit combination may be used, but they must be specified in
@@ -219,7 +220,7 @@ class Test(avocadoTest):
                     except Exception as excpt: # pylint: disable=broad-except
                         skip_process_error("Unable to read commit list: "
                                            "{}".format(excpt))
-                        commits = None
+                        return
                     if commits and vals[1] in commits:
                         # fix is in this code base
                         self.log.info("This test variant is included in the "
@@ -395,10 +396,9 @@ class TestWithoutServers(Test):
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
-        self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
-        self.fault_file = None
         self.context = None
         self.d_log = None
+        self.fault_injection = None
 
         # Create a default TestLogger w/o a DaosLog object to prevent errors in
         # tearDown() if setUp() is not completed.  The DaosLog is added upon the
@@ -437,14 +437,8 @@ class TestWithoutServers(Test):
         self.log.debug("Common test directory: %s", self.test_dir)
 
         # setup fault injection, this MUST be before API setup
-        fault_list = self.params.get("fault_list", '/run/faults/*')
-        if fault_list:
-            # not using workdir because the huge path was messing up
-            # orterun or something, could re-evaluate this later
-            self.fault_file = fault_config_utils.write_fault_file(self.tmp,
-                                                                  fault_list,
-                                                                  None)
-            os.environ["D_FI_CONFIG"] = self.fault_file
+        self.fault_injection = FaultInjection()
+        self.fault_injection.start(self.params.get("fault_list", '/run/faults/*'), self.test_dir)
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
@@ -453,14 +447,7 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-
-        if self.fault_file:
-            try:
-                os.remove(self.fault_file)
-            except OSError as error:
-                self._teardown_errors.append(
-                    "Error running inherited teardown(): {}".format(error))
-
+        self._teardown_errors.extend(self.fault_injection.stop())
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
@@ -653,6 +640,8 @@ class TestWithServers(TestWithoutServers):
         hosts = list(self.hostlist_servers)
         if self.hostlist_clients:
             hosts.extend(self.hostlist_clients)
+        # Copy the fault injection files to the hosts.
+        self.fault_injection.copy_fault_files(hosts)
         lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
         for line in lines:
             self.log.debug("  %s", line)
@@ -665,7 +654,7 @@ class TestWithServers(TestWithoutServers):
             if self.hostlist_clients:
                 hosts.extend(self.hostlist_clients)
             self.log.info("-" * 100)
-            self.stop_leftover_processes(["orterun"], hosts)
+            self.stop_leftover_processes(["orterun", "mpirun"], hosts)
 
             # Ensure write permissions for the daos command log files when
             # using systemctl
@@ -733,24 +722,17 @@ class TestWithServers(TestWithoutServers):
             message (str): message to write to log file.
         """
         if self.server_managers and self.agent_managers:
-            temp_dir = TemporaryDirectory()
-
             # Compose and run cart_ctl command
             cart_ctl = CartCtl()
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
-            cart_ctl.cfg_path.value = temp_dir.name
             cart_ctl.m.value = message
             cart_ctl.n.value = None
+            cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
-                # Fetch attachinfo data from server via the agent
-                attachinfo_file = manager.get_attachinfo_file()
-                cp_command = "sudo cp {} {}".format(
-                    attachinfo_file, temp_dir.name)
-                run_command(cp_command, verbose=True, raise_exception=False)
                 cart_ctl.group_name.value = manager.get_config_value("name")
-                cart_ctl.run()
+                # cart_ctl.run()
         else:
             self.log.info(
                 "Unable to write message to the server log: %d servers groups "
@@ -1314,8 +1296,6 @@ class TestWithServers(TestWithoutServers):
                         self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error destroying pool: {}".format(error))
-
-
         return error_list
 
     def search_and_destroy_pools(self):

@@ -351,7 +351,8 @@ to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
 | dfuse-direct-io-disable | Force use of page cache for this container ("on"/"off")        |
 
 For metadata caching attributes specify the duration that the cache should be
-valid for, specified in seconds, and allowing 'S' or 'M' suffix.
+valid for, specified in seconds or with a 's', 'm', 'h' or 'd' suffix for seconds,
+minutes, hours or days.
 
 dfuse-data-cache should be set to "on", or "off" if set, any other value will
 log an error, and result in the cache being off.  The O\_DIRECT flag for open

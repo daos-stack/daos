@@ -230,7 +230,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	if (opc_get(parent_req->cr_opc) == DAOS_OBJ_RPC_PUNCH)
 		opc = DAOS_OBJ_RPC_TGT_PUNCH;
-	else if (opc_get(parent_req->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS)
+	else if (opc_get(parent_req->cr_opc) == DAOS_OBJ_RPC_PUNCH_DKEYS)
 		opc = DAOS_OBJ_RPC_TGT_PUNCH_DKEYS;
 	else
 		opc = DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;

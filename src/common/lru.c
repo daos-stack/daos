@@ -239,6 +239,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	link = d_hash_rec_find(&lcache->dlc_htable, key, key_size);
 	if (link != NULL) {
 		llink = link2llink(link);
+		D_ASSERT(llink->ll_evicted == 0);
 		/* remove busy item from LRU */
 		if (!d_list_empty(&llink->ll_qlink))
 			d_list_del_init(&llink->ll_qlink);

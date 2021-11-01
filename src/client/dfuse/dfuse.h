@@ -51,10 +51,8 @@ struct dfuse_projection_info {
 };
 
 /* Launch fuse, and do not return until complete */
-bool
-dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
-		  struct fuse_lowlevel_ops *flo,
-		  struct fuse_args *args);
+int
+dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args);
 
 struct dfuse_inode_entry;
 
@@ -253,7 +251,10 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 /* Start a dfuse projection */
 int
-dfuse_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs);
+dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs);
+
+int
+dfuse_fs_stop(struct dfuse_projection_info *fs_handle);
 
 /* Drain and free resources used by a projection */
 int
@@ -264,7 +265,8 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle);
 extern int
 dfuse_loop(struct dfuse_info *dfuse_info);
 
-struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
+extern
+struct fuse_lowlevel_ops dfuse_ops;
 
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\

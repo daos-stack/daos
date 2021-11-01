@@ -328,6 +328,10 @@ class LogLine():
         """Return True if line is record of fault injection"""
         return self._is_type(['fault_id'], trace=False)
 
+    def is_fi_site_mem(self):
+        """Return True if line is record of fault injection for memory allocation"""
+        return self._is_type(['fault_id', '0,'], trace=False)
+
     def is_fi_alloc_fail(self):
         """Return True if line is showing failed memory allocation"""
         return self._is_type(['out', 'of', 'memory'], trace=False)
@@ -504,7 +508,7 @@ class LogIter():
 
         # Force check encoding for smaller files.
         i = os.stat(fname)
-        if i.st_size < (1024*1024*20):
+        if i.st_size < (1024*1024*5):
             check_encoding = True
 
         if fname.endswith('.bz2'):
@@ -537,7 +541,7 @@ class LogIter():
         self._data = []
 
         i = os.fstat(self._fd.fileno())
-        self.__from_file = bool(i.st_size > (1024*1024*20)) or self.bz2
+        self.__from_file = bool(i.st_size > (1024*1024*100)) or self.bz2
 
         if self.__from_file:
             self._load_pids()
