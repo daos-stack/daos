@@ -93,6 +93,15 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int			rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+
+	rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+					oh->doh_ie->ie_stat.st_ino, 0, 0);
+	DFUSE_TRA_ERROR(oh, "rc is %d", rc);
+
+	rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+					oh->doh_ie->ie_stat.st_ino, -1, 0);
+	DFUSE_TRA_ERROR(oh, "rc is %d", rc);
 
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)

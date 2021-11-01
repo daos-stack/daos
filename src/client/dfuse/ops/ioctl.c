@@ -241,6 +241,7 @@ err:
 static void
 handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 {
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	d_iov_t iov = {};
 	int rc;
 
@@ -257,6 +258,12 @@ handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
+
+	fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+					 oh->doh_ie->ie_stat.st_ino, 0, 0);
+
+	fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+					 oh->doh_ie->ie_stat.st_ino, -1, 0);
 
 	DFUSE_REPLY_IOCTL_SIZE(oh, req, iov.iov_buf, iov.iov_len);
 	D_FREE(iov.iov_buf);

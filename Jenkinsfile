@@ -161,7 +161,7 @@ pipeline {
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
-               defaultValue: 'ci_nlt_1',
+               defaultValue: 'ci_vm1',
                description: "Label to use for NLT tests")
         string(name: 'CI_NVME_3_LABEL',
                defaultValue: 'ci_nvme3',

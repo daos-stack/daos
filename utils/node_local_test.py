@@ -1698,6 +1698,29 @@ class posix_tests():
         assert rc.returncode == 0
 
     @needs_dfuse
+    def test_il_copy(self):
+        """Copy to a file with IL and verify the size is correct"""
+
+        src_file = os.path.join(self.dfuse.dir, 'src_file')
+        dst_file = os.path.join(self.dfuse.dir, 'dst_file')
+
+        with open(src_file, 'w') as fd:
+            fd.write('content')
+
+        il_cmd(self.dfuse, ['cp', src_file, dst_file], check_fstat=False)
+
+        with open(dst_file, 'r') as fd:
+            data = fd.read(1024)
+            print('__{}__'.format(data))
+            print(len(data))
+
+        src = os.stat(src_file)
+        dst = os.stat(dst_file)
+        print(os.stat(src_file))
+        print(os.stat(dst_file))
+        assert src.st_size == dst.st_size
+
+    @needs_dfuse
     def test_xattr(self):
         """Perform basic tests with extended attributes"""
 

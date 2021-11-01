@@ -366,9 +366,10 @@ struct fuse_lowlevel_ops dfuse_ops;
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(ie,					\
-				"Returning attr inode %#lx mode %#o",	\
+				"Returning attr inode %#lx mode %#o size %zi",	\
 				(attr)->st_ino,				\
-				(attr)->st_mode);			\
+				(attr)->st_mode,			\
+				(attr)->st_size);			\
 		__rc = fuse_reply_attr(req, attr,			\
 				(ie)->ie_dfs->dfc_attr_timeout);	\
 		if (__rc != 0)						\
