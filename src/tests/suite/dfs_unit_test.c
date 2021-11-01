@@ -1088,6 +1088,21 @@ dfs_setup(void **state)
 }
 
 static int
+dfs_setup_dtx(void **state)
+{
+	char	*save_val;
+	int	rc;
+
+	save_val = getenv("DFS_USE_DTX");
+	setenv("DFS_USE_DTX", "1", 1);
+
+	rc = dfs_setup(state);
+
+	setenv("DFS_USE_DTX", save_val, 1);
+	return rc;
+}
+
+static int
 dfs_teardown(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -1119,9 +1134,11 @@ run_dfs_unit_test(int rank, int size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit",
-					 dfs_unit_tests, dfs_setup,
+	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
 					 dfs_teardown);
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
+					 dfs_setup_dtx, dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

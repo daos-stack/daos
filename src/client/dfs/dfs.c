@@ -442,11 +442,13 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	sgl->sg_nr_out	= 0;
 	sgl->sg_iovs	= sg_iovs;
 
-	rc = daos_obj_fetch(oh, th, 0, &dkey, xnr + 1, iods ? iods : iod,
+	rc = daos_obj_fetch(oh, th, DAOS_COND_DKEY_FETCH, &dkey, xnr + 1, iods ? iods : iod,
 			    sgls ? sgls : sgl, NULL, NULL);
-	if (rc) {
-		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
-			DP_RC(rc));
+	if (rc == -DER_NONEXIST) {
+		*exists = false;
+		D_GOTO(out, rc = 0);
+	} else if (rc) {
+		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name, DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
@@ -468,11 +470,9 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 		sgl->sg_nr_out	= 0;
 		sgl->sg_iovs	= sg_iovs;
 
-		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, iod, sgl, NULL,
-				    NULL);
+		rc = daos_obj_fetch(oh, th, DAOS_COND_DKEY_FETCH, &dkey, 1, iod, sgl, NULL, NULL);
 		if (rc) {
-			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
-				DP_RC(rc));
+			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name, DP_RC(rc));
 			D_FREE(value);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
@@ -869,8 +869,7 @@ restart:
 			daos_array_close(file->oh, NULL);
 		} else if (rc) {
 			daos_array_close(file->oh, NULL);
-			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n",
-				file->name, rc);
+			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n", file->name, rc);
 			D_GOTO(out, rc);
 		} else {
 			/** Success, commit */
@@ -2459,8 +2458,7 @@ lookup_rel_path_loop:
 
 			/* Cannot go outside the container */
 			if (daos_oid_cmp(parent.oid, dfs->root.oid) == 0) {
-				D_DEBUG(DB_TRACE,
-					"Failed to lookup path outside container: %s\n",
+				D_DEBUG(DB_TRACE, "Failed to lookup path outside container: %s\n",
 					path);
 				D_GOTO(err_obj, rc = ENOENT);
 			}
@@ -4209,7 +4207,10 @@ xattr_copy(daos_handle_t src_oh, char *src_name, daos_handle_t dst_oh,
 		memset(enum_buf, 0, ENUM_XDESC_BUF);
 		rc = daos_obj_list_akey(src_oh, th, &src_dkey, &number, kds,
 					&sgl, &anchor, NULL);
-		if (rc) {
+		if (rc == -DER_TX_RESTART) {
+			D_DEBUG(DB_TRACE, "daos_obj_list_akey() failed (%d)\n", rc);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		} else if (rc) {
 			D_ERROR("daos_obj_list_akey() failed (%d)\n", rc);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
@@ -4405,7 +4406,9 @@ restart:
 
 	/** cp the extended attributes if they exist */
 	rc = xattr_copy(parent->oh, name, new_parent->oh, new_name, th);
-	if (rc) {
+	if (rc == ERESTART) {
+		D_GOTO(out, rc);
+	} else if (rc) {
 		D_ERROR("Failed to copy extended attributes (%d)\n", rc);
 		D_GOTO(out, rc);
 	}

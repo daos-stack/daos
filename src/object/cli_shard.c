@@ -1688,7 +1688,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 			D_DEBUG(DB_IO, "key size "DF_U64" too big.\n",
 				oeo->oeo_size);
 			enum_args->eaa_kds[0].kd_key_len = oeo->oeo_size;
-		} else if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
+		} else if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY || rc == -DER_TX_RESTART) {
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
 				""DF_RC"\n", enum_args->rpc, opc, DP_RC(rc));
 		} else {
