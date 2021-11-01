@@ -128,7 +128,7 @@ class NvmePoolExclude(OSAUtils):
                     # not enough ranks to perform testing for other
                     # object class.
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               rank, t_string)
+                                                               rank)
                     self.print_and_assert_on_rebuild_failure(output)
 
     def test_nvme_pool_excluded(self):
