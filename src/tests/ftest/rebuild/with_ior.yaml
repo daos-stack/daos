@@ -28,7 +28,7 @@ dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_caching: True
 ior:
-    ior_timeout: 60
+    ior_timeout: 180
     client_processes:
         np_16:
             np: 16
