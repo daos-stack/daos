@@ -724,6 +724,8 @@ allocate_simple_desc(char *descBufAddress, data_desc_simple_t *desc,
 		memcpy(&desc->eq, desc_buffer, 8);
 		/* skip event idx (2) */
 		desc_buffer += 10;
+	} else {
+		desc->event = NULL;
 	}
 	/* skip dkeylen and dkey */
 	desc_buffer += 2;
@@ -861,7 +863,9 @@ update_ret_code(void *udata, daos_event_t *ev, int ret)
 	char *desc_buffer = desc->ret_buf_address;
 
 	memcpy(desc_buffer, &ret, 4);
-	ev->ev_error = 0;
+	if (ev) {
+		ev->ev_error = 0;
+	}
 	return 0;
 }
 
@@ -1071,6 +1075,9 @@ update_actual_size(void *udata, daos_event_t *ev, int ret)
 			0 : desc->sgls[i].sg_iovs->iov_len;
 		memcpy(desc_buffer, &value, 4);
 		desc_buffer += 4;
+	}
+	if (ev) {
+		ev->ev_error = 0;
 	}
 	return 0;
 }
