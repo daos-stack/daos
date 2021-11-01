@@ -40,8 +40,8 @@ class RbldWithIOR(IorTestBase):
         # ior parameters
         iorflags_write = self.params.get("F", '/run/ior/iorflags/write/')
         iorflags_read = self.params.get("F", '/run/ior/iorflags/read/')
-        file1 = "daos:testFile1"
-        file2 = "daos:testFile2"
+        file1 = "daos:/testFile1"
+        file2 = "daos:/testFile2"
 
         # create pool
         self.create_pool()

@@ -21,29 +21,40 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// findPciAddrsWithDomain returns controllers that match the input prefix in the
-// domain component of their PCI address.
-func findPciAddrsWithDomain(inCtrlrs storage.NvmeControllers, prefix string) ([]string, error) {
-	var outPciAddrs []string
+// backingAddrToVMD converts a VMD backing devices address e.g. 5d0505:03.00.0
+// to the relevant logical VMD address e.g. 0000:5d:05.5.
+func backingAddrToVMD(backingAddr string) (string, bool) {
+	domain, _, _, _, err := common.ParsePCIAddress(backingAddr)
+	if err != nil {
+		return "", false
+	}
+	if domain == 0 {
+		return "", false
+	}
 
-	for _, ctrlr := range inCtrlrs {
-		domain, _, _, _, err := common.ParsePCIAddress(ctrlr.PciAddr)
-		if err != nil {
-			return nil, err
-		}
-		if fmt.Sprintf("%x", domain) == prefix {
-			outPciAddrs = append(outPciAddrs, ctrlr.PciAddr)
+	domStr := fmt.Sprintf("%x", domain)
+
+	return fmt.Sprintf("0000:%c%c:%c%c.%c", domStr[0], domStr[1], domStr[2],
+		domStr[3], domStr[5]), true
+}
+
+// mapVMDToBackingAddrs stores found vmd backing addresses under vmd address key.
+func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) map[string][]string {
+	vmds := make(map[string][]string)
+
+	for _, ctrlr := range foundCtrlrs {
+		// find backing device addresses from vmd address
+		vmdAddr, isVMDBackingAddr := backingAddrToVMD(ctrlr.PciAddr)
+		if isVMDBackingAddr {
+			vmds[vmdAddr] = append(vmds[vmdAddr], ctrlr.PciAddr)
 		}
 	}
 
-	return outPciAddrs, nil
+	return vmds
 }
 
-// substVMDAddrs replaces VMD PCI addresses in input device list with the
-// PCI addresses of the backing devices behind the VMD.
-//
-// Select any PCI addresses that have the compressed VMD address BDF as backing
-// address domain.
+// substVMDAddrs replaces VMD PCI addresses in input device list with the PCI
+// addresses of the backing devices behind the VMD.
 //
 // Return new device list with PCI addresses of devices behind the VMD.
 func substVMDAddrs(inPCIAddrs []string, foundCtrlrs storage.NvmeControllers) ([]string, error) {
@@ -51,25 +62,19 @@ func substVMDAddrs(inPCIAddrs []string, foundCtrlrs storage.NvmeControllers) ([]
 		return nil, nil
 	}
 
-	var outPciAddrs []string
-	for _, dev := range inPCIAddrs {
-		_, b, d, f, err := common.ParsePCIAddress(dev)
-		if err != nil {
-			return nil, err
-		}
-		matchDevs, err := findPciAddrsWithDomain(foundCtrlrs,
-			fmt.Sprintf("%02x%02x%02x", b, d, f))
-		if err != nil {
-			return nil, err
-		}
-		if len(matchDevs) == 0 {
-			outPciAddrs = append(outPciAddrs, dev)
+	vmds := mapVMDToBackingAddrs(foundCtrlrs)
+
+	// swap input vmd addresses with respective backing addresses
+	var outPCIAddrs []string
+	for _, inAddr := range inPCIAddrs {
+		if backingAddrs, exists := vmds[inAddr]; exists {
+			outPCIAddrs = append(outPCIAddrs, backingAddrs...)
 			continue
 		}
-		outPciAddrs = append(outPciAddrs, matchDevs...)
+		outPCIAddrs = append(outPCIAddrs, inAddr)
 	}
 
-	return outPciAddrs, nil
+	return outPCIAddrs, nil
 }
 
 // substituteVMDAddresses wraps around substVMDAddrs and takes a BdevScanResponse
