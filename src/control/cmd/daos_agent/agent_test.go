@@ -167,7 +167,7 @@ func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 	// GetAttachInfo RPC invocation.
 	os.Setenv(drpcDirEnvVar, tmpDir)
 	os.Setenv(childModeEnvVar, childModeGetAttachInfo)
-	maxIter := 128
+	maxIter := 32
 	for i := 0; i < maxIter; i++ {
 		go func(rc chan *mgmtpb.GetAttachInfoResp, ec chan error) {
 			pr, err := pbin.ExecReq(context.Background(), log, os.Args[0], &pbin.Request{})
