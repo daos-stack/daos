@@ -11,7 +11,7 @@ All commands shown here are on a two-socket Cascade Lake server running a new in
 On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
 ## What is DAOS
-The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non-Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware.
+The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non-Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware. For additional information, see the article [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
 
 ## Building a Docker Image
 
@@ -44,7 +44,7 @@ Once the image has been created, a container will need to be started to run the 
 ### Setting Hugepages
 At this stage, depending on how hugepages are configured on your system, you may get errors when the `docker run` command is issued. So for this demonstration, we will configure hugepages before issuing the `docker run` command:
 
-We set the hugepages by using the following commands
+We set the hugepages by using the following commands:
 ```bash
 echo 1024 | sudo tee /proc/sys/VM/nr_hugepages
 cat /proc/meminfo | grep Huge
@@ -119,5 +119,11 @@ You will now see in your list of images, including your new_image_name
 
 `sudo docker images`
 
-## Next Steps:
+## Next Steps
 If all the above steps are done, we now have a complete Docker instance established, and we now need to look at pool creation using the DAOS Admin Tool
+
+## Ressources
+- [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
+- [DAOS Github Repo](https://github.com/daos-stack/daos)
+- [daos.io](https://docs.daos.io/)
+- 
