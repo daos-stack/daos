@@ -184,6 +184,16 @@ class JobManager(ExecutableCommand):
         # processes running by returning a "R" state.
         return "R" if 1 not in results or len(results) > 1 else None
 
+    def stop(self):
+        """Stop the subprocess command and kill any job processes running on hosts.
+
+        Raises:
+            CommandFailure: if unable to stop
+
+        """
+        super().stop()
+        self.kill()
+
     def kill(self):
         """Forcibly terminate any job processes running on hosts."""
         regex = self.job.command_regex

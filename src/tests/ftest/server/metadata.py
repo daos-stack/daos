@@ -22,17 +22,23 @@ def run_ior_loop(manager, uuids):
     Args:
         manager (str): mpi job manager command
         uuids (list): list of container UUIDs
+
+    Returns:
+        list: a list of CmdResults from each ior command run
+
     """
+    results = []
     errors = []
     for index, cont_uuid in enumerate(uuids):
         manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
         try:
-            manager.run()
+            results.append(manager.run())
         except CommandFailure as error:
             errors.append("IOR Loop {}/{} failed: {}".format(index, len(uuids), error))
     if errors:
         raise CommandFailure(
             "IOR failed in {}/{} loops: {}".format(len(errors), len(uuids), "\n".join(errors)))
+    return results
 
 
 class ObjectMetadata(TestWithServers):
