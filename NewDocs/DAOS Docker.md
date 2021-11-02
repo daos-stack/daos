@@ -6,12 +6,12 @@
 
 This article shows how to get started using Distributed Asynchronous Object Storage (DAOS) containers by taking you through the steps to build, configure and run the DAOS service in a Docker container. 
 
-All commands shown here are on a two-socket Cascade Lake server running a new install of Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DDR and 16GB of storage. 
-
 On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
 ## What is DAOS
-The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non-Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware. For additional information, see the article [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
+The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non-Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware. For additional information, see the following articles articles:
+- [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
+- [DAOS: Revolutionizing High-Performance Storage with Intel® Optane™ Technology](https://www.intel.com/content/dam/www/public/us/en/documents/solution-briefs/high-performance-storage-brief.pdf)
 
 ## Building a Docker Image
 
@@ -22,6 +22,8 @@ To build the Docker image, we can do it one of two ways:
 If you prefer a different base than CentOS7, replace the filename "Dockerfile.centos.7" in the command strings below with one of the following."
 - Dockerfile.centos.8
 - Dockerfile.ubuntu.20.04
+
+> All commands shown here are on a two-socket Cascade Lake server running a new install of Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DDR and 16GB of storage. 
 
 ### 1. Build From Local Clone
 
@@ -122,8 +124,7 @@ You will now see in your list of images, including your new_image_name
 ## Next Steps
 If all the above steps are done, we now have a complete Docker instance established, and we now need to look at pool creation using the DAOS Admin Tool
 
-## Ressources
+## Resources
 - [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
 - [DAOS Github Repo](https://github.com/daos-stack/daos)
 - [daos.io](https://docs.daos.io/)
-- 
