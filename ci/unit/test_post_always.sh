@@ -47,6 +47,9 @@ rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
       --filter="include daos*.log" --filter="include test.cov" \
       --filter="exclude *" "$test_log_dir/"
 
+# Fetch dmesg from the test node.
+ssh "$SSH_KEY_ARGS" jenkins@"$NODE" 'dmesg' > "$test_log_dir/$NODE.dmesg"
+
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE
 python utils/fix_cmocka_xml.py

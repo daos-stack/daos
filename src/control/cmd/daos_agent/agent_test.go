@@ -10,9 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -103,6 +105,13 @@ func getAttachInfo() error {
 }
 
 func TestMain(m *testing.M) {
+	defer func() {
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+
+		fmt.Fprintf(os.Stderr, "pid %d: Lifetime Alloced = %s\n", os.Getpid(), humanize.Bytes(m.TotalAlloc))
+	}()
+
 	mode := os.Getenv(childModeEnvVar)
 	switch mode {
 	case "":
