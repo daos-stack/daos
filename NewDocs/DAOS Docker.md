@@ -11,7 +11,7 @@ All commands shown here are on a two-socket Cascade Lake server running a new in
 On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
 ## What is DAOS
-The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware.
+The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non-Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware.
 
 ## Building a Docker Image
 
@@ -71,21 +71,23 @@ Now we need to start the docker container by invoking the "docker run" command
 
 `sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages:/dev/hugepages daos`
 
-Alternatively, you can use 1G hugepages or no Hugepages as well.
+Alternatively, you can use 1G hugepages or no hugepages as well. In those cases, the docker container would need to be started as follows:
 
 `sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages-1G:/dev/hugepages-1G`
+
+or
 
 `sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev`
 
 > Warning: If Docker is being run on a non-Linux system, the "-v" parameter should be removed from the command line. Example:
-`docker run -it -d --privileged --cap-add=ALL --name server`
+`sudo docker run -it -d --privileged --cap-add=ALL --name server`
 
 ## Start the DAOS Service
-Now that the Daos Docker image is running, we need to enable the DAOS Service 
+Now that the DAOS Docker image is running, we need to enable the DAOS Service 
 
 The DAOS service can be started in the docker container as follows:
 
-`docker exec server daos_server start -o /home/daos/daos/utils/config/examples/daos_server_local.yml`
+`sudo docker exec server daos_server start -o /home/daos/daos/utils/config/examples/daos_server_local.yml`
 
 > The daos_server_local.yml configuration file sets up a simple local DAOS system with a single server instance running in the container. By default, it uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp. The storage size can be changed in the yaml file if necessary.
 
