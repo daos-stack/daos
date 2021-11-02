@@ -391,8 +391,8 @@ int dc_mgmt_net_cfg(const char *name)
 		 * the domain. Otherwise we could get a mismatch between interface and domain.
 		 */
 		if (ofi_domain)
-			D_WARN("Using agent for network config. Ignoring client provided "
-			       "OFI_DOMAIN: %s\n", ofi_domain);
+			D_WARN("Ignoring OFI_DOMAIN '%s' because OFI_INTERFACE is not set; using "
+			       "automatic configuration instead\n", ofi_domain);
 
 		rc = setenv("OFI_DOMAIN", info.domain, 1);
 		if (rc != 0)
