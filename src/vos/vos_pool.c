@@ -592,7 +592,7 @@ static int
 vos_register_slabs(struct umem_attr *uma)
 {
 	struct pobj_alloc_class_desc	*slab;
-	int				 i, rc;
+	int				 i, rc, j;
 
 	D_ASSERT(uma->uma_pool != NULL);
 	for (i = 0; i < VOS_SLAB_MAX; i++) {
@@ -605,6 +605,16 @@ vos_register_slabs(struct umem_attr *uma)
 			return rc;
 		}
 
+		for (j = 0; j < i; j++) {
+			if (uma->uma_slabs[j].unit_size == slab->unit_size) {
+				/** PMDK will fail to register a new slab of the same size
+				 *  so reuse the class id
+				 */
+				slab->class_id = uma->uma_slabs[j].class_id;
+				goto skip_new_class;
+			}
+		}
+
 		rc = pmemobj_ctl_set(uma->uma_pool, "heap.alloc_class.new.desc",
 				     slab);
 		if (rc) {
@@ -613,6 +623,7 @@ vos_register_slabs(struct umem_attr *uma)
 			rc = umem_tx_errno(rc);
 			return rc;
 		}
+skip_new_class:
 		D_ASSERT(slab->class_id != 0);
 	}
 
