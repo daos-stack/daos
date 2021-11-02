@@ -7,11 +7,12 @@ timeout: 360
 server_config:
   name: daos_server
   servers:
-    scm_size: 20
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
     bdev_class: nvme
     bdev_list: ["aaaa:aa:aa.a"]
 pool:
   mode: 146
-  scm_size: 16G
-  nvme_size: 224G
+  scm_size: 32G
+  nvme_size: 530G
   control_method: dmg
