@@ -89,7 +89,9 @@ gc_ult(void *arg)
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT started\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 
-	D_ASSERT(child->spc_gc_req != NULL);
+	if (child->spc_gc_req == NULL)
+		goto out;
+
 	while (!dss_ult_exiting(child->spc_gc_req)) {
 		rc = vos_gc_pool(child->spc_hdl, -1, dss_ult_yield,
 				 (void *)child->spc_gc_req);
@@ -105,6 +107,7 @@ gc_ult(void *arg)
 		sched_req_sleep(child->spc_gc_req, 10ULL * 1000);
 	}
 
+out:
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT stopped\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 }
@@ -134,7 +137,7 @@ start_gc_ult(struct ds_pool_child *child)
 	if (child->spc_gc_req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
 		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_join(gc);
+		ABT_thread_free(&gc);
 		return -DER_NOMEM;
 	}
 
@@ -594,7 +597,7 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	if (pool->sp_ec_ephs_req == NULL) {
 		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
 			DP_UUID(pool->sp_uuid));
-		ABT_thread_join(ec_eph_query_ult);
+		ABT_thread_free(&ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
 

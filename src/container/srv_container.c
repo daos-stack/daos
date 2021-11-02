@@ -1383,6 +1383,9 @@ cont_agg_eph_leader_ult(void *arg)
 	struct cont_ec_agg	*tmp;
 	int			rc = 0;
 
+	if (svc->cs_ec_leader_ephs_req == NULL)
+		goto out;
+
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
@@ -1456,6 +1459,7 @@ yield:
 		sched_req_sleep(svc->cs_ec_leader_ephs_req, EC_AGG_EPH_INTV);
 	}
 
+out:
 	D_DEBUG(DF_DSMS, DF_UUID": stop eph ult: rc %d\n",
 		DP_UUID(svc->cs_pool_uuid), rc);
 
@@ -1492,7 +1496,7 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 	if (svc->cs_ec_leader_ephs_req == NULL) {
 		D_ERROR(DF_UUID"Failed to get req for ec eph query ULT\n",
 			DP_UUID(svc->cs_pool_uuid));
-		ABT_thread_join(ec_eph_leader_ult);
+		ABT_thread_free(&ec_eph_leader_ult);
 		return -DER_NOMEM;
 	}
 
