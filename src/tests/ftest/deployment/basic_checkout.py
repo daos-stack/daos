@@ -5,11 +5,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from ior.small import IorSmall
+from small import IorSmall
 from mdtest.small import MdtestSmall
-from container.autotest import ContainerAutotestTest
-from erasurecode.ior_smoke import EcodIor
-from datamover.large_file import DmvrPosixLargeFile
+from autotest import ContainerAutotestTest
+from ior_smoke import EcodIor
+from large_file import DmvrPosixLargeFile
 
 class BasicCheckout(IorSmall, MdtestSmall, ContainerAutotestTest, EcodIor):
     # pylint: disable=too-many-ancestors
