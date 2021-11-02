@@ -471,7 +471,7 @@ cont_start_agg_ult(struct ds_cont_child *cont, void (*func)(void *),
 		D_CRIT(DF_CONT"[%d]: Failed to get req for aggregation ULT\n",
 		       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		       dmi->dmi_tgt_id);
-		ABT_thread_join(agg_ult);
+		ABT_thread_free(&agg_ult);
 		return -DER_NOMEM;
 	}
 
@@ -2457,6 +2457,10 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 
 	D_DEBUG(DB_MD, DF_UUID" start tgt ec query eph ULT\n",
 		DP_UUID(pool->sp_uuid));
+
+	if (pool->sp_ec_ephs_req == NULL)
+		goto out;
+
 	while (!dss_ult_exiting(pool->sp_ec_ephs_req)) {
 		struct dss_coll_ops	coll_ops = { 0 };
 		struct dss_coll_args	coll_args = { 0 };
@@ -2512,6 +2516,7 @@ yield:
 		sched_req_sleep(pool->sp_ec_ephs_req, EC_TGT_AGG_INTV);
 	}
 
+out:
 	D_INFO(DF_UUID" stop tgt ec aggregation\n", DP_UUID(pool->sp_uuid));
 
 	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list,
