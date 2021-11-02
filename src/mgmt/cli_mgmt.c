@@ -379,23 +379,32 @@ int dc_mgmt_net_cfg(const char *name)
 			crt_timeout);
 	}
 
+	/*
+	 * If the client is using env vars for OFI_INTERFACE/OFI_DOMAIN, they must provide both.
+	 * Otherwise they could end up with a mismatched domain and interface by overriding only
+	 * one of the values returned by the daos_agent.
+	 */
 	ofi_interface = getenv("OFI_INTERFACE");
-	if (!ofi_interface) {
+	ofi_domain = getenv("OFI_DOMAIN");
+	if (!ofi_interface && !ofi_domain) {
 		rc = setenv("OFI_INTERFACE", info.interface, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
-	} else {
-		D_INFO("Using client provided OFI_INTERFACE: %s\n",
-			ofi_interface);
-	}
 
-	ofi_domain = getenv("OFI_DOMAIN");
-	if (!ofi_domain) {
 		rc = setenv("OFI_DOMAIN", info.domain, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
-	} else {
+	} else if (ofi_interface && ofi_domain) {
+		D_INFO("Using client provided OFI_INTERFACE: %s\n", ofi_interface);
 		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+	} else {
+		if (ofi_interface) {
+			D_ERROR("OFI_INTERFACE (%s) provided via env without OFI_DOMAIN\n",
+				ofi_interface);
+		} else {
+			D_ERROR("OFI_DOMAIN (%s) provided without OFI_INTERFACE\n", ofi_domain);
+		}
+		D_GOTO(cleanup, rc = -DER_INVAL);
 	}
 
 	D_DEBUG(DB_MGMT,
