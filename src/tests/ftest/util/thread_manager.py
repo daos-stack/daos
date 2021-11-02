@@ -34,21 +34,39 @@ class ThreadResult():
             str: the string respresentation of this object
 
         """
+        def get_result(result):
+            """Get the result information to display.
+
+            Args:
+                result (object): the result returned by the thread
+
+            Returns:
+                list: each line of the result information
+
+            """
+            data = []
+            if isinstance(result, CmdResult):
+                data.append("    command:     {}".format(result.command))
+                data.append("    exit_status: {}".format(result.exit_status))
+                data.append("    duration:    {}".format(result.duration))
+                data.append("    interrupted: {}".format(result.interrupted))
+                data.append("    stdout:")
+                for line in result.stdout_text.splitlines():
+                    data.append("      {}".format(line))
+                data.append("    stderr:")
+                for line in result.stderr_text.splitlines():
+                    data.append("      {}".format(line))
+            else:
+                for line in str(result).splitlines():
+                    data.append("    {}".format(line))
+            return data
+
         info = ["Thread {} results:".format(self.id), "  args: {}".format(self.args), "  result:"]
-        if isinstance(self.result, CmdResult):
-            info.append("    command:     {}".format(self.result.command))
-            info.append("    exit_status: {}".format(self.result.exit_status))
-            info.append("    duration:    {}".format(self.result.duration))
-            info.append("    interrupted: {}".format(self.result.interrupted))
-            info.append("    stdout:")
-            for line in self.result.stdout_text.splitlines():
-                info.append("      {}".format(line))
-            info.append("    stderr:")
-            for line in self.result.stderr_text.splitlines():
-                info.append("      {}".format(line))
+        if isinstance(self.result, list):
+            for this_result in self.result:
+                info.extend(get_result(this_result))
         else:
-            for line in str(self.result).splitlines():
-                info.append("    {}".format(line))
+            info.extend(get_result(self.result))
         return "\n".join(info)
 
 
@@ -101,12 +119,15 @@ class ThreadManager():
                     try:
                         results.append(
                             ThreadResult(id, True, self.job_kwargs[id], future.result()))
+                        self.log.info("Thread %d passed: %s", id, results[-1])
                     except Exception as error:
                         results.append(ThreadResult(id, False, self.job_kwargs[id], str(error)))
+                        self.log.info("Thread %d failed: %s", id, results[-1])
             except TimeoutError as error:
                 for future in futures:
                     if not future.done():
                         results.append(ThreadResult(id, False, self.job_kwargs[id], str(error)))
+                        self.log.info("Thread %d timed out: %s", id, results[-1])
         return results
 
     def check(self, results):
