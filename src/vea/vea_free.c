@@ -431,6 +431,8 @@ migrate_end_cb(void *data, bool noop)
 
 		/* Remove entry from aggregate LRU list */
 		d_list_del_init(&entry->ve_link);
+		frags++;
+
 		/*
 		 * Remove entry from aggregate tree, entry will be freed on
 		 * deletion.
