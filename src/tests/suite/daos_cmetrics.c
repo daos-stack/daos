@@ -3332,7 +3332,7 @@ io_obj_ec_array(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	/* Set the container propery for ec cell to 4K */
+	/* Set the container property for ec cell to 4K */
 	props = daos_prop_alloc(1);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	props->dpp_entries[0].dpe_val = (4 << 10);
