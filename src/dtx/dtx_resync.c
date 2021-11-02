@@ -269,7 +269,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 			 *	Then we mark the TX as corrupted via special
 			 *	dtx_abort() with 0 @epoch.
 			 */
-			rc = dtx_abort(cont, 0, &dte, 1);
+			rc = dtx_abort(cont, dte, 0);
 			if (rc < 0 && err != NULL)
 				*err = rc;
 
@@ -312,7 +312,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 * some other DTX(s). To avoid complex rollback logic, let's
 		 * abort the DTXs one by one, not batched.
 		 */
-		rc = dtx_abort(cont, epoch, &dte, 1);
+		rc = dtx_abort(cont, dte, epoch);
 
 		D_DEBUG(DB_TRACE,
 			"As the new leader for TX "DF_DTI", abort it: "
@@ -356,7 +356,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	if (drh->drh_count == 0)
 		goto out;
 
-	ABT_rwlock_wrlock(pool->sp_lock);
+	ABT_rwlock_rdlock(pool->sp_lock);
 	tgt_cnt = pool_map_target_nr(pool->sp_map);
 	ABT_rwlock_unlock(pool->sp_lock);
 	D_ASSERT(tgt_cnt != 0);
@@ -432,6 +432,9 @@ out:
 	if (err >= 0 && !cont->sc_closing)
 		/* Drain old committable DTX to help subsequent rebuild. */
 		err = dtx_obj_sync(cont, NULL, dra->epoch);
+
+	if (err == -DER_NONEXIST)
+		err = 0;
 
 	return err;
 }
@@ -685,7 +688,7 @@ dtx_resync_ult(void *data)
 		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
 		arg->version);
 
-	rc = dss_thread_collective(dtx_resync_one, arg, 0);
+	rc = dss_thread_collective(dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
 	if (rc) {
 		/* If dtx resync fails, then let's still update
 		 * sp_dtx_resync_version, so the rebuild can go ahead,

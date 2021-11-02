@@ -48,7 +48,11 @@ dc_cont_init(void)
 void
 dc_cont_fini(void)
 {
-	daos_rpc_unregister(&cont_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&cont_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 /*
@@ -1767,13 +1771,13 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		rc = dc_task_resched(task);
+		rc = dc_task_depend(task, 1, &ptask);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
 		}
 
-		rc = dc_task_depend(task, 1, &ptask);
+		rc = dc_task_resched(task);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
@@ -1939,7 +1943,7 @@ struct dc_cont_glob {
 static inline daos_size_t
 dc_cont_glob_buf_size()
 {
-       return sizeof(struct dc_cont_glob);
+	return sizeof(struct dc_cont_glob);
 }
 
 static inline void
@@ -2516,12 +2520,13 @@ dc_cont_get_attr(tse_task_t *task)
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
-		D_GOTO(out, rc);
+		D_GOTO(out_rpc, rc);
 	}
 	for (i = 0 ; i < args->n ; i++) {
 		uint64_t len;
@@ -2530,22 +2535,21 @@ dc_cont_get_attr(tse_task_t *task)
 		in->cagi_key_length += len + 1;
 		D_STRNDUP(new_names[i], args->names[i], len);
 		if (new_names[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_names[i], sizeof(char *));
 		if (rc) {
 			D_FREE(new_names[i]);
-			D_GOTO(out, rc);
+			D_GOTO(out_rpc, rc);
 		}
 	}
 
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
 			      CRT_BULK_RW, &in->cagi_bulk);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, &cb_args);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
 
 	cb_args.cra_bulk = in->cagi_bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
@@ -2559,6 +2563,8 @@ dc_cont_get_attr(tse_task_t *task)
 	dc_cont_metrics_incr_inflightcntr(cb_args.cra_rpc->cr_opc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
+out_rpc:
+	cont_req_cleanup(CLEANUP_RPC, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to get container attributes: "DF_RC"\n",

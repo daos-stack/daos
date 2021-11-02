@@ -123,6 +123,8 @@ struct obj_reasb_req {
 	daos_obj_id_t			 orr_oid;
 	/* epoch for IO (now only used for fetch */
 	struct dtx_epoch		 orr_epoch;
+	/* original obj IO API args */
+	daos_obj_rw_t			*orr_args;
 	/* original user input iods/sgls */
 	daos_iod_t			*orr_uiods;
 	d_sg_list_t			*orr_usgls;
@@ -148,6 +150,8 @@ struct obj_reasb_req {
 	 * parity cell.
 	 */
 	uint8_t				*tgt_bitmap;
+	/* iod_size is set by IO reply, one per iod */
+	daos_size_t			*orr_size_set;
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
@@ -170,8 +174,6 @@ struct obj_reasb_req {
 					 orr_singv_only:1,
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
 					 orr_iom_realloc:1,
-	/* iod_size is set by IO reply */
-					 orr_size_set:1,
 	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
 					 orr_fail_alloc:1,
 	/* for use by daos client side metrics */
@@ -249,16 +251,9 @@ struct migrate_pool_tls {
 	ABT_cond		mpt_inflight_cond;
 	ABT_mutex		mpt_inflight_mutex;
 	int			mpt_inflight_max_ult;
+	uint32_t		mpt_opc;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
-	/* Indicates whether objects on the migration destination should be
-	 * removed prior to migrating new data here. This is primarily useful
-	 * for reintegration to ensure that any data that has adequate replica
-	 * data to reconstruct will prefer the remote data over possibly stale
-	 * existing data. Objects that don't have remote replica data will not
-	 * be removed.
-	 */
-				mpt_del_local_objs:1,
 				mpt_fini:1;
 };
 
@@ -287,6 +282,8 @@ struct obj_pool_metrics {
 	struct d_tm_node_t	*opm_update_restart;
 	/** Total number of resent update operations (type = counter) */
 	struct d_tm_node_t	*opm_update_resent;
+	/** Total number of retry update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_retry;
 };
 
 struct obj_tls {
@@ -496,8 +493,8 @@ int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 			   daos_key_t *dkey, daos_key_t *akey,
 			   daos_recx_t *recx, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, struct dtx_id *dti,
-			   unsigned int *map_ver, daos_handle_t th,
-			   tse_task_t *task);
+			   unsigned int *map_ver, unsigned int req_map_ver,
+			   daos_handle_t th, tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,

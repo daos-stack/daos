@@ -372,6 +372,17 @@ uint64_t sched_cur_msec(void);
  */
 uint64_t sched_cur_seq(void);
 
+/**
+ * Get current ULT/Task execution time. The execution time is the elapsed
+ * time since current ULT/Task was scheduled last time.
+ *
+ * \param[out]	msecs		executed time in milli-second
+ * \param[in]	ult_name	ULT name (optional)
+ *
+ * \retval			-DER_NOSYS or 0 on success.
+ */
+int sched_exec_time(uint64_t *msecs, const char *ult_name);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
@@ -491,8 +502,10 @@ enum dss_xs_type {
 	DSS_XS_OFFLOAD	= 2,
 	/** pool service, RDB, drpc handler */
 	DSS_XS_SYS	= 3,
+	/** SWIM operations */
+	DSS_XS_SWIM	= 4,
 	/** drpc listener */
-	DSS_XS_DRPC	= 4,
+	DSS_XS_DRPC	= 5,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -500,6 +513,8 @@ int dss_parameters_set(unsigned int key_id, uint64_t value);
 enum dss_ult_flags {
 	/* Periodically created ULTs */
 	DSS_ULT_FL_PERIODIC	= (1 << 0),
+	/* Use DSS_DEEP_STACK_SZ as the stack size */
+	DSS_ULT_DEEP_STACK	= (1 << 1),
 };
 
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
@@ -857,7 +872,8 @@ int
 ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
 		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  unsigned int *shards, int cnt, int clear_conts);
+		  daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
+		  unsigned int migrate_opc);
 void
 ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
 

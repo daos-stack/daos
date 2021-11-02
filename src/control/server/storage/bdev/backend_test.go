@@ -73,6 +73,13 @@ func mockCtrlrsInclVMD() storage.NvmeControllers {
 	return bdevCtrlrs
 }
 
+func ctrlrsFromPCIAddrs(addrs ...string) (ncs storage.NvmeControllers) {
+	for _, addr := range addrs {
+		ncs = append(ncs, &storage.NvmeController{PciAddr: addr})
+	}
+	return
+}
+
 func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.MockNvmeCfg) *spdkBackend {
 	return &spdkBackend{
 		log: log,
@@ -80,6 +87,74 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 			Env:  &spdk.MockEnvImpl{Cfg: mec},
 			Nvme: &spdk.MockNvmeImpl{Cfg: mnc},
 		},
+	}
+}
+
+func TestBackend_groomDiscoveredBdevs(t *testing.T) {
+	ctrlr1 := storage.MockNvmeController(1)
+	ctrlr2 := storage.MockNvmeController(2)
+	ctrlr3 := storage.MockNvmeController(3)
+
+	for name, tc := range map[string]struct {
+		scanReq   storage.BdevScanRequest
+		inCtrlrs  storage.NvmeControllers
+		expCtrlrs storage.NvmeControllers
+		expErr    error
+	}{
+		"no controllers; no filter": {
+			scanReq: storage.BdevScanRequest{},
+		},
+		"no filter": {
+			inCtrlrs:  storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			expCtrlrs: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+		},
+		"filtered": {
+			scanReq: storage.BdevScanRequest{
+				DeviceList: []string{ctrlr1.PciAddr, ctrlr3.PciAddr},
+			},
+			inCtrlrs:  storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			expCtrlrs: storage.NvmeControllers{ctrlr1, ctrlr3},
+		},
+		"missing": {
+			scanReq: storage.BdevScanRequest{
+				DeviceList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
+			},
+			inCtrlrs: storage.NvmeControllers{ctrlr1, ctrlr3},
+			expErr:   FaultBdevNotFound(ctrlr2.PciAddr),
+		},
+		"vmd devices; vmd not enabled": {
+			scanReq: storage.BdevScanRequest{
+				DeviceList: []string{"0000:85:05.5"},
+			},
+			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
+			expErr: FaultBdevNotFound("0000:85:05.5"),
+		},
+		"vmd devices; vmd enabled": {
+			scanReq: storage.BdevScanRequest{
+				VMDEnabled: true,
+				DeviceList: []string{"0000:85:05.5"},
+			},
+			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
+			expCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotCtrlrs, gotErr := groomDiscoveredBdevs(tc.scanReq, tc.inCtrlrs)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expCtrlrs, gotCtrlrs, defCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected controllers (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
 
@@ -1175,130 +1250,6 @@ func TestBackend_Prepare(t *testing.T) {
 				t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
 			}
 
-		})
-	}
-}
-
-func TestBackend_checkCfgBdevsExist(t *testing.T) {
-	for name, tc := range map[string]struct {
-		vmdEnabled    bool
-		inControllers storage.NvmeControllers
-		engineStorage map[uint32]*storage.Config
-		expErr        error
-	}{
-		"empty cfg bdev list": {
-			engineStorage: make(map[uint32]*storage.Config),
-		},
-		"addr in cfg bdev list; vmd disabled": {
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(vmdAddr),
-					},
-				},
-			},
-			expErr: FaultBdevNotFound(vmdAddr),
-		},
-		"addr in cfg bdev list; vmd enabled": {
-			vmdEnabled: true,
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(vmdAddr),
-					},
-				},
-			},
-		},
-		"no backing devices": {
-			vmdEnabled: true,
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:d7:05.5"),
-					},
-				},
-			},
-			expErr: FaultBdevNotFound("0000:d7:05.5"),
-		},
-		"vmd and non vmd in scan; addr in cfg bdev list": {
-			vmdEnabled: true,
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:8a:00.0", "0000:8d:00.0",
-								vmdAddr),
-					},
-				},
-			},
-		},
-		"vmd and non vmd in scan; addr in cfg bdev list; multiple io servers": {
-			vmdEnabled: true,
-			inControllers: append(mockCtrlrsInclVMD(),
-				&storage.NvmeController{PciAddr: "d70505:01:00.0"},
-				&storage.NvmeController{PciAddr: "d70505:02:00.0"}),
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:90:00.0", "0000:d8:00.0",
-								"0000:d7:05.5"),
-					},
-				},
-				1: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:8a:00.0", "0000:8d:00.0",
-								vmdAddr),
-					},
-				},
-			},
-		},
-		"unexpected scan": {
-			inControllers: storage.MockNvmeControllers(3),
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:90:00.0", "0000:d8:00.0",
-								"0000:d7:05.5"),
-					},
-				},
-				1: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:8a:00.0", "0000:8d:00.0",
-								vmdAddr),
-					},
-				},
-			},
-			expErr: errors.New("not found"), // engine order not deterministic
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			if tc.inControllers == nil {
-				tc.inControllers = mockCtrlrsInclVMD()
-			}
-
-			gotErr := checkCfgBdevsExist(log, tc.inControllers, tc.engineStorage, tc.vmdEnabled)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
 		})
 	}
 }

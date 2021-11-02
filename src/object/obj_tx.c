@@ -1183,6 +1183,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
+			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
@@ -1774,6 +1775,10 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	struct tx_commit_cb_args	 tcca;
 	crt_endpoint_t			 tgt_ep;
 	int				 rc;
+
+	if (tx->tx_pm_ver != 0 && tx->tx_pm_ver != dc_pool_get_version(tx->tx_pool) &&
+	    (tx->tx_retry || tx->tx_read_cnt > 0))
+		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	if (!tx->tx_retry) {
 		rc = dc_tx_commit_prepare(tx, task);
