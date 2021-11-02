@@ -23,7 +23,7 @@ hosts:
     - client-A
 setup:
   start_servers_once: False
-timeout: 900
+timeout: 1200
 server_config:
   engines_per_host: 2
   name: daos_server

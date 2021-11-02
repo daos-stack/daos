@@ -21,7 +21,7 @@ hosts:
         - server-F
   test_clients:
     - client-A
-timeout: 1200
+timeout: 1500
 setup:
   start_servers_once: False
 server_config:

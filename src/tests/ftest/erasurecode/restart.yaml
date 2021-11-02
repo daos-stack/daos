@@ -9,7 +9,7 @@ hosts:
     - client-A
     - client-B
     - client-C
-timeout: 1500
+timeout: 1800
 setup:
   start_agents_once: False
   start_servers_once: False
