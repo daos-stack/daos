@@ -161,21 +161,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 }
 
 func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	if mod.attachInfo.IsCached() {
-		return mod.attachInfo.GetAttachInfoResp()
-	}
-
-	resp, err := mod.getAttachInfoRemote(ctx, numaNode, sys)
-	if err != nil {
-		return nil, err
-	}
-
-	if mod.attachInfo.IsEnabled() {
-		mod.attachInfo.Cache(ctx, resp)
-		return mod.attachInfo.GetAttachInfoResp()
-	}
-
-	return resp, nil
+	return mod.attachInfo.Get(ctx, numaNode, sys, mod.getAttachInfoRemote)
 }
 
 func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
@@ -216,6 +202,7 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 	if err != nil {
 		return nil, err
 	}
+
 	mod.fabricInfo.CacheScan(netCtx, result)
 
 	return mod.fabricInfo.GetDevice(numaNode, netDevClass)

@@ -303,7 +303,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 		 * reclaim is not being scheduled in the previous failure reintegration,
 		 * so let's ignore duplicate shards(DER_EXIST) in this case.
 		 */
-		if (rpt->rt_rebuild_op == RB_OP_REINT) {
+		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND) {
 			D_DEBUG(DB_REBUILD, DF_UUID" found duplicate "DF_UOID" %d\n",
 				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
 			rc = 0;
@@ -513,6 +513,12 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	oc_attr = daos_oclass_attr_find(oid.id_pub, NULL);
+	if (oc_attr == NULL) {
+		D_INFO(DF_UUID" skip invalid "DF_UOID"\n", DP_UUID(rpt->rt_pool_uuid),
+		       DP_UOID(oid));
+		D_GOTO(out, rc = 0);
+	}
+
 	grp_size = daos_oclass_grp_size(oc_attr);
 
 	dc_obj_fetch_md(oid.id_pub, &md);
@@ -784,7 +790,7 @@ rebuild_scanner(void *data)
 out:
 	tls->rebuild_pool_scan_done = 1;
 	if (ult_send != ABT_THREAD_NULL)
-		ABT_thread_join(ult_send);
+		ABT_thread_free(&ult_send);
 
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;

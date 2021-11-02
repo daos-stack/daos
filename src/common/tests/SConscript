@@ -41,7 +41,7 @@ def scons():
     daos_build.test(tenv, 'lru', 'lru.c',
                     LIBS=['daos_common_pmem', 'gurt', 'cart'])
     daos_build.test(tenv, 'sched', 'sched.c',
-                    LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
+                    LIBS=['daos_common', 'gurt', 'cart', 'cmocka', 'pthread'])
     daos_build.test(tenv, 'abt_perf', 'abt_perf.c',
                     LIBS=['daos_common', 'gurt', 'abt'])
     daos_build.test(tenv, 'acl_real_tests', 'acl_util_real_tests.c',
