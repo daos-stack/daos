@@ -1140,6 +1140,7 @@ update_actual_size_async(void *udata, daos_event_t *ev, int ret)
 		memcpy(desc_buffer, &value, 4);
 		desc_buffer += 4;
 	}
+	release_desc_async(desc);
 	ev->ev_error = 0;
 	return 0;
 }
