@@ -2486,6 +2486,9 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 
 		d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list,
 					   ce_list) {
+			if (dss_ult_exiting(pool->sp_ec_ephs_req))
+				break;
+
 			if (ec_eph->ce_destroy) {
 				cont_ec_eph_destroy(ec_eph);
 				continue;
@@ -2514,8 +2517,7 @@ yield:
 	}
 
 out:
-	D_DEBUG(DB_MD, DF_UUID" stop tgt ec aggregation\n",
-		DP_UUID(pool->sp_uuid));
+	D_INFO(DF_UUID" stop tgt ec aggregation\n", DP_UUID(pool->sp_uuid));
 
 	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list,
 				   ce_list)

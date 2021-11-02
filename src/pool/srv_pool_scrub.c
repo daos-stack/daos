@@ -289,7 +289,10 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 		"xs_id: %d, tgt_id: %d, ctx_id: %d, ",
 		dmi->dmi_xs_id, dmi->dmi_tgt_id, dmi->dmi_ctx_id);
 
-	rc = dss_ult_create(scrubbing_ult, child, DSS_XS_SELF, 0, 0, &thread);
+	/* There will be several levels iteration, such as pool, container, object, and lower,
+	 * and so on. Let's use DSS_DEEP_STACK_SZ to avoid ULT overflow.
+	 */
+	rc = dss_ult_create(scrubbing_ult, child, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, &thread);
 	if (rc) {
 		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT. %d\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, rc);

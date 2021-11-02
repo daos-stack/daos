@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v2.0 - dev
+site_name: DAOS v2.1 - dev
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
@@ -59,7 +59,6 @@ nav:
         - 'CentOS': 'QSG/setup.md'
         - 'openSUSE': 'QSG/suse_setup.md'
         - 'Build from Scratch': 'QSG/scratch.md'
-        - 'Admin/Client Tools': 'QSG/tour.md'
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
         - 'Software Installation': 'admin/installation.md'
@@ -72,6 +71,7 @@ nav:
         - 'Troubleshooting': 'admin/troubleshooting.md'
         - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
+        - 'Management (DMG) Tool Reference': 'QSG/dmg_tool.md'
     - Test and Benchmarking:
         - 'Run DAOS Autotest': 'QSG/autotest.md'
         - 'Run CaRT Self_test': 'QSG/cartselftest.md'
@@ -90,8 +90,9 @@ nav:
         - 'Spark and Hadoop': 'user/spark.md'
         - 'Data Mover': 'user/datamover.md'
         - 'Native Programming Interface': 'user/interface.md'
+        - 'DAOS Tool Reference': 'QSG/daos_tool.md'
     - Releases:
-        - 'Release Notes v2.0': 'release/release_notes_v2_0.md'
+        - 'Release Notes v2.1': 'release/release_notes_v2_1.md'
         - 'Support Matrix': 'release/support_matrix.md'
         - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Developer Zone:

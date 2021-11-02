@@ -616,13 +616,16 @@ ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 	sched_req_wait(pool->sp_ec_ephs_req, true);
 	sched_req_put(pool->sp_ec_ephs_req);
 	pool->sp_ec_ephs_req = NULL;
+	D_INFO(DF_UUID": EC query ULT stopped\n", DP_UUID(pool->sp_uuid));
 }
 
 static void
 pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 {
-	if (!pool->sp_fetch_hdls)
+	if (!pool->sp_fetch_hdls) {
+		D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 		return;
+	}
 
 	ABT_mutex_lock(pool->sp_mutex);
 	ABT_cond_signal(pool->sp_fetch_hdls_cond);
@@ -631,6 +634,7 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 	ABT_mutex_lock(pool->sp_mutex);
 	ABT_cond_wait(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
+	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 }
 
 /*
@@ -731,6 +735,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_migrate_abort(pool->sp_uuid, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
+	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
 }
 
 /* ds_pool_hdl ****************************************************************/
