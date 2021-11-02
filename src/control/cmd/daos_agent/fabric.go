@@ -30,6 +30,7 @@ type FabricInterface struct {
 	Name        string
 	Domain      string
 	NetDevClass uint32
+	Providers   []string
 }
 
 func (f *FabricInterface) String() string {
@@ -40,10 +41,20 @@ func (f *FabricInterface) String() string {
 	return fmt.Sprintf("%s%s (%s)", f.Name, dom, netdetect.DevClassName(f.NetDevClass))
 }
 
-// DefaultFabricInterface is the one used if no devices are found on the system.
-var DefaultFabricInterface = &FabricInterface{
-	Name:   "lo",
-	Domain: "lo",
+// AddProvider adds a provider to the FabricInterface.
+func (f *FabricInterface) AddProvider(provider string) {
+	if f == nil || provider == "" {
+		return
+	}
+
+	for _, p := range f.Providers {
+		// Avoid adding duplicates
+		if p == provider {
+			return
+		}
+	}
+
+	f.Providers = append(f.Providers, provider)
 }
 
 // FabricDevClassManual is a wildcard netDevClass that indicates the device was
@@ -130,17 +141,12 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32, provider string
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
-	if n.getNumNUMANodes() == 0 {
-		n.log.Infof("No fabric interfaces found, using default interface %q", DefaultFabricInterface.Name)
-		return DefaultFabricInterface, nil
-	}
-
 	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass, provider)
 	if err == nil {
 		return fi, nil
 	}
 
-	fi, err = n.findOnRemoteNUMA(netDevClass, provider)
+	fi, err = n.findOnAnyNUMA(netDevClass, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +154,22 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32, provider string
 	fiCopy := new(FabricInterface)
 	*fiCopy = *fi
 	return fiCopy, nil
+}
+
+// Find finds a specific fabric device by name.
+func (n *NUMAFabric) Find(name string) (*FabricInterface, error) {
+	if n == nil {
+		return nil, errors.New("nil NUMAFabric")
+	}
+
+	for _, devs := range n.numaMap {
+		for _, fi := range devs {
+			if fi.Name == name {
+				return fi, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("fabric interface %q not found", name)
 }
 
 func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32, provider string) (*FabricInterface, error) {
@@ -216,7 +238,7 @@ func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
 	return n.numaMap[numaNode][idx]
 }
 
-func (n *NUMAFabric) findOnRemoteNUMA(netDevClass uint32, provider string) (*FabricInterface, error) {
+func (n *NUMAFabric) findOnAnyNUMA(netDevClass uint32, provider string) (*FabricInterface, error) {
 	numNodes := n.getNumNUMANodes()
 	for i := 0; i < numNodes; i++ {
 		numa := (n.defaultNumaNode + i) % numNodes
@@ -270,13 +292,15 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan []*netdete
 	fabric := newNUMAFabric(log)
 
 	for _, fs := range scan {
-		if fs.DeviceName == "lo" {
+		if curIF, err := fabric.Find(fs.DeviceName); err == nil {
+			curIF.AddProvider(fs.Provider)
 			continue
 		}
 
 		newIF := &FabricInterface{
 			Name:        fs.DeviceName,
 			NetDevClass: fs.NetDevClass,
+			Providers:   []string{fs.Provider},
 		}
 
 		if getDevAlias != nil {
