@@ -809,6 +809,7 @@ struct vos_iterator {
 				 it_for_discard:1,
 				 it_for_migration:1,
 				 it_cleanup_stale_dtx:1,
+				 it_show_uncommitted:1,
 				 it_ignore_uncommitted:1;
 };
 
@@ -1002,7 +1003,7 @@ key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
-	       uint64_t flags, struct vos_ts_set *ts_set,
+	       uint64_t flags, struct vos_ts_set *ts_set, umem_off_t *known_key,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
@@ -1138,14 +1139,14 @@ D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
  *  \param toh[IN]			Open key tree handle
  *  \param type[IN]			Iterator type (VOS_ITER_AKEY/DKEY only)
  *  \param epr[IN]			Valid epoch range for iteration
- *  \param ignore_inprogress[IN]	Fail if there are uncommitted entries
+ *  \param show_uncommitted[IN]		Return uncommitted entries marked as instead of failing
  *  \param cb[IN]			Callback for key
  *  \param arg[IN]			argument to pass to callback
  *  \param dth[IN]			dtx handle
  */
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
-		const daos_epoch_range_t *epr, bool ignore_inprogress,
+		const daos_epoch_range_t *epr, bool show_uncommitted,
 		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth);
 
 /** Start epoch of vos */
