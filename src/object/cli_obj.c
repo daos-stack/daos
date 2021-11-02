@@ -1984,7 +1984,11 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 			if (!size_fetch &&
 			    !obj_recx_valid(iods[i].iod_nr, iods[i].iod_recxs,
 					    update)) {
-				D_ERROR("IOD_ARRAY should have valid recxs\n");
+				D_ERROR("Invalid recxs update %s\n", update ? "yes" : "no");
+				for (j = 0; j < iods[i].iod_nr; j++)
+					D_ERROR("%d: "DF_RECX"\n", j,
+						DP_RECX(iods[i].iod_recxs[j]));
+
 				return -DER_INVAL;
 			}
 			if (iods[i].iod_size == DAOS_REC_ANY)
