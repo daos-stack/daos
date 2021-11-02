@@ -3,11 +3,12 @@ hosts:
     - server-A
   test_clients:
     - client-A
-timeout: 1800
+timeout: 800
 server_config:
   name: daos_server
   servers:
     targets: 1
+    scm_size: 40
 pool:
   name: daos_server
   scm_size: 20G
@@ -17,11 +18,12 @@ container:
   control_method: daos
   
 ior:
-  block_size: 4M
-  transfer_sizes: [1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 256K, 512K, 1M, 2M, 4M]
-  repetitions: 1
+  block_size: 8M
+  transfer_sizes: [512B, 1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 512K, 1M, 2M, 4M, 8M]
+  repetitions: 3
   iorupdateflags:
-    F: "-w -W -k -G 1"
+    F: "-w -k -G 1"
   iorfetchflags:
-    F: "-r -R -G 1"
+    F: "-r -k -G 1"
   dfs_oclass: "SX"
+  dfs_chunk: 4194304
