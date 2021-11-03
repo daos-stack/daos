@@ -9,7 +9,6 @@ package netdetect
 /*
 #cgo LDFLAGS: -lhwloc -lfabric
 #include <stdlib.h>
-#include <hwloc.h>
 #include <stdio.h>
 #include <rdma/fabric.h>
 #include <rdma/fi_domain.h>
@@ -18,66 +17,6 @@ package netdetect
 #include <rdma/fi_tagged.h>
 #include <rdma/fi_rma.h>
 #include <rdma/fi_errno.h>
-
-#if HWLOC_API_VERSION >= 0x00020000
-
-int cmpt_setFlags(hwloc_topology_t topology)
-{
-	return hwloc_topology_set_all_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
-}
-
-hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx)
-{
-	return hwloc_get_obj_by_depth(topology, depth, idx);
-}
-
-uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth)
-{
-	return (uint)hwloc_get_nbobjs_by_depth(topology, depth);
-}
-
-int cmpt_get_parent_arity(hwloc_obj_t node)
-{
-	return node->parent->io_arity;
-}
-
-hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
-{
-	hwloc_obj_t child;
-	int i;
-
-	child = node->parent->io_first_child;
-	for (i = 0; i < idx; i++) {
-		child = child->next_sibling;
-	}
-	return child;
-}
-#else
-int cmpt_setFlags(hwloc_topology_t topology)
-{
-	return hwloc_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
-}
-
-hwloc_obj_t cmpt_get_obj_by_depth(hwloc_topology_t topology, int depth, uint idx)
-{
-	return hwloc_get_obj_by_depth(topology, (uint)depth, idx);
-}
-
-uint cmpt_get_nbobjs_by_depth(hwloc_topology_t topology, int depth)
-{
-	return (uint)hwloc_get_nbobjs_by_depth(topology, (uint)depth);
-}
-
-int cmpt_get_parent_arity(hwloc_obj_t node)
-{
-	return node->parent->arity;
-}
-
-hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
-{
-	return node->parent->children[idx];
-}
-#endif
 
 #define getHFIUnitError -2
 typedef struct {
@@ -106,11 +45,10 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
-	"unsafe"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/netdetect/hwloc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -167,7 +105,7 @@ func (fs *FabricScan) String() string {
 
 // DeviceScan caches initialization data for later hwloc usage
 type DeviceScan struct {
-	topology             C.hwloc_topology_t
+	topology             hwloc.Topology
 	depth                int
 	numObj               uint
 	systemDeviceNames    []string
@@ -177,15 +115,10 @@ type DeviceScan struct {
 	targetDevice         string
 }
 
-type logger interface {
-	Debug(string)
-	Debugf(string, ...interface{})
-}
-
-var log logger = logging.NewStdoutLogger("netdetect")
+var log logging.Logger = logging.NewStdoutLogger("netdetect")
 
 // SetLogger sets the package-level logger
-func SetLogger(l logger) {
+func SetLogger(l logging.Logger) {
 	log = l
 }
 
@@ -193,56 +126,14 @@ func (da *DeviceAffinity) String() string {
 	return fmt.Sprintf("%s:%s:%s:%d", da.DeviceName, da.CPUSet, da.NodeSet, da.NUMANode)
 }
 
-type hwlocProtectedAccess struct {
-	mutex sync.Mutex
-}
-
-var hpa hwlocProtectedAccess
-
-func (hpa *hwlocProtectedAccess) GetProcCPUBind(topology C.hwloc_topology_t, pid C.hwloc_pid_t, cpuset C.hwloc_cpuset_t, flags C.int) C.int {
-	hpa.mutex.Lock()
-	defer hpa.mutex.Unlock()
-	status := C.hwloc_get_proc_cpubind(topology, pid, cpuset, flags)
-	return status
-}
-
-func (hpa *hwlocProtectedAccess) topology_init() (C.hwloc_topology_t, error) {
-	var topology C.hwloc_topology_t
-	var status C.int
-
-	defer func() {
-		if status != 0 && topology != nil {
-			cleanUp(topology)
-		}
-	}()
-
-	hpa.mutex.Lock()
-	defer hpa.mutex.Unlock()
-
-	status = C.hwloc_topology_init(&topology)
-	if status != 0 {
-		return nil, errors.Errorf("hwloc_topology_init failure: %v", status)
-	}
-
-	status = C.cmpt_setFlags(topology)
-	if status != 0 {
-		return nil, errors.Errorf("hwloc setFlags failure: %v", status)
-	}
-
-	status = C.hwloc_topology_load(topology)
-	if status != 0 {
-		return nil, errors.Errorf("hwloc_topology_load failure: %v", status)
-	}
-
-	return topology, nil
-}
-
 type netdetectContext struct {
-	topology      C.hwloc_topology_t
-	numaAware     bool
-	numNUMANodes  int
-	coresPerNuma  int
-	deviceScanCfg DeviceScan
+	api             hwloc.API
+	topology        hwloc.Topology
+	cleanupTopology func()
+	numaAware       bool
+	numNUMANodes    uint
+	coresPerNuma    uint
+	deviceScanCfg   DeviceScan
 }
 
 func getContext(ctx context.Context) (*netdetectContext, error) {
@@ -265,7 +156,8 @@ func Init(parent context.Context) (context.Context, error) {
 	}
 
 	ndc := netdetectContext{}
-	ndc.topology, err = initLib()
+	ndc.api = hwloc.GetAPI()
+	ndc.topology, ndc.cleanupTopology, err = hwloc.GetTopology(ndc.api)
 	if err != nil {
 		return nil, errors.Errorf("unable to initialize netdetect context: %v", err)
 	}
@@ -285,7 +177,7 @@ func Init(parent context.Context) (context.Context, error) {
 	log.Debugf("network detection, system names: %v, hwloc names %v",
 		ndc.deviceScanCfg.systemDeviceNames, ndc.deviceScanCfg.hwlocDeviceNames)
 	if err != nil {
-		cleanUp(ndc.topology)
+		ndc.cleanupTopology()
 		return nil, err
 	}
 
@@ -302,7 +194,7 @@ func HasNUMA(ctx context.Context) bool {
 }
 
 // NumNumaNodes returns the number of detected NUMA nodes, or 0 if none.
-func NumNumaNodes(ctx context.Context) int {
+func NumNumaNodes(ctx context.Context) uint {
 	ndc, err := getContext(ctx)
 	if err != nil || !HasNUMA(ctx) {
 		return 0
@@ -312,7 +204,7 @@ func NumNumaNodes(ctx context.Context) int {
 
 // CoresPerNuma returns the number of cores on each NUMA node, or 0 if not NUMA
 // aware.
-func CoresPerNuma(ctx context.Context) int {
+func CoresPerNuma(ctx context.Context) uint {
 	ndc, err := getContext(ctx)
 	if err != nil || !HasNUMA(ctx) {
 		return 0
@@ -326,29 +218,7 @@ func CleanUp(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	cleanUp(ndc.topology)
-}
-
-// initLib initializes the hwloc library.
-func initLib() (C.hwloc_topology_t, error) {
-	version := C.hwloc_get_api_version()
-	if (version >> 16) != (C.HWLOC_API_VERSION >> 16) {
-		return nil, errors.Errorf("compilation error - compiled for hwloc API 0x%x but using library API 0x%x\n", C.HWLOC_API_VERSION, version)
-	}
-
-	topology, err := hpa.topology_init()
-	if err != nil {
-		return nil, err
-	}
-
-	return topology, nil
-}
-
-// cleanUp closes out the hwloc resources
-func cleanUp(topology C.hwloc_topology_t) {
-	if topology != nil {
-		C.hwloc_topology_destroy(topology)
-	}
+	ndc.cleanupTopology()
 }
 
 // getHwlocDeviceNames retrieves all of the system device names that hwloc knows about
@@ -361,11 +231,11 @@ func getHwlocDeviceNames(deviceScanCfg DeviceScan) ([]string, error) {
 	}
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
-		if node == nil {
+		node, err := deviceScanCfg.topology.GetObjByDepth(deviceScanCfg.depth, i)
+		if err != nil {
 			continue
 		}
-		hwlocDeviceNames = append(hwlocDeviceNames, C.GoString(node.name))
+		hwlocDeviceNames = append(hwlocDeviceNames, node.Name())
 	}
 
 	return hwlocDeviceNames, nil
@@ -375,19 +245,19 @@ func getHwlocDeviceNames(deviceScanCfg DeviceScan) ([]string, error) {
 // that are frequently used for hwloc queries.  If a valid context is provided,
 // the topology associated with that context is used and hwloc will not be reinitialized.
 // If the context is nil, or has a nil topology, hwloc is initialized.
-func initDeviceScan(topology C.hwloc_topology_t) (DeviceScan, error) {
+func initDeviceScan(topology hwloc.Topology) (DeviceScan, error) {
 	var deviceScanCfg DeviceScan
 	var err error
 
 	deviceScanCfg.topology = topology
 
-	depth := C.hwloc_get_type_depth(deviceScanCfg.topology, C.HWLOC_OBJ_OS_DEVICE)
-	if depth != C.HWLOC_TYPE_DEPTH_OS_DEVICE {
+	depth := deviceScanCfg.topology.GetTypeDepth(hwloc.ObjTypeOSDevice)
+	if depth != hwloc.TypeDepthOSDevice {
 		return deviceScanCfg,
 			errors.New("hwloc_get_type_depth returned invalid value")
 	}
-	deviceScanCfg.depth = int(depth)
-	deviceScanCfg.numObj = uint(C.cmpt_get_nbobjs_by_depth(deviceScanCfg.topology, C.int(depth)))
+	deviceScanCfg.depth = depth
+	deviceScanCfg.numObj = deviceScanCfg.topology.GetNumObjAtDepth(depth)
 
 	// Create the list of all the valid network device names
 	systemDeviceNames, err := GetDeviceNames()
@@ -417,7 +287,6 @@ func initDeviceScan(topology C.hwloc_topology_t) (DeviceScan, error) {
 // getLookupMethod is used to determine how to perform a match between the device we are looking for
 // and the devices that are reported by hwloc.
 func getLookupMethod(deviceScanCfg DeviceScan) int {
-
 	// If the target device is on both the systemDeviceNames list and the hwlocDeviceNames list,
 	// then we know we can do a valid direct lookup.  If it only shows up on the systemDevicesNames list
 	// it is likely a device we do not want used, such as "lo"
@@ -439,16 +308,16 @@ func getLookupMethod(deviceScanCfg DeviceScan) int {
 }
 
 // getNodeDirect finds a node object that is a direct exact match lookup of the target device against the hwloc device list
-func getNodeDirect(deviceScanCfg DeviceScan) C.hwloc_obj_t {
+func getNodeDirect(deviceScanCfg DeviceScan) hwloc.Object {
 	var i uint
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.cmpt_get_obj_by_depth(deviceScanCfg.topology, C.int(deviceScanCfg.depth), C.uint(i))
-		if node == nil {
+		node, err := deviceScanCfg.topology.GetObjByDepth(deviceScanCfg.depth, i)
+		if err != nil {
 			continue
 		}
 
-		if C.GoString(node.name) == deviceScanCfg.targetDevice {
+		if node.Name() == deviceScanCfg.targetDevice {
 			return node
 		}
 	}
@@ -457,10 +326,9 @@ func getNodeDirect(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 
 // getNodeSibling finds a node object that is the sibling of the device being matched.  The sibling will be something found
 // on the systemDevicesNameMap.
-func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
-	var i C.int
+func getNodeSibling(deviceScanCfg DeviceScan) hwloc.Object {
 	node := getNodeDirect(deviceScanCfg)
-	if node == nil || node.parent == nil {
+	if node == nil {
 		return nil
 	}
 	// This node will have a sibling if its parent has more than one child (arity > 0)
@@ -469,11 +337,14 @@ func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	// The sibling of hfi1_0 is ib0, and ib0 *is* found on the systemDeviceNameMap.
 	// The sibling device has the same non-I/O ancestor and shares the same NUMA Node, so we want that.
 
-	count := C.cmpt_get_parent_arity(node)
+	count := node.GetNumSiblings()
 	if count > 0 {
-		for i = 0; i < count; i++ {
-			child := C.cmpt_get_child(node, C.int(i))
-			if _, found := deviceScanCfg.systemDeviceNamesMap[C.GoString(child.name)]; found {
+		for i := uint(0); i < count; i++ {
+			child, err := node.GetChild(i)
+			if err != nil {
+				continue
+			}
+			if _, found := deviceScanCfg.systemDeviceNamesMap[child.Name()]; found {
 				return child
 			}
 		}
@@ -485,21 +356,23 @@ func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // This function is now tuned to search in one direction, from a system device to a sibling
 // that is not also a system device.  This allows differentiating between multiple devices
 // "ib0, ib1 ..." and the interface adapter they are connected to "hfi1_0, mlx4_0 ..."
-func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
-	var i C.int
+func getNodeAlias(deviceScanCfg DeviceScan) hwloc.Object {
 	node := getNodeDirect(deviceScanCfg)
-	if node == nil || node.parent == nil {
+	if node == nil {
 		return nil
 	}
 
 	// This node will have a sibling if its parent has more than one child (arity > 0)
 	// Search for the first sibling node that has a different name than the search node name
 	// and is not found on the systemDeviceNames map.
-	count := C.cmpt_get_parent_arity(node)
+	count := node.GetNumSiblings()
 	if count > 0 {
-		for i = 0; i < count; i++ {
-			child := C.cmpt_get_child(node, C.int(i))
-			if _, found := deviceScanCfg.systemDeviceNamesMap[C.GoString(child.name)]; !found {
+		for i := uint(0); i < count; i++ {
+			child, err := node.GetChild(i)
+			if err != nil {
+				continue
+			}
+			if _, found := deviceScanCfg.systemDeviceNamesMap[child.Name()]; !found {
 				return child
 			}
 		}
@@ -511,7 +384,7 @@ func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // In order to succeed, one or more hwlocDeviceNames must be a subset of the target device name.
 // This allows us to find a decorated virtual device name such as "hfi1_0-dgram" which matches against one of the hwlocDeviceNames
 // which can then be mapped to a sibling, "ib0" which is found on the systemDeviceNamesMap.
-func getNodeBestFit(deviceScanCfg DeviceScan) C.hwloc_obj_t {
+func getNodeBestFit(deviceScanCfg DeviceScan) hwloc.Object {
 	var newDeviceName string
 
 	// Find the largest hwloc device name that is contained by the target device name to ensure the closest match
@@ -541,27 +414,27 @@ func getNodeBestFit(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // the cpuset of the given device node to determine where it belongs.
 // In some configurations, the number of NUMA nodes found is 0.  In that case,
 // the NUMA ID will be considered 0.
-func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, error) {
+func getNUMASocketID(topology hwloc.Topology, node hwloc.Object) (uint, error) {
 	if node == nil {
 		return 0, errors.New("invalid node provided")
 	}
 
-	if C.GoString(node.name) == "lo" {
+	if node.Name() == "lo" {
 		return 0, nil
 	}
 
-	numanode := C.hwloc_get_ancestor_obj_by_type(topology, C.HWLOC_OBJ_NUMANODE, node)
-	if numanode != nil {
-		return uint(numanode.logical_index), nil
+	numanode, err := node.GetAncestorByType(hwloc.ObjTypeNUMANode)
+	if err == nil {
+		return numanode.LogicalIndex(), nil
 	}
 
 	// If we made it here, it means that we're running in some flavor of a restricted environment
 	// which caused the numa node ancestor lookup to fail.  We're not restricted from looking at the
 	// cpuset for each numa node, so we can look for an intersection of the node's cpuset with each
 	// numa node cpuset until a match is found or we run out of candidates.
-	ancestorNode := C.hwloc_get_non_io_ancestor_obj(topology, node)
-	if ancestorNode == nil {
-		return 0, errors.New("unable to find non-io ancestor node for device")
+	ancestorNode, err := node.GetNonIOAncestor()
+	if err != nil {
+		return 0, err
 	}
 
 	numNuma := numNUMANodes(topology)
@@ -572,10 +445,10 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 
 	log.Debugf("There are %d NUMA nodes.", numNuma)
 
-	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	for i := 0; i < numNuma; i++ {
-		numanode := C.cmpt_get_obj_by_depth(topology, C.int(depth), C.uint(i))
-		if numanode == nil {
+	depth := topology.GetTypeDepth(hwloc.ObjTypeNUMANode)
+	for i := uint(0); i < numNuma; i++ {
+		numanode, err := topology.GetObjByDepth(depth, i)
+		if err != nil {
 			// We don't want the lack of NUMA information to be an error.
 			// If we get this far and can't access the NUMA topology data,
 			// we will use NUMA ID 0.
@@ -583,8 +456,8 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 			return 0, nil
 		}
 
-		if C.hwloc_bitmap_isincluded(ancestorNode.cpuset, numanode.cpuset) != 0 {
-			return uint(numanode.logical_index), nil
+		if ancestorNode.CPUSet().IsSubsetOf(numanode.CPUSet()) {
+			return numanode.LogicalIndex(), nil
 		}
 	}
 
@@ -592,19 +465,18 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	return 0, nil
 }
 
-func numNUMANodes(topology C.hwloc_topology_t) int {
-	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := int(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth)))
-	return numObj
+func numNUMANodes(topology hwloc.Topology) uint {
+	depth := topology.GetTypeDepth(hwloc.ObjTypeNUMANode)
+	return topology.GetNumObjAtDepth(depth)
 }
 
-func getCoreCount(topology C.hwloc_topology_t) (int, error) {
-	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_CORE)
-	if depth == C.HWLOC_TYPE_DEPTH_UNKNOWN {
+func getCoreCount(topology hwloc.Topology) (uint, error) {
+	depth := topology.GetTypeDepth(hwloc.ObjTypeCore)
+	if depth == hwloc.TypeDepthUnknown {
 		return 0, errors.New("number of cpu cores could not be detected")
 	}
 
-	return int(C.cmpt_get_nbobjs_by_depth(topology, C.int(depth))), nil
+	return topology.GetNumObjAtDepth(depth), nil
 }
 
 // GetNUMASocketIDForPid determines the cpuset and nodeset corresponding to the given pid.
@@ -620,31 +492,31 @@ func GetNUMASocketIDForPid(ctx context.Context, pid int32) (int, error) {
 		return 0, errors.Errorf("NUMA Node data is unavailable.")
 	}
 
-	cpuset := C.hwloc_bitmap_alloc()
-	defer C.hwloc_bitmap_free(cpuset)
-
-	status := hpa.GetProcCPUBind(ndc.topology, C.int(pid), cpuset, 0)
-	if status != 0 {
-		return 0, errors.Errorf("NUMA Node data is unavailable.")
+	cpuSet, cleanupCPUSet, err := ndc.topology.GetProcCPUBind(pid, 0)
+	if err != nil {
+		return 0, err
 	}
+	defer cleanupCPUSet()
 
-	nodeset := C.hwloc_bitmap_alloc()
-	defer C.hwloc_bitmap_free(nodeset)
-	C.hwloc_cpuset_to_nodeset(ndc.topology, cpuset, nodeset)
+	nodeset, cleanupNodeSet, err := cpuSet.ToNodeSet()
+	if err != nil {
+		return 0, err
+	}
+	defer cleanupNodeSet()
 
-	depth := C.hwloc_get_type_depth(ndc.topology, C.HWLOC_OBJ_NUMANODE)
-	for i := 0; i < ndc.numNUMANodes; i++ {
-		numanode := C.cmpt_get_obj_by_depth(ndc.topology, C.int(depth), C.uint(i))
-		if numanode == nil {
+	depth := ndc.topology.GetTypeDepth(hwloc.ObjTypeNUMANode)
+	for i := uint(0); i < ndc.numNUMANodes; i++ {
+		numanode, err := ndc.topology.GetObjByDepth(depth, i)
+		if err != nil {
 			return 0, errors.Errorf("NUMA Node data is unavailable.")
 		}
 
-		if C.hwloc_bitmap_intersects(nodeset, numanode.nodeset) != 0 {
-			return int(numanode.logical_index), nil
+		if nodeset.Intersects(numanode.NodeSet()) {
+			return int(numanode.LogicalIndex()), nil
 		}
 
-		if C.hwloc_bitmap_intersects(cpuset, numanode.cpuset) != 0 {
-			return int(numanode.logical_index), nil
+		if cpuSet.Intersects(numanode.CPUSet()) {
+			return int(numanode.LogicalIndex()), nil
 		}
 	}
 
@@ -665,8 +537,6 @@ func GetDeviceAlias(ctx context.Context, device string) (string, error) {
 // with the name "hfi1_0".  Any devices specified by additionalSystemDevices are added
 // to the system device list that is automatically determined.
 func getDeviceAliasWithSystemList(ctx context.Context, device string, additionalSystemDevices []string) (string, error) {
-	var node C.hwloc_obj_t
-
 	log.Debugf("Searching for a device alias for: %s", device)
 
 	ndc, err := getContext(ctx)
@@ -687,12 +557,12 @@ func getDeviceAliasWithSystemList(ctx context.Context, device string, additional
 		ndc.deviceScanCfg.systemDeviceNamesMap[deviceName] = struct{}{}
 	}
 
-	node = getNodeAlias(ndc.deviceScanCfg)
+	node := getNodeAlias(ndc.deviceScanCfg)
 	if node == nil {
 		return "", errors.Errorf("unable to find an alias for: %s", ndc.deviceScanCfg.targetDevice)
 	}
-	log.Debugf("Device alias for %s is %s", device, C.GoString(node.name))
-	return C.GoString(node.name), nil
+	log.Debugf("Device alias for %s is %s", device, node.Name())
+	return node.Name(), nil
 }
 
 // GetAffinityForDevice searches the system topology reported by hwloc
@@ -712,10 +582,6 @@ func getDeviceAliasWithSystemList(ctx context.Context, device string, additional
 // is closest to.  Note that, if administrator cgroup settings exclude any NUMA Node resources
 // that cover the particular network device, then the NUMA node ID may be inaccurate.
 func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
-	var node C.hwloc_obj_t
-	var cpuset *C.char
-	var nodeset *C.char
-
 	if deviceScanCfg.topology == nil {
 		return DeviceAffinity{}, errors.New("hwloc library not yet initialized")
 	}
@@ -745,6 +611,7 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 		}, nil
 	}
 
+	var node hwloc.Object
 	switch getLookupMethod(deviceScanCfg) {
 	case direct:
 		node = getNodeDirect(deviceScanCfg)
@@ -762,22 +629,13 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 		return DeviceAffinity{}, errors.Errorf("cannot determine device affinity because the device was not found in the topology: %s", deviceScanCfg.targetDevice)
 	}
 
-	ancestorNode := C.hwloc_get_non_io_ancestor_obj(deviceScanCfg.topology, node)
-	if ancestorNode == nil {
+	ancestorNode, err := node.GetNonIOAncestor()
+	if err != nil {
 		return DeviceAffinity{}, errors.Errorf("unable to find an ancestor node in topology for device for device: %s", deviceScanCfg.targetDevice)
 	}
 
-	cpusetLen := C.hwloc_bitmap_asprintf(&cpuset, ancestorNode.cpuset)
-	if cpusetLen <= 0 {
-		return DeviceAffinity{}, errors.Errorf("there was no cpuset available for device: %s", deviceScanCfg.targetDevice)
-	}
-	defer C.free(unsafe.Pointer(cpuset))
-
-	nodesetLen := C.hwloc_bitmap_asprintf(&nodeset, ancestorNode.nodeset)
-	if nodesetLen <= 0 {
-		return DeviceAffinity{}, errors.Errorf("there was no nodeset available for device: %s", deviceScanCfg.targetDevice)
-	}
-	defer C.free(unsafe.Pointer(nodeset))
+	cpuset := ancestorNode.CPUSet().String()
+	nodeset := ancestorNode.NodeSet().String()
 
 	numaSocket, err := getNUMASocketID(deviceScanCfg.topology, node)
 	if err != nil {
@@ -785,9 +643,9 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	}
 
 	return DeviceAffinity{
-		DeviceName: C.GoString(node.name),
-		CPUSet:     C.GoString(cpuset),
-		NodeSet:    C.GoString(nodeset),
+		DeviceName: node.Name(),
+		CPUSet:     cpuset,
+		NodeSet:    nodeset,
 		NUMANode:   numaSocket,
 	}, nil
 }

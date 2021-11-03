@@ -142,7 +142,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	// On a NUMA-aware system, emit a message when the configuration may be
 	// sub-optimal.
 	numaCount := netdetect.NumNumaNodes(ctx)
-	if numaCount > 0 && engineCount > numaCount {
+	if numaCount > 0 && uint(engineCount) > numaCount {
 		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected",
 			numaCount, engineCount)
 	}
