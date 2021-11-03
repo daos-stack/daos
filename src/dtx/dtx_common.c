@@ -161,23 +161,6 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 }
 
 static void
-dtx_init_sched_req(struct ds_cont_child *cont, struct sched_request **sched_req,
-		   ABT_thread ult)
-{
-	uuid_t			anonym_uuid;
-	struct sched_req_attr	attr;
-
-	D_ASSERT(sched_req != NULL);
-	D_ASSERT(*sched_req == NULL);
-
-	if (cont == NULL || !cont->sc_closing) {
-		uuid_clear(anonym_uuid);
-		sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-		*sched_req = sched_req_get(&attr, ult);
-	}
-}
-
-static void
 dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 {
 	vos_dtx_stat(cont->sc_hdl, stat, DSF_SKIP_BAD);
@@ -339,10 +322,12 @@ out:
 static void
 dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 {
-	ABT_thread			 child;
 	struct dtx_batched_cont_args	*dbca;
 	struct ds_cont_child		*cont;
-	int				 rc;
+	struct sched_req_attr		 attr;
+
+	D_ASSERT(dbpa->dbpa_pool);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &dbpa->dbpa_pool->spc_uuid);
 
 	while (1) {
 		struct dtx_stat		 stat = { 0 };
@@ -391,21 +376,11 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 		      dtx_agg_thd_age_up))) {
 			D_ASSERT(!dbca->dbca_agg_done);
 			dtx_get_dbca(dbca);
-			rc = dss_ult_create(dtx_aggregate, dbca,
-					    DSS_XS_SELF, 0, 0, &child);
-			if (rc != 0) {
-				D_WARN("Fail to start DTX agg ULT (1) for "
-				       DF_UUID": "DF_RC"\n",
-				       DP_UUID(cont->sc_uuid), DP_RC(rc));
-				dtx_put_dbca(dbca);
-				continue;
-			}
-
-			dtx_init_sched_req(cont, &dbca->dbca_agg_req, child);
+			dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
 			if (dbca->dbca_agg_req == NULL) {
-				D_WARN("Fail to get agg sched req (1) for "
-				       DF_UUID"\n", DP_UUID(cont->sc_uuid));
-				ABT_thread_free(&child);
+				D_WARN("Fail to start DTX agg ULT (1) for "DF_UUID"\n",
+				       DP_UUID(cont->sc_uuid));
+				dtx_put_dbca(dbca);
 				continue;
 			}
 
@@ -447,20 +422,13 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 	D_ASSERT(dbca->dbca_agg_req == NULL && !dbca->dbca_agg_done);
 	dtx_get_dbca(dbca);
 
-	rc = dss_ult_create(dtx_aggregate, dbca, DSS_XS_SELF, 0, 0, &child);
-	if (rc != 0) {
-		D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID": "DF_RC"\n",
-		       DP_UUID(cont->sc_uuid), DP_RC(rc));
+	dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
+	if (dbca->dbca_agg_req == NULL) {
+		D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID"\n",
+		       DP_UUID(cont->sc_uuid));
 		dtx_put_dbca(dbca);
 	} else {
-		dtx_init_sched_req(cont, &dbca->dbca_agg_req, child);
-		if (dbca->dbca_agg_req == NULL) {
-			D_WARN("Fail to get agg sched req (2) for "DF_UUID"\n",
-			       DP_UUID(cont->sc_uuid));
-			ABT_thread_free(&child);
-		} else {
-			dbpa->dbpa_aggregating = 1;
-		}
+		dbpa->dbpa_aggregating = 1;
 	}
 }
 
@@ -561,27 +529,23 @@ dtx_batched_commit(void *arg)
 	struct dss_module_info		*dmi = dss_get_module_info();
 	struct dtx_batched_cont_args	*dbca;
 	struct dtx_batched_cont_args	*tmp;
-	ABT_thread			 child;
-	int				 rc;
+	struct sched_req_attr		 attr;
+	uuid_t				 anonym_uuid;
 
-	dtx_init_sched_req(NULL, &dmi->dmi_dtx_cmt_req, ABT_THREAD_NULL);
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+
+	D_ASSERT(dmi->dmi_dtx_cmt_req == NULL);
+	dmi->dmi_dtx_cmt_req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (dmi->dmi_dtx_cmt_req == NULL) {
 		D_ERROR("Failed to get DTX batched commit sched request.\n");
 		return;
 	}
 
-	rc = dss_ult_create(dtx_aggregation_main, NULL,
-			    DSS_XS_SELF, 0, 0, &child);
-	if (rc != 0) {
-		D_ERROR("Fail to start DTX aggregation main ULT: "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
-	}
-
-	dtx_init_sched_req(NULL, &dmi->dmi_dtx_agg_req, child);
+	D_ASSERT(dmi->dmi_dtx_agg_req == NULL);
+	dmi->dmi_dtx_agg_req = sched_create_ult(&attr, dtx_aggregation_main, NULL, 0);
 	if (dmi->dmi_dtx_agg_req == NULL) {
-		D_ERROR("Failed to get DTX aggregation sched request.\n");
-		ABT_thread_free(&child);
+		D_ERROR("Fail to start DTX aggregation main ULT.\n");
 		goto out;
 	}
 
@@ -623,22 +587,15 @@ dtx_batched_commit(void *arg)
 			D_ASSERT(!dbca->dbca_commit_done);
 			sleep_time = 0;
 			dtx_get_dbca(dbca);
-			rc = dss_ult_create(dtx_batched_commit_one, dbca,
-					    DSS_XS_SELF, 0, 0, &child);
-			if (rc != 0) {
-				D_WARN("Fail to start DTX ULT (1) for "
-				       DF_UUID": "DF_RC"\n",
-				       DP_UUID(cont->sc_uuid), DP_RC(rc));
+
+			D_ASSERT(dbca->dbca_cont);
+			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
+			dbca->dbca_commit_req = sched_create_ult(&attr, dtx_batched_commit_one,
+								 dbca, 0);
+			if (dbca->dbca_commit_req == NULL) {
+				D_WARN("Fail to start DTX ULT (1) for "DF_UUID"\n",
+				       DP_UUID(cont->sc_uuid));
 				dtx_put_dbca(dbca);
-			} else {
-				dtx_init_sched_req(cont, &dbca->dbca_commit_req,
-						   child);
-				if (dbca->dbca_commit_req == NULL) {
-					D_WARN("Fail to get sched req (1) for "
-					       DF_UUID"\n",
-					       DP_UUID(cont->sc_uuid));
-					ABT_thread_free(&child);
-				}
 			}
 		}
 
@@ -656,23 +613,15 @@ dtx_batched_commit(void *arg)
 			D_ASSERT(!dbca->dbca_cleanup_done);
 			sleep_time = 0;
 			dtx_get_dbca(dbca);
-			rc = dss_ult_create(dtx_cleanup_stale, dbca,
-					    DSS_XS_SELF, 0, 0, &child);
-			if (rc != 0) {
-				D_WARN("Fail to start DTX ULT (3) for "
-				       DF_UUID": "DF_RC"\n",
-				       DP_UUID(cont->sc_uuid), DP_RC(rc));
+
+			D_ASSERT(dbca->dbca_cont);
+			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
+			dbca->dbca_cleanup_req = sched_create_ult(&attr, dtx_cleanup_stale,
+								  dbca, 0);
+			if (dbca->dbca_cleanup_req == NULL) {
+				D_WARN("Fail to start DTX ULT (3) for "DF_UUID"\n",
+				       DP_UUID(cont->sc_uuid));
 				dtx_put_dbca(dbca);
-			} else {
-				dtx_init_sched_req(cont,
-						   &dbca->dbca_cleanup_req,
-						   child);
-				if (dbca->dbca_cleanup_req == NULL) {
-					D_WARN("Fail to get sched req (3) for "
-					       DF_UUID"\n",
-					       DP_UUID(cont->sc_uuid));
-					ABT_thread_free(&child);
-				}
 			}
 		}
 
