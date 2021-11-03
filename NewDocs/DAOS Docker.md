@@ -84,8 +84,18 @@ or
 > Warning: If Docker is being run on a non-Linux system, the "-v" parameter should be removed from the command line. Example:
 `sudo docker run -it -d --privileged --cap-add=ALL --name server`
 
+## Create the certificates
+First we need to create the cerificates that DAOS uses for encryption
+
+```
+cd /tmp
+/usr/lib64/daos/certgen/gen_certificates.sh
+```
+`sudo docker exec server 
+
 ## Start the DAOS Service
 Now that the DAOS Docker image is running, we need to enable the DAOS Service 
+
 
 The DAOS service can be started in the docker container as follows:
 
@@ -108,6 +118,10 @@ Format Summary:
   -----     ----------- ------------
   localhost 1           1
 ```
+## Creating DAOS Pools
+
+`sudo docker exec server dmg pool create --size 15GB`
+
 ## Saving the Docker changes (optional)
 Now that we have started the service and formatted the storage, you may want to save the changes at this point. You do that by running the following commands:
 
