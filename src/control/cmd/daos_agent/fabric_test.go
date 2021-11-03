@@ -585,6 +585,32 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 		},
+		"trim domain when not needed": {
+			provider: "ofi+sockets",
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "t2",
+							Domain:      "t2_dom",
+							NetDevClass: netdetect.Infiniband,
+						},
+					},
+				},
+			},
+			node:        0,
+			netDevClass: netdetect.Infiniband,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					NetDevClass: netdetect.Infiniband,
+				},
+				{
+					Name:        "t2",
+					NetDevClass: netdetect.Infiniband,
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

@@ -143,7 +143,7 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32, provider string
 
 	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass, provider)
 	if err == nil {
-		return fi, nil
+		return copyFI(fi, provider), nil
 	}
 
 	fi, err = n.findOnAnyNUMA(netDevClass, provider)
@@ -151,9 +151,17 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32, provider string
 		return nil, err
 	}
 
+	return copyFI(fi, provider), nil
+}
+
+func copyFI(fi *FabricInterface, provider string) *FabricInterface {
 	fiCopy := new(FabricInterface)
 	*fiCopy = *fi
-	return fiCopy, nil
+	if !providerIsVerbs(provider) {
+		// for non-verbs providers, including the domain can cause issues
+		fiCopy.Domain = ""
+	}
+	return fiCopy
 }
 
 // Find finds a specific fabric device by name.

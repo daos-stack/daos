@@ -481,17 +481,16 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 			lfc:    &localFabricCache{},
 			expErr: NotCachedErr,
 		},
-		"success": {
+		"strip domain": {
 			lfc:         newTestFabricCache(t, nil, populatedCache),
 			numaNode:    1,
 			netDevClass: netdetect.Ether,
 			expDevice: &FabricInterface{
 				Name:        "test5",
 				NetDevClass: netdetect.Ether,
-				Domain:      "test5_alias",
 			},
 		},
-		"domain required": {
+		"keep domain": {
 			lfc:         newTestFabricCache(t, nil, populatedCache),
 			numaNode:    2,
 			provider:    "ofi+verbs",
