@@ -306,6 +306,9 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		return daos_errno2der(errno);
 	}
 
+	D_DEBUG(DB_MGMT, "Pool Path: %s, SCM size: "DF_U64", UUID: "DF_UUID
+		", call vos_pmemobj_create()\n", path, scm_sz, DP_UUID(uuid));
+
 	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), scm_sz,
 				0600);
 	if (!ph) {
@@ -314,6 +317,9 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 			scm_sz, pmemobj_errormsg());
 		return daos_errno2der(rc);
 	}
+
+	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID", call pmemobj_ctl_set()\n",
+		path, DP_UUID(uuid));
 
 	rc = pmemobj_ctl_set(ph, "stats.enabled", &enabled);
 	if (rc) {
@@ -405,6 +411,8 @@ end:
 	blob_hdr.bbh_hdr_sz = VOS_BLOB_HDR_BLKS;
 	uuid_copy(blob_hdr.bbh_pool, uuid);
 
+	D_DEBUG(DB_MGMT, "xs:%p pool:"DF_UUID", call vea_format()\n", xs_ctxt, DP_UUID(uuid));
+
 	/* Format SPDK blob*/
 	rc = vea_format(&umem, vos_txd_get(), &pool_df->pd_vea_df, VOS_BLK_SZ,
 			VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
@@ -417,6 +425,8 @@ end:
 		goto close;
 	}
 
+	D_DEBUG(DB_MGMT, "xs:%p pool:"DF_UUID", done vea_format()\n", xs_ctxt, DP_UUID(uuid));
+
 open:
 	/* If the caller does not want a VOS pool handle, we're done. */
 	if (poh == NULL)
@@ -425,6 +435,8 @@ open:
 	/* Create a VOS pool handle using ph. */
 	rc = pool_open(ph, pool_df, uuid, flags, NULL, poh);
 	ph = NULL;
+
+	D_DEBUG(DB_MGMT, "xs:%p pool:"DF_UUID", done pool_open()\n", xs_ctxt, DP_UUID(uuid));
 
 close:
 	/* Close this local handle, if it hasn't been consumed nor already
@@ -639,6 +651,23 @@ enum {
 	LM_FLAG_ENABLED
 };
 
+#define LINE_SIZE 256
+static void
+log_proc_self_maps(void)
+{
+	FILE		*maps = fopen("/proc/self/maps", "r");
+	char		 buf[LINE_SIZE];
+
+	if (maps == NULL) {
+		D_WARN("Could not open /proc/self/maps, errno=%d (%s)\n", errno, strerror(errno));
+		return;
+	}
+
+	while (fgets(buf, LINE_SIZE, maps) != NULL) {
+		D_WARN("%s", buf);
+	}
+}
+
 static void
 lock_pool_memory(struct vos_pool *pool)
 {
@@ -655,7 +684,8 @@ lock_pool_memory(struct vos_pool *pool)
 		}
 
 		if (rlim.rlim_cur != RLIM_INFINITY || rlim.rlim_max != RLIM_INFINITY) {
-			D_WARN("Infinite rlimit not detected, not locking VOS pool memory\n");
+			D_WARN("Infinite rlimit not detected (cur=%lu, max=%lu), not locking "
+			       "VOS pool memory\n", rlim.rlim_cur, rlim.rlim_max);
 			lock_mem = LM_FLAG_DISABLED;
 			return;
 		}
@@ -668,8 +698,10 @@ lock_pool_memory(struct vos_pool *pool)
 
 	rc = mlock((void *)pool->vp_umm.umm_base, pool->vp_pool_df->pd_scm_sz);
 	if (rc != 0) {
-		D_WARN("Could not lock memory for VOS pool at "DF_X64"; errno=%d (%s)\n",
-		       pool->vp_umm.umm_base, errno, strerror(errno));
+		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
+		       "; errno=%d (%s)\n", pool->vp_pool_df->pd_scm_sz, pool->vp_umm.umm_base,
+		       errno, strerror(errno));
+		log_proc_self_maps();
 		return;
 	}
 

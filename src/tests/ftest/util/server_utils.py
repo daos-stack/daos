@@ -14,7 +14,7 @@ import yaml
 from avocado import fail_on
 
 from command_utils_base import CommandFailure, CommonConfig
-from command_utils import SubprocessManager
+from command_utils import SubprocessManager, ExecutableCommand
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
     stop_processes, get_display_size, run_pcmd
@@ -24,7 +24,6 @@ from server_utils_base import \
 from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
 from ClusterShell.NodeSet import NodeSet
-
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     """Get the daos_server command object to manage.
@@ -91,6 +90,8 @@ class DaosServerManager(SubprocessManager):
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
         """
+        self.pidstatstartcmd = None
+        self.pidstatstopcmd = None
         self.group = group
         server_command = get_server_command(
             group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
@@ -483,6 +484,14 @@ class DaosServerManager(SubprocessManager):
         # Wait for all the engines to start
         self.detect_engine_start()
 
+        # Start pidstat in the background to monitor context switches of daos_server, daos_engine
+        startcmd = "clush -w {} 'pidstat -C daos_ -tuw 1 > {} 2>&1'".format(
+            ",".join(self.hosts), get_log_file("daos_pidstat.log"))
+        stopcmd = "clush -w {} 'pkill pidstat'".format(",".join(self.hosts))
+        self.pidstatstartcmd = ExecutableCommand("pidstat", startcmd, subprocess=True)
+        self.pidstatstartcmd.run()
+        self.pidstatstopcmd = ExecutableCommand("pkill_pidstat", stopcmd, subprocess=False)
+
         return True
 
     def stop(self):
@@ -500,6 +509,13 @@ class DaosServerManager(SubprocessManager):
             messages.append(
                 "Error stopping the {} subprocess: {}".format(
                     self.manager.command, error))
+        finally:
+            if self.pidstatstartcmd is not None:
+                try:
+                    self.pidstatstartcmd.stop()
+                    self.pidstatstopcmd.run()
+                except CommandFailure as error:
+                    messages.append("Error stopping pidstat: {}".format(error))
 
         # Kill any leftover processes that may not have been stopped correctly
         self.manager.kill()

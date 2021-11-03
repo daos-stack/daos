@@ -75,7 +75,8 @@ mem_pin_workaround(void)
 			       errno, strerror(errno));
 
 	} else {
-		D_INFO("mlockall() skipped\n");
+		D_INFO("mlockall() skipped, rlim_cur=%lu, rlim_max=%lu\n",
+		       rlim.rlim_cur, rlim.rlim_max);
 	}
 
 	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
