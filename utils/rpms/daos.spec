@@ -520,8 +520,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - Fix name of daos serialize package
 
 * Tue Oct 26 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-5
-- Create new daos-{client,server}tests-openmpi and daos-server-tests
-  subpackages
+- Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
 - Rename daos-tests daos-client-tests and make daos-tests require all
   other test suites to maintain existing behavior
 
