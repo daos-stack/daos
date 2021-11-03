@@ -25,8 +25,10 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
 struct vos_key_info {
-	bool	ki_non_empty;
-	bool	ki_has_uncommitted;
+	umem_off_t		*ki_known_key;
+	struct vos_object	*ki_obj;
+	bool			 ki_non_empty;
+	bool			 ki_has_uncommitted;
 };
 
 /** This callback is invoked only if the tree is not empty */
@@ -35,7 +37,9 @@ empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 		 vos_iter_type_t type, vos_iter_param_t *param, void *cb_arg,
 		 unsigned int *acts)
 {
+	struct umem_instance	*umm;
 	struct vos_key_info	*kinfo = cb_arg;
+	int			 rc;
 
 	if (entry->ie_vis_flags == VOS_IT_UNCOMMITTED) {
 		kinfo->ki_has_uncommitted = true;
@@ -43,17 +47,29 @@ empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	kinfo->ki_non_empty = true;
+	umm = vos_obj2umm(kinfo->ki_obj);
+	rc = umem_tx_add_ptr(umm, kinfo->ki_known_key, sizeof(*(kinfo->ki_known_key)));
+	if (rc != 0)
+		return rc;
+
+	*(kinfo->ki_known_key) = umem_ptr2off(umm, entry->ie_key.iov_buf);
 
 	return 1; /* Return positive number to break iteration */
 }
 
 static int
-tree_is_empty(struct vos_object *obj, daos_handle_t toh,
+tree_is_empty(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 	      const daos_epoch_range_t *epr, vos_iter_type_t type)
 {
 	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_key_info	 kinfo = {0};
 	int			 rc;
+
+	if (*known_key != UMOFF_NULL)
+		return 0;
+
+	kinfo.ki_obj = obj;
+	kinfo.ki_known_key = known_key;
 
 	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
 			     &kinfo, dth);
@@ -72,7 +88,7 @@ tree_is_empty(struct vos_object *obj, daos_handle_t toh,
 }
 
 static int
-vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
+vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 		    struct vos_ts_set *ts_set, const daos_epoch_range_t *epr,
 		    vos_iter_type_t type)
 {
@@ -93,10 +109,7 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		/** DAOS-4698.  Don't do emptiness check on dkey or propagate
-		 *  to object until this rebuild bug is fixed.
-		 */
-		return 0;
+		break;
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
@@ -111,7 +124,7 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 	 */
 	vos_ts_set_append_cflags(ts_set, read_flag);
 
-	rc = tree_is_empty(obj, toh, epr, type);
+	rc = tree_is_empty(obj, known_key, toh, epr, type);
 	if (rc > 0) {
 		/** tree is now empty, set the flags so we can punch
 		 *  the parent
@@ -214,7 +227,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 
 	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
 		/** Check if we need to propagate the punch */
-		rc = vos_propagate_check(obj, toh, ts_set, &epr,
+		rc = vos_propagate_check(obj, &krec->kr_known_akey, toh, ts_set, &epr,
 					 VOS_ITER_AKEY);
 	}
 
@@ -234,7 +247,7 @@ punch_dkey:
 
 	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
 		/** Check if we need to propagate to object */
-		rc = vos_propagate_check(obj, obj->obj_toh, ts_set,
+		rc = vos_propagate_check(obj, &obj->obj_df->vo_known_dkey, obj->obj_toh, ts_set,
 					 &epr, VOS_ITER_DKEY);
 	}
  out:
