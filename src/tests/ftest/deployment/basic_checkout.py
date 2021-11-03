@@ -43,6 +43,7 @@ class BasicCheckout(IorSmall, MdtestSmall, ContainerAutotestTest, EcodIor):
         self.test_container_autotest()
 
 class BasicCheckoutDm(DmvrPosixLargeFile):
+    # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class to wrap datamover test to
                                run as part of basic checkout and verify

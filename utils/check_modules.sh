@@ -68,9 +68,15 @@ fi
 PYTHONPATH=$TOPDIR/utils:$TOPDIR/src/tests/ftest
 PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/util
 PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/soak
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/ior
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/container
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/erasurecode
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/datamover
 PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/cart/util
 PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/util/apricot
+
 PYTHONPATH=$PYTHONPATH:$TOPDIR/src/client
+
 export PYTHONPATH
 
 ./utils/sl/check_script.py "${pfiles[@]}"
