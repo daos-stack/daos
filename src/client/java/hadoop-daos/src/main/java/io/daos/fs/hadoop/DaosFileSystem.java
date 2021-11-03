@@ -6,13 +6,11 @@
 
 package io.daos.fs.hadoop;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 import com.google.common.collect.Lists;
 
@@ -29,109 +27,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Implementation of {@link FileSystem} for DAOS file system.
  *
- * <p>
- *
- * <p>
- * Before instantiating this class, we need to do some configuration visible to
- * Hadoop. They are configured in daos-site.xml. See below table for
- * all mandatory and optional configuration items.
- *
- * <table>
- * <thead>
- *   <tr>
- *   <td>Item</td>
- *   <td>Default</td>
- *   <td>Range</td>
- *   <td>mandatory</td>
- *   <td>Description</td>
- *   </tr>
- * </thead>
- * <tbody>
- * <tr>
- *   <td>{@value io.daos.fs.hadoop.Constants#DAOS_SERVER_GROUP}</td>
- *   <td>{@value io.daos.Constants#POOL_DEFAULT_SERVER_GROUP}</td>
- *   <td></td>
- *   <td>false</td>
- *   <td>daos server group name</td>
- * </tr>
- * <tr>
- *   <td>{@value io.daos.fs.hadoop.Constants#DAOS_POOL_UUID}</td>
- *   <td></td>
- *   <td></td>
- *   <td>true</td>
- *   <td>UUID of DAOS pool</td>
- * </tr>
- * <tr>
- *   <td>{@value io.daos.fs.hadoop.Constants#DAOS_POOL_FLAGS}</td>
- *   <td>{@value io.daos.Constants#ACCESS_FLAG_POOL_READWRITE}</td>
- *   <td>
- *       {@value io.daos.Constants#ACCESS_FLAG_POOL_READONLY},
- *       {@value io.daos.Constants#ACCESS_FLAG_POOL_READWRITE},
- *       {@value io.daos.Constants#ACCESS_FLAG_POOL_EXECUTE}
- *   </td>
- *   <td>false</td>
- *   <td>pool access flags</td>
- * </tr>
- * <tr>
- *   <td>{@value io.daos.fs.hadoop.Constants#DAOS_CONTAINER_UUID}</td>
- *   <td></td>
- *   <td></td>
- *   <td>true</td>
- *   <td>UUID of DAOS container which created with "--type posix"</td>
- * </tr>
- * <tr>
- * <td>{@value io.daos.fs.hadoop.Constants#DAOS_READ_BUFFER_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#DEFAULT_DAOS_READ_BUFFER_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#MINIMUM_DAOS_READ_BUFFER_SIZE} -
- * {@value io.daos.fs.hadoop.Constants#MAXIMUM_DAOS_READ_BUFFER_SIZE}</td>
- * <td>false</td>
- * <td>size of direct buffer for reading data from DAOS</td>
- * </tr>
- * <tr>
- * <td>{@value io.daos.fs.hadoop.Constants#DAOS_WRITE_BUFFER_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#DEFAULT_DAOS_WRITE_BUFFER_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#MINIMUM_DAOS_WRITE_BUFFER_SIZE} -
- * {@value io.daos.fs.hadoop.Constants#MAXIMUM_DAOS_WRITE_BUFFER_SIZE}</td>
- * <td>false</td>
- * <td>size of direct buffer for writing data to DAOS</td>
- * </tr>
- * <tr>
- * <td>{@value io.daos.fs.hadoop.Constants#DAOS_BLOCK_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#DEFAULT_DAOS_BLOCK_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#MINIMUM_DAOS_BLOCK_SIZE} -
- * {@value io.daos.fs.hadoop.Constants#MAXIMUM_DAOS_BLOCK_SIZE}</td>
- * <td>false</td>
- * <td>size for splitting large file into blocks when read by Hadoop</td>
- * </tr>
- * <tr>
- * <td>{@value io.daos.fs.hadoop.Constants#DAOS_CHUNK_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#DEFAULT_DAOS_CHUNK_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#MINIMUM_DAOS_CHUNK_SIZE} -
- * {@value io.daos.fs.hadoop.Constants#MAXIMUM_DAOS_CHUNK_SIZE}</td>
- * <td>false</td>
- * <td>size of DAOS file chunk</td>
- * </tr>
- * <tr>
- * <td>{@value io.daos.fs.hadoop.Constants#DAOS_READ_MINIMUM_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#MINIMUM_DAOS_READ_BUFFER_SIZE}</td>
- * <td>{@value io.daos.fs.hadoop.Constants#MINIMUM_DAOS_READ_BUFFER_SIZE} -
- * {@value io.daos.fs.hadoop.Constants#MAXIMUM_DAOS_READ_BUFFER_SIZE}</td>
- * <td>false</td>
- * <td>size of DAOS file chunk</td>
- * </tr>
- * </tbody>
- * </table>
- *
- * <pre>
- * User can use below statement to make their configuration visible to Hadoop.
- * <code>
- * Configuration cfg = new Configuration();
- * cfg.addResource("path to your configuration file");
- * </code>
- * </pre>
- *
- * <p>
- * To get instance of this class via Hadoop FileSystem, please refer to the package description.
+ * check resources/daos-config.txt for supported DAOS URIs and configurations.
  */
 public class DaosFileSystem extends FileSystem {
   private static final Logger LOG = LoggerFactory.getLogger(DaosFileSystem.class);
@@ -144,11 +40,13 @@ public class DaosFileSystem extends FileSystem {
   private int chunkSize;
   private int minReadSize;
   private String bucket;
-  private boolean uns;
   private String unsPrefix;
-  private String qualifiedUnsPrefix;
+  private String qualifiedUriNoPrefix;
+  private String qualifiedUriPath;
   private String qualifiedUnsWorkPath;
   private String workPath;
+
+  private boolean withUnsPrefix;
 
   private boolean async = Constants.DEFAULT_DAOS_IO_ASYNC;
 
@@ -159,7 +57,7 @@ public class DaosFileSystem extends FileSystem {
         LOG.debug("daos finalizer relocated to hadoop ShutdownHookManager");
       }
     } else {
-      LOG.error("failed to relocate daos finalizer");
+      LOG.warn("failed to relocate daos finalizer");
     }
   }
 
@@ -172,19 +70,14 @@ public class DaosFileSystem extends FileSystem {
     if (!getScheme().equals(name.getScheme())) {
       throw new IllegalArgumentException("schema should be " + getScheme());
     }
-    DunsInfo info = searchUnsPath(name.getPath(),
-        conf.getBoolean(Constants.UNS_PATH_SEARCH_RECURSIVE, Constants.DEFAULT_UNS_PATH_SEARCH_RECURSIVE));
+    DunsInfo info = searchUnsPath(name);
     if (info != null) {
       LOG.info("initializing from uns path, " + name);
-      uns = true;
-      unsPrefix = info.getPrefix();
       initializeFromUns(name, conf, info);
-    } else {
-      LOG.info("initializing from config file");
-      uns = false;
-      initializeFromConfigFile(name, conf);
+      return;
     }
-    async = conf.getBoolean(Constants.DAOS_IO_ASYNC, Constants.DEFAULT_DAOS_IO_ASYNC);
+    throw new IllegalArgumentException("bad DAOS URI. " + name + "\n See supported DAOS URIs and configs: \n" +
+        DaosFsConfig.getInstance().getConfigHelp());
   }
 
   /**
@@ -205,238 +98,119 @@ public class DaosFileSystem extends FileSystem {
     if (!path.startsWith("/")) {
       throw new IllegalArgumentException("path should be started with /, " + path);
     }
-
-    Set<String> exProps = new HashSet<>();
-    exProps.add(Constants.DAOS_POOL_UUID);
-    exProps.add(Constants.DAOS_CONTAINER_UUID);
-    DaosConfigFile.getInstance().merge(name.getAuthority(), conf, exProps);
-    parseUnsConfig(conf, unsInfo);
+    if (!"POSIX".equalsIgnoreCase(unsInfo.getLayout())) {
+      throw new IllegalArgumentException("expect POSIX file system, but " + unsInfo.getLayout());
+    }
+    unsPrefix = unsInfo.getPrefix();
+    withUnsPrefix = conf.getBoolean(Constants.DAOS_WITH_UNS_PREFIX, Constants.DEFAULT_DAOS_WITH_UNS_PREFIX);
+    if (!withUnsPrefix) {
+      LOG.warn("withUnsPrefix is set to false from Hadoop configuration. You may not be able to connect to DAOS");
+    }
+    conf.set(Constants.DAOS_POOL_ID, unsInfo.getPoolId());
+    conf.set(Constants.DAOS_CONTAINER_ID, unsInfo.getContId());
     super.initialize(name, conf);
-    validateAndConnect(name, conf);
+    connectAndValidate(name, conf, unsInfo);
+  }
+
+  private void connectAndValidate(URI name, Configuration conf, DunsInfo unsInfo) throws IOException {
+    // daosFSclient build
+    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder().poolId(unsInfo.getPoolId())
+        .containerId(unsInfo.getContId());
+    String svrGrp = conf.get(Constants.DAOS_SERVER_GROUP);
+    if (!DaosUtils.isBlankStr(svrGrp)) {
+      builder.serverGroup(svrGrp);
+    }
+    String poolFlags = conf.get(Constants.DAOS_POOL_FLAGS);
+    if (!DaosUtils.isBlankStr(poolFlags)) {
+      builder.poolFlags(Integer.valueOf(poolFlags));
+    }
+    try {
+      this.daos = builder.build();
+      qualifiedUriNoPrefix = name.getScheme() + "://" + (name.getAuthority() == null ? "" : name.getAuthority());
+      qualifiedUriPath = qualifiedUriNoPrefix + "/" + unsPrefix;
+      workPath = "/user/" + System.getProperty("user.name");
+      this.uri = URI.create(qualifiedUriPath + "/");
+      qualifiedUnsWorkPath = withUnsPrefix ? qualifiedUriPath + workPath : qualifiedUriNoPrefix + workPath;
+      workingDir = new Path(qualifiedUnsWorkPath);
+      // mkdir workingDir in DAOS
+      daos.mkdir(workPath, true);
+      getAndValidateDaosAttrs(name, conf);
+      setConf(conf);
+      LOG.info("DaosFileSystem initialized");
+    } catch (Exception e) {
+      throw new IOException("failed to initialize " + this.getClass().getName(), e);
+    }
   }
 
   /**
    * search UNS path from given <code>path</code> or its ancestors.
    *
-   * @param path
-   * path of URI
-   * @param recursive
-   * search UNS path recursively?
+   * @param uri
+   * uri
    * @return DunsInfo
    * @throws IOException
    * {@link DaosIOException}
    */
-  private DunsInfo searchUnsPath(String path, boolean recursive) throws IOException {
+  private DunsInfo searchUnsPath(URI uri) throws IOException {
+    String path = uri.getPath();
     if ("/".equals(path) || !path.startsWith("/")) {
       return null;
     }
-    File file = new File(path);
+    // search UUID/Label or from file
     DunsInfo info = null;
-    while (info == null && file != null) {
-      try {
-        info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
-          io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
-        if (info != null || !recursive) {
-          break;
-        }
-      } catch (DaosIOException e) {
-        // ignoring error
+    try {
+      info = DaosUns.getAccessInfo(uri);
+    } catch (DaosIOException e) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("failed to search UNS path " + path, e);
       }
-      file = file.getParentFile();
     }
     return info;
   }
 
-  private void parseUnsConfig(Configuration conf, DunsInfo info) {
-    if (!"POSIX".equalsIgnoreCase(info.getLayout())) {
-      throw new IllegalArgumentException("expect POSIX file system, but " + info.getLayout());
+  private void getAndValidateDaosAttrs(URI name, Configuration conf) {
+    Map<String, String> allAttrs = daos.getUserDefAttributes();
+    String daosChoice = allAttrs.getOrDefault(Constants.DAOS_CONFIG_CHOICE, "");
+    String choice = conf.get(Constants.DAOS_CONFIG_CHOICE, daosChoice);
+    DaosFsConfig.getInstance().merge(choice, conf, allAttrs);
+
+    this.bucket = name.getHost();
+    this.readBufferSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULT_DAOS_READ_BUFFER_SIZE);
+    this.writeBufferSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
+    this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);
+    this.chunkSize = conf.getInt(Constants.DAOS_CHUNK_SIZE, Constants.DEFAULT_DAOS_CHUNK_SIZE);
+    this.minReadSize = conf.getInt(Constants.DAOS_READ_MINIMUM_SIZE, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE);
+    if (minReadSize > readBufferSize || minReadSize <= 0) {
+      LOG.warn("overriding minReadSize to readBufferSize " + readBufferSize);
+      minReadSize = readBufferSize;
     }
-    String poolId = info.getPoolId();
-    String contId = info.getContId();
-    String appInfo = info.getAppInfo();
-    if (appInfo != null) {
-      String[] pairs = appInfo.split(":");
-      for (String pair : pairs) {
-        if (DaosUtils.isBlankStr(pair)) {
-          continue;
-        }
-        String[] kv = pair.split("=");
-        try {
-          switch (kv[0]) {
-            case Constants.DAOS_SERVER_GROUP:
-              if (DaosUtils.isBlankStr(conf.get(Constants.DAOS_SERVER_GROUP))) {
-                conf.set(Constants.DAOS_SERVER_GROUP, DaosUtils.unEscapeUnsValue(kv[1]));
-              }
-              break;
-            case Constants.DAOS_POOL_UUID:
-              if (DaosUtils.isBlankStr(poolId)) {
-                poolId = DaosUtils.unEscapeUnsValue(kv[1]);
-              } else {
-                LOG.warn("ignoring pool id {} from app info", kv[1]);
-              }
-              break;
-            case Constants.DAOS_POOL_SVC:
-              if (DaosUtils.isBlankStr(conf.get(Constants.DAOS_POOL_SVC))) {
-                conf.set(Constants.DAOS_POOL_SVC, DaosUtils.unEscapeUnsValue(kv[1]));
-              }
-              break;
-            case Constants.DAOS_POOL_FLAGS:
-              if (DaosUtils.isBlankStr(conf.get(Constants.DAOS_POOL_FLAGS))) {
-                conf.set(Constants.DAOS_POOL_FLAGS, DaosUtils.unEscapeUnsValue(kv[1]));
-              }
-              break;
-            case Constants.DAOS_CONTAINER_UUID:
-              if (DaosUtils.isBlankStr(contId)) {
-                contId = DaosUtils.unEscapeUnsValue(kv[1]);
-              } else {
-                LOG.warn("ignoring container id {} from app info", kv[1]);
-              }
-              break;
-            case Constants.DAOS_READ_BUFFER_SIZE:
-            case Constants.DAOS_WRITE_BUFFER_SIZE:
-            case Constants.DAOS_BLOCK_SIZE:
-            case Constants.DAOS_CHUNK_SIZE:
-            case Constants.DAOS_READ_MINIMUM_SIZE:
-              if (DaosUtils.isBlankStr(conf.get(kv[0]))) {
-                conf.setInt(kv[0], Integer.valueOf(kv[1]));
-              }
-              break;
-            case Constants.DAOS_IO_ASYNC:
-              if (!("true".equalsIgnoreCase(kv[1]) || "false".equalsIgnoreCase(kv[1]))) {
-                throw new IllegalArgumentException("value need to be true or false for " +
-                        Constants.DAOS_IO_ASYNC);
-              }
-              conf.set(Constants.DAOS_IO_ASYNC, kv[1]);
-              break;
-            default:
-              throw new IllegalArgumentException("unknown daos config, " + kv[0]);
-          }
-        } catch (NumberFormatException e) {
-          throw new IllegalArgumentException("bad config " + pair, e);
-        }
-      }
+    async = conf.getBoolean(Constants.DAOS_IO_ASYNC, Constants.DEFAULT_DAOS_IO_ASYNC);
+
+    checkSizeMin(readBufferSize, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE,
+            "internal read buffer size should be no less than ");
+    checkSizeMin(writeBufferSize, Constants.MINIMUM_DAOS_WRITE_BUFFER_SIZE,
+            "internal write buffer size should be no less than ");
+    checkSizeMin(blockSize, Constants.MINIMUM_DAOS_BLOCK_SIZE,
+            "block size should be no less than ");
+    checkSizeMin(chunkSize, Constants.MINIMUM_DAOS_CHUNK_SIZE,
+            "daos chunk size should be no less than ");
+
+    checkSizeMax(readBufferSize, Constants.MAXIMUM_DAOS_READ_BUFFER_SIZE,
+            "internal read buffer size should not be greater than ");
+    checkSizeMax(writeBufferSize, Constants.MAXIMUM_DAOS_WRITE_BUFFER_SIZE,
+            "internal write buffer size should not be greater than ");
+    checkSizeMax(blockSize, Constants.MAXIMUM_DAOS_BLOCK_SIZE, "block size should be not be greater than ");
+    checkSizeMax(chunkSize, Constants.MAXIMUM_DAOS_CHUNK_SIZE, "daos chunk size should not be greater than ");
+
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("configs: ");
+      LOG.debug("read buffer size " + readBufferSize);
+      LOG.debug("write buffer size: " + writeBufferSize);
+      LOG.debug("block size: " + blockSize);
+      LOG.debug("chunk size: " + chunkSize);
+      LOG.debug("min read size: " + minReadSize);
+      LOG.debug("async: " + async);
     }
-    // TODO: other info, like svc, will be moved to agent. then change accordingly.
-    conf.set(Constants.DAOS_POOL_UUID, poolId);
-    conf.set(Constants.DAOS_CONTAINER_UUID, contId);
-  }
-
-  /**
-   * initialize from daos-site.xml.
-   *
-   * @param name
-   * hadoop URI
-   * @param conf
-   * hadoop configuration
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  private void initializeFromConfigFile(URI name, Configuration conf) throws IOException {
-    conf = DaosConfigFile.getInstance().parseConfig(name.getAuthority(), conf);
-    super.initialize(name, conf);
-
-    validateAndConnect(name, conf);
-  }
-
-  private void validateAndConnect(URI name, Configuration conf) throws IOException {
-    try {
-      this.bucket = name.getHost();
-      this.readBufferSize = conf.getInt(Constants.DAOS_READ_BUFFER_SIZE, Constants.DEFAULT_DAOS_READ_BUFFER_SIZE);
-      this.writeBufferSize = conf.getInt(Constants.DAOS_WRITE_BUFFER_SIZE, Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE);
-      this.blockSize = conf.getInt(Constants.DAOS_BLOCK_SIZE, Constants.DEFAULT_DAOS_BLOCK_SIZE);
-      this.chunkSize = conf.getInt(Constants.DAOS_CHUNK_SIZE, Constants.DEFAULT_DAOS_CHUNK_SIZE);
-      this.minReadSize = conf.getInt(Constants.DAOS_READ_MINIMUM_SIZE, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE);
-      if (minReadSize > readBufferSize || minReadSize <= 0) {
-        LOG.warn("overriding minReadSize to readBufferSize " + readBufferSize);
-        minReadSize = readBufferSize;
-      }
-
-      checkSizeMin(readBufferSize, Constants.MINIMUM_DAOS_READ_BUFFER_SIZE,
-              "internal read buffer size should be no less than ");
-      checkSizeMin(writeBufferSize, Constants.MINIMUM_DAOS_WRITE_BUFFER_SIZE,
-              "internal write buffer size should be no less than ");
-      checkSizeMin(blockSize, Constants.MINIMUM_DAOS_BLOCK_SIZE,
-              "block size should be no less than ");
-      checkSizeMin(chunkSize, Constants.MINIMUM_DAOS_CHUNK_SIZE,
-              "daos chunk size should be no less than ");
-
-      checkSizeMax(readBufferSize, Constants.MAXIMUM_DAOS_READ_BUFFER_SIZE,
-              "internal read buffer size should not be greater than ");
-      checkSizeMax(writeBufferSize, Constants.MAXIMUM_DAOS_WRITE_BUFFER_SIZE,
-              "internal write buffer size should not be greater than ");
-      checkSizeMax(blockSize, Constants.MAXIMUM_DAOS_BLOCK_SIZE, "block size should be not be greater than ");
-      checkSizeMax(chunkSize, Constants.MAXIMUM_DAOS_CHUNK_SIZE, "daos chunk size should not be greater than ");
-
-      String svrGrp = conf.get(Constants.DAOS_SERVER_GROUP);
-      String poolFlags = conf.get(Constants.DAOS_POOL_FLAGS);
-      String svc = conf.get(Constants.DAOS_POOL_SVC);
-
-      String poolUuid = conf.get(Constants.DAOS_POOL_UUID);
-      if (DaosUtils.isEmptyStr(poolUuid)) {
-        throw new IllegalArgumentException(Constants.DAOS_POOL_UUID +
-                " is null , need to set " + Constants.DAOS_POOL_UUID);
-      }
-      String contUuid = conf.get(Constants.DAOS_CONTAINER_UUID);
-      if (DaosUtils.isEmptyStr(contUuid)) {
-        throw new IllegalArgumentException(Constants.DAOS_CONTAINER_UUID +
-                " is null, need to set " + Constants.DAOS_CONTAINER_UUID);
-      }
-
-      if (LOG.isDebugEnabled()) {
-        LOG.debug(name + " configs:");
-        if (!DaosUtils.isBlankStr(svrGrp)) {
-          LOG.debug("daos server group: " + svrGrp);
-        }
-        LOG.debug("pool uuid: " + poolUuid);
-        if (!DaosUtils.isBlankStr(poolFlags)) {
-          LOG.debug("pool flags: " + poolFlags);
-        }
-        LOG.debug("container uuid: " + contUuid);
-        if (!DaosUtils.isBlankStr(svc)) {
-          LOG.debug("pool svc: " + svc);
-        }
-        LOG.debug("read buffer size " + readBufferSize);
-        LOG.debug("write buffer size: " + writeBufferSize);
-        LOG.debug("block size: " + blockSize);
-        LOG.debug("chunk size: " + chunkSize);
-        LOG.debug("min read size: " + minReadSize);
-      }
-
-      // daosFSclient build
-      DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder().poolId(poolUuid)
-              .containerId(contUuid);
-      if (!DaosUtils.isBlankStr(svrGrp)) {
-        builder.serverGroup(svrGrp);
-      }
-      if (!DaosUtils.isBlankStr(poolFlags)) {
-        builder.poolFlags(Integer.valueOf(poolFlags));
-      }
-      if (!DaosUtils.isBlankStr(svc)) {
-        builder.ranks(svc);
-      }
-      this.daos = builder.build();
-      String tmpUri = name.getScheme() + "://" + (name.getAuthority() == null ? "/" : name.getAuthority());
-      workPath = "/user/" + System.getProperty("user.name");
-      this.uri = URI.create(tmpUri);
-      if (uns) {
-        qualifiedUnsPrefix = tmpUri + unsPrefix;
-        qualifiedUnsWorkPath = qualifiedUnsPrefix + workPath;
-        workingDir = new Path(qualifiedUnsWorkPath);
-      } else {
-        this.workingDir = new Path(workPath)
-          .makeQualified(this.uri, this.getWorkingDirectory());
-      }
-      // mkdir workingDir in DAOS
-      daos.mkdir(workPath, true);
-      setConf(conf);
-      LOG.info("DaosFileSystem initialized");
-    } catch (IOException e) {
-      throw new IOException("failed to initialize " + this.getClass().getName(), e);
-    }
-  }
-
-  public boolean isUns() {
-    return uns;
   }
 
   public String getUnsPrefix() {
@@ -445,7 +219,7 @@ public class DaosFileSystem extends FileSystem {
 
   @Override
   public int getDefaultPort() {
-    return 1;
+    return 0;
   }
 
   private void checkSizeMin(int size, int min, String msg) {
@@ -484,28 +258,51 @@ public class DaosFileSystem extends FileSystem {
    */
   @Override
   public Path resolvePath(final Path p) {
-    if (!uns) {
-      return p.makeQualified(getUri(), this.getWorkingDirectory());
-    }
     // UNS path
     URI puri = p.toUri();
-    if (puri.getScheme() == null && puri.getAuthority() == null) {
-      String path = puri.getPath();
-      if (!path.startsWith(unsPrefix)) {
-        path = path.startsWith("/") ? (qualifiedUnsPrefix + path) :
-          (qualifiedUnsWorkPath + "/" + path);
-      } else {
-        path = qualifiedUnsPrefix.substring(0, qualifiedUnsPrefix.indexOf(unsPrefix)) + path;
-      }
-      return new Path(path);
+    if (puri.getScheme() != null || puri.getAuthority() != null) {
+      return p;
     }
-    return p;
+    String path = puri.getPath();
+    if (withUnsPrefix) {
+      if (!path.startsWith(unsPrefix)) {
+        path = path.startsWith("/") ? (qualifiedUriPath + path) : (qualifiedUnsWorkPath + "/" + path);
+      } else {
+        path = qualifiedUriNoPrefix + path;
+      }
+    } else {
+      path = removeUnsPrefix(puri);
+    }
+    return new Path(path);
+  }
+
+  private String removeUnsPrefix(URI puri) {
+    String path = puri.getPath();
+    if (!path.startsWith(unsPrefix)) {
+      return path.startsWith("/") ? (qualifiedUriNoPrefix + path) : (qualifiedUnsWorkPath + "/" + path);
+    }
+    boolean truncated = false;
+    if (path.length() > unsPrefix.length()) {
+      path = path.substring(unsPrefix.length());
+      truncated = true;
+    } else {
+      path = "/";
+    }
+    if (!path.startsWith("/")) {
+      if (truncated) { // ensure correct uns prefix, counter example, <unsPrefix>abc, is not on uns path
+        path = qualifiedUriNoPrefix + puri.getPath();
+      } else {
+        path = (qualifiedUnsWorkPath + "/" + path);
+      }
+    }
+    return path;
   }
 
   private String getDaosRelativePath(Path path) {
-    String p = path.toUri().getPath();
+    String oriPath = path.toUri().getPath();
+    String p = oriPath;
     boolean truncated = false;
-    if (uns && p.startsWith(unsPrefix)) {
+    if (p.startsWith(unsPrefix)) {
       if (p.length() > unsPrefix.length()) {
         p = p.substring(unsPrefix.length());
         truncated = true;
@@ -515,7 +312,7 @@ public class DaosFileSystem extends FileSystem {
     }
     if (!p.startsWith("/")) {
       if (truncated) { // ensure correct uns prefix, counter example, <unsPrefix>abc, is not on uns path
-        return path.toUri().getPath();
+        return oriPath;
       }
       p = workPath + "/" + p;
     }
@@ -724,16 +521,16 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem:   delete  path = {} - recursive = {}", f.toUri().getPath(), recursive);
     }
-    DaosFile file = daos.getFile(f.toUri().getPath());
-
     FileStatus[] statuses;
-
     // indicating root directory "/".
     if (f.toUri().getPath().equals("/")) {
       statuses = listStatus(f);
       boolean isEmptyDir = statuses.length <= 0;
       return rejectRootDirectoryDelete(isEmptyDir, recursive);
     }
+
+    DaosFile file = daos.getFile(getDaosRelativePath(f));
+
     if (!file.exists()) {
       if (LOG.isDebugEnabled()) {
         LOG.debug(String.format(
@@ -747,14 +544,14 @@ public class DaosFileSystem extends FileSystem {
       }
       if (recursive) {
         // delete the dir and all files in the dir
-        return file.delete(recursive);
+        return file.delete(true);
       } else {
         statuses = listStatus(f);
         if (statuses != null && statuses.length > 0) {
           throw new IOException("DaosFileSystem delete : There are files in dir ");
         } else if (statuses != null && statuses.length == 0) {
           // delete empty dir
-          return file.delete(recursive);
+          return file.delete(false);
         }
       }
     }

@@ -205,6 +205,12 @@ put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 	d_rank_list_free(info->ms_ranks);
 }
 
+void
+dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
+{
+	return put_attach_info(info, resp);
+}
+
 /*
  * Get the attach info (i.e., rank URIs) for name. To avoid duplicating the
  * rank URIs, we return the GetAttachInfo response directly. Callers are
@@ -232,7 +238,9 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("failed to connect to %s " DF_RC "\n",
 			dc_agent_sockpath, DP_RC(rc));
-		D_GOTO(out, 0);
+		if (rc == -DER_NONEXIST)
+			rc = -DER_AGENT_COMM;
+		D_GOTO(out, rc);
 	}
 
 	/* Prepare the GetAttachInfo request. */
@@ -299,6 +307,13 @@ out_ctx:
 	drpc_close(ctx);
 out:
 	return rc;
+}
+
+int
+dc_get_attach_info(const char *name, bool all_ranks,
+		   struct dc_mgmt_sys_info *info,
+		   Mgmt__GetAttachInfoResp **respp) {
+	return get_attach_info(name, all_ranks, info, respp);
 }
 
 #define SYS_INFO_BUF_SIZE 16
@@ -502,7 +517,9 @@ dc_mgmt_notify_exit(void)
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("failed to connect to %s " DF_RC "\n",
 			dc_agent_sockpath, DP_RC(rc));
-		D_GOTO(out, 0);
+		if (rc == -DER_NONEXIST)
+			rc = -DER_AGENT_COMM;
+		D_GOTO(out, rc);
 	}
 
 	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
@@ -907,7 +924,11 @@ dc_mgmt_init()
 void
 dc_mgmt_fini()
 {
-	daos_rpc_unregister(&mgmt_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&mgmt_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 int dc2_mgmt_svc_rip(tse_task_t *task)

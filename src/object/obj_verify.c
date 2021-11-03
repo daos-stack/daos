@@ -650,6 +650,7 @@ dc_obj_verify_ec_cb(struct dss_enum_unpack_io *io, void *arg)
 	int				idx = 0;
 	int				rc;
 
+	D_ASSERT(obj != NULL);
 	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64"\n", DP_KEY(&io->ui_dkey),
 		nr, shard);
 	if (nr == 0)
@@ -685,9 +686,8 @@ dc_obj_verify_ec_cb(struct dss_enum_unpack_io *io, void *arg)
 		sgls_verify[idx].sg_nr_out = 1;
 		sgls_verify[idx].sg_iovs = &iovs_verify[idx];
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
-			rc = obj_recx_ec2_daos(obj_get_oca(obj),
-					       io->ui_oid.id_shard,
-					       &iod->iod_recxs, &iod->iod_nr);
+			rc = obj_recx_ec2_daos(obj_get_oca(obj), io->ui_oid.id_shard,
+					       &iod->iod_recxs, NULL, &iod->iod_nr, true);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -727,8 +727,9 @@ dc_obj_verify_ec_cb(struct dss_enum_unpack_io *io, void *arg)
 		if (sgls[i].sg_iovs[0].iov_len != sgls_verify[i].sg_iovs[0].iov_len ||
 		    memcmp(sgls[i].sg_iovs[0].iov_buf, sgls_verify[i].sg_iovs[0].iov_buf,
 			   sgls[i].sg_iovs[0].iov_len)) {
-			D_ERROR(DF_OID" shard %u mismatch\n", DP_OID(obj->cob_md.omd_id),
-				dova->current_shard);
+			D_ERROR(DF_OID"i %d shard %u mismatch\n",
+				DP_OID(obj->cob_md.omd_id), i, dova->current_shard);
+
 			D_GOTO(out, rc = -DER_MISMATCH);
 		}
 		D_DEBUG(DB_TRACE, DF_OID" shard %u match\n", DP_OID(obj->cob_md.omd_id),
@@ -736,11 +737,9 @@ dc_obj_verify_ec_cb(struct dss_enum_unpack_io *io, void *arg)
 	}
 out:
 	for (i = 0; i < idx; i++) {
-		if (iovs[i].iov_buf)
-			D_FREE(iovs[i].iov_buf);
+		D_FREE(iovs[i].iov_buf);
 
-		if (iovs_verify[i].iov_buf)
-			D_FREE(iovs_verify[i].iov_buf);
+		D_FREE(iovs_verify[i].iov_buf);
 	}
 
 	return rc;

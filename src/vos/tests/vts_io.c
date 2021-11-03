@@ -771,6 +771,10 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		goto exit;
 
 	/* Verify */
+	if (arg->ta_flags & TF_REC_EXT)
+		assert_int_equal(iod.iod_size, UPDATE_REC_SIZE);
+	else
+		assert_int_equal(iod.iod_size, UPDATE_BUF_SIZE);
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 exit:

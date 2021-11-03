@@ -25,10 +25,11 @@ distro_custom() {
     pip3 install clustershell
 
     if ! rpm -q nfs-utils; then
-        dnf -y install nfs-utils
+        retry_cmd 360 dnf -y install nfs-utils
     fi
 
     # CORCI-1096
+    dnf -y install esmtp
     sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
 
     dnf config-manager --disable powertools
@@ -90,11 +91,10 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    time dnf -y install $LSB_RELEASE
+    retry_cmd 360 dnf -y install $LSB_RELEASE
 
     # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ] &&
-       ! time dnf -y install $INST_RPMS; then
+    if [ -n "$INST_RPMS" ] && ! retry_cmd 360 dnf -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
@@ -103,8 +103,7 @@ post_provision_config_nodes() {
     distro_custom
 
     # now make sure everything is fully up-to-date
-    if ! time dnf -y upgrade \
-                  --exclude "$EXCLUDE_UPGRADE"; then
+    if ! retry_cmd 600 dnf -y upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
     fi

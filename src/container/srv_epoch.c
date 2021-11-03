@@ -62,9 +62,9 @@ snap_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 	return 0;
 }
 
+/* Read snapshot epochs from rdb (TODO: add names) */
 static int
-read_snap_list(struct rdb_tx *tx, struct cont *cont,
-	       daos_epoch_t **buf, int *count)
+read_snap_list(struct rdb_tx *tx, struct cont *cont, daos_epoch_t **buf, int *count)
 {
 	struct snap_list_iter_args iter_args;
 	int rc;
@@ -89,20 +89,6 @@ read_snap_list(struct rdb_tx *tx, struct cont *cont,
 	}
 	*count = iter_args.sla_index;
 	*buf   = iter_args.sla_buf;
-	return 0;
-}
-
-int
-ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont, uuid_t c_hdl,
-		       struct container_hdl *hdl)
-{
-	return 0;
-}
-
-int
-ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
-		       crt_context_t ctx, struct container_hdl *hdl)
-{
 	return 0;
 }
 
@@ -151,6 +137,7 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 	char					 zero = 0;
 	d_iov_t					 key;
 	d_iov_t					 value;
+	uint32_t				 nsnapshots;
 	int					 rc;
 
 	rc = ds_cont_bcast_create(ctx, cont->c_svc,
@@ -187,6 +174,22 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		goto out_rpc;
 	}
+	/* Update number of snapshots */
+	d_iov_set(&value, &nsnapshots, sizeof(nsnapshots));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup nsnapshots, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto out_rpc;
+	}
+	nsnapshots++;
+	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to update nsnapshots, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto out_rpc;
+	}
+
 	D_DEBUG(DF_DSMS, DF_CONT": created snapshot "DF_U64"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), *epoch);
 out_rpc:
@@ -234,6 +237,8 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_epoch_op_in		*in = crt_req_get(rpc);
 	d_iov_t				 key;
+	d_iov_t				 value;
+	uint32_t			 nsnapshots;
 	int				 rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
@@ -248,7 +253,16 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
+	/* Lookup snapshot, so that nsnapshots-- does not occur if snapshot does not exist */
 	d_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &cont->c_snaps, &key, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup snapshot [%lu]: "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->cei_epoch, DP_RC(rc));
+		goto out;
+	}
+
 	rc = rdb_tx_delete(tx, &cont->c_snaps, &key);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to delete snapshot [%lu]: %d\n",
@@ -256,6 +270,23 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			in->cei_epoch, rc);
 		goto out;
 	}
+
+	/* Update number of snapshots */
+	d_iov_set(&value, &nsnapshots, sizeof(nsnapshots));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup nsnapshots, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto out;
+	}
+	nsnapshots--;
+	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to update nsnapshots, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto out;
+	}
+
 	D_DEBUG(DF_DSMS, DF_CONT": deleted snapshot [%lu]\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
 		in->cei_epoch);
@@ -273,16 +304,106 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
+/* Transfer snapshots to client (TODO: add snapshot names) */
+static int
+xfer_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+	       struct container_hdl *hdl, crt_rpc_t *rpc, crt_bulk_t *bulk, int *snap_countp)
+{
+	int		rc;
+	daos_size_t	bulk_size;
+	int		snap_count;
+	daos_epoch_t   *snapshots = NULL;
+	int		xfer_size;
+
+	/*
+	 * If remote bulk handle does not exist, only aggregate size is sent.
+	 */
+	if (bulk) {
+		rc = crt_bulk_get_len(bulk, &bulk_size);
+		if (rc != 0)
+			goto out;
+		D_DEBUG(DF_DSMS, DF_CONT": bulk_size=%lu\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), bulk_size);
+
+		snap_count = (int)(bulk_size / sizeof(daos_epoch_t));
+	} else {
+		bulk_size = 0;
+		snap_count = 0;
+	}
+	rc = read_snap_list(tx, cont, &snapshots, &snap_count);
+	if (rc != 0)
+		goto out;
+
+	xfer_size = snap_count * sizeof(daos_epoch_t);
+	xfer_size = MIN(xfer_size, bulk_size);
+
+	D_DEBUG(DF_DSMS, DF_CONT": snap_count=%d, bulk_size=%zu, xfer_size=%d\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), snap_count, bulk_size,
+		xfer_size);
+	if (xfer_size > 0) {
+		ABT_eventual		 eventual;
+		int			*status;
+		d_iov_t			 iov = {
+			.iov_buf			= snapshots,
+			.iov_len			= xfer_size,
+			.iov_buf_len			= xfer_size
+		};
+		d_sg_list_t		 sgl = {
+			.sg_nr_out			= 1,
+			.sg_nr				= 1,
+			.sg_iovs			= &iov
+		};
+		struct crt_bulk_desc	 bulk_desc = {
+			.bd_rpc				= rpc,
+			.bd_bulk_op			= CRT_BULK_PUT,
+			.bd_local_off			= 0,
+			.bd_remote_hdl			= bulk,
+			.bd_remote_off			= 0,
+			.bd_len				= xfer_size
+		};
+
+		rc = ABT_eventual_create(sizeof(*status), &eventual);
+		if (rc != ABT_SUCCESS) {
+			rc = dss_abterr2der(rc);
+			goto out_mem;
+		}
+
+		rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &bulk_desc.bd_local_hdl);
+		if (rc != 0)
+			goto out_eventual;
+		rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, NULL);
+		if (rc != 0)
+			goto out_bulk;
+		rc = ABT_eventual_wait(eventual, (void **)&status);
+		if (rc != ABT_SUCCESS)
+			rc = dss_abterr2der(rc);
+		else
+			rc = *status;
+		D_DEBUG(DF_DSMS, DF_CONT": done bulk transfer xfer_size=%d, rc=%d\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), xfer_size, rc);
+
+out_bulk:
+		crt_bulk_free(bulk_desc.bd_local_hdl);
+out_eventual:
+		ABT_eventual_free(&eventual);
+	}
+
+out_mem:
+	if (snapshots)
+		D_FREE(snapshots);
+out:
+	if (rc == 0)
+		*snap_countp = snap_count;
+	return rc;
+}
+
 int
 ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		  struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_snap_list_in	*in		= crt_req_get(rpc);
 	struct cont_snap_list_out	*out		= crt_reply_get(rpc);
-	daos_size_t			 bulk_size;
-	daos_epoch_t			*snapshots;
 	int				 snap_count;
-	int				 xfer_size;
 	int				 rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
@@ -297,77 +418,11 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	/*
-	 * If remote bulk handle does not exist, only aggregate size is sent.
-	 */
-	if (in->sli_bulk) {
-		rc = crt_bulk_get_len(in->sli_bulk, &bulk_size);
-		if (rc != 0)
-			goto out;
-		D_DEBUG(DF_DSMS, DF_CONT": bulk_size=%lu\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->sli_op.ci_uuid), bulk_size);
-		snap_count = (int)(bulk_size / sizeof(daos_epoch_t));
-	} else {
-		bulk_size = 0;
-		snap_count = 0;
-	}
-	rc = read_snap_list(tx, cont, &snapshots, &snap_count);
-	if (rc != 0)
+	rc = xfer_snap_list(tx, pool_hdl, cont, hdl, rpc, in->sli_bulk, &snap_count);
+	if (rc)
 		goto out;
 	out->slo_count = snap_count;
-	xfer_size = snap_count * sizeof(daos_epoch_t);
-	xfer_size = MIN(xfer_size, bulk_size);
 
-	if (xfer_size > 0) {
-		ABT_eventual	 eventual;
-		int		*status;
-		d_iov_t	 iov = {
-			.iov_buf	= snapshots,
-			.iov_len	= xfer_size,
-			.iov_buf_len	= xfer_size
-		};
-		d_sg_list_t	 sgl = {
-			.sg_nr_out = 1,
-			.sg_nr	   = 1,
-			.sg_iovs   = &iov
-		};
-		struct crt_bulk_desc bulk_desc = {
-			.bd_rpc		= rpc,
-			.bd_bulk_op	= CRT_BULK_PUT,
-			.bd_local_off	= 0,
-			.bd_remote_hdl	= in->sli_bulk,
-			.bd_remote_off	= 0,
-			.bd_len		= xfer_size
-		};
-
-		rc = ABT_eventual_create(sizeof(*status), &eventual);
-		if (rc != ABT_SUCCESS) {
-			rc = dss_abterr2der(rc);
-			goto out_mem;
-		}
-
-		rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW,
-				     &bulk_desc.bd_local_hdl);
-		if (rc != 0)
-			goto out_eventual;
-		rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, NULL);
-		if (rc != 0)
-			goto out_bulk;
-		rc = ABT_eventual_wait(eventual, (void **)&status);
-		if (rc != ABT_SUCCESS)
-			rc = dss_abterr2der(rc);
-		else
-			rc = *status;
-
-out_bulk:
-		crt_bulk_free(bulk_desc.bd_local_hdl);
-out_eventual:
-		ABT_eventual_free(&eventual);
-	}
-
-out_mem:
-	D_FREE(snapshots);
 out:
 	return rc;
 }

@@ -324,7 +324,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		bound = epoch;
 	}
 
-	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
+	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
 		DP_UOID(oid), epr.epr_hi);
 
 	vos_dth_set(dth);
@@ -472,8 +472,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
 
 	rc = umem_tx_end(umm, rc);
-	if (rc)
-		goto out;
+
 out:
 	vos_obj_release(occ, obj, true);
 	return rc;
@@ -1219,6 +1218,8 @@ recx_get_flags(struct vos_obj_iter *oiter)
 		options |= EVT_ITER_REVERSE;
 	if (oiter->it_flags & VOS_IT_FOR_PURGE)
 		options |= EVT_ITER_FOR_PURGE;
+	if (oiter->it_flags & VOS_IT_FOR_DISCARD)
+		options |= EVT_ITER_FOR_DISCARD;
 	if (oiter->it_flags & VOS_IT_FOR_MIGRATION)
 		options |= EVT_ITER_FOR_MIGRATION;
 	return options;
@@ -1401,6 +1402,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->it_recx = param->ip_recx;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
+	if (param->ip_flags & VOS_IT_FOR_DISCARD)
+		oiter->it_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
@@ -1593,6 +1596,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		oiter->it_obj = obj;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
+	if (info->ii_flags & VOS_IT_FOR_DISCARD)
+		oiter->it_iter.it_for_discard = 1;
 	if (info->ii_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
 
@@ -1806,13 +1811,14 @@ exit:
 }
 
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
+vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
 	struct umem_instance	*umm;
 	struct vos_krec_df	*krec;
 	struct vos_object	*obj;
+	struct umem_attr	 uma;
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
 	bool			 reprobe = false;
@@ -1837,7 +1843,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog,
-				&oiter->it_epr, discard,
+				&oiter->it_epr, iter->it_for_discard, false,
 				&oiter->it_punched, &oiter->it_ilog_info);
 
 	if (rc == 1) {
@@ -1855,8 +1861,11 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 				  iter->it_type == VOS_ITER_DKEY ?
 				  "akey" : "single value");
 		} else if (krec->kr_bmap & KREC_BF_EVT) {
-			D_ASSERTF(evt_is_empty(&krec->kr_evt),
-				  "Orphaned array value detected\n");
+			umem_attr_get(umm, &uma);
+			rc = evt_has_data(&krec->kr_evt, &uma);
+			if (rc < 0)
+				goto end;
+			D_ASSERTF(rc == 0, "Orphaned array value detected\n");
 		}
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
@@ -1866,6 +1875,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 		rc = 0;
 	}
 
+end:
 	rc = umem_tx_end(umm, rc);
 
 exit:

@@ -10,7 +10,7 @@ SHELL=/bin/bash
 -include Makefile.local
 
 # default to Leap 15 distro for chrootbuild
-CHROOT_NAME ?= opensuse-leap-15.2-x86_64
+CHROOT_NAME ?= opensuse-leap-15.3-x86_64
 include packaging/Makefile_distro_vars.mk
 
 ifeq ($(DEB_NAME),)
@@ -301,14 +301,33 @@ ifeq ($(ID_LIKE),debian)
 # $(DISTRO_BASE)_LOCAL_REPOS is a list separated by | because you cannot pass lists
 # of values with spaces as environment variables
 $(DISTRO_BASE)_LOCAL_REPOS := [trusted=yes]
+else
+$(DISTRO_BASE)_LOCAL_REPOS := $(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO)|
+DISTRO_REPOS = disabled # any non-empty value here works and is not used beyond testing if the value is empty or not
 endif
+ifeq ($(DISTRO_BASE), EL_8)
+# hack to use 8.3 non-group repos on EL_8
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)repository/centos-8.3-base-x86_64-proxy|$(REPOSITORY_URL)repository/centos-8.3-extras-x86_64-proxy|$(REPOSITORY_URL)repository/centos-8.3-powertools-x86_64-proxy|$(REPOSITORY_URL)repository/epel-el-8-x86_64-proxy
+else
+ifeq ($(DISTRO_BASE), EL_7)
+# hack to use 7.9 non-group repos on EL_7
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)repository/centos-7.9-base-x86_64-proxy|$(REPOSITORY_URL)repository/centos-7.9-extras-x86_64-proxy|$(REPOSITORY_URL)repository/centos-7.9-updates-x86_64-proxy|$(REPOSITORY_URL)repository/epel-el-7-x86_64-proxy
+else
+ifeq ($(DISTRO_BASE), LEAP_15)
+# hack to use 15.2 non-group repos on LEAP_15
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)repository/opensuse-15.2-update-oss-x86_64-provo-mirror-proxy|$(REPOSITORY_URL)repository/opensuse-15.2-update-non-oss-x86_64-proxy|$(REPOSITORY_URL)repository/opensuse-15.2-oss-x86_64-proxy|$(REPOSITORY_URL)repository/opensuse-15.2-non-oss-x86_64-proxy
+else
 $(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS) $(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_$(DAOS_REPO_TYPE)_REPO)/
 endif
-$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)|
-ifneq ($(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO),)
-DISTRO_REPOS = $(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)
-$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)/|
 endif
+endif
+endif
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)|
+# group repos are not working in Nexus so we hack in the group members directly above
+#ifneq ($(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO),)
+#DISTRO_REPOS = $(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)
+#$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)/|
+#endif
 ifneq ($(DAOS_STACK_$(DISTRO_BASE)_APPSTREAM_REPO),)
 $(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_APPSTREAM_REPO)|
 endif

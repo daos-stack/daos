@@ -88,7 +88,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	 * Extent block count is represented by uint32_t, make sure the
 	 * largest extent won't overflow.
 	 */
-	if (tot_blks >= UINT32_MAX) {
+	if (tot_blks > UINT32_MAX) {
 		D_ERROR("Capacity "DF_U64" is too large.\n", capacity);
 		return -DER_INVAL;
 	}
@@ -199,7 +199,7 @@ vea_unload(struct vea_space_info *vsi)
 int
 vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	 struct vea_space_df *md, struct vea_unmap_context *unmap_ctxt,
-	 struct vea_space_info **vsip)
+	 void *metrics, struct vea_space_info **vsip)
 {
 	struct umem_attr uma;
 	struct vea_space_info *vsi;
@@ -232,6 +232,7 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	vsi->vsi_agg_time = 0;
 	vsi->vsi_agg_scheduled = false;
 	vsi->vsi_unmap_ctxt = *unmap_ctxt;
+	vsi->vsi_metrics = metrics;
 
 	rc = create_free_class(&vsi->vsi_class, md);
 	if (rc)
@@ -308,10 +309,7 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 	/* Get hint offset */
 	hint_get(hint, &resrvd->vre_hint_off);
 
-migrate:
-	/* Trigger free extents migration */
-	migrate_free_exts(vsi, false);
-
+retry:
 	/* Reserve from hint offset */
 	rc = reserve_hint(vsi, blk_cnt, resrvd);
 	if (rc != 0)
@@ -339,7 +337,9 @@ migrate:
 	if (rc == -DER_NOSPACE && retry) {
 		vsi->vsi_agg_time = 0; /* force free extents migration */
 		retry = false;
-		goto migrate;
+		/* Trigger free extents migration */
+		migrate_free_exts(vsi, false);
+		goto retry;
 	} else if (rc != 0) {
 		goto error;
 	}
@@ -347,10 +347,7 @@ done:
 	D_ASSERT(resrvd->vre_blk_off != VEA_HINT_OFF_INVAL);
 	D_ASSERT(resrvd->vre_blk_cnt == blk_cnt);
 
-	D_ASSERTF(vsi->vsi_stat[STAT_FREE_BLKS] >= blk_cnt,
-		  "free:"DF_U64" < rsrvd:%u\n",
-		  vsi->vsi_stat[STAT_FREE_BLKS], blk_cnt);
-	vsi->vsi_stat[STAT_FREE_BLKS] -= blk_cnt;
+	dec_stats(vsi, STAT_FREE_BLKS, blk_cnt);
 
 	/* Update hint offset */
 	hint_update(hint, resrvd->vre_blk_off + blk_cnt,
@@ -373,6 +370,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	uint64_t		 seq_max = 0, seq_min = 0;
 	uint64_t		 off_c = 0, off_p = 0;
 	uint64_t		 cur_time;
+	unsigned int		 seq_cnt = 0;
 	int			 rc = 0;
 
 	if (d_list_empty(resrvd_list))
@@ -398,6 +396,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 			D_ASSERT(seq_min < resrvd->vre_hint_seq);
 		}
 
+		seq_cnt++;
 		seq_max = resrvd->vre_hint_seq;
 		off_p = resrvd->vre_blk_off + resrvd->vre_blk_cnt;
 
@@ -427,8 +426,8 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	}
 
 	rc = publish ? hint_tx_publish(vsi->vsi_umem, hint, off_p, seq_min,
-				       seq_max) :
-		       hint_cancel(hint, off_c, seq_min, seq_max);
+				       seq_max, seq_cnt) :
+		       hint_cancel(hint, off_c, seq_min, seq_max, seq_cnt);
 error:
 	d_list_for_each_entry_safe(resrvd, tmp, resrvd_list, vre_link) {
 		d_list_del_init(&resrvd->vre_link);
@@ -677,8 +676,7 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 	}
 
 	if (stat != NULL) {
-		struct vea_free_class	*vfc = &vsi->vsi_class;
-		int			 i, rc;
+		int	rc;
 
 		stat->vs_free_persistent = 0;
 		rc = dbtree_iterate(vsi->vsi_md_free_btr, DAOS_INTENT_DEFAULT,
@@ -694,36 +692,12 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 		if (rc != 0)
 			return rc;
 
-		stat->vs_large_frags = d_binheap_size(&vfc->vfc_heap);
-
-		stat->vs_small_frags = 0;
-		stat->vs_largest_blks = 0;
-		for (i = 0; i < vfc->vfc_lru_cnt; i++) {
-			struct vea_entry	*ve;
-			d_list_t		*lru = &vfc->vfc_lrus[i];
-
-			d_list_for_each_entry(ve, lru, ve_link) {
-				stat->vs_small_frags++;
-				if (ve->ve_ext.vfe_blk_cnt >
-						stat->vs_largest_blks)
-					stat->vs_largest_blks =
-						ve->ve_ext.vfe_blk_cnt;
-			}
-		}
-
-		if (!d_binheap_is_empty(&vfc->vfc_heap)) {
-			struct d_binheap_node	*root;
-			struct vea_entry	*entry;
-
-			root = d_binheap_root(&vfc->vfc_heap);
-			entry = container_of(root, struct vea_entry, ve_node);
-			stat->vs_largest_blks = entry->ve_ext.vfe_blk_cnt;
-		}
-
 		stat->vs_resrv_hint = vsi->vsi_stat[STAT_RESRV_HINT];
 		stat->vs_resrv_large = vsi->vsi_stat[STAT_RESRV_LARGE];
 		stat->vs_resrv_small = vsi->vsi_stat[STAT_RESRV_SMALL];
-		stat->vs_resrv_vec = vsi->vsi_stat[STAT_RESRV_VEC];
+		stat->vs_frags_large = vsi->vsi_stat[STAT_FRAGS_LARGE];
+		stat->vs_frags_small = vsi->vsi_stat[STAT_FRAGS_SMALL];
+		stat->vs_frags_aging = vsi->vsi_stat[STAT_FRAGS_AGING];
 	}
 
 	return 0;

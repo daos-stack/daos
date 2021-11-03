@@ -582,7 +582,7 @@ def get_random_string(length, exclude=None, include=None):
 
     random_string = None
     while not isinstance(random_string, str) or random_string in exclude:
-        random_string = "".join(random.choice(include) for _ in range(length))
+        random_string = "".join(random.choice(include) for _ in range(length)) #nosec
     return random_string
 
 
@@ -703,6 +703,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             result = pcmd(hosts, "; ".join(commands_part1), verbose, timeout,
                           None)
 
+        # in case dump of ULT stacks is still running it may be interrupted
         commands_part2 = [
             "rc=0",
             "if " + ps_cmd,
@@ -710,10 +711,10 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             "sudo /usr/bin/pkill {}".format(pattern),
             "sleep 5",
             "if " + ps_cmd,
-            "then /usr/bin/pkill --signal ABRT {}".format(pattern),
+            "then sudo /usr/bin/pkill --signal ABRT {}".format(pattern),
             "sleep 1",
             "if " + ps_cmd,
-            "then /usr/bin/pkill --signal KILL {}".format(pattern),
+            "then sudo /usr/bin/pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
             "fi",
@@ -1264,3 +1265,19 @@ def report_errors(test, errors):
         test.fail(error_msg)
 
     test.log.info("No errors detected.")
+
+
+def percent_change(val1, val2):
+    """Calculate percent change between two values as a decimal.
+
+    Args:
+        val1 (float): first value.
+        val2 (float): second value.
+
+    Returns:
+        float: decimal percent change.
+
+    """
+    if val1 and val2:
+        return (float(val2) - float(val1)) / float(val1)
+    return 0.0

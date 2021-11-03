@@ -1,19 +1,76 @@
 #!/bin/bash
 
+YUM=dnf
+if [ "$(lsb_release -si)" = "CentOS" ]; then
+    if [[ $(lsb_release -sr) = 8* ]]; then
+        OPENMPI_RPM=openmpi
+        OPENMPI=mpi/openmpi-x86_64
+    else
+        OPENMPI_RPM=openmpi3
+        OPENMPI=mpi/openmpi3-x86_64
+    fi
+elif [ "$(lsb_release -si)" = "openSUSE" ]; then
+    OPENMPI_RPM=openmpi3
+    OPENMPI=gnu-openmpi
+fi
+
 set -uex
-sudo yum -y install --exclude ompi,libpmemobj,argobots,spdk \
-     daos-client-"${DAOS_PKG_VERSION}"
+sudo $YUM -y install daos-client-"${DAOS_PKG_VERSION}"
 if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"
   exit 1
 fi
-sudo yum -y history rollback last-1
-sudo yum -y install --exclude ompi daos-server-"${DAOS_PKG_VERSION}"
+if ! sudo $YUM -y history undo last; then
+    echo "Error trying to undo previous dnf transaction"
+    $YUM history
+    exit 1
+fi
+sudo $YUM -y erase $OPENMPI_RPM
+sudo $YUM -y install daos-client-tests-"${DAOS_PKG_VERSION}"
+if rpm -q $OPENMPI_RPM; then
+  echo "$OPENMPI_RPM RPM should be installed as a dependency of daos-client-tests"
+  exit 1
+fi
+if ! sudo $YUM -y history undo last; then
+    echo "Error trying to undo previous dnf transaction"
+    $YUM history
+    exit 1
+fi
+sudo $YUM -y install daos-server-tests-"${DAOS_PKG_VERSION}"
+if rpm -q $OPENMPI_RPM; then
+  echo "$OPENMPI_RPM RPM should be installed as a dependency of daos-server-tests"
+  exit 1
+fi
+if ! sudo $YUM -y history undo last; then
+    echo "Error trying to undo previous dnf transaction"
+    $YUM history
+    exit 1
+fi
+sudo $YUM -y install daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
+if ! rpm -q daos-client; then
+  echo "daos-client RPM should be installed as a dependency of daos-client-tests-openmpi"
+  exit 1
+fi
+if rpm -q daos-server; then
+  echo "daos-server RPM should not be installed as a dependency of daos-client-tests-openmpi"
+  exit 1
+fi
+if ! rpm -q daos-client-tests; then
+  echo "daos-client-tests RPM should be installed as a dependency of daos-client-tests-openmpi"
+  exit 1
+fi
+if ! sudo $YUM -y history undo last; then
+    echo "Error trying to undo previous dnf transaction"
+    $YUM history
+    exit 1
+fi
+sudo $YUM -y install daos-server-"${DAOS_PKG_VERSION}"
 if rpm -q daos-client; then
   echo "daos-client RPM should not be installed as a dependency of daos-server"
   exit 1
 fi
-sudo yum -y install --exclude ompi daos-tests-"${DAOS_PKG_VERSION}"
+
+sudo $YUM -y install daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
 
 me=$(whoami)
 for dir in server agent; do
@@ -32,7 +89,12 @@ sudo cp /tmp/dmg.yml /etc/daos/daos.yml
 cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
 cat /etc/daos/daos.yml
-module load mpi/openmpi3-x86_64
+if ! module load $OPENMPI; then
+    echo "Unable to load OpenMPI module: $OPENMPI"
+    module avail
+    module list
+    exit 1
+fi
 coproc daos_server --debug start -t 1 --recreate-superblocks
 trap 'set -x; kill -INT $COPROC_PID' EXIT
 line=""

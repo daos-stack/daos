@@ -214,7 +214,9 @@ func (srv *server) initStorage() error {
 	}
 
 	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
-	return srv.ctlSvc.Setup()
+	srv.ctlSvc.Setup()
+
+	return nil
 }
 
 func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
@@ -226,12 +228,6 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
-
-	// TODO DAOS-8040: re-enable VMD
-	// Indicate whether VMD devices have been detected and can be used.
-	// for _, bc := range cfg.Storage.BdevConfigs() {
-	//	bc.Bdev.VmdEnabled = srv.bdevProvider.IsVMDEnabled()
-	// }
 
 	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
 		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
@@ -259,7 +255,6 @@ func (srv *server) addEngines(ctx context.Context) error {
 	if nvmeScanResp == nil {
 		return errors.New("nil nvme scan response received")
 	}
-	srv.log.Debugf("set bdev cache when creating engine: %v", nvmeScanResp.Controllers)
 
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)

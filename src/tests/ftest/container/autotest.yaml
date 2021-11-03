@@ -1,9 +1,18 @@
 hosts:
-  test_servers:
-    - server-A
+  servers: !mux
+    1_server:
+      test_servers:
+        - server-A
+    3_servers:
+      test_servers:
+        - server-A
+        - server-B
+        - server-C
   test_clients:
-    - client-B
-timeout: 360
+    - client-A
+timeout: 500
+setup:
+  start_servers_once: False
 server_config:
   name: daos_server
   servers:
@@ -13,5 +22,5 @@ server_config:
 pool:
   mode: 146
   scm_size: 16G
-  nvme_size: 128G
+  nvme_size: 224G
   control_method: dmg

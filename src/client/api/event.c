@@ -620,8 +620,7 @@ daos_eq_create(daos_handle_t *eqh)
 
 	rc = crt_context_create(&eqx->eqx_ctx);
 	if (rc) {
-		D_WARN("Failed to create CART context; using the global one "
-		       "("DF_RC")\n", DP_RC(rc));
+		D_WARN("Failed to create CART context; using the global one, "DF_RC"\n", DP_RC(rc));
 		eqx->eqx_ctx = daos_eq_ctx;
 	}
 
@@ -712,7 +711,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	struct eq_progress_arg	epa;
 	int			rc;
 
-	if (n_events == 0)
+	if (n_events == 0 || events == NULL)
 		return -DER_INVAL;
 
 	/** look up private eq */

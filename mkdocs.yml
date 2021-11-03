@@ -1,0 +1,102 @@
+# Project Information
+site_name: DAOS v2.1 - dev
+site_description: Distributed Asynchronous Object Storage
+site_author: DAOS Project
+
+# Repository
+repo_name: daos-stack/daos
+repo_url: https://github.com/daos-stack/daos
+copyright: Copyright &copy; 2016 - 2021 Intel Corporation
+
+# Theme
+theme:
+    name: 'material'
+    logo: daos_logo_wh.png
+    font:
+        text: Ubuntu
+        code: Roboto Mono
+    language: en
+    palette:
+        scheme:  'slate'
+        primary: 'light blue'
+        accent:  'blue'
+    features:
+        - navigation.tabs
+        - navigation.tabs.sticky
+        - navigation.instant
+        - navigation.top
+        - toc.integrate
+        - navigation.indexes
+
+extra:
+    homepage: http://daos.io
+
+markdown_extensions:
+    - admonition
+    - footnotes
+    - toc:
+        permalink: true
+        toc_depth: 3
+
+# Page tree
+nav:
+    - Intro:
+        - 'Welcome': 'index.md'
+        - 'Community Wiki': 'http://wiki.daos.io'
+        - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
+        - 'Community Mailing list': 'https://daos.groups.io/g/daos'
+        - 'Issue tracker': 'http://jira.daos.io'
+    - Overview:
+        - 'Architecture': 'overview/architecture.md'
+        - 'Storage Model': 'overview/storage.md'
+        - 'Transaction Model': 'overview/transaction.md'
+        - 'Data Integrity': 'overview/data_integrity.md'
+        - 'Fault Model': 'overview/fault.md'
+        - 'Security Model': 'overview/security.md'
+        - 'Use Cases': 'overview/use_cases.md'
+        - 'Terminology': 'overview/terminology.md'
+    - Installation and Setup:
+        - 'CentOS': 'QSG/setup.md'
+        - 'openSUSE': 'QSG/suse_setup.md'
+        - 'Build from Scratch': 'QSG/scratch.md'
+    - Administration Guide:
+        - 'Hardware Requirements': 'admin/hardware.md'
+        - 'Software Installation': 'admin/installation.md'
+        - 'Pre-deployment Checklist': 'admin/predeployment_check.md'
+        - 'System Deployment': 'admin/deployment.md'
+        - 'System Administration': 'admin/administration.md'
+        - 'Pool Operations': 'admin/pool_operations.md'
+        - 'Tiering and Unified Namespace': 'admin/tiering_uns.md'
+        - 'Performance Tuning': 'admin/performance_tuning.md'
+        - 'Troubleshooting': 'admin/troubleshooting.md'
+        - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
+        - 'Environment Variables': 'admin/env_variables.md'
+        - 'Management (DMG) Tool Reference': 'QSG/dmg_tool.md'
+    - Test and Benchmarking:
+        - 'Run DAOS Autotest': 'QSG/autotest.md'
+        - 'Run CaRT Self_test': 'QSG/cartselftest.md'
+        - 'Run IOR': 'QSG/runior.md'
+        - 'Run mdtest': 'QSG/mdtest.md'
+        - 'Run dbench': 'QSG/dbench.md'
+        - 'Datamover test': 'QSG/datamover.md'
+        - 'IO500 Setup': 'http://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
+    - User Guide:
+        - 'Workflow': 'user/workflow.md'
+        - 'Container Management': 'user/container.md'
+        - 'File System': 'user/filesystem.md'
+        - 'MPI-IO Support': 'user/mpi-io.md'
+        - 'HDF5 Support': 'user/hdf5.md'
+        - 'Python Support': 'user/python.md'
+        - 'Spark and Hadoop': 'user/spark.md'
+        - 'Data Mover': 'user/datamover.md'
+        - 'Native Programming Interface': 'user/interface.md'
+        - 'DAOS Tool Reference': 'QSG/daos_tool.md'
+    - Releases:
+        - 'Release Notes v2.1': 'release/release_notes_v2_1.md'
+        - 'Support Matrix': 'release/support_matrix.md'
+        - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
+    - Developer Zone:
+        - 'Dev Environment': 'dev/development.md'
+        - 'Contributing': 'dev/contributing.md'
+        - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
+        - 'DAOS API Documentation': 'html/index.html'

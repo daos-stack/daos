@@ -150,6 +150,7 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 
 type poolCmd struct {
 	Query     poolQueryCmd     `command:"query" description:"query pool info"`
+	ListConts containerListCmd `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
 	ListAttrs poolListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
 	GetAttr   poolGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
 	SetAttr   poolSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
@@ -291,7 +292,10 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attrs, nil)
+		if cmd.Verbose {
+			return cmd.outputJSON(attrs.asMap(), nil)
+		}
+		return cmd.outputJSON(attrs.asList(), nil)
 	}
 
 	var bld strings.Builder
@@ -356,7 +360,7 @@ func (cmd *poolSetAttrCmd) Execute(_ []string) error {
 
 	if err := setDaosAttribute(cmd.cPoolHandle, poolAttr, &attribute{
 		Name:  cmd.Args.Name,
-		Value: cmd.Args.Value,
+		Value: []byte(cmd.Args.Value),
 	}); err != nil {
 		return errors.Wrapf(err,
 			"failed to set attribute %q on pool %s",
@@ -392,6 +396,9 @@ func (cmd *poolDelAttrCmd) Execute(_ []string) error {
 
 type poolAutoTestCmd struct {
 	poolBaseCmd
+
+	SkipBig       C.bool `long:"skip-big" short:"S" description:"skip big tests"`
+	DeadlineLimit C.int  `long:"deadline-limit" short:"D" description:"deadline limit for test (seconds)"`
 }
 
 func (cmd *poolAutoTestCmd) Execute(_ []string) error {
@@ -418,6 +425,10 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
+
+	ap.skip_big = C.bool(cmd.SkipBig)
+
+	ap.deadline_limit = C.int(cmd.DeadlineLimit)
 
 	rc := C.pool_autotest_hdlr(ap)
 	if err := daosError(rc); err != nil {

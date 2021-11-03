@@ -72,6 +72,7 @@ fi
 rm -f /tmp/test.cov
 if [ -f /usr/lib/daos/TESTING/ftest/test.cov ]; then
     cp /usr/lib/daos/TESTING/ftest/test.cov /tmp
+    chmod 777 /tmp/test.cov
 fi
 
 # make sure to set up for daos_agent. The test harness will take care of
@@ -95,6 +96,13 @@ wq
 EOF
     mount \"$DAOS_BASE\"
 fi"
+
+# For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for sockets
+sudo sysctl -w net.ipv4.conf.all.accept_local=1
+sudo sysctl -w net.ipv4.conf.all.arp_ignore=2
+sudo sysctl -w net.ipv4.conf.all.rp_filter=2
+find /sys/class/net/ -maxdepth 1 -name 'ib*' -print0 | xargs -t -I {} --null basename {} | \
+    xargs -t -I {} sudo sysctl -w net.ipv4.conf.{}.rp_filter=2
 
 if ! $TEST_RPMS; then
     # set up symlinks to spdk scripts (none of this would be

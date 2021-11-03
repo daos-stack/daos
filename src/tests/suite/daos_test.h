@@ -88,6 +88,7 @@ extern int daos_event_priv_reset(void);
 /* the pool used for daos test suite */
 struct test_pool {
 	d_rank_t		ranks[TEST_RANKS_MAX_NUM];
+	char			pool_str[64];
 	uuid_t			pool_uuid;
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
@@ -129,6 +130,7 @@ typedef struct {
 	struct test_pool	pool;
 	char			*pool_label;
 	uuid_t			co_uuid;
+	char			co_str[64];
 	char			*cont_label;
 	unsigned int		uid;
 	unsigned int		gid;
@@ -168,6 +170,7 @@ typedef struct {
 	 */
 	int			(*rebuild_cb)(void *test_arg);
 	void			*rebuild_cb_arg;
+	uint32_t		rebuild_pre_pool_ver;
 	/* The callback is called after pool rebuild, used for validating IO
 	 * after rebuild
 	 */
@@ -220,6 +223,7 @@ enum {
 
 #define SMALL_POOL_SIZE		(1ULL << 30)	/* 1GB */
 #define DEFAULT_POOL_SIZE	(4ULL << 30)	/* 4GB */
+#define REBUILD_POOL_SIZE	(4ULL << 30)
 
 #define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
 #define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
@@ -420,7 +424,7 @@ get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
-		      char *verify_data, daos_handle_t th);
+		      char *verify_data, daos_handle_t th, bool degraded);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,

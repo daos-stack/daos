@@ -222,12 +222,23 @@ out:
 	if (prop)
 		daos_prop_free(prop);
 	if (rc) {
-		if (daos_handle_is_valid(oh))
-			daos_kv_close(oh, NULL);
-		if (daos_handle_is_valid(coh))
-			daos_cont_close(coh, NULL);
-		if (daos_handle_is_valid(poh))
-			daos_pool_disconnect(poh, NULL);
+		int	rc2;
+
+		if (daos_handle_is_valid(oh)) {
+			rc2 = daos_kv_close(oh, NULL);
+			if (rc2)
+				D_ERROR("daos_kv_close() Failed "DF_RC"\n", DP_RC(rc2));
+		}
+		if (daos_handle_is_valid(coh)) {
+			rc2 = daos_cont_close(coh, NULL);
+			if (rc2)
+				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+		}
+		if (daos_handle_is_valid(poh)) {
+			rc2 = daos_pool_disconnect(poh, NULL);
+			if (rc2)
+				D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+		}
 	}
 
 	/* Populate return list */
@@ -267,8 +278,6 @@ __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 	if (rc)
 		goto out;
 
-	if (attr.da_type != DAOS_PROP_CO_LAYOUT_PYTHON)
-		rc = -DER_INVAL;
 out:
 	obj = cont_open(rc, attr.da_pool, attr.da_cont, flags);
 	duns_destroy_attr(&attr);
@@ -706,7 +715,7 @@ rewait:
 			if (evp->ev_error == DER_SUCCESS) {
 				rc = kv_get_comp(op, daos_dict);
 				if (rc != DER_SUCCESS)
-					D_GOTO(err, 0);
+					D_GOTO(err, rc);
 				/* Reset the size of the request */
 				op->size = op->buf_size;
 				evp->ev_error = 0;
@@ -730,7 +739,7 @@ rewait:
 						&op->size, op->buf, evp);
 				if (rc != -DER_SUCCESS)
 					break;
-				D_GOTO(rewait, 0);
+				D_GOTO(rewait, rc);
 			} else {
 				rc = evp->ev_error;
 				break;
@@ -746,7 +755,7 @@ rewait:
 			op->key = PyString_AsString(key);
 		}
 		if (!op->key)
-			D_GOTO(err, 0);
+			D_GOTO(err, rc = 0);
 		rc = daos_kv_get(oh, DAOS_TX_NONE, 0, op->key, &op->size,
 				 op->buf, evp);
 		if (rc) {
@@ -889,7 +898,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 
 			rc = PyBytes_AsStringAndSize(value, &buf, &pysize);
 			if (buf == NULL || rc != 0)
-				D_GOTO(err, 0);
+				D_GOTO(err, rc);
 
 			size = pysize;
 		}
@@ -900,7 +909,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 			key_str = PyString_AsString(key);
 		}
 		if (!key_str)
-			D_GOTO(err, 0);
+			D_GOTO(err, rc = 0);
 
 		/** insert or delete kv pair */
 		if (size == 0)
