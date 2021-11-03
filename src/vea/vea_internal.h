@@ -78,12 +78,31 @@ struct vea_free_class {
 };
 
 enum {
-	STAT_RESRV_HINT	= 0,
-	STAT_RESRV_LARGE,
-	STAT_RESRV_SMALL,
-	STAT_RESRV_VEC,
-	STAT_FREE_BLKS,
-	STAT_MAX,
+	/* Number of hint reserve */
+	STAT_RESRV_HINT		= 0,
+	/* Number of large reserve */
+	STAT_RESRV_LARGE	= 1,
+	/* Number of small reserve */
+	STAT_RESRV_SMALL	= 2,
+	/* Max reserve type */
+	STAT_RESRV_TYPE_MAX	= 3,
+	/* Number of large(> VEA_LARGE_EXT_MB) free frags available for allocation */
+	STAT_FRAGS_LARGE	= 3,
+	/* Number of small free frags available for allocation */
+	STAT_FRAGS_SMALL	= 4,
+	/* Number of frags in aging buffer (to be unmapped) */
+	STAT_FRAGS_AGING	= 5,
+	/* Max frag type */
+	STAT_FRAGS_TYPE_MAX	= 3,
+	/* Number of blocks available for allocation */
+	STAT_FREE_BLKS		= 6,
+	STAT_MAX		= 7,
+};
+
+struct vea_metrics {
+	struct d_tm_node_t	*vm_rsrv[STAT_RESRV_TYPE_MAX];
+	struct d_tm_node_t	*vm_frags[STAT_FRAGS_TYPE_MAX];
+	struct d_tm_node_t	*vm_free_blks;
 };
 
 /* In-memory compound index */
@@ -122,6 +141,8 @@ struct vea_space_info {
 	struct vea_unmap_context	 vsi_unmap_ctxt;
 	/* Statistics */
 	uint64_t			 vsi_stat[STAT_MAX];
+	/* Metrics */
+	struct vea_metrics		*vsi_metrics;
 	bool				 vsi_agg_scheduled;
 };
 
@@ -149,6 +170,8 @@ int verify_resrvd_ext(struct vea_resrvd_ext *resrvd);
 int vea_dump(struct vea_space_info *vsi, bool transient);
 int vea_verify_alloc(struct vea_space_info *vsi, bool transient,
 		     uint64_t off, uint32_t cnt);
+void dec_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr);
+void inc_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr);
 
 /* vea_alloc.c */
 int compound_vec_alloc(struct vea_space_info *vsi, struct vea_ext_vector *vec);
@@ -163,8 +186,8 @@ int reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
 int persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe);
 
 /* vea_free.c */
-void free_class_remove(struct vea_free_class *vfc, struct vea_entry *entry);
-int free_class_add(struct vea_free_class *vfc, struct vea_entry *entry);
+void free_class_remove(struct vea_space_info *vsi, struct vea_entry *entry);
+int free_class_add(struct vea_space_info *vsi, struct vea_entry *entry);
 int compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		  unsigned int flags);
 int persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
