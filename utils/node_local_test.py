@@ -1012,7 +1012,8 @@ class DFuse():
                  container=None,
                  mount_path=None,
                  uns_path=None,
-                 caching=True):
+                 caching=True,
+                 wbcache=True):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1024,6 +1025,7 @@ class DFuse():
         self.cores = daos.dfuse_cores
         self._daos = daos
         self.caching = caching
+        self.wbcache = wbcache
         self.use_valgrind = True
         self._sp = None
 
@@ -1082,6 +1084,9 @@ class DFuse():
 
         if not self.caching:
             cmd.append('--disable-caching')
+        else:
+            if not self.wbcache:
+                cmd.append('--disable-wb-cache')
 
         if self.uns_path:
             cmd.extend(['--path', self.uns_path])
@@ -2844,7 +2849,7 @@ def run_in_fg(server, conf):
     if not container:
         container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
 
-    dfuse = DFuse(server, conf, pool=pool.uuid, caching=True)
+    dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
     dfuse.start()
 
     run_daos_cmd(conf,
