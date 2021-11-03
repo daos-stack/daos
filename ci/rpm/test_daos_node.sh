@@ -95,7 +95,6 @@ if ! module load $OPENMPI; then
     module list
     exit 1
 fi
-server_start=$SECONDS
 coproc daos_server --debug start -t 1 --recreate-superblocks 2>&1
 trap 'set -x; kill -INT $COPROC_PID' EXIT
 line=""
