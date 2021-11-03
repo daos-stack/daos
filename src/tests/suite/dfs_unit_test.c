@@ -1137,8 +1137,8 @@ run_dfs_unit_test(int rank, int size)
 	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
 					 dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
-					 dfs_setup_dtx, dfs_teardown);
+	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
+					  dfs_setup_dtx, dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

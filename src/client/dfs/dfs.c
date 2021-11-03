@@ -472,8 +472,12 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 
 		rc = daos_obj_fetch(oh, th, DAOS_COND_DKEY_FETCH, &dkey, 1, iod, sgl, NULL, NULL);
 		if (rc) {
-			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name, DP_RC(rc));
 			D_FREE(value);
+			if (rc == -DER_NONEXIST) {
+				*exists = false;
+				D_GOTO(out, rc = 0);
+			}
+			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name, DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
