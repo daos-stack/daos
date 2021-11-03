@@ -33,21 +33,27 @@ blkcnt_to_lru(struct vea_free_class *vfc, uint32_t blkcnt)
 }
 
 void
-free_class_remove(struct vea_free_class *vfc, struct vea_entry *entry)
+free_class_remove(struct vea_space_info *vsi, struct vea_entry *entry)
 {
+	struct vea_free_class *vfc = &vsi->vsi_class;
+
 	if (entry->ve_in_heap) {
 		D_ASSERTF(entry->ve_ext.vfe_blk_cnt > vfc->vfc_large_thresh,
 			  "%u <= %u", entry->ve_ext.vfe_blk_cnt,
 			  vfc->vfc_large_thresh);
 		d_binheap_remove(&vfc->vfc_heap, &entry->ve_node);
 		entry->ve_in_heap = 0;
+		dec_stats(vsi, STAT_FRAGS_LARGE, 1);
+	} else {
+		dec_stats(vsi, STAT_FRAGS_SMALL, 1);
 	}
 	d_list_del_init(&entry->ve_link);
 }
 
 int
-free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
+free_class_add(struct vea_space_info *vsi, struct vea_entry *entry)
 {
+	struct vea_free_class *vfc = &vsi->vsi_class;
 	int rc;
 
 	D_ASSERT(entry->ve_in_heap == 0);
@@ -62,6 +68,7 @@ free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
 		}
 
 		entry->ve_in_heap = 1;
+		inc_stats(vsi, STAT_FRAGS_LARGE, 1);
 	} else { /* Otherwise add to one of size categarized LRU */
 		struct vea_entry *cur;
 		d_list_t *lru_head, *tmp;
@@ -79,6 +86,7 @@ free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
 		}
 		if (d_list_empty(&entry->ve_link))
 			d_list_add(&entry->ve_link, lru_head);
+		inc_stats(vsi, STAT_FRAGS_SMALL, 1);
 	}
 
 	return 0;
@@ -92,10 +100,12 @@ undock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
 		return;
 
 	D_ASSERT(entry != NULL);
-	if (type == VEA_TYPE_COMPOUND)
-		free_class_remove(&vsi->vsi_class, entry);
-	else
+	if (type == VEA_TYPE_COMPOUND) {
+		free_class_remove(vsi, entry);
+	} else {
 		d_list_del_init(&entry->ve_link);
+		dec_stats(vsi, STAT_FRAGS_AGING, 1);
+	}
 }
 
 static int
@@ -106,11 +116,12 @@ dock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
 
 	D_ASSERT(entry != NULL);
 	if (type == VEA_TYPE_COMPOUND) {
-		rc = free_class_add(&vsi->vsi_class, entry);
+		rc = free_class_add(vsi, entry);
 	} else {
 		D_ASSERT(type == VEA_TYPE_AGGREGATE);
 		D_ASSERT(d_list_empty(&entry->ve_link));
 		d_list_add_tail(&entry->ve_link, &vsi->vsi_agg_lru);
+		inc_stats(vsi, STAT_FRAGS_AGING, 1);
 	}
 
 	return rc;
@@ -298,11 +309,11 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	entry = (struct vea_entry *)val.iov_buf;
 	D_INIT_LIST_HEAD(&entry->ve_link);
 
-	rc = free_class_add(&vsi->vsi_class, entry);
+	rc = free_class_add(vsi, entry);
 
 accounting:
 	if (!rc && !(flags & VEA_FL_NO_ACCOUNTING))
-		vsi->vsi_stat[STAT_FREE_BLKS] += vfe->vfe_blk_cnt;
+		inc_stats(vsi, STAT_FREE_BLKS, vfe->vfe_blk_cnt);
 	return rc;
 }
 
@@ -383,6 +394,7 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 	/* Add to the tail of aggregate LRU list */
 	d_list_add_tail(&entry->ve_link, &vsi->vsi_agg_lru);
+	inc_stats(vsi, STAT_FRAGS_AGING, 1);
 
 	return 0;
 }
@@ -429,6 +441,8 @@ migrate_end_cb(void *data, bool noop)
 
 		/* Remove entry from aggregate LRU list */
 		d_list_del_init(&entry->ve_link);
+		dec_stats(vsi, STAT_FRAGS_AGING, 1);
+
 		/*
 		 * Remove entry from aggregate tree, entry will be freed on
 		 * deletion.
