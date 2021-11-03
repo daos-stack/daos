@@ -206,10 +206,15 @@ next:
 			stream->st_rc = rc;
 			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+		} else {
+			D_INFO("created %s for tgt %d, xs_id %d, xs_nr=%d\n",
+			       create_ult ? "thread" : "task", tid, dx->dx_xs_id, xs_nr);
 		}
 	}
 
+	D_INFO("waiting for tasks with ABT_future_wait()\n");
 	ABT_future_wait(future);
+	D_INFO("done waiting for tasks\n");
 
 	rc = aggregator.at_rc;
 
