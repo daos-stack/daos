@@ -273,7 +273,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             DAOS engine IO latency telemetry metrics min, max, mean and stddev.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=telemetry
         :avocado: tags=test_io_latency_telemetry
 
@@ -347,7 +347,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             size.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=telemetry
         :avocado: tags=test_ior_latency_telemetry
 
