@@ -31,19 +31,49 @@ class CriticalIntegration(TestWithServers):
         """
 
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
-
+        daos_server_version_list = []
+        dmg_version_list = []
         for host in self.hostlist_servers:
-            command_for_testrunner = "ssh -oNumberOfPasswordPrompts=0 {} 'echo hello'".format(host)
-            remote_root_access = "ssh -oNumberOfPasswordPrompts=0 root@{} 'echo hello'".format(host)
-            command_for_inter_node = "pdsh -S -w {} 'echo hello'".format(','.join(self.hostlist_servers))
+            daos_server_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
+                              " 'daos_server version'".format(host))
+            remote_root_access = ("ssh -oNumberOfPasswordPrompts=0 root@{}"
+                                  " 'echo hello'".format(host))
+            command_for_inter_node = ("pdsh -S -w {}"
+                                      " 'echo hello'".format(','.join(self.hostlist_servers)))
             try:
-                run_command(command_for_testrunner)
+                out = run_command(daos_server_cmd)
+                daos_server_version_list.append(out.stdout.split(b' ')[3])
                 if check_remote_root_access:
                     run_command(remote_root_access)
                 IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
             except (DaosTestError, CommandFailure) as error:
                 self.fail("Ssh check Failed.\n {}".format(error))
 
+        for host in self.hostlist_clients:
+            dmg_version_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
+                               " 'dmg version -i'".format(host))
+
+            try:
+                out = run_command(dmg_version_cmd)
+                dmg_version_list.append(out.stdout.split(b' ')[2])
+            except DaosTestError as error:
+                self.fail("SSH check for client nodes failed.\n {}".format(error))
+
+
+        result_daos_server = (daos_server_version_list.count(daos_server_version_list[0])
+                             == len(daos_server_version_list))
+        result_dmg = dmg_version_list.count(dmg_version_list[0]) == len(dmg_version_list)
+        result_client_server = daos_server_version_list[0][1:] == dmg_version_list[0]
+        
+        if (result_daos_server and result_dmg and result_client_server):
+            self.log.info("All servers have same daos version")
+            self.log.info("All clients have same daos version")
+            self.log.info("Servers and Clients have same daos version")
+        else:
+            self.log.info("Not all servers and clients have same daos version")
+            self.log.info("Clients: {}".format(dmg_version_list))
+            self.log.info("servers: {}".format(daos_server_version_list))
+            self.fail()
 
     def test_ras(self):
         """
