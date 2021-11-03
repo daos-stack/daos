@@ -927,8 +927,8 @@ class Systemctl(JobManager):
                 data.append("    {}".format(line))
         return "\n".join(data)
 
-    def check_logs(self, pattern, since, until, quantity=1, timeout=60):
-        """Check the command logs on each host for a specified string.
+    def search_logs(self, pattern, since, until, quantity=1, timeout=60):
+        """Search the command logs on each host for a specified string.
 
         Args:
             pattern (str): regular expression to search for in the logs
@@ -941,8 +941,10 @@ class Systemctl(JobManager):
                 the specified pattern. Defaults to 60.
 
         Returns:
-            bool: whether or not the search string was found in the logs on each
-                host
+            tuple:
+                (bool) - if the pattern was found quantity number of times
+                (int)  - the number of patterns found
+                (bool) - if the search timed out
 
         """
         self.log.info(
@@ -969,9 +971,27 @@ class Systemctl(JobManager):
             complete = detected == quantity
             timed_out = time.time() - start > timeout
 
-            if complete:
-                self.timestamps["running"] = datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S")
+        return complete, detected, timed_out
+
+    def check_logs(self, pattern, since, until, quantity=1, timeout=60):
+        """Check the command logs on each host for a specified string.
+
+        Args:
+            pattern (str): regular expression to search for in the logs
+            since (str): search log entries from this date.
+            until (str, optional): search log entries up to this date. Defaults
+                to None, in which case it is not utilized.
+            quantity (int, optional): number of times to expect the search
+                pattern per host. Defaults to 1.
+            timeout (int, optional): maximum number of seconds to wait to detect
+                the specified pattern. Defaults to 60.
+
+        Returns:
+            bool: whether or not the search string was found in the logs on each
+                host
+
+        """
+        complete, detected, timed_out = self.search_logs(pattern, since, until, quantity, timeout)
 
         # Summarize results
         msg = "{}/{} '{}' messages detected in".format(
@@ -1002,7 +1022,7 @@ class Systemctl(JobManager):
 
         return complete
 
-    def dump_logs(self, hosts=None):
+    def dump_logs(self, hosts=None, timestamp = None):
         """Display the journalctl log data since detecting server start.
 
         Args:
@@ -1010,10 +1030,9 @@ class Systemctl(JobManager):
                 journalctl log data. Defaults to None which will log the
                 journalctl log data from all of the hosts.
         """
-        timestamp = None
-        if self.timestamps["running"]:
+        if timestamp is None and self.timestamps["running"]:
             timestamp = self.timestamps["running"]
-        elif self.timestamps["verified"]:
+        elif timestamp is None and self.timestamps["verified"]:
             timestamp = self.timestamps["verified"]
         if timestamp:
             if hosts is None:

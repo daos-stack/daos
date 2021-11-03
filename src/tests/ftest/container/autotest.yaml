@@ -13,6 +13,6 @@ server_config:
     bdev_list: ["aaaa:aa:aa.a"]
 pool:
   mode: 146
-  scm_size: 32G
-  nvme_size: 530G
+  size: 90%
+  tier_ratio: 6
   control_method: dmg
