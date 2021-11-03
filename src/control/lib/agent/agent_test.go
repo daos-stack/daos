@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-package main
+package agent
 
 import (
 	"context"
@@ -137,23 +137,16 @@ func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 	client := control.NewMockInvoker(log, &control.MockInvokerConfig{
 		UnaryResponse: control.MockMSResponse("localhost", nil, srvResp),
 	})
-	testAgentStart := &startCmd{
-		logCmd: logCmd{
-			log: log,
-		},
-		configCmd: configCmd{
-			cfg: agentCfg,
-		},
-		ctlInvokerCmd: ctlInvokerCmd{
-			ctlInvoker: client,
-		},
-	}
+	agent := NewServer(agentCfg, client)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Start the "agent" in a goroutine. Unfortunately, we can't block
 	// on waiting for it to be ready without rewriting things a lot, but
 	// sleeping for a second should be fine.
 	go func() {
-		err := testAgentStart.Execute([]string{})
+		err := agent.Start(ctx, log)
 		if err != nil {
 			t.Log(err)
 		}
@@ -171,7 +164,7 @@ func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 	maxIter := 32
 	for i := 0; i < maxIter; i++ {
 		go func(rc chan *mgmtpb.GetAttachInfoResp, ec chan error) {
-			pr, err := pbin.ExecReq(context.Background(), log, os.Args[0], &pbin.Request{})
+			pr, err := pbin.ExecReq(ctx, log, os.Args[0], &pbin.Request{})
 			if err != nil {
 				ec <- err
 				return

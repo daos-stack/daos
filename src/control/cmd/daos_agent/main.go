@@ -18,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/agent"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -54,15 +55,15 @@ func (cmd *ctlInvokerCmd) setInvoker(ctlInvoker control.Invoker) {
 
 type (
 	configSetter interface {
-		setConfig(*Config)
+		setConfig(*agent.Config)
 	}
 
 	configCmd struct {
-		cfg *Config
+		cfg *agent.Config
 	}
 )
 
-func (cmd *configCmd) setConfig(cfg *Config) {
+func (cmd *configCmd) setConfig(cfg *agent.Config) {
 	cmd.cfg = cfg
 }
 
@@ -174,16 +175,16 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 
 		cfgPath := opts.ConfigPath
 		if cfgPath == "" {
-			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
+			defaultConfigPath := path.Join(build.ConfigDir, agent.DefaultConfigFile)
 			if _, err := os.Stat(defaultConfigPath); err == nil {
 				cfgPath = defaultConfigPath
 			}
 		}
 
-		cfg := DefaultConfig()
+		cfg := agent.DefaultConfig()
 		if cfgPath != "" {
 			var err error
-			if cfg, err = LoadConfig(cfgPath); err != nil {
+			if cfg, err = agent.LoadConfig(cfgPath); err != nil {
 				return errors.WithMessage(err, "failed to load agent configuration")
 			}
 			log.Debugf("agent config loaded from %s", cfgPath)

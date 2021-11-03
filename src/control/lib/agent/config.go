@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package main
+package agent
 
 import (
 	"fmt"
@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	defaultConfigFile = "daos_agent.yml"
-	defaultRuntimeDir = "/var/run/daos_agent"
-	defaultLogFile    = "/tmp/daos_agent.log"
+	DefaultConfigFile = "daos_agent.yml"
+	DefaultRuntimeDir = "/var/run/daos_agent"
+	DefaultLogFile    = "/tmp/daos_agent.log"
 )
 
 // Config defines the agent configuration.
@@ -71,8 +71,8 @@ func DefaultConfig() *Config {
 		SystemName:      build.DefaultSystemName,
 		ControlPort:     build.DefaultControlPort,
 		AccessPoints:    []string{localServer},
-		RuntimeDir:      defaultRuntimeDir,
-		LogFile:         defaultLogFile,
+		RuntimeDir:      DefaultRuntimeDir,
+		LogFile:         DefaultLogFile,
 		TransportConfig: security.DefaultAgentTransportConfig(),
 	}
 }
