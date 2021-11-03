@@ -75,6 +75,12 @@ func MockMSResponse(hostAddr string, hostErr error, hostMsg proto.Message) *Unar
 	}
 }
 
+func (mi *MockInvoker) GetInvokeCount() int {
+	mi.invokeCountMutex.RLock()
+	defer mi.invokeCountMutex.RUnlock()
+	return mi.invokeCount
+}
+
 func (mi *MockInvoker) Debug(msg string) {
 	mi.log.Debug(msg)
 }
