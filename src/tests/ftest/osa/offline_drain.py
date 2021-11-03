@@ -8,10 +8,11 @@ import random
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
+from nvme_utils import ServerFillUp
 from write_host_file import write_host_file
 
 
-class OSAOfflineDrain(OSAUtils):
+class OSAOfflineDrain(OSAUtils, ServerFillUp):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -32,7 +33,7 @@ class OSAOfflineDrain(OSAUtils):
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
 
-    def run_offline_drain_test(self, num_pool, data=False, oclass=None):
+    def run_offline_drain_test(self, num_pool, data=False, oclass=None, pool_fillup=0):
         """Run the offline drain without data.
             Args:
             num_pool (int) : total pools to create for testing purposes.
@@ -64,8 +65,20 @@ class OSAOfflineDrain(OSAUtils):
             test_seq = self.ior_test_sequence[0]
 
             if data:
-                self.run_ior_thread("Write", oclass, test_seq)
-                self.run_mdtest_thread(oclass)
+                # if pool_fillup is greater than 0, then
+                # use start_ior_load method from nvme_utils.py.
+                # Otherwise, use the osa_utils.py run_ior_thread
+                # method.
+                if pool_fillup > 0:
+                    self.ior_cmd.dfs_oclass.update(oclass)
+                    self.ior_cmd.dfs_dir_oclass.update(oclass)
+                    self.ior_default_flags = self.ior_w_flags
+                    self.log.info(self.pool.pool_percentage_used())
+                    self.start_ior_load(storage='NVMe', operation="Auto_Write", percent=pool_fillup)
+                    self.log.info(self.pool.pool_percentage_used())
+                else:
+                    self.run_ior_thread("Write", oclass, test_seq)
+                    self.run_mdtest_thread(oclass)
                 if self.test_with_snapshot is True:
                     # Create a snapshot of the container
                     # after IOR job completes.
@@ -93,6 +106,9 @@ class OSAOfflineDrain(OSAUtils):
                     # Exclude rank 3
                     output = self.dmg_command.pool_exclude(self.pool.uuid, "3")
                     self.pool.wait_for_rebuild(True)
+                # If the pool is filled up just drain only a single rank.
+                if pool_fillup > 0 and index > 0:
+                    continue
                 output = self.dmg_command.pool_drain(self.pool.uuid,
                                                      rank, t_string)
                 self.print_and_assert_on_rebuild_failure(output)
@@ -116,13 +132,16 @@ class OSAOfflineDrain(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
             if data:
-                self.run_ior_thread("Read", oclass, test_seq)
-                self.run_mdtest_thread(oclass)
-                self.container = self.pool_cont_dict[self.pool][0]
-                kwargs = {"pool": self.pool.uuid,
-                          "cont": self.container.uuid}
-                output = self.daos_command.container_check(**kwargs)
-                self.log.info(output)
+                if pool_fillup > 0:
+                    self.start_ior_load(storage='NVMe', operation='Auto_Read', percent=pool_fillup)
+                else:
+                    self.run_ior_thread("Read", oclass, test_seq)
+                    self.run_mdtest_thread(oclass)
+                    self.container = self.pool_cont_dict[self.pool][0]
+                    kwargs = {"pool": self.pool.uuid,
+                              "cont": self.container.uuid}
+                    output = self.daos_command.container_check(**kwargs)
+                    self.log.info(output)
 
     def test_osa_offline_drain(self):
         """
@@ -227,3 +246,16 @@ class OSAOfflineDrain(OSAUtils):
                                                   '/run/snapshot/*')
         self.log.info("Offline Drain : After taking snapshot")
         self.run_offline_drain_test(1, data=True)
+
+    def test_osa_offline_drain_with_less_pool_space(self):
+        """Test ID: DAOS-7160
+        Test Description: Drain rank after with less pool space.
+
+        :avocado: tags=all,full_regression,hw,medium,ib2
+        :avocado: tags=osa,offline_drain_full
+        :avocado: tags=offline_drain_with_less_pool_space
+        """
+        self.log.info("Offline Drain : Test with less pool space")
+        oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
+        pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
+        self.run_offline_drain_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)

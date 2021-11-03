@@ -29,7 +29,7 @@ server_config:
       scm_list: ["/dev/pmem0"]
       # common items below (same in server 0 and server 1)
       scm_class: dcpm
-      nr_xs_helpers: 16
+      nr_xs_helpers: 4
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
@@ -45,7 +45,7 @@ server_config:
       scm_list: ["/dev/pmem1"]
       # common items below (same in server 0 and server 1)
       scm_class: dcpm
-      nr_xs_helpers: 16
+      nr_xs_helpers: 4
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128

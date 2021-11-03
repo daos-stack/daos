@@ -89,7 +89,9 @@ gc_ult(void *arg)
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT started\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 
-	D_ASSERT(child->spc_gc_req != NULL);
+	if (child->spc_gc_req == NULL)
+		goto out;
+
 	while (!dss_ult_exiting(child->spc_gc_req)) {
 		rc = vos_gc_pool(child->spc_hdl, -1, dss_ult_yield,
 				 (void *)child->spc_gc_req);
@@ -102,9 +104,13 @@ gc_ult(void *arg)
 			break;
 
 		/* It'll be woke up by container destroy or aggregation */
-		sched_req_sleep(child->spc_gc_req, 10ULL * 1000);
+		if (rc > 0)
+			sched_req_yield(child->spc_gc_req);
+		else
+			sched_req_sleep(child->spc_gc_req, 10UL * 1000);
 	}
 
+out:
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT stopped\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 }
@@ -134,7 +140,7 @@ start_gc_ult(struct ds_pool_child *child)
 	if (child->spc_gc_req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
 		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_join(gc);
+		ABT_thread_free(&gc);
 		return -DER_NOMEM;
 	}
 
@@ -189,17 +195,28 @@ pool_child_add_one(void *varg)
 	if (child == NULL)
 		return -DER_NOMEM;
 
+	/* initialize metrics on the target xstream for each module */
+	rc = dss_module_init_metrics(DAOS_TGT_TAG, child->spc_metrics,
+				     arg->pla_pool->sp_path, info->dmi_tgt_id);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to initialize module metrics for pool"
+			"." DF_RC "\n", DP_UUID(child->spc_uuid), DP_RC(rc));
+		goto out_free;
+	}
+
 	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tgt_id,
 			      &path);
 	if (rc != 0)
-		goto out_free;
+		goto out_metrics;
 
-	rc = vos_pool_open(path, arg->pla_uuid, 0, &child->spc_hdl);
+	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
+	rc = vos_pool_open_metrics(path, arg->pla_uuid, VOS_POF_EXCL,
+				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
 	D_FREE(path);
 
 	if (rc != 0)
-		goto out_free;
+		goto out_metrics;
 
 	uuid_copy(child->spc_uuid, arg->pla_uuid);
 	child->spc_map_version = arg->pla_map_version;
@@ -224,15 +241,6 @@ pool_child_add_one(void *varg)
 	if (rc != 0)
 		goto out_gc;
 
-	/* initialize metrics on the target xstream for each module */
-	rc = dss_module_init_metrics(DAOS_TGT_TAG, child->spc_metrics,
-				     arg->pla_pool->sp_path, info->dmi_tgt_id);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to initialize module metrics for pool"
-			"." DF_RC "\n", DP_UUID(child->spc_uuid), DP_RC(rc));
-		goto out_scrub;
-	}
-
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
 	/* Load all containers */
@@ -245,8 +253,6 @@ pool_child_add_one(void *varg)
 out_list:
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
-	dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
-out_scrub:
 	ds_stop_scrubbing_ult(child);
 out_gc:
 	stop_gc_ult(child);
@@ -254,6 +260,8 @@ out_eventual:
 	ABT_eventual_free(&child->spc_ref_eventual);
 out_vos:
 	vos_pool_close(child->spc_hdl);
+out_metrics:
+	dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
 out_free:
 	D_FREE(child);
 	return rc;
@@ -597,7 +605,7 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	if (pool->sp_ec_ephs_req == NULL) {
 		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
 			DP_UUID(pool->sp_uuid));
-		ABT_thread_join(ec_eph_query_ult);
+		ABT_thread_free(&ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
 
@@ -616,13 +624,16 @@ ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 	sched_req_wait(pool->sp_ec_ephs_req, true);
 	sched_req_put(pool->sp_ec_ephs_req);
 	pool->sp_ec_ephs_req = NULL;
+	D_INFO(DF_UUID": EC query ULT stopped\n", DP_UUID(pool->sp_uuid));
 }
 
 static void
 pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 {
-	if (!pool->sp_fetch_hdls)
+	if (!pool->sp_fetch_hdls) {
+		D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 		return;
+	}
 
 	ABT_mutex_lock(pool->sp_mutex);
 	ABT_cond_signal(pool->sp_fetch_hdls_cond);
@@ -631,6 +642,7 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 	ABT_mutex_lock(pool->sp_mutex);
 	ABT_cond_wait(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
+	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 }
 
 /*
@@ -731,6 +743,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_migrate_abort(pool->sp_uuid, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
+	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
 }
 
 /* ds_pool_hdl ****************************************************************/

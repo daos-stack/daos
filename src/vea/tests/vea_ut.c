@@ -81,7 +81,7 @@ ut_load(void **state)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&args->vua_umm, &args->vua_txd, args->vua_md, &unmap_ctxt,
-		      &args->vua_vsi);
+		      NULL, &args->vua_vsi);
 	assert_rc_equal(rc, 0);
 }
 
@@ -112,13 +112,12 @@ ut_query(void **state)
 	/* verify the statistics */
 	assert_int_equal(stat.vs_free_persistent, tot_blks);
 	assert_int_equal(stat.vs_free_transient, tot_blks);
-	assert_int_equal(stat.vs_large_frags, 1);
-	assert_int_equal(stat.vs_small_frags, 0);
+	assert_int_equal(stat.vs_frags_large, 1);
+	assert_int_equal(stat.vs_frags_small, 0);
+	assert_int_equal(stat.vs_frags_aging, 0);
 	assert_int_equal(stat.vs_resrv_hint, 0);
 	assert_int_equal(stat.vs_resrv_large, 0);
 	assert_int_equal(stat.vs_resrv_small, 0);
-	assert_int_equal(stat.vs_resrv_vec, 0);
-	assert_int_equal(stat.vs_largest_blks, tot_blks);
 }
 
 static void
@@ -237,15 +236,14 @@ ut_reserve(void **state)
 	rc = vea_query(args->vua_vsi, NULL, &stat);
 	assert_rc_equal(rc, 0);
 
-	assert_int_equal(stat.vs_large_frags, 0);
-	assert_int_equal(stat.vs_small_frags, 2);
+	assert_int_equal(stat.vs_frags_large, 0);
+	assert_int_equal(stat.vs_frags_small, 2);
 	/* 2 hint from the second reserve for io stream 0 & 1 */
 	assert_int_equal(stat.vs_resrv_hint, 2);
 	/* 2 large from the first reserve for io stream 0 & 1 */
 	assert_int_equal(stat.vs_resrv_large, 2);
 	/* 1 small from the reserve for io stream 2 */
 	assert_int_equal(stat.vs_resrv_small, 1);
-	assert_int_equal(stat.vs_resrv_vec, 0);
 }
 
 static void
@@ -333,7 +331,6 @@ static void
 ut_free(void **state)
 {
 	struct vea_ut_args *args = *state;
-	struct vea_hint_context *h_ctxt;
 	struct vea_resrvd_ext *ext;
 	d_list_t *r_list;
 	uint64_t blk_off;
@@ -361,17 +358,8 @@ ut_free(void **state)
 	print_message("persistent free extents:\n");
 	vea_dump(args->vua_vsi, false);
 
-	/* wait for free extents expire */
-	print_message("wait for %d seconds ...\n", VEA_MIGRATE_INTVL);
-	sleep(VEA_MIGRATE_INTVL);
-	/* call reserve to trigger free extents migration */
-	r_list = &args->vua_resrvd_list[0];
-	h_ctxt = args->vua_hint_ctxt[0];
-	rc = vea_reserve(args->vua_vsi, 1, h_ctxt, r_list);
-	assert_rc_equal(rc, 0);
-
-	rc = vea_cancel(args->vua_vsi, h_ctxt, r_list);
-	assert_int_equal(rc, 0);
+	/* call vea_flush to trigger free extents migration */
+	vea_flush(args->vua_vsi, true);
 
 	r_list = &args->vua_alloc_list;
 	d_list_for_each_entry(ext, r_list, vre_link) {
@@ -560,7 +548,7 @@ ut_reserve_special(void **state)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
-		      &args.vua_vsi);
+		      NULL, &args.vua_vsi);
 	assert_rc_equal(rc, 0);
 
 	print_message("Try to reserve extent larger than available space\n");
@@ -687,7 +675,7 @@ ut_inval_params_load(void **state)
 
 	/* vea_load: Test unformatted blob */
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
-		      &args.vua_vsi);
+		      NULL, &args.vua_vsi);
 	assert_rc_equal(rc, -DER_UNINIT);
 
 	/* vea_load: Test umem is NULL */
@@ -697,19 +685,19 @@ ut_inval_params_load(void **state)
 			header_blocks, capacity, NULL, NULL, false);
 	assert_rc_equal(rc, 0);
 	expect_assert_failure(vea_load(NULL, &args.vua_txd, args.vua_md,
-				       &unmap_ctxt, &args.vua_vsi));
+				       &unmap_ctxt, NULL, &args.vua_vsi));
 
 	/* vea_load: Test md is NULL */
 	expect_assert_failure(vea_load(&args.vua_umm, &args.vua_txd, NULL,
-				       &unmap_ctxt, &args.vua_vsi));
+				       &unmap_ctxt, NULL, &args.vua_vsi));
 
 	/* vea_load: Test unmap_ctxt is NULL */
 	expect_assert_failure(vea_load(&args.vua_umm, &args.vua_txd,
-				       args.vua_md, NULL, &args.vua_vsi));
+				       args.vua_md, NULL, NULL, &args.vua_vsi));
 
 	/* vea_load: Test vsip is NULL */
 	expect_assert_failure(vea_load(&args.vua_umm, &args.vua_txd,
-				       args.vua_md, &unmap_ctxt, NULL));
+				       args.vua_md, &unmap_ctxt, NULL, NULL));
 
 	/* vea_unload: Test is vsi NULL */
 	expect_assert_failure(vea_unload(args.vua_vsi));
@@ -738,7 +726,7 @@ ut_inval_params_reserve(void **state)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
-		      &args.vua_vsi);
+		      NULL, &args.vua_vsi);
 	assert_rc_equal(rc, 0);
 
 	r_list = &args.vua_resrvd_list[0];
@@ -774,7 +762,7 @@ ut_inval_params_cancel(void **state)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
-		      &args.vua_vsi);
+		      NULL, &args.vua_vsi);
 	assert_rc_equal(rc, 0);
 	r_list = &args.vua_resrvd_list[0];
 
@@ -806,7 +794,7 @@ ut_inval_params_tx_publish(void **state)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
-		      &args.vua_vsi);
+		      NULL, &args.vua_vsi);
 	assert_rc_equal(rc, 0);
 	r_list = &args.vua_resrvd_list[0];
 
@@ -848,7 +836,7 @@ ut_inval_params_free(void **state)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
-		      &args.vua_vsi);
+		      NULL, &args.vua_vsi);
 	assert_rc_equal(rc, 0);
 	r_list = &args.vua_resrvd_list[0];
 
@@ -940,7 +928,7 @@ ut_free_invalid_space(void **state)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
-		      &args.vua_vsi);
+		      NULL, &args.vua_vsi);
 	assert_int_equal(rc, 0);
 
 	/* Reserve from I/O Stream 0 */
@@ -973,15 +961,13 @@ print_stats(struct vea_ut_args *args, bool verbose)
 
 	rc = vea_query(args->vua_vsi, NULL, &stat);
 	assert_int_equal(rc, 0);
-	print_message("free_blks:"DF_U64"/"DF_U64", large_frags:"DF_U64", "
-		      "small_frags:"DF_U64", largest_ext_blks:%u\n"
+	print_message("free_blks:"DF_U64"/"DF_U64", frags_large:"DF_U64", "
+		      "frags_small:"DF_U64", frags_aging:"DF_U64"\n"
 		      "resrv_hint:"DF_U64"\nresrv_large:"DF_U64"\n"
-		      "resrv_small:"DF_U64"\nresrv_vec:"DF_U64"\n",
+		      "resrv_small:"DF_U64"\n",
 		      stat.vs_free_persistent, stat.vs_free_transient,
-		      stat.vs_large_frags, stat.vs_small_frags,
-		      stat.vs_largest_blks,
-		      stat.vs_resrv_hint, stat.vs_resrv_large,
-		      stat.vs_resrv_small, stat.vs_resrv_vec);
+		      stat.vs_frags_large, stat.vs_frags_small, stat.vs_frags_aging,
+		      stat.vs_resrv_hint, stat.vs_resrv_large, stat.vs_resrv_small);
 
 	if (verbose)
 		vea_dump(args->vua_vsi, true);
@@ -1010,7 +996,7 @@ ut_interleaved_ops(void **state)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
-		      &args.vua_vsi);
+		      NULL, &args.vua_vsi);
 	assert_int_equal(rc, 0);
 
 	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
@@ -1183,7 +1169,7 @@ ut_fragmentation(void **state)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
-		      &args.vua_vsi);
+		      NULL, &args.vua_vsi);
 	assert_rc_equal(rc, 0);
 
 	/* Generate random fragments on the same I/O stream */
