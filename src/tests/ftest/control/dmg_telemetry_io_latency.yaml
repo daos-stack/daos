@@ -19,7 +19,7 @@ container:
   
 ior:
   block_size: 8M
-  transfer_sizes: [512, 1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 512K, 1M, 2M, 4M, 8M]
+  transfer_sizes: [512, 1K, 2K, 4K, 8K, 16K, 32K, 64K, 128K, 256K, 512K, 1M, 2M, 4M, 8M]
   repetitions: 3
   iorupdateflags:
     F: "-w -k -G 1"
