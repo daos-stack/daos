@@ -414,6 +414,9 @@ class ObjectMetadata(TestWithServers):
                 # Start the servers
                 self.start_server_managers()
 
+                # Since starting the servers will format the storage the pool will be gone
+                self.pool = None
+
         self.log.info("Test passed")
 
     def test_container_removal_after_der_nospace(self):
