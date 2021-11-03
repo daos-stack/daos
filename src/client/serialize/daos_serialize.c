@@ -8,8 +8,8 @@
 
 /* for user attr dataset */
 struct usr_attr {
-	char *attr_name;
-	hvl_t attr_val;
+	char	*attr_name;
+	hvl_t	attr_val;
 };
 
 int
@@ -633,7 +633,7 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dspace = H5Aget_space(cont_attr);
-	if (status < 0) {
+	if (attr_dspace < 0) {
 		D_ERROR("failed to get attribute dataspace\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}

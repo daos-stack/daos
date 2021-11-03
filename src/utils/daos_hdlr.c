@@ -1931,14 +1931,14 @@ dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char **
 	}
 
 	/* Allocate a buffer to hold all attribute names */
-	name_buf = calloc(total_size, sizeof(char));
+	D_ALLOC(name_buf, total_size);
 	if (name_buf == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* Get the attribute names */
 	rc = daos_cont_list_attr(coh, name_buf, &total_size, NULL);
 	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "Failed list user attributes");
+		DH_PERROR_DER(ap, rc, "Failed to list user attributes");
 		D_GOTO(out, rc);
 	}
 
@@ -1979,6 +1979,8 @@ dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char **
 			break;
 		}
 		D_STRNDUP(names[i], name_buf + cur_size, name_len + 1);
+		if (names[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 		cur_size += name_len + 1;
 	}
 

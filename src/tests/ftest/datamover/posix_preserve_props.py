@@ -15,9 +15,9 @@ class DmvrPreserveProps(DataMoverTestBase):
     Test Class Description:
         Tests the following cases:
             1. DAOS -> POSIX: Write container properties to an hdf5 file, and write
-	       to destination posix path.
-	    2. POSIX -> DAOS: Read container properties from an hdf5 file, and
-	       write to destination container.
+               to destination posix path.
+            2. POSIX -> DAOS: Read container properties from an hdf5 file, and
+               write to destination container.
 
     :avocado: recursive
     """
