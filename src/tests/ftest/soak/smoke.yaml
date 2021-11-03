@@ -20,7 +20,6 @@ setup:
 server_config:
     engines_per_host: 2
     name: daos_server
-    nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
