@@ -601,10 +601,10 @@ vs_stop_run(struct vea_stress_pool *vs_pool, int rc)
 	}
 
 	fprintf(stdout, "free_blks:["DF_12U64","DF_12U64"] frags_l:"DF_12U64" frags_s:"DF_12U64" "
-		"largest_blk:%-12u r_hint:"DF_12U64" r_large:"DF_12U64" r_small:"DF_12U64"\n",
-		stat.vs_free_persistent, stat.vs_free_transient, stat.vs_large_frags,
-		stat.vs_small_frags, stat.vs_largest_blks, stat.vs_resrv_hint,
-		stat.vs_resrv_large, stat.vs_resrv_small);
+		"frags_a:"DF_12U64" r_hint:"DF_12U64" r_large:"DF_12U64" r_small:"DF_12U64"\n",
+		stat.vs_free_persistent, stat.vs_free_transient, stat.vs_frags_large,
+		stat.vs_frags_small, stat.vs_frags_aging, stat.vs_resrv_hint, stat.vs_resrv_large,
+		stat.vs_resrv_small);
 
 	return stop;
 }
@@ -809,7 +809,7 @@ vs_setup_pool(void)
 	unmap_ctxt.vnc_unmap = NULL;
 	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&vs_pool->vsp_umm, &vs_pool->vsp_txd, vs_pool->vsp_vsd, &unmap_ctxt,
-		      &vs_pool->vsp_vsi);
+		      NULL, &vs_pool->vsp_vsi);
 	if (rc) {
 		fprintf(stderr, "failed to load\n");
 		goto error;

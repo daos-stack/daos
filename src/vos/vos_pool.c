@@ -264,7 +264,7 @@ vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
 }
 
 static int pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
-		     unsigned int flags, daos_handle_t *poh);
+		     unsigned int flags, void *metrics, daos_handle_t *poh);
 
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
@@ -423,7 +423,7 @@ open:
 		goto close;
 
 	/* Create a VOS pool handle using ph. */
-	rc = pool_open(ph, pool_df, uuid, flags, poh);
+	rc = pool_open(ph, pool_df, uuid, flags, NULL, poh);
 	ph = NULL;
 
 close:
@@ -685,7 +685,7 @@ lock_pool_memory(struct vos_pool *pool)
  */
 static int
 pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
-	  unsigned int flags, daos_handle_t *poh)
+	  unsigned int flags, void *metrics, daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool		*pool = NULL;
@@ -740,13 +740,17 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	}
 
 	if (bio_nvme_configured() && pool_df->pd_nvme_sz != 0) {
-		struct vea_unmap_context unmap_ctxt;
+		struct vea_unmap_context	 unmap_ctxt;
+		struct vos_pool_metrics		*vp_metrics = metrics;
+		void				*vea_metrics = NULL;
 
+		if (vp_metrics)
+			vea_metrics = vp_metrics->vp_vea_metrics;
 		/* set unmap callback fp */
 		unmap_ctxt.vnc_unmap = vos_blob_unmap_cb;
 		unmap_ctxt.vnc_data = pool->vp_io_ctxt;
 		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
-			      &unmap_ctxt, &pool->vp_vea_info);
+			      &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {
 			D_ERROR("Failed to load block space info: "DF_RC"\n",
 				DP_RC(rc));
@@ -783,8 +787,8 @@ failed:
 }
 
 int
-vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
-	      daos_handle_t *poh)
+vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
+		      daos_handle_t *poh)
 {
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool = NULL;
@@ -863,7 +867,7 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 		goto out;
 	}
 
-	rc = pool_open(ph, pool_df, uuid, flags, poh);
+	rc = pool_open(ph, pool_df, uuid, flags, metrics, poh);
 	ph = NULL;
 
 out:
@@ -873,6 +877,12 @@ out:
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
 	return rc;
+}
+
+int
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *poh)
+{
+	return vos_pool_open_metrics(path, uuid, flags, NULL, poh);
 }
 
 /**
