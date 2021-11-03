@@ -28,7 +28,7 @@ ior:
         np_16:
             np: 16
     test_file: testFile
-    repetitions: 2
+    repetitions: 3
     iorflags:
         ssf:
           flags: "-v -D 600 -w -r"
