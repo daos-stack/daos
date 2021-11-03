@@ -8,6 +8,7 @@ import os
 from time import sleep, time
 import ctypes
 import json
+from datetime import datetime
 
 from test_utils_base import TestDaosApiBase
 from avocado import fail_on
@@ -609,6 +610,54 @@ class TestPool(TestDaosApiBase):
                 self.control_method.value)
 
         return status
+
+    def get_rebuild_timestamp(self):
+        """Get the current timestamp for the check_rebuild() method.
+
+        Returns:
+            str: timestamp in the format required by check_rebuild()
+
+        """
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def check_rebuild(self, server_manager, since, started=True):
+        """Wait for rebuild to start or finish.
+
+        Detect rebuild start or finish messages in the server journalctl logs.
+
+        Args:
+            server_manager (DaosServerManager): manager for the servers hosting the pool
+            since (str): search log entries from this date; format="%Y-%m-%d %H:%M:%S"
+            started (bool, optional): whether to check for rebuild start (True) or finish (False).
+                Defaults to True.
+
+        Raises:
+            DaosTestError: if there is a timeout checking for the rebuild messages
+
+        Returns:
+            bool: True if the expected rebuild messages were found; False otherwise.
+
+        """
+        state = "start" if started else "finish"
+        pattern = r"RAS EVENT id:\s+\[pool_rebuild_{}ed\].*pool:\s+\[{}\]".format(state, self.uuid)
+        quantity = 1
+        self.log.info(
+            "Waiting for rebuild to %s%s ...", state,
+            " with a {} second timeout".format(self.rebuild_timeout.value)
+            if self.rebuild_timeout.value is not None else "")
+        complete, detected, timed_out = server_manager.search_logs(
+            pattern, since, None, quantity, self.rebuild_timeout.value)
+        if complete:
+            self.log.info("Rebuild %s detected", state)
+        else:
+            self.log.info("Detected %d/%d rebuild %s messages:", detected, quantity, state)
+            server_manager.dump_logs(timestamp=since)
+        if timed_out:
+            raise DaosTestError(
+                "TIMEOUT detected after {} seconds while for waiting for rebuild to {}.  This "
+                "timeout can be adjusted via the 'pool/rebuild_timeout' test yaml "
+                "parameter.".format(self.rebuild_timeout.value, state))
+        return complete
 
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
