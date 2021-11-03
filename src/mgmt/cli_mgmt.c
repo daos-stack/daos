@@ -741,6 +741,13 @@ dc_mgmt_sys_detach(struct dc_mgmt_sys *sys)
 }
 
 /**
+ * This is a temporary fix because this check is broken in GCC 9.0+
+ */
+#if (_GNUC_ > 8)
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wstringop-truncation"
+#endif
+/**
  * Encode \a sys into \a buf of capacity \a cap. If \a buf is NULL, just return
  * the number of bytes that would be required. If \a buf is not NULL and \a cap
  * is insufficient, return -DER_TRUNC.
@@ -764,6 +771,9 @@ dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap)
 
 	return len;
 }
+#if (_GNUC_ > 8)
+# pragma GCC diagnostic pop
+#endif
 
 /** Decode \a buf of length \a len. */
 ssize_t
