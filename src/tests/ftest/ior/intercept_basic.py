@@ -47,11 +47,11 @@ class IorIntercept(IorTestBase):
         apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
         for api in apis:
             self.ior_cmd.api.update(api)
-            out = self.run_ior_with_pool(fail_on_warning=False)
+            out = self.run_ior_with_pool(fail_on_warning=True)
             without_intercept = IorCommand.get_ior_metrics(out)
             if api == "POSIX":
                 intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                out = self.run_ior_with_pool(intercept, fail_on_warning=False)
+                out = self.run_ior_with_pool(intercept, fail_on_warning=True)
                 with_intercept = IorCommand.get_ior_metrics(out)
                 max_mib = int(IorMetrics.Max_MiB)
                 min_mib = int(IorMetrics.Min_MiB)
@@ -60,6 +60,9 @@ class IorIntercept(IorTestBase):
                                           "/run/ior/iorflags/ssf/*", 1)
                 read_x = self.params.get("read_x",
                                          "/run/ior/iorflags/ssf/*", 1)
+
+                self.log.info("Metrics are %s", with_intercept)
+                self.log.info("Metrics are %s", without_intercept)
 
                 # Verifying write performance
                 self.assertTrue(float(with_intercept[0][max_mib]) >

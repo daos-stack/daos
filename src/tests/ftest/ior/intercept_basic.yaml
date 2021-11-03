@@ -28,12 +28,10 @@ ior:
         np_16:
             np: 16
     test_file: testFile
-    repetitions: 1
-# Remove the below line once DAOS-3143 is resolved
-    dfs_destroy: False
+    repetitions: 2
     iorflags:
         ssf:
-          flags: "-v -D 300 -w -r"
+          flags: "-v -D 600 -w -r"
           ior_api:
             - DFS
             - POSIX
