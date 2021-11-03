@@ -8,7 +8,7 @@ hosts:
     - server-F
   test_clients:
     - client-G
-timeout: 700
+timeout: 2700
 server_config:
     name: daos_server
 #    provider: ofi+tcp;ofi_rxm
