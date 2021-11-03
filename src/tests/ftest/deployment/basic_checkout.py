@@ -25,7 +25,6 @@ class BasicCheckout(IorSmall, MdtestSmall, ContainerAutotestTest, EcodIor):
         Test Description: Bundles four tests into one and run in the
                           following sequence - ior_small, mdtest_small,
                           ec_smoke and autotest.
-        :avocado: tags=hw,large
         :avocado: tags=installation,basiccheckout
         """
         # local param
@@ -56,7 +55,6 @@ class BasicCheckoutDm(DmvrPosixLargeFile):
         Test Description: Datamover test to check connection and datamover
                           functionality with Lustre fs on newly installed
                           server nodes.
-        :avocado: tags=hw,large
         :avocado: tags=installation,basiccheckout
         """
         # local param

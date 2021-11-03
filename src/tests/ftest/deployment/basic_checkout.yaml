@@ -6,15 +6,28 @@ hosts:
     - server-D
     - server-E
     - server-F
+    - server-G
+    - server-H
+    - server-I
+    - server-J
+    - server-K
+    - server-L
+    - server-M
+    - server-N
+    - server-O
+    - server-P
   test_clients:
-    - client-G
+    - client-Q
+    - client-R
+    - client-S
+    - client-T
 timeout: 2700
 server_config:
     name: daos_server
-#    provider: ofi+tcp;ofi_rxm
+    provider: ofi+tcp;ofi_rxm
     servers:
         bdev_class: nvme
-        bdev_list: ["0000:83:00.0"]
+        bdev_list: ["aaaa:aa:aa.a"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
     transport_config:
@@ -39,8 +52,8 @@ ior:
     ior_timeout: 60
     client_processes:
         np_16:
-            np: 16
-        fs_copy: 10
+            np: 64
+        fs_copy: 40
     test_file: daos:testFile
     repetitions: 2
     dfs_destroy: False
@@ -75,15 +88,15 @@ ior:
       - "EC_4P2G1"
       - "EC_4P2G8"
       - "EC_4P2GX"
-#      - "EC_8P2G1"
-#      - "EC_8P2G8"
-#      - "EC_8P2GX"
+      - "EC_8P2G1"
+      - "EC_8P2G8"
+      - "EC_8P2GX"
     dm:
       dm_ior_options: ["-w -k", "5", "1M", "1G", "EC_2P2G1", "EC_2P2GX", "/testFile", "1"]
 mdtest:
   client_processes:
     np_8:
-      np: 8
+      np: 64
   test_dir: "/"
   iteration: 1
   dfs_destroy: True
