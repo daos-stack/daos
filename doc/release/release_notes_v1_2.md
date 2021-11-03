@@ -25,11 +25,13 @@ Please visit this [link](https://github.com/daos-stack/daos/blob/master/LICENSE)
 for more information on the licenses.
 
 ## Software Installation
+
 Reference the [Software Installation](https://daos-stack.github.io/admin/installation/)
 section of the [DAOS Administration Guide](https://daos-stack.github.io/admin/hardware/)
 for more details.
 
 ## Hardware Support
+
 ### Processor Requirements
 DAOS requires a 64-bit processor architecture and is primarily developed on
 Intel 64 architecture. The DAOS software and the libraries it depends on
@@ -72,6 +74,7 @@ filesystem, and NVMe SSDs can be also emulated with DRAM or a loopback
 file. Any data written using a tmpfs will not be persistent across a reboot.
 
 ## DAOS Testing
+
 DAOS 1.2 validation efforts were focused on anticipated initial use cases.
 Testing has been completed in the following areas:
 
@@ -240,6 +243,7 @@ extending the storage pool. Main features of DAOS EC include:
   background and recover data redundancy to the original level.
 
 ## Document updates
+
 All documents supporting the [https://daos-stack.github.io/](https://daos-stack.github.io/)
 site have been refreshed for this release.
 Design documents in the DAOS Source repository have also been refreshed for this release.

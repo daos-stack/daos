@@ -46,7 +46,7 @@ nav:
         - 'openSUSE Setup': 'QSG/suse_setup.md'
         - 'Admin/Client Tools': 'QSG/tour.md'
         - 'Test and Benchmarking': 'QSG/test_index.md'
-        - 'IO500 Setup': 'https://wiki.hpdd.intel.com/display/DC/DAOS+IO-500+Instructions'
+        - 'IO500 Setup': 'https://daosio.atlassian.net/wiki/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
         - 'Software Installation': 'admin/installation.md'
@@ -74,14 +74,14 @@ nav:
         - 'Run dbench': 'QSG/dbench.md'
         - 'Datamover test': 'QSG/datamover.md'
     - Releases:
-        - 'Release Notes v1.0': 'release/release_notes_v1_0.md'
-        - 'Support Matrix': 'release/support_matrix.md'
+        - 'Release Notes v1.2': 'release/release_notes_v1_2.md'
+        - 'Support Matrix v1.2': 'release/support_matrix_v1_2.md'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
         - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
         - 'DAOS API Documentation': 'html/index.html'
-    - Community Wiki: 'https://wiki.hpdd.intel.com'
-    - Roadmap: 'https://wiki.hpdd.intel.com/display/DC/Roadmap/'
+    - Community Wiki: 'http://wiki.daos.io/'
+    - Roadmap: 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Mailing list: 'https://daos.groups.io/g/daos'
-    - Issue tracker: 'https://jira.hpdd.intel.com/projects/DAOS'
+    - Issue tracker: 'http://jira.daos.io/'
