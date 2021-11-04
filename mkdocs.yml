@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v2.0 - dev
+site_name: DAOS v2.0
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
@@ -42,10 +42,10 @@ markdown_extensions:
 nav:
     - Intro:
         - 'Welcome': 'index.md'
-        - 'Community Wiki': 'http://wiki.daos.io'
+        - 'Community Wiki': 'http://wiki.daos.io/'
         - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
         - 'Community Mailing list': 'https://daos.groups.io/g/daos'
-        - 'Issue tracker': 'http://jira.daos.io'
+        - 'Issue tracker': 'http://jira.daos.io/'
     - Overview:
         - 'Architecture': 'overview/architecture.md'
         - 'Storage Model': 'overview/storage.md'
@@ -56,9 +56,9 @@ nav:
         - 'Use Cases': 'overview/use_cases.md'
         - 'Terminology': 'overview/terminology.md'
     - Installation and Setup:
-        - 'CentOS': 'QSG/setup.md'
-        - 'openSUSE': 'QSG/suse_setup.md'
-        - 'Build from Scratch': 'QSG/scratch.md'
+        - 'CentOS': 'QSG/setup_centos.md'
+        - 'openSUSE': 'QSG/setup_suse.md'
+        - 'Build from Scratch': 'QSG/build_from_scratch.md'
         - 'Admin/Client Tools': 'QSG/tour.md'
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
@@ -92,7 +92,7 @@ nav:
         - 'Native Programming Interface': 'user/interface.md'
     - Releases:
         - 'Release Notes v2.0': 'release/release_notes_v2_0.md'
-        - 'Support Matrix': 'release/support_matrix.md'
+        - 'Support Matrix v2.0': 'release/support_matrix_v2_0.md'
         - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'

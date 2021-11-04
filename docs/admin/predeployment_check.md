@@ -47,14 +47,16 @@ The DAOS Agent (running on the client nodes) is responsible for resolving
 UID/GID to user/group names which are added to a signed credential and sent to
 the DAOS storage nodes.
 
-## Multi-rail/NIC Setup
+## Setup for multiple network links
 
-Storage nodes can be configured with multiple network interfaces to run
-multiple engine instances.
+With libfabric, it is not supported to aggregate (or stripe over) multiple
+network links as a single endpoint. So a single DAOS engine can only use
+a single network link.
+But when a storage node runs multiple engine instances, each engine instance
+can and should manage its own network link to achieve optimum performance.
 
-
-Some special configuration is required to use librdmacm with multiple
-interfaces.
+Some special configuration is required to configure the IP layer and
+to use librdmacm with multiple interfaces in the same IP network.
 
 First, the accept_local feature must be enabled on the network interfaces
 to be used by DAOS. This can be done using the following command (<ifaces> must
@@ -160,8 +162,8 @@ time the system is provisioned and requires a reboot to take effect.
 
 To tell systemd to create the necessary directories for DAOS:
 
--   Copy the file utils/systemd/daosfiles.conf to /etc/tmpfiles.d\
-    cp utils/systemd/daosfiles.conf /etc/tmpfiles.d
+-   Copy the config file:
+    `cp utils/systemd/daosfiles.conf /etc/tmpfiles.d`
 
 -   Modify the copied file to change the user and group fields
     (currently daos) to the user daos will be run as
@@ -177,7 +179,7 @@ that require elevated privileges on behalf of `daos_server`.
 ### Privileged Helper Configuration
 
 When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
-to the correct location with the correct permissions. The RPM creates a "daos_server"
+to the correct location with the correct permissions. The RPM creates a `daos_server`
 system group and configures permissions such that `daos_admin` may only be invoked
 from `daos_server`.
 
