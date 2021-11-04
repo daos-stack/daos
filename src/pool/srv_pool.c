@@ -5723,7 +5723,7 @@ ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl)
 	if (rc != 0)
 		return rc;
 
-	return uuid_compare(pool->sp_uuid, hdl) == 0;
+	return uuid_compare(srv_hdl, hdl) == 0;
 }
 
 static bool

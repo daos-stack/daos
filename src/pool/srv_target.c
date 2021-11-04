@@ -1395,8 +1395,8 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	unsigned int			version;
 	int				rc;
 
-	D_DEBUG(DB_TRACE, DF_UUID": handling rpc %p\n",
-		DP_UUID(in->tmi_op.pi_uuid), rpc);
+	D_DEBUG(DB_TRACE, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
+		DP_UUID(in->tmi_op.pi_uuid), rpc, DP_UUID(in->tmi_op.pi_hdl));
 
 	/* Validate the pool handle and get the ds_pool object. */
 	if (daos_rpc_from_client(rpc)) {
@@ -1423,6 +1423,9 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 		}
 		rc = ds_pool_hdl_is_from_srv(pool, in->tmi_op.pi_hdl);
 		if (rc < 0) {
+			D_CDEBUG(rc == -DER_NOTLEADER, DLOG_DBG, DLOG_ERR,
+				 DF_UUID": failed to check pool handle: "DF_RC"\n",
+				 DP_UUID(in->tmi_op.pi_uuid), DP_RC(rc));
 			if (rc == -DER_NOTLEADER)
 				rc = -DER_AGAIN;
 			goto out_pool;
