@@ -95,7 +95,7 @@ if ! module load $OPENMPI; then
     module list
     exit 1
 fi
-coproc daos_server --debug start -t 1 --recreate-superblocks
+coproc daos_server --debug start -t 1 --recreate-superblocks 2>&1
 trap 'set -x; kill -INT $COPROC_PID' EXIT
 line=""
 while [[ "$line" != *started\ on\ rank\ 0* ]]; do
@@ -103,7 +103,26 @@ while [[ "$line" != *started\ on\ rank\ 0* ]]; do
   echo "Server stdout: $line"
 done
 echo "Server started!"
-daos_agent --debug &
-AGENT_PID=$!
-trap 'set -x; kill -INT $AGENT_PID $COPROC_PID' EXIT
-OFI_INTERFACE=eth0 daos_test -m
+SERVER_PID=$COPROC_PID
+coproc daos_agent --debug 2>&1
+trap 'set -x; kill -INT $COPROC_PID' EXIT
+line=""
+while [[ "$line" != *listening\ on\ * ]]; do
+  read -r -t 60 line <&"${COPROC[0]}"
+  echo "Agent stdout: $line"
+done
+echo "Agent started!"
+AGENT_PID=$COPROC_PID
+trap 'set -x; kill -INT $AGENT_PID $SERVER_PID' EXIT
+if ! OFI_INTERFACE=eth0 timeout -k 30 300 daos_test -m; then
+    rc=${PIPESTATUS[0]}
+    if [ "$rc" = "124" ]; then
+        echo "daos_test -m was killed after running for 5 minutes"
+    else
+        echo "daos_test -m failed, exiting with $rc"
+    fi
+    echo "daos_server stdout and stderr since rank 0 started:"
+    cat <&"${COPROC[0]}"
+    exit "$rc"
+fi
+exit 0
