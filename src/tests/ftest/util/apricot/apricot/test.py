@@ -675,7 +675,7 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_agents:
             self.start_agents(force=force_agent_start)
 
-        self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*")
+        self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
 
         # If there's no server started, then there's no server log to write to.
         if (self.setup_start_servers and self.setup_start_agents and
