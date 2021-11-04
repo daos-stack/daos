@@ -1960,13 +1960,13 @@ dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char **
 	}
 
 	/* Allocate arrays for attribute names, buffers, and sizes */
-	D_ALLOC(names, num_attrs * sizeof(char *));
+	D_ALLOC_ARRAY(names, num_attrs);
 	if (names == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC(sizes, num_attrs * sizeof(size_t));
+	D_ALLOC_ARRAY(sizes, num_attrs);
 	if (sizes == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC(buffers, num_attrs * sizeof(void *));
+	D_ALLOC_ARRAY(buffers, num_attrs);
 	if (buffers == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2012,9 +2012,8 @@ dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char **
 	*_buffers = buffers;
 	*_sizes = sizes;
 out:
-	if (rc != 0) {
+	if (rc != 0)
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
-	}
 	D_FREE(name_buf);
 	return rc;
 }
@@ -2145,9 +2144,8 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	*_props = props;
 out:
 	daos_prop_free(prop_acl);
-	if (rc != 0) {
+	if (rc != 0)
 		daos_prop_free(props);
-	}
 	return rc;
 }
 
@@ -2155,7 +2153,7 @@ out:
 static int
 dm_check_cont_status(struct cmd_args_s *ap, daos_handle_t coh, bool *status_healthy)
 {
-	daos_prop_t		*prop = NULL;
+	daos_prop_t		*prop;
 	struct daos_prop_entry	*entry;
 	struct daos_co_status	stat = {0};
 	int			rc = 0;
@@ -2333,6 +2331,7 @@ dm_connect(struct cmd_args_s *ap,
 			DH_PERROR_DER(ap, rc, "Failed to check container status");
 			D_GOTO(err, rc);
 		} else if (!status_healthy) {
+			rc = -DER_INVAL;
 			DH_PERROR_DER(ap, rc, "Container status is unhealthy, stopping");
 			D_GOTO(err, rc);
 		}

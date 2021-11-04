@@ -642,7 +642,7 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 		D_ERROR("failed to get dimensions of dataspace\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	D_ALLOC(roots, sizeof(struct daos_prop_co_roots));
+	D_ALLOC_PTR(roots);
 	if (roots == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	status = H5Aread(cont_attr, attr_dtype, roots->cr_oids);
