@@ -44,11 +44,13 @@ In this step, we create a CentOS 7 image and fetches the latest DAOS version fro
 Once the image has been created, a container will need to be started to run the DAOS service. 
 
 ### Setting Hugepages
-At this stage, depending on how hugepages are configured on your system, you may get errors when the `docker run` command is issued. So for this demonstration, we will configure hugepages before issuing the `docker run` command:
+At this stage, depending on how hugepages are configured on your hist system, you may get errors when the `docker run` command is issued. So for this demonstration, we will configure hugepages before issuing the `docker run` command:
+
+> Depending on the CPU involved, the quantity of hugepages will very. In our case of a Cascade Lake Server it is a qty of 16
 
 We set the hugepages by using the following commands:
 ```bash
-echo 1024 | sudo tee /proc/sys/VM/nr_hugepages
+echo 16 | sudo tee /proc/sys/VM/nr_hugepages
 cat /proc/meminfo | grep Huge
 ```
 
@@ -58,24 +60,24 @@ This command should provide an output similar to:
 AnonHugePages:         0 kB
 ShmemHugePages:        0 kB
 FileHugePages:         0 kB
-HugePages_Total:    1024
-HugePages_Free:     1024
+HugePages_Total:    16
+HugePages_Free:     16
 HugePages_Rsvd:        0
 HugePages_Surp:        0
-Hugepagesize:       2048 kB
-Hugetlb:         2097152 kB
+Hugepagesize:       2048 kB   *Probably needs new data as I switched to 1g hugepages
+Hugetlb:         2097152 kB   *Probably needs new data as I switched to 1g hugepages
 ```
 
 For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages)
 
-### Starting the Docker Container
+## Starting the Docker Container
 Now we need to start the docker container by invoking the "docker run" command
 
-`sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages:/dev/hugepages daos`
-
-Alternatively, you can use 1G hugepages or no hugepages as well. In those cases, the docker container would need to be started as follows:
-
 `sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages-1G:/dev/hugepages-1G`
+
+Alternatively, you can use standard hugepages or no hugepages as well. In those cases, the docker container would need to be started as follows:
+
+`sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages:/dev/hugepages daos`
 
 or
 
@@ -88,6 +90,7 @@ or
 First we need to create the cerificates that DAOS uses for encryption
 
 ```
+cd ..
 cd /tmp
 /usr/lib64/daos/certgen/gen_certificates.sh
 ```
@@ -95,7 +98,6 @@ cd /tmp
 
 ## Start the DAOS Service
 Now that the DAOS Docker image is running, we need to enable the DAOS Service 
-
 
 The DAOS service can be started in the docker container as follows:
 
