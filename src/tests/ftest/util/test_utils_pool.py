@@ -645,18 +645,17 @@ class TestPool(TestDaosApiBase):
             "Waiting for rebuild to %s%s ...", state,
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
-        complete, detected, timed_out = server_manager.search_logs(
+
+        complete, message = server_manager.search_logs(
             pattern, since, None, quantity, self.rebuild_timeout.value)
         if complete:
-            self.log.info("Rebuild %s detected", state)
+            self.log.info("Rebuild %s detected - %s", state, message)
         else:
-            self.log.info("Detected %d/%d rebuild %s messages:", detected, quantity, state)
-            server_manager.dump_logs(timestamp=since)
-        if timed_out:
             raise DaosTestError(
                 "TIMEOUT detected after {} seconds while for waiting for rebuild to {}.  This "
                 "timeout can be adjusted via the 'pool/rebuild_timeout' test yaml "
                 "parameter.".format(self.rebuild_timeout.value, state))
+
         return complete
 
     def wait_for_rebuild(self, to_start, interval=1):
