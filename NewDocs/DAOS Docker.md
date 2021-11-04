@@ -86,7 +86,7 @@ or
 > Warning: If Docker is being run on a non-Linux system, the "-v" parameter should be removed from the command line. Example:
 `sudo docker run -it -d --privileged --cap-add=ALL --name server`
 
-## Create the certificates
+## Create the Certificates  (Work in Progress)
 First we need to create the cerificates that DAOS uses for encryption
 
 ```
@@ -120,7 +120,7 @@ Format Summary:
   -----     ----------- ------------
   localhost 1           1
 ```
-## Creating DAOS Pools
+## Creating DAOS Pools (Work in Progress)
 
 `sudo docker exec server dmg pool create --size 15GB`
 
@@ -137,8 +137,8 @@ You will now see in your list of images, including your new_image_name
 
 `sudo docker images`
 
-## Next Steps
-If all the above steps are done, we now have a complete Docker instance established, and we now need to look at pool creation using the DAOS Admin Tool
+## Next Steps (work in Progress)
+
 
 ## Resources
 - [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
