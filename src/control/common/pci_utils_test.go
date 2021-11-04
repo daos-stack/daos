@@ -63,7 +63,7 @@ func TestPCIUtils_NewPCIAddress(t *testing.T) {
 	}
 }
 
-func TestPCIUtils_NewPCIAddressList(t *testing.T) {
+func TestPCIUtils_NewPCIAddressSet(t *testing.T) {
 	for name, tc := range map[string]struct {
 		addrStrs    []string
 		expAddrStr  string
@@ -88,23 +88,23 @@ func TestPCIUtils_NewPCIAddressList(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			addrList, err := NewPCIAddressList(tc.addrStrs...)
+			addrSet, err := NewPCIAddressSet(tc.addrStrs...)
 			CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expAddrStr, addrList.String()); diff != "" {
-				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.expAddrStr, addrSet.String()); diff != "" {
+				t.Fatalf("unexpected string (-want, +got):\n%s\n", diff)
 			}
-			if diff := cmp.Diff(tc.expAddrStrs, addrList.Strings()); diff != "" {
-				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.expAddrStrs, addrSet.Strings()); diff != "" {
+				t.Fatalf("unexpected list (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
 }
 
-func TestPCIUtils_PCIAddressList_Intersect(t *testing.T) {
+func TestPCIUtils_PCIAddressSet_Intersect(t *testing.T) {
 	for name, tc := range map[string]struct {
 		addrStrs          []string
 		intersectAddrStrs []string
@@ -124,17 +124,17 @@ func TestPCIUtils_PCIAddressList_Intersect(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			addrList, err := NewPCIAddressList(tc.addrStrs...)
+			addrSet, err := NewPCIAddressSet(tc.addrStrs...)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			intersectAddrList, err := NewPCIAddressList(tc.intersectAddrStrs...)
+			intersectAddrSet, err := NewPCIAddressSet(tc.intersectAddrStrs...)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			intersection := addrList.Intersect(intersectAddrList)
+			intersection := addrSet.Intersect(intersectAddrSet)
 
 			if diff := cmp.Diff(tc.expAddrStrs, intersection.Strings()); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
@@ -143,7 +143,7 @@ func TestPCIUtils_PCIAddressList_Intersect(t *testing.T) {
 	}
 }
 
-func TestPCIUtils_PCIAddressList_Difference(t *testing.T) {
+func TestPCIUtils_PCIAddressSet_Difference(t *testing.T) {
 	for name, tc := range map[string]struct {
 		addrStrs           []string
 		differenceAddrStrs []string
@@ -163,17 +163,17 @@ func TestPCIUtils_PCIAddressList_Difference(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			addrList, err := NewPCIAddressList(tc.addrStrs...)
+			addrSet, err := NewPCIAddressSet(tc.addrStrs...)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			differenceAddrList, err := NewPCIAddressList(tc.differenceAddrStrs...)
+			differenceAddrSet, err := NewPCIAddressSet(tc.differenceAddrStrs...)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			difference := addrList.Difference(differenceAddrList)
+			difference := addrSet.Difference(differenceAddrSet)
 
 			if diff := cmp.Diff(tc.expAddrStrs, difference.Strings()); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
