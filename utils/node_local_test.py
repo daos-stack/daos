@@ -78,6 +78,7 @@ class NLTConf():
         self.max_log_size = None
         self.valgrind_errors = False
         self.lt = CulmTimer()
+        self.lt_compress = CulmTimer()
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
         self.tmp_dir = None
@@ -765,8 +766,8 @@ class DaosServer():
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
 
-        compress_file(self.agent_log.name)
-        compress_file(self.control_log.name)
+        compress_file(self.conf, self.agent_log.name)
+        compress_file(self.conf, self.control_log.name)
 
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
@@ -2427,8 +2428,10 @@ def setup_log_test(conf):
 
     lt.wf = conf.wf
 
-def compress_file(filename):
+def compress_file(conf, filename):
     """Compress a file using bz2 for space reasons"""
+
+    conf.lt_compress.start()
     small = bz2.BZ2Compressor()
 
     fd = open(filename, 'rb')
@@ -2445,6 +2448,7 @@ def compress_file(filename):
         nfd.write(new_data)
 
     os.unlink(filename)
+    conf.lt_compress.stop()
 
 # https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
 def sizeof_fmt(num, suffix='B'):
@@ -2466,10 +2470,8 @@ def log_timer(func):
         rc = None
         try:
             rc = func(*args, **kwargs)
-        except NLTestFail:
+        finally:
             conf.lt.stop()
-            raise
-        conf.lt.stop()
         return rc
 
     return log_timer_wrapper
@@ -2510,7 +2512,7 @@ def log_test(conf,
 
     if skip_fi:
         if not lto.fi_triggered:
-            compress_file(filename)
+            compress_file(conf, filename)
             raise NLTestNoFi
 
     functions = set()
@@ -2528,7 +2530,7 @@ def log_test(conf,
     if check_fstat and 'dfuse___fxstat' not in functions:
         raise NLTestNoFunction('dfuse___fxstat')
 
-    compress_file(filename)
+    compress_file(conf, filename)
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
         raise Exception('Max log size exceeded, {} > {}'\
@@ -3742,6 +3744,7 @@ def run(wf, args):
 
     wf_server.close()
     print('Total time in log analysis: {:.2f} seconds'.format(conf.lt.total))
+    print('Total time in log compression: {:.2f} seconds'.format(conf.lt_compress.total))
     return fatal_errors
 
 def main():
