@@ -157,9 +157,9 @@ class ZeroConfigTest(TestWithServers):
         daos_racer = DaosRacerCommand(self.bin, clients[0], dmg)
         daos_racer.get_params(self)
 
-        # Update env_name list to add OFI_INTERFACE and OFI_DOMAIN if needed.
+        # Update env_name list to add OFI_INTERFACE if needed.
         if env:
-            daos_racer.update_env_names(["OFI_INTERFACE", "OFI_DOMAIN"])
+            daos_racer.update_env_names(["OFI_INTERFACE"])
 
         # Setup the environment and logfile
         log_file = "daos_racer_{}_{}.log".format(exp_iface, env)
