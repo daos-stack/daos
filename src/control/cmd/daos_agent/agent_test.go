@@ -118,6 +118,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
+	t.Skip("DAOS-8967")
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
