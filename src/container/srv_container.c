@@ -1475,12 +1475,11 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 {
 	struct sched_req_attr	attr;
 
+	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 	if (unlikely(ec_agg_disabled))
 		return 0;
 
-	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 	D_ASSERT(svc->cs_ec_leader_ephs_req == NULL);
-
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &svc->cs_pool_uuid);
 	svc->cs_ec_leader_ephs_req = sched_create_ult(&attr, cont_agg_eph_leader_ult, svc, 0);
 	if (svc->cs_ec_leader_ephs_req == NULL) {

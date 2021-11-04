@@ -10,7 +10,7 @@ set -x
 
 . utils/sl/setup_local.sh
 
-sudo --preserve-env=SL_PREFIX ./utils/setup_daos_admin.sh
+sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_admin.sh
 
 TMP_DIR=$(mktemp -d)
 

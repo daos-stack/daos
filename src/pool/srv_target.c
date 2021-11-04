@@ -182,17 +182,28 @@ pool_child_add_one(void *varg)
 	if (child == NULL)
 		return -DER_NOMEM;
 
+	/* initialize metrics on the target xstream for each module */
+	rc = dss_module_init_metrics(DAOS_TGT_TAG, child->spc_metrics,
+				     arg->pla_pool->sp_path, info->dmi_tgt_id);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to initialize module metrics for pool"
+			"." DF_RC "\n", DP_UUID(child->spc_uuid), DP_RC(rc));
+		goto out_free;
+	}
+
 	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tgt_id,
 			      &path);
 	if (rc != 0)
-		goto out_free;
+		goto out_metrics;
 
-	rc = vos_pool_open(path, arg->pla_uuid, 0, &child->spc_hdl);
+	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
+	rc = vos_pool_open_metrics(path, arg->pla_uuid, VOS_POF_EXCL,
+				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
 	D_FREE(path);
 
 	if (rc != 0)
-		goto out_free;
+		goto out_metrics;
 
 	uuid_copy(child->spc_uuid, arg->pla_uuid);
 	child->spc_map_version = arg->pla_map_version;
@@ -217,15 +228,6 @@ pool_child_add_one(void *varg)
 	if (rc != 0)
 		goto out_gc;
 
-	/* initialize metrics on the target xstream for each module */
-	rc = dss_module_init_metrics(DAOS_TGT_TAG, child->spc_metrics,
-				     arg->pla_pool->sp_path, info->dmi_tgt_id);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to initialize module metrics for pool"
-			"." DF_RC "\n", DP_UUID(child->spc_uuid), DP_RC(rc));
-		goto out_scrub;
-	}
-
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
 	/* Load all containers */
@@ -238,8 +240,6 @@ pool_child_add_one(void *varg)
 out_list:
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
-	dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
-out_scrub:
 	ds_stop_scrubbing_ult(child);
 out_gc:
 	stop_gc_ult(child);
@@ -247,6 +247,8 @@ out_eventual:
 	ABT_eventual_free(&child->spc_ref_eventual);
 out_vos:
 	vos_pool_close(child->spc_hdl);
+out_metrics:
+	dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
 out_free:
 	D_FREE(child);
 	return rc;
