@@ -235,9 +235,8 @@ class IorCommand(ExecutableCommand):
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             if self.dfs_pool.value is not None:
-                env["DAOS_POOL"] = self.dfs_pool.value
-                env["DAOS_CONT"] = self.dfs_cont.value
-                env["DAOS_BYPASS_DUNS"] = "1"
+                env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.dfs_pool.value,
+                                                                self.dfs_cont.value)
                 if self.dfs_oclass.value is not None:
                     env["IOR_HINT__MPI__romio_daos_obj_class"] = \
                         self.dfs_oclass.value
