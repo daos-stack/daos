@@ -232,7 +232,8 @@ scrubbing_ult(void *arg)
 	C_TRACE("Scrubbing ULT started for pool: "DF_UUIDF"[%d]\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 
-	D_ASSERT(child->spc_scrubbing_req != NULL);
+	if (child->spc_scrubbing_req == NULL)
+		return;
 
 	sc_init(&ctx, child);
 	sleep_sec = between_scrub_sec();
@@ -306,7 +307,7 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 	if (child->spc_scrubbing_req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get req for Scrubbing ULT\n",
 		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_join(thread);
+		ABT_thread_free(&thread);
 		return -DER_NOMEM;
 	}
 
