@@ -104,14 +104,13 @@ while [[ "$line" != *started\ on\ rank\ 0* ]]; do
 done
 echo "Server started!"
 coproc AGENT daos_agent --debug 2>&1
-trap 'set -x; kill -INT $COPROC_PID' EXIT
+trap 'set -x; kill -INT $AGENT_PID $SERVER_PID' EXIT
 line=""
 while [[ "$line" != *listening\ on\ * ]]; do
   read -r -t 60 line <&"${AGENT[0]}"
   echo "Agent stdout: $line"
 done
 echo "Agent started!"
-trap 'set -x; kill -INT $AGENT_PID $SERVER_PID' EXIT
 if ! OFI_INTERFACE=eth0 timeout -k 30 300 daos_test -m; then
     rc=${PIPESTATUS[0]}
     if [ "$rc" = "124" ]; then
