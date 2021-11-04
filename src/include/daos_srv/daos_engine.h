@@ -134,50 +134,6 @@ void dss_unregister_key(struct dss_module_key *key);
 /** pthread names are limited to 16 chars */
 #define DSS_XS_NAME_LEN		(32)
 
-struct srv_profile_chunk {
-	d_list_t	spc_chunk_list;
-	uint32_t	spc_chunk_offset;
-	uint32_t	spc_chunk_size;
-	uint64_t	*spc_chunks;
-};
-
-/* The profile structure to record single operation */
-struct srv_profile_op {
-	int		pro_op;			/* operation */
-	char		*pro_op_name;		/* name of the op */
-	int		pro_acc_cnt;		/* total number of val */
-	int		pro_acc_val;		/* current total val */
-	d_list_t	pro_chunk_list;		/* list of all chunks */
-	d_list_t	pro_chunk_idle_list;	/* idle list of profile chunk */
-	int		pro_chunk_total_cnt;	/* Count in idle list & list */
-	int		pro_chunk_cnt;		/* count in list */
-	struct srv_profile_chunk *pro_current_chunk; /* current chunk */
-};
-
-/* Holding the total trunk list for a specific profiling module */
-
-#define D_TIME_START(start, op)			\
-do {						\
-	struct daos_profile *dp;		\
-						\
-	dp = dss_get_module_info()->dmi_dp;	\
-	if ((dp) == NULL)			\
-		break;				\
-	start = daos_get_ntime();		\
-} while (0)
-
-#define D_TIME_END(start, op)			\
-do {						\
-	struct daos_profile *dp;		\
-	int time_msec;				\
-						\
-	dp = dss_get_module_info()->dmi_dp;	\
-	if ((dp) == NULL || start == 0)		\
-		break;				\
-	time_msec = (daos_get_ntime() - start)/1000; \
-	daos_profile_count(dp, op, time_msec);	\
-} while (0)
-
 /* Opaque xstream configuration data */
 struct dss_xstream;
 
