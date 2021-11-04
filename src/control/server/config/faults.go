@@ -92,6 +92,14 @@ var (
 	)
 )
 
+func FaultConfigTargetCountMismatch(curIdx, expCount, curCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigTargetCountMismatch,
+		fmt.Sprintf("the 'targets' parameter in I/O Engine %d does not match (%d != %d)", curIdx, curCount, expCount),
+		"ensure that each I/O Engine has the same 'targets' value and restart",
+	)
+}
+
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigDuplicateFabric,

@@ -425,7 +425,7 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger, hpi *common.HugePageInfo) (err error) {
+func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -492,7 +492,7 @@ func (cfg *Server) Validate(log logging.Logger, hpi *common.HugePageInfo) (err e
 	}
 
 	if cfgHasBdevs {
-		minHugePages, err := common.CalcMinHugePages(hpi, cfgTargets)
+		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargets)
 		if err != nil {
 			return err
 		}
@@ -576,8 +576,17 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	seenValues := make(map[string]int)
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
+	numTargets := 0
 
 	for idx, engine := range cfg.Engines {
+		if idx == 0 {
+			numTargets = engine.TargetCount
+		} else {
+			if engine.TargetCount != numTargets {
+				return FaultConfigTargetCountMismatch(idx, numTargets, engine.TargetCount)
+			}
+		}
+
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
 			engine.Fabric.Provider,
 			engine.Fabric.Interface,

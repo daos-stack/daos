@@ -28,11 +28,11 @@ const (
 
 // HugePageInfo contains information about system hugepages.
 type HugePageInfo struct {
-	Total      int
-	Free       int
-	Reserved   int
-	Surplus    int
-	PageSizeKb int
+	Total      int `json:"total"`
+	Free       int `json:"free"`
+	Reserved   int `json:"reserved"`
+	Surplus    int `json:"surplus"`
+	PageSizeKb int `json:"page_size_kb"`
 }
 
 func (hpi *HugePageInfo) TotalMB() int {
@@ -103,12 +103,12 @@ func GetHugePageInfo() (*HugePageInfo, error) {
 
 // CalcMinHugePages returns the minimum number of hugepages that should be
 // requested for the given number of targets.
-func CalcMinHugePages(hpi *HugePageInfo, numTargets int) (int, error) {
+func CalcMinHugePages(hugePageSizeKb int, numTargets int) (int, error) {
 	if numTargets < 1 {
 		return 0, errors.New("numTargets must be >= 1")
 	}
 
-	hugepageSizeBytes := hpi.PageSizeKb * 1024
+	hugepageSizeBytes := hugePageSizeKb * 1024
 	if hugepageSizeBytes == 0 {
 		return 0, errors.New("invalid system hugepage size")
 	}

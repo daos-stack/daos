@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -170,6 +171,14 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 		return nil, err
 	}
 	resp.Scm = respScm
+
+	hpi, err := c.getHugePageInfo()
+	if err != nil {
+		return nil, err
+	}
+	if err := convert.Types(hpi, &resp.HugePageInfo); err != nil {
+		return nil, err
+	}
 
 	c.log.Debug("responding to StorageScan RPC")
 

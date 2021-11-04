@@ -136,7 +136,7 @@ func TestCommon_CalcMinHugePages(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotPages, gotErr := CalcMinHugePages(tc.input, tc.numTargets)
+			gotPages, gotErr := CalcMinHugePages(tc.input.PageSizeKb, tc.numTargets)
 			CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

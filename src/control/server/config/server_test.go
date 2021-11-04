@@ -163,7 +163,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log, defHugePageInfo)
+				err = configA.Validate(log, defHugePageInfo.PageSizeKb)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -185,7 +185,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log, defHugePageInfo)
+				err = configB.Validate(log, defHugePageInfo.PageSizeKb)
 			}
 
 			if err != nil {
@@ -539,6 +539,39 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithTargetCount(8),
 				),
 		},
+		"mismatched target counts": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(
+					engine.NewConfig().
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithBdevClass("nvme").
+								WithBdevDeviceList("0000:81:00.0"),
+						).
+						WithFabricInterfacePort(1234).
+						WithFabricInterface("eth0").
+						WithTargetCount(8),
+					engine.NewConfig().
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/bar"),
+							storage.NewTierConfig().
+								WithBdevClass("nvme").
+								WithBdevDeviceList("0000:82:00.0"),
+						).
+						WithFabricInterfacePort(1234).
+						WithFabricInterface("eth1").
+						WithTargetCount(7),
+				)
+			},
+			expErr: FaultConfigTargetCountMismatch(1, 8, 7),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -551,7 +584,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			dupe := tt.extraConfig(dupeCfg(config))
 
-			CmpErr(t, tt.expErr, dupe.Validate(log, defHugePageInfo))
+			CmpErr(t, tt.expErr, dupe.Validate(log, defHugePageInfo.PageSizeKb))
 			if tt.expErr != nil || tt.expConfig == nil {
 				return
 			}
@@ -780,7 +813,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			config = tt.extraConfig(config)
 			log.Debugf("%+v", config)
 
-			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo))
+			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo.PageSizeKb))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -985,7 +1018,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log, defHugePageInfo)
+			gotErr := conf.Validate(log, defHugePageInfo.PageSizeKb)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}

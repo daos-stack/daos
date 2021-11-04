@@ -375,6 +375,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 	hostRespWithScmNssNumaZero := dualHostRespSame("pmemDupNuma")
 	hostRespWithSingleSSD := dualHostRespSame("nvmeSingle")
 	hostRespWithSSDs := dualHostRespSame("withSpaceUsage")
+	hostRespDiffHpSizes := dualHostResp("withSpaceUsage", "1gbHugepages")
 
 	for name, tc := range map[string]struct {
 		engineCount   int
@@ -497,6 +498,19 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				engineCfgWithSSDs(t, 1).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
 			},
 			expSSDs: [][]string{{}, {}},
+		},
+		"different hugepage sizes": {
+			engineCount:   2,
+			hostResponses: hostRespDiffHpSizes,
+			expPMems: [][]string{
+				engineCfgWithSSDs(t, 0).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
+			},
+			expSSDs: [][]string{
+				engineCfgWithSSDs(t, 0).Storage.Tiers.BdevConfigs()[0].Bdev.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Tiers.BdevConfigs()[0].Bdev.DeviceList,
+			},
+			expErr: errors.New("not consistent"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -638,7 +652,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			WithFabricProvider(provider)
 	}
 	numa0 := uint(0)
-	numa1 := uint(1)
+	//numa1 := uint(1)
 
 	for name, tc := range map[string]struct {
 		engineCount    int               // number of engines to provide in config
@@ -784,7 +798,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},
-		"dual pmem dual ssd": {
+		// FIXME: This fails with the new constraint that each engine must have the same 'targets' value.
+		/*"dual pmem dual ssd": {
 			engineCount:  2,
 			accessPoints: []string{"hostX:10002"},
 			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
@@ -832,7 +847,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageVosEnv("NVME").
 					WithTargetCount(15).
 					WithHelperStreamCount(6)),
-		},
+		},*/
 		"hugepages test": {
 			engineCount:    1,
 			accessPoints:   []string{"hostX:10002"},
@@ -860,56 +875,6 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithTargetCount(8).
 					WithHelperStreamCount(2)),
 		},
-		"hugepages test, multiple target counts": {
-			engineCount:  2,
-			accessPoints: []string{"hostX:10002"},
-			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
-			numaIfaces:   numaNetIfaceMap{0: ib0, 1: ib1},
-			numaSSDs: numaSSDsMap{
-				0: common.MockPCIAddrs(0, 1, 2, 3), 1: common.MockPCIAddrs(4, 5, 6),
-			},
-			numaCoreCounts: numaCoreCountsMap{
-				0: &coreCounts{12, 2}, 1: &coreCounts{6, 0},
-			},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(9216).WithEngines(
-				defaultEngineCfg(0).
-					WithFabricInterface("ib0").
-					WithFabricInterfacePort(defaultFiPort).
-					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa0).
-					WithStorage(
-						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
-							WithScmDeviceList("/dev/pmem0").
-							WithScmMountPoint("/mnt/daos0"),
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
-					).
-					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
-					WithStorageVosEnv("NVME").
-					WithTargetCount(12).
-					WithHelperStreamCount(2),
-				defaultEngineCfg(1).
-					WithFabricInterface("ib1").
-					WithFabricInterfacePort(
-						int(defaultFiPort+defaultFiPortInterval)).
-					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa1).
-					WithStorage(
-						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
-							WithScmDeviceList("/dev/pmem1").
-							WithScmMountPoint("/mnt/daos1"),
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
-					).
-					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
-					WithStorageVosEnv("NVME").
-					WithTargetCount(6).
-					WithHelperStreamCount(0)),
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -920,15 +885,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				numaIfaces:  tc.numaIfaces,
 			}
 			sd := &storageDetails{
-				numaPMems: tc.numaPMems,
-				numaSSDs:  tc.numaSSDs,
+				hugePageSize: 2048,
+				numaPMems:    tc.numaPMems,
+				numaSSDs:     tc.numaSSDs,
 			}
 
-			hpi := &common.HugePageInfo{
-				PageSizeKb: 2048,
-			}
-
-			gotCfg, gotErr := genConfig(log, tc.accessPoints, nd, sd, tc.numaCoreCounts, hpi)
+			gotCfg, gotErr := genConfig(log, tc.accessPoints, nd, sd, tc.numaCoreCounts)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

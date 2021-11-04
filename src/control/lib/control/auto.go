@@ -115,13 +115,7 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	// FIXME: This should come from the remote server
-	hpi, err := common.GetHugePageInfo()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg, err := genConfig(req.Log, req.AccessPoints, nd, sd, ccs, hpi)
+	cfg, err := genConfig(req.Log, req.AccessPoints, nd, sd, ccs)
 	if err != nil {
 		return nil, err
 	}
@@ -396,8 +390,9 @@ func mapSSDs(ssds storage.NvmeControllers) numaSSDsMap {
 }
 
 type storageDetails struct {
-	numaPMems numaPMemsMap
-	numaSSDs  numaSSDsMap
+	hugePageSize int
+	numaPMems    numaPMemsMap
+	numaSSDs     numaSSDsMap
 }
 
 // validate checks sufficient PMem devices and SSD NUMA groups exist for the
@@ -450,8 +445,9 @@ func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount i
 	}
 
 	sd := &storageDetails{
-		numaPMems: mapPMems(storageSet.HostStorage.ScmNamespaces),
-		numaSSDs:  mapSSDs(storageSet.HostStorage.NvmeDevices),
+		numaPMems:    mapPMems(storageSet.HostStorage.ScmNamespaces),
+		numaSSDs:     mapSSDs(storageSet.HostStorage.NvmeDevices),
+		hugePageSize: storageSet.HostStorage.HugePageInfo.PageSizeKb,
 	}
 	if err := sd.validate(req.Log, engineCount, req.MinNrSSDs); err != nil {
 		return nil, err
@@ -561,7 +557,7 @@ func defaultEngineCfg(idx int) *engine.Config {
 
 // genConfig generates server config file from details of available network,
 // storage and CPU hardware.
-func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap, hpi *common.HugePageInfo) (*config.Server, error) {
+func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
 	// basic sanity checks
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
@@ -617,7 +613,7 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 	for _, e := range engines {
 		numTargets += e.TargetCount
 	}
-	reqHugePages, err := common.CalcMinHugePages(hpi, numTargets)
+	reqHugePages, err := common.CalcMinHugePages(sd.hugePageSize, numTargets)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to calculate minimum hugepages")
 	}
@@ -629,5 +625,5 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		WithControlLogFile(defaultControlLogFile).
 		WithNrHugePages(reqHugePages)
 
-	return cfg, cfg.Validate(log, hpi)
+	return cfg, cfg.Validate(log, sd.hugePageSize)
 }

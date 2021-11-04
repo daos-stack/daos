@@ -472,6 +472,7 @@ Errors:
 -----
 host1
 -----
+HugePage Size: 2048 KB
 	No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
@@ -500,6 +501,7 @@ Errors:
 -----
 host1
 -----
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -533,6 +535,7 @@ Errors:
 ---------
 host[1-2]
 ---------
+HugePage Size: 2048 KB
 	No SCM modules found
 
 	No NVMe devices found
@@ -558,6 +561,7 @@ host[1-2]
 ---------
 host[1-2]
 ---------
+HugePage Size: 2048 KB
 	No SCM modules found
 
 	No NVMe devices found
@@ -579,6 +583,7 @@ host[1-2]
 -----
 host1
 -----
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -604,6 +609,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 -----
 host1
 -----
+HugePage Size: 2048 KB
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
 pmem0         0         1.0 TB   
@@ -633,6 +639,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ---------
 host[1-2]
 ---------
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -662,6 +669,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 -----
 host1
 -----
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -671,6 +679,7 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 -----
 host2
 -----
+HugePage Size: 2048 KB
 	No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
@@ -690,6 +699,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ------------
 host[0-1023]
 ------------
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -727,6 +737,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ----------------
 host-[0001-0004]
 ----------------
+HugePage Size: 2048 KB
 	No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
@@ -762,6 +773,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ------------------
 host-j-[0001-0004]
 ------------------
+HugePage Size: 2048 KB
 	No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
@@ -797,6 +809,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ---------
 host[1,3]
 ---------
+HugePage Size: 2048 KB
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
 pmem0         0         1.0 TB   
@@ -810,6 +823,7 @@ NVMe PCI     Model FW Revision Socket ID Capacity
 ---------
 host[2,4]
 ---------
+HugePage Size: 2048 KB
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
 pmem0         0         1.0 TB   

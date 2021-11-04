@@ -152,6 +152,7 @@ const (
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
 	ServerConfigInsufficientHugePages
+	ServerConfigTargetCountMismatch
 )
 
 // SPDK library bindings codes

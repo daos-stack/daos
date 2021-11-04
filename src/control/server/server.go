@@ -35,7 +35,7 @@ import (
 )
 
 func processConfig(log *logging.LeveledLogger, cfg *config.Server, hpi *common.HugePageInfo) (*system.FaultDomain, error) {
-	if err := cfg.Validate(log, hpi); err != nil {
+	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
