@@ -79,6 +79,15 @@ class RbldWidelyStriped(MdtestBase):
         self.execute_mdtest()
         # Kill rank[6] and wait for rebuild to complete
         self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
+        time.sleep(9999)
+
+        ################################################
+        #
+        # Check engine_net_req_timeout telemetry values
+        #
+        ################################################
+
+
         self.pool.wait_for_rebuild(False, interval=1)
 
         # create 2nd container
