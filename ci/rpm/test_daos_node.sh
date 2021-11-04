@@ -95,7 +95,7 @@ if ! module load $OPENMPI; then
     module list
     exit 1
 fi
-coproc SERVER daos_server --debug start -t 1 --recreate-superblocks 2>&1
+coproc SERVER { daos_server --debug start -t 1 --recreate-superblocks; } 2>&1
 trap 'set -x; kill -INT $SERVER_PID' EXIT
 line=""
 while [[ "$line" != *started\ on\ rank\ 0* ]]; do
@@ -103,7 +103,7 @@ while [[ "$line" != *started\ on\ rank\ 0* ]]; do
   echo "Server stdout: $line"
 done
 echo "Server started!"
-coproc AGENT daos_agent --debug 2>&1
+coproc AGENT { daos_agent --debug; } 2>&1
 trap 'set -x; kill -INT $AGENT_PID $SERVER_PID' EXIT
 line=""
 while [[ "$line" != *listening\ on\ * ]]; do
