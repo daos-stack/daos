@@ -342,7 +342,7 @@ class LogTest():
         else:
             rpc_r = rpc_reporting()
 
-        for line in self._li.new_iter(pid=pid):
+        for line in self._li.new_iter(pid=pid, stateful=True):
             if rpc_r:
                 rpc_r.add_line(line)
             self.save_log_line(line)

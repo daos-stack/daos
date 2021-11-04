@@ -399,6 +399,83 @@ class LogLine():
     def free_pointer(self):
         """Return the memory address freed"""
         return self.get_field(-1).rstrip('.')
+
+# pylint: disable=too-many-branches
+class StateIter():
+
+    """Helper class for LogIter to add a statefull iterator.
+    Implement a new iterator() for LogIter() that tracks descriptors
+    and adds two new attributes, pdesc and pparent which are the local
+    descriptor with the reuse-count appended.
+    """
+    def __init__(self, li):
+        self.reuse_table = {}
+        self.active_desc = {}
+        self.li = li
+        self._l = None
+
+    def __iter__(self):
+
+        # Dict, indexed by pointer, containing re-use index for that pointer.
+        self.reuse_table = {}
+        # Conversion from active pointer to line where it was created.
+        self.active_desc = {}
+
+        self._l = iter(self.li)
+        return self
+
+    def __next__(self):
+        line = next(self._l)
+
+        if not line.trace:
+            line.rpc = False
+            return line
+
+        if line.is_new() or line.is_new_rpc():
+            if line.descriptor in self.reuse_table:
+                self.reuse_table[line.descriptor] += 1
+                line.pdesc = '{}_{}'.format(line.descriptor,
+                                            self.reuse_table[line.descriptor])
+            else:
+                self.reuse_table[line.descriptor] = 0
+                line.pdesc = line.descriptor
+            self.active_desc[line.descriptor] = line
+            if line.is_new():
+                if line.parent in self.active_desc:
+                    line.pparent = self.active_desc[line.parent].pdesc
+                else:
+                    line.pparent = line.parent
+                line.rpc = False
+            else:
+                line.rpc = True
+        elif line.is_link():
+            if line.parent in self.active_desc:
+                line.pparent = self.active_desc[line.parent].pdesc
+            else:
+                line.pparent = line.parent
+            line.pdesc = line.descriptor
+            line.rpc = False
+        else:
+            if line.descriptor in self.active_desc:
+                line.rpc = self.active_desc[line.descriptor].rpc
+                if not line.rpc:
+                    line.pparent = self.active_desc[line.descriptor].pparent
+                line.pdesc = self.active_desc[line.descriptor].pdesc
+                line.rpc_opcode = self.active_desc[line.descriptor].get_field(3)
+            else:
+                line.pdesc = line.descriptor
+                line.rpc = False
+
+            if (line.is_dereg() or line.is_dereg_rpc()) and \
+               line.descriptor in self.active_desc:
+                del self.active_desc[line.descriptor]
+
+        return line
+
+    def next(self):
+        """Python2/3 compat function"""
+        return self.__next__()
+
 # pylint: disable=too-many-branches
 
 # pylint: disable=too-few-public-methods
@@ -537,6 +614,7 @@ class LogIter():
 
     def new_iter(self,
                  pid=None,
+                 stateful=False,
                  trace_only=False,
                  raw=False):
         """Rewind file iterator, and set options
@@ -569,6 +647,11 @@ class LogIter():
             self._iter_last_index = 0
         self._trace_only = trace_only
         self._raw = raw
+
+        if stateful:
+            if pid is None:
+                raise InvalidPid
+            return StateIter(self)
 
         return self
 
