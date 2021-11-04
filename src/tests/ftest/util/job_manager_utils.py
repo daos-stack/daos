@@ -927,7 +927,7 @@ class Systemctl(JobManager):
                 data.append("    {}".format(line))
         return "\n".join(data)
 
-    def search_logs(self, pattern, since, until, quantity=1, timeout=60):
+    def search_logs(self, pattern, since, until, quantity=1, timeout=60, verbose=False):
         """Search the command logs on each host for a specified string.
 
         Args:
@@ -939,12 +939,13 @@ class Systemctl(JobManager):
                 pattern per host. Defaults to 1.
             timeout (int, optional): maximum number of seconds to wait to detect
                 the specified pattern. Defaults to 60.
+            verbose (bool, optional): whether or not to display the log data upon successful pattern
+                detection. Defaults to False.
 
         Returns:
             tuple:
                 (bool) - if the pattern was found quantity number of times
-                (int)  - the number of patterns found
-                (bool) - if the search timed out
+                (str)  - string indicating the number of patterns found in what duration
 
         """
         self.log.info(
@@ -956,6 +957,7 @@ class Systemctl(JobManager):
         complete = False
         timed_out = False
         start = time.time()
+        duration = 0
 
         # Search for patterns in the subprocess output until:
         #   - the expected number of pattern matches are detected (success)
@@ -969,9 +971,27 @@ class Systemctl(JobManager):
                 detected += len(match) if match else 0
 
             complete = detected == quantity
-            timed_out = time.time() - start > timeout
+            duration = time.time() - start
+            timed_out = duration > timeout
 
-        return complete, detected, timed_out
+        # Summarize results
+        msg = "{}/{} '{}' messages detected in".format(detected, quantity, pattern)
+        runtime = "{}/{} seconds".format(duration, timeout)
+
+        if not complete:
+            # Report the error / timeout
+            reason = "ERROR detected"
+            details = ""
+            if timed_out:
+                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
+                runtime = "{} seconds".format(duration)
+            if log_data:
+                details = ":\n{}".format(self.str_log_data(log_data))
+            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+        elif verbose:
+            self.display_log_data(log_data)
+
+        return complete, " ".join([msg, runtime])
 
     def check_logs(self, pattern, since, until, quantity=1, timeout=60):
         """Check the command logs on each host for a specified string.
@@ -991,38 +1011,14 @@ class Systemctl(JobManager):
                 host
 
         """
-        complete, detected, timed_out = self.search_logs(pattern, since, until, quantity, timeout)
-
-        # Summarize results
-        msg = "{}/{} '{}' messages detected in".format(
-            detected, quantity, pattern)
-        runtime = "{}/{} seconds".format(time.time() - start, timeout)
-
-        if not complete:
-            # Report the error / timeout
-            reason = "ERROR detected"
-            details = ""
-            if timed_out:
-                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
-                runtime = "{} seconds".format(time.time() - start)
-            if log_data:
-                details = ":\n{}".format(self.str_log_data(log_data))
-            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
-            if timed_out:
-                self.log.debug(
-                    "If needed the %s second timeout can be adjusted via "
-                    "the 'pattern_timeout' test yaml parameter under %s",
-                    timeout, self.namespace)
-        else:
+        # Find the pattern in the logs
+        complete, message = self.search_logs(pattern, since, until, quantity, timeout, False)
+        if complete:
             # Report the successful start
-            # self.display_log_data(log_data)
-            self.log.info(
-                "%s subprocess startup detected - %s %s",
-                self._command, msg, runtime)
-
+            self.log.info("%s subprocess startup detected - %s", self._command, message)
         return complete
 
-    def dump_logs(self, hosts=None, timestamp = None):
+    def dump_logs(self, hosts=None, timestamp=None):
         """Display the journalctl log data since detecting server start.
 
         Args:
