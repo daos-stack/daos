@@ -61,9 +61,6 @@ class IorIntercept(IorTestBase):
                 read_x = self.params.get("read_x",
                                          "/run/ior/iorflags/ssf/*", 1)
 
-                self.log.info("Metrics are %s", with_intercept)
-                self.log.info("Metrics are %s", without_intercept)
-
                 # Verifying write performance
                 self.assertTrue(float(with_intercept[0][max_mib]) >
                                 write_x * float(without_intercept[0][max_mib]))

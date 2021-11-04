@@ -28,7 +28,7 @@ ior:
         np_16:
             np: 16
     test_file: testFile
-    repetitions: 3
+    repetitions: 5
     iorflags:
         ssf:
           flags: "-v -D 600 -w -r"
@@ -38,7 +38,7 @@ ior:
           transfersize_blocksize:
             1M:
               transfer_size: '1M'
-              block_size: '8G'
+              block_size: '2G'
               # Expected performance improvement
               # of write and read for the specific
               # transfer/block size when using
