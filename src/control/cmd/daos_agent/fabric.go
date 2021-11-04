@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -128,27 +129,39 @@ func (n *NUMAFabric) getNumNUMANodes() int {
 }
 
 // GetDevice selects the next available interface device on the requested NUMA node.
-func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (n *NUMAFabric) GetDevice(numaNode int, netDevClass uint32, provider string) (*FabricInterface, error) {
 	if n == nil {
 		return nil, errors.New("nil NUMAFabric")
+	}
+
+	if provider == "" {
+		return nil, errors.New("provider is required")
 	}
 
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
-	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass)
+	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass, provider)
 	if err == nil {
-		return fi, nil
+		return copyFI(fi, provider), nil
 	}
 
-	fi, err = n.findOnAnyNUMA(netDevClass)
+	fi, err = n.findOnAnyNUMA(netDevClass, provider)
 	if err != nil {
 		return nil, err
 	}
 
+	return copyFI(fi, provider), nil
+}
+
+func copyFI(fi *FabricInterface, provider string) *FabricInterface {
 	fiCopy := new(FabricInterface)
 	*fiCopy = *fi
-	return fiCopy, nil
+	if !providerIsVerbs(provider) {
+		// for non-verbs providers, including the domain can cause issues
+		fiCopy.Domain = ""
+	}
+	return fiCopy
 }
 
 // Find finds a specific fabric device by name.
@@ -167,13 +180,19 @@ func (n *NUMAFabric) Find(name string) (*FabricInterface, error) {
 	return nil, fmt.Errorf("fabric interface %q not found", name)
 }
 
-func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32, provider string) (*FabricInterface, error) {
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
 
 		if fabricIF.NetDevClass != netDevClass && fabricIF.NetDevClass != FabricDevClassManual {
 			n.log.Debugf("Excluding device: %s, network device class: %s. Does not match requested network device class: %s",
 				fabricIF.Name, netdetect.DevClassName(fabricIF.NetDevClass), netdetect.DevClassName(netDevClass))
+			continue
+		}
+
+		if providerIsVerbs(provider) && fabricIF.Domain == "" {
+			n.log.Debugf("Excluding device: %s, network device class: %s. No domain",
+				fabricIF.Name, netdetect.DevClassName(fabricIF.NetDevClass))
 			continue
 		}
 
@@ -185,6 +204,10 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32) (*Fabri
 		return fabricIF, nil
 	}
 	return nil, FabricNotFoundErr(netDevClass)
+}
+
+func providerIsVerbs(provider string) bool {
+	return strings.HasPrefix(provider, verbsProvider)
 }
 
 // getAddrFI wraps net.InterfaceByName to allow using the addrFI interface as
@@ -223,11 +246,11 @@ func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
 	return n.numaMap[numaNode][idx]
 }
 
-func (n *NUMAFabric) findOnAnyNUMA(netDevClass uint32) (*FabricInterface, error) {
+func (n *NUMAFabric) findOnAnyNUMA(netDevClass uint32, provider string) (*FabricInterface, error) {
 	numNodes := n.getNumNUMANodes()
 	for i := 0; i < numNodes; i++ {
 		numa := (n.defaultNumaNode + i) % numNodes
-		fi, err := n.getDeviceFromNUMA(numa, netDevClass)
+		fi, err := n.getDeviceFromNUMA(numa, netDevClass, provider)
 		if err == nil {
 			// Start the search on this node next time
 			n.defaultNumaNode = numa
