@@ -10,14 +10,14 @@ DAOS servers require Storage Class Memory (SCM) that is supported by
 but this is not supported in a production environment.)
 DAOS has been validated with
 [Intel Optane Persistent Memory 100 Series](https://ark.intel.com/content/www/us/en/ark/products/series/190349/intel-optane-persistent-memory-100-series.html)
-on 2rd gen Intel Xeon Scalable processors, and
+on 2nd gen Intel Xeon Scalable processors, and
 [Intel Optane Persistent Memory 200 Series](https://ark.intel.com/content/www/us/en/ark/products/series/203877/intel-optane-persistent-memory-200-series.html)
 on 3rd gen Intel Xeon Scalable processors.
 
 DAOS clients have no specific hardware dependencies.
 
 Some users have reported successful compilation and basic testing of DAOS
-on ARM64 platforms, but those envionments are not currently supported.
+on ARM64 platforms, but those environments are not currently supported.
 
 ## Operating System Support
 
