@@ -64,6 +64,7 @@ container:
     single_data_set:
       # [object_qty, record_qty, dkey, akey, data_size]
       - [1, 1, 1, 1, 4194304]
+    properties: "rf:1"
 objectclass:
     dfs_oclass_list:
       #- [EC_Object_Class, Minimum number of servers]
