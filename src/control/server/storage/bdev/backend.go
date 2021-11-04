@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -171,7 +170,6 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 		}
 	}
 
-	fmt.Printf("getting VMDprepare request\n\n")
 	// If VMD has been explicitly enabled and there are VMD enabled
 	// NVMe devices on the host, attempt to prepare them first.
 	vmdReq, err := getVMDPrepReq(sb.log, &req, vmdDetect)

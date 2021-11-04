@@ -180,17 +180,14 @@ func vmdFilterAddresses(inReq *storage.BdevPrepareRequest, vmdPCIAddrs *common.P
 	outAllowList := new(common.PCIAddressList)
 	outReq := *inReq
 
-	fmt.Printf("##1\n")
 	inAllowList, err := common.NewPCIAddressListFromString(inReq.PCIAllowList)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("##1\n")
 	inBlockList, err := common.NewPCIAddressListFromString(inReq.PCIBlockList)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("##1\n")
 
 	// Set allow list to all VMD addresses if no allow or block lists in request.
 	if inAllowList.IsEmpty() && inBlockList.IsEmpty() {
@@ -211,17 +208,12 @@ func vmdFilterAddresses(inReq *storage.BdevPrepareRequest, vmdPCIAddrs *common.P
 		}
 
 		outAllowList = inclAddrs
-		//		hasSubset, allowed := strings.Split(inReq.PCIAllowList, storage.BdevPciAddrSep)
-		//		for _, addr := range vmdPCIAddrs {
-		//			if common.Includes(allowed, addr) {
-		//				outAllowList = append(outAllowList, addr)
-		//			}
-		//		}
 	}
 
 	if !inBlockList.IsEmpty() {
-		// var outList []string
-		inList := outAllowList // in case vmdPCIAddrs list has already been filtered
+		// use outAllowList in case vmdPCIAddrs list has already been filtered
+		inList := outAllowList
+
 		if inList.IsEmpty() {
 			inList = vmdPCIAddrs
 		}
@@ -236,22 +228,9 @@ func vmdFilterAddresses(inReq *storage.BdevPrepareRequest, vmdPCIAddrs *common.P
 		}
 
 		outAllowList = exclAddrs
-		//		blocked := strings.Split(inReq.PCIBlockList, storage.BdevPciAddrSep)
-		//		for _, addr := range inList {
-		//			if !common.Includes(blocked, addr) {
-		//				outList = append(outList, addr)
-		//			}
-		//		}
-		//		outAllowList = outList
-		//		if len(outAllowList) == 0 {
-		//			// no allowed vmd addresses
-		//			outReq.PCIAllowList = ""
-		//			outReq.PCIBlockList = ""
-		//			return outReq
-		//		}
 	}
 
-	outReq.PCIAllowList = outAllowList.String() // strings.Join(outAllowList, storage.BdevPciAddrSep)
+	outReq.PCIAllowList = outAllowList.String()
 	outReq.PCIBlockList = ""
 	return &outReq, nil
 }
@@ -265,12 +244,10 @@ func getVMDPrepReq(log logging.Logger, req *storage.BdevPrepareRequest, vmdDetec
 		return nil, nil
 	}
 
-	fmt.Printf("getting VMD\n")
 	vmdPCIAddrs, err := vmdDetect()
 	if err != nil {
 		return nil, errors.Wrap(err, "VMD could not be enabled")
 	}
-	fmt.Printf("getting VMD: %s\n", vmdPCIAddrs)
 
 	if vmdPCIAddrs.IsEmpty() {
 		log.Debug("vmd prep: no vmd devices found")
@@ -278,12 +255,10 @@ func getVMDPrepReq(log logging.Logger, req *storage.BdevPrepareRequest, vmdDetec
 	}
 	log.Debugf("volume management devices detected: %v", vmdPCIAddrs)
 
-	fmt.Printf("getting VMD filters, req: %+v\n", req)
 	vmdReq, err := vmdFilterAddresses(req, vmdPCIAddrs)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("getting VMD filters\n")
 
 	// No addrs left after filtering
 	if vmdReq.PCIAllowList == "" {
