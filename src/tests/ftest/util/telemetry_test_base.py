@@ -85,7 +85,7 @@ class TestWithTelemetry(TestWithServers):
 
         self.log.info("Test PASSED")
 
-    def get_min_max_mean_stddev(self, suffix, num_targets):
+    def get_min_max_mean_stddev(self, prefix, total_targets, target_per_rank):
         """Get four lists of min, max, mean, stddev.
 
         Sample get_pool_metrics output.
@@ -119,9 +119,11 @@ class TestWithTelemetry(TestWithServers):
             ...
 
         Args:
-            suffix (str): Metrics suffix for the metric that has min, max,
+            prefix (str): Metrics prefix for the metric that has min, max,
                 mean, or stddev at the end.
-            num_targets (int): Number of targets.
+            total_targets (int): Total number of targets in all the ranks and
+                hosts in the output.
+            target_per_rank (int): Number of target per rank.
 
         Returns:
             dict: min, max, mean, stddev from each target in a dict.
@@ -132,30 +134,30 @@ class TestWithTelemetry(TestWithServers):
                     "stddev": [0, 1, 2, 3, 4, 5, 6, 7...]
                 }
                 Note that all the stats should have the same rank order for the
-                verification to work. Not using the sample input values.
+                verification to work.
 
         """
         output = {}
 
         for stats_value in ["min", "max", "mean", "stddev"]:
-            specific_metrics = [suffix + stats_value]
+            specific_metrics = [prefix + stats_value]
             pool_out = self.telemetry.get_pool_metrics(
                 specific_metrics=specific_metrics)
             self.log.info("pool_out = %s", pool_out)
 
-            values = [0 for _ in range(num_targets)]
+            values = [0] * total_targets
             offset = 0
 
             for rank_to_dicts in pool_out[specific_metrics[0]].values():
                 for target_to_val in rank_to_dicts.values():
                     for target, value in target_to_val.items():
-                        values[int(target) + offset * 8] = value
+                        values[int(target) + offset * target_per_rank] = value
 
                     offset += 1
 
             output[stats_value] = values
 
-        self.log.info("output for %s = %s", suffix, output)
+        self.log.info("output for %s = %s", prefix, output)
         return output
 
     @staticmethod
