@@ -175,8 +175,9 @@
 ## all targets across all engines, divided by the system hugepage size.
 ## If not set here, an appropriate value will be automatically calculated.
 ## Default system hugepage size will be used.
+## Example: (2 engines * (8 targets/engine * 1GB)) / 2MB hugepage size = 16834
 #
-#nr_hugepages: 16384
+##nr_hugepages: 0
 #
 #
 ## Force specific debug mask for daos_server (control plane).

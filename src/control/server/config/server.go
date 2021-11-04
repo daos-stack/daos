@@ -500,6 +500,7 @@ func (cfg *Server) Validate(log logging.Logger, hpi *common.HugePageInfo) (err e
 		// If the config doesn't specify hugepages, use the minimum.
 		// Otherwise, validate that the configured amount is sufficient.
 		if cfg.NrHugepages == 0 {
+			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages, cfgTargets)
 			cfg.NrHugepages = minHugePages
 		} else if cfg.NrHugepages < minHugePages {
 			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
