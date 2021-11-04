@@ -1113,14 +1113,13 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 {
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 	struct vos_krec_df	*krec;
-	d_iov_t			 kiov = {0};
 	struct ilog_df		*ilog = NULL;
 	daos_epoch_range_t	 epr = {0, epoch};
 	bool			 mark = false;
 	int			 rc;
 	int			 lrc;
 
-	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, &kiov,
+	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
 			  val_iov);
 
 	if (rc == 0 || rc == -DER_NONEXIST) {
@@ -1178,12 +1177,12 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	if (rc != 0)
 		goto done;
 
-	if (*known_key == umem_ptr2off(vos_obj2umm(obj), kiov.iov_buf)) {
+	if (*known_key == umem_ptr2off(vos_obj2umm(obj), krec)) {
 		/** Set the value to UMOFF_NULL so punch propagation will run full check */
 		rc = umem_tx_add_ptr(vos_obj2umm(obj), known_key, sizeof(*known_key));
 		if (rc)
 			D_GOTO(done, rc);
-		*known_key = UMOFF_NULL;
+		*known_key |= 0x1;
 	}
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));

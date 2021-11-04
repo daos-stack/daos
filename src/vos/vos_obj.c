@@ -29,6 +29,8 @@ struct vos_key_info {
 	struct vos_object	*ki_obj;
 	bool			 ki_non_empty;
 	bool			 ki_has_uncommitted;
+	const void		*ki_first;
+	daos_handle_t		 ki_toh;
 };
 
 /** This callback is invoked only if the tree is not empty */
@@ -37,14 +39,31 @@ empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 		 vos_iter_type_t type, vos_iter_param_t *param, void *cb_arg,
 		 unsigned int *acts)
 {
+	struct vos_rec_bundle	 rbund = {0};
+	d_iov_t			 val_iov;
 	struct umem_instance	*umm;
 	struct vos_key_info	*kinfo = cb_arg;
 	int			 rc;
+
+	if (kinfo->ki_first == entry->ie_key.iov_buf)
+		return 1; /** We've seen this one before */
+
+	/** Save the first thing we see so we can stop iteration early
+	 *  if we see it again on 2nd pass.
+	 */
+	if (kinfo->ki_first == NULL)
+		kinfo->ki_first = entry->ie_key.iov_buf;
 
 	if (entry->ie_vis_flags == VOS_IT_UNCOMMITTED) {
 		kinfo->ki_has_uncommitted = true;
 		return 0;
 	}
+
+	d_iov_set(&val_iov, &rbund, sizeof(rbund));
+	rc = dbtree_fetch(kinfo->ki_toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &entry->ie_key, NULL,
+			  &val_iov);
+	if (rc != 0)
+		return rc;
 
 	kinfo->ki_non_empty = true;
 	umm = vos_obj2umm(kinfo->ki_obj);
@@ -52,7 +71,7 @@ empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc != 0)
 		return rc;
 
-	*(kinfo->ki_known_key) = umem_ptr2off(umm, entry->ie_key.iov_buf);
+	*(kinfo->ki_known_key) = umem_ptr2off(umm, rbund.rb_krec);
 
 	return 1; /* Return positive number to break iteration */
 }
@@ -61,18 +80,42 @@ static int
 tree_is_empty(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 	      const daos_epoch_range_t *epr, vos_iter_type_t type)
 {
+	daos_anchor_t		 anchor = {0};
 	struct dtx_handle	*dth = vos_dth_get();
+	d_iov_t			 key;
 	struct vos_key_info	 kinfo = {0};
+	struct vos_krec_df	*krec;
 	int			 rc;
 
-	if (*known_key != UMOFF_NULL)
+	if (*known_key != UMOFF_NULL && (*known_key & 0x1) == 0)
 		return 0;
 
+	kinfo.ki_toh = toh;
 	kinfo.ki_obj = obj;
 	kinfo.ki_known_key = known_key;
 
+	if (*known_key == UMOFF_NULL)
+		goto tail;
+
+	krec = umem_off2ptr(vos_obj2umm(obj), (*known_key & ~(1ULL)));
+	d_iov_set(&key, vos_krec2key(krec), krec->kr_size);
+	dbtree_key2anchor(toh, &key, &anchor);
+
 	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
-			     &kinfo, dth);
+			     &kinfo, dth, &anchor);
+
+	if (rc < 0)
+		return rc;
+
+	if (kinfo.ki_non_empty)
+		return 0;
+
+	/** Start from beginning one more time.  It will iterate until it
+	 *  sees the first thing it saw
+	 */
+tail:
+	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
+			     &kinfo, dth, NULL);
 
 	if (rc < 0)
 		return rc;

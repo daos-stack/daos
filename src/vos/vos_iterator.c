@@ -818,7 +818,7 @@ out:
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 		const daos_epoch_range_t *epr, bool ignore_inprogress,
-		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth)
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth, daos_anchor_t *anchor)
 {
 	struct vos_iter_anchors	*anchors = NULL;
 	vos_iter_param_t	 param = {0};
@@ -830,6 +830,13 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 
 	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
 	D_ASSERT(daos_handle_is_valid(toh));
+
+	if (anchor != NULL) {
+		if (type == VOS_ITER_DKEY)
+			memcpy(&anchors->ia_dkey, anchor, sizeof(*anchor));
+		else
+			memcpy(&anchors->ia_akey, anchor, sizeof(*anchor));
+	}
 
 	param.ip_hdl = toh;
 	param.ip_epr = *epr;

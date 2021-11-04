@@ -1121,11 +1121,12 @@ D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
  *  \param cb[IN]			Callback for key
  *  \param arg[IN]			argument to pass to callback
  *  \param dth[IN]			dtx handle
+ *  \param anchor[IN]			Option anchor from where to start iterator
  */
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 		const daos_epoch_range_t *epr, bool show_uncommitted,
-		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth);
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth, daos_anchor_t *anchor);
 
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
