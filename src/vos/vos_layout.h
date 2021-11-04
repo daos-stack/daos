@@ -349,6 +349,8 @@ struct vos_obj_df {
 	daos_epoch_t			vo_sync;
 	/** Offset of known existing dkey */
 	umem_off_t			vo_known_dkey;
+	/** Attributes for future use */
+	uint64_t			vo_attr;
 	/** Incarnation log for the object */
 	struct ilog_df			vo_ilog;
 	/** VOS dkey btree root */
