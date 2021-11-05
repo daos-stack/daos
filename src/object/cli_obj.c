@@ -1067,6 +1067,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	uint32_t		 i, j;
 	uint32_t		 shard_idx, shard_nr, grp_size;
 	bool			 cli_disp = flags & OBJ_TGT_FLAG_CLI_DISPATCH;
+	bool			 extra_shard = false;
 	int			 rc;
 
 	D_ASSERT(shard_cnt >= 1);
@@ -1083,6 +1084,13 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		for (i = 0; i < shard_cnt; i++)
 			if (isset(bit_map, i))
 				shard_nr++;
+		/* for EC partial update, take one extra shard for the case of selected leader
+		 * not involved in the IO.
+		 */
+		if (shard_nr < shard_cnt && obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
+			shard_nr++;
+			extra_shard = true;
+		}
 	} else {
 		shard_nr = shard_cnt;
 	}
@@ -1113,9 +1121,11 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		struct daos_shard_tgt	*head;
 		struct daos_oclass_attr	*oca;
 		uint32_t		 fail_nr;
+		bool			 leader_involved;
 
 		shard_idx = start_shard + i * grp_size;
 		head = tgt = req_tgts->ort_shard_tgts + i * grp_size;
+		leader_involved = true;
 		if (req_tgts->ort_srv_disp) {
 			rc = obj_grp_leader_get(obj, shard_idx, map_ver);
 			if (rc < 0) {
@@ -1130,6 +1140,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 				return rc;
 			}
 			leader_shard = rc;
+			if (bit_map != NIL_BITMAP && isclr(bit_map, leader_shard % grp_size))
+				leader_involved = false;
 			rc = obj_shard_tgts_query(obj, map_ver, leader_shard,
 						  0, tgt++, obj_auxi);
 			if (rc != 0)
@@ -1185,6 +1197,9 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 				}
 			}
 		}
+
+		if (extra_shard && leader_involved)
+			head[req_tgts->ort_grp_size - 1].st_rank = DAOS_TGT_IGNORE;
 	}
 
 	if (flags == 0 && bit_map == NIL_BITMAP)

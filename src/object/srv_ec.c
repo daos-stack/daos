@@ -75,10 +75,10 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 
 	/* minimal K/P is 2/1, so at least 1 forward targets */
 	D_ASSERT(tgt_nr >= 1);
-	D_ASSERT(oiods != NULL);
-	/* as we select the last parity node as leader, and for any update
-	 * there must be a siod (the last siod) for leader except for singv.
+	/* for any update there must be a siod (the last siod) for leader and one for forward
+	 * target, except for singv.
 	 */
+	D_ASSERT(oiods != NULL);
 	D_ASSERT((oiods[0].oiod_flags & OBJ_SIOD_SINGV) ||
 		 oiods[0].oiod_nr >= 2);
 
@@ -122,6 +122,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			if (tgt_max_idx < tgt_idx)
 				tgt_max_idx = tgt_idx;
 		} else {
+			if (tgts[i].st_rank == DAOS_TGT_IGNORE)
+				continue;
 			D_ASSERT(tgts[i].st_shard >= start_shard);
 			tgt_idx = tgts[i].st_shard - start_shard;
 			D_ASSERT(tgt_idx <= tgt_max_idx);
@@ -165,6 +167,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	split_iod_csums = req->osr_iod_csums;
 
 	for (i = 0; i < iod_nr; i++) {
+		bool	local_io_bypass = false;
 		int	idx;
 
 		iod = &iods[i];
@@ -205,15 +208,22 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			}
 		} else {
 			siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
-			split_iod->iod_nr = siod->siod_nr;
-			idx = siod->siod_idx;
-			if (with_csums) {
-				split_iod_csum->ic_data =
-					&iod_csum->ic_data[idx];
-				split_iod_csum->ic_nr = siod->siod_nr;
+			if (likely(siod->siod_nr != 0)) {
+				split_iod->iod_nr = siod->siod_nr;
+				idx = siod->siod_idx;
+				if (with_csums) {
+					split_iod_csum->ic_data =
+						&iod_csum->ic_data[idx];
+					split_iod_csum->ic_nr = siod->siod_nr;
+				}
+			} else {
+				D_DEBUG(DB_IO, DF_UOID "local IO will be bypassed\n", DP_UOID(oid));
+				local_io_bypass = true;
+				split_iod->iod_nr = 0;
+				split_iod->iod_recxs = NULL;
 			}
 		}
-		if (iod->iod_recxs != NULL)
+		if (iod->iod_recxs != NULL && !local_io_bypass)
 			split_iod->iod_recxs = &iod->iod_recxs[idx];
 	}
 

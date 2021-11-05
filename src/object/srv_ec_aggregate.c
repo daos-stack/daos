@@ -2206,7 +2206,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = ds_pool_check_dtx_leader(info->api_pool, &entry->ie_oid,
 				      info->api_pool->sp_map_version, true);
-	if (rc == 1 && entry->ie_oid.id_shard >= oca.u.ec.e_k) {
+	if (rc == 1 && is_ec_parity_shard(entry->ie_oid.id_shard, &oca)) {
 		D_DEBUG(DB_EPC, "oid:"DF_UOID" ec agg starting\n",
 			DP_UOID(entry->ie_oid));
 
