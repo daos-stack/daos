@@ -10,7 +10,7 @@ server_config:
 pool:
   mode: 511
   name: daos_server
-  scm_size: 8G
+  scm_size: 8000000000
   control_method: dmg
 dkeys:
   number_of_dkeys: 1000000
