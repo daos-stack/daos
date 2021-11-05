@@ -1004,9 +1004,10 @@ dfuse_openat(int dirfd, const char *pathname, int flags, ...)
 
 		fd = __real_openat(dirfd, pathname, flags, mode);
 	} else {
-		fd =  __real_openat(dirfd, pathname, flags);
+		fd = __real_openat(dirfd, pathname, flags);
 		mode = 0;
 	}
+
 	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
 
@@ -1039,7 +1040,6 @@ dfuse_openat(int dirfd, const char *pathname, int flags, ...)
 				"%d. intercepted, fstat=%d, bypass=%s",
 				pathname, flags, fd, entry.fd_fstat,
 				bypass_status[entry.fd_status]);
-
 	return fd;
 }
 
@@ -1056,7 +1056,7 @@ dfuse_mkstemp(char *template)
 		return fd;
 
 	if (!dfuse_check_valid_path(template)) {
-		DFUSE_LOG_DEBUG("open(template=%s) ignoring by path",
+		DFUSE_LOG_DEBUG("mkstemp(template=%s) ignoring by path",
 				template);
 		return fd;
 	}
@@ -1064,7 +1064,7 @@ dfuse_mkstemp(char *template)
 	status = DFUSE_IO_BYPASS;
 
 	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_EXCL | O_RDWR, status)) {
-		DFUSE_LOG_DEBUG("open(template=%s) interception not possible",
+		DFUSE_LOG_DEBUG("mkstemp(template=%s) interception not possible",
 				template);
 		return fd;
 	}
