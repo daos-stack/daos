@@ -3145,15 +3145,15 @@ class AllocFailTestRun():
                                'probability_x': 1,
                                'probability_y': 1}]
 
-        if self.aft.skip_daos_init:
-            fc['fault_config'].append({'id': 101, 'probability_x': 1})
-
         if self.loc:
             fc['fault_config'].append({'id': 0,
                                        'probability_x': 1,
                                        'probability_y': 1,
                                        'interval': self.loc,
                                        'max_faults': 1})
+
+            if self.aft.skip_daos_init:
+                fc['fault_config'].append({'id': 101, 'probability_x': 1})
 
         # pylint: disable=consider-using-with
         self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_', suffix='.yaml')

@@ -152,13 +152,15 @@ daos_init(void)
 	 * function.  This allows us to only test daos_init() under fault injection for one
 	 * test only, then avoid replicating the same effort for other fault injection tests.
 	 */
-
 	if (D_SHOULD_FAIL(d_fault_init)) {
 		struct d_fault_attr_t blank = {};
 
 		d_fault_mem = d_fault_attr_lookup(0);
-		d_fault_mem_saved = *d_fault_mem;
-		d_fault_attr_set(0, blank);
+
+		if (d_fault_mem) {
+			d_fault_mem_saved = *d_fault_mem;
+			d_fault_attr_set(0, blank);
+		}
 	}
 
 	/** set up handle hash-table */
