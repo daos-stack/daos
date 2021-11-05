@@ -90,7 +90,10 @@ class NLTConf():
                 os.rmdir(self.tmp_dir)
             os.makedirs(self.tmp_dir)
 
+        self._compress_proc = None
+
     def __del__(self):
+        self.flush_bz2()
         os.rmdir(self.dfuse_parent_dir)
 
     def set_wf(self, wf):
@@ -114,6 +117,20 @@ class NLTConf():
 
     def __getitem__(self, key):
         return self.bc[key]
+
+    def flush_bz2(self):
+        if not self._compress_proc:
+            return
+        self.lt_compress.start()
+        self._compress_proc.wait()
+        self.lt_compress.stop()
+        self._compress_proc = None
+
+    def compress_file(self, filename):
+        """Compress a file using bz2 for space reasons"""
+
+        self.flush_bz2()
+        self._compress_proc = subprocess.Popen(['bzip2', '--best', filename])
 
 class CulmTimer():
     """Class to keep track of elapsed time so we know where to focus performance tuning"""
@@ -766,8 +783,8 @@ class DaosServer():
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
 
-        compress_file(self.conf, self.agent_log.name)
-        compress_file(self.conf, self.control_log.name)
+        self.conf.compress_file(self.agent_log.name)
+        self.conf.compress_file(self.control_log.name)
 
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
@@ -2428,28 +2445,6 @@ def setup_log_test(conf):
 
     lt.wf = conf.wf
 
-def compress_file(conf, filename):
-    """Compress a file using bz2 for space reasons"""
-
-    conf.lt_compress.start()
-    small = bz2.BZ2Compressor()
-
-    fd = open(filename, 'rb')
-
-    nfd = open('{}.bz2'.format(filename), 'wb')
-    lines = fd.read(64*1024)
-    while lines:
-        new_data = bz2.compress(lines)
-        if new_data:
-            nfd.write(new_data)
-        lines = fd.read(64*1024)
-    new_data = small.flush()
-    if new_data:
-        nfd.write(new_data)
-
-    os.unlink(filename)
-    conf.lt_compress.stop()
-
 # https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
 def sizeof_fmt(num, suffix='B'):
     """Return size as a human readable string"""
@@ -2512,7 +2507,7 @@ def log_test(conf,
 
     if skip_fi:
         if not lto.fi_triggered:
-            compress_file(conf, filename)
+            conf.compress_file(filename)
             raise NLTestNoFi
 
     functions = set()
@@ -2530,7 +2525,7 @@ def log_test(conf,
     if check_fstat and 'dfuse___fxstat' not in functions:
         raise NLTestNoFunction('dfuse___fxstat')
 
-    compress_file(conf, filename)
+    conf.compress_file(filename)
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
         raise Exception('Max log size exceeded, {} > {}'\
@@ -3743,6 +3738,7 @@ def run(wf, args):
         fatal_errors.add_result(True)
 
     wf_server.close()
+    conf.flush_bz2()
     print('Total time in log analysis: {:.2f} seconds'.format(conf.lt.total))
     print('Total time in log compression: {:.2f} seconds'.format(conf.lt_compress.total))
     return fatal_errors
