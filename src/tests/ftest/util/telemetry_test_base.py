@@ -161,7 +161,7 @@ class TestWithTelemetry(TestWithServers):
         return output
 
     @staticmethod
-    def verify_stats(enum_metrics, metric_suffix, test_latency):
+    def verify_stats(enum_metrics, metric_prefix, test_latency):
         """Verify the statistical correctness of the min, max, mean, stddev.
 
         See get_min_max_mean_stddev() for sample.
@@ -175,7 +175,8 @@ class TestWithTelemetry(TestWithServers):
 
         Args:
             enum_metrics (dict): get_min_max_mean_stddev() output.
-            metric_suffix (str): Metric suffix.
+            metric_prefix (str): Metric prefix. For example,
+                engine_io_ops_dkey_enum_active_
             test_latency (bool): Whether this validation is for latency.
 
         Returns:
@@ -198,22 +199,22 @@ class TestWithTelemetry(TestWithServers):
             if test_latency:
                 if min_list[tgt] == 0:
                     errors.append(
-                        "{}min is 0 at target {}!".format(metric_suffix, tgt))
+                        "{}min is 0 at target {}!".format(metric_prefix, tgt))
             else:
                 if min_list[tgt] != 0:
                     errors.append(
                         "{}min is NOT 0 at target {}!".format(
-                            metric_suffix, tgt))
+                            metric_prefix, tgt))
 
             if mean_list[tgt] < min_list[tgt] or max_list[tgt] < mean_list[tgt]:
                 errors.append(
                     "{}mean is invalid at target {}!".format(
-                        metric_suffix, tgt))
+                        metric_prefix, tgt))
 
             if stddev_list[tgt] > max_list[tgt] - min_list[tgt]:
                 errors.append(
                     "{}stddev is invalid at target {}!".format(
-                        metric_suffix, tgt))
+                        metric_prefix, tgt))
 
         return errors
 
