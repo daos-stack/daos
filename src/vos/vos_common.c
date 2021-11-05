@@ -487,6 +487,49 @@ vos_mod_fini(void)
 	return 0;
 }
 
+static inline int
+vos_metrics_count(void)
+{
+	return vea_metrics_count();
+}
+
+static void
+vos_metrics_free(void *data)
+{
+	struct vos_pool_metrics *vp_metrics = data;
+
+	if (vp_metrics->vp_vea_metrics != NULL)
+		vea_metrics_free(vp_metrics->vp_vea_metrics);
+	D_FREE(data);
+}
+
+static void *
+vos_metrics_alloc(const char *path, int tgt_id)
+{
+	struct vos_pool_metrics	*vp_metrics;
+
+	D_ASSERT(tgt_id >= 0);
+
+	D_ALLOC_PTR(vp_metrics);
+	if (vp_metrics == NULL)
+		return NULL;
+
+	vp_metrics->vp_vea_metrics = vea_metrics_alloc(path, tgt_id);
+	if (vp_metrics->vp_vea_metrics == NULL) {
+		vos_metrics_free(vp_metrics);
+		return NULL;
+	}
+
+	return vp_metrics;
+}
+
+struct dss_module_metrics vos_metrics = {
+	.dmm_tags = DAOS_TGT_TAG,
+	.dmm_init = vos_metrics_alloc,
+	.dmm_fini = vos_metrics_free,
+	.dmm_nr_metrics = vos_metrics_count,
+};
+
 struct dss_module vos_srv_module =  {
 	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
@@ -494,6 +537,7 @@ struct dss_module vos_srv_module =  {
 	.sm_init	= vos_mod_init,
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
+	.sm_metrics	= &vos_metrics,
 };
 
 static void
