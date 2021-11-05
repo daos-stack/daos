@@ -724,6 +724,8 @@ allocate_simple_desc(char *descBufAddress, data_desc_simple_t *desc,
 		memcpy(&desc->eq, desc_buffer, 8);
 		/* skip event idx (2) */
 		desc_buffer += 10;
+	} else {
+		desc->event = NULL;
 	}
 	/* skip dkeylen and dkey */
 	desc_buffer += 2;
@@ -861,7 +863,9 @@ update_ret_code(void *udata, daos_event_t *ev, int ret)
 	char *desc_buffer = desc->ret_buf_address;
 
 	memcpy(desc_buffer, &ret, 4);
-	desc->event->status = 0;
+	if (ev) {
+		desc->event->status = 0;
+	}
 	return 0;
 }
 
@@ -891,6 +895,7 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 			return;
 		}
 		desc->event->status = EVENT_IN_USE;
+		desc->event->event.ev_error = 0;
 	}
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
 				desc->nbrOfRequests, desc->iods,
@@ -1042,6 +1047,7 @@ Java_io_daos_obj_DaosObjClient_updateObjectAsync(
 		goto fail;
 	}
 	desc->event->status = EVENT_IN_USE;
+	desc->event->event.ev_error = 0;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
 			     desc->nbrOfEntries, desc->iods,
 			     desc->sgls, &desc->event->event);
@@ -1106,6 +1112,7 @@ Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
 			return;
 		}
 		desc->event->status = EVENT_IN_USE;
+		desc->event->event.ev_error = 0;
 	}
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, flags, &desc->dkey,
 			    desc->nbrOfRequests, desc->iods,
@@ -1139,6 +1146,7 @@ update_actual_size_async(void *udata, daos_event_t *ev, int ret)
 		desc_buffer += 4;
 	}
 	desc->event->status = 0;
+	release_desc_async(desc);
 	return 0;
 }
 
@@ -1169,6 +1177,7 @@ Java_io_daos_obj_DaosObjClient_fetchObjectAsync(
 		goto fail;
 	}
 	desc->event->status = EVENT_IN_USE;
+	desc->event->event.ev_error = 0;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, flags, &desc->dkey,
 			    desc->nbrOfEntries, desc->iods,
 			    desc->sgls, NULL, &desc->event->event);

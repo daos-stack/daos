@@ -760,6 +760,7 @@ Java_io_daos_dfs_DaosFsClient_allocateDfsDesc(JNIEnv *env,
 	/* move by 8 and skip offset, length, event id */
 	desc_buffer += 26;
 	desc->ret_buf_address = desc_buffer;
+	desc->event = NULL;
 	/* copy back address */
 	memcpy((char *)descBufAddress, &desc, 8);
 	return *(jlong *)&desc;
@@ -777,6 +778,16 @@ Java_io_daos_dfs_DaosFsClient_releaseDfsDesc(JNIEnv *env, jclass clientClass,
 					     jlong descHandle)
 {
 	dfs_desc_t *desc = (dfs_desc_t *)descHandle;
+
+	if (desc->event) {
+        		// TODO: remove
+        		int rc = daos_event_fini(&desc->event->event);
+        		if (rc) {
+        			printf("failed to fin event %d\n", rc);
+        		}
+        		free(desc->event);
+        		desc->event = NULL;
+        	}
 
 	free(desc);
 }
@@ -849,7 +860,24 @@ decode_dfs_desc(char *buf, dfs_desc_t **desc_ret, uint64_t *offset_ret,
 	desc->iov.iov_len = desc->iov.iov_buf_len = (size_t)(*len);
 	/* event */
 	memcpy(&eid, buf, 2);
-	desc->event = desc->eq->events[eid];
+	// desc->event = desc->eq->events[eid];
+	// TODO: REMOVE
+	if (desc->event) {
+		// TODO: remove
+		int rc = daos_event_fini(&desc->event->event);
+		if (rc) {
+			printf("failed to fin event %d\n", rc);
+		}
+		free(desc->event);
+		desc->event = NULL;
+	}
+	data_event_t *event = (data_event_t *)malloc(sizeof(data_event_t));
+	int rc = daos_event_init(&event->event, desc->eq->eqhdl, NULL);
+	if (rc) {
+		printf("failed to init event %d\n", rc);
+	}
+	event->event.ev_debug = eid;
+	desc->event = event;
 }
 
 static int
@@ -879,6 +907,7 @@ Java_io_daos_dfs_DaosFsClient_dfsReadAsync(JNIEnv *env, jobject client,
 	int rc;
 
 	decode_dfs_desc(buf, &desc, &offset, &len);
+	desc->event->event.ev_error = 0;
 	rc = daos_event_register_comp_cb(&desc->event->event,
 					 update_actual_size, desc);
 	if (rc) {
@@ -969,6 +998,7 @@ Java_io_daos_dfs_DaosFsClient_dfsWriteAsync(JNIEnv *env, jobject client,
 	int rc;
 
 	decode_dfs_desc(buf, &desc, &offset, &len);
+	desc->event->event.ev_error = 0;
 	rc = daos_event_register_comp_cb(&desc->event->event, update_ret_code, desc);
 	if (rc) {
 		char *msg = "Failed to register dfs write callback";
