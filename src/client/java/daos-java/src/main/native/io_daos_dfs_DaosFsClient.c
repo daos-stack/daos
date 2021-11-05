@@ -779,16 +779,6 @@ Java_io_daos_dfs_DaosFsClient_releaseDfsDesc(JNIEnv *env, jclass clientClass,
 {
 	dfs_desc_t *desc = (dfs_desc_t *)descHandle;
 
-	if (desc->event) {
-        		// TODO: remove
-        		int rc = daos_event_fini(&desc->event->event);
-        		if (rc) {
-        			printf("failed to fin event %d\n", rc);
-        		}
-        		free(desc->event);
-        		desc->event = NULL;
-        	}
-
 	free(desc);
 }
 
@@ -860,24 +850,7 @@ decode_dfs_desc(char *buf, dfs_desc_t **desc_ret, uint64_t *offset_ret,
 	desc->iov.iov_len = desc->iov.iov_buf_len = (size_t)(*len);
 	/* event */
 	memcpy(&eid, buf, 2);
-	// desc->event = desc->eq->events[eid];
-	// TODO: REMOVE
-	if (desc->event) {
-		// TODO: remove
-		int rc = daos_event_fini(&desc->event->event);
-		if (rc) {
-			printf("failed to fin event %d\n", rc);
-		}
-		free(desc->event);
-		desc->event = NULL;
-	}
-	data_event_t *event = (data_event_t *)malloc(sizeof(data_event_t));
-	int rc = daos_event_init(&event->event, desc->eq->eqhdl, NULL);
-	if (rc) {
-		printf("failed to init event %d\n", rc);
-	}
-	event->event.ev_debug = eid;
-	desc->event = event;
+	desc->event = desc->eq->events[eid];
 }
 
 static int
@@ -891,6 +864,7 @@ update_actual_size(void *udata, daos_event_t *ev, int ret)
 	desc_buffer += 4;
 	memcpy(desc_buffer, &value, 4);
 	desc->event->status = 0;
+	return 0;
 }
 
 JNIEXPORT void JNICALL
@@ -982,6 +956,7 @@ update_ret_code(void *udata, daos_event_t *ev, int ret)
 
 	memcpy(desc_buffer, &ret, 4);
 	desc->event->status = 0;
+	return 0;
 }
 
 JNIEXPORT void JNICALL

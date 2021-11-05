@@ -884,6 +884,8 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 		return;
 	}
 	if (async) {
+		desc->event->status = EVENT_IN_USE;
+		desc->event->event.ev_error = 0;
 		rc = daos_event_register_comp_cb(&desc->event->event,
 			update_ret_code, desc);
 		if (rc) {
@@ -894,8 +896,6 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 					rc);
 			return;
 		}
-		desc->event->status = EVENT_IN_USE;
-		desc->event->event.ev_error = 0;
 	}
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
 				desc->nbrOfRequests, desc->iods,
@@ -1038,6 +1038,8 @@ Java_io_daos_obj_DaosObjClient_updateObjectAsync(
 		throw_exception_const_msg_object(env, msg, rc);
 		goto fail;
 	}
+	desc->event->status = EVENT_IN_USE;
+	desc->event->event.ev_error = 0;
 	rc = daos_event_register_comp_cb(&desc->event->event,
 					 update_ret_code_async, desc);
 	if (rc) {
@@ -1046,8 +1048,6 @@ Java_io_daos_obj_DaosObjClient_updateObjectAsync(
 		throw_exception_const_msg_object(env, msg, rc);
 		goto fail;
 	}
-	desc->event->status = EVENT_IN_USE;
-	desc->event->event.ev_error = 0;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
 			     desc->nbrOfEntries, desc->iods,
 			     desc->sgls, &desc->event->event);
@@ -1102,6 +1102,8 @@ Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
 		return;
 	}
 	if (async) {
+		desc->event->status = EVENT_IN_USE;
+		desc->event->event.ev_error = 0;
 		rc = daos_event_register_comp_cb(&desc->event->event,
 						 update_actual_size,
 						 desc);
@@ -1111,8 +1113,6 @@ Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
 			throw_const_obj(env, msg, rc);
 			return;
 		}
-		desc->event->status = EVENT_IN_USE;
-		desc->event->event.ev_error = 0;
 	}
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, flags, &desc->dkey,
 			    desc->nbrOfRequests, desc->iods,
@@ -1168,6 +1168,8 @@ Java_io_daos_obj_DaosObjClient_fetchObjectAsync(
 		throw_exception_const_msg_object(env, msg, rc);
 		goto fail;
 	}
+	desc->event->status = EVENT_IN_USE;
+	desc->event->event.ev_error = 0;
 	rc = daos_event_register_comp_cb(&desc->event->event,
 					 update_actual_size_async, desc);
 	if (rc) {
@@ -1176,8 +1178,6 @@ Java_io_daos_obj_DaosObjClient_fetchObjectAsync(
 		throw_exception_const_msg_object(env, msg, rc);
 		goto fail;
 	}
-	desc->event->status = EVENT_IN_USE;
-	desc->event->event.ev_error = 0;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, flags, &desc->dkey,
 			    desc->nbrOfEntries, desc->iods,
 			    desc->sgls, NULL, &desc->event->event);
