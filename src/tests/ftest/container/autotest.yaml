@@ -2,8 +2,10 @@ hosts:
   test_servers:
     - server-A
   test_clients:
-    - client-B
-timeout: 360
+    - client-A
+timeout: 1000
+setup:
+  start_servers_once: False
 server_config:
   name: daos_server
   servers:

@@ -646,8 +646,14 @@ class TestPool(TestDaosApiBase):
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
 
-        complete, message = server_manager.search_logs(
-            pattern, since, None, quantity, self.rebuild_timeout.value)
+        try:
+            complete, message = server_manager.manager.search_logs(
+                pattern, since, None, quantity, self.rebuild_timeout.value)
+        except AttributeError as error:
+            raise NotImplementedError(
+                "The TestPool.check_rebuild() method does not yet support a DaosServerManager with "
+                "a manager attribute defined as a non-Systemctl class: {}".format(error))
+
         if complete:
             self.log.info("Rebuild %s detected - %s", state, message)
         else:
