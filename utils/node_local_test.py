@@ -3113,6 +3113,13 @@ class AllocFailTestRun():
         self.fault_injected = None
         self.loc = loc
 
+        self._fault_config = [{'id': 0,
+                               'probability_x': 1,
+                               'max_faults': 1}]
+
+        if aft.skip_daos_init:
+            self._fault_config.append({'id': 101, 'probability_x': 1})
+
         prefix = 'dnt_fi_{}_{}_'.format(aft.description, loc)
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
@@ -3139,11 +3146,8 @@ class AllocFailTestRun():
 
     def start(self):
         """Start the command"""
-        fc = {}
 
-        fc['fault_config'] = [{'id': 100,
-                               'probability_x': 1,
-                               'probability_y': 1}]
+        fc = self._fault_config
 
         if self.loc:
             fc['fault_config'].append({'id': 0,
@@ -3323,6 +3327,8 @@ class AllocFailTest():
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
+        # Instruct the fault injection code to skip daos_init().
+        self.skip_daos_init = False
 
     def launch(self):
         """Run all tests for this command"""
@@ -3350,7 +3356,7 @@ class AllocFailTest():
         print('Maximum number of spawned tests will be {}'.format(max_child))
 
         active = []
-        fid = 1
+        fid = 2
         max_count = 0
         finished = False
 
@@ -3526,6 +3532,8 @@ def test_alloc_fail_cat(server, conf):
     cmd = ['cat', target_file]
 
     test_cmd = AllocFailTest(conf, 'il-cat', cmd)
+    test_cmd.skip_daos_init = True
+
     test_cmd.use_il = True
     test_cmd.check_stderr = False
     test_cmd.wf = conf.wf

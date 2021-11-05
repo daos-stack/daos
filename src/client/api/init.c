@@ -130,6 +130,9 @@ const struct daos_task_api dc_funcs[] = {
 int
 daos_init(void)
 {
+	struct d_fault_attr_t *d_fault_init;
+	struct d_fault_attr_t *d_fault_mem = NULL;
+	struct d_fault_attr_t d_fault_mem_saved;
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
@@ -137,6 +140,21 @@ daos_init(void)
 		/** already initialized, report success */
 		module_initialized++;
 		D_GOTO(unlock, rc = 0);
+	}
+
+	d_fault_init = d_fault_attr_lookup(10);
+
+	/* If fault injection 10 is set then turn off fault injection 0 for the rest of this
+	 * function.  This allows us to only test daos_init() under fault injection for one
+	 * test only, then avoid replicating the same effort for other fault injection tests.
+	 */
+
+	if (D_SHOULD_FAIL(d_fault_init)) {
+		struct d_fault_attr_t blank = {};
+
+		d_fault_mem = d_fault_attr_lookup(0);
+		d_fault_mem_saved = *d_fault_mem;
+		d_fault_attr_set(0, blank);
 	}
 
 	rc = daos_debug_init(NULL);
@@ -221,6 +239,10 @@ out_debug:
 	daos_debug_fini();
 unlock:
 	D_MUTEX_UNLOCK(&module_lock);
+
+	if (d_fault_mem)
+		d_fault_attr_set(0, d_fault_mem_saved);
+
 	return rc;
 }
 
