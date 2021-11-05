@@ -39,7 +39,7 @@ ior:
   test_file: /testFile
   repetitions: 1
   transfer_size: '1M'
-  block_size: '10G'
+  block_size: '7G'
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
   disable_caching: True
@@ -47,7 +47,7 @@ dfuse:
 mdtest:
   client_processes:
     np: 30
-  num_of_files_dirs: 33334      # creating total of 1M files
+  num_of_files_dirs: 33334     # creating total of 1M files
   test_dir: "/"
   iteration: 1
   dfs_destroy: False
