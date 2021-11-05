@@ -72,6 +72,8 @@ fi
 
 sudo $YUM -y install daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
 
+sudo $YUM -y install strace
+
 me=$(whoami)
 for dir in server agent; do
   sudo mkdir "/var/run/daos_$dir"
@@ -99,15 +101,31 @@ coproc SERVER { daos_server --debug start -t 1 --recreate-superblocks; } 2>&1
 trap 'set -x; kill -INT $SERVER_PID' EXIT
 line=""
 while [[ "$line" != *started\ on\ rank\ 0* ]]; do
-  read -r -t 60 line <&"${SERVER[0]}"
+  if ! read -r -t 60 line <&"${SERVER[0]}"; then
+      rc=${PIPESTATUS[0]}
+      if [ "$rc" = "142" ]; then
+          echo "Timed out waiting for output from the server"
+      else
+          echo "Error reading the output from the server: $rc"
+      fi
+      exit "$rc"
+  fi
   echo "Server stdout: $line"
 done
 echo "Server started!"
 coproc AGENT { daos_agent --debug; } 2>&1
-trap 'set -x; kill -INT $AGENT_PID $SERVER_PID' EXIT
+trap 'set -x; strace -f kill -INT $AGENT_PID $SERVER_PID' EXIT
 line=""
 while [[ "$line" != *listening\ on\ * ]]; do
-  read -r -t 60 line <&"${AGENT[0]}"
+  if ! read -r -t 60 line <&"${AGENT[0]}"; then
+      rc=${PIPESTATUS[0]}
+      if [ "$rc" = "142" ]; then
+          echo "Timed out waiting for output from the agent"
+      else
+          echo "Error reading the output from the agent: $rc"
+      fi
+      exit "$rc"
+  fi
   echo "Agent stdout: $line"
 done
 echo "Agent started!"
