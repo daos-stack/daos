@@ -47,6 +47,9 @@ Once the image has been created, a container will need to be started to run the 
 At this stage, depending on how hugepages are configured on your hist system, you may get errors when the `docker run` command is issued. So for this demonstration, we will configure hugepages before issuing the `docker run` command:
 
 > Depending on the CPU involved, the quantity of hugepages will very. In our case of a Cascade Lake Server it is a qty of 16
+- Cascade Lake 16 pages
+- Icelake 64 pages
+- Saphire Rapids 96 pages
 
 We set the hugepages by using the following commands:
 ```bash
