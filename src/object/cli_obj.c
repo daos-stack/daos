@@ -948,6 +948,12 @@ shard_open:
 			ec_degrade = true;
 			obj_shard_close(obj_shard);
 		}
+		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE && obj_shard->do_reintegrating) {
+			D_ERROR(DF_OID" shard is being reintegrated: %d\n",
+				DP_OID(obj->cob_md.omd_id), -DER_IO);
+			obj_shard_close(obj_shard);
+			D_GOTO(out, rc = -DER_IO);
+		}
 	} else {
 		if (rc == -DER_NONEXIST) {
 			if (!obj_auxi->is_ec_obj) {
