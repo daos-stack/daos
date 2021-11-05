@@ -75,7 +75,7 @@ Hugetlb:         2097152 kB
 
 ```
 
-For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages)
+For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages) and the white paper [Intel Architecture Optimization with Large Code Pages](https://www.intel.com/content/dam/develop/external/us/en/documents/runtimeperformanceoptimizationblueprint-largecodepages-q1update.pdf)
 
 ## Starting the Docker Container
 Now we need to start the docker container by invoking the "docker run" command
@@ -142,3 +142,5 @@ You will now see in your list of images, including your new_image_name
 - [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
 - [DAOS Github Repo](https://github.com/daos-stack/daos)
 - [daos.io](https://docs.daos.io/)
+- [Intel Architecture Optimization with Large Code Pages](https://www.intel.com/content/dam/develop/external/us/en/documents/runtimeperformanceoptimizationblueprint-largecodepages-q1update.pdf)
+- [Designing DAOS Storage Solutions with Lenovo ThinkSystem SR630 Servers](https://lenovopress.com/lp1398-designing-daos-storage-solutions-with-sr630)
