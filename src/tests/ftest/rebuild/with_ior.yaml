@@ -28,7 +28,7 @@ dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_caching: True
 ior:
-    ior_timeout: 300
+    ior_timeout: 120
     client_processes:
         np_16:
             np: 16
@@ -42,4 +42,4 @@ ior:
     transfer_blk_size_rebld:
         rank_to_kill: 3
         transfer_size: '1M'
-        block_size: '256M'
+        block_size: '128M'
