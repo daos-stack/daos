@@ -1956,7 +1956,7 @@ dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char **
 	/* Sanity check */
 	if (num_attrs == 0) {
 		DH_PERROR_DER(ap, rc, "Failed to parse user attributes");
-		D_GOTO(out, rc = -DER_MISC);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/* Allocate arrays for attribute names, buffers, and sizes */
@@ -2131,8 +2131,9 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 		/* ACL will be appended to the end */
 		props_merged = daos_prop_merge(props, prop_acl);
 		if (props_merged == NULL) {
+			rc = -DER_INVAL;
 			DH_PERROR_DER(ap, rc, "Failed set container ACL");
-			D_GOTO(out, rc = -DER_INVAL);
+			D_GOTO(out, rc);
 		}
 		daos_prop_free(props);
 		props = props_merged;
@@ -2197,7 +2198,7 @@ dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *pro
 	/* Get all user attributes if any exist */
 	rc = dm_cont_get_usr_attrs(ap, ca->src_coh, &num_attrs, &names, &buffers, &sizes);
 	if (rc != 0) {
-		rc = 1;
+		DH_PERROR_DER(ap, rc, "Failed to get user attributes");
 		D_GOTO(out, rc);
 	}
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
