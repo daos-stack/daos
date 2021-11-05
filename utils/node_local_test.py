@@ -3113,13 +3113,6 @@ class AllocFailTestRun():
         self.fault_injected = None
         self.loc = loc
 
-        self._fault_config = [{'id': 0,
-                               'probability_x': 1,
-                               'max_faults': 1}]
-
-        if aft.skip_daos_init:
-            self._fault_config.append({'id': 101, 'probability_x': 1})
-
         prefix = 'dnt_fi_{}_{}_'.format(aft.description, loc)
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
@@ -3146,8 +3139,14 @@ class AllocFailTestRun():
 
     def start(self):
         """Start the command"""
+        fc = {}
 
-        fc = self._fault_config
+        fc['fault_config'] = [{'id': 100,
+                               'probability_x': 1,
+                               'probability_y': 1}]
+
+        if aft.skip_daos_init:
+            fc['fault_config'].append({'id': 101, 'probability_x': 1})
 
         if self.loc:
             fc['fault_config'].append({'id': 0,
