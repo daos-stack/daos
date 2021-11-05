@@ -3145,7 +3145,7 @@ class AllocFailTestRun():
                                'probability_x': 1,
                                'probability_y': 1}]
 
-        if aft.skip_daos_init:
+        if self.aft.skip_daos_init:
             fc['fault_config'].append({'id': 101, 'probability_x': 1})
 
         if self.loc:
