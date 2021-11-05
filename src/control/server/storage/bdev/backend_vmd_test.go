@@ -20,8 +20,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func addrListFromStrings(t *testing.T, addrs ...string) *common.PCIAddressList {
-	al, err := common.NewPCIAddressList(addrs...)
+func addrListFromStrings(t *testing.T, addrs ...string) *common.PCIAddressSet {
+	al, err := common.NewPCIAddressSet(addrs...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func addrListFromStrings(t *testing.T, addrs ...string) *common.PCIAddressList {
 	return al
 }
 
-func mockAddrList(t *testing.T, idxs ...int) *common.PCIAddressList {
+func mockAddrList(t *testing.T, idxs ...int) *common.PCIAddressSet {
 	t.Helper()
 	var addrs []string
 
@@ -53,9 +53,9 @@ func TestBackend_substituteVMDAddresses(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
-		inAddrs     *common.PCIAddressList
+		inAddrs     *common.PCIAddressSet
 		bdevCache   *storage.BdevScanResponse
-		expOutAddrs *common.PCIAddressList
+		expOutAddrs *common.PCIAddressSet
 		expErr      error
 	}{
 		"one vmd requested; no backing devices": {
@@ -110,7 +110,7 @@ func TestBackend_substituteVMDAddresses(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expOutAddrs, gotAddrs); diff != "" {
+			if diff := cmp.Diff(tc.expOutAddrs, gotAddrs, defCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected output addresses (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -124,7 +124,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		inReq      *storage.BdevPrepareRequest
-		inVmdAddrs *common.PCIAddressList
+		inVmdAddrs *common.PCIAddressSet
 		expOutReq  *storage.BdevPrepareRequest
 		expErr     error
 	}{
@@ -268,7 +268,7 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
 			},
-			detectVMD: func() (*common.PCIAddressList, error) { return nil, errors.New("test") },
+			detectVMD: func() (*common.PCIAddressSet, error) { return nil, errors.New("test") },
 			expErr:    errors.New("test"),
 		},
 		"vmd enabled; no vmds detected": {
@@ -277,7 +277,7 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
 			},
-			detectVMD: func() (*common.PCIAddressList, error) { return nil, nil },
+			detectVMD: func() (*common.PCIAddressSet, error) { return nil, nil },
 		},
 		"vmd enabled; vmds detected": {
 			inReq: &storage.BdevPrepareRequest{
@@ -285,8 +285,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
 			},
-			detectVMD: func() (*common.PCIAddressList, error) {
-				al, _ := common.NewPCIAddressList(common.MockPCIAddr(1), common.MockPCIAddr(2))
+			detectVMD: func() (*common.PCIAddressSet, error) {
+				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
 				return al, nil
 			},
 			expOutReq: &storage.BdevPrepareRequest{
@@ -304,8 +304,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				TargetUser:    username,
 				PCIAllowList:  common.MockPCIAddr(1),
 			},
-			detectVMD: func() (*common.PCIAddressList, error) {
-				al, _ := common.NewPCIAddressList(common.MockPCIAddr(1), common.MockPCIAddr(2))
+			detectVMD: func() (*common.PCIAddressSet, error) {
+				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
 				return al, nil
 			},
 			expOutReq: &storage.BdevPrepareRequest{
@@ -322,8 +322,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				TargetUser:    username,
 				PCIBlockList:  common.MockPCIAddr(1),
 			},
-			detectVMD: func() (*common.PCIAddressList, error) {
-				al, _ := common.NewPCIAddressList(common.MockPCIAddr(1), common.MockPCIAddr(2))
+			detectVMD: func() (*common.PCIAddressSet, error) {
+				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
 				return al, nil
 			},
 			expOutReq: &storage.BdevPrepareRequest{
@@ -342,8 +342,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 					common.MockPCIAddr(1), common.MockPCIAddr(2),
 				}, " "),
 			},
-			detectVMD: func() (*common.PCIAddressList, error) {
-				al, _ := common.NewPCIAddressList(common.MockPCIAddr(1), common.MockPCIAddr(2))
+			detectVMD: func() (*common.PCIAddressSet, error) {
+				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
 				return al, nil
 			},
 		},
@@ -356,8 +356,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 					common.MockPCIAddr(1), common.MockPCIAddr(2),
 				}, " "),
 			},
-			detectVMD: func() (*common.PCIAddressList, error) {
-				al, _ := common.NewPCIAddressList(common.MockPCIAddr(3), common.MockPCIAddr(4))
+			detectVMD: func() (*common.PCIAddressSet, error) {
+				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(3), common.MockPCIAddr(4))
 				return al, nil
 			},
 		},

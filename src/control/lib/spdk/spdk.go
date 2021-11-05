@@ -75,16 +75,16 @@ func Rc2err(label string, rc C.int) error {
 //
 // Many assumptions are made as to the input and output PCI address structure in
 // the conversion.
-func backingAddress2VMD(log logging.Logger, pciAddrs *common.PCIAddressList) (*common.PCIAddressList, error) {
-	if pciAddrs == nil {
+func backingAddress2VMD(log logging.Logger, devs *common.PCIAddressSet) (*common.PCIAddressSet, error) {
+	if devs == nil {
 		return nil, errors.New("revertBackingToVMD: nil pci address list")
 	}
 
-	outAddrs := common.PCIAddressList{}
+	outAddrs := common.PCIAddressSet{}
 
-	for _, inAddr := range *pciAddrs {
+	for _, inAddr := range devs.Addresses() {
 		if inAddr.Domain == "0000" {
-			outAddrs.Add(*inAddr)
+			outAddrs.Add(inAddr)
 			continue
 		}
 
@@ -108,8 +108,8 @@ func backingAddress2VMD(log logging.Logger, pciAddrs *common.PCIAddressList) (*c
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	PCIAllowList *common.PCIAddressList // restrict SPDK device access
-	EnableVMD    bool                   // flag if VMD functionality should be enabled
+	PCIAllowList *common.PCIAddressSet // restrict SPDK device access
+	EnableVMD    bool                  // flag if VMD functionality should be enabled
 }
 
 func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {

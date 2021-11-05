@@ -22,7 +22,9 @@ func TestSpdk_backingAddress2VMD(t *testing.T) {
 		expOutAddrs []string
 		expErr      error
 	}{
-		"empty": {},
+		"empty": {
+			expOutAddrs: []string{},
+		},
 		"no vmd addresses": {
 			inAddrs:     []string{"0000:80:00.0"},
 			expOutAddrs: []string{"0000:80:00.0"},
@@ -44,12 +46,12 @@ func TestSpdk_backingAddress2VMD(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			addrList, err := common.NewPCIAddressList(tc.inAddrs...)
+			addrSet, err := common.NewPCIAddressSet(tc.inAddrs...)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			gotAddrs, gotErr := backingAddress2VMD(log, addrList)
+			gotAddrs, gotErr := backingAddress2VMD(log, addrSet)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

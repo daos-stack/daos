@@ -42,7 +42,7 @@ type (
 
 	removeFn     func(string) error
 	userLookupFn func(string) (*user.User, error)
-	vmdDetectFn  func() (*common.PCIAddressList, error)
+	vmdDetectFn  func() (*common.PCIAddressSet, error)
 	hpCleanFn    func(string, string, string) error
 	writeConfFn  func(logging.Logger, *storage.BdevWriteConfigRequest) error
 )
@@ -234,19 +234,19 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
 // to only those devices discovered and in device list and confirm that the devices specified in
 // the device list have all been discovered.
-func groomDiscoveredBdevs(reqDevAddrs *common.PCIAddressList, discovered storage.NvmeControllers, vmdEnabled bool) (storage.NvmeControllers, error) {
-	if reqDevAddrs == nil {
+func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.NvmeControllers, vmdEnabled bool) (storage.NvmeControllers, error) {
+	if reqDevs == nil {
 		return nil, errors.New("nil device list in bdev scan request")
 	}
 
 	// if empty device list, return all discovered controllers
-	if reqDevAddrs.IsEmpty() {
+	if reqDevs.IsEmpty() {
 		return discovered, nil
 	}
 
-	var missing common.PCIAddressList
+	var missing common.PCIAddressSet
 	out := make(storage.NvmeControllers, 0)
-	vmds := make(map[common.PCIAddress]storage.NvmeControllers)
+	vmds := make(map[string]storage.NvmeControllers)
 
 	// store discovered VMD backing devices under vmd address key
 	for _, ctrlr := range discovered {
@@ -255,13 +255,12 @@ func groomDiscoveredBdevs(reqDevAddrs *common.PCIAddressList, discovered storage
 			return nil, errors.Wrap(err, "invalid discovered controller address")
 		}
 
-		vmdAddr, isVMDBackingAddr := backingAddrToVMD(*addr)
-		if isVMDBackingAddr {
-			vmds[vmdAddr] = append(vmds[vmdAddr], ctrlr)
+		if vmdAddr, isVMDBackingAddr := backingAddrToVMD(addr); isVMDBackingAddr {
+			vmds[vmdAddr.String()] = append(vmds[vmdAddr.String()], ctrlr)
 		}
 	}
 
-	for _, want := range *reqDevAddrs {
+	for _, want := range reqDevs.Addresses() {
 		found := false
 		for _, got := range discovered {
 			// check if discovered ctrlr is in device list
@@ -274,14 +273,14 @@ func groomDiscoveredBdevs(reqDevAddrs *common.PCIAddressList, discovered storage
 
 		if !found && vmdEnabled {
 			// check if discovered ctrlr is backing devices for vmd in device list
-			if backing, exists := vmds[*want]; exists {
+			if backing, exists := vmds[want.String()]; exists {
 				out = append(out, backing...)
 				found = true
 			}
 		}
 
 		if !found {
-			missing.Add(*want)
+			missing.Add(want)
 		}
 	}
 
@@ -296,7 +295,7 @@ func groomDiscoveredBdevs(reqDevAddrs *common.PCIAddressList, discovered storage
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
-	requestedBdevs, err := common.NewPCIAddressList(req.DeviceList...)
+	requestedBdevs, err := common.NewPCIAddressSet(req.DeviceList...)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +425,7 @@ func (sb *spdkBackend) formatKdev(req *storage.BdevFormatRequest) (*storage.Bdev
 }
 
 func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	deviceList, err := common.NewPCIAddressList(req.Properties.DeviceList...)
+	deviceList, err := common.NewPCIAddressSet(req.Properties.DeviceList...)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +503,7 @@ func (sb *spdkBackend) writeNVMEConf(req storage.BdevWriteConfigRequest, confWri
 				continue
 			}
 
-			bdevs, err := common.NewPCIAddressList(props.DeviceList...)
+			bdevs, err := common.NewPCIAddressSet(props.DeviceList...)
 			if err != nil {
 				return errors.Wrapf(err, "storage tier %d", props.Tier)
 			}

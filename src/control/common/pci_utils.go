@@ -77,6 +77,8 @@ func (pa *PCIAddress) IsVMDBackingAddress() bool {
 	return pa.Domain != "0000"
 }
 
+// LessThan evaluate whether "this" address is less than "other" by comparing
+// domain/bus/device/function in order.
 func (pa *PCIAddress) LessThan(other *PCIAddress) bool {
 	if pa == nil || other == nil {
 		return false
@@ -97,7 +99,7 @@ func (pa *PCIAddress) LessThan(other *PCIAddress) bool {
 	return hexStr2Int(pa.Function) < hexStr2Int(other.Function)
 }
 
-// NewPCIAddress creates a PCIAddress stuct from input string.
+// NewPCIAddress creates a PCIAddress struct from input string.
 func NewPCIAddress(addr string) (*PCIAddress, error) {
 	dom, bus, dev, fun, err := parsePCIAddress(addr)
 	if err != nil {
@@ -178,6 +180,7 @@ func (pal *PCIAddressSet) AddStrings(addrs ...string) error {
 	return nil
 }
 
+// Addresses returns sorted slice of PCI address type object references.
 func (pal *PCIAddressSet) Addresses() []*PCIAddress {
 	if pal == nil {
 		return nil
@@ -218,6 +221,11 @@ func (pal *PCIAddressSet) Len() int {
 	}
 
 	return len(pal.addrMap)
+}
+
+// IsEmpty returns true if address set is empty.
+func (pal *PCIAddressSet) IsEmpty() bool {
+	return pal.Len() == 0
 }
 
 func hexStr2Int(s string) int64 {

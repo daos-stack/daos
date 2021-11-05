@@ -337,7 +337,7 @@ func (bc *BdevConfig) Validate(class Class) error {
 			return err
 		}
 	case ClassNvme:
-		if _, err := common.NewPCIAddressList(bc.DeviceList...); err != nil {
+		if _, err := common.NewPCIAddressSet(bc.DeviceList...); err != nil {
 			return errors.Wrapf(err, "parse pci addresse0 %v", bc.DeviceList)
 		}
 	default:
