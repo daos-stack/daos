@@ -66,6 +66,7 @@ struct dc_obj_shard {
 #define do_target_id	do_pl_shard.po_target
 #define do_fseq		do_pl_shard.po_fseq
 #define do_rebuilding	do_pl_shard.po_rebuilding
+#define do_reintegrating do_pl_shard.po_reintegrating
 
 /** client object layout */
 struct dc_obj_layout {
