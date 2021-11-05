@@ -146,9 +146,9 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
-	d_fault_init = d_fault_attr_lookup(10);
+	d_fault_init = d_fault_attr_lookup(101);
 
-	/* If fault injection 10 is set then turn off fault injection 0 for the rest of this
+	/* If fault injection 101 is set then turn off fault injection 0 for the rest of this
 	 * function.  This allows us to only test daos_init() under fault injection for one
 	 * test only, then avoid replicating the same effort for other fault injection tests.
 	 */
