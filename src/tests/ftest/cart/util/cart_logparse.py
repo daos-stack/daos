@@ -402,8 +402,8 @@ class LogLine():
 
 # pylint: disable=too-many-branches
 class StateIter():
-
     """Helper class for LogIter to add a statefull iterator.
+
     Implement a new iterator() for LogIter() that tracks descriptors
     and adds two new attributes, pdesc and pparent which are the local
     descriptor with the reuse-count appended.
