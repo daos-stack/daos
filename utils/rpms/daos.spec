@@ -254,6 +254,18 @@ Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
 %description server-tests-openmpi
 This is the package needed to run the DAOS server test suite openmpi tools
 
+
+%package tests-openmpi
+Summary: The DAOS test suite - tools which need openmpi
+#This is a bit messy and needs some cleanup.  In theory,
+#we should have client tests and server tests in separate
+#packages but some binaries need libraries from both at
+#present.
+Requires: %{name}-tests%{?_isa} = %{version}-%{release}
+
+%description tests-openmpi
+This is the package needed to run the DAOS test suite openmpi tools
+
 %package devel
 Summary: The DAOS development libraries and headers
 Requires: %{name}-client%{?_isa} = %{version}-%{release}

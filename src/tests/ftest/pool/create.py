@@ -110,7 +110,7 @@ class PoolCreateTests(PoolTestBase):
             server.  Verify that attempting to create  a pool of the same size
             across all of the servers fails due to no space.  Now verify that
             creating a pool of the same size on across all but the first server
-            succeeds.  Repeat the last two steps 100 times with the addition of
+            succeeds.  Repeat the last two steps many times with the addition of
             deleting the successfully created pool to verify that there is not
             any subtle/low capacity space being lost with each failed create.
 
@@ -141,7 +141,7 @@ class PoolCreateTests(PoolTestBase):
             self.pool[0].dmg.result.exit_status == 0,
             "Creating a large capacity pool on a single server should succeed."
         )
-        for index in range(100):
+        for index in range(300):
             self.log.info("Loop %s", index)
             self.pool[1].create()
             self.assertTrue(

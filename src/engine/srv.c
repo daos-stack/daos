@@ -339,7 +339,7 @@ dss_srv_handler(void *arg)
 	rc = hwloc_set_membind(dss_topo, dx->dx_cpuset, HWLOC_MEMBIND_BIND,
 			       HWLOC_MEMBIND_THREAD);
 	if (rc)
-		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
+		D_WARN("failed to set memory affinity: %d\n", errno);
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG, dx->dx_xs_id, dx->dx_tgt_id);
@@ -832,6 +832,8 @@ dss_start_xs_id(int xs_id)
 	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
 	/* if we are NUMA aware, use the NUMA information */
 	if (numa_obj) {
+		D_INFO("xs_id %d : Using NUMA-aware core allocation\n", xs_id);
+
 		idx = hwloc_bitmap_first(core_allocation_bitmap);
 		if (idx == -1) {
 			D_ERROR("No core available for XS: %d", xs_id);
@@ -851,12 +853,8 @@ dss_start_xs_id(int xs_id)
 			D_PRINT("Null core returned by hwloc\n");
 			return -DER_INVAL;
 		}
-
-		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
-		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
-		free(cpuset);
 	} else {
-		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
+		D_INFO("xs id %d : Using non-NUMA aware core allocation\n", xs_id);
 		/*
 		 * All system XS will use the first core, but
 		 * the SWIM XS will use separate core if enough cores
@@ -876,6 +874,10 @@ dss_start_xs_id(int xs_id)
 			return -DER_INVAL;
 		}
 	}
+
+	hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
+	D_INFO("xs_id %d : Using CPU set %s\n", xs_id, cpuset);
+	free(cpuset);
 
 	rc = dss_start_one_xstream(obj->cpuset, xs_id);
 	if (rc)
