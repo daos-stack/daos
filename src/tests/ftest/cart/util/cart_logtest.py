@@ -605,7 +605,7 @@ class rpc_reporting():
         try:
             if line.function not in self.known_functions:
                 return
-        except KeyError:
+        except AttributeError:
             return
 
         if line.is_new_rpc():
