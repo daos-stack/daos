@@ -9,12 +9,15 @@
 import threading
 import time
 
-from mdtest_test_base import MdtestBase
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
 
+from mdtest_test_base import MdtestBase
+from telemetry_test_base import TestWithTelemetry
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 # pylint: disable=attribute-defined-outside-init
-class RbldWidelyStriped(MdtestBase):
+class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
     """Rebuild test cases featuring mdtest.
 
     This class contains tests for pool rebuild that feature I/O going on
@@ -23,11 +26,15 @@ class RbldWidelyStriped(MdtestBase):
     :avocado: recursive
     """
 
-    def test_rebuild_widely_striped(self):
+    def __init__(self, *args, **kwargs):
+        """Initialize a Test object."""
+        super().__init__(*args, **kwargs)
+        self.metrics = {"engine_net_ofi_sockets_req_timeout": {}}
+
+    def test_net_telemetry(self):
         """Jira ID: DAOS-3795/DAOS-3796.
 
-        Test Description: Verify rebuild for widely striped object using
-                          mdtest.
+        Test Description: Verify engine net telemetry metrics.
 
         Use Cases:
           Create pool and container.
@@ -45,10 +52,21 @@ class RbldWidelyStriped(MdtestBase):
           Stop 2 servers in the middle of mdtest. Let rebuild to complete.
           Allow mdtest to complete.
 
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=rebuild,widelystriped
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,telemetry,net
+        :avocado: tags=test_with_telemetry_net,test_net_telemetry
         """
+
+        metrics = "engine_net_ofi_sockets_req_timeout"
+        data = self.telemetry.get_metrics(metrics)
+
+        req_timeouts = 0
+        for host in data:
+            for metric in data[host]["engine_net_ofi_sockets_req_timeout"]["metrics"]:
+                if metric["value"] > 0:
+                    req_timeouts += metric["value"]
+
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
@@ -72,13 +90,43 @@ class RbldWidelyStriped(MdtestBase):
                                            rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
-
         # create 1st container
         self.add_container(self.pool)
         # start 1st mdtest run and let it complete
         self.execute_mdtest()
         # Kill rank[6] and wait for rebuild to complete
+
         self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
+
+        #########################################################
+        #
+        # START: Check engine_net_req_timeout telemetry values
+        #
+        #########################################################
+
+        # Remove the killed host from the clustershell telemetry hostlist
+        self.telemetry.hosts.remove(self.hostlist_servers[rank[0]])
+
+        data = self.telemetry.get_metrics(metrics)
+
+        req_timeouts = 0
+        for host in data:
+            for metric in data[host]["engine_net_ofi_sockets_req_timeout"]["metrics"]:
+                req_timeouts += metric["value"]
+
+        if not req_timeouts > 0:
+            self.fail("Expected engine_net_ofi_sockets_req_timeout "
+                      "to be greater than 0.")
+
+        time.sleep(9999)
+
+        #########################################################
+        #
+        # END: Check engine_net_req_timeout telemetry values
+        #
+        #########################################################
+
+
         self.pool.wait_for_rebuild(False, interval=1)
 
         # create 2nd container
