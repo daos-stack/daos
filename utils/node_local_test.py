@@ -90,7 +90,7 @@ class NLTConf():
                 os.rmdir(self.tmp_dir)
             os.makedirs(self.tmp_dir)
 
-        self._compress_proc = None
+        self._compress_procs = []
 
     def __del__(self):
         self.flush_bz2()
@@ -119,18 +119,17 @@ class NLTConf():
         return self.bc[key]
 
     def flush_bz2(self):
-        if not self._compress_proc:
-            return
         self.lt_compress.start()
-        self._compress_proc.wait()
+        for proc in self._compress_procs:
+            proc.wait()
+        self._compress_procs = []
         self.lt_compress.stop()
-        self._compress_proc = None
 
     def compress_file(self, filename):
         """Compress a file using bz2 for space reasons"""
 
-        self.flush_bz2()
-        self._compress_proc = subprocess.Popen(['bzip2', '--best', filename])
+        self._compress_procs[:] = (proc for proc in self._compress_procs if proc.poll())
+        self._compress_procs.append(subprocess.Popen(['bzip2', '--best', filename]))
 
 class CulmTimer():
     """Class to keep track of elapsed time so we know where to focus performance tuning"""
@@ -2494,6 +2493,10 @@ def log_test(conf,
 
     log_iter = lp.LogIter(filename)
 
+    # LogIter will have opened the file and seek through it as required, so start a background
+    # process to compress it in parallel with the log tracing.
+    conf.compress_file(filename)
+
     lto = lt.LogTest(log_iter, quiet=quiet)
 
     lto.hide_fi_calls = skip_fi
@@ -2507,7 +2510,6 @@ def log_test(conf,
 
     if skip_fi:
         if not lto.fi_triggered:
-            conf.compress_file(filename)
             raise NLTestNoFi
 
     functions = set()
@@ -2524,8 +2526,6 @@ def log_test(conf,
 
     if check_fstat and 'dfuse___fxstat' not in functions:
         raise NLTestNoFunction('dfuse___fxstat')
-
-    conf.compress_file(filename)
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
         raise Exception('Max log size exceeded, {} > {}'\
