@@ -30,10 +30,7 @@ struct dtx_batched_pool_args {
 	/* The list of containers belong to the pool. */
 	d_list_t			 dbpa_cont_list;
 	struct ds_pool_child		*dbpa_pool;
-	/* The container that needs to do DTX aggregation. */
-	struct dtx_batched_cont_args	*dbpa_victim;
-	struct dtx_stat			 dbpa_stat;
-	uint32_t			 dbpa_aggregating:1;
+	uint32_t			 dbpa_aggregating;
 };
 
 struct dtx_batched_cont_args {
@@ -322,17 +319,17 @@ dtx_aggregate(void *arg)
 		 * to do DTX aggregation.
 		 */
 
-		if (stat.dtx_cont_cmt_count == 0 ||
-		    stat.dtx_first_cmt_blob_time_lo == 0 ||
+		if (stat.dtx_cont_cmt_count == 0 || stat.dtx_first_cmt_blob_time_lo == 0 ||
 		    (stat.dtx_cont_cmt_count <= dtx_agg_thd_cnt_lo &&
-		     dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <=
-		     dtx_agg_thd_age_lo))
+		     dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <= dtx_agg_thd_age_lo))
 			break;
 	}
 
 	dbca->dbca_agg_done = 1;
 
 out:
+	D_ASSERT(dbca->dbca_pool->dbpa_aggregating != 0);
+	dbca->dbca_pool->dbpa_aggregating--;
 	dtx_put_dbca(dbca);
 }
 
@@ -342,6 +339,8 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 	ABT_thread			 child;
 	struct dtx_batched_cont_args	*dbca;
 	struct ds_cont_child		*cont;
+	struct dtx_batched_cont_args	*victim_dbca = NULL;
+	struct dtx_stat			 victim_stat = { 0 };
 	int				 rc;
 
 	while (1) {
@@ -353,6 +352,8 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 		dbca = d_list_entry(dbpa->dbpa_cont_list.next,
 				    struct dtx_batched_cont_args,
 				    dbca_pool_link);
+
+		D_ASSERT(!dbca->dbca_deregister);
 
 		if (dbca->dbca_agg_req != NULL && dbca->dbca_agg_done) {
 			sched_req_put(dbca->dbca_agg_req);
@@ -367,28 +368,21 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 		dbca->dbca_agg_gen = dtx_agg_gen;
 		d_list_move_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 
-		if (dbca->dbca_deregister)
+		if (dbca->dbca_agg_req != NULL)
 			continue;
 
 		cont = dbca->dbca_cont;
 		if (cont->sc_closing)
 			continue;
 
-		if (dbca->dbca_agg_req != NULL) {
-			dbpa->dbpa_aggregating = 1;
-			continue;
-		}
-
 		dtx_stat(cont, &stat);
-		if (stat.dtx_cont_cmt_count == 0 ||
-		    stat.dtx_first_cmt_blob_time_lo == 0)
+		if (stat.dtx_cont_cmt_count == 0 || stat.dtx_first_cmt_blob_time_lo == 0)
 			continue;
 
 		if (stat.dtx_cont_cmt_count >= dtx_agg_thd_cnt_up ||
 		    ((stat.dtx_cont_cmt_count > dtx_agg_thd_cnt_lo ||
 		      stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) &&
-		     (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) >=
-		      dtx_agg_thd_age_up))) {
+		     (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) >= dtx_agg_thd_age_up))) {
 			D_ASSERT(!dbca->dbca_agg_done);
 			dtx_get_dbca(dbca);
 			rc = dss_ult_create(dtx_aggregate, dbca,
@@ -409,57 +403,46 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 				continue;
 			}
 
-			dbpa->dbpa_aggregating = 1;
+			dbpa->dbpa_aggregating++;
 			continue;
 		}
 
-		if (dbpa->dbpa_stat.dtx_first_cmt_blob_time_lo == 0 ||
-		    dbpa->dbpa_stat.dtx_first_cmt_blob_time_lo >
-		    stat.dtx_first_cmt_blob_time_lo ||
-		    (dbpa->dbpa_stat.dtx_first_cmt_blob_time_lo ==
-		     stat.dtx_first_cmt_blob_time_lo &&
-		     dbpa->dbpa_stat.dtx_first_cmt_blob_time_up >
-		     stat.dtx_first_cmt_blob_time_up) ||
-		    (dbpa->dbpa_stat.dtx_first_cmt_blob_time_lo ==
-		     stat.dtx_first_cmt_blob_time_lo &&
-		     dbpa->dbpa_stat.dtx_first_cmt_blob_time_up ==
-		     stat.dtx_first_cmt_blob_time_up &&
-		     dbpa->dbpa_stat.dtx_cont_cmt_count <
-		     stat.dtx_cont_cmt_count)) {
-			dbpa->dbpa_stat = stat;
-			dbpa->dbpa_victim = dbca;
+		if (victim_stat.dtx_first_cmt_blob_time_lo == 0 ||
+		    victim_stat.dtx_first_cmt_blob_time_lo > stat.dtx_first_cmt_blob_time_lo ||
+		    (victim_stat.dtx_first_cmt_blob_time_lo == stat.dtx_first_cmt_blob_time_lo &&
+		     victim_stat.dtx_first_cmt_blob_time_up > stat.dtx_first_cmt_blob_time_up) ||
+		    (victim_stat.dtx_first_cmt_blob_time_lo == stat.dtx_first_cmt_blob_time_lo &&
+		     victim_stat.dtx_first_cmt_blob_time_up == stat.dtx_first_cmt_blob_time_up &&
+		     victim_stat.dtx_cont_cmt_count < stat.dtx_cont_cmt_count)) {
+			victim_stat = stat;
+			victim_dbca = dbca;
 		}
 	}
-
-	if (dbpa->dbpa_aggregating || dbpa->dbpa_victim == NULL ||
-	    dbpa->dbpa_stat.dtx_pool_cmt_count <= dtx_agg_thd_cnt_lo ||
-	    dbpa->dbpa_stat.dtx_first_cmt_blob_time_lo == 0 ||
-	    dtx_hlc_age2sec(dbpa->dbpa_stat.dtx_first_cmt_blob_time_lo) <=
-	    dtx_agg_thd_age_lo)
-		return;
 
 	/* No single container exceeds DTX thresholds, but the whole pool does,
 	 * then we choose the victim container to do the DTX aggregation.
 	 */
 
-	dbca = dbpa->dbpa_victim;
-	cont = dbca->dbca_cont;
-	D_ASSERT(dbca->dbca_agg_req == NULL && !dbca->dbca_agg_done);
-	dtx_get_dbca(dbca);
+	if (dbpa->dbpa_aggregating == 0 && victim_dbca != NULL &&
+	    victim_stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) {
+		D_ASSERT(victim_dbca->dbca_agg_req == NULL && !victim_dbca->dbca_agg_done);
 
-	rc = dss_ult_create(dtx_aggregate, dbca, DSS_XS_SELF, 0, 0, &child);
-	if (rc != 0) {
-		D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID": "DF_RC"\n",
-		       DP_UUID(cont->sc_uuid), DP_RC(rc));
-		dtx_put_dbca(dbca);
-	} else {
-		dtx_init_sched_req(cont, &dbca->dbca_agg_req, child);
-		if (dbca->dbca_agg_req == NULL) {
-			D_WARN("Fail to get agg sched req (2) for "DF_UUID"\n",
-			       DP_UUID(cont->sc_uuid));
-			ABT_thread_free(&child);
+		dtx_get_dbca(victim_dbca);
+		rc = dss_ult_create(dtx_aggregate, victim_dbca, DSS_XS_SELF, 0, 0, &child);
+		if (rc != 0) {
+			D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID": "DF_RC"\n",
+			       DP_UUID(victim_dbca->dbca_cont->sc_uuid), DP_RC(rc));
+			dtx_put_dbca(victim_dbca);
 		} else {
-			dbpa->dbpa_aggregating = 1;
+			dtx_init_sched_req(victim_dbca->dbca_cont,
+					   &victim_dbca->dbca_agg_req, child);
+			if (victim_dbca->dbca_agg_req == NULL) {
+				D_WARN("Fail to get agg sched req (2) for "DF_UUID"\n",
+				       DP_UUID(victim_dbca->dbca_cont->sc_uuid));
+				ABT_thread_free(&child);
+			} else {
+				dbpa->dbpa_aggregating++;
+			}
 		}
 	}
 }
@@ -474,8 +457,6 @@ dtx_aggregation_main(void *arg)
 		return;
 
 	while (1) {
-		int	sleep_time = 50; /* ms */
-
 		if (!d_list_empty(&dmi->dmi_dtx_batched_pool_list)) {
 			dbpa = d_list_entry(dmi->dmi_dtx_batched_pool_list.next,
 					    struct dtx_batched_pool_args,
@@ -484,17 +465,13 @@ dtx_aggregation_main(void *arg)
 					 &dmi->dmi_dtx_batched_pool_list);
 
 			dtx_agg_gen++;
-			dbpa->dbpa_victim = NULL;
-			dbpa->dbpa_aggregating = 0;
 			dtx_aggregation_pool(dbpa);
-			if (dbpa->dbpa_aggregating)
-				sleep_time = 0;
 		}
 
 		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
 
-		sched_req_sleep(dmi->dmi_dtx_agg_req, sleep_time);
+		sched_req_sleep(dmi->dmi_dtx_agg_req, 500 /* ms */);
 	}
 }
 
@@ -539,7 +516,7 @@ dtx_batched_commit_one(void *arg)
 		dtx_stat(cont, &stat);
 
 		if (stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up &&
-		    !dbca->dbca_pool->dbpa_aggregating)
+		    dbca->dbca_pool->dbpa_aggregating == 0)
 			sched_req_wakeup(dmi->dmi_dtx_agg_req);
 
 		if ((stat.dtx_committable_count <= DTX_THRESHOLD_COUNT) &&
@@ -602,6 +579,9 @@ dtx_batched_commit(void *arg)
 		dbca = d_list_entry(dmi->dmi_dtx_batched_cont_list.next,
 				    struct dtx_batched_cont_args,
 				    dbca_sys_link);
+
+		D_ASSERT(!dbca->dbca_deregister);
+
 		dtx_get_dbca(dbca);
 		cont = dbca->dbca_cont;
 		d_list_move_tail(&dbca->dbca_sys_link,
@@ -614,8 +594,7 @@ dtx_batched_commit(void *arg)
 			dbca->dbca_commit_done = 0;
 		}
 
-		if (!cont->sc_closing &&
-		    !dbca->dbca_deregister && dbca->dbca_commit_req == NULL &&
+		if (!cont->sc_closing && dbca->dbca_commit_req == NULL &&
 		    ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		     (stat.dtx_oldest_committable_time != 0 &&
 		      dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >=
