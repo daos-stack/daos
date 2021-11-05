@@ -44,14 +44,14 @@ In this step, we create a CentOS 7 image and fetches the latest DAOS version fro
 Once the image has been created, a container will need to be started to run the DAOS service. 
 
 ### Setting Hugepages
-At this stage, depending on how hugepages are configured on your hist system, you may get errors when the `docker run` command is issued. So for this demonstration, we will configure hugepages before issuing the `docker run` command:
+At this stage, depending on how hugepages are configured on your host system, you may get errors when the `docker run` command is issued. So for this demonstration, we will be configuring hugepages before issuing the `docker run` command:
 
-> Depending on the CPU involved, the quantity of hugepages will very. In our case of a Cascade Lake Server it is a qty of 16
+> Depending on the CPU involved, the quantity of available hugepages changes, for example.
 - Cascade Lake 16 pages
 - Icelake 64 pages
 - Saphire Rapids 96 pages
 
-We set the hugepages by using the following commands:
+In our case of a Cascade Lake Server it is a qty of 16, and we set the hugepages by using the following commands:
 ```bash
 echo 16 | sudo tee /proc/sys/VM/nr_hugepages
 cat /proc/meminfo | grep Huge
@@ -63,12 +63,13 @@ This command should provide an output similar to:
 AnonHugePages:         0 kB
 ShmemHugePages:        0 kB
 FileHugePages:         0 kB
-HugePages_Total:    16
-HugePages_Free:     16
+HugePages_Total:    1024
+HugePages_Free:     1023
 HugePages_Rsvd:        0
 HugePages_Surp:        0
-Hugepagesize:       2048 kB   *Probably needs new data as I switched to 1g hugepages
-Hugetlb:         2097152 kB   *Probably needs new data as I switched to 1g hugepages
+Hugepagesize:       2048 kB
+Hugetlb:         2097152 kB
+
 ```
 
 For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages)
