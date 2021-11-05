@@ -1073,8 +1073,7 @@ pipeline {
                         label params.CI_NVME_5_LABEL
                     }
                     steps {
-                        functionalTest target: hwDistroTarget(),
-                                       inst_repos: daosRepos(),
+                        functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                    }
@@ -1094,8 +1093,7 @@ pipeline {
                         label params.CI_NVME_9_LABEL
                     }
                     steps {
-                        functionalTest target: hwDistroTarget(),
-                                       inst_repos: daosRepos(),
+                        functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
