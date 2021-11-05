@@ -4439,7 +4439,6 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (obj_auxi->spec_shard) {
 		D_ASSERT(!obj_auxi->to_leader);
 
-		obj_auxi->flags |= ORF_DTX_REFRESH;
 		if (args->extra_arg != NULL) {
 			shard = *(int *)args->extra_arg;
 		} else if (obj_auxi->io_retry) {
