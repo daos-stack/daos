@@ -592,8 +592,7 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	if (rc) {
 		/** don't log error if conditional failed */
 		if (rc != -DER_EXIST)
-			D_ERROR("Failed to insert entry %s, "DF_RC"\n",
-				name, DP_RC(rc));
+			D_ERROR("Failed to insert entry %s, "DF_RC"\n", name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -851,12 +850,10 @@ restart:
 		oid_cp(&entry->oid, file->oid);
 
 		/** Open the array object for the file */
-		rc = daos_array_open_with_attr(dfs->coh, file->oid, th,
-					       DAOS_OO_RW, 1, chunk_size,
+		rc = daos_array_open_with_attr(dfs->coh, file->oid, th, DAOS_OO_RW, 1, chunk_size,
 					       &file->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
@@ -866,8 +863,7 @@ restart:
 		entry->chunk_size = chunk_size;
 
 		rc = insert_entry(parent->oh, th, file->name, len,
-				  (!dfs->use_dtx || oexcl) ?
-				  DAOS_COND_DKEY_INSERT : 0, entry);
+				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
 			daos_array_close(file->oh, NULL);
@@ -4311,8 +4307,7 @@ dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_pare
 	}
 
 restart:
-	rc = fetch_entry(parent->oh, th, name, len, true, &exists, &entry,
-			 0, NULL, NULL, NULL);
+	rc = fetch_entry(parent->oh, th, name, len, true, &exists, &entry, 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
 		D_GOTO(out, rc);
@@ -4323,8 +4318,8 @@ restart:
 	if (moid)
 		oid_cp(moid, entry.oid);
 
-	rc = fetch_entry(new_parent->oh, th, new_name, new_len, true, &exists,
-			 &new_entry, 0, NULL, NULL, NULL);
+	rc = fetch_entry(new_parent->oh, th, new_name, new_len, true, &exists, &new_entry, 0,
+			 NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", new_name, rc);
 		D_GOTO(out, rc);
@@ -4342,8 +4337,7 @@ restart:
 			}
 
 			/** make sure new dir is empty */
-			rc = daos_obj_open(dfs->coh, new_entry.oid, DAOS_OO_RW,
-					   &oh, NULL);
+			rc = daos_obj_open(dfs->coh, new_entry.oid, DAOS_OO_RW, &oh, NULL);
 			if (rc) {
 				D_ERROR("daos_obj_open() Failed (%d)\n", rc);
 				D_GOTO(out, rc = daos_der2errno(rc));
@@ -4351,8 +4345,7 @@ restart:
 
 			rc = get_num_entries(oh, th, &nr, true);
 			if (rc) {
-				D_ERROR("failed to check dir %s (%d)\n",
-					new_name, rc);
+				D_ERROR("failed to check dir %s (%d)\n", new_name, rc);
 				daos_obj_close(oh, NULL);
 				D_GOTO(out, rc);
 			}
@@ -4369,11 +4362,9 @@ restart:
 			}
 		}
 
-		rc = remove_entry(dfs, th, new_parent->oh, new_name, new_len,
-				  new_entry);
+		rc = remove_entry(dfs, th, new_parent->oh, new_name, new_len, new_entry);
 		if (rc) {
-			D_ERROR("Failed to remove entry %s (%d)\n",
-				new_name, rc);
+			D_ERROR("Failed to remove entry %s (%d)\n", new_name, rc);
 			D_GOTO(out, rc);
 		}
 
@@ -4385,17 +4376,14 @@ restart:
 	if (S_ISLNK(entry.mode)) {
 		rc = remove_entry(dfs, th, parent->oh, name, len, entry);
 		if (rc) {
-			D_ERROR("Failed to remove entry %s (%d)\n",
-				name, rc);
+			D_ERROR("Failed to remove entry %s (%d)\n", name, rc);
 			D_GOTO(out, rc);
 		}
 
 		rc = insert_entry(parent->oh, th, new_name, new_len,
-				  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT,
-				  &entry);
+				  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry);
 		if (rc)
-			D_ERROR("Inserting new entry %s failed (%d)\n",
-				new_name, rc);
+			D_ERROR("Inserting new entry %s failed (%d)\n", new_name, rc);
 		D_GOTO(out, rc);
 	}
 
@@ -4404,7 +4392,7 @@ restart:
 	rc = insert_entry(new_parent->oh, th, new_name, new_len,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry);
 	if (rc) {
-		D_ERROR("Inserting entry %s failed (%d)\n", new_name, rc);
+		D_ERROR("Inserting entry %s DTX %d failed (%d)\n", new_name, dfs->use_dtx, rc);
 		D_GOTO(out, rc);
 	}
 
@@ -4419,8 +4407,7 @@ restart:
 
 	/** remove the old entry from the old parent (just the dkey) */
 	d_iov_set(&dkey, (void *)name, len);
-	rc = daos_obj_punch_dkeys(parent->oh, th,
-				  dfs->use_dtx ? 0 : DAOS_COND_PUNCH, 1, &dkey,
+	rc = daos_obj_punch_dkeys(parent->oh, th, dfs->use_dtx ? 0 : DAOS_COND_PUNCH, 1, &dkey,
 				  NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name, rc);
