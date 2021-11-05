@@ -86,16 +86,6 @@ or
 > Warning: If Docker is being run on a non-Linux system, the "-v" parameter should be removed from the command line. Example:
 `sudo docker run -it -d --privileged --cap-add=ALL --name server`
 
-## Create the Certificates  (Work in Progress)
-First we need to create the cerificates that DAOS uses for encryption
-
-```
-cd ..
-cd /tmp
-/usr/lib64/daos/certgen/gen_certificates.sh
-```
-`sudo docker exec server 
-
 ## Start the DAOS Service
 Now that the DAOS Docker image is running, we need to enable the DAOS Service 
 
