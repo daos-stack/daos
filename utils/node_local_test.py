@@ -14,7 +14,6 @@ the client with fault injection of D_ALLOC() usage.
 # pylint: disable=protected-access
 
 import os
-import bz2
 import sys
 import time
 import uuid
@@ -119,6 +118,7 @@ class NLTConf():
         return self.bc[key]
 
     def flush_bz2(self):
+        """Wait for all bzip2 subprocess to finish"""
         self.lt_compress.start()
         for proc in self._compress_procs:
             proc.wait()
@@ -127,6 +127,8 @@ class NLTConf():
 
     def compress_file(self, filename):
         """Compress a file using bz2 for space reasons"""
+
+        # pylint: disable=consider-using-with
 
         self._compress_procs[:] = (proc for proc in self._compress_procs if proc.poll())
         self._compress_procs.append(subprocess.Popen(['bzip2', '--best', filename]))
