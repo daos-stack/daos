@@ -19,6 +19,8 @@ To build the Docker image, we can do it one of two ways:
 - Local clone of the GitHub DAOS repo
 - Directly from GitHub
 
+> I should reconsider this path and build off CentOS8 as its closer to Rocky8.4
+
 If you prefer a different base than CentOS7, replace the filename "Dockerfile.centos.7" in the command strings below with one of the following."
 - Dockerfile.centos.8
 - Dockerfile.ubuntu.20.04
@@ -39,7 +41,6 @@ In this step, we create a CentOS 7 image and fetches the latest DAOS version fro
 
 `docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.7 -t daos`
 
-
 ## Docker Setup
 Once the image has been created, a container will need to be started to run the DAOS service. 
 
@@ -58,6 +59,8 @@ cat /proc/meminfo | grep Huge
 ```
 
 This command should provide an output similar to:
+
+> Need new table as this was for 1mg Hugepages
 
 ```bash
 AnonHugePages:         0 kB
@@ -114,6 +117,7 @@ Format Summary:
   -----     ----------- ------------
   localhost 1           1
 ```
+
 ## Creating DAOS Pools (Work in Progress)
 
 `sudo docker exec server dmg pool create --size 15GB`
