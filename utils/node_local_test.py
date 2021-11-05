@@ -1196,6 +1196,7 @@ def run_daos_cmd(conf,
                  cmd,
                  show_stdout=False,
                  valgrind=True,
+                 log_check=True,
                  use_json=False):
     """Run a DAOS command
 
@@ -1221,14 +1222,20 @@ def run_daos_cmd(conf,
     exec_cmd.extend(cmd)
 
     cmd_env = get_base_env()
+    if log_check:
+        prefix = 'dnt_cmd_{}_'.format(get_inc_id())
+        # pylint: disable=consider-using-with
+        log_file = tempfile.NamedTemporaryFile(prefix=prefix,
+                                               suffix='.log',
+                                               dir=conf.tmp_dir,
+                                               delete=False)
 
-    prefix = 'dnt_cmd_{}_'.format(get_inc_id())
-    log_file = tempfile.NamedTemporaryFile(prefix=prefix,
-                                           suffix='.log',
-                                           dir=conf.tmp_dir,
-                                           delete=False)
+        cmd_env['D_LOG_FILE'] = log_file.name
+    else:
+        del cmd_env['DD_MASK']
+        del cmd_env['DD_SUBSYS']
+        del cmd_env['D_LOG_MASK']
 
-    cmd_env['D_LOG_FILE'] = log_file.name
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
     rc = subprocess.run(exec_cmd,
@@ -1252,9 +1259,8 @@ def run_daos_cmd(conf,
     if rc.returncode < 0:
         show_memleaks = False
 
-    rc.fi_loc = log_test(conf,
-                         log_file.name,
-                         show_memleaks=show_memleaks)
+    if log_check:
+        rc.fi_loc = log_test(conf, log_file.name, show_memleaks=show_memleaks)
     vh.convert_xml()
     # If there are valgrind errors here then mark them for later reporting but
     # do not abort.  This allows a full-test run to report all valgrind issues
@@ -1268,7 +1274,14 @@ def run_daos_cmd(conf,
         rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
-def _create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, valgrind=False):
+def _create_cont(conf,
+                 pool=None,
+                 cont=None,
+                 ctype=None,
+                 label=None,
+                 path=None,
+                 valgrind=False,
+                 log_check=True):
     """Helper function for create_cont"""
 
     cmd = ['container',
@@ -1289,12 +1302,19 @@ def _create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, 
     if cont:
         cmd.extend(['--cont', cont])
 
-    rc = run_daos_cmd(conf, cmd, use_json=True, valgrind=valgrind)
+    rc = run_daos_cmd(conf, cmd, use_json=True, log_check=log_check, valgrind=valgrind)
     print('rc is {}'.format(rc))
     print(rc.json)
     return rc
 
-def create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, valgrind=False):
+def create_cont(conf,
+                pool=None,
+                cont=None,
+                ctype=None,
+                label=None,
+                path=None,
+                valgrind=False,
+                log_check=True):
     """Create a container and return the uuid"""
 
     rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
@@ -1311,10 +1331,10 @@ def create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, v
     assert rc.returncode == 0, rc
     return rc.json['response']['container_uuid']
 
-def destroy_container(conf, pool, container, valgrind=True):
+def destroy_container(conf, pool, container, valgrind=True, log_check=True):
     """Destroy a container"""
     cmd = ['container', 'destroy', pool, container]
-    rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True)
+    rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True, log_check=log_check)
     print(rc)
     if rc.returncode == 1 and rc.json['status'] == -1012:
         # This shouldn't happen but can on unclean shutdown, file it as a test failure so it does
@@ -2307,10 +2327,15 @@ def run_posix_tests(server, conf, test=None):
                                            pool.id(),
                                            ctype="POSIX",
                                            valgrind=False,
+                                           log_check=False,
                                            label=fn)
                 pt.container_label = fn
                 rc = obj()
-                destroy_container(conf, pool.id(), pt.container_label, valgrind=False)
+                destroy_container(conf,
+                                  pool.id(),
+                                  pt.container_label,
+                                  valgrind=False,
+                                  log_check=False)
                 pt.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
