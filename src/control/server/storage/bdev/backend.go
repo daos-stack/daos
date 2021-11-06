@@ -246,18 +246,10 @@ func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.Nvme
 
 	var missing common.PCIAddressSet
 	out := make(storage.NvmeControllers, 0)
-	vmds := make(map[string]storage.NvmeControllers)
 
-	// store discovered VMD backing devices under vmd address key
-	for _, ctrlr := range discovered {
-		addr, err := common.NewPCIAddress(ctrlr.PciAddr)
-		if err != nil {
-			return nil, errors.Wrap(err, "invalid discovered controller address")
-		}
-
-		if vmdAddr, isVMDBackingAddr := backingAddrToVMD(addr); isVMDBackingAddr {
-			vmds[vmdAddr.String()] = append(vmds[vmdAddr.String()], ctrlr)
-		}
+	vmds, err := mapVMDToBackingDevs(discovered)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, want := range reqDevs.Addresses() {

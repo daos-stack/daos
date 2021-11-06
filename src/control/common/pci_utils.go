@@ -12,11 +12,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
-// bdevPciAddrSep defines the separator used between PCI addresses in string lists.
-const bdevPciAddrSep = " "
+const (
+	// bdevPciAddrSep defines the separator used between PCI addresses in string lists.
+	bdevPciAddrSep = " "
+	// vmdDomainLen defines the expected length of a VMD backing devices address domain.
+	vmdDomainLen = 6
+)
 
 // parsePCIAddress returns separated components of BDF format PCI address.
 func parsePCIAddress(addr string) (dom, bus, dev, fun uint64, err error) {
@@ -75,6 +80,26 @@ func (pa *PCIAddress) IsVMDBackingAddress() bool {
 	}
 
 	return pa.Domain != "0000"
+}
+
+// BackingToVMDAddress returns the VMD PCI address associated with a VMD backing devices address.
+func (pa *PCIAddress) BackingToVMDAddress() (*PCIAddress, error) {
+	if pa == nil {
+		return nil, errors.New("PCIAddress is nil")
+	}
+	if !pa.IsVMDBackingAddress() {
+		return nil, errors.New("not a vmd backing device address")
+
+	}
+
+	// assume non-zero pci address domain field indicates a vmd backing device wisth
+	// fixed length field
+	if len(pa.Domain) != vmdDomainLen {
+		return nil, errors.New("unexpected length of vmd domain")
+	}
+
+	return NewPCIAddress(fmt.Sprintf("0000:%s:%s.%s", pa.Domain[:2], pa.Domain[2:4],
+		pa.Domain[5:]))
 }
 
 // LessThan evaluate whether "this" address is less than "other" by comparing
@@ -271,6 +296,40 @@ func (pal *PCIAddressSet) Difference(in *PCIAddressSet) *PCIAddressSet {
 	}
 
 	return difference
+}
+
+// BackingToVMDAddresses converts all VMD backing device PCI addresses (with the VMD address
+// encoded in the domain component of the PCI address) in set back to the PCI address of the VMD
+// e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
+//
+// Many assumptions are made as to the input and output PCI address structure in the conversion.
+func (pal *PCIAddressSet) BackingToVMDAddresses(log logging.Logger) (*PCIAddressSet, error) {
+	if pal == nil {
+		return nil, errors.New("PCIAddressSet is nil")
+	}
+
+	outAddrs := PCIAddressSet{}
+
+	for _, inAddr := range pal.Addresses() {
+		if !inAddr.IsVMDBackingAddress() {
+			if err := outAddrs.Add(inAddr); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		vmdAddr, err := inAddr.BackingToVMDAddress()
+		if err != nil {
+			return nil, err
+		}
+
+		log.Debugf("replacing backing device %s with vmd %s", inAddr, vmdAddr)
+		if err := outAddrs.Add(vmdAddr); err != nil {
+			return nil, err
+		}
+	}
+
+	return &outAddrs, nil
 }
 
 // NewPCIAddressSet takes a variable number of strings and attempts to create an address set.

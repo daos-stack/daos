@@ -9,6 +9,7 @@ package common
 import (
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 )
@@ -177,6 +178,54 @@ func TestPCIUtils_PCIAddressSet_Difference(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expAddrStrs, difference.Strings()); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPCIUtils_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
+	for name, tc := range map[string]struct {
+		inAddrs     []string
+		expOutAddrs []string
+		expErr      error
+	}{
+		"empty": {
+			expOutAddrs: []string{},
+		},
+		"no vmd addresses": {
+			inAddrs:     []string{"0000:80:00.0"},
+			expOutAddrs: []string{"0000:80:00.0"},
+		},
+		"single vmd address": {
+			inAddrs:     []string{"5d0505:01:00.0"},
+			expOutAddrs: []string{"0000:5d:05.5"},
+		},
+		"multiple vmd address": {
+			inAddrs:     []string{"5d0505:01:00.0", "5d0505:03:00.0"},
+			expOutAddrs: []string{"0000:5d:05.5"},
+		},
+		"invalid vmd domain in address": {
+			inAddrs: []string{"5d055:01:00.0"},
+			expErr:  errors.New("unexpected length of vmd domain"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			addrSet, err := NewPCIAddressSet(tc.inAddrs...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotAddrs, gotErr := addrSet.BackingToVMDAddresses(log)
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expOutAddrs, gotAddrs.Strings()); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
 	}

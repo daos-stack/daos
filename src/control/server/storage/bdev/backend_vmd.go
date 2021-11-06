@@ -21,40 +21,68 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// backingAddrToVMD converts a VMD backing devices address e.g. 5d0505:03.00.0
-// to the relevant logical VMD address e.g. 0000:5d:05.5.
-func backingAddrToVMD(in *common.PCIAddress) (*common.PCIAddress, bool) {
-	if !in.IsVMDBackingAddress() {
-		return nil, false
-	}
-
-	dom := in.Domain
-	newAddrStr := fmt.Sprintf("0000:%c%c:%c%c.%c", dom[0], dom[1], dom[2], dom[3], dom[5])
-
-	addr, err := common.NewPCIAddress(newAddrStr)
+func getVMD(inAddr string) (*common.PCIAddress, error) {
+	addr, err := common.NewPCIAddress(inAddr)
 	if err != nil {
-		panic(err)
+		return nil, errors.Wrap(err, "controller pci address invalid")
 	}
 
-	return addr, true
+	if !addr.IsVMDBackingAddress() {
+		return nil, nil
+	}
+
+	vmdAddr, err := addr.BackingToVMDAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	return vmdAddr, nil
 }
 
-// mapVMDToBackingAddrs stores found vmd backing addresses under vmd address key.
+// mapVMDToBackingDevs stores found vmd backing device details under vmd address key.
+func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) (map[string]storage.NvmeControllers, error) {
+	vmds := make(map[string]storage.NvmeControllers)
+
+	for _, ctrlr := range foundCtrlrs {
+		vmdAddr, err := getVMD(ctrlr.PciAddr)
+		if err != nil {
+			return nil, err
+		}
+		if vmdAddr == nil {
+			continue // not a backing device address
+		}
+
+		if _, exists := vmds[vmdAddr.String()]; !exists {
+			vmds[vmdAddr.String()] = make(storage.NvmeControllers, 0)
+		}
+
+		// add backing device details to vmd address key in map
+		vmds[vmdAddr.String()] = append(vmds[vmdAddr.String()], ctrlr)
+	}
+
+	return vmds, nil
+}
+
+// mapVMDToBackingAddrs stores found vmd backing device addresses under vmd address key.
 func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*common.PCIAddressSet, error) {
 	vmds := make(map[string]*common.PCIAddressSet)
 
 	for _, ctrlr := range foundCtrlrs {
-		addr, err := common.NewPCIAddress(ctrlr.PciAddr)
+		vmdAddr, err := getVMD(ctrlr.PciAddr)
 		if err != nil {
-			return nil, errors.Wrap(err, "controller pci address invalid")
+			return nil, err
+		}
+		if vmdAddr == nil {
+			continue // not a backing device address
 		}
 
-		// find backing device addresses from vmd address
-		if vmdAddr, isVMDBackingAddr := backingAddrToVMD(addr); isVMDBackingAddr {
-			if _, exists := vmds[vmdAddr.String()]; !exists {
-				vmds[vmdAddr.String()] = new(common.PCIAddressSet)
-			}
-			vmds[vmdAddr.String()].Add(addr)
+		if _, exists := vmds[vmdAddr.String()]; !exists {
+			vmds[vmdAddr.String()] = new(common.PCIAddressSet)
+		}
+
+		// add backing device address to vmd address key in map
+		if err := vmds[vmdAddr.String()].AddStrings(ctrlr.PciAddr); err != nil {
+			return nil, err
 		}
 	}
 

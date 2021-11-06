@@ -338,7 +338,7 @@ func (bc *BdevConfig) Validate(class Class) error {
 		}
 	case ClassNvme:
 		if _, err := common.NewPCIAddressSet(bc.DeviceList...); err != nil {
-			return errors.Wrapf(err, "parse pci addresse0 %v", bc.DeviceList)
+			return errors.Wrapf(err, "parse pci addresses %v", bc.DeviceList)
 		}
 	default:
 		return errors.Errorf("bdev_class value %q not supported (valid: nvme/kdev/file)", class)

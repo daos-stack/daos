@@ -53,8 +53,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const vmdDomainLen = 6
-
 // Env is the interface that provides SPDK environment management.
 type Env interface {
 	InitSPDKEnv(logging.Logger, *EnvOptions) error
@@ -69,42 +67,6 @@ func Rc2err(label string, rc C.int) error {
 	return fmt.Errorf("%s: %d", label, rc)
 }
 
-// backingAddress2VMD converts VMD backing device PCI addresses (with the VMD
-// address encoded in the domain component of the PCI address) back to the PCI
-// address of the VMD e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
-//
-// Many assumptions are made as to the input and output PCI address structure in
-// the conversion.
-func backingAddress2VMD(log logging.Logger, devs *common.PCIAddressSet) (*common.PCIAddressSet, error) {
-	if devs == nil {
-		return nil, errors.New("revertBackingToVMD: nil pci address list")
-	}
-
-	outAddrs := common.PCIAddressSet{}
-
-	for _, inAddr := range devs.Addresses() {
-		if inAddr.Domain == "0000" {
-			outAddrs.Add(inAddr)
-			continue
-		}
-
-		// assume non-zero pci address domain field indicates a vmd backing device with
-		// fixed length field
-		if len(inAddr.Domain) != vmdDomainLen {
-			return nil, errors.New("unexpected length of vmd domain")
-		}
-
-		vmdAddr := fmt.Sprintf("0000:%s:%s.%s", inAddr.Domain[:2], inAddr.Domain[2:4],
-			inAddr.Domain[5:])
-		if err := outAddrs.AddStrings(vmdAddr); err != nil {
-			log.Debugf("replacing backing device %s with vmd %s", inAddr, vmdAddr)
-			return nil, err
-		}
-	}
-
-	return &outAddrs, nil
-}
-
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
@@ -114,13 +76,12 @@ type EnvOptions struct {
 
 func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
 	if o.EnableVMD {
-		// DPDK will not accept VMD backing device addresses
-		// so convert to VMD addresses
-		newAllowList, err := backingAddress2VMD(log, o.PCIAllowList)
+		// DPDK will not accept VMD backing device addresses so convert to VMD addresses
+		newSet, err := o.PCIAllowList.BackingToVMDAddresses(log)
 		if err != nil {
 			return err
 		}
-		o.PCIAllowList = newAllowList
+		o.PCIAllowList = newSet
 	}
 
 	return nil
