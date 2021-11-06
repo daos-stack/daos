@@ -1310,7 +1310,7 @@ def create_cont(conf,
         print(rc.json)
         return rc
     
-    rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind, log_check)
+    rc = _create_cont()
 
     if rc.returncode == 1 and \
        rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
@@ -1319,7 +1319,7 @@ def create_cont(conf,
         # remove and retry in this case.
         if path is None:
             destroy_container(conf, pool, label)
-            rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
+            rc = _create_cont()
 
     assert rc.returncode == 0, rc
     return rc.json['response']['container_uuid']
