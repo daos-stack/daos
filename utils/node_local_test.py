@@ -1274,39 +1274,6 @@ def run_daos_cmd(conf,
         rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
-def _create_cont(conf,
-                 pool=None,
-                 cont=None,
-                 ctype=None,
-                 label=None,
-                 path=None,
-                 valgrind=False,
-                 log_check=True):
-    """Helper function for create_cont"""
-
-    cmd = ['container',
-           'create']
-
-    if pool:
-        cmd.append(pool)
-
-    if label:
-        cmd.extend(['--properties',
-                    'label:{}'.format(label)])
-    if ctype:
-        cmd.extend(['--type', ctype])
-
-    if path:
-        cmd.extend(['--path', path])
-
-    if cont:
-        cmd.extend(['--cont', cont])
-
-    rc = run_daos_cmd(conf, cmd, use_json=True, log_check=log_check, valgrind=valgrind)
-    print('rc is {}'.format(rc))
-    print(rc.json)
-    return rc
-
 def create_cont(conf,
                 pool=None,
                 cont=None,
@@ -1317,7 +1284,33 @@ def create_cont(conf,
                 log_check=True):
     """Create a container and return the uuid"""
 
-    rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
+
+    def _create_cont():
+        """Helper function for create_cont"""
+
+        cmd = ['container', 'create']
+
+        if pool:
+            cmd.append(pool)
+
+        if label:
+            cmd.extend(['--properties', 'label:{}'.format(label)])
+
+        if ctype:
+            cmd.extend(['--type', ctype])
+
+        if path:
+            cmd.extend(['--path', path])
+
+        if cont:
+            cmd.extend(['--cont', cont])
+
+        rc = run_daos_cmd(conf, cmd, use_json=True, log_check=log_check, valgrind=valgrind)
+        print('rc is {}'.format(rc))
+        print(rc.json)
+        return rc
+    
+    rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind, log_check)
 
     if rc.returncode == 1 and \
        rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
