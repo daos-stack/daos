@@ -42,4 +42,4 @@ ior:
     transfer_blk_size_rebld:
         rank_to_kill: 3
         transfer_size: '1M'
-        block_size: '128M'
+        block_size: '64M'
