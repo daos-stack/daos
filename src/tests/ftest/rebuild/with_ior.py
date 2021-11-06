@@ -31,8 +31,8 @@ class RbldWithIOR(IorTestBase):
         :avocado: tags=large
         :avocado: tags=pool,rebuild
         :avocado: tags=rebuildwithior
-        """
 
+        """
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
