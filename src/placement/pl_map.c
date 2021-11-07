@@ -592,12 +592,6 @@ pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr)
 	return rc;
 }
 
-static bool
-shard_is_down(struct pl_obj_shard *shard)
-{
-	return (shard->po_shard == -1 || shard->po_target == -1);
-}
-
 /**
  * Select leader replica for the given object's shard.
  *
@@ -628,35 +622,28 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
 		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
 		int fail_cnt = 0;
-		int idx;
+		int idx = grp_idx * grp_size + tgt_nr - 1;
 		int leader_shard_idx;
 
-		/*
-		 * For EC obj, select data shard 0 or parity shard as leader. As those shards always
-		 * involved for every modification operation -
-		 * If shard 0 is healthy then select it as leader, or will select one parity shard.
-		 * If #failed_shards exceed #parity_shards, returns EIO.
+		/* For EC obj, select parity shard or data shard 0 as leader.
+		 * Firstly select parity shard if available, or select first data shard as it has
+		 * the highest possibility to involve in the IO.
+		 * If all parity shards and first data shard unavailable, return EIO.
 		 */
-		idx = grp_idx * grp_size;
 		shard = pl_get_shard(data, idx);
-		if (shard->po_rebuilding || shard_is_down(shard)) {
+		while (shard->po_rebuilding || shard->po_shard == -1 || shard->po_target == -1) {
 			fail_cnt++;
-
-			idx = grp_idx * grp_size + tgt_nr - 1;
-			shard = pl_get_shard(data, idx);
-			while (shard->po_rebuilding || shard_is_down(shard)) {
+			if (fail_cnt > oc_attr->u.ec.e_p) {
+				D_ERROR(DF_OID" fail_cnt %d, exceed e_p %d, "DF_RC"\n",
+					DP_OID(oid), fail_cnt, oc_attr->u.ec.e_p, DP_RC(-DER_IO));
+				return -DER_IO;
+			}
+			if (fail_cnt == oc_attr->u.ec.e_p)
+				idx = grp_idx * grp_size;
+			else
 				idx--;
 
-				fail_cnt++;
-				if (fail_cnt > oc_attr->u.ec.e_p) {
-					D_ERROR(DF_OID" fail_cnt %d, exceed e_p %d, "DF_RC"\n",
-						DP_OID(oid), fail_cnt, oc_attr->u.ec.e_p,
-						DP_RC(-DER_IO));
-					return -DER_IO;
-				}
-
-				shard = pl_get_shard(data, idx);
-			}
+			shard = pl_get_shard(data, idx);
 		}
 
 		D_ASSERT(fail_cnt <= oc_attr->u.ec.e_p);
