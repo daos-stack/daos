@@ -1309,7 +1309,7 @@ def create_cont(conf,
         print('rc is {}'.format(rc))
         print(rc.json)
         return rc
-    
+
     rc = _create_cont()
 
     if rc.returncode == 1 and \
