@@ -37,7 +37,7 @@ var file_mgmt_mgmt_proto_rawDesc = []byte{
 	0x67, 0x6d, 0x74, 0x2f, 0x73, 0x76, 0x63, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x0e, 0x6d,
 	0x67, 0x6d, 0x74, 0x2f, 0x61, 0x63, 0x6c, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x11, 0x6d,
 	0x67, 0x6d, 0x74, 0x2f, 0x73, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x32, 0xd7, 0x0b, 0x0a, 0x07, 0x4d, 0x67, 0x6d, 0x74, 0x53, 0x76, 0x63, 0x12, 0x27, 0x0a, 0x04,
+	0x32, 0x9b, 0x0c, 0x0a, 0x07, 0x4d, 0x67, 0x6d, 0x74, 0x53, 0x76, 0x63, 0x12, 0x27, 0x0a, 0x04,
 	0x4a, 0x6f, 0x69, 0x6e, 0x12, 0x0d, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x4a, 0x6f, 0x69, 0x6e,
 	0x52, 0x65, 0x71, 0x1a, 0x0e, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x4a, 0x6f, 0x69, 0x6e, 0x52,
 	0x65, 0x73, 0x70, 0x22, 0x00, 0x12, 0x43, 0x0a, 0x0c, 0x43, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72,
@@ -130,11 +130,16 @@ var file_mgmt_mgmt_proto_rawDesc = []byte{
 	0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x45, 0x72, 0x61, 0x73, 0x65, 0x12, 0x14, 0x2e, 0x6d, 0x67,
 	0x6d, 0x74, 0x2e, 0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x45, 0x72, 0x61, 0x73, 0x65, 0x52, 0x65,
 	0x71, 0x1a, 0x15, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x45,
-	0x72, 0x61, 0x73, 0x65, 0x52, 0x65, 0x73, 0x70, 0x22, 0x00, 0x42, 0x3a, 0x5a, 0x38, 0x67, 0x69,
-	0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74,
-	0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73, 0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e,
-	0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74,
-	0x6f, 0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x72, 0x61, 0x73, 0x65, 0x52, 0x65, 0x73, 0x70, 0x22, 0x00, 0x12, 0x42, 0x0a, 0x0d, 0x53, 0x79,
+	0x73, 0x74, 0x65, 0x6d, 0x43, 0x6c, 0x65, 0x61, 0x6e, 0x75, 0x70, 0x12, 0x16, 0x2e, 0x6d, 0x67,
+	0x6d, 0x74, 0x2e, 0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x43, 0x6c, 0x65, 0x61, 0x6e, 0x75, 0x70,
+	0x52, 0x65, 0x71, 0x1a, 0x17, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x53, 0x79, 0x73, 0x74, 0x65,
+	0x6d, 0x43, 0x6c, 0x65, 0x61, 0x6e, 0x75, 0x70, 0x52, 0x65, 0x73, 0x70, 0x22, 0x00, 0x42, 0x3a,
+	0x5a, 0x38, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x61, 0x6f,
+	0x73, 0x2d, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73, 0x72, 0x63,
+	0x2f, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x33,
 }
 
 var file_mgmt_mgmt_proto_goTypes = []interface{}{
@@ -162,28 +167,30 @@ var file_mgmt_mgmt_proto_goTypes = []interface{}{
 	(*SystemStopReq)(nil),           // 21: mgmt.SystemStopReq
 	(*SystemStartReq)(nil),          // 22: mgmt.SystemStartReq
 	(*SystemEraseReq)(nil),          // 23: mgmt.SystemEraseReq
-	(*JoinResp)(nil),                // 24: mgmt.JoinResp
-	(*shared.ClusterEventResp)(nil), // 25: shared.ClusterEventResp
-	(*LeaderQueryResp)(nil),         // 26: mgmt.LeaderQueryResp
-	(*PoolCreateResp)(nil),          // 27: mgmt.PoolCreateResp
-	(*PoolDestroyResp)(nil),         // 28: mgmt.PoolDestroyResp
-	(*PoolEvictResp)(nil),           // 29: mgmt.PoolEvictResp
-	(*PoolExcludeResp)(nil),         // 30: mgmt.PoolExcludeResp
-	(*PoolDrainResp)(nil),           // 31: mgmt.PoolDrainResp
-	(*PoolExtendResp)(nil),          // 32: mgmt.PoolExtendResp
-	(*PoolReintegrateResp)(nil),     // 33: mgmt.PoolReintegrateResp
-	(*PoolQueryResp)(nil),           // 34: mgmt.PoolQueryResp
-	(*PoolSetPropResp)(nil),         // 35: mgmt.PoolSetPropResp
-	(*PoolGetPropResp)(nil),         // 36: mgmt.PoolGetPropResp
-	(*ACLResp)(nil),                 // 37: mgmt.ACLResp
-	(*GetAttachInfoResp)(nil),       // 38: mgmt.GetAttachInfoResp
-	(*ListPoolsResp)(nil),           // 39: mgmt.ListPoolsResp
-	(*ListContResp)(nil),            // 40: mgmt.ListContResp
-	(*ContSetOwnerResp)(nil),        // 41: mgmt.ContSetOwnerResp
-	(*SystemQueryResp)(nil),         // 42: mgmt.SystemQueryResp
-	(*SystemStopResp)(nil),          // 43: mgmt.SystemStopResp
-	(*SystemStartResp)(nil),         // 44: mgmt.SystemStartResp
-	(*SystemEraseResp)(nil),         // 45: mgmt.SystemEraseResp
+	(*SystemCleanupReq)(nil),        // 24: mgmt.SystemCleanupReq
+	(*JoinResp)(nil),                // 25: mgmt.JoinResp
+	(*shared.ClusterEventResp)(nil), // 26: shared.ClusterEventResp
+	(*LeaderQueryResp)(nil),         // 27: mgmt.LeaderQueryResp
+	(*PoolCreateResp)(nil),          // 28: mgmt.PoolCreateResp
+	(*PoolDestroyResp)(nil),         // 29: mgmt.PoolDestroyResp
+	(*PoolEvictResp)(nil),           // 30: mgmt.PoolEvictResp
+	(*PoolExcludeResp)(nil),         // 31: mgmt.PoolExcludeResp
+	(*PoolDrainResp)(nil),           // 32: mgmt.PoolDrainResp
+	(*PoolExtendResp)(nil),          // 33: mgmt.PoolExtendResp
+	(*PoolReintegrateResp)(nil),     // 34: mgmt.PoolReintegrateResp
+	(*PoolQueryResp)(nil),           // 35: mgmt.PoolQueryResp
+	(*PoolSetPropResp)(nil),         // 36: mgmt.PoolSetPropResp
+	(*PoolGetPropResp)(nil),         // 37: mgmt.PoolGetPropResp
+	(*ACLResp)(nil),                 // 38: mgmt.ACLResp
+	(*GetAttachInfoResp)(nil),       // 39: mgmt.GetAttachInfoResp
+	(*ListPoolsResp)(nil),           // 40: mgmt.ListPoolsResp
+	(*ListContResp)(nil),            // 41: mgmt.ListContResp
+	(*ContSetOwnerResp)(nil),        // 42: mgmt.ContSetOwnerResp
+	(*SystemQueryResp)(nil),         // 43: mgmt.SystemQueryResp
+	(*SystemStopResp)(nil),          // 44: mgmt.SystemStopResp
+	(*SystemStartResp)(nil),         // 45: mgmt.SystemStartResp
+	(*SystemEraseResp)(nil),         // 46: mgmt.SystemEraseResp
+	(*SystemCleanupResp)(nil),       // 47: mgmt.SystemCleanupResp
 }
 var file_mgmt_mgmt_proto_depIdxs = []int32{
 	0,  // 0: mgmt.MgmtSvc.Join:input_type -> mgmt.JoinReq
@@ -211,33 +218,35 @@ var file_mgmt_mgmt_proto_depIdxs = []int32{
 	21, // 22: mgmt.MgmtSvc.SystemStop:input_type -> mgmt.SystemStopReq
 	22, // 23: mgmt.MgmtSvc.SystemStart:input_type -> mgmt.SystemStartReq
 	23, // 24: mgmt.MgmtSvc.SystemErase:input_type -> mgmt.SystemEraseReq
-	24, // 25: mgmt.MgmtSvc.Join:output_type -> mgmt.JoinResp
-	25, // 26: mgmt.MgmtSvc.ClusterEvent:output_type -> shared.ClusterEventResp
-	26, // 27: mgmt.MgmtSvc.LeaderQuery:output_type -> mgmt.LeaderQueryResp
-	27, // 28: mgmt.MgmtSvc.PoolCreate:output_type -> mgmt.PoolCreateResp
-	28, // 29: mgmt.MgmtSvc.PoolDestroy:output_type -> mgmt.PoolDestroyResp
-	29, // 30: mgmt.MgmtSvc.PoolEvict:output_type -> mgmt.PoolEvictResp
-	30, // 31: mgmt.MgmtSvc.PoolExclude:output_type -> mgmt.PoolExcludeResp
-	31, // 32: mgmt.MgmtSvc.PoolDrain:output_type -> mgmt.PoolDrainResp
-	32, // 33: mgmt.MgmtSvc.PoolExtend:output_type -> mgmt.PoolExtendResp
-	33, // 34: mgmt.MgmtSvc.PoolReintegrate:output_type -> mgmt.PoolReintegrateResp
-	34, // 35: mgmt.MgmtSvc.PoolQuery:output_type -> mgmt.PoolQueryResp
-	35, // 36: mgmt.MgmtSvc.PoolSetProp:output_type -> mgmt.PoolSetPropResp
-	36, // 37: mgmt.MgmtSvc.PoolGetProp:output_type -> mgmt.PoolGetPropResp
-	37, // 38: mgmt.MgmtSvc.PoolGetACL:output_type -> mgmt.ACLResp
-	37, // 39: mgmt.MgmtSvc.PoolOverwriteACL:output_type -> mgmt.ACLResp
-	37, // 40: mgmt.MgmtSvc.PoolUpdateACL:output_type -> mgmt.ACLResp
-	37, // 41: mgmt.MgmtSvc.PoolDeleteACL:output_type -> mgmt.ACLResp
-	38, // 42: mgmt.MgmtSvc.GetAttachInfo:output_type -> mgmt.GetAttachInfoResp
-	39, // 43: mgmt.MgmtSvc.ListPools:output_type -> mgmt.ListPoolsResp
-	40, // 44: mgmt.MgmtSvc.ListContainers:output_type -> mgmt.ListContResp
-	41, // 45: mgmt.MgmtSvc.ContSetOwner:output_type -> mgmt.ContSetOwnerResp
-	42, // 46: mgmt.MgmtSvc.SystemQuery:output_type -> mgmt.SystemQueryResp
-	43, // 47: mgmt.MgmtSvc.SystemStop:output_type -> mgmt.SystemStopResp
-	44, // 48: mgmt.MgmtSvc.SystemStart:output_type -> mgmt.SystemStartResp
-	45, // 49: mgmt.MgmtSvc.SystemErase:output_type -> mgmt.SystemEraseResp
-	25, // [25:50] is the sub-list for method output_type
-	0,  // [0:25] is the sub-list for method input_type
+	24, // 25: mgmt.MgmtSvc.SystemCleanup:input_type -> mgmt.SystemCleanupReq
+	25, // 26: mgmt.MgmtSvc.Join:output_type -> mgmt.JoinResp
+	26, // 27: mgmt.MgmtSvc.ClusterEvent:output_type -> shared.ClusterEventResp
+	27, // 28: mgmt.MgmtSvc.LeaderQuery:output_type -> mgmt.LeaderQueryResp
+	28, // 29: mgmt.MgmtSvc.PoolCreate:output_type -> mgmt.PoolCreateResp
+	29, // 30: mgmt.MgmtSvc.PoolDestroy:output_type -> mgmt.PoolDestroyResp
+	30, // 31: mgmt.MgmtSvc.PoolEvict:output_type -> mgmt.PoolEvictResp
+	31, // 32: mgmt.MgmtSvc.PoolExclude:output_type -> mgmt.PoolExcludeResp
+	32, // 33: mgmt.MgmtSvc.PoolDrain:output_type -> mgmt.PoolDrainResp
+	33, // 34: mgmt.MgmtSvc.PoolExtend:output_type -> mgmt.PoolExtendResp
+	34, // 35: mgmt.MgmtSvc.PoolReintegrate:output_type -> mgmt.PoolReintegrateResp
+	35, // 36: mgmt.MgmtSvc.PoolQuery:output_type -> mgmt.PoolQueryResp
+	36, // 37: mgmt.MgmtSvc.PoolSetProp:output_type -> mgmt.PoolSetPropResp
+	37, // 38: mgmt.MgmtSvc.PoolGetProp:output_type -> mgmt.PoolGetPropResp
+	38, // 39: mgmt.MgmtSvc.PoolGetACL:output_type -> mgmt.ACLResp
+	38, // 40: mgmt.MgmtSvc.PoolOverwriteACL:output_type -> mgmt.ACLResp
+	38, // 41: mgmt.MgmtSvc.PoolUpdateACL:output_type -> mgmt.ACLResp
+	38, // 42: mgmt.MgmtSvc.PoolDeleteACL:output_type -> mgmt.ACLResp
+	39, // 43: mgmt.MgmtSvc.GetAttachInfo:output_type -> mgmt.GetAttachInfoResp
+	40, // 44: mgmt.MgmtSvc.ListPools:output_type -> mgmt.ListPoolsResp
+	41, // 45: mgmt.MgmtSvc.ListContainers:output_type -> mgmt.ListContResp
+	42, // 46: mgmt.MgmtSvc.ContSetOwner:output_type -> mgmt.ContSetOwnerResp
+	43, // 47: mgmt.MgmtSvc.SystemQuery:output_type -> mgmt.SystemQueryResp
+	44, // 48: mgmt.MgmtSvc.SystemStop:output_type -> mgmt.SystemStopResp
+	45, // 49: mgmt.MgmtSvc.SystemStart:output_type -> mgmt.SystemStartResp
+	46, // 50: mgmt.MgmtSvc.SystemErase:output_type -> mgmt.SystemEraseResp
+	47, // 51: mgmt.MgmtSvc.SystemCleanup:output_type -> mgmt.SystemCleanupResp
+	26, // [26:52] is the sub-list for method output_type
+	0,  // [0:26] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
