@@ -136,6 +136,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
       TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
+USER root:root
 
 # Load the COMPILER arg early, and optionally install the Intel compiler
 # Do this before the CACHEBUST to make best use of cache as this is a big
@@ -149,7 +150,6 @@ RUN [ "$COMPILER" != "icc" ] || \
       zypper clean all; }
 
 # force an upgrade to get any newly built RPMs
-USER root:root
 ARG CACHEBUST
 RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
     zypper --non-interactive update && \
