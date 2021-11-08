@@ -108,31 +108,25 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
  * Abort the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
+ * \param dti	[IN]	The DTX identifiers to be aborted.
  * \param epoch	[IN]	The max epoch for the DTX to be aborted.
- * \param dtis	[IN]	The array for DTX identifiers to be aborted.
- * \param count [IN]	The count of DTXs to be aborted.
  *
- * \return		Negative value if error.
- * \return		Others are for the count of aborted DTXs.
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
-	      int count);
+vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
 
 /**
  * Set flags on the active DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param dtis	[IN]	The array for DTX identifiers to be handled.
- * \param count [IN]	The count of DTXs to be handled.
+ * \param dti	[IN]	The DTX identifiers to be handled.
  * \param flags [IN]	The flags for the DTXs.
  *
- * \return		Negative value if error.
- * \return		Others are for the count of handled DTXs.
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dtis, int count,
-		  uint32_t flags);
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.
@@ -287,6 +281,13 @@ vos_pool_destroy(const char *path, uuid_t uuid);
 int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
+
+/**
+ * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
+ */
+int
+vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
+		      daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle

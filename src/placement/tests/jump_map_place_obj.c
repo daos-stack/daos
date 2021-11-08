@@ -430,10 +430,8 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
-	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version,
-			  domain_tree_len,
-			  node_count, ntargets, domain_tree, target_uuids,
-			  &rank_list, NULL, target_count);
+	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count,
+			  ntargets, domain_tree, &rank_list, target_count);
 	D_FREE(domain_tree);
 	assert_success(rc);
 
@@ -1622,7 +1620,10 @@ placement_handles_multiple_states(void **state)
 	 */
 	ver_after_drain = ctx.ver;
 
-	is_false(jtc_layout_has_duplicate(&ctx));
+	/* During drain or extending, some targets might be in both original
+	 * and extending area.
+	 */
+	/* is_false(jtc_layout_has_duplicate(&ctx)); */
 
 	/*
 	 * Compute placement in this state. All three shards should

@@ -243,6 +243,11 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 	if (!spare_avail)
 		goto next_fail;
 
+	if (is_extending != NULL &&
+	    (spare_tgt->ta_comp.co_status == PO_COMP_ST_UP ||
+	     spare_tgt->ta_comp.co_status == PO_COMP_ST_DRAIN))
+		*is_extending = true;
+
 	/* The selected spare target is down as well */
 	if (!pool_target_avail(spare_tgt, allow_status)) {
 		D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
@@ -297,10 +302,6 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		D_DEBUG(DB_PL, "failed shard ("DF_FAILEDSHARD") added to "
 			       "remamp_list\n", DP_FAILEDSHARD(*f_shard));
 		remap_add_one(remap_list, f_shard);
-		if (is_extending != NULL &&
-		    (spare_tgt->ta_comp.co_status == PO_COMP_ST_UP ||
-		     spare_tgt->ta_comp.co_status == PO_COMP_ST_DRAIN))
-			*is_extending = true;
 
 		/* Continue with the failed shard has minimal fseq */
 		if ((*current) == remap_list) {
@@ -464,6 +465,9 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 		new_shards[grp_idx].po_target = f_shard->fs_tgt_id;
 		if (f_shard->fs_status != PO_COMP_ST_DRAIN)
 			new_shards[grp_idx].po_rebuilding = 1;
+
+		if (f_shard->fs_status == PO_COMP_ST_UP)
+			new_shards[grp_idx].po_reintegrating = 1;
 	}
 
 	layout->ol_grp_size += max_fail_grp;

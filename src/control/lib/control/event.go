@@ -51,8 +51,12 @@ func eventNotify(ctx context.Context, rpcClient UnaryInvoker, seq uint64, evt *e
 	rpcClient.Debugf("forwarding %s event to MS access points %v (seq: %d)", evt.ID, aps, seq)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx,
+		msg, err := mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx,
 			&sharedpb.ClusterEventReq{Sequence: seq, Event: pbRASEvent})
+		if err == nil && msg != nil {
+			rpcClient.Debugf("%s event forwarded to MS @ %s", evt.ID, conn.Target())
+		}
+		return msg, err
 	})
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
