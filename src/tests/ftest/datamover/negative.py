@@ -49,7 +49,7 @@ class DmvrNegativeTest(DataMoverTestBase):
             (3) Bad parameter: daos-prefix is invalid.
             (4) Bad parameter: UUID, UNS, or POSIX path is invalid.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=datamover,dcp,dfuse,ior
         :avocado: tags=dm_negative,dm_bad_params_dcp
         """
         self.set_tool("DCP")
@@ -248,7 +248,7 @@ class DmvrNegativeTest(DataMoverTestBase):
             DAOS-5515: destination pool does not have enough space.
             DAOS-6387: posix filesystem does not have enough space.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,ior
         :avocado: tags=dm_negative,dm_negative_space_dcp
         """
         self.set_tool("DCP")
@@ -289,7 +289,7 @@ class DmvrNegativeTest(DataMoverTestBase):
             Tests the following cases:
                 destination filename is invalid.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,ior
         :avocado: tags=dm_negative,dm_negative_error_check_dcp
         """
         self.set_tool("DCP")

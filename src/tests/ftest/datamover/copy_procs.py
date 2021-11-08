@@ -41,7 +41,7 @@ class DmvrCopyProcs(DataMoverTestBase):
             Create a single 100M file in cont1 using ior.
         :avocado: tags=all,daily_regression
         :avocado: tags=small,hw
-        :avocado: tags=datamover
+        :avocado: tags=datamover,ior
         :avocado: tags=copy_procs
         """
         # Create pool and containers
