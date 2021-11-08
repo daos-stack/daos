@@ -1620,7 +1620,7 @@ const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_destroy_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[6] =
+static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[7] =
 {
   {
     "sys",
@@ -1694,19 +1694,32 @@ static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[6]
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "machine",
+    7,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolEvictReq, machine),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_evict_req__field_indices_by_name[] = {
   4,   /* field[4] = destroy */
   5,   /* field[5] = force_destroy */
   3,   /* field[3] = handles */
   1,   /* field[1] = id */
+  6,   /* field[6] = machine */
   2,   /* field[2] = svc_ranks */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__pool_evict_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 7 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor =
 {
@@ -1716,14 +1729,14 @@ const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor =
   "Mgmt__PoolEvictReq",
   "mgmt",
   sizeof(Mgmt__PoolEvictReq),
-  6,
+  7,
   mgmt__pool_evict_req__field_descriptors,
   mgmt__pool_evict_req__field_indices_by_name,
   1,  mgmt__pool_evict_req__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_evict_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_evict_resp__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__pool_evict_resp__field_descriptors[2] =
 {
   {
     "status",
@@ -1737,14 +1750,27 @@ static const ProtobufCFieldDescriptor mgmt__pool_evict_resp__field_descriptors[1
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "count",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolEvictResp, count),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_evict_resp__field_indices_by_name[] = {
+  1,   /* field[1] = count */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__pool_evict_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_evict_resp__descriptor =
 {
@@ -1754,7 +1780,7 @@ const ProtobufCMessageDescriptor mgmt__pool_evict_resp__descriptor =
   "Mgmt__PoolEvictResp",
   "mgmt",
   sizeof(Mgmt__PoolEvictResp),
-  1,
+  2,
   mgmt__pool_evict_resp__field_descriptors,
   mgmt__pool_evict_resp__field_indices_by_name,
   1,  mgmt__pool_evict_resp__number_ranges,
