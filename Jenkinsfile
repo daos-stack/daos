@@ -629,8 +629,8 @@ pipeline {
                     }
                     steps {
                         sh (script:"df")
-                        sh (script:"ls -l /data")
-                        sh (script:"ls -l /opt/intel")
+                        sh (script:"ls -ld /opt/intel")
+                        sh (script:"ls -ld /data")
                         sh (script:"ls -l /opt/intel/oneapi")
                         sh (script:"ls -l /opt/intel/oneapi/compiler")
                         sconsBuild parallel_build: parallelBuild(),
