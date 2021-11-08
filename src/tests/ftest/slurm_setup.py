@@ -27,13 +27,10 @@ PACKAGE_LIST = ["slurm", "slurm-example-configs",
 
 if "suse" in distro_info.name.lower():
     distro = "suse.lp153"
-    PACKAGE_VERSION = "20.11.8-1.{}.x86_64".format(distro)
 elif "centos" in distro_info.name.lower() and distro_info.version == "7":
     distro = "el7"
-    PACKAGE_VERSION = "18.08.8-1.{}.x86_64".format(distro)
 elif "centos" in distro_info.name.lower() and distro_info.version == "8":
     distro = "el8"
-    PACKAGE_VERSION = "20.11.8-1.{}.x86_64".format(distro)
 
 COPY_LIST = ["cp /etc/slurm/slurm.conf.example /etc/slurm/slurm.conf",
              "cp /etc/slurm/cgroup.conf.example /etc/slurm/cgroup.conf",
@@ -165,8 +162,6 @@ def configuring_packages(args, action):
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     cmd_list = []
     for package in PACKAGE_LIST:
-        if PACKAGE_VERSION:
-            package = package + "-" + PACKAGE_VERSION
         logging.info("%s %s on %s", action, package, all_nodes)
         cmd_list.append("yum {} -y ".format(action) + package)
     return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)

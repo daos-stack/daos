@@ -275,15 +275,17 @@ def run_metrics_check(self, logging=True, prefix=None):
             if prefix:
                 name = prefix + "_metrics_{}.csv".format(engine)
             destination = self.outputsoakdir
+            daos_metrics = "sudo daos_metrics -S {} --csv".format(engine)
+            self.log.info("Running %s", daos_metrics)
             results = run_pcmd(hosts=self.hostlist_servers,
-                               command="sudo daos_metrics -S {} --csv".format(
-                                   engine),
+                               command=daos_metrics,
                                verbose=(not logging),
                                timeout=60)
             if logging:
                 for result in results:
                     hosts = result["hosts"]
                     log_name = name + "-" + str(hosts)
+                    self.log.info("Logging %s output to %s", daos_metrics, log_name)
                     write_logfile(result["stdout"], log_name, destination)
 
 
@@ -439,7 +441,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers) #nosec
+        rank = random.randint(0, exclude_servers)
 
         if targets >= 8:
             tgt_idx = None
@@ -517,7 +519,7 @@ def launch_server_stop_start(self, pools, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers) #nosec
+        rank = random.randint(0, exclude_servers)
         # init the status dictionary
         params = {"name": name,
                   "status": status,
