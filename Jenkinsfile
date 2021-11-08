@@ -623,12 +623,13 @@ pipeline {
                             label 'wolf-33-docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15"
+                                                " -t ${sanitized_JOB_NAME}-leap15 --build-arg DEPS_JOBS=40"
                             args '-v /opt/intel:/opt/intel'
                         }
                     }
                     steps {
                         sh (script:"df")
+                        sh (script:"find /opt/intel/oneapi/compiler")
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"

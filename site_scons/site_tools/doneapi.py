@@ -34,6 +34,7 @@ class DetectCompiler():
         paths = [root, binp, libp, binarch, libarch, include, icx]
         for path in paths:
             if not os.path.exists(path):
+                print('Unable to use oneapi due to missing {}'.format(path))
                 return
         # pylint: enable=too-many-boolean-expressions
         self.map = {'root' : root,
