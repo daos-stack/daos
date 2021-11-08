@@ -94,7 +94,7 @@ daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, da
  * the Array APIs.
  *
  * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID. It is required that the feat for dkey type
+ * \param[in]	oid	Object ID. It is required that the object type
  *			be set to DAOS_OT_ARRAY.
  * \param[in]	th	Transaction handle.
  * \param[in]	cell_size
