@@ -6,13 +6,12 @@
 """
 
 import re
-from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
-from ior_utils import IorCommand, IorMetrics
 from test_utils_container import TestContainer
 from apricot import skipForTicket
+
 
 def get_rf(oclass):
     """Return redundancy factor based on the oclass.
@@ -55,7 +54,7 @@ def convert_to_number(size):
                  "T": 1024 * 1024 * 1024 * 1024}
     # Convert string to bytes
     suffix = str(size)[-1]
-    for key in SIZE_DICT:
+    for key, value in SIZE_DICT.items():
         if suffix == key:
             num = int(SIZE_DICT[key]) * int(size[:-1])
     return int(num)
@@ -68,6 +67,12 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a Test object."""
+        super().__init__(*args, **kwargs)
+        self.rpc_latency = {}
+        self.iterations = 1
 
     def add_containers(self, pool, oclass=None, path="/run/container/*"):
         """Create a list of containers that the various jobs use for storage.
@@ -123,9 +128,9 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             # ior_results is a list of the following:
             # Results:
 
-            # access bw(MiB/s) IOPS  Latency(s) block(KiB) xfer(KiB) open(s)  wr/rd(s) close(s) total(s)
-            # ------ --------- ----  ---------- ---------- --------- -------- -------- -------- --------
-            # read   107.84    27.16 0.036824   4096       4096      0.000252 0.036824 0.000015 0.037091
+            # access bw(MiB/s) IOPS Latency(s) block xfer(KiB) open(s)  wr/rd(s) close(s) total(s)
+            # ------ --------- ---- ---------- ----- --------- -------- -------- -------- --------
+            # read   107.84    27.1 0.036824   4096  4096      0.000252 0.036824 0.000015 0.037091
             self.log.info(
                 "Latency for ior %s with transfer size %s(KiB) is %.2fus"
                 "", ior_results[0], ior_results[5], (float(ior_results[3])*float(10**6)))
@@ -140,6 +145,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             ior_latency (dict): dictionary of list of ior latency
             test_metric (str): name of telemetry metrics
             transfer_size(str): transfer_size
+
         Returns:
             status: (bool) True if metric is verified
 
@@ -281,7 +287,6 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         self.iterations = self.params.get("repetitions", "/run/*")
         self.container = []
-        self.rpc_latency = {}
         verification_results = []
         metrics_data = {}
         ior_latency = {}
@@ -355,7 +360,6 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         self.iterations = self.params.get("repetitions", "/run/*")
         self.container = []
-        self.rpc_latency = {}
         ior_verification_results = []
         metrics_data = {}
         ior_latency = {}
