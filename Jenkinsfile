@@ -669,7 +669,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT') {
+                stage('NLT CentOS 8') {
                     when {
                       beforeAgent true
                       expression { ! skipStage() }
