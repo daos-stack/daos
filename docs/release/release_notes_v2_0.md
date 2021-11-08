@@ -1,3 +1,4 @@
 # DAOS Version 2.0 Release Notes
 
-DAOS 2.0 is under active development and is planned for September 2021.
+DAOS 2.0 is still in validation and has not been released yet.
+The release is planned for November 2021.
