@@ -504,6 +504,8 @@ tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_nr)
 			break;
 		}
 
+		/** Align to 4K or locking the region based on the size will fail */
+		scm_size = D_ALIGNUP(scm_size, 1ULL << 12);
 		/**
 		 * Pre-allocate blocks for vos files in order to provide
 		 * consistent performance and avoid entering into the backend
