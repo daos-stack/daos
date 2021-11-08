@@ -214,7 +214,9 @@ func (srv *server) initStorage() error {
 	}
 
 	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
-	return srv.ctlSvc.Setup()
+	srv.ctlSvc.Setup()
+
+	return nil
 }
 
 func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
@@ -330,7 +332,25 @@ func (srv *server) registerEvents() {
 			srv.mgmtSvc.startJoinLoop(ctx)
 			registerLeaderSubscriptions(srv)
 			srv.log.Debugf("requesting sync GroupUpdate after leader change")
-			srv.mgmtSvc.reqGroupUpdate(ctx, true)
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						// Wait for at least one engine to be ready to service the
+						// GroupUpdate request.
+						for _, ei := range srv.harness.Instances() {
+							if ei.IsReady() {
+								srv.mgmtSvc.reqGroupUpdate(ctx, true)
+								return
+							}
+						}
+						srv.log.Debugf("no engines ready for GroupUpdate; waiting %s", groupUpdateInterval)
+						time.Sleep(groupUpdateInterval)
+					}
+				}
+			}()
 			return nil
 		},
 		func(ctx context.Context) error {

@@ -423,13 +423,11 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	errno = 0;
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
-		int err = errno;
+		rc = errno;
 
-		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-				  err, strerror(err));
-
+		DFUSE_LOG_WARNING("ioctl call on %d failed: %d (%s)", fd, rc, strerror(rc));
 		D_FREE(iov.iov_buf);
-		return err;
+		return rc;
 	}
 
 	iov.iov_buf_len = hsd_reply.fsr_dobj_size;
@@ -440,7 +438,7 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 				  iov,
 				  &entry->fd_dfsoh);
 	if (rc)
-		DFUSE_LOG_WARNING("Failed to use dfs object handle %d", rc);
+		DFUSE_LOG_WARNING("Failed to use dfs object handle: %d (%s)", rc, strerror(rc));
 
 	D_FREE(iov.iov_buf);
 
@@ -635,7 +633,7 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 			      0,
 			      iov, &cont->ioc_dfs);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use dfs handle %d", rc);
+		DFUSE_LOG_WARNING("Failed to use dfs handle: %d (%s)", rc, strerror(rc));
 		D_FREE(iov.iov_buf);
 		return rc;
 	}
@@ -734,15 +732,15 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 					 il_reply.fir_cont) != 0)
 				continue;
 
-			D_GOTO(get_file, 0);
+			D_GOTO(get_file, rc = 0);
 		}
-		D_GOTO(open_cont, 0);
+		D_GOTO(open_cont, rc = 0);
 	}
 
 	/* Allocate data for pool */
 	D_ALLOC_PTR(pool);
 	if (pool == NULL)
-		D_GOTO(err, 0);
+		D_GOTO(err, rc = ENOMEM);
 
 	pool_alloc = true;
 	uuid_copy(pool->iop_uuid, il_reply.fir_pool);
@@ -754,7 +752,7 @@ open_cont:
 	if (cont == NULL) {
 		if (pool_alloc)
 			D_FREE(pool);
-		D_GOTO(err, 0);
+		D_GOTO(err, rc = ENOMEM);
 	}
 
 	cont->ioc_pool = pool;
@@ -773,11 +771,11 @@ open_cont:
 		rcb = ioil_open_cont_handles(fd, &il_reply, cont);
 		if (!rcb) {
 			DFUSE_LOG_DEBUG("ioil_open_cont_handles() failed");
-			D_GOTO(shrink, 0);
+			D_GOTO(shrink, rc = rcb);
 		}
 	} else if (rc != 0) {
-		D_ERROR("ioil_fetch_cont_handles() failed, %d\n", rc);
-		D_GOTO(shrink, 0);
+		D_ERROR("ioil_fetch_cont_handles() failed: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(shrink, rc);
 	}
 
 get_file:
@@ -794,16 +792,17 @@ get_file:
 
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
-	if (rc)
-		D_GOTO(shrink, 0);
+	if (rc == EISDIR)
+		D_GOTO(err, rc);
+	else if (rc)
+		D_GOTO(shrink, rc);
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
-		DFUSE_LOG_DEBUG("Failed to track IOF file fd=%d., disabling kernel bypass",
-				fd);
+		DFUSE_LOG_DEBUG("Failed to track IOF file fd=%d., disabling kernel bypass", fd);
 		/* Disable kernel bypass */
 		entry->fd_status = DFUSE_IO_DIS_RSRC;
-		D_GOTO(obj_close, 0);
+		D_GOTO(obj_close, rc);
 	}
 
 	DFUSE_LOG_DEBUG("Added entry for new fd %d", fd);
@@ -989,6 +988,64 @@ dfuse_open(const char *pathname, int flags, ...)
 }
 
 DFUSE_PUBLIC int
+dfuse_openat(int dirfd, const char *pathname, int flags, ...)
+{
+	struct fd_entry entry = {0};
+	int fd;
+	int status;
+	unsigned int mode; /* mode_t gets "promoted" to unsigned int
+			    * for va_arg routine
+			    */
+
+	if (flags & O_CREAT) {
+		va_list ap;
+
+		va_start(ap, flags);
+		mode = va_arg(ap, unsigned int);
+		va_end(ap);
+
+		fd = __real_openat(dirfd, pathname, flags, mode);
+	} else {
+		fd = __real_openat(dirfd, pathname, flags);
+		mode = 0;
+	}
+
+	if (!ioil_iog.iog_initialized || (fd == -1))
+		return fd;
+
+	if (!dfuse_check_valid_path(pathname)) {
+		DFUSE_LOG_DEBUG("openat(pathname=%s) ignoring by path",
+				pathname);
+		return fd;
+	}
+
+	status = DFUSE_IO_BYPASS;
+	/* Disable bypass for O_APPEND|O_PATH */
+	if ((flags & (O_PATH | O_APPEND)) != 0)
+		status = DFUSE_IO_DIS_FLAG;
+
+	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
+		DFUSE_LOG_DEBUG("openat(pathname=%s) interception not possible",
+				pathname);
+		return fd;
+	}
+
+	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
+
+	if (flags & O_CREAT)
+		DFUSE_LOG_DEBUG("openat(pathname=%s, flags=0%o, mode=0%o) = "
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, mode, fd, entry.fd_fstat,
+				bypass_status[entry.fd_status]);
+	else
+		DFUSE_LOG_DEBUG("openat(pathname=%s, flags=0%o) = "
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, fd, entry.fd_fstat,
+				bypass_status[entry.fd_status]);
+	return fd;
+}
+
+DFUSE_PUBLIC int
 dfuse_mkstemp(char *template)
 {
 	struct fd_entry entry = {0};
@@ -1001,7 +1058,7 @@ dfuse_mkstemp(char *template)
 		return fd;
 
 	if (!dfuse_check_valid_path(template)) {
-		DFUSE_LOG_DEBUG("open(template=%s) ignoring by path",
+		DFUSE_LOG_DEBUG("mkstemp(template=%s) ignoring by path",
 				template);
 		return fd;
 	}
@@ -1009,7 +1066,7 @@ dfuse_mkstemp(char *template)
 	status = DFUSE_IO_BYPASS;
 
 	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_EXCL | O_RDWR, status)) {
-		DFUSE_LOG_DEBUG("open(template=%s) interception not possible",
+		DFUSE_LOG_DEBUG("mkstemp(template=%s) interception not possible",
 				template);
 		return fd;
 	}

@@ -58,32 +58,34 @@ func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Confi
 	)
 }
 
-// Setup delegates to Storage implementation's Setup methods.
-func (c *StorageControlService) Setup() error {
+// Setup performs storage discovery and validates existence of configured devices.
+func (c *StorageControlService) Setup() {
 	if _, err := c.ScmScan(storage.ScmScanRequest{}); err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
-	// don't scan if using emulated NVMe
-	// TODO: this should probably be verified and scan per engine
+	var cfgBdevs []string
+
 	for _, storageCfg := range c.instanceStorage {
 		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
 			if tierCfg.Class != storage.ClassNvme {
-				return nil
+				// don't scan if any tier is using emulated NVMe
+				return
 			}
+			cfgBdevs = append(cfgBdevs, tierCfg.Bdev.DeviceList...)
 		}
 	}
 
 	nvmeScanResp, err := c.NvmeScan(storage.BdevScanRequest{
-		EngineStorage: c.instanceStorage,
+		DeviceList: cfgBdevs,
 	})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
-		return nil
+		return
 	}
 
 	c.storage.SetBdevCache(*nvmeScanResp)
-	return nil
+	return
 }
 
 func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.ScmNamespace {

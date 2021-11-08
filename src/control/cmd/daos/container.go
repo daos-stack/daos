@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"unsafe"
 
@@ -215,6 +216,25 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
 			return err
 		}
+	}
+
+	if cmd.PoolID().Empty() {
+		if cmd.Path == "" {
+			return errors.New("no pool ID or dfs path supplied")
+		}
+
+		ap.path = C.CString(cmd.Path)
+		rc := C.resolve_duns_pool(ap)
+		freeString(ap.path)
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to resolve pool id from %q; use --pool <id>", filepath.Dir(cmd.Path))
+		}
+
+		pu, err := uuidFromC(ap.p_uuid)
+		if err != nil {
+			return err
+		}
+		cmd.poolBaseCmd.Args.Pool.UUID = pu
 	}
 
 	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
@@ -470,6 +490,8 @@ func listContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
 		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
 	}
+
+	C.free(unsafe.Pointer(cConts))
 
 	return out, nil
 }
