@@ -620,19 +620,14 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
-                            label 'wolf-33-docker_runner'
+                            label 'wolf-34-docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15 --build-arg DEPS_JOBS=40"
+                                                " -t ${sanitized_JOB_NAME}-leap15"
                             args '-v /opt/intel:/opt/intel'
                         }
                     }
                     steps {
-                        sh (script:"df")
-                        sh (script:"ls -ld /opt/intel")
-                        sh (script:"ls -ld /data")
-                        sh (script:"ls -l /opt/intel/oneapi")
-                        sh (script:"ls -l /opt/intel/oneapi/compiler")
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"

@@ -34,7 +34,6 @@ class DetectCompiler():
         paths = [root, binp, libp, binarch, libarch, include, icx]
         for path in paths:
             if not os.path.exists(path):
-                print('Unable to use oneapi due to missing {}'.format(path))
                 return
         # pylint: enable=too-many-boolean-expressions
         self.map = {'root' : root,
@@ -57,7 +56,7 @@ def generate(env):
 
     detector = DetectCompiler()
     if detector['icx'] is None:
-        raise SCons.Errors.InternalError("No oneapi compiler found")
+        raise SCons.Error.InternalError("No oneapi compiler found")
 
     env['INTEL_C_COMPILER_TOP'] = detector['root']
     paths = {'INCLUDE': 'include',
