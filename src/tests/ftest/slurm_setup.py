@@ -15,7 +15,6 @@ import sys
 from time import sleep
 from ClusterShell.NodeSet import NodeSet
 from util.general_utils import pcmd, run_task
-from avocado.utils.distro import detect
 
 
 distro_info = detect()
@@ -24,13 +23,6 @@ SLURM_CONF = "/etc/slurm/slurm.conf"
 
 PACKAGE_LIST = ["slurm", "slurm-example-configs",
                 "slurm-slurmctld", "slurm-slurmd"]
-
-if "suse" in distro_info.name.lower():
-    distro = "suse.lp153"
-elif "centos" in distro_info.name.lower() and distro_info.version == "7":
-    distro = "el7"
-elif "centos" in distro_info.name.lower() and distro_info.version == "8":
-    distro = "el8"
 
 COPY_LIST = ["cp /etc/slurm/slurm.conf.example /etc/slurm/slurm.conf",
              "cp /etc/slurm/cgroup.conf.example /etc/slurm/cgroup.conf",
@@ -76,28 +68,17 @@ def update_config_cmdlist(args):
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         sys.exit(1)
-    if distro == "el8" or distro == "suse.lp153":
-        cmd_list = [
-            "sed -i -e 's/SlurmctldHost=linux0/SlurmctldHost={}/g' {}".format(
-                args.control, SLURM_CONF),
-            "sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(
-                SLURM_CONF),
-            "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
-                args.user, SLURM_CONF),
-            "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-                SLURM_CONF),
-            ]
-    else:
-        cmd_list = [
-            "sed -i -e 's/ControlMachine=linux0/ControlMachine={}/g' {}".format(
-                args.control, SLURM_CONF),
-            "sed -i -e 's/ClusterName=linux/ClusterName=ci_cluster/g' {}".format(
-                SLURM_CONF),
-            "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
-                args.user, SLURM_CONF),
-            "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-                SLURM_CONF),
-            ]
+
+    cmd_list = [
+        "sed -i -e 's/SlurmctldHost=linux0/SlurmctldHost={}/g' {}".format(
+            args.control, SLURM_CONF),
+        "sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(
+            SLURM_CONF),
+        "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
+            args.user, SLURM_CONF),
+        "sed -i -e 's/NodeName/#NodeName/g' {}".format(
+            SLURM_CONF),
+        ]
 
     # This info needs to be gathered from every node that can run a slurm job
     command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
