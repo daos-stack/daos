@@ -117,16 +117,12 @@ class NLTConf():
     def __getitem__(self, key):
         return self.bc[key]
 
-    def flush_bz2(self):
-        """Wait for all bzip2 subprocess to finish"""
-        self.lt_compress.start()
-        for proc in self._compress_procs:
-            proc.wait()
-        self._compress_procs = []
-        self.lt_compress.stop()
-
     def compress_file(self, filename):
-        """Compress a file using bz2 for space reasons"""
+        """Compress a file using bz2 for space reasons
+
+        Launch a bzip2 process in the background as this is time consuming, and each time
+        a new process is launched then reap any previous ones which have completed.
+        """
 
         # pylint: disable=consider-using-with
 
@@ -134,6 +130,14 @@ class NLTConf():
         # Give everyone read permissions on the file.
         os.chmod(filename, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
         self._compress_procs.append(subprocess.Popen(['bzip2', '--best', filename]))
+
+    def flush_bz2(self):
+        """Wait for all bzip2 subprocess to finish"""
+        self.lt_compress.start()
+        for proc in self._compress_procs:
+            proc.wait()
+        self._compress_procs = []
+        self.lt_compress.stop()
 
 class CulmTimer():
     """Class to keep track of elapsed time so we know where to focus performance tuning"""
@@ -1223,15 +1227,14 @@ def run_daos_cmd(conf,
 
     cmd_env = get_base_env()
     if log_check:
-        prefix = 'dnt_cmd_{}_'.format(get_inc_id())
-        # pylint: disable=consider-using-with
-        log_file = tempfile.NamedTemporaryFile(prefix=prefix,
-                                               suffix='.log',
-                                               dir=conf.tmp_dir,
-                                               delete=False)
-
-        cmd_env['D_LOG_FILE'] = log_file.name
+        with tempfile.NamedTemporaryFile(prefix='dnt_cmd_{}_'.format(get_inc_id()),
+                                         suffix='.log',
+                                         dir=conf.tmp_dir,
+                                         delete=False) as lf:
+            log_name = lf.name
+        cmd_env['D_LOG_FILE'] = log_name
     else:
+        log_name = None
         del cmd_env['DD_MASK']
         del cmd_env['DD_SUBSYS']
         del cmd_env['D_LOG_MASK']
@@ -1259,8 +1262,8 @@ def run_daos_cmd(conf,
     if rc.returncode < 0:
         show_memleaks = False
 
-    if log_check:
-        rc.fi_loc = log_test(conf, log_file.name, show_memleaks=show_memleaks)
+    if log_name:
+        rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks)
     vh.convert_xml()
     # If there are valgrind errors here then mark them for later reporting but
     # do not abort.  This allows a full-test run to report all valgrind issues
