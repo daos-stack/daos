@@ -402,20 +402,14 @@ class ObjectMetadata(TestWithServers):
                     len(errors), 0,
                     "Error stopping agents:\n  {}".format("\n  ".join(errors)))
 
-                # Stop the servers
-                errors = self.stop_servers()
+                # Restart the servers w/o formatting the storage
+                errors = self.restart_servers()
                 self.assertEqual(
                     len(errors), 0,
                     "Error stopping servers:\n  {}".format("\n  ".join(errors)))
 
                 # Start the agents
                 self.start_agent_managers()
-
-                # Start the servers
-                self.start_server_managers()
-
-                # Since starting the servers will format the storage the pool will be gone
-                self.pool = None
 
         self.log.info("Test passed")
 
