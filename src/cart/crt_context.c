@@ -552,6 +552,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_DEBUG(DB_TRACE, "destroy context (idx %d, force %d), "
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
+		if (i > 5)
+			D_ERROR("destroy context (idx %d, force %d) "
+				"takes too long time. This is attempt %d of %d.\n",
+				ctx->cc_idx, force, i, CRT_SWIM_FLUSH_ATTEMPTS);
 		/* Flush SWIM RPC already sent */
 		rc = crt_context_flush(crt_ctx, timeout_sec);
 		if (rc)

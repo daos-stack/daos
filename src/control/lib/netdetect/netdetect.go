@@ -141,6 +141,7 @@ const (
 	IEEE1394   = 24
 	Eui64      = 27
 	Infiniband = 32
+	Loopback   = 772
 )
 
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
@@ -1303,6 +1304,8 @@ func DevClassName(class uint32) string {
 		return "EUI64"
 	case Infiniband:
 		return "INFINIBAND"
+	case Loopback:
+		return "LOOPBACK"
 	default:
 		return "UNKNOWN"
 	}

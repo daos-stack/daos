@@ -117,13 +117,12 @@ struct vea_attr {
 struct vea_stat {
 	uint64_t	vs_free_persistent;	/* Persistent free blocks */
 	uint64_t	vs_free_transient;	/* Transient free blocks */
-	uint64_t	vs_large_frags;	/* Large free frags */
-	uint64_t	vs_small_frags;	/* Small free frags */
 	uint64_t	vs_resrv_hint;	/* Number of hint reserve */
 	uint64_t	vs_resrv_large;	/* Number of large reserve */
 	uint64_t	vs_resrv_small;	/* Number of small reserve */
-	uint64_t	vs_resrv_vec;	/* Number of vector reserve */
-	uint32_t	vs_largest_blks;/* Largest free frag size in blocks */
+	uint64_t	vs_frags_large;	/* Large free frags */
+	uint64_t	vs_frags_small;	/* Small free frags */
+	uint64_t	vs_frags_aging;	/* Aging frags */
 };
 
 struct vea_space_info;
@@ -162,6 +161,7 @@ int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
  * \param txd        [IN]	Stage callback data for PMDK transaction
  * \param md         [IN]	Space tracking information on SCM
  * \param unmap_ctxt [IN]	Context for unmap operation
+ * \param metrics    [IN]	Metrics
  * \param vsip       [OUT]	In-memory compound index
  *
  * \return			Zero on success, in-memory compound free extent
@@ -170,7 +170,7 @@ int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
  */
 int vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	     struct vea_space_df *md, struct vea_unmap_context *unmap_ctxt,
-	     struct vea_space_info **vsip);
+	     void *metrics, struct vea_space_info **vsip);
 
 /**
  * Free the memory footprint created by vea_load().
@@ -307,5 +307,27 @@ int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
  * \param plug      [IN]	Plug or unplug
  */
 void vea_flush(struct vea_space_info *vsi, bool plug);
+
+/**
+ * Free metrcis
+ *
+ * \param data      [IN]	Metrics to be freed
+ */
+void vea_metrics_free(void *data);
+
+/**
+ * Allocate VEA metrics
+ *
+ * \param path      [IN]	Metrics path
+ * \param tgt_id    [IN]	Target ID
+ *
+ * \return			VEA metrics on success, NULL on error
+ */
+void *vea_metrics_alloc(const char *path, int tgt_id);
+
+/**
+ * Get VEA metrics count
+ */
+int vea_metrics_count(void);
 
 #endif /* __VEA_API_H__ */
