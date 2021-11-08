@@ -68,7 +68,7 @@ ior:
       api: MPIIO
     posix:
       api: POSIX
-  test_file: daos:testFile
+  test_file: daos:/testFile
   repetitions: 3
   transfersize_blocksize: !mux
     1K:
