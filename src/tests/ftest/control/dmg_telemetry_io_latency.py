@@ -251,24 +251,26 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
                     for target in range(self.server_managers[-1].get_config_value("targets")):
                         value = metrics_data[test_metric][host][str(rank)][str(target)][size]
                         metrics[test_metric] = metrics[test_metric] + value
-        min = metrics["engine_io_latency_fetch_min"]
-        max = metrics["engine_io_latency_fetch_max"]
-        mean = metrics["engine_io_latency_fetch_mean"]
-        stddev = metrics["engine_io_latency_fetch_stddev"]
+        min_value = metrics["engine_io_latency_fetch_min"]
+        max_value = metrics["engine_io_latency_fetch_max"]
+        mean_value = metrics["engine_io_latency_fetch_mean"]
+        stddev_value = metrics["engine_io_latency_fetch_stddev"]
         if ((
-            max >= metrics["engine_io_latency_fetch"]) and (
-                metrics["engine_io_latency_fetch"] >= min) and (
-                    max > mean) and (mean > min) and (stddev < (max-min))):
+            max_value >= metrics["engine_io_latency_fetch"]) and (
+                metrics["engine_io_latency_fetch"] >= min_value) and (
+                    max_value > mean_value) and (mean_value > min_value) and (
+                        stddev_value < (max_value-min_value))):
             status["fetch"] = True
 
-        min = metrics["engine_io_latency_update_min"]
-        max = metrics["engine_io_latency_update_max"]
-        mean = metrics["engine_io_latency_update_mean"]
-        stddev = metrics["engine_io_latency_update_stddev"]
+        min_value = metrics["engine_io_latency_update_min"]
+        max_value = metrics["engine_io_latency_update_max"]
+        mean_value = metrics["engine_io_latency_update_mean"]
+        stddev_value = metrics["engine_io_latency_update_stddev"]
         if ((
-            max >= metrics["engine_io_latency_update"]) and (
-                metrics["engine_io_latency_update"] >= min) and (
-                    max > mean) and (mean > min) and (stddev < (max-min))):
+            max_value >= metrics["engine_io_latency_update"]) and (
+                metrics["engine_io_latency_update"] >= min_value) and (
+                    max_value > mean_value) and (mean_value > min_value) and (
+                        stddev_value < (max_value-min_value))):
             status["update"] = True
         return status
 
