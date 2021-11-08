@@ -10,17 +10,18 @@ hosts:
         - server-C
   test_clients:
     - client-A
-timeout: 500
+timeout: 1000
 setup:
   start_servers_once: False
 server_config:
   name: daos_server
   servers:
-    scm_size: 20
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
     bdev_class: nvme
     bdev_list: ["aaaa:aa:aa.a"]
 pool:
   mode: 146
-  scm_size: 16G
-  nvme_size: 224G
+  size: 90%
+  tier_ratio: 6
   control_method: dmg

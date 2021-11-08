@@ -927,6 +927,72 @@ class Systemctl(JobManager):
                 data.append("    {}".format(line))
         return "\n".join(data)
 
+    def search_logs(self, pattern, since, until, quantity=1, timeout=60, verbose=False):
+        """Search the command logs on each host for a specified string.
+
+        Args:
+            pattern (str): regular expression to search for in the logs
+            since (str): search log entries from this date.
+            until (str, optional): search log entries up to this date. Defaults
+                to None, in which case it is not utilized.
+            quantity (int, optional): number of times to expect the search
+                pattern per host. Defaults to 1.
+            timeout (int, optional): maximum number of seconds to wait to detect
+                the specified pattern. Defaults to 60.
+            verbose (bool, optional): whether or not to display the log data upon successful pattern
+                detection. Defaults to False.
+
+        Returns:
+            tuple:
+                (bool) - if the pattern was found quantity number of times
+                (str)  - string indicating the number of patterns found in what duration
+
+        """
+        self.log.info(
+            "Searching for '%s' in '%s' output on %s",
+            pattern, self._systemctl, self._hosts)
+
+        log_data = None
+        detected = 0
+        complete = False
+        timed_out = False
+        start = time.time()
+        duration = 0
+
+        # Search for patterns in the subprocess output until:
+        #   - the expected number of pattern matches are detected (success)
+        #   - the time out is reached (failure)
+        #   - the service is no longer running (failure)
+        while not complete and not timed_out and self.service_running():
+            detected = 0
+            log_data = self.get_log_data(self._hosts, since, until, timeout)
+            for entry in log_data:
+                match = re.findall(pattern, "\n".join(entry["data"]))
+                detected += len(match) if match else 0
+
+            complete = detected == quantity
+            duration = time.time() - start
+            timed_out = duration > timeout
+
+        # Summarize results
+        msg = "{}/{} '{}' messages detected in".format(detected, quantity, pattern)
+        runtime = "{}/{} seconds".format(duration, timeout)
+
+        if not complete:
+            # Report the error / timeout
+            reason = "ERROR detected"
+            details = ""
+            if timed_out:
+                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
+                runtime = "{} seconds".format(duration)
+            if log_data:
+                details = ":\n{}".format(self.str_log_data(log_data))
+            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+        elif verbose:
+            self.display_log_data(log_data)
+
+        return complete, " ".join([msg, runtime])
+
     def check_logs(self, pattern, since, until, quantity=1, timeout=60):
         """Check the command logs on each host for a specified string.
 
@@ -945,64 +1011,14 @@ class Systemctl(JobManager):
                 host
 
         """
-        self.log.info(
-            "Searching for '%s' in '%s' output on %s",
-            pattern, self._systemctl, self._hosts)
-
-        log_data = None
-        detected = 0
-        complete = False
-        timed_out = False
-        start = time.time()
-
-        # Search for patterns in the subprocess output until:
-        #   - the expected number of pattern matches are detected (success)
-        #   - the time out is reached (failure)
-        #   - the service is no longer running (failure)
-        while not complete and not timed_out and self.service_running():
-            detected = 0
-            log_data = self.get_log_data(self._hosts, since, until, timeout)
-            for entry in log_data:
-                match = re.findall(pattern, "\n".join(entry["data"]))
-                detected += len(match) if match else 0
-
-            complete = detected == quantity
-            timed_out = time.time() - start > timeout
-
-            if complete:
-                self.timestamps["running"] = datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S")
-
-        # Summarize results
-        msg = "{}/{} '{}' messages detected in".format(
-            detected, quantity, pattern)
-        runtime = "{}/{} seconds".format(time.time() - start, timeout)
-
-        if not complete:
-            # Report the error / timeout
-            reason = "ERROR detected"
-            details = ""
-            if timed_out:
-                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
-                runtime = "{} seconds".format(time.time() - start)
-            if log_data:
-                details = ":\n{}".format(self.str_log_data(log_data))
-            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
-            if timed_out:
-                self.log.debug(
-                    "If needed the %s second timeout can be adjusted via "
-                    "the 'pattern_timeout' test yaml parameter under %s",
-                    timeout, self.namespace)
-        else:
+        # Find the pattern in the logs
+        complete, message = self.search_logs(pattern, since, until, quantity, timeout, False)
+        if complete:
             # Report the successful start
-            # self.display_log_data(log_data)
-            self.log.info(
-                "%s subprocess startup detected - %s %s",
-                self._command, msg, runtime)
-
+            self.log.info("%s subprocess startup detected - %s", self._command, message)
         return complete
 
-    def dump_logs(self, hosts=None):
+    def dump_logs(self, hosts=None, timestamp=None):
         """Display the journalctl log data since detecting server start.
 
         Args:
@@ -1010,10 +1026,9 @@ class Systemctl(JobManager):
                 journalctl log data. Defaults to None which will log the
                 journalctl log data from all of the hosts.
         """
-        timestamp = None
-        if self.timestamps["running"]:
+        if timestamp is None and self.timestamps["running"]:
             timestamp = self.timestamps["running"]
-        elif self.timestamps["verified"]:
+        elif timestamp is None and self.timestamps["verified"]:
             timestamp = self.timestamps["verified"]
         if timestamp:
             if hosts is None:

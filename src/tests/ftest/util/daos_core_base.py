@@ -132,6 +132,7 @@ class DaosCoreBase(TestWithServers):
                 "--map-by node", "-x", "D_LOG_MASK=DEBUG",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
                 "-x", "COVFILE=/tmp/test.cov",
+                "-x", "FI_MR_CACHE_MONITOR=disabled",
                 self.daos_test,
                 "-n", dmg_config_file,
                 "".join(["-", subtest]),

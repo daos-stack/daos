@@ -31,7 +31,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
           Perform io using ior with RP_3GX replication.
           Kill one of the ranks and trigger rebuild.
           Destroy Pool during rebuild.
-          Re-create pool on reamining ranks.
+          Re-create pool on remaining ranks.
 
         :avocado: tags=all,pr,hw
         :avocado: tags=medium,ib2
@@ -68,17 +68,16 @@ class RbldPoolDestroyWithIO(IorTestBase):
             self.log.info("Starting ior run number %s", run)
             self.run_ior_with_pool()
 
-        self.log.info("Starting rebuild by killing rank %s", rank)
         # Kill the server and trigger rebuild
+        self.log.info("Starting rebuild by killing rank %s", rank)
+        since = self.pool.get_rebuild_timestamp()
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start. If True just wait for rebuild to start,
         # if False, wait for rebuild to complete.
         self.log.info("Wait for rebuild to start")
-        self.pool.wait_for_rebuild(True, interval=1)
-
-        # self.log.info("Wait for rebuild to finish")
-        # self.pool.wait_for_rebuild(False, interval=1)
+        self.pool.check_rebuild(self.server_managers[0], since, True)
+        # since = self.pool.get_rebuild_timestamp()
 
         self.pool.set_query_data()
         rebuild_status = self.pool.query_data["response"]["rebuild"]["state"]
@@ -89,6 +88,9 @@ class RbldPoolDestroyWithIO(IorTestBase):
                       rebuild_status)
         self.pool.destroy()
         self.container = None
+
+        # self.log.info("Wait for rebuild to finish")
+        # self.pool.check_rebuild(self.server_managers[0], since, False)
 
         # re-create the pool of full size to verify the space was reclaimed,
         # after re-starting the server on excluded rank
