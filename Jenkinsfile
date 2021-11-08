@@ -629,7 +629,10 @@ pipeline {
                     }
                     steps {
                         sh (script:"df")
-                        sh (script:"find /opt/intel/oneapi/compiler")
+                        sh (script:"ls -l /data")
+                        sh (script:"ls -l /opt/intel")
+                        sh (script:"ls -l /opt/intel/oneapi")
+                        sh (script:"ls -l /opt/intel/oneapi/compiler")
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
