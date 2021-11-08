@@ -339,7 +339,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         if errors:
             self.fail("Test FAILED")
 
-    @skipForTicket("DAOS-8985")
+    @skipForTicket("DAOS-9031")
     def test_ior_latency_telmetry_metrics(self):
         """JIRA ID: DAOS-8624.
 
