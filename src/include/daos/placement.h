@@ -61,7 +61,8 @@ struct pl_obj_shard {
 	uint32_t	po_shard;	/* shard index */
 	uint32_t	po_target;	/* target id */
 	uint32_t	po_fseq;	/* The latest failure sequence */
-	uint32_t	po_rebuilding:1; /* rebuilding status */
+	uint32_t	po_rebuilding:1, /* rebuilding status */
+			po_reintegrating:1; /* reintegrating status */
 };
 
 struct pl_obj_layout {
