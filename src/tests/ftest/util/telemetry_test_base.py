@@ -85,7 +85,7 @@ class TestWithTelemetry(TestWithServers):
 
         self.log.info("Test PASSED")
 
-    def get_min_max_mean_stddev(self, prefix, total_targets, target_per_rank):
+    def get_min_max_mean_stddev(self, prefix, total_targets, targets_per_rank):
         """Get four lists of min, max, mean, stddev.
 
         Sample get_pool_metrics output.
@@ -123,7 +123,7 @@ class TestWithTelemetry(TestWithServers):
                 mean, or stddev at the end.
             total_targets (int): Total number of targets in all the ranks and
                 hosts in the output.
-            target_per_rank (int): Number of target per rank.
+            targets_per_rank (int): Number of target per rank.
 
         Returns:
             dict: min, max, mean, stddev from each target in a dict.
@@ -151,7 +151,7 @@ class TestWithTelemetry(TestWithServers):
             for rank_to_dicts in pool_out[specific_metrics[0]].values():
                 for target_to_val in rank_to_dicts.values():
                     for target, value in target_to_val.items():
-                        values[int(target) + offset * target_per_rank] = value
+                        values[int(target) + offset * targets_per_rank] = value
 
                     offset += 1
 

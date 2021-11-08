@@ -22,7 +22,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         """Initialize a DkeyAkeyEnumPunch object."""
         super().__init__(*args, **kwargs)
         self.total_targets = None
-        self.target_per_rank = None
+        self.targets_per_rank = None
         self.errors = []
         self.ioreqs = []
         self.dkeys_a = []
@@ -36,9 +36,9 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         """Define number of targets from server count and target/server.
         """
         server_count = len(self.server_managers[0].hosts)
-        self.target_per_rank = self.params.get(
+        self.targets_per_rank = self.params.get(
             "targets", "/run/server_config/servers/*/")
-        self.total_targets = self.target_per_rank * server_count
+        self.total_targets = self.targets_per_rank * server_count
 
     def write_objects_insert_keys(self, container, objtype):
         """Write objects and insert dkeys and akeys in them.
@@ -92,6 +92,25 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             self.ioreqs[i].obj.punch_dkeys(0, dkeys=[self.dkey_strs_b[i]])
             if i % 10 == 0:
                 self.log.info("Keys punched %d", i)
+
+    def verify_active_latency(self, prefix, test_latency):
+        """Call the dmg telemetry command with given prefix and verify.
+
+        Obtain and verify the io metrics 1 to 4 in test_dkey_akey_enum_punch()
+
+        Args:
+            prefix (str): Metrics prefix for the metric that has min, max,
+                mean, or stddev at the end.
+            test_latency (bool): Whether to verify the latency metric.
+        """
+        metrics = self.get_min_max_mean_stddev(
+            prefix=prefix, total_targets=self.total_targets,
+            targets_per_rank=self.targets_per_rank)
+
+        self.errors.extend(
+            self.verify_stats(
+                enum_metrics=metrics, metric_prefix=prefix,
+                test_latency=test_latency))
 
     def test_dkey_akey_enum_punch(self):
         """Test count and active for enum and punch.
@@ -207,9 +226,13 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         self.telemetry.dmg.verbose = False
 
         ### Obtain and verify the io metrics 1 to 4. ###
+        # engine_pool_ops_dkey_enum
         pool_dkey_enum = self.telemetry.ENGINE_POOL_METRICS[5]
+        # engine_pool_ops_akey_enum
         pool_akey_enum = self.telemetry.ENGINE_POOL_METRICS[2]
+        # engine_pool_ops_dkey_punch
         pool_dkey_punch = self.telemetry.ENGINE_POOL_METRICS[6]
+        # engine_pool_ops_akey_punch
         pool_akey_punch = self.telemetry.ENGINE_POOL_METRICS[3]
         specific_metrics = [
             pool_dkey_enum, pool_akey_enum,
@@ -248,48 +271,20 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
 
         ### Verify active and latency; metrics 5 to 8. ###
         # Verify dkey enum active.
-        prefix = "engine_io_ops_dkey_enum_active_"
-        dkey_active_metrics = self.get_min_max_mean_stddev(
-            prefix=prefix, total_targets=self.total_targets,
-            target_per_rank=self.target_per_rank)
-
-        self.errors.extend(
-            self.verify_stats(
-                enum_metrics=dkey_active_metrics, metric_prefix=prefix,
-                test_latency=False))
+        self.verify_active_latency(
+            prefix="engine_io_ops_dkey_enum_active_", test_latency=False)
 
         # Verify akey enum active.
-        prefix = "engine_io_ops_akey_enum_active_"
-        akey_active_metrics = self.get_min_max_mean_stddev(
-            prefix=prefix, total_targets=self.total_targets,
-            target_per_rank=self.target_per_rank)
-
-        self.errors.extend(
-            self.verify_stats(
-                enum_metrics=akey_active_metrics, metric_prefix=prefix,
-                test_latency=False))
+        self.verify_active_latency(
+            prefix="engine_io_ops_akey_enum_active_", test_latency=False)
 
         # Verify dkey enum latency.
-        prefix = "engine_io_ops_dkey_enum_latency_"
-        dkey_latency_metrics = self.get_min_max_mean_stddev(
-            prefix=prefix, total_targets=self.total_targets,
-            target_per_rank=self.target_per_rank)
-
-        self.errors.extend(
-            self.verify_stats(
-                enum_metrics=dkey_latency_metrics, metric_prefix=prefix,
-                test_latency=True))
+        self.verify_active_latency(
+            prefix="engine_io_ops_dkey_enum_latency_", test_latency=True)
 
         # Verify akey enum latency.
-        prefix = "engine_io_ops_akey_enum_latency_"
-        akey_latency_metrics = self.get_min_max_mean_stddev(
-            prefix=prefix, total_targets=self.total_targets,
-            target_per_rank=self.target_per_rank)
-
-        self.errors.extend(
-            self.verify_stats(
-                enum_metrics=akey_latency_metrics, metric_prefix=prefix,
-                test_latency=True))
+        self.verify_active_latency(
+            prefix="engine_io_ops_akey_enum_latency_", test_latency=True)
 
         if self.errors:
             self.fail("\n----- Errors detected! -----\n{}".format(
