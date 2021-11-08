@@ -56,7 +56,7 @@ def convert_to_number(size):
     suffix = str(size)[-1]
     for key, value in SIZE_DICT.items():
         if suffix == key:
-            num = int(SIZE_DICT[key]) * int(size[:-1])
+            num = int(value) * int(size[:-1])
     return int(num)
 
 
@@ -255,10 +255,8 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         max_value = metrics["engine_io_latency_fetch_max"]
         mean_value = metrics["engine_io_latency_fetch_mean"]
         stddev_value = metrics["engine_io_latency_fetch_stddev"]
-        if ((
-            max_value >= metrics["engine_io_latency_fetch"]) and (
-                metrics["engine_io_latency_fetch"] >= min_value) and (
-                    max_value > mean_value) and (mean_value > min_value) and (
+        if ((max_value >= metrics["engine_io_latency_fetch"] >= min_value) and (
+                    max_value > mean_value > min_value) and (
                         stddev_value < (max_value-min_value))):
             status["fetch"] = True
 
@@ -266,10 +264,8 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         max_value = metrics["engine_io_latency_update_max"]
         mean_value = metrics["engine_io_latency_update_mean"]
         stddev_value = metrics["engine_io_latency_update_stddev"]
-        if ((
-            max_value >= metrics["engine_io_latency_update"]) and (
-                metrics["engine_io_latency_update"] >= min_value) and (
-                    max_value > mean_value) and (mean_value > min_value) and (
+        if ((max_value >= metrics["engine_io_latency_update"] >= min_value) and (
+                    max_value > mean_value > min_value) and (
                         stddev_value < (max_value-min_value))):
             status["update"] = True
         return status
