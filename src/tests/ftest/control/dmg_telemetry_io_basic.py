@@ -96,7 +96,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=control,telemetry
+        :avocado: tags=control,telemetry,ior
         :avocado: tags=test_with_telemetry_basic,test_io_telemetry
         :avocado: tags=test_io_telemetry_basic
 
