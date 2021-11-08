@@ -620,7 +620,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
-                            label 'wolf-34-docker_runner'
+                            label 'wolf-33-docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15"
