@@ -90,8 +90,7 @@ handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
 	if (rc)
 		D_GOTO(free, rc = daos_der2errno(rc));
 
@@ -123,8 +122,7 @@ handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 		D_GOTO(err, rc = ENOMEM);
 
 	/* Firstly sample the size */
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
@@ -132,8 +130,10 @@ handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
+	if (rc)
+		D_GOTO(free, rc = daos_der2errno(rc));
+
 	errno = 0;
 	fd = mkstemp(fname);
 	if (fd == -1)
@@ -195,10 +195,9 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
-				  &iov);
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	hsd_reply.fsr_dobj_size = iov.iov_buf_len;
 	if (hsd_reply.fsr_dobj_size > MAX_IOCTL_SIZE)
@@ -224,7 +223,7 @@ handle_doh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 
 	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
@@ -250,10 +249,9 @@ handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
-				  &iov);
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
