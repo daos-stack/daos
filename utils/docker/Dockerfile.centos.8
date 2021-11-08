@@ -206,10 +206,18 @@ COPY utils utils
 COPY src src
 USER root:root
 RUN chown -R daos_server.daos_server /home/daos/daos/
+
+ARG COMPILER=gcc
+
+RUN [ "$COMPILER" != "icc" ] || \
+  { cp utils/oneAPI.repo /etc/yum.repos.d && \
+  yum -y update && \
+  yum -y install intel-oneapi-compiler-dpcpp-cpp-2021.4.0 && \
+  yum clean all; }
 USER daos_server:daos_server
 
 # select compiler to use
-ARG COMPILER=gcc
+
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
