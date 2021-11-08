@@ -4,7 +4,7 @@
 [![Coverity Scan Build Status](https://img.shields.io/coverity/scan/3015.svg)](https://scan.coverity.com/projects/daos-stack-daos)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/4163f52ec65e4ba8991208288a9a15a6)](https://www.codacy.com/app/johann.lombardi/daos?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=daos-stack/daos&amp;utm_campaign=Badge_Grade)
 
-Please file issues in our [Jira issue tracker](https://jira.hpdd.intel.com/secure/CreateIssue!default.jspa?selectedProjectId=11116)
+Please file issues in our [Jira issue tracker](https://daosio.atlassian.net//secure/CreateIssue!default.jspa?selectedProjectId=11116)
 
 ## What is DAOS?
 
@@ -33,8 +33,8 @@ This includes:
   and monitor a DAOS system.
 * [User Guide](https://daos-stack.github.io/user/container/) documenting the
   DAOS native API, as well as the integration with POSIX, MPI-IO, HDF5, and Spark.
-* [Release Notes](https://daos-stack.github.io/release/releaseNote_v1_0/)
-  for the 1.0 release.
+* [Release Notes](https://daos-stack.github.io/release/release_notes_v1_2/)
+  for the 1.2 release.
 * [Developer documentation](https://daos-stack.github.io/dev/development/)
   to learn more about DAOS internals and contribute to the development effort.
 
@@ -43,5 +43,5 @@ More information can also be found on the [wiki](https://wiki.hpdd.intel.com/).
 ## Contacts
 
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos).
-Bugs should be reported through our [issue tracker](https://jira.hpdd.intel.com/projects/DAOS)
+Bugs should be reported through our [issue tracker](http://jira.daos.io/)
 with a test case to reproduce the issue (when applicable) and [debug logs](./doc/debugging.md).
