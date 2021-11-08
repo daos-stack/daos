@@ -147,7 +147,7 @@ RUN [ "$COMPILER" != "icc" ] || \
     { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks addrepo https://yum.repos.intel.com/oneapi oneAPI && \
       zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks update && \
       zypper --non-interactive install intel-oneapi-compiler-dpcpp-cpp && \
-      zypper clean all; }
+      zypper clean --all; }
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST
