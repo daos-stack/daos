@@ -1,0 +1,115 @@
+hosts:
+  test_servers:
+    - wolf-179
+    - wolf-189
+#    - server-A
+#    - server-B
+#    - server-C
+#    - server-D
+#    - server-E
+#    - server-F
+  test_clients:
+    - wolf-179
+#    - client-G
+timeout: 700
+server_config:
+    name: daos_server
+    port: 10001
+#    provider: ofi+tcp;ofi_rxm
+    servers:
+        bdev_class: nvme
+        bdev_list: ["0000:83:00.0"]
+        scm_class: ram
+        scm_size: 30
+#        scm_class: dcpm
+#        scm_list: ["/dev/pmem0"]
+#    transport_config:
+#      allow_insecure: True
+#agent_config:
+#    transport_config:
+#      allow_insecure: True
+dmg:
+    dmg_sub_command: storage
+    storage:
+      storage_sub_command: scan
+#    insecure: False
+    transport_config:
+      allow_insecure: True
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 25G
+#    nvme_size: 250G
+    control_method: dmg
+container:
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
+ior:
+    ior_timeout: 60
+    client_processes:
+        np_16:
+            np: 16
+        fs_copy: 10
+    test_file: daos:testFile
+    repetitions: 2
+    dfs_destroy: False
+    iorflags:
+          ec_test_flags: "-w -W -r -R -G 1 -vv"
+          ior_flags:
+            - "-v -W -w -r -R"
+            - "-v -W -w -r -R -F"
+          ior_api:
+            - DFS
+            - MPIIO
+#            - POSIX
+#            - HDF5
+#            - HDF5-VOL
+          transfer_block_size:
+            - [256B, 2M]
+            - [1M, 32M]
+          obj_class:
+            - "SX"
+#            - "RP_2GX"
+    objectclass:
+      dfs_oclass:
+      - "EC_2P1G1"
+      - "EC_2P1G8"
+      - "EC_2P1GX"
+      - "EC_2P2G1"
+      - "EC_2P2G8"
+      - "EC_2P2GX"
+      - "EC_4P1G1"
+      - "EC_4P1G8"
+      - "EC_4P1GX"
+      - "EC_4P2G1"
+      - "EC_4P2G8"
+      - "EC_4P2GX"
+#      - "EC_8P2G1"
+#      - "EC_8P2G8"
+#      - "EC_8P2GX"
+    dm:
+      dm_ior_options: ["-w -k", "5", "1M", "1G", "EC_2P2G1", "EC_2P2GX", "/testFile", "1"]
+mdtest:
+  client_processes:
+    np_8:
+      np: 8
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: True
+  manager: "MPICH"
+  mdtest_params:
+#     [api, write, read, branching_factor, num_of_dir_files, depth, flags]
+    - [DFS, 4096, 4096, 1, 1000, 0, ' ']
+    - [DFS, 4096, 4096, 1, 1000, 20, ' ']
+#    - [POSIX, 0, 0, 1, 1000, 0, ' ']
+#    - [POSIX, 0, 0, 1, 1000, 20, ' ']
+#    - [DFS, 4096, 4096, 2, 10, 5, ' ']
+#    - [POSIX, 4096, 4096, 2, 10, 5, ' ']
+#    - [DFS, 4096, 4096, 1, 1000, 20, '-u']
+#    - [POSIX, 0, 0, 2, 10, 5, '-u']
+dfuse:
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_caching: True
+hdf5_vol:
+    plugin_path: /usr/lib64/mpich/lib
