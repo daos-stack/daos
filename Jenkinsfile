@@ -620,7 +620,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
+                            label 'wolf-34-docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15"
@@ -628,6 +628,7 @@ pipeline {
                         }
                     }
                     steps {
+                        sh (script:"df")
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
