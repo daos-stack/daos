@@ -668,8 +668,9 @@ lock_pool_memory(struct vos_pool *pool)
 
 	rc = mlock((void *)pool->vp_umm.umm_base, pool->vp_pool_df->pd_scm_sz);
 	if (rc != 0) {
-		D_WARN("Could not lock memory for VOS pool at "DF_X64"; errno=%d (%s)\n",
-		       pool->vp_umm.umm_base, errno, strerror(errno));
+		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
+		       "; errno=%d (%s)\n", pool->vp_pool_df->pd_scm_sz, pool->vp_umm.umm_base,
+		       errno, strerror(errno));
 		return;
 	}
 
