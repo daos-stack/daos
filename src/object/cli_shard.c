@@ -925,7 +925,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				int rc1;
 
 				rc1 = dc_shard_update_size(rw_args, rc);
-				D_ASSERT(rc1 == 0);
+				D_ASSERT(rc1 == 0 || rc1 == -DER_FETCH_AGAIN);
+				if (rc1)
+					rc = rc1;
 			}
 		}
 		D_GOTO(out, rc);
