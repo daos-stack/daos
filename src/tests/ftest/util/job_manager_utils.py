@@ -972,7 +972,8 @@ class Systemctl(JobManager):
 
             complete = detected == quantity
             duration = time.time() - start
-            timed_out = duration > timeout
+            if timeout is not None:
+                timed_out = duration > timeout
 
         # Summarize results
         msg = "{}/{} '{}' messages detected in".format(detected, quantity, pattern)
