@@ -487,6 +487,7 @@ class DaosServer():
         self._yaml_file = None
         self._io_server_dir = None
         self.test_pool = None
+        self.network_interface=None
 
         # Detect the number of cores for dfuse and do something sensible, if there are
         # more than 32 on the node then use 12, otherwise use the whole node.
@@ -614,8 +615,8 @@ class DaosServer():
             scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
 
         ref_engine = copy.deepcopy(scyaml['engines'][0])
-        ref_engine['storage'][0]['scm_size'] = int(
-            ref_engine['storage'][0]['scm_size'] / self.engines)
+        ref_engine['storage'][0]['scm_size'] = int(ref_engine['storage'][0]['scm_size'] /
+                                                   self.engines)
         scyaml['engines'] = []
         # Leave some cores for dfuse, and start the daos server after these.
         if self.dfuse_cores:
@@ -623,6 +624,7 @@ class DaosServer():
         else:
             first_core = 0
         server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
+        self.network_interface = ref_engine['fabric_iface']
         for idx in range(self.engines):
             engine = copy.deepcopy(ref_engine)
             engine['log_file'] = self.server_logs[idx].name
@@ -837,9 +839,7 @@ class DaosServer():
         if not data['response']['pools']:
             return pools
         for pool in data['response']['pools']:
-            pobj = DaosPool(self,
-                            pool['uuid'],
-                            pool.get('label', None))
+            pobj = DaosPool(self, pool['uuid'], pool.get('label', None))
             pools.append(pobj)
             if pobj.label == 'NLT':
                 self.test_pool = pobj
@@ -848,7 +848,12 @@ class DaosServer():
     def _make_pool(self):
         """Create a DAOS pool"""
 
-        size = 1024*4
+        # If running as a small system with tmpfs already mounted then this is likely a docker
+        # container so restricted in size.
+        if self.conf.args.no_root:
+            size = 1024*2
+        else:
+            size = 1024*4
 
         rc = self.run_dmg(['pool',
                            'create',
@@ -2582,7 +2587,7 @@ def set_server_fi(server):
 
     cmd_env = get_base_env()
 
-    cmd_env['OFI_INTERFACE'] = 'eth0'
+    cmd_env['OFI_INTERFACE'] = server.network_interface
     cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     vh = ValgrindHelper(server.conf)
 
