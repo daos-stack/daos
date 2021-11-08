@@ -145,7 +145,7 @@ USER root:root
 ARG COMPILER=gcc
 RUN [ "$COMPILER" != "icc" ] || \
     { zypper --non-interactive --gpg-auto-import-keys addrepo https://yum.repos.intel.com/oneapi oneAPI && \
-      zypper --non-interactive update && \
+      zypper --non-interactive --gpg-auto-import-keys update && \
       zypper --non-interactive install intel-oneapi-compiler-dpcpp-cpp && \
       zypper clean all; }
 
