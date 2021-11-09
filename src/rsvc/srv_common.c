@@ -424,8 +424,7 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->bci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
-			 sizeof(cb_info->bci_rc));
+	DABT_EVENTUAL_SET(*eventual, (void *)&cb_info->bci_rc, sizeof(cb_info->bci_rc));
 	return 0;
 }
 
@@ -457,18 +456,11 @@ attr_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t op,
 	if (rc != 0)
 		goto out_eventual;
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		goto out_eventual;
-	}
-	if (*status != 0) {
-		rc = *status;
-		goto out_eventual;
-	}
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
+	rc = *status;
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out:
 	return rc;
 }

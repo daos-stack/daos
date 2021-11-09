@@ -265,7 +265,7 @@ oid_iv_ent_destroy(d_sg_list_t *sgl)
 	struct oid_iv_entry *entry;
 
 	entry = sgl->sg_iovs[0].iov_buf;
-	ABT_mutex_free(&entry->lock);
+	DABT_MUTEX_FREE(&entry->lock);
 	d_sgl_fini(sgl, true);
 
 	return 0;

@@ -574,7 +574,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		}
 		D_DEBUG(DB_TRACE, "Waiting for resync of "DF_UUID"\n",
 			DP_UUID(co_uuid));
-		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
+		DABT_COND_WAIT(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		resynced = true;
 	}
 	if (resynced || /* Someone just did the DTX resync*/
@@ -624,7 +624,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 
 	ABT_mutex_lock(cont->sc_mutex);
 	cont->sc_dtx_resyncing = 0;
-	ABT_cond_broadcast(cont->sc_dtx_resync_cond);
+	DABT_COND_BROADCAST(cont->sc_dtx_resync_cond);
 	ABT_mutex_unlock(cont->sc_mutex);
 
 out:

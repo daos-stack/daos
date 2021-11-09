@@ -139,7 +139,7 @@ rdb_put(struct rdb *db)
 	D_ASSERTF(db->d_ref > 0, "%d\n", db->d_ref);
 	db->d_ref--;
 	if (db->d_ref == RDB_BASE_REFS)
-		ABT_cond_broadcast(db->d_ref_cv);
+		DABT_COND_BROADCAST(db->d_ref_cv);
 	ABT_mutex_unlock(db->d_mutex);
 }
 
@@ -193,7 +193,7 @@ rdb_hash_init(void)
 					 NULL /* priv */, &rdb_hash_ops,
 					 &rdb_hash);
 	if (rc != 0)
-		ABT_mutex_free(&rdb_hash_lock);
+		DABT_MUTEX_FREE(&rdb_hash_lock);
 	return rc;
 }
 
@@ -201,7 +201,7 @@ void
 rdb_hash_fini(void)
 {
 	d_hash_table_destroy_inplace(&rdb_hash, true /* force */);
-	ABT_mutex_free(&rdb_hash_lock);
+	DABT_MUTEX_FREE(&rdb_hash_lock);
 }
 
 struct rdb *
@@ -331,9 +331,9 @@ err_kvss:
 err_ref_cv:
 	ABT_cond_free(&db->d_ref_cv);
 err_raft_mutex:
-	ABT_mutex_free(&db->d_raft_mutex);
+	DABT_MUTEX_FREE(&db->d_raft_mutex);
 err_mutex:
-	ABT_mutex_free(&db->d_mutex);
+	DABT_MUTEX_FREE(&db->d_mutex);
 err_db:
 	D_FREE(db);
 err:
@@ -474,8 +474,8 @@ rdb_stop(struct rdb *db)
 	vos_pool_close(db->d_pool);
 	rdb_kvs_cache_destroy(db->d_kvss);
 	ABT_cond_free(&db->d_ref_cv);
-	ABT_mutex_free(&db->d_raft_mutex);
-	ABT_mutex_free(&db->d_mutex);
+	DABT_MUTEX_FREE(&db->d_raft_mutex);
+	DABT_MUTEX_FREE(&db->d_mutex);
 	D_DEBUG(DB_MD, DF_DB": stopped db %p\n", DP_DB(db), db);
 	D_FREE(db);
 }

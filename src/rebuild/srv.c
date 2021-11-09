@@ -646,7 +646,7 @@ rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 		D_FREE(rgt->rgt_servers);
 
 	if (rgt->rgt_lock)
-		ABT_mutex_free(&rgt->rgt_lock);
+		DABT_MUTEX_FREE(&rgt->rgt_lock);
 
 	if (rgt->rgt_done_cond)
 		ABT_cond_free(&rgt->rgt_done_cond);
@@ -892,7 +892,7 @@ rpt_destroy(struct rebuild_tgt_pool_tracker *rpt)
 		d_rank_list_free(rpt->rt_svc_list);
 
 	if (rpt->rt_lock)
-		ABT_mutex_free(&rpt->rt_lock);
+		DABT_MUTEX_FREE(&rpt->rt_lock);
 
 	if (rpt->rt_fini_cond)
 		ABT_cond_free(&rpt->rt_fini_cond);
@@ -922,7 +922,7 @@ rpt_put(struct rebuild_tgt_pool_tracker	*rpt)
 	D_ASSERT(rpt->rt_refcount >= 0);
 	D_DEBUG(DB_REBUILD, "rpt %p ref %d\n", rpt, rpt->rt_refcount);
 	if (rpt->rt_refcount == 1 && rpt->rt_finishing)
-		ABT_cond_signal(rpt->rt_fini_cond);
+		DABT_COND_SIGNAL(rpt->rt_fini_cond);
 	ABT_mutex_unlock(rpt->rt_lock);
 }
 
@@ -1356,7 +1356,7 @@ out_pool:
 	ds_pool_put(pool);
 	if (rgt) {
 		ABT_mutex_lock(rgt->rgt_lock);
-		ABT_cond_signal(rgt->rgt_done_cond);
+		DABT_COND_SIGNAL(rgt->rgt_done_cond);
 		ABT_mutex_unlock(rgt->rgt_lock);
 		rgt_put(rgt);
 	}
@@ -1445,7 +1445,7 @@ rebuild_ults(void *arg)
 		rebuild_task_destroy(task);
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
-	ABT_cond_signal(rebuild_gst.rg_stop_cond);
+	DABT_COND_SIGNAL(rebuild_gst.rg_stop_cond);
 	rebuild_gst.rg_rebuild_running = 0;
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
 }
@@ -1476,7 +1476,7 @@ ds_rebuild_abort(uuid_t pool_uuid, unsigned int version)
 	 * so we have to use another lock here.
 	 */
 	ABT_mutex_lock(rebuild_gst.rg_lock);
-	ABT_cond_wait(rpt->rt_done_cond, rebuild_gst.rg_lock);
+	DABT_COND_WAIT(rpt->rt_done_cond, rebuild_gst.rg_lock);
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
 }
 
@@ -1515,7 +1515,7 @@ ds_rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version)
 	 * so we have to use another lock here.
 	 */
 	ABT_mutex_lock(rgt->rgt_lock);
-	ABT_cond_wait(rgt->rgt_done_cond, rgt->rgt_lock);
+	DABT_COND_WAIT(rgt->rgt_done_cond, rgt->rgt_lock);
 	ABT_mutex_unlock(rgt->rgt_lock);
 
 	D_DEBUG(DB_REBUILD, "rebuild "DF_UUID"/ %d is stopped.\n",
@@ -1548,7 +1548,7 @@ ds_rebuild_leader_stop_all()
 	D_DEBUG(DB_REBUILD, "abort rebuild %p\n", &rebuild_gst);
 	rebuild_gst.rg_abort = 1;
 	if (rebuild_gst.rg_rebuild_running)
-		ABT_cond_wait(rebuild_gst.rg_stop_cond,
+		DABT_COND_WAIT(rebuild_gst.rg_stop_cond,
 			      rebuild_gst.rg_lock);
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
 	if (rebuild_gst.rg_stop_cond)
@@ -1835,7 +1835,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	 * to destroy the rpt after this.
 	 */
 	if (rpt->rt_refcount > 1)
-		ABT_cond_wait(rpt->rt_fini_cond, rpt->rt_lock);
+		DABT_COND_WAIT(rpt->rt_fini_cond, rpt->rt_lock);
 	ABT_mutex_unlock(rpt->rt_lock);
 
 	/* destroy the rebuild pool tls on XS 0 */
@@ -1856,7 +1856,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	/* Notify anyone who is waiting for the rebuild to finish */
 	ABT_mutex_lock(rebuild_gst.rg_lock);
-	ABT_cond_signal(rpt->rt_done_cond);
+	DABT_COND_SIGNAL(rpt->rt_done_cond);
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
 
 	rpt_destroy(rpt);
@@ -1888,7 +1888,7 @@ rebuild_tgt_status_check_ult(void *arg)
 		if (rc != ABT_SUCCESS)
 			break;
 		rc = rebuild_tgt_query(rpt, &status);
-		ABT_mutex_free(&status.lock);
+		DABT_MUTEX_FREE(&status.lock);
 		if (rc || status.status != 0) {
 			D_ERROR(DF_UUID" rebuild failed: "DF_RC"\n",
 				DP_UUID(rpt->rt_pool_uuid),
@@ -2262,7 +2262,7 @@ fini(void)
 	if (rebuild_gst.rg_stop_cond)
 		ABT_cond_free(&rebuild_gst.rg_stop_cond);
 
-	ABT_mutex_free(&rebuild_gst.rg_lock);
+	DABT_MUTEX_FREE(&rebuild_gst.rg_lock);
 
 	rebuild_iv_fini();
 	return 0;

@@ -299,11 +299,11 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 	if (tls->mpt_svc_list.rl_ranks)
 		D_FREE(tls->mpt_svc_list.rl_ranks);
 	if (tls->mpt_done_eventual)
-		ABT_eventual_free(&tls->mpt_done_eventual);
+		DABT_EVENTUAL_FREE(&tls->mpt_done_eventual);
 	if (tls->mpt_inflight_cond)
 		ABT_cond_free(&tls->mpt_inflight_cond);
 	if (tls->mpt_inflight_mutex)
-		ABT_mutex_free(&tls->mpt_inflight_mutex);
+		DABT_MUTEX_FREE(&tls->mpt_inflight_mutex);
 	if (daos_handle_is_valid(tls->mpt_root_hdl))
 		obj_tree_destroy(tls->mpt_root_hdl);
 	if (daos_handle_is_valid(tls->mpt_migrated_root_hdl))
@@ -326,7 +326,7 @@ migrate_pool_tls_put(struct migrate_pool_tls *tls)
 		return;
 	tls->mpt_refcount--;
 	if (tls->mpt_fini && tls->mpt_refcount == 1)
-		ABT_eventual_set(tls->mpt_done_eventual, NULL, 0);
+		DABT_EVENTUAL_SET(tls->mpt_done_eventual, NULL, 0);
 	if (tls->mpt_refcount == 0)
 		migrate_pool_tls_destroy(tls);
 }
@@ -1626,7 +1626,7 @@ migrate_one_ult(void *arg)
 		D_INFO("mrone %p wait "DF_U64"/"DF_U64"\n", mrone, tls->mpt_inflight_size,
 			tls->mpt_inflight_max_size);
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
-		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
+		DABT_COND_WAIT(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
 	}
 
@@ -1638,7 +1638,7 @@ migrate_one_ult(void *arg)
 	tls->mpt_inflight_size -= data_size;
 
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
-	ABT_cond_broadcast(tls->mpt_inflight_cond);
+	DABT_COND_BROADCAST(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
 	D_DEBUG(DB_REBUILD, DF_UOID" migrate dkey "DF_KEY" inflight "DF_U64": "
@@ -2565,7 +2565,7 @@ ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver)
 	tls->mpt_fini = 1;
 
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
-	ABT_cond_broadcast(tls->mpt_inflight_cond);
+	DABT_COND_BROADCAST(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 	migrate_pool_tls_put(tls); /* lookup */
 	migrate_pool_tls_put(tls); /* destroy */
@@ -2590,10 +2590,10 @@ migrate_fini_one_ult(void *data)
 	tls->mpt_fini = 1;
 
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
-	ABT_cond_broadcast(tls->mpt_inflight_cond);
+	DABT_COND_BROADCAST(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
-	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+	DABT_EVENTUAL_WAIT(tls->mpt_done_eventual, NULL);
 	migrate_pool_tls_put(tls); /* destroy */
 
 	D_DEBUG(DB_TRACE, "abort one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
@@ -2985,7 +2985,7 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 
 		while (ult_cnt >= tls->mpt_inflight_max_ult && !tls->mpt_fini) {
 			ABT_mutex_lock(tls->mpt_inflight_mutex);
-			ABT_cond_wait(tls->mpt_inflight_cond,
+			DABT_COND_WAIT(tls->mpt_inflight_cond,
 				      tls->mpt_inflight_mutex);
 			ABT_mutex_unlock(tls->mpt_inflight_mutex);
 			ult_cnt = max(tls->mpt_obj_generated_ult -
@@ -3371,7 +3371,7 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
 		dms->dm_migrating = 0;
 
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
-	ABT_cond_broadcast(tls->mpt_inflight_cond);
+	DABT_COND_BROADCAST(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u migrating=%s,"
@@ -3382,7 +3382,7 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
 		arg.obj_generated_ult, arg.obj_executed_ult,
 		arg.generated_ult, arg.executed_ult, dms->dm_status);
 out:
-	ABT_mutex_free(&arg.status_lock);
+	DABT_MUTEX_FREE(&arg.status_lock);
 	migrate_pool_tls_put(tls);
 	return rc;
 }

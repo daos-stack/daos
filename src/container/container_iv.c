@@ -891,7 +891,7 @@ out:
 	if (pool != NULL)
 		ds_pool_put(pool);
 
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	DABT_EVENTUAL_SET(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 static int
@@ -936,9 +936,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	if (rc)
 		D_GOTO(out_eventual, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 	if (*status != 0)
 		D_GOTO(out_eventual, rc = *status);
 
@@ -950,7 +948,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	}
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 
@@ -1284,7 +1282,7 @@ out:
 	D_FREE(iv_entry);
 	if (prop_fetch != NULL)
 		daos_prop_free(prop_fetch);
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	DABT_EVENTUAL_SET(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 int
@@ -1313,14 +1311,12 @@ cont_iv_prop_fetch(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *cont_prop)
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 	if (*status != 0)
 		D_GOTO(out, rc = *status);
 
 out:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 
@@ -1341,7 +1337,7 @@ cont_iv_snapshot_fetch_ult(void *data)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = cont_iv_snapshots_fetch(arg->ns, arg->cont_uuid, arg->snapshots,
 				     &arg->snapshot_cnt);
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	DABT_EVENTUAL_SET(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 int
@@ -1368,9 +1364,7 @@ cont_iv_snapshot_fetch_non_sys(struct ds_iv_ns *ns, uuid_t cont_uuid,
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 	if (*status != 0)
 		D_GOTO(out, rc = *status);
 
@@ -1380,7 +1374,7 @@ cont_iv_snapshot_fetch_non_sys(struct ds_iv_ns *ns, uuid_t cont_uuid,
 	if (snapshot_cnt)
 		*snapshot_cnt = arg.snapshot_cnt;
 out:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 

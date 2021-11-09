@@ -207,10 +207,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 
 out:
 	drr->drr_result = rc;
-	rc = ABT_future_set(dra->dra_future, drr);
-	D_ASSERTF(rc == ABT_SUCCESS,
-		  "ABT_future_set failed for opc %x to %d/%d: rc = %d.\n",
-		  dra->dra_opc, drr->drr_rank, drr->drr_tag, rc);
+	DABT_FUTURE_SET(dra->dra_future, drr);
 
 	D_DEBUG(DB_TRACE,
 		"DTX req for opc %x (req %p future %p) got reply from %d/%d: "
@@ -253,7 +250,7 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 
 	if (rc != 0) {
 		drr->drr_result = rc;
-		ABT_future_set(dra->dra_future, drr);
+		DABT_FUTURE_SET(dra->dra_future, drr);
 	}
 
 	return rc;
@@ -754,7 +751,7 @@ out:
 		rc1 = 0;
 
 	if (child != ABT_THREAD_NULL)
-		ABT_thread_free(&child);
+		DABT_THREAD_FREE(&child);
 
 	if (dra.dra_future != ABT_FUTURE_NULL) {
 		rc2 = dtx_req_wait(&dra);

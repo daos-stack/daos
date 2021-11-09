@@ -48,7 +48,7 @@ blob_cp_arg_init(struct blob_cp_arg *ba)
 static inline void
 blob_cp_arg_fini(struct blob_cp_arg *ba)
 {
-	ABT_eventual_free(&ba->bca_eventual);
+	DABT_EVENTUAL_FREE(&ba->bca_eventual);
 }
 
 static void
@@ -84,7 +84,7 @@ blob_common_cb(struct blob_cp_arg *ba, int rc)
 
 	D_ASSERT(ba->bca_inflights == 1);
 	ba->bca_inflights--;
-	ABT_eventual_set(ba->bca_eventual, NULL, 0);
+	DABT_EVENTUAL_SET(ba->bca_eventual, NULL, 0);
 }
 
 /*
@@ -176,9 +176,7 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 		rc = xs_poll_completion(xs_ctxt, &ba->bca_inflights, 0);
 		D_ASSERT(rc == 0);
 	} else {
-		rc = ABT_eventual_wait(ba->bca_eventual, NULL);
-		if (rc != ABT_SUCCESS)
-			D_ERROR("ABT eventual wait failed. %d", rc);
+		DABT_EVENTUAL_WAIT(ba->bca_eventual, NULL);
 	}
 }
 

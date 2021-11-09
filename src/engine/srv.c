@@ -453,7 +453,7 @@ dss_srv_handler(void *arg)
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
-			ABT_future_set(dx->dx_shutdown, dx);
+			DABT_FUTURE_SET(dx->dx_shutdown, dx);
 			wait_all_exited(dx);
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
@@ -465,7 +465,7 @@ dss_srv_handler(void *arg)
 	D_ASSERT(!xstream_data.xd_ult_signal);
 	xstream_data.xd_ult_signal = true;
 	xstream_data.xd_ult_init_rc = 0;
-	ABT_cond_signal(xstream_data.xd_ult_init);
+	DABT_COND_SIGNAL(xstream_data.xd_ult_init);
 
 	/* wait until all xstreams are ready, otherwise it is not safe
 	 * to run lock-free dss_collective, although this race is not
@@ -476,7 +476,7 @@ dss_srv_handler(void *arg)
 	 * dss_{thread,task}_collective.
 	 */
 	if (dx->dx_xs_id != 1 /* DSS_XS_SWIM */)
-		ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
+		DABT_COND_WAIT(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
 	signal_caller = false;
@@ -521,7 +521,7 @@ signal:
 		D_ASSERT(!xstream_data.xd_ult_signal);
 		xstream_data.xd_ult_signal = true;
 		xstream_data.xd_ult_init_rc = rc;
-		ABT_cond_signal(xstream_data.xd_ult_init);
+		DABT_COND_SIGNAL(xstream_data.xd_ult_init);
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 	}
 }
@@ -707,7 +707,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	ABT_mutex_lock(xstream_data.xd_mutex);
 
 	if (!xstream_data.xd_ult_signal)
-		ABT_cond_wait(xstream_data.xd_ult_init, xstream_data.xd_mutex);
+		DABT_COND_WAIT(xstream_data.xd_ult_init, xstream_data.xd_mutex);
 	xstream_data.xd_ult_signal = false;
 	rc = xstream_data.xd_ult_init_rc;
 	if (rc != 0) {
@@ -754,7 +754,7 @@ dss_xstreams_fini(bool force)
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
-		ABT_future_set(dx->dx_stopping, dx);
+		DABT_FUTURE_SET(dx->dx_stopping, dx);
 	}
 
 	/** Stop & free progress ULTs */
@@ -762,14 +762,13 @@ dss_xstreams_fini(bool force)
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
-		ABT_future_set(dx->dx_shutdown, dx);
+		DABT_FUTURE_SET(dx->dx_shutdown, dx);
 	}
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
-		ABT_thread_join(dx->dx_progress);
-		ABT_thread_free(&dx->dx_progress);
+		DABT_THREAD_FREE(&dx->dx_progress);
 		ABT_future_free(&dx->dx_shutdown);
 		ABT_future_free(&dx->dx_stopping);
 	}
@@ -804,7 +803,7 @@ void
 dss_xstreams_open_barrier(void)
 {
 	ABT_mutex_lock(xstream_data.xd_mutex);
-	ABT_cond_broadcast(xstream_data.xd_ult_barrier);
+	DABT_COND_BROADCAST(xstream_data.xd_ult_barrier);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 }
 
@@ -1175,7 +1174,7 @@ dss_srv_fini(bool force)
 		ABT_cond_free(&xstream_data.xd_ult_init);
 		/* fall through */
 	case XD_INIT_MUTEX:
-		ABT_mutex_free(&xstream_data.xd_mutex);
+		DABT_MUTEX_FREE(&xstream_data.xd_mutex);
 		/* fall through */
 	case XD_INIT_NONE:
 		if (xstream_data.xd_xs_ptrs != NULL)

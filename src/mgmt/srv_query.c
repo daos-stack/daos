@@ -79,8 +79,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 		goto out;
 	}
 
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 
 out:
 	smd_dev_free_info(dev_info);
@@ -197,8 +196,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		goto out;
 	}
 
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 
 out:
 	smd_dev_free_info(dev_info);
@@ -643,8 +641,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 		goto out;
 	}
 
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 
 	uuid_copy(faulty_info.devid, dev_uuid);
 	/* set the VMD LED to FAULTY state on init xstream */

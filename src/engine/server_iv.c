@@ -12,6 +12,7 @@
 #include <daos/common.h>
 #include <gurt/list.h>
 #include <cart/iv.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/iv.h>
 #include <daos_prop.h>
 #include "srv_internal.h"
@@ -177,7 +178,11 @@ ds_iv_ns_put(struct ds_iv_ns *ns)
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 	if (ns->iv_refcount == 1)
+#if 0 /* FIXME */
+		DABT_EVENTUAL_SET(ns->iv_done_eventual, NULL, 0);
+#else
 		ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
+#endif
 	else if (ns->iv_refcount == 0)
 		ds_iv_ns_destroy(ns);
 }
@@ -717,7 +722,7 @@ iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 
 	D_ASSERT(d_list_empty(&ns->iv_entry_list));
 	d_list_del(&ns->iv_ns_link);
-	ABT_eventual_free(&ns->iv_done_eventual);
+	DABT_EVENTUAL_FREE(&ns->iv_done_eventual);
 	D_FREE(ns);
 }
 
@@ -848,12 +853,9 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 	ns->iv_stop = 1;
 	ds_iv_ns_put(ns);
 	if (ns->iv_refcount > 1) {
-		int rc;
-
 		D_DEBUG(DB_MGMT, DF_UUID" ns stop wait ref %u\n",
 			DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
-		rc = ABT_eventual_wait(ns->iv_done_eventual, NULL);
-		D_ASSERT(rc == ABT_SUCCESS);
+		DABT_EVENTUAL_WAIT(ns->iv_done_eventual, NULL);
 		D_DEBUG(DB_MGMT, DF_UUID" ns stopped\n",
 			DP_UUID(ns->iv_pool_uuid));
 	}
@@ -946,7 +948,7 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 				iv_value->sg_iovs[0].iov_len);
 	}
 
-	ABT_future_set(cb_info->future, &rc);
+	DABT_FUTURE_SET(cb_info->future, &rc);
 	return ret;
 }
 

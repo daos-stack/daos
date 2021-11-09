@@ -928,7 +928,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				    v->piv_map.piv_pool_map_ver);
 
 	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_signal(pool->sp_fetch_hdls_cond);
+	DABT_COND_SIGNAL(pool->sp_fetch_hdls_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	ds_pool_put(pool);
@@ -1233,7 +1233,7 @@ out:
 	if (pool != NULL)
 		ds_pool_put(pool);
 	if (iv_arg->iua_eventual)
-		ABT_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
+		DABT_EVENTUAL_SET(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
 	D_FREE(iv_arg);
 }
 
@@ -1324,7 +1324,7 @@ pool_iv_srv_hdl_fetch_ult(void *data)
 
 	rc = ds_pool_iv_srv_hdl_fetch(arg->pool, NULL, NULL);
 
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+	DABT_EVENTUAL_SET(arg->eventual, (void *)&rc, sizeof(rc));
 }
 
 int
@@ -1352,9 +1352,7 @@ ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
 	if (rc)
 		D_GOTO(out_eventual, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 	if (*status != 0)
 		D_GOTO(out_eventual, rc = *status);
 
@@ -1364,7 +1362,7 @@ ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
 		uuid_copy(*srv_pool_hdl, pool->sp_srv_pool_hdl);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 

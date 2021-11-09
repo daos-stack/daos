@@ -46,14 +46,11 @@ collective_func(void *varg)
 	struct dss_stream_arg_type	*a_args	= varg;
 	struct collective_arg		*carg	= a_args->st_coll_args;
 	struct dss_future_arg		*f_arg	= &carg->ca_future;
-	int				rc;
 
 	/** Update just the rc value */
 	a_args->st_rc = f_arg->dfa_func(f_arg->dfa_arg);
 
-	rc = ABT_future_set(f_arg->dfa_future, (void *)a_args);
-	if (rc != ABT_SUCCESS)
-		D_ERROR("future set failure %d\n", rc);
+	DABT_FUTURE_SET(f_arg->dfa_future, (void *)a_args);
 }
 
 /* Reduce the return codes into the first element. */
@@ -150,8 +147,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 				D_GOTO(out_future, rc);
 		}
 
-	rc = ABT_future_set(future, (void *)&aggregator);
-	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	DABT_FUTURE_SET(future, (void *)&aggregator);
 	for (tid = 0; tid < xs_nr; tid++) {
 		stream			= &stream_args->csa_streams[tid];
 		stream->st_coll_args	= &carg;
@@ -165,8 +161,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 
 			if (i < args->ca_exclude_tgts_cnt) {
 				D_DEBUG(DB_TRACE, "Skip tgt %d\n", tid);
-				rc = ABT_future_set(future, (void *)stream);
-				D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+				DABT_FUTURE_SET(future, (void *)stream);
 				continue;
 			}
 		}
@@ -204,8 +199,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		if (rc != 0) {
 next:
 			stream->st_rc = rc;
-			rc = ABT_future_set(future, (void *)stream);
-			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+			DABT_FUTURE_SET(future, (void *)stream);
 		}
 	}
 
@@ -478,7 +472,7 @@ ult_execute_cb(void *data)
 	arg->dfa_status = rc;
 
 	if (!arg->dfa_async)
-		ABT_future_set(arg->dfa_future, (void *)(intptr_t)rc);
+		DABT_FUTURE_SET(arg->dfa_future, (void *)(intptr_t)rc);
 	else
 		arg->dfa_comp_cb(arg->dfa_comp_arg);
 }

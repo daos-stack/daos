@@ -73,7 +73,7 @@ blob_create_cp(void *cb_arg, spdk_blob_id blob_id, int rc)
 
 	boa->boa_rc = daos_errno2der(-rc);
 	boa->boa_blob_id = blob_id;
-	ABT_eventual_set(boa->boa_eventual, NULL, 0);
+	DABT_EVENTUAL_SET(boa->boa_eventual, NULL, 0);
 	if (rc)
 		D_ERROR("Create blob failed. %d\n", rc);
 }
@@ -84,7 +84,7 @@ blob_delete_cp(void *cb_arg, int rc)
 	struct blob_ops_arg	*boa = cb_arg;
 
 	boa->boa_rc = daos_errno2der(-rc);
-	ABT_eventual_set(boa->boa_eventual, NULL, 0);
+	DABT_EVENTUAL_SET(boa->boa_eventual, NULL, 0);
 	if (rc)
 		D_ERROR("Delete blob failed. %d\n", rc);
 }
@@ -117,20 +117,14 @@ create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz,
 
 	spdk_bs_create_blob_ext(bs, &blob_opts, blob_create_cp, &boa);
 
-	rc = ABT_eventual_wait(boa.boa_eventual, NULL);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		D_ERROR("Wait eventual failed. "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
+	DABT_EVENTUAL_WAIT(boa.boa_eventual, NULL);
 
 	rc = boa.boa_rc;
 	if (rc)
 		D_ERROR("Create blob failed. "DF_RC"\n", DP_RC(rc));
 	else
 		*blob_id = boa.boa_blob_id;
-out:
-	ABT_eventual_free(&boa.boa_eventual);
+	DABT_EVENTUAL_FREE(&boa.boa_eventual);
 	return rc;
 }
 
@@ -147,19 +141,13 @@ delete_one_blob(struct spdk_blob_store *bs, spdk_blob_id blob_id)
 
 	spdk_bs_delete_blob(bs, blob_id, blob_delete_cp, &boa);
 
-	rc = ABT_eventual_wait(boa.boa_eventual, NULL);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		D_ERROR("Wait eventual failed. "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
+	DABT_EVENTUAL_WAIT(boa.boa_eventual, NULL);
 
 	rc = boa.boa_rc;
 	if (rc)
 		D_ERROR("Delete blob("DF_U64") failed. "DF_RC"\n",
 			blob_id, DP_RC(rc));
-out:
-	ABT_eventual_free(&boa.boa_eventual);
+	DABT_EVENTUAL_FREE(&boa.boa_eventual);
 	return rc;
 }
 

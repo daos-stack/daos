@@ -412,7 +412,7 @@ ds_mgmt_tgt_setup(void)
 err_cv:
 	ABT_cond_free(&pooltgts->dpt_cv);
 err_mutex:
-	ABT_mutex_free(&pooltgts->dpt_mutex);
+	DABT_MUTEX_FREE(&pooltgts->dpt_mutex);
 err_pooltgts:
 	D_FREE(pooltgts);
 err_zombies:
@@ -434,7 +434,7 @@ ds_mgmt_tgt_cleanup(void)
 			DP_RC(rc));
 	}
 	ABT_cond_free(&pooltgts->dpt_cv);
-	ABT_mutex_free(&pooltgts->dpt_mutex);
+	DABT_MUTEX_FREE(&pooltgts->dpt_mutex);
 	D_FREE(pooltgts);
 	D_FREE(zombies_path);
 	D_FREE(newborns_path);
@@ -822,7 +822,7 @@ out:
 	ABT_mutex_lock(pooltgts->dpt_mutex);
 	d_hash_rec_delete_at(&pooltgts->dpt_creates_ht,
 			     &tca.tca_ptrec->dptr_hlink);
-	ABT_cond_signal(pooltgts->dpt_cv);
+	DABT_COND_SIGNAL(pooltgts->dpt_cv);
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
 	D_DEBUG(DB_MGMT, DF_UUID" record removed from dpt_creates_ht\n",
 		DP_UUID(tca.tca_ptrec->dptr_uuid));
@@ -962,7 +962,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		D_DEBUG(DB_MGMT, DF_UUID": busy creating tgts, ask to cancel "
 			"(request %u)\n", DP_UUID(td_in->td_pool_uuid), nreqs);
 		ptrec->cancel_create = true;
-		ABT_cond_wait(pooltgts->dpt_cv, pooltgts->dpt_mutex);
+		DABT_COND_WAIT(pooltgts->dpt_cv, pooltgts->dpt_mutex);
 	} while (1);
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
 	D_DEBUG(DB_MGMT, DF_UUID": ready to destroy targets\n",

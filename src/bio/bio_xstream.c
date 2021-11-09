@@ -243,7 +243,7 @@ fini_smd:
 free_cond:
 	ABT_cond_free(&nvme_glb.bd_barrier);
 free_mutex:
-	ABT_mutex_free(&nvme_glb.bd_mutex);
+	DABT_MUTEX_FREE(&nvme_glb.bd_mutex);
 
 	return rc;
 }
@@ -262,7 +262,7 @@ bio_nvme_fini(void)
 {
 	bio_spdk_env_fini();
 	ABT_cond_free(&nvme_glb.bd_barrier);
-	ABT_mutex_free(&nvme_glb.bd_mutex);
+	DABT_MUTEX_FREE(&nvme_glb.bd_mutex);
 	D_ASSERT(nvme_glb.bd_xstream_cnt == 0);
 	D_ASSERT(nvme_glb.bd_init_thread == NULL);
 	D_ASSERT(d_list_empty(&nvme_glb.bd_bdevs));
@@ -484,7 +484,7 @@ free_bio_blobstore(struct bio_blobstore *bb)
 	D_ASSERT(bb->bb_ref == 0);
 
 	ABT_cond_free(&bb->bb_barrier);
-	ABT_mutex_free(&bb->bb_mutex);
+	DABT_MUTEX_FREE(&bb->bb_mutex);
 	D_FREE(bb->bb_xs_ctxts);
 
 	D_FREE(bb);
@@ -880,9 +880,9 @@ put_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 
 	/* Wait for other xstreams to put_bio_blobstore() first */
 	if (bs != NULL && bb->bb_ref)
-		ABT_cond_wait(bb->bb_barrier, bb->bb_mutex);
+		DABT_COND_WAIT(bb->bb_barrier, bb->bb_mutex);
 	else if (bb->bb_ref == 0)
-		ABT_cond_broadcast(bb->bb_barrier);
+		DABT_COND_BROADCAST(bb->bb_barrier);
 
 	ABT_mutex_unlock(bb->bb_mutex);
 
@@ -932,7 +932,7 @@ alloc_bio_blobstore(struct bio_xs_context *ctxt, struct bio_bdev *d_bdev)
 	return bb;
 
 out_mutex:
-	ABT_mutex_free(&bb->bb_mutex);
+	DABT_MUTEX_FREE(&bb->bb_mutex);
 out_ctxts:
 	D_FREE(bb->bb_xs_ctxts);
 out_bb:
@@ -1198,7 +1198,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 */
 			if (nvme_glb.bd_xstream_cnt != 0) {
 				D_DEBUG(DB_MGMT, "Init xs waits\n");
-				ABT_cond_wait(nvme_glb.bd_barrier,
+				DABT_COND_WAIT(nvme_glb.bd_barrier,
 					      nvme_glb.bd_mutex);
 			}
 
@@ -1221,7 +1221,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			nvme_glb.bd_init_thread = NULL;
 
 		} else if (nvme_glb.bd_xstream_cnt == 0) {
-			ABT_cond_broadcast(nvme_glb.bd_barrier);
+			DABT_COND_BROADCAST(nvme_glb.bd_barrier);
 		}
 	}
 

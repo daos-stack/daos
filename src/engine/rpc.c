@@ -15,8 +15,7 @@ rpc_cb(const struct crt_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->cci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->cci_rc,
-			 sizeof(cb_info->cci_rc));
+	DABT_EVENTUAL_SET(*eventual, (void *)&cb_info->cci_rc, sizeof(cb_info->cci_rc));
 }
 
 /**
@@ -43,14 +42,12 @@ dss_rpc_send(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 
 	rc = *status;
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out:
 	return rc;
 }

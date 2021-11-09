@@ -790,7 +790,7 @@ rebuild_scanner(void *data)
 out:
 	tls->rebuild_pool_scan_done = 1;
 	if (ult_send != ABT_THREAD_NULL)
-		ABT_thread_free(&ult_send);
+		DABT_THREAD_FREE(&ult_send);
 
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;

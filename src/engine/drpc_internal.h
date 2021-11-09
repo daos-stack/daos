@@ -105,10 +105,8 @@ int drpc_listener_init(void);
  * Shut down the dRPC listener thread and clean up any open connections.
  *
  * Waits for the listener thread to complete before returning.
- *
- * \return	0	Success
  */
-int drpc_listener_fini(void);
+void drpc_listener_fini(void);
 
 /**
  * Fetch the socket path for the dRPC listener.

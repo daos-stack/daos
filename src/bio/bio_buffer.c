@@ -107,7 +107,7 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
 
 	D_ASSERT(buf->bdb_tot_cnt == 0);
-	ABT_mutex_free(&buf->bdb_mutex);
+	DABT_MUTEX_FREE(&buf->bdb_mutex);
 	ABT_cond_free(&buf->bdb_wait_iods);
 
 	D_FREE(buf);
@@ -136,14 +136,14 @@ dma_buffer_create(unsigned int init_cnt)
 
 	rc = ABT_cond_create(&buf->bdb_wait_iods);
 	if (rc != ABT_SUCCESS) {
-		ABT_mutex_free(&buf->bdb_mutex);
+		DABT_MUTEX_FREE(&buf->bdb_mutex);
 		D_FREE(buf);
 		return NULL;
 	}
 
 	rc = bulk_cache_create(buf);
 	if (rc != 0) {
-		ABT_mutex_free(&buf->bdb_mutex);
+		DABT_MUTEX_FREE(&buf->bdb_mutex);
 		ABT_cond_free(&buf->bdb_wait_iods);
 		D_FREE(buf);
 		return NULL;
@@ -202,7 +202,7 @@ bio_iod_free(struct bio_desc *biod)
 	D_ASSERT(!biod->bd_buffer_prep);
 
 	if (biod->bd_dma_done != ABT_EVENTUAL_NULL)
-		ABT_eventual_free(&biod->bd_dma_done);
+		DABT_EVENTUAL_FREE(&biod->bd_dma_done);
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
@@ -875,7 +875,7 @@ rw_completion(void *cb_arg, int err)
 
 skip_media_error:
 	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
-		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
+		DABT_EVENTUAL_SET(biod->bd_dma_done, NULL, 0);
 }
 
 void
@@ -1022,7 +1022,7 @@ dma_rw(struct bio_desc *biod)
 	} else {
 		biod->bd_dma_issued = 1;
 		if (biod->bd_inflights != 0)
-			ABT_eventual_wait(biod->bd_dma_done, NULL);
+			DABT_EVENTUAL_WAIT(biod->bd_dma_done, NULL);
 	}
 
 	biod->bd_ctxt->bic_inflight_dmas--;
@@ -1036,7 +1036,7 @@ dma_drop_iod(struct bio_dma_buffer *bdb)
 	bdb->bdb_active_iods--;
 
 	ABT_mutex_lock(bdb->bdb_mutex);
-	ABT_cond_broadcast(bdb->bdb_wait_iods);
+	DABT_COND_BROADCAST(bdb->bdb_wait_iods);
 	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
@@ -1085,7 +1085,7 @@ retry:
 			biod, retry_cnt++);
 
 		ABT_mutex_lock(bdb->bdb_mutex);
-		ABT_cond_wait(bdb->bdb_wait_iods, bdb->bdb_mutex);
+		DABT_COND_WAIT(bdb->bdb_wait_iods, bdb->bdb_mutex);
 		ABT_mutex_unlock(bdb->bdb_mutex);
 
 		D_DEBUG(DB_IO, "IOD %p finished waiting. %d\n",

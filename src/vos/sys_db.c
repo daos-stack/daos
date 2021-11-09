@@ -411,7 +411,7 @@ vos_db_fini(void)
 {
 	db_close(&vos_db.db_pub);
 	if (vos_db.db_lock)
-		ABT_mutex_free(&vos_db.db_lock);
+		DABT_MUTEX_FREE(&vos_db.db_lock);
 
 	if (vos_db.db_file) {
 		if (vos_db.db_vos_self) {

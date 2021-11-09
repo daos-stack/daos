@@ -343,9 +343,7 @@ ds_mgmt_svc_stop(void)
 		return rc;
 	}
 
-	ABT_thread_join(thread);
-
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 	return 0;
 }
 

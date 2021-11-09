@@ -126,7 +126,7 @@ err_leader_ref_cv:
 err_state_cv:
 	ABT_cond_free(&svc->s_state_cv);
 err_mutex:
-	ABT_mutex_free(&svc->s_mutex);
+	DABT_MUTEX_FREE(&svc->s_mutex);
 err_db_path:
 	D_FREE(svc->s_db_path);
 err_name:
@@ -147,7 +147,7 @@ fini_free(struct ds_rsvc *svc)
 		ABT_cond_free(&svc->s_map_dist_cv);
 	ABT_cond_free(&svc->s_leader_ref_cv);
 	ABT_cond_free(&svc->s_state_cv);
-	ABT_mutex_free(&svc->s_mutex);
+	DABT_MUTEX_FREE(&svc->s_mutex);
 	D_FREE(svc->s_db_path);
 	D_FREE(svc->s_name);
 	rsvc_class(svc->s_class)->sc_free(svc);
@@ -333,7 +333,7 @@ put_leader(struct ds_rsvc *svc)
 	D_ASSERTF(svc->s_leader_ref > 0, "%d\n", svc->s_leader_ref);
 	svc->s_leader_ref--;
 	if (svc->s_leader_ref == 0)
-		ABT_cond_broadcast(svc->s_leader_ref_cv);
+		DABT_COND_BROADCAST(svc->s_leader_ref_cv);
 }
 
 /**
@@ -388,7 +388,7 @@ change_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
 	D_DEBUG(DB_MD, "%s: term "DF_U64" state %s to %s\n", svc->s_name,
 		svc->s_term, state_str(svc->s_state), state_str(state));
 	svc->s_state = state;
-	ABT_cond_broadcast(svc->s_state_cv);
+	DABT_COND_BROADCAST(svc->s_state_cv);
 }
 
 static void map_distd(void *arg);
@@ -419,17 +419,13 @@ static void
 drain_map_distd(struct ds_rsvc *svc)
 {
 	svc->s_map_distd_stop = true;
-	ABT_cond_broadcast(svc->s_map_dist_cv);
+	DABT_COND_BROADCAST(svc->s_map_dist_cv);
 }
 
 static void
 fini_map_distd(struct ds_rsvc *svc)
 {
-	int rc;
-
-	rc = ABT_thread_join(svc->s_map_distd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&svc->s_map_distd);
+	DABT_THREAD_FREE(&svc->s_map_distd);
 }
 
 static int
@@ -502,7 +498,7 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 	 * DS_RSVC_UP_EMPTY state promptly.
 	 */
 	while (svc->s_state == DS_RSVC_DOWN)
-		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
+		DABT_COND_WAIT(svc->s_state_cv, svc->s_mutex);
 	D_ASSERTF(svc->s_state == DS_RSVC_UP_EMPTY, "%d\n", svc->s_state);
 
 	D_DEBUG(DB_MD, "%s: calling sc_bootstrap\n", svc->s_name);
@@ -554,7 +550,7 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 				break;
 			D_DEBUG(DB_MD, "%s: waiting for %d leader refs\n",
 				svc->s_name, svc->s_leader_ref);
-			ABT_cond_wait(svc->s_leader_ref_cv, svc->s_mutex);
+			DABT_COND_WAIT(svc->s_leader_ref_cv, svc->s_mutex);
 		}
 
 		rsvc_class(svc->s_class)->sc_step_down(svc);
@@ -649,7 +645,7 @@ void
 ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 {
 	svc->s_map_dist = true;
-	ABT_cond_broadcast(svc->s_map_dist_cv);
+	DABT_COND_BROADCAST(svc->s_map_dist_cv);
 }
 
 static bool
@@ -905,7 +901,7 @@ stop(struct ds_rsvc *svc, bool destroy)
 		 */
 		rdb_resign(svc->s_db, svc->s_term);
 	while (svc->s_state != DS_RSVC_DOWN)
-		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
+		DABT_COND_WAIT(svc->s_state_cv, svc->s_mutex);
 
 	if (destroy)
 		rc = remove(svc->s_db_path);
@@ -998,8 +994,7 @@ ds_rsvc_stop_all(enum ds_rsvc_class_id class)
 	/* Wait for the stopper ULTs to return. */
 	d_list_for_each_entry_safe(ult, ult_tmp, &arg.saa_list, su_entry) {
 		d_list_del_init(&ult->su_entry);
-		ABT_thread_join(ult->su_thread);
-		ABT_thread_free(&ult->su_thread);
+		DABT_THREAD_FREE(&ult->su_thread);
 		D_FREE(ult);
 	}
 

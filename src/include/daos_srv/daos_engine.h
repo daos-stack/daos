@@ -11,19 +11,20 @@
 #ifndef __DSS_API_H__
 #define __DSS_API_H__
 
+#include <pthread.h>
+#include <hwloc.h>
+#include <abt.h>
 #include <daos/common.h>
 #include <daos/drpc.h>
 #include <daos/rpc.h>
 #include <daos/cont_props.h>
+#include <daos_srv/dabt.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/ras.h>
 #include <daos_event.h>
 #include <daos_task.h>
-#include <pthread.h>
-#include <hwloc.h>
-#include <abt.h>
 #include <cart/iv.h>
 #include <daos/checksum.h>
 

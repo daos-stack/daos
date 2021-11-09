@@ -73,9 +73,8 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
-		ABT_eventual_set(child->spc_ref_eventual,
-				 (void *)&child->spc_ref,
-				 sizeof(child->spc_ref));
+		DABT_EVENTUAL_SET(child->spc_ref_eventual, (void *)&child->spc_ref,
+				     sizeof(child->spc_ref));
 	}
 }
 
@@ -140,7 +139,7 @@ start_gc_ult(struct ds_pool_child *child)
 	if (child->spc_gc_req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
 		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_free(&gc);
+		DABT_THREAD_FREE(&gc);
 		return -DER_NOMEM;
 	}
 
@@ -257,7 +256,7 @@ out_list:
 out_gc:
 	stop_gc_ult(child);
 out_eventual:
-	ABT_eventual_free(&child->spc_ref_eventual);
+	DABT_EVENTUAL_FREE(&child->spc_ref_eventual);
 out_vos:
 	vos_pool_close(child->spc_hdl);
 out_metrics:
@@ -276,7 +275,7 @@ static int
 pool_child_delete_one(void *uuid)
 {
 	struct ds_pool_child *child;
-	int *ref, rc;
+	int *ref;
 
 	child = ds_pool_child_lookup(uuid);
 	if (child == NULL)
@@ -289,11 +288,8 @@ pool_child_delete_one(void *uuid)
 
 	ds_pool_child_put(child); /* -1 for lookup */
 
-	rc = ABT_eventual_wait(child->spc_ref_eventual, (void **)&ref);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	ABT_eventual_free(&child->spc_ref_eventual);
+	DABT_EVENTUAL_WAIT(child->spc_ref_eventual, (void **)&ref);
+	DABT_EVENTUAL_FREE(&child->spc_ref_eventual);
 
 	/* only stop gc ULT when all ops ULTs are done */
 	stop_gc_ult(child);
@@ -418,7 +414,7 @@ err_done_cond:
 err_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 err_mutex:
-	ABT_mutex_free(&pool->sp_mutex);
+	DABT_MUTEX_FREE(&pool->sp_mutex);
 err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
@@ -458,7 +454,7 @@ pool_free_ref(struct daos_llink *llink)
 
 	ABT_cond_free(&pool->sp_fetch_hdls_cond);
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
-	ABT_mutex_free(&pool->sp_mutex);
+	DABT_MUTEX_FREE(&pool->sp_mutex);
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE(pool);
 }
@@ -553,7 +549,7 @@ pool_fetch_hdls_ult(void *data)
 	 */
 	ABT_mutex_lock(pool->sp_mutex);
 	if (pool->sp_map == NULL)
-		ABT_cond_wait(pool->sp_fetch_hdls_cond, pool->sp_mutex);
+		DABT_COND_WAIT(pool->sp_fetch_hdls_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	if (pool->sp_stopping) {
@@ -569,7 +565,7 @@ pool_fetch_hdls_ult(void *data)
 
 out:
 	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_signal(pool->sp_fetch_hdls_done_cond);
+	DABT_COND_SIGNAL(pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	pool->sp_fetch_hdls = 0;
@@ -605,7 +601,7 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	if (pool->sp_ec_ephs_req == NULL) {
 		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
 			DP_UUID(pool->sp_uuid));
-		ABT_thread_free(&ec_eph_query_ult);
+		DABT_THREAD_FREE(&ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
 
@@ -636,11 +632,11 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 	}
 
 	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_signal(pool->sp_fetch_hdls_cond);
+	DABT_COND_SIGNAL(pool->sp_fetch_hdls_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	ABT_mutex_lock(pool->sp_mutex);
-	ABT_cond_wait(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
+	DABT_COND_WAIT(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
 	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 }

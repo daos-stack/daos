@@ -405,7 +405,7 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 			if (dbca->dbca_agg_req == NULL) {
 				D_WARN("Fail to get agg sched req (1) for "
 				       DF_UUID"\n", DP_UUID(cont->sc_uuid));
-				ABT_thread_free(&child);
+				DABT_THREAD_FREE(&child);
 				continue;
 			}
 
@@ -457,7 +457,7 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 		if (dbca->dbca_agg_req == NULL) {
 			D_WARN("Fail to get agg sched req (2) for "DF_UUID"\n",
 			       DP_UUID(cont->sc_uuid));
-			ABT_thread_free(&child);
+			DABT_THREAD_FREE(&child);
 		} else {
 			dbpa->dbpa_aggregating = 1;
 		}
@@ -581,7 +581,7 @@ dtx_batched_commit(void *arg)
 	dtx_init_sched_req(NULL, &dmi->dmi_dtx_agg_req, child);
 	if (dmi->dmi_dtx_agg_req == NULL) {
 		D_ERROR("Failed to get DTX aggregation sched request.\n");
-		ABT_thread_free(&child);
+		DABT_THREAD_FREE(&child);
 		goto out;
 	}
 
@@ -637,7 +637,7 @@ dtx_batched_commit(void *arg)
 					D_WARN("Fail to get sched req (1) for "
 					       DF_UUID"\n",
 					       DP_UUID(cont->sc_uuid));
-					ABT_thread_free(&child);
+					DABT_THREAD_FREE(&child);
 				}
 			}
 		}
@@ -671,7 +671,7 @@ dtx_batched_commit(void *arg)
 					D_WARN("Fail to get sched req (3) for "
 					       DF_UUID"\n",
 					       DP_UUID(cont->sc_uuid));
-					ABT_thread_free(&child);
+					DABT_THREAD_FREE(&child);
 				}
 			}
 		}
@@ -1731,8 +1731,7 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 	ABT_future		future = dlh->dlh_future;
 
 	sub->dss_result = rc;
-	rc = ABT_future_set(future, dlh);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
+	DABT_FUTURE_SET(future, dlh);
 
 	D_DEBUG(DB_TRACE, "execute from rank %d tag %d, rc %d.\n",
 		sub->dss_tgt.st_rank, sub->dss_tgt.st_tgt_idx,
@@ -1763,11 +1762,7 @@ dtx_leader_exec_ops_ult(void *arg)
 		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
 		    (i == daos_fail_value_get() &&
 		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
-			int ret;
-
-			ret = ABT_future_set(future, dlh);
-			D_ASSERTF(ret == ABT_SUCCESS,
-				  "ABT_future_set failed %d.\n", ret);
+			DABT_FUTURE_SET(future, dlh);
 			continue;
 		}
 
@@ -1779,13 +1774,8 @@ dtx_leader_exec_ops_ult(void *arg)
 	}
 
 	if (rc != 0) {
-		for (i++; i < dlh->dlh_sub_cnt; i++) {
-			int ret;
-
-			ret = ABT_future_set(future, dlh);
-			D_ASSERTF(ret == ABT_SUCCESS,
-				  "ABT_future_set failed %d.\n", ret);
-		}
+		for (i++; i < dlh->dlh_sub_cnt; i++)
+			DABT_FUTURE_SET(future, dlh);
 	}
 
 	D_FREE(ult_arg);

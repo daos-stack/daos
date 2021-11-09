@@ -767,7 +767,7 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 err_events_cv:
 	ABT_cond_free(&svc->ps_events.pse_cv);
 err_events_mutex:
-	ABT_mutex_free(&svc->ps_events.pse_mutex);
+	DABT_MUTEX_FREE(&svc->ps_events.pse_mutex);
 err_user:
 	rdb_path_fini(&svc->ps_user);
 err_handles:
@@ -822,7 +822,7 @@ queue_event(struct pool_svc *svc, d_rank_t rank, uint64_t incarnation, enum crt_
 
 	ABT_mutex_lock(events->pse_mutex);
 	d_list_add_tail(&event->psv_link, &events->pse_queue);
-	ABT_cond_broadcast(events->pse_cv);
+	DABT_COND_BROADCAST(events->pse_cv);
 	ABT_mutex_unlock(events->pse_mutex);
 	return 0;
 }
@@ -913,7 +913,7 @@ events_handler(void *arg)
 				d_list_del_init(&event->psv_link);
 				break;
 			}
-			ABT_cond_wait(events->pse_cv, events->pse_mutex);
+			DABT_COND_WAIT(events->pse_cv, events->pse_mutex);
 		}
 		ABT_mutex_unlock(events->pse_mutex);
 		if (stop)
@@ -991,7 +991,6 @@ static void
 fini_events(struct pool_svc *svc)
 {
 	struct pool_svc_events *events = &svc->ps_events;
-	int			rc;
 
 	D_ASSERT(events->pse_handler != ABT_THREAD_NULL);
 
@@ -999,12 +998,10 @@ fini_events(struct pool_svc *svc)
 
 	ABT_mutex_lock(events->pse_mutex);
 	events->pse_stop = true;
-	ABT_cond_broadcast(events->pse_cv);
+	DABT_COND_BROADCAST(events->pse_cv);
 	ABT_mutex_unlock(events->pse_mutex);
 
-	rc = ABT_thread_join(events->pse_handler);
-	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&events->pse_handler);
+	DABT_THREAD_FREE(&events->pse_handler);
 	events->pse_handler = ABT_THREAD_NULL;
 }
 
@@ -1015,7 +1012,7 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 
 	ds_cont_svc_fini(&svc->ps_cont_svc);
 	ABT_cond_free(&svc->ps_events.pse_cv);
-	ABT_mutex_free(&svc->ps_events.pse_mutex);
+	DABT_MUTEX_FREE(&svc->ps_events.pse_mutex);
 	rdb_path_fini(&svc->ps_user);
 	rdb_path_fini(&svc->ps_handles);
 	rdb_path_fini(&svc->ps_root);
@@ -1540,8 +1537,7 @@ ds_pool_start_all(void)
 			DP_RC(rc));
 		return rc;
 	}
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 	return 0;
 }
 
@@ -1585,8 +1581,7 @@ ds_pool_stop_all(void)
 			DP_RC(rc));
 		return rc;
 	}
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
+	DABT_THREAD_FREE(&thread);
 
 	return 0;
 }
@@ -1905,7 +1900,7 @@ out_tx:
 			D_GOTO(out_svc, rc);
 		}
 		svc->ps_rsvc.s_state = DS_RSVC_UP;
-		ABT_cond_broadcast(svc->ps_rsvc.s_state_cv);
+		DABT_COND_BROADCAST(svc->ps_rsvc.s_state_cv);
 	}
 
 out_mutex:
@@ -1954,8 +1949,7 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->bci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
-			 sizeof(cb_info->bci_rc));
+	DABT_EVENTUAL_SET(*eventual, (void *)&cb_info->bci_rc, sizeof(cb_info->bci_rc));
 	return 0;
 }
 
@@ -2471,15 +2465,13 @@ transfer_cont_buf(struct daos_pool_cont_info *cont_buf, size_t ncont,
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 
 	if (*status != 0)
 		D_GOTO(out_eventual, rc = *status);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out_bulk:
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
@@ -5110,15 +5102,13 @@ transfer_ranks_buf(d_rank_t *ranks_buf, size_t nranks,
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 
 	if (*status != 0)
 		D_GOTO(out_eventual, rc = *status);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 out_bulk:
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
@@ -5638,14 +5628,12 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
 	if (rc)
 		D_GOTO(out_eventual, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+	DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 	if (*status != 0)
 		D_GOTO(out_eventual, rc = *status);
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+	DABT_EVENTUAL_FREE(&eventual);
 	return rc;
 }
 

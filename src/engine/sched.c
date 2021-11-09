@@ -1084,16 +1084,13 @@ sched_req_wakeup(struct sched_request *req)
 void
 sched_req_wait(struct sched_request *req, bool abort)
 {
-	int	rc;
-
 	D_ASSERT(req != NULL);
 	if (abort) {
 		req->sr_abort = 1;
 		sched_req_wakeup(req);
 	}
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
-	rc = ABT_thread_join(req->sr_ult);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_thread_join: %d\n", rc);
+	DABT_THREAD_JOIN(req->sr_ult);
 }
 
 inline bool
@@ -1197,17 +1194,14 @@ sched_req_put(struct sched_request *req)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	struct sched_info	*info = &dx->dx_sched_info;
-	int			 rc;
 
 	D_ASSERT(req != NULL && req->sr_ult != ABT_THREAD_NULL);
 	D_ASSERT(d_list_empty(&req->sr_link));
-	if (req->sr_owned) {
+	if (req->sr_owned)
 		/* We are responsible for freeing a req-owned ULT. */
-		rc = ABT_thread_free(&req->sr_ult);
-		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-	} else {
+		DABT_THREAD_FREE(&req->sr_ult);
+	else
 		req->sr_ult = ABT_THREAD_NULL;
-	}
 	d_list_add_tail(&req->sr_link, &info->si_idle_list);
 
 	if (req->sr_attr.sra_type == SCHED_REQ_GC) {
@@ -1233,7 +1227,7 @@ sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
 	struct sched_info	*info = &dx->dx_sched_info;
 
 	info->si_wait_cnt += 1;
-	ABT_cond_wait(cond, mutex);
+	DABT_COND_WAIT(cond, mutex);
 	D_ASSERT(info->si_wait_cnt > 0);
 	info->si_wait_cnt -= 1;
 }

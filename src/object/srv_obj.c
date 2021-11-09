@@ -247,8 +247,7 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	D_ASSERT(arg->bulks_inflight > 0);
 	arg->bulks_inflight--;
 	if (arg->bulks_inflight == 0)
-		ABT_eventual_set(arg->eventual, &arg->result,
-				 sizeof(arg->result));
+		DABT_EVENTUAL_SET(arg->eventual, &arg->result, sizeof(arg->result));
 
 	crt_req_decref(rpc);
 	return cb_info->bci_rc;
@@ -474,7 +473,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  struct obj_bulk_args *p_arg)
 {
 	struct obj_bulk_args	arg = { 0 };
-	int			i, rc, *status, ret;
+	int			i, rc, *status;
 	bool			async = true;
 
 	if (remote_bulks == NULL) {
@@ -536,16 +535,16 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	}
 done:
 	if (--(p_arg->bulks_inflight) == 0)
-		ABT_eventual_set(p_arg->eventual, &rc, sizeof(rc));
+		DABT_EVENTUAL_SET(p_arg->eventual, &rc, sizeof(rc));
 
 	if (async)
 		return rc;
 
-	ret = ABT_eventual_wait(p_arg->eventual, (void **)&status);
+	DABT_EVENTUAL_WAIT(p_arg->eventual, (void **)&status);
 	if (rc == 0)
-		rc = ret ? dss_abterr2der(ret) : *status;
+		rc = *status;
 
-	ABT_eventual_free(&p_arg->eventual);
+	DABT_EVENTUAL_FREE(&p_arg->eventual);
 	/* After RDMA is done, corrupt the server data */
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK)) {
 		struct bio_sglist	*fbsgl;
@@ -4024,18 +4023,15 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		if (!bulks[i].inited)
 			continue;
 
-		rc = ABT_eventual_wait(bulks[i].eventual, (void **)&status);
-		if (rc != 0)
-			rc = dss_abterr2der(rc);
-		if (rc == 0 && *status != 0)
-			rc = *status;
+		DABT_EVENTUAL_WAIT(bulks[i].eventual, (void **)&status);
+		rc = *status;
 
-		ABT_eventual_free(&bulks[i].eventual);
+		DABT_EVENTUAL_FREE(&bulks[i].eventual);
 		bio_iod_flush(biods[i]);
 		rma_idx++;
 
 		if (rc != 0) {
-			D_ERROR(DF_DTI" ABT_eventual_wait failed: "DF_RC"\n",
+			D_ERROR(DF_DTI" bulk failed: "DF_RC"\n",
 				DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 
 			goto out;
@@ -4157,8 +4153,8 @@ out:
 				if (!bulks[i].inited)
 					continue;
 
-				ABT_eventual_wait(bulks[i].eventual, NULL);
-				ABT_eventual_free(&bulks[i].eventual);
+				DABT_EVENTUAL_WAIT(bulks[i].eventual, NULL);
+				DABT_EVENTUAL_FREE(&bulks[i].eventual);
 				rma_idx++;
 			}
 		}
@@ -4613,8 +4609,7 @@ out:
 	ds_obj_cpd_set_sub_result(oco, dca->dca_idx, rc,
 				  dcsh->dcsh_epoch.oe_value);
 
-	rc = ABT_future_set(dca->dca_future, NULL);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
+	DABT_FUTURE_SET(dca->dca_future, NULL);
 }
 
 void
@@ -4714,7 +4709,7 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 		if (rc != 0) {
 			struct daos_cpd_sub_head	*dcsh;
 
-			ABT_future_set(future, NULL);
+			DABT_FUTURE_SET(future, NULL);
 			dcsh = ds_obj_cpd_get_dcsh(rpc, i);
 			ds_obj_cpd_set_sub_result(oco, i, rc,
 						  dcsh->dcsh_epoch.oe_value);

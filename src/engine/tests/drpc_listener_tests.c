@@ -251,45 +251,6 @@ test_drpc_listener_init_cant_create_ult(void **state)
 			 drpc_progress_context_create_return);
 }
 
-static void
-test_drpc_listener_fini_success(void **state)
-{
-	assert_rc_equal(drpc_listener_fini(), DER_SUCCESS);
-
-	/* Joined ABT thread */
-	assert_int_equal(ABT_thread_join_call_count, 1);
-
-	/* Freed ABT thread */
-	assert_non_null(ABT_thread_free_thread_ptr);
-
-	/* Freed mutex */
-	assert_non_null(ABT_mutex_free_mutex_ptr);
-}
-
-static void
-test_drpc_listener_fini_cant_join_thread(void **state)
-{
-	ABT_thread_join_return = ABT_ERR_INV_THREAD;
-
-	assert_rc_equal(drpc_listener_fini(), -DER_INVAL);
-}
-
-static void
-test_drpc_listener_fini_cant_free_thread(void **state)
-{
-	ABT_thread_free_return = ABT_ERR_INV_THREAD;
-
-	assert_rc_equal(drpc_listener_fini(), -DER_INVAL);
-}
-
-static void
-test_drpc_listener_fini_cant_free_mutex(void **state)
-{
-	ABT_mutex_free_return = ABT_ERR_INV_MUTEX;
-
-	assert_rc_equal(drpc_listener_fini(), -DER_INVAL);
-}
-
 /* Convenience macros for unit tests */
 #define UTEST(x)	cmocka_unit_test_setup_teardown(x,	\
 				drpc_listener_test_setup,	\
@@ -304,10 +265,6 @@ main(void)
 		UTEST(test_drpc_listener_init_cant_create_prog_ctx),
 		UTEST(test_drpc_listener_init_cant_create_mutex),
 		UTEST(test_drpc_listener_init_cant_create_ult),
-		UTEST(test_drpc_listener_fini_success),
-		UTEST(test_drpc_listener_fini_cant_join_thread),
-		UTEST(test_drpc_listener_fini_cant_free_thread),
-		UTEST(test_drpc_listener_fini_cant_free_mutex),
 	};
 
 	return cmocka_run_group_tests_name("engine_drpc_listener",

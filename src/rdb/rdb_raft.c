@@ -563,13 +563,8 @@ rdb_raft_recv_is_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 			arg->drb_rc = cb_info->bci_rc;
 	}
 	arg->drb_n--;
-	if (arg->drb_n == 0) {
-		int rc;
-
-		rc = ABT_eventual_set(arg->drb_eventual, NULL /* value */,
-				      0 /* nbytes */);
-		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-	}
+	if (arg->drb_n == 0)
+		DABT_EVENTUAL_SET(arg->drb_eventual, NULL /* value */, 0 /* nbytes */);
 	return 0;
 }
 
@@ -665,12 +660,11 @@ rdb_raft_recv_is(struct rdb *db, crt_rpc_t *rpc, d_iov_t *kds,
 	}
 
 	/* Wait for all transfers to complete. */
-	rc = ABT_eventual_wait(arg.drb_eventual, NULL /* value */);
-	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	DABT_EVENTUAL_WAIT(arg.drb_eventual, NULL /* value */);
 	rc = arg.drb_rc;
 
 out_eventual:
-	ABT_eventual_free(&arg.drb_eventual);
+	DABT_EVENTUAL_FREE(&arg.drb_eventual);
 out_data_bulk:
 	crt_bulk_free(data_bulk);
 out_kds_bulk:
@@ -1278,7 +1272,7 @@ rdb_raft_cb_log_poll(raft_server_t *raft, void *arg, raft_entry_t *entries,
 	}
 
 	/* Notify rdb_compactd(), who performs the real compaction. */
-	ABT_cond_broadcast(db->d_compact_cv);
+	DABT_COND_BROADCAST(db->d_compact_cv);
 
 	return 0;
 }
@@ -1575,7 +1569,7 @@ rdb_raft_queue_event(struct rdb *db, enum rdb_raft_event_type type,
 	db->d_events[db->d_nevents].dre_term = term;
 	db->d_events[db->d_nevents].dre_type = type;
 	db->d_nevents++;
-	ABT_cond_broadcast(db->d_events_cv);
+	DABT_COND_BROADCAST(db->d_events_cv);
 }
 
 static void
@@ -1802,7 +1796,7 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 
 	if (state->drs_term != term || state->drs_leader != leader ||
 	    state->drs_committed != committed)
-		ABT_cond_broadcast(db->d_applied_cv);
+		DABT_COND_BROADCAST(db->d_applied_cv);
 
 	return rc;
 }
@@ -2541,20 +2535,14 @@ rdb_raft_start(struct rdb *db)
 
 err_callbackd:
 	db->d_stop = true;
-	rc = ABT_thread_join(db->d_callbackd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_callbackd);
+	DABT_THREAD_FREE(&db->d_callbackd);
 err_timerd:
 	db->d_stop = true;
-	rc = ABT_thread_join(db->d_timerd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_timerd);
+	DABT_THREAD_FREE(&db->d_timerd);
 err_recvd:
 	db->d_stop = true;
-	ABT_cond_broadcast(db->d_replies_cv);
-	rc = ABT_thread_join(db->d_recvd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_recvd);
+	DABT_COND_BROADCAST(db->d_replies_cv);
+	DABT_THREAD_FREE(&db->d_recvd);
 err_lc:
 	rdb_raft_unload_lc(db);
 err_raft:
@@ -2576,20 +2564,18 @@ err:
 void
 rdb_raft_stop(struct rdb *db)
 {
-	int rc;
-
 	/* Stop sending any new RPCs. */
 	db->d_stop = true;
 
 	/* Wake up all daemons and TXs. */
 	ABT_mutex_lock(db->d_raft_mutex);
-	ABT_cond_broadcast(db->d_applied_cv);
-	ABT_cond_broadcast(db->d_events_cv);
-	ABT_cond_broadcast(db->d_compact_cv);
+	DABT_COND_BROADCAST(db->d_applied_cv);
+	DABT_COND_BROADCAST(db->d_events_cv);
+	DABT_COND_BROADCAST(db->d_compact_cv);
 	ABT_mutex_unlock(db->d_raft_mutex);
 
 	ABT_mutex_lock(db->d_mutex);
-	ABT_cond_broadcast(db->d_replies_cv);
+	DABT_COND_BROADCAST(db->d_replies_cv);
 
 	/* Abort all in-flight RPCs. */
 	rdb_abort_raft_rpcs(db);
@@ -2602,23 +2588,15 @@ rdb_raft_stop(struct rdb *db)
 			break;
 		D_DEBUG(DB_MD, DF_DB": waiting for %d references\n", DP_DB(db),
 			db->d_ref - RDB_BASE_REFS);
-		ABT_cond_wait(db->d_ref_cv, db->d_mutex);
+		DABT_COND_WAIT(db->d_ref_cv, db->d_mutex);
 	}
 	ABT_mutex_unlock(db->d_mutex);
 
 	/* Join and free all daemons. */
-	rc = ABT_thread_join(db->d_compactd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_compactd);
-	rc = ABT_thread_join(db->d_callbackd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_callbackd);
-	rc = ABT_thread_join(db->d_timerd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_timerd);
-	rc = ABT_thread_join(db->d_recvd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&db->d_recvd);
+	DABT_THREAD_FREE(&db->d_compactd);
+	DABT_THREAD_FREE(&db->d_callbackd);
+	DABT_THREAD_FREE(&db->d_timerd);
+	DABT_THREAD_FREE(&db->d_recvd);
 
 	rdb_raft_unload_lc(db);
 	raft_free(db->d_raft);
@@ -2698,7 +2676,7 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)
 		}
 		if (index <= db->d_applied)
 			break;
-		ABT_cond_wait(db->d_applied_cv, db->d_raft_mutex);
+		DABT_COND_WAIT(db->d_applied_cv, db->d_raft_mutex);
 	}
 	return rc;
 }

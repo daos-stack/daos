@@ -66,7 +66,7 @@ bio_get_dev_state_internal(void *msg_arg)
 
 	dsm->devstate = dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
 	collect_bs_usage(dsm->xs->bxc_blobstore->bb_bs, &dsm->devstate);
-	ABT_eventual_set(dsm->eventual, NULL, 0);
+	DABT_EVENTUAL_SET(dsm->eventual, NULL, 0);
 }
 
 static void
@@ -85,7 +85,7 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	if (rc)
 		D_ERROR("State transition failed, rc=%d\n", rc);
 
-	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
+	DABT_EVENTUAL_SET(dsm->eventual, &rc, sizeof(rc));
 }
 
 /* Call internal method to increment CSUM media error. */
@@ -121,17 +121,13 @@ bio_get_dev_state(struct nvme_stats *state, struct bio_xs_context *xs)
 
 	spdk_thread_send_msg(owner_thread(xs->bxc_blobstore),
 			     bio_get_dev_state_internal, &dsm);
-	rc = ABT_eventual_wait(dsm.eventual, NULL);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
+	DABT_EVENTUAL_WAIT(dsm.eventual, NULL);
 
 	*state = dsm.devstate;
 
-	rc = ABT_eventual_free(&dsm.eventual);
-	if (rc != ABT_SUCCESS)
-		rc = dss_abterr2der(rc);
+	DABT_EVENTUAL_FREE(&dsm.eventual);
 
-	return rc;
+	return 0;
 }
 
 /*
@@ -162,14 +158,10 @@ bio_dev_set_faulty(struct bio_xs_context *xs)
 
 	spdk_thread_send_msg(owner_thread(xs->bxc_blobstore),
 			     bio_dev_set_faulty_internal, &dsm);
-	rc = ABT_eventual_wait(dsm.eventual, (void **)&dsm_rc);
-	if (rc == 0)
-		rc = *dsm_rc;
-	else
-		rc = dss_abterr2der(rc);
+	DABT_EVENTUAL_WAIT(dsm.eventual, (void **)&dsm_rc);
+	rc = *dsm_rc;
 
-	if (ABT_eventual_free(&dsm.eventual) != ABT_SUCCESS)
-		rc = dss_abterr2der(rc);
+	DABT_EVENTUAL_FREE(&dsm.eventual);
 
 	return rc;
 }

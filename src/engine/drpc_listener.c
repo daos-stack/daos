@@ -175,43 +175,18 @@ drpc_listener_init(void)
 /*
  * Updates the state to stop the thread, and waits for it to exit.
  */
-static int
+static void
 drpc_listener_stop(void)
 {
-	int rc;
-
 	set_listener_running(false);
-
-	rc = ABT_thread_join(status.thread);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT error re-joining thread: %d\n", rc);
-		return dss_abterr2der(rc);
-	}
-
-	return 0;
+	DABT_THREAD_JOIN(status.thread);
 }
 
-int
+void
 drpc_listener_fini(void)
 {
-	int	rc;
-	int	tmp_rc;
-
-	rc = drpc_listener_stop();
-
-	tmp_rc = ABT_thread_free(&status.thread);
-	if (tmp_rc != ABT_SUCCESS) {
-		D_ERROR("ABT error freeing thread: %d\n", tmp_rc);
-		rc = dss_abterr2der(tmp_rc);
-	}
-
-	tmp_rc = ABT_mutex_free(&status.running_mutex);
-	if (tmp_rc != ABT_SUCCESS) {
-		D_ERROR("ABT error freeing mutex: %d\n", tmp_rc);
-		rc = dss_abterr2der(tmp_rc);
-	}
-
+	drpc_listener_stop();
+	DABT_THREAD_FREE(&status.thread);
+	DABT_MUTEX_FREE(&status.running_mutex);
 	D_FREE(drpc_listener_socket_path);
-
-	return rc;
 }

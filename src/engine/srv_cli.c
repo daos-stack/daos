@@ -60,7 +60,7 @@ dsc_task_comp_cb(tse_task_t *task, void *arg)
 {
 	ABT_eventual *eventual = arg;
 
-	ABT_eventual_set(*eventual, &task->dt_result, sizeof(task->dt_result));
+	DABT_EVENTUAL_SET(*eventual, &task->dt_result, sizeof(task->dt_result));
 	return 0;
 }
 
@@ -89,7 +89,7 @@ dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg, int arg_size,
 					 sizeof(eventual));
 		if (rc) {
 			tse_task_complete(task, rc);
-			ABT_eventual_free(&eventual);
+			DABT_EVENTUAL_FREE(&eventual);
 			return rc;
 		}
 	}
@@ -103,7 +103,7 @@ dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg, int arg_size,
 		if (rc) {
 			tse_task_complete(task, rc);
 			if (sync)
-				ABT_eventual_free(&eventual);
+				DABT_EVENTUAL_FREE(&eventual);
 			return rc;
 		}
 	}
@@ -112,14 +112,11 @@ dsc_task_run(tse_task_t *task, tse_task_cb_t retry_cb, void *arg, int arg_size,
 	rc = tse_task_schedule(task, true);
 
 	if (sync) {
-		int	ret;
-
-		ret = ABT_eventual_wait(eventual, (void **)&status);
+		DABT_EVENTUAL_WAIT(eventual, (void **)&status);
 		if (rc == 0)
-			rc = ret != ABT_SUCCESS ?
-			     dss_abterr2der(ret) : *status;
+			rc = *status;
 
-		ABT_eventual_free(&eventual);
+		DABT_EVENTUAL_FREE(&eventual);
 	}
 
 	return rc;

@@ -1062,6 +1062,7 @@ csum_recalc(struct agg_io_context *io, struct bio_sglist *bsgl,
 	args.cra_seg_cnt	= recalc_seg_cnt;
 	args.cra_buf		= io->ic_buf;
 	args.cra_buf_len	= io->ic_buf_len;
+	args.csum_eventual	= ABT_EVENTUAL_NULL;
 
 	io->ic_csum_recalc_func(&args);
 	if (args.cra_rc == -DER_CSUM && args.cra_bio_ctxt != NULL)

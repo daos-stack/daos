@@ -307,7 +307,7 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 	if (child->spc_scrubbing_req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get req for Scrubbing ULT\n",
 		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_free(&thread);
+		DABT_THREAD_FREE(&thread);
 		return -DER_NOMEM;
 	}
 
