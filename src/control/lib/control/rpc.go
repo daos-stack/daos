@@ -260,6 +260,8 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 		ctx, cancel := setDeadlineIfUnset(parent, req)
 		defer cancel()
 
+		// Record the start time of this attempt.
+		reqStartTime := time.Now()
 		var wg sync.WaitGroup
 		for _, host := range hosts {
 			wg.Add(1)
@@ -271,6 +273,9 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 					conn, err = grpc.DialContext(ctx, hostAddr, opts...)
 					if err == nil {
 						msg, err = req.getRPC()(ctx, conn)
+						if err == nil {
+							c.Debugf("%T/%s/%s", req, hostAddr, time.Since(reqStartTime))
+						}
 						conn.Close()
 					}
 				}
@@ -312,6 +317,9 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 	reqCtx, cancel := setDeadlineIfUnset(parentCtx, req)
 	defer cancel()
 
+	// Record the start time of the request (all attempts).
+	reqStartTime := time.Now()
+
 	// For non-MS requests, just keep things simple. Fan-out, fan-in,
 	// no retries possible.
 	if !req.isMSRequest() {
@@ -324,6 +332,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		if err := gatherResponses(reqCtx, respChan, ur); err != nil {
 			return nil, wrapReqTimeout(req, err)
 		}
+		c.Debugf("%T/%s", req, time.Since(reqStartTime))
 		return ur, nil
 	}
 
@@ -476,6 +485,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			}
 
 			// Otherwise, we're finished trying.
+			c.Debugf("%T/%s", req, time.Since(reqStartTime))
 			return ur, nil
 		}
 
