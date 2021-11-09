@@ -818,7 +818,12 @@ class TestWithServers(TestWithoutServers):
         return force_agent_start
 
     def restart_servers(self):
-        """Stop and start the servers without reformatting the storage."""
+        """Stop and start the servers without reformatting the storage.
+
+        Returns:
+            list: a list of strings identifying an errors found restarting the servers.
+
+        """
         self.log.info("-" * 100)
         self.log.info("--- STOPPING SERVERS ---")
         errors = []
@@ -831,7 +836,7 @@ class TestWithServers(TestWithoutServers):
         errors.extend(self._stop_managers(self.server_managers, "servers"))
 
         self.log.info("-" * 100)
-        self.log.debug("--- STARTING SERVERS ---")
+        self.log.debug("--- RESTARTING SERVERS ---")
         # self._start_manager_list("server", self.server_managers)
         for manager in self.server_managers:
             self.log.info(
@@ -839,15 +844,17 @@ class TestWithServers(TestWithoutServers):
                 manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
             try:
-                manager.run()
+                manager.manager.run()
             except CommandFailure as error:
-                manager.kill()
+                manager.manager.kill()
                 errors.append("Failed to restart servers: {}".format(error))
         status = self.check_running("servers", self.server_managers)
         if status["restart"] and not status["expected"]:
             errors.append(
                 "ERROR: At least one multi-variant server was not found in its expected state "
                 "after restarting all servers")
+        self.log.info("-" * 100)
+        return errors
 
     def setup_agents(self, agent_groups=None):
         """Start the daos_agent processes.
