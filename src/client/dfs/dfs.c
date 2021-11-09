@@ -4671,7 +4671,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	daos_key_t	dkey;
 	daos_handle_t	oh;
 	int		rc;
-	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -4681,13 +4680,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
-
-	mode = obj->mode;
-
-	/* Patch in user read permissions here for trusted namespaces */
-	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
-	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
-		mode |= S_IRUSR;
 
 	xname = concat("x:", name);
 	if (xname == NULL)
@@ -4751,7 +4743,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	daos_handle_t	oh;
 	uint64_t	cond = 0;
 	int		rc;
-	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -4763,13 +4754,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
-
-	mode = obj->mode;
-
-	/* Patch in user read permissions here for trusted namespaces */
-	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
-	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
-		mode |= S_IRUSR;
 
 	xname = concat("x:", name);
 	if (xname == NULL)
