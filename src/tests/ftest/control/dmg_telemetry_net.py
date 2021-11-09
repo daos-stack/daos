@@ -53,7 +53,7 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
           Allow mdtest to complete.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=control,telemetry,net
         :avocado: tags=test_with_telemetry_net,test_net_telemetry
         """
