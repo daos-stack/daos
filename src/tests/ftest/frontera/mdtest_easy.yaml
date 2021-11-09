@@ -1,0 +1,49 @@
+hosts: !mux
+  1s_1c:
+    test_servers:
+      - server-A
+    test_clients:
+      - client-B
+  1s_1c_2:
+    test_servers:
+      - server-A
+    test_clients:
+      - client-B
+timeout: 600
+server_config:
+  name: daos_server
+  servers:
+    0:
+      scm_class: ram
+      scm_mount: /mnt/daos
+pool:
+  mode: 146
+  name: daos_server
+  scm_size: 10G
+  control_method: dmg
+  properties: reclaim:disabled
+container:
+  type: POSIX
+  control_method: daos
+  properties: dedup:memcmp
+
+mdtest:
+  client_processes:
+    ppn: 4
+  test_dir: "/"
+  iteration: 1
+  manager: "MPICH"
+  flags: "-F -P -G 27 -N 1 -p 10 -Y -v -u -L"
+  stonewall_timer: 5
+  api: "DFS"
+  read_bytes: 0
+  write_bytes: 0
+  branching_factor: 1
+  depth: 0
+  pre_iter: 10
+  num_of_files_dirs: 100000000
+  stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  dfs_destroy: False
+  dfs_chunk: "1M"
+  dfs_oclass: "S1"
+  dfs_dir_oclass: "SX"

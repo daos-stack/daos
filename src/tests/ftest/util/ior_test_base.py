@@ -47,7 +47,11 @@ class IorTestBase(DfuseTestBase):
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
-        self.processes = self.params.get("np", '/run/ior/client_processes/*')
+        ppn = self.params.get("ppn", '/run/ior/client_processes/*')
+        if ppn:
+            self.processes = ppn * len(self.hostlist_clients)
+        else:
+            self.processes = self.params.get("np", '/run/ior/client_processes/*')
         self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
 
     def create_pool(self):

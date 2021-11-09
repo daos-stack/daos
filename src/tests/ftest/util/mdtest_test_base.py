@@ -35,7 +35,11 @@ class MdtestBase(DfuseTestBase):
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()
         self.mdtest_cmd.get_params(self)
-        self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
+        ppn = self.params.get("ppn", '/run/mdtest/client_processes/*')
+        if ppn:
+            self.processes = ppn * len(self.hostlist_clients)
+        else:
+            self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
 
         self.log.info('Clients %s', self.hostlist_clients)
