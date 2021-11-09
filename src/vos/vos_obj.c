@@ -87,6 +87,10 @@ tree_is_empty(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 	struct vos_krec_df	*krec;
 	int			 rc;
 
+	/** The address of the known_key, which actually points at the krec is guaranteed by PMDK
+	 *  to be allocated at an 8 byte alignment so the low order bit is available to mark it as
+	 *  punched.
+	 */
 	if (*known_key != UMOFF_NULL && (*known_key & 0x1) == 0)
 		return 0;
 
