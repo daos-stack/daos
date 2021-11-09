@@ -387,12 +387,12 @@ int dc_mgmt_net_cfg(const char *name)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 
 		/*
-		* If we use the agent as the source, client env shouldn't be allowed to override
-		* the domain. Otherwise we could get a mismatch between interface and domain.
-		*/
+		 * If we use the agent as the source, client env shouldn't be allowed to override
+		 * the domain. Otherwise we could get a mismatch between interface and domain.
+		 */
 		if (ofi_domain)
 			D_WARN("Ignoring OFI_DOMAIN '%s' because OFI_INTERFACE is not set; using "
-					"automatic configuration instead\n", ofi_domain);
+			       "automatic configuration instead\n", ofi_domain);
 
 		rc = setenv("OFI_DOMAIN", info.domain, 1);
 		if (rc != 0)
