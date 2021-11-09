@@ -25,6 +25,7 @@ class MdtestBase(DfuseTestBase):
         self.processes = None
         self.ppn = None
         self.hostfile_clients_slots = None
+        self.subprocess = False
 
     def setUp(self):
         """Set up each test case."""
@@ -39,6 +40,7 @@ class MdtestBase(DfuseTestBase):
         self.ppn = self.params.get("ppn", '/run/mdtest/client_processes/*')
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
+        self.subprocess = self.params.get("subprocess", '/run/mdtest/*', False)
 
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
@@ -56,8 +58,7 @@ class MdtestBase(DfuseTestBase):
         if self.container is None:
             self.add_container(self.pool)
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool,
-                                        self.container.uuid)
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
@@ -86,9 +87,9 @@ class MdtestBase(DfuseTestBase):
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
-            self.job_manager = Mpirun(self.mdtest_cmd, mpitype="mpich")
+            self.job_manager = Mpirun(self.mdtest_cmd, self.subprocess, mpitype="mpich")
         else:
-            self.job_manager = Orterun(self.mdtest_cmd)
+            self.job_manager = Orterun(self.mdtest_cmd, self.subprocess)
 
         return self.job_manager
 
@@ -103,10 +104,12 @@ class MdtestBase(DfuseTestBase):
                 space. Defaults to True.
             pool (TestPool, optional): The pool for which to display space.
                 Default is self.pool.
+
+        Returns:
+            object: result of job manager run
         """
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
-        manager.assign_hosts(
-            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_hosts(self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         if self.ppn is None:
             manager.assign_processes(processes)
         else:
@@ -121,7 +124,9 @@ class MdtestBase(DfuseTestBase):
         try:
             if display_space:
                 pool.display_pool_daos_space()
-            manager.run()
+            out = manager.run()
+
+            return out
         except CommandFailure as error:
             self.log.error("Mdtest Failed: %s", str(error))
             # Queue is used when we use a thread to call
@@ -130,7 +135,7 @@ class MdtestBase(DfuseTestBase):
                 out_queue.put("Mdtest Failed")
             self.fail("Test was expected to pass but it failed.\n")
         finally:
-            if display_space:
+            if not self.subprocess and display_space:
                 pool.display_pool_daos_space()
 
     def run_mdtest_multiple_variants(self, mdtest_params):
