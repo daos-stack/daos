@@ -286,6 +286,22 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         self.verify_active_latency(
             prefix="engine_io_ops_akey_enum_latency_", test_latency=True)
 
+        # Verify dkey punch active.
+        self.verify_active_latency(
+            prefix="engine_io_ops_dkey_punch_active_", test_latency=False)
+
+        # Verify akey punch active.
+        self.verify_active_latency(
+            prefix="engine_io_ops_akey_punch_active_", test_latency=False)
+
+        # Verify dkey punch latency.
+        self.verify_active_latency(
+            prefix="engine_io_ops_dkey_punch_latency_", test_latency=True)
+
+        # Verify akey punch latency.
+        self.verify_active_latency(
+            prefix="engine_io_ops_akey_punch_latency_", test_latency=True)
+
         if self.errors:
             self.fail("\n----- Errors detected! -----\n{}".format(
                 "\n".join(self.errors)))
