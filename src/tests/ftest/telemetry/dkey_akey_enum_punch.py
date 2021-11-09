@@ -309,7 +309,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         container.destroy()
         self.pool.destroy(disconnect=0)
 
-    def test_tgt_dkey_akey_punch(self):
+    def test_pool_tgt_dkey_akey_punch(self):
         """Test punch count for tgt values.
 
         tgt is related to replication, so the test step is similarto  above,
@@ -333,7 +333,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=telemetry
-        :avocado: tags=tgt_dkey_akey_punch
+        :avocado: tags=pool_tgt_dkey_akey_punch
         """
         self.set_num_targets()
 
@@ -373,6 +373,84 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             msg = "tgt akey punch total is not 200! Actual = {}".format(
                 tgt_akey_punch_total)
             self.errors.append(msg)
+
+        if self.errors:
+            self.fail("\n----- Errors detected! -----\n{}".format(
+                "\n".join(self.errors)))
+
+        container.destroy()
+        self.pool.destroy(disconnect=0)
+
+    def test_tgt_dkey_akey_punch(self):
+        """Test active and latency for tgt punch.
+
+        This case is the same as the metrics 7 and 8 in
+        test_dkey_akey_enum_punch() except the metrics have tgt and we need to
+        use OC_RP_2G1.
+
+        Test Steps:
+        1. Write 100 objects.
+        2. Insert 2 dkeys per object. Insert 1 akey per dkey. Use OC_RP_2G1.
+        3. Punch all akeys and dkeys.
+        4. Verify the metrics below.
+
+        --- Metrics tested ---
+        1. tgt dkey punch active and latency.
+        engine_io_ops_tgt_dkey_punch_active_max
+        engine_io_ops_tgt_dkey_punch_active_mean
+        engine_io_ops_tgt_dkey_punch_active_min
+        engine_io_ops_tgt_dkey_punch_active_stddev
+        engine_io_ops_tgt_dkey_punch_latency_max
+        engine_io_ops_tgt_dkey_punch_latency_mean
+        engine_io_ops_tgt_dkey_punch_latency_min
+        engine_io_ops_tgt_dkey_punch_latency_stddev
+
+        2. tgt akey punch active and latency.
+        engine_io_ops_tgt_akey_punch_active_max
+        engine_io_ops_tgt_akey_punch_active_mean
+        engine_io_ops_tgt_akey_punch_active_min
+        engine_io_ops_tgt_akey_punch_active_stddev
+        engine_io_ops_tgt_akey_punch_latency_max
+        engine_io_ops_tgt_akey_punch_latency_mean
+        engine_io_ops_tgt_akey_punch_latency_min
+        engine_io_ops_tgt_akey_punch_latency_stddev
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=telemetry
+        :avocado: tags=tgt_dkey_akey_punch
+        """
+        self.set_num_targets()
+
+        self.add_pool()
+        container = DaosContainer(self.context)
+        container.create(self.pool.pool.handle)
+        container.open()
+
+        # Object type needs to be OC_RP_2G1 because we're testing tgt.
+        self.write_objects_insert_keys(
+            container=container, objtype=DaosObjClass.OC_RP_2G1)
+
+        self.punch_all_keys()
+
+        self.telemetry.dmg.verbose = False
+
+        ### Verify active and latency; metrics 1 and 2. ###
+        # Verify tgt dkey punch active.
+        self.verify_active_latency(
+            prefix="engine_io_ops_tgt_dkey_punch_active_", test_latency=False)
+
+        # Verify dkey punch latency.
+        self.verify_active_latency(
+            prefix="engine_io_ops_tgt_dkey_punch_latency_", test_latency=True)
+
+        # Verify akey punch active.
+        self.verify_active_latency(
+            prefix="engine_io_ops_tgt_akey_punch_active_", test_latency=False)
+
+        # Verify akey punch latency.
+        self.verify_active_latency(
+            prefix="engine_io_ops_tgt_akey_punch_latency_", test_latency=True)
 
         if self.errors:
             self.fail("\n----- Errors detected! -----\n{}".format(
