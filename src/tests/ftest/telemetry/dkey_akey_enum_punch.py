@@ -206,6 +206,9 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         self.set_num_targets()
 
         self.add_pool()
+
+        self.pool.set_query_data()
+
         container = DaosContainer(self.context)
         container.create(self.pool.pool.handle)
         container.open()
@@ -338,6 +341,9 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         self.set_num_targets()
 
         self.add_pool()
+
+        self.pool.set_query_data()
+
         container = DaosContainer(self.context)
         container.create(self.pool.pool.handle)
         container.open()
@@ -423,6 +429,9 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         self.set_num_targets()
 
         self.add_pool()
+
+        self.pool.set_query_data()
+
         container = DaosContainer(self.context)
         container.create(self.pool.pool.handle)
         container.open()
