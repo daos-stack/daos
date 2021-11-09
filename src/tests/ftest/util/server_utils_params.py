@@ -351,7 +351,7 @@ class DaosServerYamlParameters(YamlParameters):
                 self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
             # Use environment variables to get default parameters
-            default_interface = os.environ.get("OFI_INTERFACE", "eth0")
+            default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
             default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
 
