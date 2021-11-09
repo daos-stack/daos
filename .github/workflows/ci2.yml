@@ -52,6 +52,10 @@ jobs:
       matrix:
         # Only run on Ubuntu for now, centos 8 just isn't very stable.
         distro: [ubuntu.20.04]
+        # ubuntu/gcc is broken right now DAOS-7601
+        compiler: [clang]
+    env:
+      COMPILER: ${{ matrix.compiler }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -93,7 +97,7 @@ jobs:
       matrix:
         # Run this on distros where we don't run the ci1 Workflow.
         distro: [ubuntu.20.04, centos.8, leap.15]
-        compiler: [clang, gcc, icc]
+        compiler: [clang, gcc]
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
