@@ -227,11 +227,14 @@ The memlock limit only needs to be manually adjusted when `daos_server` is not
 running as a systemd service. Default ulimit settings vary between OSes.
 
 For RPM installations, the service will typically be launched by systemd and
-the limit is pre-set to unlimited in the `daos_server.service` unit file:
-https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service#L16.
+the limit is pre-set to unlimited in the `daos_server.service`
+[unit file](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
+
 Note that values set in `/etc/security/limits.conf` are ignored by services
 launched by systemd.
 
 For non-RPM installations where `daos_server` is launched directly from the
-commandline, limits should be adjusted in `/etc/security/limits.conf` as per
-https://software.intel.com/content/www/us/en/develop/blogs/best-known-methods-for-setting-locked-memory-size.html.
+commandline (including source builds), limits should be adjusted in
+`/etc/security/limits.conf` as per
+[this article](https://access.redhat.com/solutions/61334) (which is a RHEL
+specific document but the instructions apply to most Linux distributions).
