@@ -56,7 +56,6 @@ class IoConfGen(ExecutableCommand):
                             dmg_config_file, self.filename.value])
 
         manager = Orterun(command)
-        print(os.environ)
         # run daos_run_io_conf Command using Openmpi
         try:
             out = manager.run()

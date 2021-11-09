@@ -28,7 +28,7 @@ class EcodRunIoConf(IoConfTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_array,ec_failure
-        :avocado: tags=ec_rank_target_failure
+        :avocado: tags=ec,ec_array,ec_fault
+        :avocado: tags=ec_io_conf_run
         """
         self.execute_io_conf_run_test()
