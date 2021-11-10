@@ -22,13 +22,10 @@ distro_custom() {
     # so instead, force install of avocado 69.x using pip
     #dnf -y install python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
     dnf -y erase avocado{,-common}                                              \
-                 python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
-                 python3-pyyaml
+                 python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}}
     pip3 install "avocado-framework<70.0"
     pip3 install "avocado-framework-plugin-result-html<70.0"
     pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
-
-    dnf -y install clustershell
 
     dnf config-manager --disable powertools
 
