@@ -33,12 +33,17 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         self.obj_count = 100
 
     def set_num_targets(self):
-        """Define number of targets from server count and target/server.
+        """Define total number of targets and targets per rank from pool query.
+
+        Sometimes the total numer of targets and targets per rank are different
+        from what we specify in the server config.
         """
+        self.pool.set_query_data()
+        self.total_targets = self.pool.query_data["response"]["total_targets"]
+
+        # Calculate targets per rank from the total targets.
         server_count = len(self.server_managers[0].hosts)
-        self.targets_per_rank = self.params.get(
-            "targets", "/run/server_config/servers/*/")
-        self.total_targets = self.targets_per_rank * server_count
+        self.targets_per_rank = int(self.total_targets / server_count)
 
     def write_objects_insert_keys(self, container, objtype):
         """Write objects and insert dkeys and akeys in them.
@@ -203,11 +208,9 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=dkey_akey_enum_punch
         """
-        self.set_num_targets()
-
         self.add_pool()
 
-        self.pool.set_query_data()
+        self.set_num_targets()
 
         container = DaosContainer(self.context)
         container.create(self.pool.pool.handle)
@@ -338,11 +341,9 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=pool_tgt_dkey_akey_punch
         """
-        self.set_num_targets()
-
         self.add_pool()
 
-        self.pool.set_query_data()
+        self.set_num_targets()
 
         container = DaosContainer(self.context)
         container.create(self.pool.pool.handle)
@@ -426,11 +427,9 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=tgt_dkey_akey_punch
         """
-        self.set_num_targets()
-
         self.add_pool()
 
-        self.pool.set_query_data()
+        self.set_num_targets()
 
         container = DaosContainer(self.context)
         container.create(self.pool.pool.handle)
