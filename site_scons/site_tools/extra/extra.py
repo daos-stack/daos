@@ -26,10 +26,9 @@ import re
 import os
 
 from SCons.Builder import Builder
-from SCons.Script import Dir
 from SCons.Script import WhereIs
 
-def supports_custom_format(clang_exe):
+def _supports_custom_format(clang_exe):
     """Get the version of clang-format"""
 
     try:
@@ -46,19 +45,19 @@ def supports_custom_format(clang_exe):
     print("Custom .clang-format wants version 7+. Using Mozilla style.")
     return False
 
-def find_indent():
+def _find_indent():
     """find clang-format"""
     indent = WhereIs("clang-format")
     if indent is None:
-        print("clang-format not found, not formatting")
+        print("clang-format not found, not formatting preprocessed files")
         return None
-    if supports_custom_format(indent):
+    if _supports_custom_format(indent):
         style = "file"
     else:
         style = "Mozilla"
     return "%s --style=%s" % (indent, style)
 
-def pp_gen(source, target, env, indent):
+def _pp_gen(source, target, env, indent):
     """generate commands for preprocessor builder"""
     action = []
     nenv = env.Clone()
@@ -70,7 +69,7 @@ def pp_gen(source, target, env, indent):
             action.append("%s -E -P %s > %s" % (cccom, src, tgt))
     return action
 
-def preprocess_emitter(source, target, env):
+def _preprocess_emitter(source, target, env):
     """generate target list for preprocessor builder"""
     target = []
     for src in source:
@@ -91,13 +90,13 @@ def preprocess_emitter(source, target, env):
 def generate(env):
     """Setup the our custom tools"""
 
-    indent = find_indent()
+    indent = _find_indent()
 
-    generator = lambda source, target, env, for_signature: pp_gen(source, target, env, indent)
+    generator = lambda source, target, env, for_signature: _pp_gen(source, target, env, indent)
 
     # Only handle C for now
     preprocess = Builder(generator=generator, suffix="_pp.c",
-                         emitter=preprocess_emitter, src_suffix=".c")
+                         emitter=_preprocess_emitter, src_suffix=".c")
 
     env.Append(BUILDERS={"Preprocess":preprocess})
 
