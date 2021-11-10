@@ -206,7 +206,7 @@ rebuild_ec_multi_stripes(void **state)
 	fail_shards[0] = 2;
 	fail_shards[1] = 1;
 	daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
-	daos_fail_loc_set(DAOS_FAIL_SHARD_FETCH | DAOS_FAIL_ALWAYS);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
 	for (i = 0; i < TEST_STRIPE_NR; i++) {
 		start = i * 4 * CELL_SIZE;
 		recxs[i * 2].rx_idx = start;
