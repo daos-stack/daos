@@ -63,7 +63,7 @@ class RbldContainerCreate(IorTestBase):
         status = True
         container = self.container[index]
         self.log.info(
-            "..Vrifying the container %s created during rebuild", container)
+            "..Verifying the container %s created during rebuild", container)
         try:
             container.read_objects()
             container.close()
