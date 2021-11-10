@@ -90,10 +90,8 @@ def scons():
     if compiler != 'covc':
         pp_env = denv.Clone()
 
-        # pylint: disable=no-member
         pp_files = pp_env.Preprocess(SRC)
         pp_env.AddPostAction(pp_files, SCons.Action.Action(macro_expand, None))
-        # pylint: enable=no-member
 
         denv.Requires(cart_targets, pp_files)
 

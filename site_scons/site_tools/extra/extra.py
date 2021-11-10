@@ -36,8 +36,7 @@ def supports_custom_format(clang_exe):
         rawbytes = subprocess.check_output([clang_exe, "-version"])
         output = rawbytes.decode('utf-8')
     except subprocess.CalledProcessError:
-        print("Unsupported clang-format for custom style.  "
-              "Using Mozilla style.")
+        print("Unsupported clang-format for custom style.  Using Mozilla style.")
         return False
 
     match = re.search(r"version (\d+)\.", output)
@@ -50,18 +49,13 @@ def supports_custom_format(clang_exe):
 def find_indent():
     """find clang-format"""
     indent = WhereIs("clang-format")
-    if indent is not None:
-        style = "Mozilla" # fallback
-        root = Dir("#").abspath
-        while root != "/":
-            if os.path.exists(os.path.join(root, ".clang-format")):
-                if not supports_custom_format(indent):
-                    break
-                style = "file"
-            root = os.path.dirname(root)
-        return "%s --style=%s" % (indent, style)
-
-    return "cat"
+    if indent is None:
+        return None
+    if supports_custom_format(indent):
+        style = "file"
+    else:
+        style = "Mozilla"
+    return "%s --style=%s" % (indent, style)
 
 def pp_gen(source, target, env, indent):
     """generate commands for preprocessor builder"""
@@ -69,7 +63,10 @@ def pp_gen(source, target, env, indent):
     nenv = env.Clone()
     cccom = nenv.subst("$CCCOM").replace(" -o ", " ")
     for src, tgt in zip(source, target):
-        action.append("%s -E -P %s | %s > %s" % (cccom, src, indent, tgt))
+        if indent:
+            action.append("%s -E -P %s | %s > %s" % (cccom, src, indent, tgt))
+        else:
+            action.append("%s -E -P %s > %s" % (cccom, src, tgt))
     return action
 
 def preprocess_emitter(source, target, env):
@@ -95,9 +92,7 @@ def generate(env):
 
     indent = find_indent()
 
-    generator = lambda source, target, env, for_signature: pp_gen(source,
-                                                                  target,
-                                                                  env, indent)
+    generator = lambda source, target, env, for_signature: pp_gen(source, target, env, indent)
 
     # Only handle C for now
     preprocess = Builder(generator=generator, suffix="_pp.c",

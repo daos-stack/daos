@@ -10,11 +10,11 @@
 
 set -e
 
-dnf -y install deltarpm
-dnf -y upgrade
-dnf -y install \
+dnf --assumeyes install deltarpm
+dnf --assumeyes upgrade
+dnf --assumeyes install --setopt=install_weak_deps=False \
     boost-python36-devel \
-    clang-analyzer \
+    clang \
     cmake \
     CUnit-devel \
     e2fsprogs \

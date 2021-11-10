@@ -10,12 +10,12 @@
 
 set -e
 
-dnf -y upgrade
-dnf -y install \
+dnf --assumeyes upgrade
+dnf --assumeyes install --setopt=install_weak_deps=False \
     boost-python3-devel \
-    clang-analyzer \
+    clang \
+    clang-tools-extra \
     cmake \
-    CUnit-devel \
     e2fsprogs \
     file \
     flex \
@@ -27,6 +27,7 @@ dnf -y install \
     glibc-langpack-en \
     golang \
     graphviz \
+    help2man \
     hwloc-devel \
     ipmctl \
     java-1.8.0-openjdk \
@@ -50,7 +51,6 @@ dnf -y install \
     ninja-build \
     numactl \
     numactl-devel \
-    openmpi-devel \
     openssl-devel \
     patch \
     patchelf \
