@@ -10,10 +10,10 @@
 
 set -e
 
-dnf upgrade
-dnf install \
+dnf --assumeyes upgrade
+dnf --assumeyes install \
     boost-python36-devel \
-    clang \
+    clang-analyzer \
     cmake \
     CUnit-devel \
     e2fsprogs \
