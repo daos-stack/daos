@@ -627,8 +627,10 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	int			 rc;
 
 	rc = iv_ns_lookup_by_ivns(ivns, &ns);
-	if (rc != 0)
+	if (rc != 0) {
+		ds_iv_ns_put(ns); /* balance ivc_on_get */
 		return rc;
+	}
 	D_ASSERT(ns != NULL);
 
 	D_ASSERT(priv_entry != NULL);

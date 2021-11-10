@@ -159,11 +159,11 @@ def set_test_environment(args):
     path = os.environ.get("PATH")
 
     if not args.list:
-        # Get the default interface to use if OFI_INTERFACE is not set
+        # Get the default interface (use OFI_INTERFACE if set) to set DAOS_TEST_FABRIC_IFACE
         set_interface_environment()
 
         # Get the default provider if CRT_PHY_ADDR_STR is not set
-        set_provider_environment(os.environ["OFI_INTERFACE"], args)
+        set_provider_environment(os.environ["DAOS_TEST_FABRIC_IFACE"], args)
 
         # Update other env definitions
         os.environ["CRT_CTX_SHARE_ADDR"] = "0"
@@ -194,8 +194,8 @@ def set_test_environment(args):
 def set_interface_environment():
     """Set up the interface environment variables.
 
-    Use the existing OFI_INTERFACE setting if already defined, otherwise
-    select the fastest, active interface on this host.
+    Use the existing OFI_INTERFACE setting if already defined, otherwise select the fastest, active
+    interface on this host.  Use this value to define DAOS_TEST_FABRIC_IFACE.
     """
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
@@ -248,9 +248,9 @@ def set_interface_environment():
             sys.exit(1)
 
     # Update env definitions
-    print("Using {} as the default interface".format(interface))
+    print("Using {} as the default interface (DAOS_TEST_FABRIC_IFACE)".format(interface))
     os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
+    os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
 
 
 def set_provider_environment(interface, args):
