@@ -277,7 +277,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             DAOS engine IO latency telemetry metrics min, max, mean and stddev.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=telemetry
         :avocado: tags=test_io_latency_telemetry
 
