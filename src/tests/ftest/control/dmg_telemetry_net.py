@@ -8,6 +8,7 @@
 
 import threading
 import time
+from re import search
 
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
@@ -29,28 +30,17 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
     def __init__(self, *args, **kwargs):
         """Initialize a Test object."""
         super().__init__(*args, **kwargs)
-        self.metrics = {"engine_net_ofi_sockets_req_timeout": {}}
 
     def test_net_telemetry(self):
-        """Jira ID: DAOS-3795/DAOS-3796.
+        """Jira ID: DAOS-9020.
 
         Test Description: Verify engine net telemetry metrics.
 
         Use Cases:
-          Create pool and container.
-          Use mdtest to create 120K files of size 32K with 3-way
-          replication.
-          Stop one server, let rebuild start and complete.
-          Destroy container and create a new one.
-          Use mdtest to create 120K files of size 32K with 3-way
-          replication.
-          Stop one more server in the middle of mdtest. Let rebuild to complete.
-          Allow mdtest to complete.
-          Destroy container and create a new one.
-          Use mdtest to create 120K files of size 32K with 3-way
-          replication.
-          Stop 2 servers in the middle of mdtest. Let rebuild to complete.
-          Allow mdtest to complete.
+          * Create pool and container.
+          * Use mdtest to create 120K files with 3-way replication.
+          * Stop one server.
+          * Ensure engine_net_ofi_sockets_req_timeout is greater than 0.
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
@@ -58,7 +48,12 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         :avocado: tags=test_with_telemetry_net,test_net_telemetry
         """
 
-        metrics = "engine_net_ofi_sockets_req_timeout"
+        all_metrics = self.telemetry.get_all_server_metrics_names(
+            self.server_managers[0])
+        metrics_filter = filter(lambda x: search("engine_net_\w+_req_timeout", x),
+                         all_metrics)
+        metrics = list(metrics_filter)
+
         data = self.telemetry.get_metrics(metrics)
 
         req_timeouts = 0
@@ -98,12 +93,6 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
 
         self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
 
-        #########################################################
-        #
-        # START: Check engine_net_req_timeout telemetry values
-        #
-        #########################################################
-
         # Remove the killed host from the clustershell telemetry hostlist
         self.telemetry.hosts.remove(self.hostlist_servers[rank[0]])
 
@@ -114,45 +103,9 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
             for metric in data[host]["engine_net_ofi_sockets_req_timeout"]["metrics"]:
                 req_timeouts += metric["value"]
 
-        if not req_timeouts > 0:
+        if req_timeouts > 0:
+            self.log.info("Expected engine_net_ofi_sockets_req_timeout values "
+                          "to be greater than 0, and it is: %d.", req_timeouts)
+        else:
             self.fail("Expected engine_net_ofi_sockets_req_timeout "
                       "to be greater than 0.")
-
-        time.sleep(9999)
-
-        #########################################################
-        #
-        # END: Check engine_net_req_timeout telemetry values
-        #
-        #########################################################
-
-
-        self.pool.wait_for_rebuild(False, interval=1)
-
-        # create 2nd container
-        self.add_container(self.pool)
-        # start 2nd mdtest job
-        thread = threading.Thread(target=self.execute_mdtest)
-        thread.start()
-        time.sleep(3)
-
-        # Kill rank[5] in the middle of mdtest run and
-        # wait for rebuild to complete
-        self.server_managers[0].stop_ranks([rank[1]], self.d_log, force=True)
-        self.pool.wait_for_rebuild(False, interval=1)
-        # wait for mdtest to complete
-        thread.join()
-
-        # create 3rd container
-        self.add_container(self.pool)
-
-        # start 3rd mdtest job
-        thread = threading.Thread(target=self.execute_mdtest)
-        thread.start()
-        time.sleep(3)
-
-        # Kill 2 server ranks [3,4]
-        self.server_managers[0].stop_ranks(rank[2], self.d_log, force=True)
-        self.pool.wait_for_rebuild(False, interval=1)
-        # wait for mdtest to complete
-        thread.join()

@@ -21,8 +21,6 @@ testparams:
   ranks:
     rank_to_kill:
       - 1
-      - 2
-      - [3,4]
 pool:
   mode: 146
   name: daos_server
