@@ -39,6 +39,22 @@
 
 /* ds_pool_child **************************************************************/
 
+static void
+stop_gc_ult(struct ds_pool_child *child)
+{
+	D_ASSERT(child != NULL);
+	/* GC ULT is not started */
+	if (child->spc_gc_req == NULL)
+		return;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
+		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	sched_req_wait(child->spc_gc_req, true);
+	sched_req_put(child->spc_gc_req);
+	child->spc_gc_req = NULL;
+}
+
 struct ds_pool_child *
 ds_pool_child_lookup(const uuid_t uuid)
 {
@@ -149,22 +165,6 @@ start_gc_ult(struct ds_pool_child *child)
 	}
 
 	return 0;
-}
-
-static void
-stop_gc_ult(struct ds_pool_child *child)
-{
-	D_ASSERT(child != NULL);
-	/* GC ULT is not started */
-	if (child->spc_gc_req == NULL)
-		return;
-
-	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
-		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
-
-	sched_req_wait(child->spc_gc_req, true);
-	sched_req_put(child->spc_gc_req);
-	child->spc_gc_req = NULL;
 }
 
 struct pool_child_lookup_arg {
