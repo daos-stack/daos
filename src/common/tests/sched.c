@@ -1068,8 +1068,17 @@ parent_func(tse_task_t *task)
 	tse_task_register_cbs(task2, prep_done_cb, NULL, 0, NULL, NULL, 0);
 	tse_task_list_add(task2, &io_task_list);
 
-	tse_task_register_deps(task2, 1, &task1);
-	tse_task_register_deps(task, 1, &task2);
+	rc = tse_task_register_deps(task2, 1, &task1);
+	if (rc != 0) {
+		D_ERROR("Failed to register task 2 dependency\n");
+		D_GOTO(out, rc);
+	}
+
+	rc = tse_task_register_deps(task, 1, &task2);
+	if (rc != 0) {
+		D_ERROR("Failed to register task dependency\n");
+		D_GOTO(out, rc);
+	}
 
 	tse_task_list_sched(&io_task_list, false);
 	return 0;
