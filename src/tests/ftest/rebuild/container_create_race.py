@@ -1,13 +1,16 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from ior_test_base import IorTestBase
+from avocado.core.exceptions import TestFail
+
 
 class RbldContainerCreate(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Rebuild with container creation test cases.
     Test Class Description:
         These rebuild tests verify the ability to create additional containers
