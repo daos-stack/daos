@@ -72,8 +72,6 @@ fi
 
 sudo $YUM -y install daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
 
-sudo $YUM -y install strace
-
 me=$(whoami)
 for dir in server agent; do
   sudo mkdir "/var/run/daos_$dir"
@@ -97,8 +95,8 @@ if ! module load $OPENMPI; then
     module list
     exit 1
 fi
-coproc SERVER { daos_server --debug start -t 1 --recreate-superblocks; } 2>&1
-trap 'set -x; kill -INT $SERVER_PID; ps -efjH' EXIT
+coproc SERVER { exec daos_server --debug start -t 1 --recreate-superblocks; } 2>&1
+trap 'set -x; kill -INT $SERVER_PID; ps -fjH' EXIT
 line=""
 while [[ "$line" != *started\ on\ rank\ 0* ]]; do
   if ! read -r -t 60 line <&"${SERVER[0]}"; then
@@ -113,8 +111,8 @@ while [[ "$line" != *started\ on\ rank\ 0* ]]; do
   echo "Server stdout: $line"
 done
 echo "Server started!"
-coproc AGENT { daos_agent --debug; } 2>&1
-trap 'set -x; strace -f kill -INT $AGENT_PID $SERVER_PID; ps -efjH' EXIT
+coproc AGENT { exec daos_agent --debug; } 2>&1
+trap 'set -x; kill -INT $AGENT_PID $SERVER_PID; ps -fjH' EXIT
 line=""
 while [[ "$line" != *listening\ on\ * ]]; do
   if ! read -r -t 60 line <&"${AGENT[0]}"; then
