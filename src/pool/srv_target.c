@@ -71,6 +71,10 @@ ds_pool_child_put(struct ds_pool_child *child)
 			DP_UUID(child->spc_uuid));
 		D_ASSERT(d_list_empty(&child->spc_list));
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
+
+		/* only stop gc ULT when all ops ULTs are done */
+		stop_gc_ult(child);
+
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
 		ABT_eventual_set(child->spc_ref_eventual,
@@ -292,9 +296,6 @@ pool_child_delete_one(void *uuid)
 		return dss_abterr2der(rc);
 
 	ABT_eventual_free(&child->spc_ref_eventual);
-
-	/* only stop gc ULT when all ops ULTs are done */
-	stop_gc_ult(child);
 
 	/* ds_pool_child must be freed here to keep
 	 * spc_ref_enventual usage safe
