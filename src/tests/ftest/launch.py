@@ -309,6 +309,7 @@ def set_python_environment():
         os.path.abspath("util"),
         os.path.abspath("cart/util"),
         os.path.abspath("ior"),
+        os.path.abspath("io"),
         os.path.abspath("container"),
         os.path.abspath("control"),
         os.path.abspath("erasurecode"),
