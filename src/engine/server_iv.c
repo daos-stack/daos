@@ -627,8 +627,10 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	int			 rc;
 
 	rc = iv_ns_lookup_by_ivns(ivns, &ns);
-	if (rc != 0)
+	if (rc != 0) {
+		ds_iv_ns_put(ns); /* balance ivc_on_get */
 		return rc;
+	}
 	D_ASSERT(ns != NULL);
 
 	D_ASSERT(priv_entry != NULL);
@@ -858,6 +860,8 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 		d_list_del(&entry->iv_link);
 		iv_entry_free(entry);
 	}
+
+	D_INFO(DF_UUID" ns stopped\n", DP_UUID(ns->iv_pool_uuid));
 }
 
 unsigned int
