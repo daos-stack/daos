@@ -50,6 +50,7 @@ def find_indent():
     """find clang-format"""
     indent = WhereIs("clang-format")
     if indent is None:
+        print("clang-format not found, not formatting")
         return None
     if supports_custom_format(indent):
         style = "file"

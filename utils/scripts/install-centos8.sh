@@ -10,8 +10,8 @@
 
 set -e
 
-dnf --assumeyes upgrade
-dnf --assumeyes install --setopt=install_weak_deps=False \
+dnf upgrade
+dnf install \
     boost-python3-devel \
     clang \
     clang-tools-extra \

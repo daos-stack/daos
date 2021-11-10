@@ -21,6 +21,8 @@ ARG CB0
 # data for installing those keys.  Then the epel-release
 # package must be installed and the GPG key it provides must be
 # installed.
+RUN echo -e "assumeyes=True\n\
+install_weak_deps=False" >> /etc/dnf/dnf.conf
 ARG REPO_URL
 ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
@@ -34,17 +36,17 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
-      dnf -y install --disablerepo extras --disablerepo baseos  \
+      dnf install --disablerepo extras --disablerepo baseos     \
           epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
-      dnf config-manager --assumeyes --quiet --disable          \
+      dnf config-manager --quiet --disable                      \
           baseos powertools epel epel-modular extras;           \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
           -i /etc/dnf/dnf.conf;                                 \
-      dnf -y upgrade epel-release;                              \
+      dnf upgrade epel-release;                                 \
     else                                                        \
-      dnf -y install epel-release dnf-plugins-core &&           \
-      dnf config-manager --assumeyes --set-enabled powertools;  \
+      dnf install epel-release dnf-plugins-core &&              \
+      dnf config-manager --set-enabled powertools;              \
     fi;                                                         \
     dnf clean all
 
@@ -61,8 +63,7 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=1\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
-      dnf config-manager --assumeyes --quiet --disable          \
-          appstream;                                            \
+      dnf config-manager --quiet --disable appstream;           \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
@@ -136,7 +137,7 @@ ARG QUICKBUILD_DEPS
 RUN if $QUICKBUILD; then                                                      \
         echo "Installing: $QUICKBUILD_DEPS";                                  \
         echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |             \
-          xargs -0 dnf -y install;                                            \
+          xargs -0 dnf install;                                               \
         dnf clean all;                                                        \
     fi
 
@@ -175,8 +176,7 @@ ARG DAOS_TARGET_TYPE=release
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { dnf -y upgrade \
-          --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    { dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all; }
 USER daos_server:daos_server
 
@@ -190,8 +190,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 # force an upgrade to get any newly built RPMs
 USER root:root
 ARG CACHEBUST
-RUN dnf -y upgrade \
-        --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+RUN dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all
 USER daos_server:daos_server
 
