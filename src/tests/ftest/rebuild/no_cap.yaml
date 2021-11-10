@@ -17,7 +17,7 @@ container:
 pool:
   mode: 511
   name: daos_server
-  scm_size: 6G 
+  scm_size: 6G
   control_method: dmg
   pool_query_timeout: 30
   pool_query_interval: 1
