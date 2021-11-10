@@ -9,7 +9,7 @@ hosts:
     - server-G
   test_clients:
     - server-H
-timeout: 500
+timeout: 300
 setup:
   start_agents_once: False
   start_servers_once: False

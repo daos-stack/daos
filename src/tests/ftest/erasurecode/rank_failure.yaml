@@ -46,8 +46,8 @@ pool:
 gen_io_conf:
   ranks: "11"
   targets: "7"
-  dkeys: "5"
-  akeys: "5"
-  record_size: "5000"
-  obj_num: "4"
+  dkeys: "3"
+  akeys: "3"
+  record_size: "1000"
+  obj_num: "3"
   obj_class: "EC_8P2GX"

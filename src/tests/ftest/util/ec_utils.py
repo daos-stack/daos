@@ -108,7 +108,7 @@ class ErasureCodeIor(ServerFillUp):
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
         rf = "rf:{}".format(ec_object['parity'])
-        if self.container.properties.value is "":
+        if self.container.properties.value is None:
             self.ec_container.properties.update(rf)
         else:
             self.ec_container.properties.update("{},{}".format(self.container.properties.value, rf))

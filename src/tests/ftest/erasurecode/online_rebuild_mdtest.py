@@ -37,7 +37,7 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
         :avocado: tags=ec_online_rebuild_array,ec_online_rebuild_mdtest
         """
         # Kill last server rank
-        self.rank_to_kill = [self.server_count - 1]
+        self.rank_to_kill = self.server_count - 1
 
         # Run only object type which matches the server count and
         # remove other objects
