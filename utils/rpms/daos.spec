@@ -516,7 +516,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Mon Nov 03 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-6
+* Wed Nov 03 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-6
 - Fix name of daos serialize package
 
 * Tue Oct 26 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-5
