@@ -67,6 +67,14 @@ extern "C" {
 void d_srand48_r(long int);
 long int d_lrand48_r(void);
 
+#define D_RAND_MAX 0x7fffffff
+
+#define D_SRAND(seedval)						\
+	d_srand48_r(seedval)
+
+#define D_RAND()							\
+	d_lrand48_r()
+
 /* memory allocating macros */
 void  d_free(void *);
 void *d_calloc(size_t, size_t);
@@ -76,12 +84,6 @@ char *d_strndup(const char *s, size_t n);
 int d_asprintf(char **strp, const char *fmt, ...);
 void *d_aligned_alloc(size_t alignment, size_t size);
 char *d_realpath(const char *path, char *resolved_path);
-
-#define D_SRAND(seedval)						\
-	d_srand48_r(seedval)
-
-#define D_RAND()							\
-	d_lrand48_r()
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
