@@ -104,7 +104,10 @@ gc_ult(void *arg)
 			break;
 
 		/* It'll be woke up by container destroy or aggregation */
-		sched_req_sleep(child->spc_gc_req, 10ULL * 1000);
+		if (rc > 0)
+			sched_req_yield(child->spc_gc_req);
+		else
+			sched_req_sleep(child->spc_gc_req, 10UL * 1000);
 	}
 
 out:
