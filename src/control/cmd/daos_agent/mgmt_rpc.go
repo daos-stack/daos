@@ -7,9 +7,7 @@
 package main
 
 import (
-	"fmt"
 	"net"
-	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -137,7 +135,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass)
+	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass, resp.ClientNetHint.Provider)
 	if err != nil {
 		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
 			netdetect.DevClassName(resp.ClientNetHint.NetDevClass), err.Error())
@@ -146,12 +144,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 
 	resp.ClientNetHint.Interface = fabricIF.Name
 	resp.ClientNetHint.Domain = fabricIF.Name
-	if strings.HasPrefix(resp.ClientNetHint.Provider, verbsProvider) {
-		if fabricIF.Domain == "" {
-			mod.log.Errorf("domain is required for verbs provider, none found on interface %s", fabricIF.Name)
-			return nil, fmt.Errorf("no domain on interface %s", fabricIF.Name)
-		}
-
+	if fabricIF.Domain != "" {
 		resp.ClientNetHint.Domain = fabricIF.Domain
 		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
@@ -161,21 +154,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 }
 
 func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	if mod.attachInfo.IsCached() {
-		return mod.attachInfo.GetAttachInfoResp()
-	}
-
-	resp, err := mod.getAttachInfoRemote(ctx, numaNode, sys)
-	if err != nil {
-		return nil, err
-	}
-
-	if mod.attachInfo.IsEnabled() {
-		mod.attachInfo.Cache(ctx, resp)
-		return mod.attachInfo.GetAttachInfoResp()
-	}
-
-	return resp, nil
+	return mod.attachInfo.Get(ctx, numaNode, sys, mod.getAttachInfoRemote)
 }
 
 func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
@@ -201,9 +180,9 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 	return pbResp, nil
 }
 
-func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32, provider string) (*FabricInterface, error) {
 	if mod.fabricInfo.IsCached() {
-		return mod.fabricInfo.GetDevice(numaNode, netDevClass)
+		return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 	}
 
 	netCtx, err := netdetect.Init(ctx)
@@ -216,9 +195,10 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 	if err != nil {
 		return nil, err
 	}
+
 	mod.fabricInfo.CacheScan(netCtx, result)
 
-	return mod.fabricInfo.GetDevice(numaNode, netDevClass)
+	return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

@@ -1126,7 +1126,7 @@ out:
 	if (extend_layout != NULL)
 		pl_obj_layout_free(extend_layout);
 
-	if (rc < 0) {
+	if (rc != 0) {
 		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
 			DP_RC(rc));
 		if (layout != NULL)
