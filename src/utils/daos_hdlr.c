@@ -1955,8 +1955,9 @@ dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char **
 
 	/* Sanity check */
 	if (num_attrs == 0) {
+		rc = -DER_INVAL;
 		DH_PERROR_DER(ap, rc, "Failed to parse user attributes");
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc);
 	}
 
 	/* Allocate arrays for attribute names, buffers, and sizes */
@@ -2137,7 +2138,7 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 		}
 		daos_prop_free(props);
 		props = props_merged;
-	} else if (rc && rc != -DER_NO_PERM) {
+	} else if (rc != -DER_NO_PERM) {
 		DH_PERROR_DER(ap, rc, "Failed to query container ACL");
 		D_GOTO(out, rc);
 	}

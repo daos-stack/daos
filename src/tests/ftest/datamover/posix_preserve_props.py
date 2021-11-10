@@ -58,7 +58,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         pool1.connect(2)
 
         # set the path to read and write container properties
-        self.preserve_props_path = self.tmp + "/cont_props.h5"
+        self.preserve_props_path = join(self.tmp, "/cont_props.h5")
 
         # Create a source cont
         cont1 = self.create_cont(pool1, cont_type=cont_type)
