@@ -272,7 +272,9 @@ func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.Nvme
 		}
 
 		if !found {
-			missing.Add(want)
+			if err := missing.Add(want); err != nil {
+				return nil, err
+			}
 		}
 	}
 
