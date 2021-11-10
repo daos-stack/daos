@@ -44,7 +44,7 @@ class PoolAttributeTest(TestWithServers):
         """
         data_set = {}
         for index in range(1024):
-            size = random.randint(1, 100)
+            size = random.randint(1, 100) #nosec
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set

@@ -7,10 +7,10 @@
 import time
 import threading
 
+from apricot import skipForTicket
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
 from dmg_utils import check_system_query_status
-from apricot import skipForTicket
 
 
 class NvmePoolExtend(OSAUtils):
@@ -118,7 +118,7 @@ class NvmePoolExtend(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7195")
+    @skipForTicket("DAOS-7195, DAOS-7955")
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
         Test Description: NVME Pool Extend

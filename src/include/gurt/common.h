@@ -154,11 +154,13 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALPATH(ptr, path)						\
 	do {								\
 		int _size;						\
+		void *_ptr;						\
 		(ptr) = d_realpath((path), NULL);			\
-		_size = (ptr) != NULL ?					\
-			strnlen((ptr), PATH_MAX + 1) + 1 : 0;		\
-		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,		\
-			      0, #ptr, 0);				\
+		_ptr = (ptr);						\
+		_size = strnlen((ptr), PATH_MAX + 1) + 1 ;		\
+		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	0, #ptr, 0); \
+		if (((ptr) == NULL) && _ptr != NULL)			\
+			errno = ENOMEM;					\
 	} while (0)
 
 #define D_ALIGNED_ALLOC(ptr, alignment, size)				\
@@ -444,7 +446,7 @@ void d_free_string(struct d_string_buffer_t *buf);
 # define offsetof(typ, memb)	((long)((char *)&(((typ *)0)->memb)))
 #endif
 
-#define D_ALIGNUP(x, a) (((x) + (a - 1)) & ~(a - 1))
+#define D_ALIGNUP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))

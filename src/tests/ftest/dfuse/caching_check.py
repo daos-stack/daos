@@ -7,7 +7,8 @@
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-from general_utils import pcmd
+from general_utils import pcmd, percent_change
+
 
 class CachingCheck(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -25,20 +26,16 @@ class CachingCheck(IorTestBase):
             Purpose of this test is to check if dfuse caching is working.
         Use case:
             Write using ior over dfuse with caching disabled.
-            Perform ior read to get base read performance.
-            Run ior read to get second read performance with caching disabled.
-            Compare first and second read performance numbers and they should
-            be similar.
+            Perform ior read twice to get base read performance.
             Unmount dfuse and mount it again with caching enabled.
             Perform ior read after fresh mount to get read performance.
-            Run ior again to get second read performance numbers with caching
-            enabled.
-            Compare first and second read performance numbers after dfuse
-            refresh and the second read should be multiple folds higher than
-            the first one.
+            Run ior again to get second read performance numbers with caching enabled.
+            Compared cached read performance numbers after refresh to the baseline
+            read performance and confirm cached read performance is multiple folds
+            higher than with caching disabled.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusecachingcheck
         """
@@ -55,22 +52,15 @@ class CachingCheck(IorTestBase):
         # update ior flag to read
         self.ior_cmd.flags.update(flags[1])
         # run ior to read and store the read performance
+        base_read_arr = []
         out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
-        base_read = IorCommand.get_ior_metrics(out)
+        base_read_arr.append(IorCommand.get_ior_metrics(out))
         # run ior again to read with caching disabled and store performance
         out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
-        without_caching = IorCommand.get_ior_metrics(out)
+        base_read_arr.append(IorCommand.get_ior_metrics(out))
+
+        # the index of max_mib
         max_mib = int(IorMetrics.Max_MiB)
-        # Compare read performance with caching disabled
-        # it should be similar to last read
-        lower_bound = (float(base_read[0][max_mib]) -
-                       (float(base_read[0][max_mib]) * read_x[0]))
-        upper_bound = (float(base_read[0][max_mib]) +
-                       (float(base_read[0][max_mib]) * read_x[0]))
-        # verify read performance is similar to last read and within
-        # the range of 1% up or down the first read performance
-        self.assertTrue(lower_bound <= float(without_caching[0][max_mib])
-                        <= upper_bound)
 
         # unmount dfuse and mount again with caching enabled
         pcmd(self.hostlist_clients,
@@ -79,11 +69,13 @@ class CachingCheck(IorTestBase):
         self.dfuse.run()
         # run ior to obtain first read performance after mount
         out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
-        base_read = IorCommand.get_ior_metrics(out)
+        base_read_arr.append(IorCommand.get_ior_metrics(out))
         # run ior again to obtain second read performance with caching enabled
         # second read should be multiple times greater than first read
         out = self.run_ior_with_pool(fail_on_warning=False)
         with_caching = IorCommand.get_ior_metrics(out)
-        # verifying read performance
-        self.assertTrue(float(with_caching[0][max_mib]) >
-                        read_x[1] * float(base_read[0][max_mib]))
+        # verify cached read performance is multiple times greater than without caching
+        for base_read in base_read_arr:
+            actual_change = percent_change(base_read[0][max_mib], with_caching[0][max_mib])
+            self.log.info('assert actual_change > min_change: %f > %f', actual_change, read_x)
+            self.assertTrue(actual_change > read_x)

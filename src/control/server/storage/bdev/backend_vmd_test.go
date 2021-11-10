@@ -19,6 +19,80 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+func TestBackend_substituteVMDAddresses(t *testing.T) {
+	const (
+		vmdAddr         = "0000:5d:05.5"
+		vmdBackingAddr1 = "5d0505:01:00.0"
+		vmdBackingAddr2 = "5d0505:03:00.0"
+	)
+
+	for name, tc := range map[string]struct {
+		inAddrs     []string
+		bdevCache   *storage.BdevScanResponse
+		expOutAddrs []string
+		expErr      error
+	}{
+		"one vmd requested; no backing devices": {
+			inAddrs: []string{vmdAddr},
+			bdevCache: &storage.BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+					"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+					"850505:11:00.0", "850505:14:00.0"),
+			},
+			expOutAddrs: []string{vmdAddr},
+		},
+		"one vmd requested; two backing devices": {
+			inAddrs: []string{vmdAddr},
+			bdevCache: &storage.BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2),
+			},
+			expOutAddrs: []string{vmdBackingAddr1, vmdBackingAddr2},
+		},
+		"two vmds requested; one has backing devices": {
+			inAddrs: []string{vmdAddr, "0000:85:05.5"},
+			bdevCache: &storage.BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+					"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+					"850505:11:00.0", "850505:14:00.0"),
+			},
+			expOutAddrs: []string{
+				vmdAddr, "850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
+				"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
+				"850505:14:00.0",
+			},
+		},
+		"two vmds requested; both have backing devices": {
+			inAddrs: []string{vmdAddr, "0000:85:05.5"},
+			bdevCache: &storage.BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2,
+					"850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
+					"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
+					"850505:14:00.0"),
+			},
+			expOutAddrs: []string{
+				vmdBackingAddr1, vmdBackingAddr2, "850505:07:00.0",
+				"850505:09:00.0", "850505:0b:00.0", "850505:0d:00.0",
+				"850505:0f:00.0", "850505:11:00.0", "850505:14:00.0",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			gotAddrs, gotErr := substituteVMDAddresses(log, tc.inAddrs, tc.bdevCache)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expOutAddrs, gotAddrs); diff != "" {
+				t.Fatalf("unexpected output addresses (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestBackend_vmdProcessFilters(t *testing.T) {
 	testNrHugePages := 42
 	usrCurrent, _ := user.Current()

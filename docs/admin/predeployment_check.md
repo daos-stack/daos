@@ -33,6 +33,19 @@ $ sudo reboot
     'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
     but note that this will require running daos_server as root.
 
+!!! note
+	If VFIO is not enabled, you will run into the issue described in:
+	https://github.com/spdk/spdk/issues/1153
+
+	When using RHEL 8.1 with official kernel from distribution (4.18.0-147.el8.x86_64)
+	it is not possible to bind nvme devices to uio_pci_generic driver and due to that
+	to use them within SPDK environment:
+
+		[82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
+		[82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
+
+	The issue was previously reported in SPDK bugzilla [here](https://github.com/spdk/spdk/issues/399) for vanilla kernel 4.18. Unfortunately the kernel used in RHEL 8 does not contain the proper [bugfix](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=linux-4.18.y&id=a34e4f42055a7fe8e804fc9e71dfc1e324c657f1) backported.
+
 ## Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
@@ -225,11 +238,14 @@ The memlock limit only needs to be manually adjusted when `daos_server` is not
 running as a systemd service. Default ulimit settings vary between OSes.
 
 For RPM installations, the service will typically be launched by systemd and
-the limit is pre-set to unlimited in the `daos_server.service` unit file:
-https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service#L16.
+the limit is pre-set to unlimited in the `daos_server.service`
+[unit file](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
+
 Note that values set in `/etc/security/limits.conf` are ignored by services
 launched by systemd.
 
 For non-RPM installations where `daos_server` is launched directly from the
-commandline, limits should be adjusted in `/etc/security/limits.conf` as per
-https://software.intel.com/content/www/us/en/develop/blogs/best-known-methods-for-setting-locked-memory-size.html.
+commandline (including source builds), limits should be adjusted in
+`/etc/security/limits.conf` as per
+[this article](https://access.redhat.com/solutions/61334) (which is a RHEL
+specific document but the instructions apply to most Linux distributions).

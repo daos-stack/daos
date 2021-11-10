@@ -30,6 +30,7 @@ server_config:
     nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
+    crt_timeout: 60
     servers:
         0:
             pinned_numa_node: 0
@@ -46,6 +47,7 @@ server_config:
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
                 - DAOS_MC_CAP=1024
+                - ABT_THREAD_STACKSIZE=32768
         1:
             pinned_numa_node: 1
             nr_xs_helpers: 1
@@ -61,6 +63,7 @@ server_config:
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
                 - DAOS_MC_CAP=1024
+                - ABT_THREAD_STACKSIZE=32768
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server
@@ -103,6 +106,7 @@ soak_stress:
         - daos_racer
         - ior_stress
         - mdtest_stress
+    ignore_soak_errors: False
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -125,7 +129,7 @@ ior_stress:
         - POSIX
         - HDF5
         - HDF5-VOL
-    test_file: daos:testFile
+    test_file: daos:/testFile
     flags: -v -w -W -r -R -k
     block_size:
         - '64M'

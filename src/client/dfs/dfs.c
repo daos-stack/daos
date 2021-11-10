@@ -665,29 +665,31 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		break;
 	case S_IFREG:
 	{
-		daos_handle_t file_oh;
+		if (obj) {
+			rc = daos_array_get_size(obj->oh, th, &size, NULL);
+			if (rc)
+				return daos_der2errno(rc);
+		} else {
+			daos_handle_t file_oh;
 
-		rc = daos_array_open_with_attr(dfs->coh, entry.oid, th,
-					       DAOS_OO_RO, 1, entry.chunk_size ?
-					       entry.chunk_size :
-					       dfs->attr.da_chunk_size,
-					       &file_oh, NULL);
-		if (rc) {
-			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
-				rc);
-			return daos_der2errno(rc);
+			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
+						       entry.chunk_size ? entry.chunk_size :
+						       dfs->attr.da_chunk_size, &file_oh, NULL);
+			if (rc) {
+				D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+
+			rc = daos_array_get_size(file_oh, th, &size, NULL);
+			if (rc) {
+				daos_array_close(file_oh, NULL);
+				return daos_der2errno(rc);
+			}
+
+			rc = daos_array_close(file_oh, NULL);
+			if (rc)
+				return daos_der2errno(rc);
 		}
-
-		rc = daos_array_get_size(file_oh, th, &size, NULL);
-		if (rc) {
-			daos_array_close(file_oh, NULL);
-			return daos_der2errno(rc);
-		}
-
-		rc = daos_array_close(file_oh, NULL);
-		if (rc)
-			return daos_der2errno(rc);
-
 		/*
 		 * TODO - this is not accurate since it does not account for
 		 * sparse files or file metadata or xattributes.
@@ -912,7 +914,7 @@ fopen:
 	if (flags & O_TRUNC) {
 		rc = daos_array_set_size(file->oh, th, 0, NULL);
 		if (rc) {
-			D_ERROR("Failed to truncate file (%d)\n", rc);
+			D_ERROR("Failed to truncate file "DF_RC"\n", DP_RC(rc));
 			daos_array_close(file->oh, NULL);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
@@ -1395,7 +1397,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", 1,
 			  DAOS_COND_DKEY_INSERT, &entry);
 	if (rc && rc != EEXIST) {
-		D_ERROR("Failed to insert root entry, %d\n", rc);
+		D_ERROR("Failed to insert root entry: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_super, rc);
 	}
 
@@ -1657,7 +1659,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	strcpy(dfs->root.name, "/");
 	rc = open_dir(dfs, NULL, amode | S_IFDIR, 0, &root_dir, 1, &dfs->root);
 	if (rc) {
-		D_ERROR("Failed to open root object, %d\n", rc);
+		D_ERROR("Failed to open root object: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_super, rc);
 	}
 
@@ -2530,16 +2532,13 @@ lookup_rel_path_loop:
 			if (stbuf) {
 				daos_size_t size;
 
-				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE,
-							 &size, NULL);
+				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size, NULL);
 				if (rc) {
 					daos_array_close(obj->oh, NULL);
-					D_GOTO(err_obj,
-					       rc = daos_der2errno(rc));
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
 				}
 				stbuf->st_size = size;
-				stbuf->st_blocks =
-					(stbuf->st_size + (1 << 9) - 1) >> 9;
+				stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 			}
 			break;
 		}
@@ -2563,8 +2562,7 @@ lookup_rel_path_loop:
 						     flags, &sym, NULL, NULL,
 						     depth + 1);
 				if (rc) {
-					D_DEBUG(DB_TRACE,
-						"Failed to lookup symlink %s\n",
+					D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n",
 						entry.value);
 					D_FREE(entry.value);
 					D_GOTO(err_obj, rc);
@@ -2913,8 +2911,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 					       dfs->attr.da_chunk_size,
 					       &obj->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() Failed (%d)\n",
-				rc);
+			D_ERROR("daos_array_open_with_attr() Failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 
@@ -2926,8 +2923,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 						 NULL);
 			if (rc) {
 				daos_array_close(obj->oh, NULL);
-				D_ERROR("daos_array_get_size() Failed (%d)\n",
-					rc);
+				D_ERROR("daos_array_get_size() Failed "DF_RC"\n", DP_RC(rc));
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
 			stbuf->st_size = size;
@@ -4035,16 +4031,15 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	iod.iod_nr = i;
 
 	if (i == 0)
-		D_GOTO(out_stat, 0);
+		D_GOTO(out_stat, rc = 0);
 
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iovs[0];
 
-	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod,
-			     &sgl, NULL);
+	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to update attr (rc = %d)\n", rc);
+		D_ERROR("Failed to update attr "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 
@@ -4625,7 +4620,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	/** Open parent object and insert xattr in the entry of the object */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
 	if (rc)
-		D_GOTO(out, rc = daos_der2errno(rc));
+		D_GOTO(free, rc = daos_der2errno(rc));
 
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
@@ -4659,8 +4654,9 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	}
 
 out:
-	D_FREE(xname);
 	daos_obj_close(oh, NULL);
+free:
+	D_FREE(xname);
 	return rc;
 }
 
@@ -4675,7 +4671,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	daos_key_t	dkey;
 	daos_handle_t	oh;
 	int		rc;
-	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -4685,13 +4680,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
-
-	mode = obj->mode;
-
-	/* Patch in user read permissions here for trusted namespaces */
-	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
-	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
-		mode |= S_IRUSR;
 
 	xname = concat("x:", name);
 	if (xname == NULL)
@@ -4729,7 +4717,7 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 				    NULL, NULL);
 	}
 	if (rc) {
-		D_ERROR("Failed to fetch xattr %s (%d)\n", name, rc);
+		D_ERROR("Failed to fetch xattr %s "DF_RC"\n", name, DP_RC(rc));
 		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
@@ -4755,7 +4743,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	daos_handle_t	oh;
 	uint64_t	cond = 0;
 	int		rc;
-	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -4768,13 +4755,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
 
-	mode = obj->mode;
-
-	/* Patch in user read permissions here for trusted namespaces */
-	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
-	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
-		mode |= S_IRUSR;
-
 	xname = concat("x:", name);
 	if (xname == NULL)
 		return ENOMEM;
@@ -4782,7 +4762,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	/** Open parent object and remove xattr from the entry of the object */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
 	if (rc)
-		D_GOTO(out, rc = daos_der2errno(rc));
+		D_GOTO(free, rc = daos_der2errno(rc));
 
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
@@ -4798,8 +4778,9 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	}
 
 out:
-	D_FREE(xname);
 	daos_obj_close(oh, NULL);
+free:
+	D_FREE(xname);
 	return rc;
 }
 

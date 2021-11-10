@@ -703,7 +703,8 @@ free_pool_and_placement_map(struct pool_map *po_map_in,
 {
 	struct pool_buf *buf;
 
-	pool_buf_extract(po_map_in, &buf);
+	if (pool_buf_extract(po_map_in, &buf))
+		return;
 	pool_map_decref(po_map_in);
 	pool_buf_free(buf);
 
@@ -797,12 +798,9 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 }
 
 int
-extend_test_pool_map(struct pool_map *map,
-		     uint32_t nnodes, uuid_t target_uuids[],
-		     d_rank_list_t *rank_list, uint32_t ndomains,
-		     uint32_t *domains, bool *updated_p,
-		     uint32_t *map_version_p,
-		     uint32_t dss_tgt_nr)
+extend_test_pool_map(struct pool_map *map, uint32_t nnodes, d_rank_list_t *rank_list,
+		     uint32_t ndomains, uint32_t *domains, bool *updated_p,
+		     uint32_t *map_version_p, uint32_t dss_tgt_nr)
 {
 	struct pool_buf	*map_buf = NULL;
 	uint32_t	map_version;
@@ -813,9 +811,8 @@ extend_test_pool_map(struct pool_map *map,
 
 	map_version = pool_map_get_version(map) + 1;
 
-	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes,
-			  ntargets, domains, target_uuids, rank_list, NULL,
-			dss_tgt_nr);
+	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
+			  rank_list, dss_tgt_nr);
 	assert_success(rc);
 
 	D_ASSERT(map_buf != NULL);

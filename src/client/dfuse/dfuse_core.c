@@ -32,23 +32,17 @@ dfuse_progress_thread(void *arg)
 			if (rc == EINTR)
 				continue;
 
-			DFUSE_TRA_ERROR(fs_handle,
-					"Error from sem_wait: %d", rc);
+			DFUSE_TRA_ERROR(fs_handle, "Error from sem_wait: %d", rc);
 		}
 
 		if (fs_handle->dpi_shutdown)
 			return NULL;
 
-		rc = daos_eq_poll(fs_handle->dpi_eq, 1,
-				  DAOS_EQ_WAIT,
-				1,
-				&dev);
-
+		rc = daos_eq_poll(fs_handle->dpi_eq, 1, DAOS_EQ_WAIT, 1, &dev);
 		if (rc == 1) {
+			daos_event_fini(dev);
 			ev = container_of(dev, struct dfuse_event, de_ev);
-
 			ev->de_complete_cb(ev);
-
 			D_FREE(ev);
 		}
 	}
@@ -266,6 +260,18 @@ _ph_free(struct dfuse_pool *dfp)
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+		/* Hook for fault injection testing, if the disconnect fails with out of memory
+		 * then simply try it again, only what might have happened is that the first
+		 * call might have disconnected, but then failed to notify about the disconnect,
+		 * in which case the subsequent call will return -DER_NO_HDL, if that's the case
+		 * then this is expected, if odd, behavior so silence that case and just return
+		 * success.
+		 */
+		if (rc == -DER_NOMEM) {
+			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+			if (rc == -DER_NO_HDL)
+				rc = -DER_SUCCESS;
+		}
 		if (rc != -DER_SUCCESS)
 			DFUSE_TRA_ERROR(dfp,
 					"daos_pool_disconnect() failed: "DF_RC,
@@ -355,13 +361,13 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 
 		rc = dfs_umount(dfc->dfs_ns);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "dfs_umount() failed, "DF_RC,
-					DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "dfs_umount() failed: %d (%s)", rc, strerror(rc));
 
 		rc = daos_cont_close(dfc->dfs_coh, NULL);
+		if (rc == -DER_NOMEM)
+			rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "dfs_cont_close() failed, "DF_RC,
-					DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, "DF_RC, DP_RC(rc));
 	}
 
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfc->dfs_dfp->dfp_entry);
@@ -847,7 +853,10 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 
 	/* Allow for uuid to be NULL, in which case this represents a pool */
 	if (uuid_is_null(*cont)) {
-		dfc->dfs_ops = &dfuse_cont_ops;
+		if (uuid_is_null(dfp->dfp_pool))
+			dfc->dfs_ops = &dfuse_pool_ops;
+		else
+			dfc->dfs_ops = &dfuse_cont_ops;
 
 		/* Turn on some caching of metadata, otherwise container
 		 * operations will be very frequent
@@ -877,9 +886,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR,
 			       &dfc->dfs_ns);
 		if (rc) {
-			DFUSE_TRA_ERROR(dfc,
-					"dfs_mount() failed: (%s)",
-					strerror(rc));
+			DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: %d (%s)", rc, strerror(rc));
 			D_GOTO(err_close, rc);
 		}
 
@@ -894,7 +901,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 				dfuse_set_default_cont_cache_values(dfc);
 				rc = 0;
 			} else if (rc != 0) {
-				D_GOTO(err_close, rc);
+				D_GOTO(err_umount, rc);
 			}
 		} else {
 			DFUSE_TRA_INFO(dfc,
@@ -937,7 +944,8 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 	*_dfc = dfc;
 
 	return rc;
-
+err_umount:
+	dfs_umount(dfc->dfs_ns);
 err_close:
 	daos_cont_close(dfc->dfs_coh, NULL);
 err_free:
@@ -965,19 +973,19 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 					 3, fs_handle, &pool_hops,
 					 &fs_handle->dpi_pool_table);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err, rc);
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
 					 5, fs_handle, &ie_hops,
 					 &fs_handle->dpi_iet);
 	if (rc != 0)
-		D_GOTO(err_pt, 0);
+		D_GOTO(err_pt, rc);
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
 	rc = daos_eq_create(&fs_handle->dpi_eq);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(err_iht, 0);
+		D_GOTO(err_iht, rc);
 
 	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
 	if (rc != 0)
@@ -1013,6 +1021,8 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
+		if (rc == ENOMEM)
+			rc = dfs_release(ie->ie_obj);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
 					strerror(rc));
@@ -1034,11 +1044,9 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 }
 
 int
-dfuse_start(struct dfuse_projection_info *fs_handle,
-	    struct dfuse_cont *dfs)
+dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
 	struct fuse_args		args = {0};
-	struct fuse_lowlevel_ops	*fuse_ops = NULL;
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
@@ -1068,10 +1076,6 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (!args.argv[3])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	fuse_ops = dfuse_get_fuse_ops();
-	if (!fuse_ops)
-		D_GOTO(err, rc = -DER_NOMEM);
-
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
 	if (!ie)
@@ -1090,11 +1094,9 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	dfs->dfs_ino = ie->ie_stat.st_ino;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
-		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
-				NULL, NULL);
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",
-					strerror(rc));
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
 			D_GOTO(err, rc = daos_errno2der(rc));
 		}
 	}
@@ -1104,35 +1106,25 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 			       sizeof(ie->ie_stat.st_ino),
 			       &ie->ie_htl,
 			       false);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
-				rc);
-		D_GOTO(err, 0);
-	}
+	D_ASSERT(rc == -DER_SUCCESS);
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_ie_remove, 0);
+		D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
-	rc = dfuse_launch_fuse(fs_handle, fuse_ops, &args);
-	D_FREE(fuse_ops);
-	if (!rc) {
-		(void)dfuse_fs_fini(fs_handle);
-		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
-		return -DER_INVAL;
-	}
-
-	return -DER_SUCCESS;
+	rc = dfuse_launch_fuse(fs_handle, &args);
+	fuse_opt_free_args(&args);
+	if (rc == -DER_SUCCESS)
+		return rc;
 
 err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
-	DFUSE_TRA_ERROR(fs_handle,
-			"Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
-	D_FREE(fuse_ops);
+	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
+	fuse_opt_free_args(&args);
 	D_FREE(ie);
 	return rc;
 }
@@ -1141,9 +1133,7 @@ static int
 ino_flush(d_list_t *rlink, void *arg)
 {
 	struct dfuse_projection_info *fs_handle = arg;
-	struct dfuse_inode_entry *ie = container_of(rlink,
-						  struct dfuse_inode_entry,
-						  ie_htl);
+	struct dfuse_inode_entry *ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	int rc;
 
 	/* Only evict entries that are direct children of the root, the kernel
@@ -1229,15 +1219,16 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 	return 0;
 }
 
-/* Called once per projection, after the FUSE filesystem has been torn down */
+/* Called as part of shutdown, if the startup was successful.  Releases resources created during
+ * operation.
+ */
 int
-dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
+dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 {
 	d_list_t	*rlink;
 	uint64_t	refs = 0;
 	int		handles = 0;
 	int		rc;
-	int		rcp = 0;
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
@@ -1273,34 +1264,42 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 		handles++;
 	} while (rlink);
 
-	if (handles && rc != -DER_SUCCESS && rc != -DER_NO_HDL) {
-		DFUSE_TRA_WARNING(fs_handle, "dropped %lu refs on %u inodes",
-				  refs, handles);
-	} else {
-		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes",
-			       refs, handles);
-	}
+	if (handles && rc != -DER_SUCCESS && rc != -DER_NO_HDL)
+		DFUSE_TRA_WARNING(fs_handle, "dropped %lu refs on %u inodes", refs, handles);
+	else
+		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes", refs, handles);
+
+	d_hash_table_traverse(&fs_handle->dpi_pool_table, dfuse_pool_close_cb, NULL);
+
+	return 0;
+}
+
+/* Called as part of shutdown, after fs_stop(), and regardless of if dfuse started or not.
+ * Releases core resources.
+ */
+int
+dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
+{
+	int	rc;
+	int	rc2 = -DER_SUCCESS;
 
 	rc = daos_eq_destroy(fs_handle->dpi_eq, 0);
-	if (rc) {
+	if (rc)
 		DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
-		rcp = EINVAL;
-	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
-	if (rc) {
+	rc2 = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
+	if (rc2) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
-		rcp = EINVAL;
+		if (rc == -DER_SUCCESS)
+			rc = rc2;
 	}
 
-	d_hash_table_traverse(&fs_handle->dpi_pool_table,
-			      dfuse_pool_close_cb, NULL);
-
-	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_pool_table, false);
-	if (rc) {
+	rc2 = d_hash_table_destroy_inplace(&fs_handle->dpi_pool_table, false);
+	if (rc2) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close pools");
-		rcp = EINVAL;
+		if (rc == -DER_SUCCESS)
+			rc = rc2;
 	}
 
-	return rcp;
+	return rc;
 }

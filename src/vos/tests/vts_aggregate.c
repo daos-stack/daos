@@ -1271,7 +1271,6 @@ discard_obj_test(void **state, bool empty)
 	daos_epoch_t		 epoch;
 	int			 rc;
 	char			 first_val = 'f';
-	char			 last_val = 'l';
 	char			 middle_val = 'm';
 	char			 fetch_val;
 	char			 expected;
@@ -1286,17 +1285,17 @@ discard_obj_test(void **state, bool empty)
 	arg->ta_flags = TF_USE_VAL;
 
 	if (!empty) {
-		update_value(arg, oid, epr.epr_lo++, 0, dkey, akey,
+		update_value(arg, oid, epr.epr_lo, 0, dkey, akey,
 			     DAOS_IOD_SINGLE, sizeof(first_val), &recx,
 			     &first_val);
 
-		update_value(arg, oid, epr.epr_lo++, 0, dkey, akey2,
+		update_value(arg, oid, epr.epr_lo + 1, 0, dkey, akey2,
 			     DAOS_IOD_ARRAY, sizeof(first_val), &recx,
 			     &first_val);
 
 	}
 
-	epoch = epr.epr_lo;
+	epoch = epr.epr_lo + 2;
 
 	update_value(arg, oid, epoch++, 0, dkey, akey,
 		     DAOS_IOD_SINGLE, sizeof(middle_val), &recx,
@@ -1306,15 +1305,7 @@ discard_obj_test(void **state, bool empty)
 		     DAOS_IOD_ARRAY, sizeof(middle_val), &recx,
 		     &middle_val);
 
-	epr.epr_hi = epoch++;
-
-	update_value(arg, oid, epoch++, 0, dkey, akey,
-		     DAOS_IOD_SINGLE, sizeof(last_val), &recx,
-		     &last_val);
-
-	update_value(arg, oid, epoch++, 0, dkey, akey2,
-		     DAOS_IOD_ARRAY, sizeof(last_val), &recx,
-		     &last_val);
+	epr.epr_hi = epoch;
 
 	rc = vos_discard(arg->ctx.tc_co_hdl, &oid, &epr, NULL, NULL);
 	assert_int_equal(rc, 0);
@@ -1324,60 +1315,15 @@ discard_obj_test(void **state, bool empty)
 	 */
 	expected = 0;
 	fetch_val = 0;
-	if (!empty)
-		expected = first_val;
 	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, DAOS_IOD_SINGLE,
 		    sizeof(first_val), &recx, &fetch_val);
 	assert_int_equal(fetch_val, expected);
 	fetch_val = 0;
 	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey2, DAOS_IOD_ARRAY,
 		    sizeof(first_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-
-	/** last value should still be there too since it's after the discard range */
-	expected = last_val;
-	fetch_val = 0;
-	fetch_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_SINGLE,
-		    sizeof(last_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-	fetch_val = 0;
-	fetch_value(arg, oid, epoch, 0, dkey, akey2, DAOS_IOD_ARRAY,
-		    sizeof(last_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-
-	/** Restore the middle values */
-	update_value(arg, oid, epr.epr_lo, 0, dkey, akey,
-		     DAOS_IOD_SINGLE, sizeof(middle_val), &recx,
-		     &middle_val);
-
-	update_value(arg, oid, epr.epr_lo + 1, 0, dkey, akey2,
-		     DAOS_IOD_ARRAY, sizeof(middle_val), &recx,
-		     &middle_val);
-
-	/** Now check middle value again */
-	expected = middle_val;
-	fetch_val = 0;
-	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, DAOS_IOD_SINGLE,
-		    sizeof(middle_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-	fetch_val = 0;
-	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey2, DAOS_IOD_ARRAY,
-		    sizeof(middle_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-
-	/** And check last value again */
-	expected = last_val;
-	fetch_val = 0;
-	fetch_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_SINGLE,
-		    sizeof(last_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-	fetch_val = 0;
-	fetch_value(arg, oid, epoch, 0, dkey, akey2, DAOS_IOD_ARRAY,
-		    sizeof(last_val), &recx, &fetch_val);
 	assert_int_equal(fetch_val, expected);
 
 	arg->ta_flags = old_flags;
-
 }
 
 static void
@@ -1892,10 +1838,10 @@ print_space_info(vos_pool_info_t *pi, char *desc)
 	VERBOSE_MSG("  NVMe allocator statistics:\n");
 	VERBOSE_MSG("    free_p: "DF_U64", \tfree_t: "DF_U64", "
 		    "\tfrags_large: "DF_U64", \tfrags_small: "DF_U64", "
-		    "\tmax_frag_blks: %u\n",
+		    "\tfrags_aging: "DF_U64"\n",
 		    stat->vs_free_persistent, stat->vs_free_transient,
-		    stat->vs_large_frags, stat->vs_small_frags,
-		    stat->vs_largest_blks);
+		    stat->vs_frags_large, stat->vs_frags_small,
+		    stat->vs_frags_aging);
 	VERBOSE_MSG("    resrv_hit: "DF_U64", \tresrv_large: "DF_U64", "
 		    "\tresrv_small: "DF_U64"\n", stat->vs_resrv_hint,
 		    stat->vs_resrv_large, stat->vs_resrv_small);
@@ -2716,6 +2662,56 @@ aggregate_32(void **state)
 	cleanup();
 }
 
+static void
+aggregate_33(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[10];
+	daos_epoch_t		 punch_epochs[] = {2, 4, 6, 8, 10, 12};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = 2;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = 2;
+	recx_arr[2].rx_idx = 2;
+	recx_arr[2].rx_nr = 2;
+	recx_arr[3].rx_idx = 1;
+	recx_arr[3].rx_nr = 2;
+	recx_arr[4].rx_idx = 4;
+	recx_arr[4].rx_nr = 2;
+	recx_arr[5].rx_idx = 4;
+	recx_arr[5].rx_nr = 2;
+	recx_arr[6].rx_idx = 6;
+	recx_arr[6].rx_nr = 2;
+	recx_arr[7].rx_idx = 6;
+	recx_arr[7].rx_nr = 2;
+	recx_arr[8].rx_idx = 12;
+	recx_arr[8].rx_nr = 20;
+	recx_arr[9].rx_idx = 12;
+	recx_arr[9].rx_nr = 2;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 2;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -2762,6 +2758,26 @@ static const struct CMUnitTest discard_tests[] = {
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
+	{ "VOS424: Aggregate extents not fully covered by delete record",
+	  aggregate_24, NULL, agg_tst_teardown },
+	{ "VOS425: Aggregate delete of end of merge window",
+	  aggregate_25, NULL, agg_tst_teardown },
+	{ "VOS426: Consecutive removed extents",
+	  aggregate_26, NULL, agg_tst_teardown },
+	{ "VOS427: Consecutive removed extents, no logical extents",
+	  aggregate_27, NULL, agg_tst_teardown },
+	{ "VOS428: Logical extent followed by consecutive removed extents",
+	  aggregate_28, NULL, agg_tst_teardown },
+	{ "VOS429: Logical extent followed by disjoint removed extents",
+	  aggregate_29, NULL, agg_tst_teardown },
+	{ "VOS430: Removal stress test",
+	  aggregate_30, NULL, agg_tst_teardown },
+	{ "VOS431: Removal spans windows, flush with no physical records",
+	  aggregate_31, NULL, agg_tst_teardown },
+	{ "VOS432: Overlapping removals",
+	  aggregate_32, NULL, agg_tst_teardown },
+	{ "VOS433: Many small removals",
+	  aggregate_33, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -2808,24 +2824,6 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_22, NULL, agg_tst_teardown },
 	{ "VOS423: Aggregate deleted records spanning window end",
 	  aggregate_23, NULL, agg_tst_teardown },
-	{ "VOS424: Aggregate extents not fully covered by delete record",
-	  aggregate_24, NULL, agg_tst_teardown },
-	{ "VOS425: Aggregate delete of end of merge window",
-	  aggregate_25, NULL, agg_tst_teardown },
-	{ "VOS426: Consecutive removed extents",
-	  aggregate_26, NULL, agg_tst_teardown },
-	{ "VOS427: Consecutive removed extents, no logical extents",
-	  aggregate_27, NULL, agg_tst_teardown },
-	{ "VOS428: Logical extent followed by consecutive removed extents",
-	  aggregate_28, NULL, agg_tst_teardown },
-	{ "VOS429: Logical extent followed by disjoint removed extents",
-	  aggregate_29, NULL, agg_tst_teardown },
-	{ "VOS430: Removal stress test",
-	  aggregate_30, NULL, agg_tst_teardown },
-	{ "VOS431: Removal spans windows, flush with no physical records",
-	  aggregate_31, NULL, agg_tst_teardown },
-	{ "VOS432: Overlapping removals",
-	  aggregate_32, NULL, agg_tst_teardown },
 };
 
 int
