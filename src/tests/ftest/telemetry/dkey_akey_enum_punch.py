@@ -35,7 +35,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
     def set_num_targets(self):
         """Define total number of targets and targets per rank from pool query.
 
-        Sometimes the total numer of targets and targets per rank are different
+        Sometimes the total number of targets and targets per rank are different
         from what we specify in the server config.
         """
         self.pool.set_query_data()
