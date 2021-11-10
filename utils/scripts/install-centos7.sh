@@ -10,9 +10,8 @@
 
 set -e
 
-dnf --assumeyes install deltarpm
-dnf --assumeyes upgrade
-dnf --assumeyes install --setopt=install_weak_deps=False \
+dnf upgrade
+dnf install \
     boost-python36-devel \
     clang \
     cmake \

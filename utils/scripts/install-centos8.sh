@@ -54,7 +54,6 @@ dnf install \
     openssl-devel \
     patch \
     patchelf \
-    pciutils \
     python3-defusedxml \
     python3-devel \
     python3-distro \
