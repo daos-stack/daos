@@ -52,7 +52,7 @@ At this stage, depending on how hugepages are configured on your host system, yo
 - Icelake 64 pages
 - Saphire Rapids 96 pages
 
-In our case of a Cascade Lake Server it is a qty of 16, and we set the hugepages by using the following commands:
+In this situation of using a Cascade Lake CPU, the hugepage capacity is 16, so we set the hugepages by using the following commands:
 ```bash
 echo 16 | sudo tee /proc/sys/VM/nr_hugepages
 cat /proc/meminfo | grep Huge
@@ -98,7 +98,7 @@ Now that the DAOS Docker image is running, we need to enable the DAOS Service
 
 The DAOS service can be started in the docker container as follows:
 
-`sudo docker exec server daos_server start -o /home/daos/daos/utils/config/examples/daos_server_local.yml`
+`sudo docker exec server sudo /opt/daos/bin/daos_server start -o /home/daos/daos/utils/config/examples/daos_server_local.yml`
 
 > The daos_server_local.yml configuration file sets up a simple local DAOS system with a single server instance running in the container. By default, it uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp. The storage size can be changed in the yaml file if necessary.
 
