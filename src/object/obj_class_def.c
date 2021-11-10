@@ -68,7 +68,7 @@
 {							\
 	.oc_name	= "RP_XSF",			\
 	.oc_id		= OC_RP_XSF,			\
-	.oc_redun	= OR_RP_2,			\
+	.oc_redun	= DAOS_OBJ_REPL_MAX,		\
 	{						\
 		.ca_schema	= DAOS_OS_STRIPED,	\
 		.ca_resil	= DAOS_RES_REPL,	\

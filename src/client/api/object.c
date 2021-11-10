@@ -12,6 +12,14 @@
 #include "task_internal.h"
 
 int
+daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
+			struct daos_oclass_attr *cattr, daos_event_t *ev)
+{
+	D_ERROR("Unsupported API\n");
+	return -DER_NOSYS;
+}
+
+int
 daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
 		     struct daos_oclass_attr *cattr, daos_event_t *ev)
 {

@@ -220,6 +220,7 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 	*ord = oc->oc_redun;
 	*nr = ca.ca_grp_nr;
 out:
+	/* ord = 0 means object class less than OC_S1 */
 	if (oc_id < (OR_RP_1 << OC_REDUN_SHIFT)) {
 		*ord = 0;
 		*nr = oc_id;
@@ -466,7 +467,7 @@ static daos_sort_ops_t	oc_ident_sort_ops = {
 static inline enum daos_obj_redun
 daos_oclass_id2redun(daos_oclass_id_t oc_id)
 {
-	return (oc_id >> 24);
+	return (oc_id >> OC_REDUN_SHIFT);
 }
 
 static int
@@ -605,7 +606,13 @@ static daos_sort_ops_t	oc_scale_sort_ops = {
 /* NB: ignore the last one which is UNKNOWN */
 #define OC_NR	daos_oclass_nr(0)
 
-/* find object class by ID */
+/*
+ * find object class by ID.
+ *
+ * firstly try to search predefined object class by unique ID, if
+ * not try to match oc_redun if ID is not less than OC_S1, number
+ * of groups will be parsed from oc_id rather than array for this case.
+ */
 static struct daos_obj_class *
 oclass_ident2cl(daos_oclass_id_t oc_id, uint32_t *nr_grps)
 {
@@ -632,7 +639,6 @@ oclass_ident2cl(daos_oclass_id_t oc_id, uint32_t *nr_grps)
 		return NULL;
 
 	if (nr_grps) {
-		/* should not happen */
 		if ((oc_ident_array[idx]->oc_redun << OC_REDUN_SHIFT) >= oc_id)
 			return NULL;
 		*nr_grps = oc_id -

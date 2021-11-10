@@ -199,7 +199,6 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	}
 
 	/** Use KV type for root kv */
-	roots->cr_oids[0].hi &= (1ULL << OID_FMT_TYPE_SHIFT) - 1;
 	roots->cr_oids[0].hi |= (uint64_t)DAOS_OT_KV_HASHED << OID_FMT_TYPE_SHIFT;
 
 	/** Open root object */

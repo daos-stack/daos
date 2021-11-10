@@ -71,9 +71,6 @@ daos_obj_is_echo(daos_obj_id_t oid)
 {
 	daos_oclass_id_t oc;
 
-	if (daos_obj_id2type(oid) == DAOS_OT_ECHO)
-		return true;
-
 	oc = daos_obj_id2class(oid);
 	return oc == DAOS_OC_ECHO_TINY_RW || oc == DAOS_OC_ECHO_R2S_RW ||
 	       oc == DAOS_OC_ECHO_R3S_RW || oc == DAOS_OC_ECHO_R4S_RW;
@@ -338,6 +335,10 @@ daos_obj_feat2type(daos_ofeat_t feat)
 		return DAOS_OT_AKEY_UINT64;
 	else if (feat == DAOS_OF_DKEY_UINT64)
 		return DAOS_OT_DKEY_UINT64;
+	else if (feat == DAOS_OF_DKEY_LEXICAL)
+		return DAOS_OT_DKEY_LEXICAL;
+	else if (feat == DAOS_OF_AKEY_LEXICAL)
+		return DAOS_OT_AKEY_LEXICAL;
 	else if (feat == (DAOS_OF_DKEY_LEXICAL | DAOS_OF_AKEY_LEXICAL))
 		return DAOS_OT_MULTI_LEXICAL;
 	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY))

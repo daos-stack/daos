@@ -171,6 +171,16 @@ typedef struct {
 	struct d_tgt_list	*tgts;
 } daos_pool_update_t;
 
+/** Object class register args */
+struct daos_obj_register_class_t {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** Object class ID. */
+	daos_oclass_id_t	cid;
+	/** Object class attributes. */
+	struct daos_oclass_attr	*cattr;
+};
+
 /** pool query args */
 typedef struct {
 	/** Pool open handle. */

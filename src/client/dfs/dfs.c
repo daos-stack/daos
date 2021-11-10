@@ -285,7 +285,7 @@ check_tx(daos_handle_t th, int rc)
 static int
 oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 {
-	enum daos_otype_t type = 0;
+	enum daos_otype_t type = DAOS_OT_MULTI_HASHED;
 	int rc;
 
 	D_MUTEX_LOCK(&dfs->lock);

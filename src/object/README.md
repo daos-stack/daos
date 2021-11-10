@@ -29,6 +29,10 @@ protection methods, and data distribution strategies. An <b>object class</b> has
 a unique class ID, which is a 16-bit value, and can represent a category of
 objects that use the same schema(data protection, distribution). DAOS provides
 some pre-defined object class for the most common use (see `daos_obj_classes`).
+In addition user can register customized object class by
+`daos_obj_register_class()` (not implemented yet). A successfully registered
+object class is stored as container metadata; it is valid in the lifetime of the
+container.
 
 The object class ID is embedded in object ID. By `daos_obj_generate_oid()` user
 can generate an object ID for the specific object class ID. DAOS uses this class

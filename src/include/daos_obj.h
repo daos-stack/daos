@@ -52,45 +52,45 @@ enum daos_otype_t {
 	DAOS_OT_MULTI_HASHED	= 0,
 
 	/**
-	 * benchmark-only, I/O is a network echo, no data is going
-	 * to be stored/returned
-	 */
-	DAOS_OT_ECHO		= 1,
-
-	/**
 	 * Object ID table created on snapshot
 	 */
-	DAOS_OT_OIT		= 2,
+	DAOS_OT_OIT		= 1,
 
 	/** KV with uint64 dkeys */
-	DAOS_OT_DKEY_UINT64	= 8,
+	DAOS_OT_DKEY_UINT64	= 2,
 
 	/** KV with uint64 akeys */
-	DAOS_OT_AKEY_UINT64	= 9,
+	DAOS_OT_AKEY_UINT64	= 3,
 
 	/** multi-level KV with uint64 [ad]keys */
-	DAOS_OT_MULTI_UINT64	= 10,
+	DAOS_OT_MULTI_UINT64	= 4,
+
+	/** KV with lexical dkeys */
+	DAOS_OT_DKEY_LEXICAL	= 5,
+
+	/** KV with lexical akeys */
+	DAOS_OT_AKEY_LEXICAL	= 6,
 
 	/** multi-level KV with lexical [ad]keys */
-	DAOS_OT_MULTI_LEXICAL	= 11,
+	DAOS_OT_MULTI_LEXICAL	= 7,
 
 	/** flat KV (no akey) with hashed dkey */
-	DAOS_OT_KV_HASHED	= 24,
+	DAOS_OT_KV_HASHED	= 8,
 
 	/** flat KV (no akey) with integer dkey */
-	DAOS_OT_KV_UINT64	= 25,
+	DAOS_OT_KV_UINT64	= 9,
 
 	/** flat KV (no akey) with lexical dkey */
-	DAOS_OT_KV_LEXICAL	= 26,
+	DAOS_OT_KV_LEXICAL	= 10,
 
 	/** Array with attributes stored in the DAOS object */
-	DAOS_OT_ARRAY		= 48,
+	DAOS_OT_ARRAY		= 11,
 
 	/** Array with attributes provided by the user */
-	DAOS_OT_ARRAY_ATTR	= 49,
+	DAOS_OT_ARRAY_ATTR	= 12,
 
 	/** Byte Array with no metadata (eg DFS/POSIX) */
-	DAOS_OT_ARRAY_BYTE	= 50,
+	DAOS_OT_ARRAY_BYTE	= 13,
 
 	/**
 	 * reserved: Multi Dimensional Array
@@ -117,6 +117,7 @@ static inline bool
 daos_is_dkey_lexical_type(enum daos_otype_t type)
 {
 	switch (type) {
+	case DAOS_OT_DKEY_LEXICAL:
 	case DAOS_OT_MULTI_LEXICAL:
 	case DAOS_OT_KV_LEXICAL:
 		return true;
@@ -136,6 +137,7 @@ static inline bool
 daos_is_akey_lexical_type(enum daos_otype_t type)
 {
 	switch (type) {
+	case DAOS_OT_AKEY_LEXICAL:
 	case DAOS_OT_MULTI_LEXICAL:
 		return true;
 	default:
