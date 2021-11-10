@@ -16,6 +16,7 @@ dnf install \
     clang \
     clang-tools-extra \
     cmake \
+    CUnit-devel \
     e2fsprogs \
     file \
     flex \
@@ -51,6 +52,7 @@ dnf install \
     ninja-build \
     numactl \
     numactl-devel \
+    openmpi-devel \
     openssl-devel \
     patch \
     patchelf \
