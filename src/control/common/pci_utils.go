@@ -12,8 +12,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -128,7 +129,7 @@ func (pa *PCIAddress) LessThan(other *PCIAddress) bool {
 func NewPCIAddress(addr string) (*PCIAddress, error) {
 	dom, bus, dev, fun, err := parsePCIAddress(addr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "unable to parse %q", addr)
 	}
 
 	pa := &PCIAddress{
@@ -152,31 +153,31 @@ type PCIAddressSet struct {
 }
 
 // Contains returns true if provided address is already in list.
-func (pal *PCIAddressSet) Contains(a *PCIAddress) bool {
-	if pal == nil {
+func (pas *PCIAddressSet) Contains(a *PCIAddress) bool {
+	if pas == nil {
 		return false
 	}
 
-	_, found := pal.addrMap[a.String()]
+	_, found := pas.addrMap[a.String()]
 	return found
 }
 
-func (pal *PCIAddressSet) add(a *PCIAddress) {
-	if pal.addrMap == nil {
-		pal.addrMap = make(map[string]*PCIAddress)
+func (pas *PCIAddressSet) add(a *PCIAddress) {
+	if pas.addrMap == nil {
+		pas.addrMap = make(map[string]*PCIAddress)
 	}
 
-	pal.addrMap[a.String()] = a
+	pas.addrMap[a.String()] = a
 }
 
 // Add adds PCI addresses to slice. Ignores duplicate addresses.
-func (pal *PCIAddressSet) Add(addrs ...*PCIAddress) error {
-	if pal == nil {
+func (pas *PCIAddressSet) Add(addrs ...*PCIAddress) error {
+	if pas == nil {
 		return errors.New("PCIAddressSet is nil")
 	}
 
 	for _, addr := range addrs {
-		pal.add(addr)
+		pas.add(addr)
 	}
 
 	return nil
@@ -184,8 +185,8 @@ func (pal *PCIAddressSet) Add(addrs ...*PCIAddress) error {
 
 // AddStrings adds PCI addresses to slice from supplied strings. If any input string is not a valid PCI
 // address then return error and don't add any elements to slice. Ignores duplicateaddresses.
-func (pal *PCIAddressSet) AddStrings(addrs ...string) error {
-	if pal == nil {
+func (pas *PCIAddressSet) AddStrings(addrs ...string) error {
+	if pas == nil {
 		return errors.New("PCIAddressSet is nil")
 	}
 
@@ -199,20 +200,20 @@ func (pal *PCIAddressSet) AddStrings(addrs ...string) error {
 			return err
 		}
 
-		pal.add(a)
+		pas.add(a)
 	}
 
 	return nil
 }
 
 // Addresses returns sorted slice of PCI address type object references.
-func (pal *PCIAddressSet) Addresses() []*PCIAddress {
-	if pal == nil {
+func (pas *PCIAddressSet) Addresses() []*PCIAddress {
+	if pas == nil {
 		return nil
 	}
 
-	addrs := make([]*PCIAddress, 0, len(pal.addrMap))
-	for _, addr := range pal.addrMap {
+	addrs := make([]*PCIAddress, 0, len(pas.addrMap))
+	for _, addr := range pas.addrMap {
 		addrs = append(addrs, addr)
 	}
 	sort.Slice(addrs, func(i, j int) bool { return addrs[i].LessThan(addrs[j]) })
@@ -221,13 +222,13 @@ func (pal *PCIAddressSet) Addresses() []*PCIAddress {
 }
 
 // Strings returns PCI addresses as slice of strings.
-func (pal *PCIAddressSet) Strings() []string {
-	if pal == nil {
+func (pas *PCIAddressSet) Strings() []string {
+	if pas == nil {
 		return nil
 	}
 
-	addrs := make([]string, len(pal.addrMap))
-	for i, addr := range pal.Addresses() {
+	addrs := make([]string, len(pas.addrMap))
+	for i, addr := range pas.Addresses() {
 		addrs[i] = addr.String()
 	}
 
@@ -235,22 +236,22 @@ func (pal *PCIAddressSet) Strings() []string {
 }
 
 // Strings returns PCI addresses as string of joined space separated strings.
-func (pal *PCIAddressSet) String() string {
-	return strings.Join(pal.Strings(), bdevPciAddrSep)
+func (pas *PCIAddressSet) String() string {
+	return strings.Join(pas.Strings(), bdevPciAddrSep)
 }
 
 // Len returns length of slice. Required by sort.Interface.
-func (pal *PCIAddressSet) Len() int {
-	if pal == nil {
+func (pas *PCIAddressSet) Len() int {
+	if pas == nil {
 		return 0
 	}
 
-	return len(pal.addrMap)
+	return len(pas.addrMap)
 }
 
 // IsEmpty returns true if address set is empty.
-func (pal *PCIAddressSet) IsEmpty() bool {
-	return pal.Len() == 0
+func (pas *PCIAddressSet) IsEmpty() bool {
+	return pas.Len() == 0
 }
 
 func hexStr2Int(s string) int64 {
@@ -262,12 +263,12 @@ func hexStr2Int(s string) int64 {
 }
 
 // Intersect returns elements in 'this' AND input address lists.
-func (pal *PCIAddressSet) Intersect(in *PCIAddressSet) *PCIAddressSet {
+func (pas *PCIAddressSet) Intersect(in *PCIAddressSet) *PCIAddressSet {
 	intersection := &PCIAddressSet{}
 
 	// loop over the smaller set
-	if pal.Len() < in.Len() {
-		for _, a := range pal.Addresses() {
+	if pas.Len() < in.Len() {
+		for _, a := range pas.Addresses() {
 			if in.Contains(a) {
 				intersection.Add(a)
 			}
@@ -277,7 +278,7 @@ func (pal *PCIAddressSet) Intersect(in *PCIAddressSet) *PCIAddressSet {
 	}
 
 	for _, a := range in.Addresses() {
-		if pal.Contains(a) {
+		if pas.Contains(a) {
 			intersection.Add(a)
 		}
 	}
@@ -286,10 +287,10 @@ func (pal *PCIAddressSet) Intersect(in *PCIAddressSet) *PCIAddressSet {
 }
 
 // Difference returns elements in 'this' list but NOT IN input address list.
-func (pal *PCIAddressSet) Difference(in *PCIAddressSet) *PCIAddressSet {
+func (pas *PCIAddressSet) Difference(in *PCIAddressSet) *PCIAddressSet {
 	difference := &PCIAddressSet{}
 
-	for _, a := range pal.Addresses() {
+	for _, a := range pas.Addresses() {
 		if !in.Contains(a) {
 			difference.Add(a)
 		}
@@ -303,14 +304,14 @@ func (pal *PCIAddressSet) Difference(in *PCIAddressSet) *PCIAddressSet {
 // e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
 //
 // Many assumptions are made as to the input and output PCI address structure in the conversion.
-func (pal *PCIAddressSet) BackingToVMDAddresses(log logging.Logger) (*PCIAddressSet, error) {
-	if pal == nil {
+func (pas *PCIAddressSet) BackingToVMDAddresses(log logging.Logger) (*PCIAddressSet, error) {
+	if pas == nil {
 		return nil, errors.New("PCIAddressSet is nil")
 	}
 
 	outAddrs := PCIAddressSet{}
 
-	for _, inAddr := range pal.Addresses() {
+	for _, inAddr := range pas.Addresses() {
 		if !inAddr.IsVMDBackingAddress() {
 			if err := outAddrs.Add(inAddr); err != nil {
 				return nil, err
