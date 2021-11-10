@@ -703,7 +703,8 @@ free_pool_and_placement_map(struct pool_map *po_map_in,
 {
 	struct pool_buf *buf;
 
-	pool_buf_extract(po_map_in, &buf);
+	if (pool_buf_extract(po_map_in, &buf))
+		return;
 	pool_map_decref(po_map_in);
 	pool_buf_free(buf);
 

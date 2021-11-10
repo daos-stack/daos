@@ -918,7 +918,7 @@ re_test:
 	assert_rc_equal(rc, 0);
 
 	fail_val = daos_shard_fail_value(&fail_shard, 1);
-	daos_fail_loc_set(DAOS_FAIL_SHARD_FETCH | DAOS_FAIL_ONCE);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ONCE);
 	daos_fail_value_set(fail_val);
 	d_iov_set(&sg_iov, rbuf, ss);
 	rc = daos_obj_fetch(ctx.oh, th, 0, &dkey, 1, &iod, &sgl,

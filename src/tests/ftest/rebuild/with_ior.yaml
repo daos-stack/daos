@@ -1,48 +1,45 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
     - server-B
     - server-C
     - server-D
+    - server-E
   test_clients:
-    - client-E
     - client-F
-timeout: 600
+    - client-G
+timeout: 800
 server_config:
   name: daos_server
   servers:
-    targets: 8
-testparams:
-  ranks:
-    rank_to_kill: 3
+    targets: 2
 pool:
   mode: 146
   name: daos_server
-  scm_size: 30000000000
+  scm_size: 6G
   svcn: 3
   control_method: dmg
   pool_query_timeout: 30
+container:
+    type: POSIX
+    properties: rf:1
+    control_method: daos
+dfuse:
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_caching: True
 ior:
+    ior_timeout: 120
     client_processes:
-        np_8:
-            np: 8
-    repetitions: 1
-    api: MPIIO
-    dfs_oclass: "RP_2GX"
+        np_16:
+            np: 16
+    repetitions: 2
+    test_file: daos:/testFile
+    ior_api: DFS
+    obj_class: "RP_2GX"
     iorflags:
-        write:
-          F: "-w -W -k -G 1"
-        read:
-          F: "-r -R -G 1 -E"
-    transfersize_blocksize: !mux
-        64M:
-            transfer_size: '1M'
-            block_size: '64M'
-        512M:
-            transfer_size: '1M'
-            block_size: '512M'
-        1G:
-            transfer_size: '1M'
-            block_size: '1G'
+        write_flg: "-C -k -e -w -g -G 27 -D 300 -Q 1 -vv"
+        read_flg: "-C -k -e -r -R -g -G 27 -D 300 -Q 1 -vv"
+    transfer_blk_size_rebld:
+        rank_to_kill: 3
+        transfer_size: '1M'
+        block_size: '64M'
