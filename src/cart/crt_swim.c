@@ -1075,6 +1075,10 @@ void crt_swim_accommodate(void)
 		else if (average > max_timeout)
 			average = max_timeout;
 
+		/*
+		 * (x >> 5) is just (x / 32) but a way faster.
+		 * This should avoid changes for small deltas.
+		 */
 		if ((average >> 5) != (ping_timeout >> 5)) {
 			D_INFO("change PING timeout from %lu ms to %lu ms\n",
 			       ping_timeout, average);

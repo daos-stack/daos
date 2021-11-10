@@ -1055,8 +1055,8 @@ done_item:
 				D_GOTO(out, rc);
 			}
 			send_updates = false;
-		} else if ((hlc + 100) < ctx->sc_next_event) {
-			break;
+		} else if ((hlc + crt_msec2hlc(100)) < ctx->sc_next_event) {
+			break; /* break loop if need to wait more than 100 ms. */
 		}
 	}
 	rc = (hlc > end) ? -DER_TIMEDOUT : -DER_CANCELED;
