@@ -453,7 +453,7 @@ void d_free_string(struct d_string_buffer_t *buf);
 # define offsetof(typ, memb)	((long)((char *)&(((typ *)0)->memb)))
 #endif
 
-#define D_ALIGNUP(x, a) (((x) + (a - 1)) & ~(a - 1))
+#define D_ALIGNUP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))

@@ -380,22 +380,29 @@ int dc_mgmt_net_cfg(const char *name)
 	}
 
 	ofi_interface = getenv("OFI_INTERFACE");
+	ofi_domain = getenv("OFI_DOMAIN");
 	if (!ofi_interface) {
 		rc = setenv("OFI_INTERFACE", info.interface, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
-	} else {
-		D_INFO("Using client provided OFI_INTERFACE: %s\n",
-			ofi_interface);
-	}
 
-	ofi_domain = getenv("OFI_DOMAIN");
-	if (!ofi_domain) {
+		/*
+		 * If we use the agent as the source, client env shouldn't be allowed to override
+		 * the domain. Otherwise we could get a mismatch between interface and domain.
+		 */
+		if (ofi_domain)
+			D_WARN("Ignoring OFI_DOMAIN '%s' because OFI_INTERFACE is not set; using "
+			       "automatic configuration instead\n", ofi_domain);
+
 		rc = setenv("OFI_DOMAIN", info.domain, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+		D_INFO("Using client provided OFI_INTERFACE: %s\n", ofi_interface);
+
+		/* If the client env didn't provide a domain, we can assume we don't need one. */
+		if (ofi_domain)
+			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
 
 	D_DEBUG(DB_MGMT,

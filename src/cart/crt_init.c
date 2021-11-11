@@ -109,7 +109,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	timeout;
 	uint32_t	credits;
 	uint32_t	fi_univ_size = 0;
-	uint32_t	mem_pin_disable = 0;
+	uint32_t	mem_pin_enable = 0;
 	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
 	int		rc = 0;
@@ -143,8 +143,8 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	/* Apply CART-890 workaround for server side only */
 	if (server) {
-		d_getenv_int("CRT_DISABLE_MEM_PIN", &mem_pin_disable);
-		if (mem_pin_disable == 0)
+		d_getenv_int("CRT_ENABLE_MEM_PIN", &mem_pin_enable);
+		if (mem_pin_enable == 1)
 			mem_pin_workaround();
 	}
 

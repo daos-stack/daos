@@ -40,8 +40,8 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
  * if there are more failures for that domain type then allowed restrict
  * container opening.
  *
- * \param pmap  [in]    The pool map referenced by the container.
- * \param props [in]    The container properties, used to get redundancy factor
+ * \param[in] pmap      The pool map referenced by the container.
+ * \param[in] props     The container properties, used to get redundancy factor
  *                      and level.
  *
  * \return	0 if the container meets the requirements, negative error code
@@ -1383,6 +1383,9 @@ cont_agg_eph_leader_ult(void *arg)
 	struct cont_ec_agg	*tmp;
 	int			rc = 0;
 
+	if (svc->cs_ec_leader_ephs_req == NULL)
+		goto out;
+
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
@@ -1456,6 +1459,7 @@ yield:
 		sched_req_sleep(svc->cs_ec_leader_ephs_req, EC_AGG_EPH_INTV);
 	}
 
+out:
 	D_DEBUG(DF_DSMS, DF_UUID": stop eph ult: rc %d\n",
 		DP_UUID(svc->cs_pool_uuid), rc);
 
@@ -1473,10 +1477,9 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 	ABT_thread		ec_eph_leader_ult = ABT_THREAD_NULL;
 	int			rc;
 
+	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 	if (unlikely(ec_agg_disabled))
 		return 0;
-
-	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 
 	rc = dss_ult_create(cont_agg_eph_leader_ult, svc, DSS_XS_SYS,
 			    0, 0, &ec_eph_leader_ult);
@@ -1492,7 +1495,7 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 	if (svc->cs_ec_leader_ephs_req == NULL) {
 		D_ERROR(DF_UUID"Failed to get req for ec eph query ULT\n",
 			DP_UUID(svc->cs_pool_uuid));
-		ABT_thread_join(ec_eph_leader_ult);
+		ABT_thread_free(&ec_eph_leader_ult);
 		return -DER_NOMEM;
 	}
 
@@ -3287,14 +3290,17 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		return rc;
 	}
 	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop);
+	cont_put(cont);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_prop_read() failed, "DF_RC"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		return rc;
 	}
 	strncpy(cinfo->pci_label, prop->dpp_entries[0].dpe_str,
 		DAOS_PROP_LABEL_MAX_LEN);
 	cinfo->pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
+	daos_prop_free(prop);
 	return 0;
 }
 
