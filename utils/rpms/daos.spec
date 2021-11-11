@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.1.0~rc2-1%{?dist}
+%global mercury_version 2.1.0~rc3-1%{?dist}
 %global libfabric_version 1.13.2~rc1-1
 %global __python %{__python3}
 
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -516,6 +516,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Thu Nov 11 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-6
+- Update mercury to v2.1.0rc3
+- Mercury patch workaround added for DAOS-8968
+
 * Tue Oct 26 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-5
 - Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
 - Rename daos-tests daos-client-tests and make daos-tests require all
