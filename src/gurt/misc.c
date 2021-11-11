@@ -308,6 +308,23 @@ d_rank_list_sort(d_rank_list_t *rank_list)
 	      sizeof(d_rank_t), rank_compare);
 }
 
+void
+d_rank_list_shuffle(d_rank_list_t *rank_list)
+{
+	uint32_t	i, j;
+	d_rank_t	tmp;
+
+	if (rank_list == NULL)
+		return;
+
+	for (i = 0; i < rank_list->rl_nr; i++) {
+		j = rand() % rank_list->rl_nr;
+		tmp = rank_list->rl_ranks[i];
+		rank_list->rl_ranks[i] = rank_list->rl_ranks[j];
+		rank_list->rl_ranks[j] = tmp;
+	}
+}
+
 /**
  * Must be previously sorted or not modified at all in order to guarantee
  * consistent indexes.
