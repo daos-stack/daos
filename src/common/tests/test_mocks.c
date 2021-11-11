@@ -231,6 +231,10 @@ sendmsg(int sockfd, const struct msghdr *msg, int flags)
 		sendmsg_msg_iov_len = msg->msg_iov[0].iov_len;
 	}
 	sendmsg_flags = flags;
+	if (sendmsg_return < 0) {
+		errno = -sendmsg_return;
+		return -1;
+	}
 	return sendmsg_return;
 }
 
