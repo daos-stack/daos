@@ -641,7 +641,7 @@ func (cfg *Server) CheckFabric(ctx context.Context) (uint32, error) {
 	for index, engine := range cfg.Engines {
 		ndc, err := cfg.GetDeviceClassFn(engine.Fabric.Interface)
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "unable to detect device class for %q", engine.Fabric.Interface)
 		}
 		if index == 0 {
 			netDevClass = ndc
