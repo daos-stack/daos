@@ -622,7 +622,8 @@ vos_register_slabs(struct umem_attr *uma)
 				 *  so reuse the class id
 				 */
 				slab->class_id = uma->uma_slabs[j].class_id;
-				goto skip_new_class;
+				D_ASSERT(slab->class_id != 0);
+				continue;
 			}
 		}
 
@@ -634,7 +635,6 @@ vos_register_slabs(struct umem_attr *uma)
 			rc = umem_tx_errno(rc);
 			return rc;
 		}
-skip_new_class:
 		D_ASSERT(slab->class_id != 0);
 	}
 
