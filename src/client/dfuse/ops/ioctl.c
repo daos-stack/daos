@@ -126,8 +126,9 @@ handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	/* XXX: Check this? */
 	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
+	if (rc)
+		D_GOTO(free, rc = daos_der2errno(rc));
 
 	errno = 0;
 	fd = mkstemp(fname);
