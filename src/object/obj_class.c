@@ -61,7 +61,10 @@ daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 		return -DER_INVAL;
 	}
 
-	daos_obj_set_oid(oid, type, oc->oc_redun, nr_grps, args);
+	if (cid < (OR_RP_1 << OC_REDUN_SHIFT))
+		daos_obj_set_oid(oid, type, 0, cid, args);
+	else
+		daos_obj_set_oid(oid, type, oc->oc_redun, nr_grps, args);
 
 	return 0;
 }
