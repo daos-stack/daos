@@ -39,17 +39,16 @@ def _supports_custom_format(clang_exe):
         return False
 
     match = re.search(r"version (\d+)\.", output)
-    if match and int(match.group(1)) >= 7:
+    if match and int(match.group(1)) >= 11:
         return True
 
-    print("Custom .clang-format wants version 7+. Using Mozilla style.")
+    print("Custom .clang-format wants version 11+. Using Mozilla style.")
     return False
 
 def _find_indent():
     """find clang-format"""
     indent = WhereIs("clang-format")
     if indent is None:
-        print("clang-format not found, not formatting preprocessed files")
         return None
     if _supports_custom_format(indent):
         style = "file"

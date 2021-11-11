@@ -1,4 +1,6 @@
-# clang-format script for daos
+# clang-format script for daos that most closely matches our coding style.
+# Tested on CentOS 8, and uses version 11 so check for that in
+# site_scons/site_tools/extra/extra.py
 ---
 BasedOnStyle: LLVM
 IndentWidth: 8
@@ -13,4 +15,15 @@ AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
 AlignTrailingComments: true
 ColumnLimit: 100
+SortIncludes: false
+AlwaysBreakAfterReturnType: All
+IndentGotoLabels: false
+AlignConsecutiveMacros: true
+# AcrossComments is the feature we want here, but is not in clang 11 yet so use
+# false until our dev systems are updated.
+# AlignConsecutiveAssignments: AcrossComments
+AlignConsecutiveAssignments: false
+SpaceBeforeParens: ControlStatementsExceptForEachMacros
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
 ...
