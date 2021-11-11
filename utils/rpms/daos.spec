@@ -518,7 +518,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %changelog
 * Thu Nov 11 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-6
 - Update mercury to v2.1.0rc3
-- Mercury patch workaround added for DAOS-8968
 
 * Tue Oct 26 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-5
 - Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages

@@ -1,7 +1,6 @@
 daos (2.1.100-6) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Update mercury to v2.1.0rc3
-  * Apply workaround patch for daos_8968
 
  -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Thu, 11 Nov 2021 010:00:01 -0100
 
