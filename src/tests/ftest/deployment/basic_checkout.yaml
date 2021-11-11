@@ -24,20 +24,31 @@ hosts:
 timeout: 2700
 server_config:
     name: daos_server
+    engines_per_host: 2
     provider: ofi+tcp;ofi_rxm
     servers:
-        bdev_class: nvme
-        bdev_list: ["aaaa:aa:aa.a"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
-    transport_config:
-      allow_insecure: True
-agent_config:
-    transport_config:
-      allow_insecure: True
-dmg:
-    transport_config:
-      allow_insecure: True
+        0:
+          pinned_numa_node: 0
+          nr_xs_helpers: 1
+          fabric_iface: ib0
+          fabric_iface_port: 31317
+          log_file: daos_server0.log
+          bdev_class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          pinned_numa_node: 1
+          nr_xs_helpers: 1
+          fabric_iface: ib1
+          fabric_iface_port: 31417
+          log_file: daos_server1.log
+          bdev_class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
 pool:
     mode: 146
     name: daos_server
@@ -49,7 +60,6 @@ container:
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 ior:
-    ior_timeout: 60
     client_processes:
         np_16:
             np: 64
@@ -58,24 +68,23 @@ ior:
     repetitions: 2
     dfs_destroy: False
     iorflags:
-          ec_test_flags: "-w -W -r -R -G 1 -vv"
           ior_flags:
             - "-v -W -w -r -R"
             - "-v -W -w -r -R -F"
           ior_api:
             - DFS
-            - MPIIO
             - POSIX
             - HDF5
             - HDF5-VOL
+            - MPIIO
           transfer_block_size:
             - [256B, 2M]
             - [1M, 32M]
           obj_class:
             - "SX"
             - "RP_2GX"
-    objectclass:
-      dfs_oclass:
+    ec_objectclass:
+      ec_oclass:
       - "EC_2P1G1"
       - "EC_2P1G8"
       - "EC_2P1GX"
