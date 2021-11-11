@@ -44,23 +44,22 @@ In this step, we create a CentOS 7 image and fetches the latest DAOS version fro
 ## Docker Setup
 Once the image has been created, a container will need to be started to run the DAOS service. 
 
-### Setting Hugepages
+### Setting Hugepages (Work in Progress)
 At this stage, depending on how hugepages are configured on your host system, you may get errors when the `docker run` command is issued. So for this demonstration, we will be configuring hugepages before issuing the `docker run` command:
 
-> Depending on the CPU involved, the quantity of available hugepages changes, for example.
+> Depending on the CPU involved, the quantity of available1G  hugepages changes, for example.
 - Cascade Lake 16 pages
 - Icelake 64 pages
 - Saphire Rapids 96 pages
 
-In this situation of using a Cascade Lake CPU, the hugepage capacity is 16, so we set the hugepages by using the following commands:
+In this situation of using a Cascade Lake CPU, the 2mb hugepage capacity at 1024 pages, so we set the hugepages by using the following commands:
+
 ```bash
-echo 16 | sudo tee /proc/sys/VM/nr_hugepages
+echo 1024 | sudo tee /proc/sys/VM/nr_hugepages
 cat /proc/meminfo | grep Huge
 ```
 
 This command should provide an output similar to:
-
-> Need new table as this was for 1mg Hugepages
 
 ```bash
 AnonHugePages:         0 kB
