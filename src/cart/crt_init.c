@@ -134,8 +134,8 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_init_prov = CRT_NA_OFI_SOCKETS;
 
-	D_SRAND(d_timeus_secdiff(0) + getpid());
-	start_rpcid = ((uint64_t)D_RAND()) << 32;
+	d_srand(d_timeus_secdiff(0) + getpid());
+	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
 
@@ -377,7 +377,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		/* feed a seed for pseudo-random number generator */
 		gettimeofday(&now, NULL);
 		seed = (unsigned int)(now.tv_sec * 1000000 + now.tv_usec);
-		D_SRAND(seed);
+		d_srand(seed);
 
 		crt_gdata.cg_server = server;
 		crt_gdata.cg_auto_swim_disable =

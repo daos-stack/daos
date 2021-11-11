@@ -17,13 +17,13 @@
 static struct drand48_data randBuffer = {0};
 
 void
-d_srand48_r(long int seedval)
+d_srand(long int seedval)
 {
 	srand48_r(seedval, &randBuffer);
 }
 
 long int
-d_lrand48_r()
+d_rand()
 {
 	long int result;
 
@@ -837,7 +837,7 @@ d_backoff_seq_next(struct d_backoff_seq *seq)
 	}
 
 	/* Return a random backoff in [0, next]. */
-	return (next * ((double)D_RAND() / D_RAND_MAX));
+	return (next * ((double)d_rand() / D_RAND_MAX));
 }
 
 double
