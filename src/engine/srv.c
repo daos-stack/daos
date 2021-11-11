@@ -280,7 +280,7 @@ dss_nvme_poll_ult(void *args)
 static void
 wait_all_exited(struct dss_xstream *dx)
 {
-	D_DEBUG(DB_TRACE, "XS(%d) draining ULTs.\n", dx->dx_xs_id);
+	D_INFO("XS(%d) draining ULTs.\n", dx->dx_xs_id);
 
 	sched_stop(dx);
 
@@ -305,7 +305,7 @@ wait_all_exited(struct dss_xstream *dx)
 
 		ABT_thread_yield();
 	}
-	D_DEBUG(DB_TRACE, "XS(%d) drained ULTs.\n", dx->dx_xs_id);
+	D_INFO("XS(%d) drained ULTs.\n", dx->dx_xs_id);
 }
 
 /*
@@ -488,29 +488,46 @@ dss_srv_handler(void *arg)
 			}
 		}
 
-		if (dss_xstream_exiting(dx))
+		if (dss_xstream_exiting(dx)) {
+			D_INFO("XS(%d) is exiting\n", dx->dx_xs_id);
 			break;
+		}
 
 		ABT_thread_yield();
 	}
 
 	wait_all_exited(dx);
+	D_INFO("XS(%d) wait_all_exited() done\n", dx->dx_xs_id);
+
 	if (dmi->dmi_dp) {
+		D_INFO("XS(%d) call daos_profile_destroy()\n", dx->dx_xs_id);
 		daos_profile_destroy(dmi->dmi_dp);
+		D_INFO("XS(%d) daos_profile_destroy() done\n", dx->dx_xs_id);
 		dmi->dmi_dp = NULL;
 	}
 nvme_fini:
-	if (dx->dx_main_xs)
+	if (dx->dx_main_xs) {
+		D_INFO("XS(%d) call bio_xsctxt_free()\n", dx->dx_xs_id);
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
+		D_INFO("XS(%d) bio_xsctxt_free done()\n", dx->dx_xs_id);
+	}
 tse_fini:
 	tse_sched_fini(&dx->dx_sched_dsc);
+	D_INFO("XS(%d) tse_sched_fini() done\n", dx->dx_xs_id);
+
 crt_destroy:
-	if (dx->dx_comm)
-		crt_context_destroy(dmi->dmi_ctx, true);
+	if (dx->dx_comm) {
+		D_INFO("XS(%d) call crt_context_destroy_debug()\n", dx->dx_xs_id);
+		crt_context_destroy_debug(dmi->dmi_ctx, true, dx->dx_xs_id);
+		D_INFO("XS(%d) crt_context_destroy() done\n", dx->dx_xs_id);
+	}
 tls_fini:
 	dss_tls_fini(dtc);
+	D_INFO("XS(%d) dss_tls_fini() done\n", dx->dx_xs_id);
 signal:
+	D_ASSERT(signal_caller == false);
 	if (signal_caller) {
+		D_INFO("XS(%d) why am I here (signal_caller=true)?\n", dx->dx_xs_id);
 		ABT_mutex_lock(xstream_data.xd_mutex);
 		/* initialized everything for the ULT, notify the creator */
 		D_ASSERT(!xstream_data.xd_ult_signal);
@@ -519,6 +536,7 @@ signal:
 		ABT_cond_signal(xstream_data.xd_ult_init);
 		ABT_mutex_unlock(xstream_data.xd_mutex);
 	}
+	D_INFO("XS(%d) returning\n", dx->dx_xs_id);
 }
 
 static inline struct dss_xstream *
@@ -739,7 +757,7 @@ dss_xstreams_fini(bool force)
 	int			 rc;
 	bool			 started = false;
 
-	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
+	D_INFO("Stopping execution streams\n");
 	dss_xstreams_open_barrier();
 	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
 	D_ASSERT(rc == 0);
@@ -750,6 +768,7 @@ dss_xstreams_fini(bool force)
 		if (dx == NULL)
 			continue;
 		ABT_future_set(dx->dx_stopping, dx);
+		D_INFO("ABT_future_set(dx_stopping) for XS(%d) done\n", dx->dx_xs_id);
 	}
 
 	/** Stop & free progress ULTs */
@@ -758,15 +777,23 @@ dss_xstreams_fini(bool force)
 		if (dx == NULL)
 			continue;
 		ABT_future_set(dx->dx_shutdown, dx);
+		D_INFO("ABT_future_set(dx_shutdown) for XS(%d) done\n", dx->dx_xs_id);
 	}
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
 		ABT_thread_join(dx->dx_progress);
+		D_INFO("Joined dx_progress ULT for XS(%d)\n", dx->dx_xs_id);
+
 		ABT_thread_free(&dx->dx_progress);
+		D_INFO("Freed dx_progress ULT for XS(%d)\n", dx->dx_xs_id);
+
 		ABT_future_free(&dx->dx_shutdown);
+		D_INFO("Freed ABT_future dx_shutdown for XS(%d)\n", dx->dx_xs_id);
+
 		ABT_future_free(&dx->dx_stopping);
+		D_INFO("Freed ABT_future dx_stopping for XS(%d)\n", dx->dx_xs_id);
 	}
 
 	/** Wait for each execution stream to complete */
@@ -775,16 +802,25 @@ dss_xstreams_fini(bool force)
 		if (dx == NULL)
 			continue;
 		ABT_xstream_join(dx->dx_xstream);
+		D_INFO("Joined XS(%d)\n", dx->dx_xs_id);
+
 		ABT_xstream_free(&dx->dx_xstream);
+		D_INFO("Freed XS(%d)\n", dx->dx_xs_id);
 	}
 
 	/** housekeeping ... */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
+		int xs_id;
+
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
+		xs_id = dx->dx_xs_id;
 		dss_sched_fini(dx);
+		D_INFO("dss_sched_fini() done for XS(%d)\n", xs_id);
+
 		dss_xstream_free(dx);
+		D_INFO("dss_xstream_free() done for XS(%d)\n", xs_id);
 		xstream_data.xd_xs_ptrs[i] = NULL;
 	}
 
@@ -792,7 +828,7 @@ dss_xstreams_fini(bool force)
 	xstream_data.xd_xs_nr = 0;
 	dss_tgt_nr = 0;
 
-	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
+	D_INFO("Execution streams stopped\n");
 }
 
 void
@@ -1147,21 +1183,26 @@ dss_srv_fini(bool force)
 		D_ASSERT(0);
 	case XD_INIT_DRPC:
 		drpc_listener_fini();
+		D_INFO("drpc_listener_fini() done\n");
 		/* fall through */
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
 		/* fall through */
 	case XD_INIT_NVME:
 		bio_nvme_fini();
+		D_INFO("bio_nvme_fini() done\n");
 		/* fall through */
 	case XD_INIT_SYS_DB:
 		vos_db_fini();
+		D_INFO("vos_db_fini() done\n");
 		/* fall through */
 	case XD_INIT_TLS_INIT:
 		dss_tls_fini(xstream_data.xd_dtc);
+		D_INFO("dss_tls_fini() done\n");
 		/* fall through */
 	case XD_INIT_TLS_REG:
 		pthread_key_delete(dss_tls_key);
+		D_INFO("pthread_key_delete(dss_tls_key) done\n");
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
@@ -1175,7 +1216,7 @@ dss_srv_fini(bool force)
 	case XD_INIT_NONE:
 		if (xstream_data.xd_xs_ptrs != NULL)
 			D_FREE(xstream_data.xd_xs_ptrs);
-		D_DEBUG(DB_TRACE, "Finalized everything\n");
+		D_INFO("Finalized everything\n");
 	}
 	return 0;
 }

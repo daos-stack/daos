@@ -394,6 +394,12 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 #define CRT_EPI_ABORT_FORCE	(0x1)
 #define CRT_EPI_ABORT_WAIT	(0x2)
 
+/* args struct for crt_ctx_epi_abort() */
+struct epi_abort_args {
+	int	flags;
+	int	id;
+};
+
 /* abort the RPCs in inflight queue and waitq in the epi. */
 static int
 crt_ctx_epi_abort(d_list_t *rlink, void *arg)
@@ -405,26 +411,40 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	int			 flags, force, wait;
 	uint64_t		 ts_start, ts_now;
 	int			 rc = 0;
+	int			 wait_try = 0;
+	struct epi_abort_args	*abort_argsp = NULL;
+	int			 id;
 
 	D_ASSERT(rlink != NULL);
 	D_ASSERT(arg != NULL);
 	epi = epi_link2ptr(rlink);
+
+	abort_argsp = (struct epi_abort_args *) arg;
+	flags = abort_argsp->flags;
+	id = abort_argsp->id;
 
 	/*
 	 * DAOS-7306: This mutex is needed in order to avoid double
 	 * completions that would happen otherwise. safe list processing
 	 * is not sufficient to avoid the race
 	 */
+	if (id >= 0)
+		D_INFO("XS(%d): trying to lock epi_mutex\n", id);
 	D_MUTEX_LOCK(&epi->epi_mutex);
+	if (id >= 0)
+		D_INFO("XS(%d): locked epi_mutex\n", id);
 	ctx = epi->epi_ctx;
 	D_ASSERT(ctx != NULL);
 
 	/* empty queue, nothing to do */
 	if (d_list_empty(&epi->epi_req_waitq) &&
-	    d_list_empty(&epi->epi_req_q))
+	    d_list_empty(&epi->epi_req_q)) {
+		if (id >= 0)
+			D_INFO("XS(%d): req_waitq and req_q are both empty. Nothing to do\n", id);
 		D_GOTO(out, rc = 0);
+	}
 
-	flags = *(int *)arg;
+	/* flags = *(int *)arg; */
 	force = flags & CRT_EPI_ABORT_FORCE;
 	wait = flags & CRT_EPI_ABORT_WAIT;
 	if (force == 0) {
@@ -444,9 +464,10 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_wait_num > 0);
 		if (msg_logged == false) {
-			D_DEBUG(DB_NET, "destroy context (idx %d, rank %d, "
-				"req_wait_num "DF_U64").\n", ctx->cc_idx,
-				epi->epi_ep.ep_rank, epi->epi_req_wait_num);
+			if (id >= 0)
+				D_INFO("XS(%d): destroy context (idx %d, rank %d, "
+				       "req_wait_num "DF_U64").\n", id, ctx->cc_idx,
+				       epi->epi_ep.ep_rank, epi->epi_req_wait_num);
 			msg_logged = true;
 		}
 		/* Just remove from wait_q, decrease the wait_num and destroy
@@ -454,7 +475,11 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		D_ASSERT(rpc_priv->crp_state == RPC_STATE_QUEUED);
 		d_list_del_init(&rpc_priv->crp_epi_link);
 		epi->epi_req_wait_num--;
+		if (id >= 0)
+			D_INFO("XS(%d): epi_req_wait_num=%"PRId64"\n", id, epi->epi_req_wait_num);
 		crt_rpc_complete(rpc_priv, -DER_CANCELED);
+		if (id >= 0)
+			D_INFO("XS(%d): crt_rpc_complete() done\n", id);
 	}
 
 	/* abort RPCs in inflight queue */
@@ -463,24 +488,28 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_num > epi->epi_reply_num);
 		if (msg_logged == false) {
-			D_DEBUG(DB_NET,
-				"destroy context (idx %d, rank %d, "
-				"epi_req_num "DF_U64", epi_reply_num "
-				""DF_U64", inflight "DF_U64").\n",
-				ctx->cc_idx, epi->epi_ep.ep_rank,
-				epi->epi_req_num, epi->epi_reply_num,
-				epi->epi_req_num - epi->epi_reply_num);
+			if (id >= 0)
+				D_INFO(
+					"XS(%d): destroy context (idx %d, rank %d, "
+					"epi_req_num "DF_U64", epi_reply_num "
+					""DF_U64", inflight "DF_U64").\n",
+					id,ctx->cc_idx, epi->epi_ep.ep_rank,
+					epi->epi_req_num, epi->epi_reply_num,
+					epi->epi_req_num - epi->epi_reply_num);
 			msg_logged = true;
 		}
 
 		rc = crt_req_abort(&rpc_priv->crp_pub);
 		if (rc != 0) {
-			D_DEBUG(DB_NET,
-				"crt_req_abort(opc: %#x) failed, rc: %d.\n",
-				rpc_priv->crp_pub.cr_opc, rc);
+			if (id >= 0)
+				D_INFO(
+					"XS(%d): crt_req_abort(opc: %#x) failed, rc: %d.\n",
+					id, rpc_priv->crp_pub.cr_opc, rc);
 			rc = 0;
 			continue;
 		}
+		if (id >= 0)
+			D_INFO("XS(%d): crt_req_abort() done/success\n", id);
 	}
 
 	ts_start = d_timeus_secdiff(0);
@@ -489,12 +518,24 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		if (d_list_empty(&epi->epi_req_waitq) &&
 		    d_list_empty(&epi->epi_req_q)) {
 			wait = 0;
+			if (id >= 0)
+				D_INFO("XS(%d): req_waitq and req_q empty, done waiting\n", id);
 		} else {
 			D_MUTEX_UNLOCK(&epi->epi_mutex);
+			if ((id >= 0) && ((wait_try % 50000) == 0))
+				D_INFO("XS(%d): wait_try=%d: unlocked epi_mutex\n", id, wait_try);
 			D_MUTEX_UNLOCK(&ctx->cc_mutex);
+			if ((id >= 0) && ((wait_try % 50000) == 0))
+				D_INFO("XS(%d): wait_try=%d: unlocked cc_mutex\n", id, wait_try);
 			rc = crt_progress(ctx, 1);
+			if ((id >= 0) && ((wait_try % 50000) == 0))
+				D_INFO("XS(%d): wait_try=%d: crt_progress() done\n", id, wait_try);
 			D_MUTEX_LOCK(&ctx->cc_mutex);
+			if ((id >= 0) && ((wait_try % 50000) == 0))
+				D_INFO("XS(%d): wait_try=%d: locked cc_mutex\n", id, wait_try);
 			D_MUTEX_LOCK(&epi->epi_mutex);
+			if ((id >= 0) && ((wait_try % 50000) == 0))
+				D_INFO("XS(%d): wait_try=%d: locked epi_mutex\n", id, wait_try);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("crt_progress failed, rc %d.\n", rc);
 				break;
@@ -506,21 +547,25 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 				break;
 			}
 		}
+		wait_try++;
 	}
 
 out:
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
+	if (id >= 0)
+		D_INFO("XS(%d): unlocked epi_mutex\n", id);
 	return rc;
 }
 
-int
-crt_context_destroy(crt_context_t crt_ctx, int force)
+static int
+crt_context_destroy_internal(crt_context_t crt_ctx, int force, int id)
 {
 	struct crt_context	*ctx;
 	uint32_t		 timeout_sec;
 	int			 flags;
 	int			 rc = 0;
 	int			 i;
+	struct epi_abort_args	 abort_args;
 
 	if (crt_ctx == CRT_CONTEXT_NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx).\n");
@@ -541,27 +586,49 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	timeout_sec = crt_swim_rpc_timeout();
 	flags = force ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
+	abort_args.flags = flags;
+	abort_args.id = id;
+	if (id >= 0)
+		D_INFO("XS(%d): try to lock cc_mutex before attempt loop\n", id);
 	D_MUTEX_LOCK(&ctx->cc_mutex);
+	if (id >= 0)
+		D_INFO("XS(%d): locked cc_mutex before attempt loop\n", id);
 	for (i = 0; i < CRT_SWIM_FLUSH_ATTEMPTS; i++) {
+		if (id >= 0)
+			D_INFO("XS(%d): attempt %d\n", id, i);
 		rc = d_hash_table_traverse(&ctx->cc_epi_table,
-					   crt_ctx_epi_abort, &flags);
-		if (rc == 0)
+					   crt_ctx_epi_abort, &abort_args);
+		if (rc == 0) {
+			if (id >= 0)
+				D_INFO("XS(%d): at attempt %d, ready to destroy\n", id, i);
 			break; /* ready to destroy */
+		}
 
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
-		D_DEBUG(DB_TRACE, "destroy context (idx %d, force %d), "
-			"d_hash_table_traverse failed rc: %d.\n",
-			ctx->cc_idx, force, rc);
+		if (id >= 0)
+			D_INFO("XS(%d): attempt %d loop, unlocked cc_mutex\n", id, i);
+
+		if (id >= 0)
+			D_INFO("XS(%d): destroy context (idx %d, force %d), "
+			       "d_hash_table_traverse failed rc: %d.\n",
+			       id, ctx->cc_idx, force, rc);
 		if (i > 5)
 			D_ERROR("destroy context (idx %d, force %d) "
 				"takes too long time. This is attempt %d of %d.\n",
 				ctx->cc_idx, force, i, CRT_SWIM_FLUSH_ATTEMPTS);
 		/* Flush SWIM RPC already sent */
 		rc = crt_context_flush(crt_ctx, timeout_sec);
-		if (rc)
+		if (rc) {
+			if (id >=0)
+				D_INFO("XS(%d): crt_context_flush() rc=%d, sleep 1ms\n", id, rc);
 			/* give a chance to other threads to complete */
 			usleep(1000); /* 1ms */
+		}
+		if (id >= 0)
+			D_INFO("XS(%d): attempt %d loop, try to lock cc_mutex\n", id, i);
 		D_MUTEX_LOCK(&ctx->cc_mutex);
+		if (id >= 0)
+			D_INFO("XS(%d): attempt %d loop, locked cc_mutex\n", id, i);
 	}
 
 	if (!force && rc && i == CRT_SWIM_FLUSH_ATTEMPTS)
@@ -577,8 +644,12 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	d_binheap_destroy_inplace(&ctx->cc_bh_timeout);
+	if (id >= 0)
+		D_INFO("XS(%d): d_binheap_destroy_inplace() done\n", id);
 
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
+	if (id >= 0)
+		D_INFO("XS(%d): unlocked cc_mutex\n", id);
 
 	int provider = ctx->cc_hg_ctx.chc_provider;
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
@@ -587,22 +658,50 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_GOTO(out, rc);
 	}
 
+	if (id >= 0)
+		D_INFO("XS(%d): crt_hg_ctx_fini() done\n", id);
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+
+	if (id >= 0)
+		D_INFO("XS(%d): locked/wrlock cg_rwlock\n", id);
 	crt_provider_dec_cur_ctx_num(provider);
+	if (id >= 0)
+		D_INFO("XS(%d): crt_provider_dec_cur_ctx_num() done\n", id);
 	d_list_del(&ctx->cc_link);
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+	if (id >=0)
+		D_INFO("XS(%d): unlocked cg_wrlock\n", id);
 
 	D_MUTEX_DESTROY(&ctx->cc_mutex);
+	if (id >= 0)
+		D_INFO("XS(%d): destroyed cc_mutex, destroyed context (idx %d, force %d)\n",
+		       id, ctx->cc_idx, force);
 	D_DEBUG(DB_TRACE, "destroyed context (idx %d, force %d)\n",
 		ctx->cc_idx, force);
 	D_FREE(ctx);
 
 out:
+	if (id >= 0)
+		D_INFO("XS(%d) returning rc=%d\n", id, rc);
 	return rc;
 
 err_unlock:
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
+	if (id >= 0)
+		D_INFO("XS(%d): in err_unlock, unlocked cc_mutex, returning rc=%d\n", id, rc);
 	return rc;
+}
+
+int
+crt_context_destroy(crt_context_t crt_ctx, int force)
+{
+	return crt_context_destroy_internal(crt_ctx, force, -1);
+}
+
+int
+crt_context_destroy_debug(crt_context_t crt_ctx, int force, int id)
+{
+	return crt_context_destroy_internal(crt_ctx, force, id);
 }
 
 int
@@ -644,6 +743,9 @@ crt_rank_abort(d_rank_t rank)
 	int			 flags;
 	int			 rc = 0;
 	d_list_t		*ctx_list;
+	struct epi_abort_args	 abort_args;
+
+	abort_args.id = -1;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
@@ -655,7 +757,8 @@ crt_rank_abort(d_rank_t rank)
 					(void *)&rank, sizeof(rank));
 		if (rlink != NULL) {
 			flags = CRT_EPI_ABORT_FORCE;
-			rc = crt_ctx_epi_abort(rlink, &flags);
+			abort_args.flags = flags;
+			rc = crt_ctx_epi_abort(rlink, &abort_args);
 			d_hash_rec_decref(&ctx->cc_epi_table, rlink);
 		}
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
