@@ -250,9 +250,12 @@ def set_interface_environment():
     # Update env definitions
     os.environ["CRT_CTX_SHARE_ADDR"] = "0"
     os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
-    print("Using {} as the default interface".format(interface))
+    print("Testing with {} as the default interface".format(interface))
     for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
-        print("Using {}={}".format(name, os.environ.get(name)))
+        try:
+            print("Testing with {}={}".format(name, os.environ[name]))
+        except KeyError:
+            print("Testing with {} unset".format(name))
 
 
 def set_provider_environment(interface, args):
@@ -301,7 +304,7 @@ def set_provider_environment(interface, args):
 
     # Update env definitions
     os.environ[name] = detected_provider
-    print("Using {}={}".format(name, os.environ[name]))
+    print("Testing with {}={}".format(name, os.environ[name]))
 
 
 def set_python_environment():
@@ -328,7 +331,7 @@ def set_python_environment():
             if required_path not in defined_python_paths:
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
-    print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
+    print("Testing with PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
 
 
 def run_command(cmd):
