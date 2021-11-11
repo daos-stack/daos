@@ -118,7 +118,7 @@ class NvmePoolExtend(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7195", "DAOS-7955")
+    @skipForTicket("DAOS-7195, DAOS-7955")
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
         Test Description: NVME Pool Extend
