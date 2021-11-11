@@ -1483,6 +1483,7 @@ create_map_refresh_rpc(struct dc_pool *pool, unsigned int map_version,
 	crt_rpc_t		       *c;
 	struct pool_tgt_query_map_in   *in;
 	struct pool_buf		       *b;
+	uint32_t			timeout;
 	int				rc;
 
 	ep.ep_grp = group;
@@ -1506,6 +1507,12 @@ create_map_refresh_rpc(struct dc_pool *pool, unsigned int map_version,
 		crt_req_decref(c);
 		return rc;
 	}
+
+	/* Shorten the timeout to speed up map_refresh tasks. */
+	rc = crt_req_get_timeout(c, &timeout);
+	D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
+	rc = crt_req_set_timeout(c, max(1, timeout / 4));
+	D_ASSERTF(rc == 0, "crt_req_set_timeout: "DF_RC"\n", DP_RC(rc));
 
 	*rpc = c;
 	*map_buf = b;
