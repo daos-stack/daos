@@ -65,12 +65,12 @@ mdtest:
   client_processes:
     np_48:
       np: 48
-      num_of_files_dirs: 50
+      num_of_files_dirs: 200
   mdtest_api:
     dfs:
       api: 'DFS'
   test_dir: "/"
-  iteration: 3
+  iteration: 4
   dfs_destroy: True
   manager: "MPICH"
   flags: "-u"
