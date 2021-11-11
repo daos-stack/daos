@@ -252,7 +252,7 @@ def set_interface_environment():
     os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
     print("Using {} as the default interface".format(interface))
     for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
-        print("Using {}={}".format(name, os.environ[name]))
+        print("Using {}={}".format(name, os.environ.get(name)))
 
 
 def set_provider_environment(interface, args):
