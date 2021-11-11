@@ -1554,6 +1554,40 @@ class posix_tests():
         if dfuse1.stop():
             self.fatal_errors = True
 
+    def test_no_perm(self):
+        """Try unlinking a file from a container when there is no write permission on
+        the container itself"""
+
+        dfuse = DFuse(self.server, self.conf, pool=self.pool.uuid, container=self.container)
+        dfuse.start(v_hint='no_0')
+
+        file = os.path.join(dfuse.dir, 'file')
+        with open(file, 'w'):
+            pass
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        rc = run_daos_cmd(self.conf,
+                          ['container',
+                           'update-acl',
+                           self.pool.id(),
+                           self.container,
+                           '--entry',
+                           'A::OWNER@:rdtTaAo'])
+        print(rc)
+        dfuse = DFuse(self.server, self.conf, pool=self.pool.uuid, container=self.container)
+        dfuse.start(v_hint='no_0')
+
+        file = os.path.join(dfuse.dir, 'file')
+        # Unlink the file, this should fail as there's no write permission.
+        try:
+            os.unlink(file)
+            assert False
+        except PermissionError:
+            pass
+        if dfuse.stop():
+            self.fatal_errors = True
+
     @needs_dfuse
     def test_readdir_25(self):
         """Test reading a directory with 25 entries"""
