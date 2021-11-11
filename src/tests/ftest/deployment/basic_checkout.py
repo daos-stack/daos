@@ -5,13 +5,12 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from small import IorSmall
-from mdtest.small import MdtestSmall
-from autotest import ContainerAutotestTest
-from ior_smoke import EcodIor
-from large_file import DmvrPosixLargeFile
+from ior_test_base import IorTestBase
+from mdtest_test_base import MdtestBase
+from data_mover_test_base import DataMoverTestBase
+from command_utils_base import CommandFailure
 
-class BasicCheckout(IorSmall, MdtestSmall, ContainerAutotestTest, EcodIor):
+class BasicCheckout(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class wrapping up tests from four
                                different test classes into one. Intent
@@ -28,21 +27,49 @@ class BasicCheckout(IorSmall, MdtestSmall, ContainerAutotestTest, EcodIor):
         :avocado: tags=installation,basiccheckout
         """
         # local param
-        ec_ior_flags = self.params.get("ec_ior_flags", "/run/ior/*")
+        flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
+        apis = self.params.get("ior_api", '/run/ior/iorflags/*')
+        dfuse_mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
+        transfer_block_size = self.params.get("transfer_block_size",
+                                              '/run/ior/iorflags/*')
+        obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
+        ec_obj_class = self.params.get("ec_oclass", '/run/ior/*')
+        mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
 
-        # run tests
-        self.test_ior_small()
-        self.test_mdtest_small()
 
-        self.ior_cmd.flags.update(ec_ior_flags)
-        self.test_ec()
+        #run ior
+        results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
+                                                 flags, dfuse_mount_dir)
 
-        self.container.destroy()
-        self.pool.destroy()
+        #run ior with different ec oclass
+        results_ec = self.run_ior_multiple_variants(ec_obj_class, [apis[0]],
+                                                    [transfer_block_size[1]],
+                                                    [flags[0]], dfuse_mount_dir)
+        results = results + results_ec
+        self.log.error("Summary of IOR small test results:")
+        errors = False
+        for item in results:
+            self.log.info("  %s  %s", item[0], item[1])
+            if item[0] == "FAIL":
+                errors = True
+        if errors:
+            self.fail("Test FAILED")
 
-        self.test_container_autotest()
+        #run mdtest
+        self.run_mdtest_multiple_variants(mdtest_params)
 
-class BasicCheckoutDm(DmvrPosixLargeFile):
+        #run autotest
+        self.log.info("Autotest start")
+        daos_cmd = self.get_daos_command()
+        try:
+            daos_cmd.pool_autotest(pool=self.pool.uuid)
+            self.log.info("daos pool autotest passed.")
+        except CommandFailure as error:
+            self.log.error("Error: %s", error)
+            self.fail("daos pool autotest failed!")
+
+
+class BasicCheckoutDm(DataMoverTestBase):
     # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class to wrap datamover test to
@@ -70,4 +97,5 @@ class BasicCheckoutDm(DmvrPosixLargeFile):
         self.ior_cmd.dfs_oclass.update(dm_ior_options[5])
         self.ior_cmd.test_file.update(dm_ior_options[6])
         self.ior_cmd.repetitions.update(dm_ior_options[7])
-        self.test_dm_large_file_fs_copy()
+        #run datamover
+        self.run_dm_activities_with_ior("FS_COPY", True)

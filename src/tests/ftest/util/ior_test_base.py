@@ -36,6 +36,7 @@ class IorTestBase(DfuseTestBase):
         self.processes = None
         self.hostfile_clients_slots = None
         self.container = None
+        self.ior_timeout = None
 
     def setUp(self):
         """Set up each test case."""
@@ -49,6 +50,7 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
         self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
+        self.ior_timeout = self.params.get("ior_timeout", '/run/ior/*', None)
 
     def create_pool(self):
         """Create a TestPool object to use with ior."""
@@ -435,6 +437,52 @@ class IorTestBase(DfuseTestBase):
             self.display_pool_space()
 
         self.log.info("--- IOR Thread %d: End ---", job_num)
+
+    def run_ior_multiple_variants(self, obj_class, apis, transfer_block_size,
+                                  flags, mount_dir):
+        """Run multiple ior commands with various different combination
+           of ior input params.
+
+        Args:
+            obj_class(list): List of different object classes
+            apis(list): list of different apis
+            transfer_block_size(list): list of different transfer sizes
+                                       and block sizes. eg: [1M, 32M]
+                                       1M is transfer size and 32M is
+                                       block size in the above example.
+            flags(list): list of ior flags
+            mount_dir(str): dfuse mount directory
+        """
+        results = []
+
+        for oclass in obj_class:
+            self.ior_cmd.dfs_oclass.update(oclass)
+            for api in apis:
+                if api == "HDF5-VOL":
+                    self.ior_cmd.api.update("HDF5")
+                    hdf5_plugin_path = self.params.get(
+                        "plugin_path", '/run/hdf5_vol/*')
+                    flags_w_k = " ".join([flags[0]] + ["-k"])
+                    self.ior_cmd.flags.update(flags_w_k, "ior.flags")
+                else:
+                    # run tests for different variants
+                    self.ior_cmd.flags.update(flags[0], "ior.flags")
+                    hdf5_plugin_path = None
+                    self.ior_cmd.api.update(api)
+                for test in transfer_block_size:
+                    # update transfer and block size
+                    self.ior_cmd.transfer_size.update(test[0])
+                    self.ior_cmd.block_size.update(test[1])
+                    # run ior
+                    try:
+                        self.run_ior_with_pool(
+                            plugin_path=hdf5_plugin_path, timeout=self.ior_timeout,
+                            mount_dir=mount_dir)
+                        results.append(["PASS", str(self.ior_cmd)])
+                    except CommandFailure:
+                        results.append(["FAIL", str(self.ior_cmd)])
+        return results
+
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.

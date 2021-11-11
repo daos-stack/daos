@@ -308,11 +308,6 @@ def set_python_environment():
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
         os.path.abspath("cart/util"),
-        os.path.abspath("ior"),
-        os.path.abspath("container"),
-        os.path.abspath("erasurecode"),
-        os.path.abspath("datamover"),
-        os.path.abspath("."),
     ]
 
     required_python_paths.extend(site.getsitepackages())
