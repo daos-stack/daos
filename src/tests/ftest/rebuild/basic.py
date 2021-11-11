@@ -94,10 +94,6 @@ class RbldBasic(TestWithServers):
             else:
                 self.pool[index].exclude(ranks=[rank])
 
-        # Wait for recovery to start
-        for index in range(pool_quantity):
-            self.pool[index].wait_for_rebuild(True)
-
         # Wait for recovery to complete
         for index in range(pool_quantity):
             self.pool[index].wait_for_rebuild(False)
