@@ -61,29 +61,27 @@ def scons():
                                      "-Wl,--wrap=close", "-Wl,--wrap=sendmsg", "-Wl,--wrap=recvmsg",
                                      "-Wl,--wrap=poll", "-Wl,--wrap=unlink"])
 
-    common_test_utils = unit_env.SharedObject(['test_mocks.c', 'test_utils.c'])
-    drpc_test_utils = unit_env.SharedObject(['../drpc.c']) + common_test_utils
+    mock_test_utils = unit_env.SharedObject(['test_mocks.c', 'test_utils.c'])
+    drpc_test_utils = unit_env.SharedObject(['../drpc.c']) + mock_test_utils
     Export('drpc_test_utils')
 
     acl_api = unit_env.Object('../acl_api.c')
 
-    daos_build.test(unit_env, 'drpc_tests',
-                    ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c',
-                     common_test_utils],
-                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_api_tests',
-                    source=['acl_api_tests.c', acl_api,
-                            common_test_utils],
+                    source=['acl_api_tests.c', acl_api, mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_valid_tests',
-                    source=['acl_valid_tests.c', acl_api,
-                            common_test_utils],
+                    source=['acl_valid_tests.c', acl_api, mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_util_tests',
-                    source=['acl_util_tests.c', '../acl_util.c'],
+                    source=['acl_util_tests.c', '../acl_util.c', mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
     daos_build.test(unit_env, 'acl_principal_tests',
-                    source=['acl_principal_tests.c', '../acl_principal.c'],
+                    source=['acl_principal_tests.c', '../acl_principal.c', mock_test_utils],
+                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    daos_build.test(unit_env, 'drpc_tests',
+                    ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c', mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
 
 if __name__ == "SCons.Script":

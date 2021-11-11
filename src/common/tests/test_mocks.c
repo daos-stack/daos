@@ -6,10 +6,6 @@
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
 
-#if D_HAS_WARNING(4, "-Wframe-larger-than=")
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#endif
-
 /**
  * Generic mocks for external functions
  */
@@ -277,6 +273,32 @@ __wrap_recvmsg(int sockfd, struct msghdr *msg, int flags)
 }
 
 void
+mock_valid_drpc_call_in_recvmsg(void)
+{
+	Drpc__Call *call = new_drpc_call();
+
+	/* Mock a valid DRPC call coming in */
+	recvmsg_return = drpc__call__get_packed_size(call);
+	drpc__call__pack(call, recvmsg_msg_content);
+
+	drpc__call__free_unpacked(call, NULL);
+}
+
+void
+mock_valid_drpc_resp_in_recvmsg(Drpc__Status status)
+{
+	Drpc__Response *resp = new_drpc_response();
+
+	resp->status = status;
+
+	/* Mock a valid DRPC response coming in */
+	recvmsg_return = drpc__response__get_packed_size(resp);
+	drpc__response__pack(resp, recvmsg_msg_content);
+
+	drpc__response__free_unpacked(resp, NULL);
+}
+
+void
 mock_poll_setup(void)
 {
 	poll_return = 1; /* greater than 0 is success */
@@ -335,75 +357,6 @@ __wrap_unlink(const char *__name)
 	unlink_call_count++;
 	unlink_name = __name;
 	return 0;
-}
-
-/* Mock for the drpc->handler function pointer */
-void
-mock_drpc_handler_setup(void)
-{
-	mock_drpc_handler_call_count = 0;
-	mock_drpc_handler_call = NULL;
-	mock_drpc_handler_resp_ptr = NULL;
-	mock_drpc_handler_resp_return = new_drpc_response();
-}
-
-void
-mock_drpc_handler_teardown(void)
-{
-	if (mock_drpc_handler_call != NULL) {
-		drpc__call__free_unpacked(mock_drpc_handler_call, NULL);
-	}
-
-	drpc__response__free_unpacked(mock_drpc_handler_resp_return, NULL);
-}
-
-int mock_drpc_handler_call_count; /* how many times it was called */
-Drpc__Call *mock_drpc_handler_call; /* alloc copy of the structure passed in */
-void *mock_drpc_handler_resp_ptr; /* saved value of resp ptr */
-Drpc__Response *mock_drpc_handler_resp_return; /* to be returned in *resp */
-void
-mock_drpc_handler(Drpc__Call *call, Drpc__Response *resp)
-{
-	uint8_t buffer[UNIXCOMM_MAXMSGSIZE];
-
-	mock_drpc_handler_call_count++;
-
-	if (call == NULL) {
-		mock_drpc_handler_call = NULL;
-	} else {
-		/*
-		 * Caller will free the original so we want to make a copy.
-		 * Keep only the latest call.
-		 */
-		if (mock_drpc_handler_call != NULL) {
-			drpc__call__free_unpacked(mock_drpc_handler_call, NULL);
-		}
-
-		/*
-		 * Drpc__Call has hierarchy of pointers - easiest way to
-		 * copy is to pack and unpack.
-		 */
-		drpc__call__pack(call, buffer);
-		mock_drpc_handler_call = drpc__call__unpack(NULL,
-				drpc__call__get_packed_size(call),
-				buffer);
-	}
-
-	mock_drpc_handler_resp_ptr = (void *)resp;
-
-	if (resp != NULL && mock_drpc_handler_resp_return != NULL) {
-		size_t len;
-
-		len = mock_drpc_handler_resp_return->body.len;
-		memcpy(resp, mock_drpc_handler_resp_return,
-				sizeof(Drpc__Response));
-		resp->body.len = len;
-		if (len > 0) {
-			D_ALLOC(resp->body.data, len);
-			memcpy(resp->body.data,
-				mock_drpc_handler_resp_return->body.data, len);
-		}
-	}
 }
 
 /* Mocks/stubs for Argobots functions */
