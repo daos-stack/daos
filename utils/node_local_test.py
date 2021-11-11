@@ -487,7 +487,8 @@ class DaosServer():
         self._yaml_file = None
         self._io_server_dir = None
         self.test_pool = None
-        self.network_interface=None
+        self.network_interface = None
+        self.network_provider = None
 
         # Detect the number of cores for dfuse and do something sensible, if there are
         # more than 32 on the node then use 12, otherwise use the whole node.
@@ -625,6 +626,7 @@ class DaosServer():
             first_core = 0
         server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
         self.network_interface = ref_engine['fabric_iface']
+        self.network_provider = scyaml['provider']
         for idx in range(self.engines):
             engine = copy.deepcopy(ref_engine)
             engine['log_file'] = self.server_logs[idx].name
@@ -2588,7 +2590,7 @@ def set_server_fi(server):
     cmd_env = get_base_env()
 
     cmd_env['OFI_INTERFACE'] = server.network_interface
-    cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
+    cmd_env['CRT_PHY_ADDR_STR'] = server.network_provider
     vh = ValgrindHelper(server.conf)
 
     if server.conf.args.memcheck == 'no':
