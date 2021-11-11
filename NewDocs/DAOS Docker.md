@@ -47,7 +47,7 @@ Once the image has been created, a container will need to be started to run the 
 ### Setting Hugepages (Work in Progress)
 At this stage, depending on how hugepages are configured on your host system, you may get errors when the `docker run` command is issued. So for this demonstration, we will be configuring hugepages before issuing the `docker run` command:
 
-> Depending on the CPU involved, the quantity of available1G  hugepages changes, for example.
+Depending on the CPU involved, the quantity of available1G  hugepages changes, for example.
 - Cascade Lake 16 pages
 - Icelake 64 pages
 - Saphire Rapids 96 pages
