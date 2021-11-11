@@ -512,12 +512,29 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
+	/* If no container is specified on the command line then fuse will use the uuids of
+	 * containers as directories, and it's possible to create a container using "mkdir",
+	 * so in this case we need to open all pools with write permissions, which will allow
+	 * container create.  As any pool may not have ACLs setup to allow this the code needs
+	 * to fail back however.
+	 *
+	 * Because of UNS any pool can be accessed via different paths, so if dfuse is run without
+	 * a pool on the command line they any pool might be first accessed via UNS, then have
+	 * used to make a new container.  If a pool but not a container is passed on the command
+	 * line then only that pool needs to be RW and others could be RO, so handle this case as
+	 * well.
+	 */
+	if (pool_name == NULL)
+		fs_handle->dpi_pool_write = true;
+
 	/* Connect to a pool.
 	 * At this point if a pool is chosen by another means then pool_uuid is already set, so try
 	 * and parse pool_name, if that's not a uuid then try it as a label, else try it as a uuid.
+	 * If the pool is set by other means then container will have been as well, so open the
+	 * pool in RO mode.
 	 */
 	if (pool_name && uuid_parse(pool_name, pool_uuid) < 0)
-		rc = dfuse_pool_connect_by_label(fs_handle, pool_name, &dfp);
+		rc = dfuse_pool_connect_by_label(fs_handle, pool_name, cont_name == NULL, &dfp);
 	else
 		rc = dfuse_pool_connect(fs_handle, &pool_uuid, &dfp);
 	if (rc != 0) {

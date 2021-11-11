@@ -399,13 +399,17 @@ d_hash_table_ops_t cont_hops = {
  */
 int
 dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
-			const char *label,
+			const char *label, bool rw,
 			struct dfuse_pool **_dfp)
 {
 	struct dfuse_pool	*dfp;
 	daos_pool_info_t        p_info = {};
 	d_list_t		*rlink;
 	int			rc;
+	unsigned int		flags = DAOS_PC_RO;
+
+	if (rw)
+		flags = DAOS_PC_RW;
 
 	D_ALLOC_PTR(dfp);
 	if (dfp == NULL)
@@ -416,7 +420,10 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
 	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group,
-			       DAOS_PC_RW, &dfp->dfp_poh, &p_info, NULL);
+			       flags, &dfp->dfp_poh, &p_info, NULL);
+	if (rc == -DER_NO_PERM && flags == DAOS_PC_RW)
+		rc = daos_pool_connect(label, fs_handle->dpi_info->di_group,
+				DAOS_PC_RO, &dfp->dfp_poh, &p_info, NULL);
 	if (rc) {
 		if (rc == -DER_NO_PERM)
 			DFUSE_TRA_INFO(dfp,
@@ -499,13 +506,22 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 
 	if (uuid_is_null(*pool) == 0) {
 		char uuid_str[37];
+		unsigned int flags = DAOS_PC_RO;
+
+		if (fs_handle->dpi_pool_write)
+			flags = DAOS_PC_RW;
 
 		uuid_copy(dfp->dfp_pool, *pool);
 		uuid_unparse(dfp->dfp_pool, uuid_str);
 		rc = daos_pool_connect(uuid_str,
 				       fs_handle->dpi_info->di_group,
-				       DAOS_PC_RW,
+				       flags,
 				       &dfp->dfp_poh, NULL, NULL);
+		if (rc == -DER_NO_PERM && flags == DAOS_PC_RW)
+			rc = daos_pool_connect(uuid_str,
+					fs_handle->dpi_info->di_group,
+					DAOS_PC_RO,
+					&dfp->dfp_poh, NULL, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM)
 				DFUSE_TRA_INFO(dfp,

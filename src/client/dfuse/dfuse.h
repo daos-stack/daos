@@ -48,6 +48,7 @@ struct dfuse_projection_info {
 	sem_t				dpi_sem;
 	pthread_t			dpi_thread;
 	bool				dpi_shutdown;
+	bool				dpi_pool_write;
 };
 
 /* Launch fuse, and do not return until complete */
@@ -228,7 +229,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle,
 
 int
 dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
-			const char *label,
+			const char *label, bool rw,
 			struct dfuse_pool **_dfp);
 
 int
