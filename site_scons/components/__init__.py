@@ -104,11 +104,6 @@ def define_mercury(reqs):
         reqs.define('rt', libs=['rt'])
     reqs.define('stdatomic', headers=['stdatomic.h'])
 
-    if reqs.check_component('stdatomic'):
-        atomic = 'stdatomic'
-    else:
-        atomic = 'openpa'
-
     reqs.define('psm2',
                 retriever=GitRepoRetriever(
                     'https://github.com/intel/opa-psm2.git'),
@@ -156,15 +151,6 @@ def define_mercury(reqs):
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'])
 
-    reqs.define('openpa',
-                retriever=GitRepoRetriever(
-                    'https://github.com/pmodels/openpa.git'),
-                commands=['$LIBTOOLIZE', './autogen.sh',
-                          './configure --prefix=$OPENPA_PREFIX',
-                          'make $JOBS_OPT',
-                          'make install'], libs=['opa'],
-                package='openpa-devel' if inst(reqs, 'openpa') else None)
-
     if reqs.target_type == 'debug':
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
     else:
@@ -175,9 +161,6 @@ def define_mercury(reqs):
     reqs.define('mercury',
                 retriever=retriever,
                 commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
-                          '-DOPA_LIBRARY=$OPENPA_PREFIX/lib' +
-                          check(reqs, 'openpa', '', '64') + '/libopa.a '
-                          '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
                           '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
                           '-DBUILD_EXAMPLES=OFF '
                           '-DMERCURY_USE_BOOST_PP=ON '
