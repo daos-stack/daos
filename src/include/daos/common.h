@@ -727,10 +727,10 @@ enum {
 /** This fault simulates corruption on disk. Must be set on server side. */
 #define DAOS_CSUM_CORRUPT_DISK		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x26)
 /**
- * This fault simulates shard fetch failure. Can be used to test EC degraded
- * fetch.
+ * This fault simulates shard open failure. Can be used to test EC degraded
+ * update/fetch.
  */
-#define DAOS_FAIL_SHARD_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
+#define DAOS_FAIL_SHARD_OPEN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
 /**
  * This fault simulates the EC aggregation boundary (agg_eph_boundry) moved
  * ahead, in that case need to redo the degraded fetch.

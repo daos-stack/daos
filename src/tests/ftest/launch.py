@@ -165,9 +165,6 @@ def set_test_environment(args):
         # Get the default provider if CRT_PHY_ADDR_STR is not set
         set_provider_environment(os.environ["DAOS_TEST_FABRIC_IFACE"], args)
 
-        # Update other env definitions
-        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-
         # Set the default location for daos log files written during testing
         # if not already defined.
         if "DAOS_TEST_LOG_DIR" not in os.environ:
@@ -251,9 +248,11 @@ def set_interface_environment():
             sys.exit(1)
 
     # Update env definitions
-    print("Using {} as the default interface".format(interface))
     os.environ["CRT_CTX_SHARE_ADDR"] = "0"
     os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
+    print("Using {} as the default interface".format(interface))
+    for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
+        print("Using {}={}".format(name, os.environ[name]))
 
 
 def set_provider_environment(interface, args):

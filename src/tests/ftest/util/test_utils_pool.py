@@ -648,7 +648,7 @@ class TestPool(TestDaosApiBase):
 
         try:
             complete, message = server_manager.manager.search_logs(
-                pattern, since, None, quantity, self.rebuild_timeout.value)
+                pattern, since, None, quantity, self.rebuild_timeout.value, True)
         except AttributeError as error:
             raise NotImplementedError(
                 "The TestPool.check_rebuild() method does not yet support a DaosServerManager with "
