@@ -6,7 +6,7 @@
 
 # Pull base image
 FROM fedora:latest
-LABEL maintainer="daos@daos.groups.io>"
+LABEL maintainer="daos@daos.groups.io"
 
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
