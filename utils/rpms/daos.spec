@@ -331,8 +331,8 @@ mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysconfdir}/sysctl.d/
 cat << EOF > %{buildroot}/%{_sysconfdir}/sysctl.d/%{sysctl_script_name}
-net.core.rmem_max=104857 +
-net.core.rmem_default=104857
+net.core.rmem_max=1048576 +
+net.core.rmem_default=1048576
 EOF
 mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
