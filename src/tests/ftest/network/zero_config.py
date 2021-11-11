@@ -168,6 +168,7 @@ class ZeroConfigTest(TestWithServers):
         racer_env = daos_racer.get_environment(self.server_managers[0], log_file)
         racer_env["FI_LOG_LEVEL"] = "info"
         racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
+        racer_env["OFI_DOMAIN"] = self.interfaces[exp_iface]["domain"]
         daos_racer.set_environment(racer_env)
 
         # Run client
