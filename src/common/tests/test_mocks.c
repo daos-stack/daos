@@ -28,7 +28,7 @@ int socket_family; /* saved input */
 int socket_type; /* saved input */
 int socket_protocol; /* saved input */
 int
-socket(int family, int type, int protocol)
+__wrap_socket(int family, int type, int protocol)
 {
 	socket_family = family;
 	socket_type = type;
@@ -56,7 +56,7 @@ const struct sockaddr *connect_addr_ptr; /* for nullcheck */
 struct sockaddr_un connect_addr; /* saved copy of input value */
 socklen_t connect_addrlen; /* saved input */
 int
-connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+__wrap_connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
 	connect_sockfd = sockfd;
 	connect_addr_ptr = addr;
@@ -87,7 +87,7 @@ const struct sockaddr *bind_addr_ptr; /* for nullcheck */
 struct sockaddr_un bind_addr; /* saved copy of input value */
 socklen_t bind_addrlen; /* saved input */
 int
-bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+__wrap_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 {
 	bind_sockfd = sockfd;
 	bind_addr_ptr = addr;
@@ -117,7 +117,7 @@ int fcntl_fd; /* saved input */
 int fcntl_cmd; /* saved input */
 int fcntl_arg; /* saved input */
 int
-fcntl(int fd, int cmd, ...)
+__wrap_fcntl(int fd, int cmd, ...)
 {
 	va_list arglist;
 
@@ -145,7 +145,7 @@ int listen_return; /* value to be returned by listen() */
 int listen_sockfd; /* saved input */
 int listen_backlog; /* saved input */
 int
-listen(int sockfd, int backlog)
+__wrap_listen(int sockfd, int backlog)
 {
 	listen_sockfd = sockfd;
 	listen_backlog = backlog;
@@ -168,7 +168,7 @@ int accept_sockfd; /* saved input */
 struct sockaddr *accept_addr_ptr; /* saved input ptr */
 socklen_t *accept_addrlen_ptr; /* saved input ptr */
 int
-accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+__wrap_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 {
 	accept_sockfd = sockfd;
 	accept_addr_ptr = addr;
@@ -189,7 +189,7 @@ int close_call_count;
 int close_return; /* value to be returned by close() */
 int close_fd; /* saved input */
 int
-close(int fd)
+__wrap_close(int fd)
 {
 	close_fd = fd;
 	close_call_count++;
@@ -218,7 +218,7 @@ size_t sendmsg_msg_iov_len; /* saved iov len */
 uint8_t sendmsg_msg_content[UNIXCOMM_MAXMSGSIZE]; /* copied into iov */
 int sendmsg_flags; /* saved input */
 ssize_t
-sendmsg(int sockfd, const struct msghdr *msg, int flags)
+__wrap_sendmsg(int sockfd, const struct msghdr *msg, int flags)
 {
 	sendmsg_call_count++;
 
@@ -256,7 +256,7 @@ size_t recvmsg_msg_iov_len; /* saved iov len */
 uint8_t recvmsg_msg_content[UNIXCOMM_MAXMSGSIZE]; /* copied into iov */
 int recvmsg_flags; /* saved input */
 ssize_t
-recvmsg(int sockfd, struct msghdr *msg, int flags)
+__wrap_recvmsg(int sockfd, struct msghdr *msg, int flags)
 {
 	recvmsg_call_count++;
 
@@ -300,7 +300,7 @@ nfds_t poll_nfds; /* saved input */
 int poll_timeout; /* saved input */
 int poll_revents_return[1024]; /* to be returned in revents struct */
 int
-poll(struct pollfd *fds, nfds_t nfds, int timeout)
+__wrap_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
 	poll_fds_ptr = (void *)fds;
 	if (fds != NULL) {
@@ -330,7 +330,7 @@ mock_unlink_setup(void)
 int unlink_call_count;
 const char *unlink_name;
 int
-unlink(const char *__name)
+__wrap_unlink(const char *__name)
 {
 	unlink_call_count++;
 	unlink_name = __name;

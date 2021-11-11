@@ -18,8 +18,6 @@ def scons():
     """Execute build"""
     Import('tenv')
 
-    common_test_utils = tenv.SharedObject(['test_mocks.c', 'test_utils.c'])
-    Export('common_test_utils')
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
 
     utest_utils = tenv.SharedObject('utest_common.c')
@@ -56,10 +54,16 @@ def scons():
     tenv.Install('$PREFIX/bin/', [common_test])
 
     unit_env = tenv.Clone()
-    # Some syscalls are aliased when fortification is enabled, which makes
-    # mocking in unit tests into a headache.
-    # The compiler decides this on its own, but let's force the issue.
-    compiler_setup.remove_fortify(unit_env)
+    unit_env.AppendUnique(OBJPREFIX='utest_')
+
+    unit_env.AppendUnique(LINKFLAGS=["-Wl,--wrap=socket", "-Wl,--wrap=connect", "-Wl,--wrap=bind",
+                                     "-Wl,--wrap=fcntl", "-Wl,--wrap=listen", "-Wl,--wrap=accept",
+                                     "-Wl,--wrap=close", "-Wl,--wrap=sendmsg", "-Wl,--wrap=recvmsg",
+                                     "-Wl,--wrap=poll", "-Wl,--wrap=unlink"])
+
+    common_test_utils = unit_env.SharedObject(['test_mocks.c', 'test_utils.c'])
+    drpc_test_utils = unit_env.SharedObject(['../drpc.c']) + common_test_utils
+    Export('drpc_test_utils')
 
     acl_api = unit_env.Object('../acl_api.c')
 
