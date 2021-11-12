@@ -2261,8 +2261,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			/* Abort it by force with MAX epoch to guarantee
 			 * that it can be aborted.
 			 */
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
-					   &orw->orw_dti, 1);
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &orw->orw_dti, DAOS_EPOCH_MAX);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -2692,15 +2691,13 @@ again2:
 out:
 	if (rc != 0 && need_abort) {
 		struct dtx_entry	 dte;
-		struct dtx_entry	*pdte;
 		int			 rc1;
 
 		dte.dte_xid = orw->orw_dti;
 		dte.dte_ver = version;
 		dte.dte_refs = 1;
 		dte.dte_mbs = mbs;
-		pdte = &dte;
-		rc1 = dtx_abort(ioc.ioc_coc, orw->orw_epoch, &pdte, 1);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&orw->orw_dti), DP_RC(rc1));
@@ -3240,8 +3237,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 			/* Abort it by force with MAX epoch to guarantee
 			 * that it can be aborted.
 			 */
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, DAOS_EPOCH_MAX,
-					   &opi->opi_dti, 1);
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, DAOS_EPOCH_MAX);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -3556,15 +3552,13 @@ again2:
 out:
 	if (rc != 0 && need_abort) {
 		struct dtx_entry	 dte;
-		struct dtx_entry	*pdte;
 		int			 rc1;
 
 		dte.dte_xid = opi->opi_dti;
 		dte.dte_ver = version;
 		dte.dte_refs = 1;
 		dte.dte_mbs = mbs;
-		pdte = &dte;
-		rc1 = dtx_abort(ioc.ioc_coc, opi->opi_epoch, &pdte, 1);
+		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&opi->opi_dti), DP_RC(rc1));
@@ -4276,8 +4270,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		/* For resent RPC, abort it firstly if exist but with different
 		 * (old) epoch, then re-execute with new epoch.
 		 */
-		rc = vos_dtx_abort(ioc->ioc_vos_coh, DAOS_EPOCH_MAX,
-				   &dcsh->dcsh_xid, 1);
+		rc = vos_dtx_abort(ioc->ioc_vos_coh, &dcsh->dcsh_xid, DAOS_EPOCH_MAX);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -4596,16 +4589,13 @@ out:
 
 	if (rc != 0 && need_abort) {
 		struct dtx_entry	 dte;
-		struct dtx_entry	*pdte;
 		int			 rc1;
 
 		dte.dte_xid = dcsh->dcsh_xid;
 		dte.dte_ver = oci->oci_map_ver;
 		dte.dte_refs = 1;
 		dte.dte_mbs = dcsh->dcsh_mbs;
-		pdte = &dte;
-		rc1 = dtx_abort(dca->dca_ioc->ioc_coc,
-				dcsh->dcsh_epoch.oe_value, &pdte, 1);
+		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&dcsh->dcsh_xid), DP_RC(rc1));
