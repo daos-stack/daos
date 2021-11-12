@@ -1,13 +1,16 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from ior_test_base import IorTestBase
+from avocado.core.exceptions import TestFail
+
 
 class RbldContainerCreate(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Rebuild with container creation test cases.
     Test Class Description:
         These rebuild tests verify the ability to create additional containers
@@ -60,7 +63,7 @@ class RbldContainerCreate(IorTestBase):
         status = True
         container = self.container[index]
         self.log.info(
-            "..Vrifying the container %s created during rebuild", container)
+            "..Verifying the container %s created during rebuild", container)
         try:
             container.read_objects()
             container.close()
@@ -86,7 +89,7 @@ class RbldContainerCreate(IorTestBase):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=large
         :avocado: tags=rebuild
         :avocado: tags=rebuild_cont_create
 
