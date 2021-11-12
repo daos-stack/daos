@@ -146,7 +146,15 @@ ivns_destroy(struct crt_ivns_internal *ivns_internal)
 	void				*cb_arg;
 
 	D_MUTEX_LOCK(&ns_list_lock);
-	d_list_del(&ivns_internal->cii_link);
+	D_SPIN_LOCK(&ivns_internal->cii_ref_lock);
+	if (ivns_internal->cii_ref_count == 0) {
+		d_list_del(&ivns_internal->cii_link);
+	} else { /* It was found in ns_list and ref incremented again */
+		D_SPIN_UNLOCK(&ivns_internal->cii_ref_lock);
+		D_MUTEX_UNLOCK(&ns_list_lock);
+		return;
+	}
+	D_SPIN_UNLOCK(&ivns_internal->cii_ref_lock);
 	D_MUTEX_UNLOCK(&ns_list_lock);
 
 	ivns = ivns_internal;
@@ -163,6 +171,7 @@ ivns_destroy(struct crt_ivns_internal *ivns_internal)
 	D_SPIN_DESTROY(&ivns_internal->cii_ref_lock);
 
 	D_FREE(ivns_internal->cii_iv_classes);
+	ivns_internal->cii_gns.gn_ivns_id.ii_nsid = 0;
 	D_FREE(ivns_internal->cii_gns.gn_ivns_id.ii_group_name);
 	D_FREE(ivns_internal);
 }
