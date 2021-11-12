@@ -627,8 +627,10 @@ open_handle_cb(tse_task_t *task, void *data)
 	daos_ofeat_t            feat;
 	int			rc = task->dt_result;
 
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to open object "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_obj, rc);
+	}
 
 	/** check and set array metadata in case of array_open */
 	if (!args->open_with_attr) {
@@ -774,16 +776,14 @@ dc_array_open(tse_task_t *task)
 		/** The upper task completes when the open task completes */
 		rc = tse_task_register_deps(task, 1, &open_task);
 		if (rc != 0) {
-			D_ERROR("Failed to register dependency "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("Failed to register dependency "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_put1, rc);
 		}
 
 		rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
 					       sizeof(args));
 		if (rc != 0) {
-			D_ERROR("Failed to register completion cb "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("Failed to register completion cb "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_put1, rc);
 		}
 
