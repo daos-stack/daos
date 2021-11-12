@@ -71,15 +71,6 @@ setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.0rc5
 EOF
     fi
 
-    # CORCI-1096
-    grep 'relayhost' /etc/postfix/main.cf
-    echo 'relayhost = [mail.wolf.hpdd.intel.com]' >> /etc/postfix/main.cf
-    if ! postfix reload; then
-        postfix reload
-        echo "Error $? reloading postfix"
-        exit 1
-    fi
-
 }
 
 post_provision_config_nodes() {
