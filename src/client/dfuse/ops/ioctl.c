@@ -306,6 +306,9 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	 * need the correct container handle to be able to use them.
 	 */
 	if (cmd == DFUSE_IOCTL_IL_DSIZE) {
+		if (S_ISDIR(oh->doh_ie->ie_stat.st_mode))
+			D_GOTO(out_err, rc = EISDIR);
+
 		if (out_bufsz < sizeof(struct dfuse_hsd_reply))
 			D_GOTO(out_err, rc = EIO);
 		handle_dsize_ioctl(oh, req);

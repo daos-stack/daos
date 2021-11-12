@@ -794,8 +794,10 @@ get_file:
 
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
-	if (rc)
-		D_GOTO(shrink, 0);
+	if (rc == EISDIR)
+		D_GOTO(err, rc);
+	else if (rc)
+		D_GOTO(shrink, rc);
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
