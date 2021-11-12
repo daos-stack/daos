@@ -287,7 +287,6 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 {
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
-	char		*out_label = NULL;
 	struct daos_acl	*out_acl = NULL;
 	daos_prop_t	*new_prop = NULL;
 	uint32_t	entries = 0;
@@ -339,12 +338,6 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		idx++;
 	}
 
-	if (out_label != NULL) {
-		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
-		new_prop->dpp_entries[idx].dpe_val_ptr = out_label;
-		idx++;
-	}
-
 	if (out_acl != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
 		new_prop->dpp_entries[idx].dpe_val_ptr = out_acl;
@@ -358,7 +351,6 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 err_out:
 	daos_prop_free(new_prop);
 	daos_acl_free(out_acl);
-	D_FREE(out_label);
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
 	return rc;
@@ -545,11 +537,15 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolEvictReq	*req = NULL;
 	Mgmt__PoolEvictResp	 resp = MGMT__POOL_EVICT_RESP__INIT;
 	uuid_t			 uuid;
-	uuid_t			*handles;
-	int			 n_handles;
+	uuid_t			*handles = NULL;
+	int			 n_handles = 0;
+	char			*machine = NULL;
+	uint32_t		 count = 0;
 	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
 	size_t			 len;
+	uint32_t		 destroy = 0;
+	uint32_t		 force_destroy = 0;
 	int			 rc;
 	int			 i;
 
@@ -593,17 +589,22 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			}
 		}
 		n_handles = req->n_handles;
+	} else if (req->destroy) {
+		handles = NULL;
+		n_handles = 0;
+		destroy = 1;
+		force_destroy = (req->force_destroy ? 1 : 0);
+	} else if (req->machine != protobuf_c_empty_string) {
+		machine = req->machine;
 	} else {
 		handles = NULL;
 		n_handles = 0;
 	}
 
-	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, req->sys);
-
-	if (rc != 0) {
-		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n",
-			req->id, DP_RC(rc));
-	}
+	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, destroy, force_destroy,
+				machine, req->sys, &count);
+	if (rc != 0)
+		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n", req->id, DP_RC(rc));
 
 out_free:
 	d_rank_list_free(svc_ranks);
@@ -611,6 +612,7 @@ out_free:
 
 out:
 	resp.status = rc;
+	resp.count = count;
 	len = mgmt__pool_evict_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {

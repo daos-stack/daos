@@ -1,6 +1,6 @@
 # DAOS Environment Variables
 
-This section lists the environment variables used by DAOS. 
+This section lists the environment variables used by DAOS.
 
 !!! warning
     Many of these variables are used for development purposes only,
@@ -62,7 +62,7 @@ Environment variables in this section only apply to the client side.
 
 |Variable                 |Description|
 |-------------------------|-----------|
-|FI\_MR\_CACHE\_MAX\_COUNT|Enable MR caching in OFI layer. Recommended to be set to 0 (disable) when CRT\_DISABLE\_MEM\_PIN is NOT set to 1. INTEGER. Default to unset.|
+|FI\_MR\_CACHE\_MAX\_COUNT|Enable MR (Memory Registration) caching in OFI layer. Recommended to be set to 0 (disable) when CRT\_DISABLE\_MEM\_PIN is NOT set to 1. INTEGER. Default to unset.|
 
 
 ## Debug System (Client & Server)
@@ -73,6 +73,8 @@ Environment variables in this section only apply to the client side.
 |D\_LOG\_FILE\_APPEND\_PID|If set and not 0, causes the main PID to be appended at the end of D\_LOG\_FILE path name (both server and client).|
 |D\_LOG\_STDERR\_IN\_LOG|If set and not 0, causes stderr messages to be merged in D\_LOG\_FILE.|
 |D\_LOG\_SIZE|DAOS debug logs (both server and client) have a 1GB file size limit by default. When this limit is reached, the current log file is closed and renamed with a .old suffix, and a new one is opened. This mechanism will repeat each time the limit is reached, meaning that available saved log records could be found in both ${D_LOG_FILE} and last generation of ${D_LOG_FILE}.old files, to a maximum of the most recent 2*D_LOG_SIZE records.  This can be modified by setting this environment variable ("D_LOG_SIZE=536870912"). Sizes can also be specified in human-readable form using `k`, `m`, `g`, `K`, `M`, and `G`. The lower-case specifiers are base-10 multipliers and the upper case specifiers are base-2 multipliers.|
+|D\_LOG\_FLUSH|Allows to specify a non-default logging level where flushing will occur. By default, only levels above WARN will cause an immediate flush instead of buffering.|
+|D\_LOG\_TRUNCATE|By default log is appended. But if set this variable will cause log to be truncated upon first open and logging start.|
 |DD\_SUBSYS  |Used to specify which subsystems to enable. DD\_SUBSYS can be set to individual subsystems for finer-grained debugging ("DD\_SUBSYS=vos"), multiple facilities ("DD\_SUBSYS=eio,mgmt,misc,mem"), or all facilities ("DD\_SUBSYS=all") which is also the default setting. If a facility is not enabled, then only ERR messages or more severe messages will print.|
 |DD\_STDERR  |Used to specify the priority level to output to stderr. Options in decreasing priority level order: FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG. By default, all CRIT and more severe DAOS messages will log to stderr ("DD\_STDERR=CRIT"), and the default for CaRT/GURT is FATAL.|
 |D\_LOG\_MASK|Used to specify what type/level of logging will be present for either all of the registered subsystems or a select few. Options in decreasing priority level order: FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG. DEBUG option is used to enable all logging (debug messages as well as all higher priority level messages). Note that if D\_LOG\_MASK is not set, it will default to logging all messages excluding debug ("D\_LOG\_MASK=INFO"). Example: "D\_LOG\_MASK=DEBUG". This will set the logging level for all facilities to DEBUG, meaning that all debug messages, as well as higher priority messages will be logged (INFO, NOTE, WARN, ERR, CRIT, FATAL). Example 2: "D\_LOG\_MASK=DEBUG,MEM=ERR,RPC=ERR". This will set the logging level to DEBUG for all facilities except MEM & RPC (which will now only log ERR and higher priority level messages, skipping all DEBUG, INFO, NOTE & WARN messages)|

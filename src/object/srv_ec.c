@@ -82,6 +82,10 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	D_ASSERT((oiods[0].oiod_flags & OBJ_SIOD_SINGV) ||
 		 oiods[0].oiod_nr >= 2);
 
+	if (oca == NULL)
+		oca = daos_oclass_attr_find(oid.id_pub, NULL);
+	D_ASSERT(oca != NULL);
+
 	if (tgt_map != NULL)
 		tgt_max_idx = 0;
 	else
@@ -118,6 +122,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			if (tgt_max_idx < tgt_idx)
 				tgt_max_idx = tgt_idx;
 		} else {
+			if (tgts[i].st_rank == DAOS_TGT_IGNORE)
+				continue;
 			D_ASSERT(tgts[i].st_shard >= start_shard);
 			tgt_idx = tgts[i].st_shard - start_shard;
 			D_ASSERT(tgt_idx <= tgt_max_idx);
@@ -137,10 +143,11 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		 */
 		if (!obj_ec_is_valid_tgt(tgt_map, map_size, leader_id, &leader))
 			leader = tgt_max_idx;
+		else
+			leader = leader % obj_ec_tgt_nr(oca);
 	} else {
 		D_ASSERT(leader_id == PO_COMP_ID_ALL);
 
-		D_ASSERT(oca != NULL);
 		leader = oid.id_shard % obj_ec_tgt_nr(oca);
 		setbit(tgt_bit_map, leader);
 		count++;

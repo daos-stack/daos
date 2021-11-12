@@ -400,7 +400,7 @@ dc_array_g2l(daos_handle_t coh, struct dc_array_glob *array_glob,
 	rc = daos_obj_open(coh, array_glob->oid, array_mode, &array->daos_oh,
 			   NULL);
 	if (rc) {
-		D_ERROR("Failed local object open "DF_RC".\n", DP_RC(rc));
+		D_ERROR("Failed local object open "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_array, rc);
 	}
 
@@ -463,7 +463,7 @@ dc_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 
 	rc = dc_array_g2l(coh, array_glob, mode, oh);
 	if (rc != 0)
-		D_ERROR("dc_array_g2l failed "DF_RC".\n", DP_RC(rc));
+		D_ERROR("dc_array_g2l failed "DF_RC"\n", DP_RC(rc));
 
 out:
 	return rc;
@@ -522,6 +522,7 @@ write_md_cb(tse_task_t *task, void *data)
 	update_args->nr		= 1;
 	update_args->iods	= &params->iod;
 	update_args->sgls	= &params->sgl;
+	update_args->flags	= DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT;
 
 	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params,
 				       sizeof(params));
@@ -626,8 +627,10 @@ open_handle_cb(tse_task_t *task, void *data)
 	daos_ofeat_t            feat;
 	int			rc = task->dt_result;
 
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to open object "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_obj, rc);
+	}
 
 	/** check and set array metadata in case of array_open */
 	if (!args->open_with_attr) {
@@ -678,7 +681,7 @@ err_obj:
 		rc2 = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 				       0, NULL, &close_task);
 		if (rc2) {
-			D_ERROR("Failed to create task to cleanup obj hdl\n");
+			D_ERROR("Failed to create task to cleanup obj hdl "DF_RC"\n", DP_RC(rc2));
 			return rc;
 		}
 
@@ -715,6 +718,7 @@ fetch_md_cb(tse_task_t *task, void *data)
 	fetch_args->nr		= 1;
 	fetch_args->iods	= &params->iod;
 	fetch_args->sgls	= &params->sgl;
+	fetch_args->flags	= DAOS_COND_DKEY_FETCH | DAOS_COND_AKEY_FETCH;
 
 	return 0;
 }
@@ -772,16 +776,14 @@ dc_array_open(tse_task_t *task)
 		/** The upper task completes when the open task completes */
 		rc = tse_task_register_deps(task, 1, &open_task);
 		if (rc != 0) {
-			D_ERROR("Failed to register dependency "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("Failed to register dependency "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_put1, rc);
 		}
 
 		rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
 					       sizeof(args));
 		if (rc != 0) {
-			D_ERROR("Failed to register completion cb "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("Failed to register completion cb "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_put1, rc);
 		}
 
@@ -1296,7 +1298,7 @@ check_short_read_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		D_ERROR("Array Read Failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_params, rc);
+		D_GOTO(out, rc);
 	}
 
 	D_ASSERT(params);
@@ -1381,7 +1383,7 @@ next:
 		/** memset all holes to 0 */
 		params->array_size = UINT64_MAX;
 		rc = process_iomap(params, args);
-		D_GOTO(err_params, rc);
+		D_GOTO(out, rc);
 	}
 
 	/** Schedule the get size to properly check for short reads */
@@ -1394,11 +1396,11 @@ next:
 
 	rc = tse_task_register_comp_cb(task, set_short_read_cb, NULL, 0);
 	if (rc)
-		D_GOTO(err_params, rc);
+		D_GOTO(out, rc);
 
 	return rc;
 
-err_params:
+out:
 	D_FREE(params);
 	tse_task_complete(task, rc);
 	return rc;
@@ -1466,8 +1468,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	 * callback of that task).
 	 */
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array) {
-		rc = daos_task_create(DAOS_OPC_ARRAY_GET_SIZE,
-				      tse_task2sched(task), 0, NULL,
+		rc = daos_task_create(DAOS_OPC_ARRAY_GET_SIZE, tse_task2sched(task), 0, NULL,
 				      &stask);
 		if (rc)
 			D_GOTO(err_task, rc);
@@ -1800,17 +1801,11 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				D_GOTO(err_iotask, rc);
 			}
 
-			tse_task_list_sched(&io_task_list, false);
-			rc = tse_task_schedule(stask, false);
-			if (rc != 0) {
-				D_FREE(sparams);
-				D_GOTO(err_iotask, rc);
-			}
+			tse_task_list_add(stask, &io_task_list);
 		}
-	} else {
-		tse_task_list_sched(&io_task_list, false);
 	}
 
+	tse_task_list_sched(&io_task_list, false);
 	array_decref(array);
 	tse_sched_progress(tse_task2sched(task));
 	return 0;
@@ -2039,7 +2034,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	rc = daos_task_create(opc, tse_task2sched(task), 0, NULL, &io_task);
 	if (rc) {
 		D_ERROR("daos_task_create() failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err, rc);
+		D_GOTO(free, rc);
 	}
 
 	p_args = daos_task_get_args(io_task);
@@ -2050,7 +2045,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
 				       sizeof(params));
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(free, rc);
 
 	rc = tse_task_register_deps(task, 1, &io_task);
 	if (rc)
@@ -2061,8 +2056,9 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 		D_GOTO(err, rc);
 
 	return rc;
-err:
+free:
 	D_FREE(params);
+err:
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2439,10 +2435,8 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		rc = tse_task_register_cbs(task, NULL, NULL, 0,
 					   adjust_array_size_cb, &props,
 					   sizeof(props));
-		if (rc) {
-			tse_task_complete(task, rc);
+		if (rc)
 			return rc;
-		}
 
 		rc = tse_task_reinit(task);
 		if (rc) {

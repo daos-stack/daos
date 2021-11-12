@@ -108,31 +108,25 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
  * Abort the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
+ * \param dti	[IN]	The DTX identifiers to be aborted.
  * \param epoch	[IN]	The max epoch for the DTX to be aborted.
- * \param dtis	[IN]	The array for DTX identifiers to be aborted.
- * \param count [IN]	The count of DTXs to be aborted.
  *
- * \return		Negative value if error.
- * \return		Others are for the count of aborted DTXs.
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
-	      int count);
+vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
 
 /**
  * Set flags on the active DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param dtis	[IN]	The array for DTX identifiers to be handled.
- * \param count [IN]	The count of DTXs to be handled.
+ * \param dti	[IN]	The DTX identifiers to be handled.
  * \param flags [IN]	The flags for the DTXs.
  *
- * \return		Negative value if error.
- * \return		Others are for the count of handled DTXs.
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dtis, int count,
-		  uint32_t flags);
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.
@@ -256,13 +250,12 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * Kill a VOS pool before destroy
  * It deletes SPDK blob of this pool and detaches it from VOS GC
  *
- * \param uuid	[IN]	Pool UUID
- * \param force [IN]	Delete blob even if it has open refcount
+ * \param uuid		[IN]	Pool UUID
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_kill(uuid_t uuid, bool force);
+vos_pool_kill(uuid_t uuid);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
@@ -288,6 +281,13 @@ vos_pool_destroy(const char *path, uuid_t uuid);
 int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
+
+/**
+ * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
+ */
+int
+vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
+		      daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -433,15 +433,20 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  * the caller.
  *
  * \param coh		[IN]	Container open handle
- * \param epr		[IN]	The epoch range to discard
- *				keys to discard
+ * \param oidp		[IN]	Optional oid for oid specific discard.  Aggregation should be
+ *				disabled before calling this function in this mode.  This simply
+ *				removes values in the specified epoch range.  It doesn't discard
+ *				any ilog entries. The expectation is the removed data will
+ *				be replaced at the same epoch (or snapshot).  If that is not the
+ *				case, any orphaned entries will be inaccessible.
+ * \param epr		[IN]	The epoch range to discard keys to discard
  * \param yield_func	[IN]	Pointer to customized yield function
  * \param yield_arg	[IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    bool (*yield_func)(void *arg), void *yield_arg);
 
 /**
@@ -1087,14 +1092,6 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/**
-	 * Pause flushing the free extents in aging buffer. This is usually
-	 * called before container destroy where huge amount of extents could
-	 * be freed in a short period of time.
-	 */
-	VOS_PO_CTL_VEA_PLUG,
-	/** Pairing with PLUG, usually called after container destroy done. */
-	VOS_PO_CTL_VEA_UNPLUG,
 };
 
 /**
@@ -1150,6 +1147,14 @@ vos_dedup_verify(daos_handle_t ioh);
 void
 vos_report_layout_incompat(const char *type, int version, int min_version,
 			   int max_version, uuid_t *uuid);
+
+#define VOS_NOTIFY_RAS_EVENTF(...)			\
+	do {						\
+		if (ds_notify_ras_eventf == NULL)	\
+			break;				\
+		ds_notify_ras_eventf(__VA_ARGS__);	\
+	} while (0)					\
+
 
 struct sys_db *vos_db_get(void);
 /**

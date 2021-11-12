@@ -89,6 +89,81 @@ func TestPoolCommands(t *testing.T) {
 
 	runCmdTests(t, []cmdTest{
 		{
+			"Pool create with extra argument",
+			fmt.Sprintf("pool create --size %s foo bar", testSizeStr),
+			"",
+			errors.New("unexpected"),
+		},
+		{
+			"Create pool with label prop and flag",
+			fmt.Sprintf("pool create --label foo --size %s --properties label:foo", testSizeStr),
+			"",
+			errors.New("can't set label property"),
+		},
+		{
+			"Create pool with label prop and argument",
+			fmt.Sprintf("pool create --size %s --properties label:foo foo", testSizeStr),
+			"",
+			errors.New("can't set label property"),
+		},
+		{
+			"Create pool with invalid label",
+			fmt.Sprintf("pool create --size %s alfalfa!", testSizeStr),
+			"",
+			errors.New("invalid label"),
+		},
+		{
+			"Create pool with label argument",
+			fmt.Sprintf("pool create --size %s foo", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
+					Properties: []*control.PoolProperty{
+						propWithVal("label", "foo"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with label flag",
+			fmt.Sprintf("pool create --size %s --label foo", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
+					Properties: []*control.PoolProperty{
+						propWithVal("label", "foo"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with label property",
+			fmt.Sprintf("pool create --size %s --properties label:foo", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
+					Properties: []*control.PoolProperty{
+						propWithVal("label", "foo"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Create pool with missing arguments",
 			"pool create",
 			"",

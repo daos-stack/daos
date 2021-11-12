@@ -68,7 +68,8 @@ struct ds_cont_child {
 				 sc_dtx_cos_shutdown:1,
 				 sc_closing:1,
 				 sc_props_fetched:1,
-				 sc_stopping:1;
+				 sc_stopping:1,
+				 sc_vos_agg_active:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
@@ -104,6 +105,10 @@ struct ds_cont_child {
 	uint64_t		sc_ec_agg_eph_boundry;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
+	/* Used by cont_ec_eph_query_ult to query the minimum EC agg epoch from all
+	 * local VOS.
+	 */
+	uint64_t		*sc_ec_query_agg_eph;
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
@@ -126,11 +131,12 @@ struct agg_param {
 	struct sched_request	*ap_req;
 	agg_param_get_eph_t	ap_max_eph_get;
 	agg_param_get_eph_t	ap_start_eph_get;
+	uint32_t		ap_vos_agg:1;
 };
 
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
 				   daos_epoch_range_t *epr, bool full_scan,
-				   struct agg_param *param);
+				   struct agg_param *param, uint64_t *msecs);
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			struct agg_param *param);
@@ -259,5 +265,7 @@ struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
-
+int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
+			  uint64_t **epoch_p);
+int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

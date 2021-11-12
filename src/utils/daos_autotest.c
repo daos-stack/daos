@@ -21,7 +21,7 @@
 #include <daos/pool.h>
 
 #include "daos_hdlr.h"
-
+#include "math.h"
 /** Input arguments passed to daos utility */
 struct cmd_args_s *autotest_ap;
 
@@ -55,7 +55,51 @@ daos_handle_t	coh3 = DAOS_HDL_INVAL;
 /** force cleanup */
 int force;
 
+/** skip big steps */
+int skip_steps[] = {28, 29};
+
+/** deadline/time limit */
+uint64_t	deadline_count;
+clock_t		deadline_limit = 30 * CLOCKS_PER_SEC;
+
 int domain_nr;
+
+/** total number of records for progress bar */
+int total_nr;
+
+/** how many ticks in progress bar */
+int ticks;
+
+/** how big each tick is in progress bar */
+int tick_size;
+
+void
+setup_progress()
+{
+	ticks = 20;
+	tick_size = total_nr / ticks;
+	fprintf(autotest_ap->outstream, "    ");
+}
+
+void
+increment_progress(int progress)
+{
+	if (progress % tick_size == 0) {
+		int percentage;
+
+		percentage = ceil((double) progress / (double) total_nr * 100.0);
+		fprintf(autotest_ap->outstream, "\b\b\b\b");
+		fprintf(autotest_ap->outstream, "% 4d", percentage);
+		fflush(autotest_ap->outstream);
+	}
+}
+
+void
+finish_progress()
+{
+	fprintf(autotest_ap->outstream, "\b\b\b\b");
+}
+
 
 static inline void
 new_oid(void)
@@ -119,6 +163,7 @@ step_fail(const char *comment, ...)
 	step_print("\033[0;31mKO\033[0m", comment, ap);
 	va_end(ap);
 }
+
 static inline void
 step_skip(const char *comment, ...)
 {
@@ -155,7 +200,7 @@ init(void)
 	rc = daos_init();
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -171,7 +216,7 @@ pconnect(void)
 			       DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	/** gather domain_nr for poh */
@@ -210,6 +255,7 @@ ccreate(void)
 
 	cuuid2 = "autotest_cont_rf1";
 	rc = daos_cont_create_with_label(poh, cuuid2, prop, NULL, NULL);
+	daos_prop_free(prop);
 	if (rc)
 		D_GOTO(fail, rc);
 
@@ -222,6 +268,7 @@ ccreate(void)
 
 	cuuid3 = "autotest_cont_rf2";
 	rc = daos_cont_create_with_label(poh, cuuid3, prop2, NULL, NULL);
+	daos_prop_free(prop2);
 	if (rc)
 		D_GOTO(fail, rc);
 
@@ -230,7 +277,7 @@ ccreate(void)
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -256,7 +303,7 @@ copen(void)
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -269,21 +316,26 @@ oS1(void)
 	new_oid();
 	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
-	for (i = 0; i < 1000000; i++) {
+	total_nr = 1000000;
+	setup_progress();
+
+	for (i = 0; i < total_nr; i++) {
 
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 		if (rc) {
 			step_fail("failed to open object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
 
 		rc = daos_obj_close(oh, NULL);
 		if (rc) {
 			step_fail("failed to close object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
+		increment_progress(i);
 	}
 
+	finish_progress();
 	step_success("");
 	return 0;
 }
@@ -298,36 +350,48 @@ oSX(void)
 	new_oid();
 	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
-	for (i = 0; i < 10000; i++) {
+	total_nr = 10000;
+	setup_progress();
+
+	for (i = 0; i < total_nr; i++) {
 
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 		if (rc) {
 			step_fail("failed to open object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
 
 		rc = daos_obj_close(oh, NULL);
 		if (rc) {
 			step_fail("failed to close object: %s", d_errdesc(rc));
-			return -1;
+			return rc;
 		}
+		increment_progress(i);
 	}
 
+	finish_progress();
 	step_success("");
 	return 0;
 }
 
 static int
-kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
+kv_put(daos_handle_t oh, daos_size_t size)
 {
 	daos_handle_t	eq;
 	daos_event_t	ev_array[MAX_INFLIGHT];
 	char		key[MAX_INFLIGHT][10];
 	char		*val;
 	daos_event_t	*evp;
-	uint64_t	i;
 	int		rc;
 	int		eq_rc;
+	double		timeout;
+	double		step_adj;
+	double		t;
+
+	deadline_count = 1;
+
+	total_nr = ticks;
+	setup_progress();
 
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
@@ -343,19 +407,18 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	memset(val, 'D', size * MAX_INFLIGHT);
 
 	/** Issue actual I/Os */
-	for (i = 1; i < nr + 1; i++) {
+	while (true) {
 		char *key_cur;
 		char *val_cur;
 
-		if (i < MAX_INFLIGHT) {
+		if (deadline_count < MAX_INFLIGHT) {
 			/** Haven't reached max request in flight yet */
-			evp = &ev_array[i];
+			evp = &ev_array[deadline_count];
 			rc = daos_event_init(evp, eq, NULL);
 			if (rc)
 				break;
-
-			key_cur = key[i];
-			val_cur = val + size * i;
+			key_cur = key[deadline_count];
+			val_cur = val + size * (deadline_count);
 		} else {
 			int slot;
 
@@ -385,15 +448,27 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 		}
 
 		/** key = insert sequence ID */
-		sprintf(key_cur, "%ld", i);
+		sprintf(key_cur, "%ld", deadline_count);
 		/** value = sequend ID + DDDDDDD... */
-		*((uint64_t *)val_cur) = i;
+		*((uint64_t *)val_cur) = deadline_count;
 
 		/** Insert kv pair */
 		rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_cur, size, val_cur,
 				evp);
+
+		if (start + deadline_limit <= clock()) {
+			break;
+		}
+
 		if (rc)
 			break;
+
+		deadline_count++;
+
+		timeout = deadline_limit / CLOCKS_PER_SEC;
+		step_adj = ticks / timeout;
+		t = ((start + deadline_limit) - clock()) / CLOCKS_PER_SEC;
+		increment_progress((int)((timeout - t) * step_adj));
 	}
 
 	/** Wait for completion of all in-flight requests */
@@ -417,11 +492,12 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 			rc = eq_rc;
 	}
 
+	finish_progress();
 	return rc;
 }
 
 static int
-kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
+kv_get(daos_handle_t oh, daos_size_t size)
 {
 	daos_handle_t	eq;
 	daos_event_t	ev_array[MAX_INFLIGHT];
@@ -433,6 +509,9 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	uint64_t	res = 0;
 	int		rc;
 	int		eq_rc;
+
+	total_nr = deadline_count;
+	setup_progress();
 
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
@@ -447,7 +526,7 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	}
 
 	/** Issue actual I/Os */
-	for (i = 1; i < nr + 1; i++) {
+	for (i = 1; i < deadline_count + 1; i++) {
 		char		*key_cur;
 		char		*val_cur;
 		daos_size_t	*val_sz_cur;
@@ -510,6 +589,7 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 				val_cur, evp);
 		if (rc)
 			break;
+		increment_progress(i);
 	}
 
 	/** Wait for completion of all in-flight requests */
@@ -544,10 +624,11 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 			return eq_rc;
 	}
 
-	/** verify that we got the sum of all integers from 1 to nr */
-	if (res != nr * (nr + 1) / 2)
+	/** verify that we got the sum of all integers from 1 to deadline_count */
+	if (res != deadline_count * (deadline_count + 1) / 2)
 		rc = -DER_MISMATCH;
 
+	finish_progress();
 	return rc;
 }
 
@@ -564,20 +645,20 @@ kv_insert128(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	put_rc = kv_put(oh, 128, 1000000);
+	put_rc = kv_put(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -594,20 +675,20 @@ kv_read128(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	get_rc = kv_get(oh, 128, 1000000);
+	get_rc = kv_get(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return get_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -629,7 +710,7 @@ kv_punch(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	punch_rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
@@ -637,12 +718,12 @@ kv_punch(void)
 
 	if (punch_rc) {
 		step_fail("failed to punch object: %s", d_errdesc(punch_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -663,20 +744,20 @@ kv_insert4k(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	put_rc = kv_put(oh, 4096, 1000000);
+	put_rc = kv_put(oh, 4096);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -693,20 +774,20 @@ kv_read4k(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	get_rc = kv_get(oh, 4096, 1000000);
+	get_rc = kv_get(oh, 4096);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -726,20 +807,20 @@ kv_insert1m(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	put_rc = kv_put(oh, 1048576, 100000);
+	put_rc = kv_put(oh, 1048576);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -756,20 +837,20 @@ kv_read1m(void)
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	get_rc = kv_get(oh, 1048576, 100000);
+	get_rc = kv_get(oh, 1048576);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
 		step_fail("failed to insert: %s", d_errdesc(get_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -792,19 +873,20 @@ kv_insertrf1(void)
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
-	put_rc = kv_put(oh, 128, 1000000);
+
+	put_rc = kv_put(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -827,20 +909,20 @@ kv_readrf1(void)
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	get_rc = kv_get(oh, 128, 1000000);
+	get_rc = kv_get(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return get_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -867,20 +949,20 @@ kv_insertrf2(void)
 	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	put_rc = kv_put(oh, 128, 1000000);
+	put_rc = kv_put(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return -1;
+		return put_rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -904,20 +986,20 @@ kv_readrf2(void)
 	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
-	get_rc = kv_get(oh, 128, 1000000);
+	get_rc = kv_get(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return -1;
+		return rc;
 	}
 
 	if (rc) {
 		step_fail("failed to close object: %s", d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 
 	step_success("");
@@ -950,7 +1032,7 @@ cclose(void)
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -975,7 +1057,7 @@ cdestroy(void)
 
 fail:
 	step_fail(d_errdesc(rc));
-	return -1;
+	return rc;
 }
 
 static int
@@ -986,7 +1068,7 @@ pdisconnect(void)
 	rc = daos_pool_disconnect(poh, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -1000,7 +1082,7 @@ fini(void)
 	rc = daos_fini();
 	if (rc) {
 		step_fail(d_errdesc(rc));
-		return -1;
+		return rc;
 	}
 	step_success("");
 	return 0;
@@ -1025,17 +1107,17 @@ static struct step steps[] = {
 	{ 11,	"Generating 10K SX layouts",		oSX,		96 },
 
 	/** KV tests */
-	{ 20,	"Inserting 1M 128B values",		kv_insert128,	96 },
+	{ 20,	"Inserting 128B values",		kv_insert128,	96 },
 	{ 21,	"Reading 128B values back",		kv_read128,	96 },
 	/** { 22,	"Listing keys",				kv_list,	96 },
 	* { 23,	"Punching object",			kv_punch,	96 },
 	*/
-	{ 24,	"Inserting 1M 4KB values",		kv_insert4k,	96 },
+	{ 24,	"Inserting 4KB values",			kv_insert4k,	96 },
 	{ 25,	"Reading 4KB values back",		kv_read4k,	96 },
 	/** { 26,	"Listing keys",				kv_list,	96 },
 	* { 27,	"Punching object",			kv_punch,	96 },
 	*/
-	{ 28,	"Inserting 100K 1MB values",		kv_insert1m,	96 },
+	{ 28,	"Inserting 1MB values",			kv_insert1m,	96 },
 	{ 29,	"Reading 1MB values back",		kv_read1m,	96 },
 	/** { 30,	"Listing keys",				kv_list,	96 },
 	* { 31,	"Punching object",			kv_punch,	96 },
@@ -1063,11 +1145,15 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 	int		rc;
 	int		resume = 0;
 	struct step	*s;
+	int		ret = 0;
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_AUTOTEST);
 
 	autotest_ap = ap;
+
+	if (autotest_ap->deadline_limit)
+		deadline_limit = autotest_ap->deadline_limit * CLOCKS_PER_SEC;
 
 	step_init();
 
@@ -1075,22 +1161,38 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 		if (s->id < resume)
 			continue;
 		step_new(s->id, s->op);
-		rc = (s->func)();
+
+		int	i;
+		bool	found = false;
+
+		if (ap->skip_big) {
+			for (i = 0; i < sizeof(skip_steps) / sizeof(int); i++) {
+				if (s->id == skip_steps[i]) {
+					found = true;
+					break;
+				}
+			}
+		}
+		if (found) {
+			step_skip("skipped");
+			rc = 0;
+		} else {
+			rc = (s->func)();
+		}
+
 		if (rc) {
 			force = 1;
+			ret = rc;
 			resume = s->clean_step;
 		}
 	}
 
-	if (force) {
+	if (force)
 		fprintf(ap->outstream,
 			"\nSome steps \033[0;31mfailed\033[0m.\n");
-		rc = 1;
-	} else {
+	else
 		fprintf(ap->outstream,
 			"\nAll steps \033[0;32mpassed\033[0m.\n");
-		rc = 0;
-	}
 
-	return rc;
+	return ret;
 }

@@ -493,7 +493,7 @@ degrade_ec_partial_update_agg(void **state)
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
 				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      DAOS_TX_NONE, true);
 	}
 	free(data);
 	free(verify_data);
@@ -559,10 +559,64 @@ degrade_ec_agg(void **state)
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
 				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      DAOS_TX_NONE, true);
 	}
 	free(data);
 	free(verify_data);
+}
+
+static void
+degrade_ec_update(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	uint64_t	dkey_int;
+	uint16_t	fail_shards[2];
+	int		i;
+	char		*data;
+#define TEST_EC_STRIPE_SIZE	(1 * 1024 * 1024 * 4)
+
+	if (!test_runable(arg, 6) || (arg->srv_ntgts / arg->srv_nnodes) < 2)
+		return;
+
+	data = (char *)malloc(TEST_EC_STRIPE_SIZE);
+	assert_true(data != NULL);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G2, DAOS_OF_DKEY_UINT64, 0, arg->myrank);
+	dkey_int = 4;
+
+	arg->fail_loc = DAOS_FAIL_SHARD_NONEXIST | DAOS_FAIL_ONCE;
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 4; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = TEST_EC_STRIPE_SIZE;
+		recx.rx_idx = i * TEST_EC_STRIPE_SIZE;
+		memset(data, 'a' + i, TEST_EC_STRIPE_SIZE);
+		inset_recxs_dkey_uint64(&dkey_int, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+					data, TEST_EC_STRIPE_SIZE, &req);
+	}
+	ioreq_fini(&req);
+
+	fail_shards[0] = 7;
+	fail_shards[1] = 8;
+	arg->fail_loc = DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS;
+	arg->fail_value = daos_shard_fail_value(fail_shards, 2);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 1; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = TEST_EC_STRIPE_SIZE;
+		recx.rx_idx = i * TEST_EC_STRIPE_SIZE;
+		memset(data, 'a' + i, TEST_EC_STRIPE_SIZE);
+		inset_recxs_dkey_uint64(&dkey_int, "a_key_1", 1, DAOS_TX_NONE, &recx, 1,
+			     data, TEST_EC_STRIPE_SIZE, &req);
+	}
+	ioreq_fini(&req);
+
+	free(data);
 }
 
 /** create a new pool/container for each test */
@@ -638,6 +692,8 @@ static const struct CMUnitTest degrade_tests[] = {
 	 degrade_ec_partial_update_agg, degrade_sub_setup, test_teardown},
 	{"DEGRADE25: degrade ec aggregation",
 	 degrade_ec_agg, degrade_sub_setup, test_teardown},
+	{"DEGRADE26: degrade ec update",
+	 degrade_ec_update, degrade_sub_setup, test_teardown},
 };
 
 int

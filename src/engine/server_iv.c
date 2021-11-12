@@ -422,21 +422,17 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	if (entry->iv_class->iv_class_ops &&
 	    entry->iv_class->iv_class_ops->ivc_ent_fetch)
-		rc = entry->iv_class->iv_class_ops->ivc_ent_fetch(entry, &key,
-								  iv_value,
-								  priv);
+		rc = entry->iv_class->iv_class_ops->ivc_ent_fetch(entry, &key, iv_value, priv);
 	else
 		rc = daos_sgl_copy_data(iv_value, &entry->iv_value);
 
-	/* store the value of the result */
-	if (flags & CRT_IV_FLAG_PENDING_FETCH &&
-	    rc == -DER_IVCB_FORWARD) {
-		D_DEBUG(DB_MD, "[%d:%d] reset to 0 during IV aggregation.\n",
-			key.rank, key.class_id);
-		rc = 0;
+output:
+	if (flags & CRT_IV_FLAG_PENDING_FETCH && rc == -DER_IVCB_FORWARD) {
+		/* For pending fetch request, let's reset to DER_NOTLEADER for retry */
+		D_DEBUG(DB_MD, "[%d:%d] reset NOTLEADER to retry.\n", key.rank, key.class_id);
+		rc = -DER_NOTLEADER;
 	}
 
-output:
 	ds_iv_ns_put(ns);
 	return rc;
 }
@@ -611,21 +607,31 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	*priv = priv_entry;
 
 out:
-	if (rc && alloc_entry) {
-		d_list_del(&entry->iv_link);
-		iv_entry_free(entry);
+	if (rc) {
+		if (alloc_entry) {
+			d_list_del(&entry->iv_link);
+			iv_entry_free(entry);
+		}
+		ds_iv_ns_put(ns);
 	}
 
-	ds_iv_ns_put(ns);
-	return 0;
+	return rc;
 }
 
 static int
 ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 {
+	struct ds_iv_ns		*ns = NULL;
 	struct iv_priv_entry	*priv_entry = priv;
 	struct ds_iv_entry	*entry;
 	int			 rc;
+
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0) {
+		ds_iv_ns_put(ns); /* balance ivc_on_get */
+		return rc;
+	}
+	D_ASSERT(ns != NULL);
 
 	D_ASSERT(priv_entry != NULL);
 
@@ -635,20 +641,24 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	/* Let's deal with iv_value first */
 	d_sgl_fini(iv_value, true);
 
-	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
-							priv_entry->priv);
+	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry, priv_entry->priv);
 	if (rc)
-		return rc;
+		D_GOTO(put, rc);
 
 	D_FREE(priv_entry);
 	D_DEBUG(DB_TRACE, "Put entry %p/%d\n", entry, entry->iv_ref - 1);
 	if (--entry->iv_ref > 0)
-		return 0;
+		D_GOTO(put, rc);
 
 	d_list_del(&entry->iv_link);
 	iv_entry_free(entry);
 
-	return 0;
+put:
+	/* one for lookup, the other one for balanced the get */
+	ds_iv_ns_put(ns);
+	ds_iv_ns_put(ns);
+
+	return rc;
 }
 
 static int
@@ -850,6 +860,8 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 		d_list_del(&entry->iv_link);
 		iv_entry_free(entry);
 	}
+
+	D_INFO(DF_UUID" ns stopped\n", DP_UUID(ns->iv_pool_uuid));
 }
 
 unsigned int
@@ -1108,6 +1120,10 @@ retry:
 		}
 
 		/* otherwise retry and wait for others to update the ns. */
+		/* IV fetch might return IVCB_FORWARD if the IV fetch forward RPC is queued,
+		 * but inflight fetch request return IVCB_FORWARD, then queued RPC will
+		 * reply IVCB_FORWARD.
+		 */
 		D_WARN("retry upon %d for class %d opc %d\n", rc,
 		       key->class_id, opc);
 		/* Yield to avoid hijack the cycle if IV RPC is not sent */

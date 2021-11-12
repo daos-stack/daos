@@ -35,27 +35,16 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
 	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
 								0);
-	uuid_t pool_uuid;
 	jlong ret;
 	daos_handle_t poh;
 	int rc;
 
-	if (!uuid_parse(pool_str, pool_uuid)) {
-		rc = daos_pool_connect(pool_uuid,
-				       server_group,
-				       flags,
-				       &poh /* returned pool handle */,
-				       NULL /* returned pool info */,
-				       NULL /* event */);
-	} else {
-		rc = daos_pool_connect(pool_str,
-				       server_group,
-				       flags,
-				       &poh /* returned pool handle */,
-				       NULL /* returned pool info */,
-				       NULL /* event */);
-	}
-
+	rc = daos_pool_connect(pool_str,
+			       server_group,
+			       flags,
+			       &poh /* returned pool handle */,
+			       NULL /* returned pool info */,
+			       NULL /* event */);
 	if (rc) {
 		char *msg = NULL;
 
@@ -123,12 +112,7 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
 	int rc;
 
 	memcpy(&poh, &poolHandle, sizeof(poh));
-	if (!uuid_parse(cont_str, cont_uuid)) {
-		rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
-	} else {
-		rc = daos_cont_open(poh, cont_str, mode, &coh, &co_info, NULL);
-	}
-
+	rc = daos_cont_open(poh, cont_str, mode, &coh, &co_info, NULL);
 	if (rc) {
 		char *msg = NULL;
 
@@ -174,18 +158,18 @@ Java_io_daos_DaosClient_daosListContAttrs(JNIEnv *env,
 {
 	daos_handle_t coh;
 	char *buffer = (char *)address;
-	int buffer_size;
+	size_t buffer_size;
 	int rc;
 
-	memcpy(&buffer_size, buffer, 4);
-	buffer += 4;
+	memcpy(&buffer_size, buffer, 8);
+	buffer += 8;
 	memcpy(&coh, &contHandle, sizeof(coh));
 	rc = daos_cont_list_attr(coh, buffer, &buffer_size, NULL);
 	if (rc) {
 		throw_base(env, "Failed to list attributes from container", rc, 0, 0);
 	} else {
-		buffer -= 4;
-		memcpy(buffer, &buffer_size, 4);
+		buffer -= 8;
+		memcpy(buffer, &buffer_size, 8);
 	}
 }
 

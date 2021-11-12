@@ -109,7 +109,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	timeout;
 	uint32_t	credits;
 	uint32_t	fi_univ_size = 0;
-	uint32_t	mem_pin_disable = 0;
+	uint32_t	mem_pin_enable = 0;
 	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
 	int		rc = 0;
@@ -143,8 +143,8 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	/* Apply CART-890 workaround for server side only */
 	if (server) {
-		d_getenv_int("CRT_DISABLE_MEM_PIN", &mem_pin_disable);
-		if (mem_pin_disable == 0)
+		d_getenv_int("CRT_ENABLE_MEM_PIN", &mem_pin_enable);
+		if (mem_pin_enable == 1)
 			mem_pin_workaround();
 	}
 
@@ -163,6 +163,10 @@ static int data_init(int server, crt_init_options_t *opt)
 	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
+	crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
+
+	D_DEBUG(DB_ALL, "SWIM context idx=%d\n", crt_gdata.cg_swim_crt_idx);
+
 	/* Override defaults and environment if option is set */
 	if (opt && opt->cio_use_credits) {
 		credits = opt->cio_ep_credits;
@@ -174,7 +178,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
 	if (fi_univ_size == 0) {
-		D_WARN("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
+		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
 
@@ -295,7 +299,8 @@ crt_plugin_fini(void)
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
+		if (crt_plugin_gdata.cpg_prog_cbs_old[i])
+			D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
 	}
 
 	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
@@ -466,7 +471,7 @@ do_init:
 		     prov == CRT_NA_OFI_TCP_RXM) &&
 		    crt_provider_is_sep(prov)) {
 			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
-			       "for current provider, ignore it.\n");
+			       "for current provider, ignoring it.\n");
 			crt_provider_set_sep(prov, false);
 		}
 
@@ -476,7 +481,7 @@ do_init:
 
 			srx_env = getenv("FI_OFI_RXM_USE_SRX");
 			if (srx_env == NULL) {
-				D_WARN("FI_OFI_RXM_USE_SRX not set, set=1\n");
+				D_INFO("FI_OFI_RXM_USE_SRX not set, set=1\n");
 				setenv("FI_OFI_RXM_USE_SRX", "1", true);
 			}
 		}
@@ -537,7 +542,6 @@ do_init:
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
 		crt_gdata.cg_inited = 1;
-
 	} else {
 		if (crt_gdata.cg_server == false && server == true) {
 			D_ERROR("CRT initialized as client, cannot set as "
@@ -856,7 +860,10 @@ int crt_na_ofi_config_init(int provider)
 		} else {
 			port = atoi(port_str);
 
-			crt_port_range_verify(port);
+			if (provider == CRT_NA_OFI_SOCKETS ||
+			    provider == CRT_NA_OFI_VERBS_RXM ||
+			    provider == CRT_NA_OFI_TCP_RXM)
+				crt_port_range_verify(port);
 
 			if (provider == CRT_NA_OFI_PSM2)
 				port = (uint16_t)port << 8;

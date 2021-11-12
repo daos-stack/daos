@@ -1,0 +1,15 @@
+hosts:
+    test_servers:
+        - server-A
+timeout: 600
+server_config:
+    name: daos_server
+pool:
+    control_method: dmg
+    scm_size: 1GB
+container:
+    akey_size: 5
+    dkey_size: 5
+    data_size: 32
+    object_qty: 1
+    record_qty: 1

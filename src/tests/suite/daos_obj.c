@@ -325,6 +325,31 @@ insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 }
 
 void
+inset_recxs_dkey_uint64(uint64_t *dkey, const char *akey, daos_size_t iod_size,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
+	     daos_size_t data_size, struct ioreq *req)
+{
+	assert_in_range(nr, 1, IOREQ_IOD_NR);
+
+	/* dkey */
+	d_iov_set(&req->dkey, (void *)dkey, sizeof(uint64_t));
+
+	/* akey */
+	ioreq_io_akey_set(req, &akey, 1);
+
+	/* set sgl */
+	if (data != NULL)
+		ioreq_sgl_simple_set(req, &data, &data_size, 1);
+
+	/* iod, recxs */
+	ioreq_iod_recxs_set(req, 0, iod_size, recxs, nr);
+
+	insert_internal_nowait(&req->dkey, 1, req->sgl, req->iod, th, req, 0);
+
+	insert_wait(req);
+}
+
+void
 punch_obj(daos_handle_t th, struct ioreq *req)
 {
 	int rc;
@@ -2517,7 +2542,7 @@ close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 
 	print_message("reopening container\n");
 	if (arg->myrank == 0) {
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW,
 				    &arg->coh, &arg->co_info, NULL /* ev */);
 		assert_rc_equal(rc, 0);
 	}
@@ -4177,6 +4202,7 @@ oclass_auto_setting(void **state)
 	test_arg_t		*arg = *state;
 	uuid_t			uuid;
 	daos_handle_t		coh;
+	char			str[37];
 	daos_pool_info_t	info = {0};
 	struct pl_map_attr	attr;
 	daos_oclass_id_t	ecidx, ecid1;
@@ -4214,10 +4240,10 @@ oclass_auto_setting(void **state)
 	print_message("OID settings with container RF0:\n");
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF0;
-	uuid_generate(uuid);
-	rc = daos_cont_create(arg->pool.poh, uuid, prop, NULL);
+	rc = daos_cont_create(arg->pool.poh, &uuid, prop, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** ALL oids by default will use OC_S1. */
@@ -4281,17 +4307,17 @@ oclass_auto_setting(void **state)
 
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("\nOID settings with container RF1:\n");
 	/** create container with rf = 1 */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
-	uuid_generate(uuid);
-	rc = daos_cont_create(arg->pool.poh, uuid, prop, NULL);
+	rc = daos_cont_create(arg->pool.poh, &uuid, prop, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** default oid should be OC_RP_2G1 */
@@ -4331,17 +4357,17 @@ oclass_auto_setting(void **state)
 
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("\nOID settings with container RF2:\n");
 	/** create container with rf = 2 */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
-	uuid_generate(uuid);
-	rc = daos_cont_create(arg->pool.poh, uuid, prop, NULL);
+	rc = daos_cont_create(arg->pool.poh, &uuid, prop, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** adjust the expected EC object class ID based on domain nr */
@@ -4393,17 +4419,17 @@ oclass_auto_setting(void **state)
 
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("\nOID settings with container RF3:\n");
 	/** create container with rf = 3 */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF3;
-	uuid_generate(uuid);
-	rc = daos_cont_create(arg->pool.poh, uuid, prop, NULL);
+	rc = daos_cont_create(arg->pool.poh, &uuid, prop, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** default oid should be OC_RP_4G1 */
@@ -4443,7 +4469,7 @@ oclass_auto_setting(void **state)
 
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_rc_equal(rc, 0);
 
 }
