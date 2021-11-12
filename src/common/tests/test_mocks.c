@@ -189,6 +189,10 @@ __wrap_close(int fd)
 {
 	close_fd = fd;
 	close_call_count++;
+	if (close_return < 0) {
+		errno = -close_return;
+		return -1;
+	}
 	return close_return;
 }
 
@@ -227,6 +231,10 @@ __wrap_sendmsg(int sockfd, const struct msghdr *msg, int flags)
 		sendmsg_msg_iov_len = msg->msg_iov[0].iov_len;
 	}
 	sendmsg_flags = flags;
+	if (sendmsg_return < 0) {
+		errno = -sendmsg_return;
+		return -1;
+	}
 	return sendmsg_return;
 }
 
@@ -269,6 +277,10 @@ __wrap_recvmsg(int sockfd, struct msghdr *msg, int flags)
 		recvmsg_msg_iov_len = msg->msg_iov[0].iov_len;
 	}
 	recvmsg_flags = flags;
+	if (recvmsg_return < 0) {
+		errno = -recvmsg_return;
+		return -1;
+	}
 	return recvmsg_return;
 }
 
@@ -339,6 +351,10 @@ __wrap_poll(struct pollfd *fds, nfds_t nfds, int timeout)
 	}
 	poll_nfds = nfds;
 	poll_timeout = timeout;
+	if (poll_return < 0) {
+		errno = -poll_return;
+		return -1;
+	}
 	return poll_return;
 }
 
