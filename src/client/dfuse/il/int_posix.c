@@ -938,6 +938,8 @@ dfuse_open(const char *pathname, int flags, ...)
 			    * for va_arg routine
 			    */
 
+	pthread_once(&init_links_flag, init_links);
+
 	if (flags & O_CREAT) {
 		va_list ap;
 
