@@ -120,7 +120,7 @@ test_cond_helper(test_arg_t *arg, int rf)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** test atomic rename with DFS DTX mode */
-	bool use_dtx;
+	bool use_dtx = false;
 
 	d_getenv_bool("DFS_USE_DTX", &use_dtx);
 	if (!use_dtx)
