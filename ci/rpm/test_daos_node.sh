@@ -1,7 +1,7 @@
 #!/bin/bash
 
 YUM=dnf
-if [ "$(lsb_release -si)" = "CentOS" ]; then
+if [[ $(lsb_release -si) = CentOS* ]]; then
     if [[ $(lsb_release -sr) = 8* ]]; then
         OPENMPI_RPM=openmpi
         OPENMPI=mpi/openmpi-x86_64

@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@bmurrell/centos-stream-8") _
 
 // For master, this is just some wildly high number
 next_version = "2.1.0"
@@ -304,6 +304,41 @@ pipeline {
                 expression { ! skipStage() }
             }
             parallel {
+                stage('Build RPM on CentOS Stream 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.mockbuild'
+                            dir 'utils/rpms/packaging'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs()
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                        }
+                    }
+                    steps {
+                        buildRpm()
+                    }
+                    post {
+                        success {
+                            buildRpmPost condition: 'success'
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup'
+                        }
+                    }
+                }
                 stage('Build RPM on CentOS 7') {
                     when {
                         beforeAgent true
@@ -787,6 +822,32 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
+                stage('Test CentOS Stream 8 RPMs on CentOS Stream 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                daos_pkg_version: daosPackagesVersion(next_version)
+                   }
+                } // stage('Test EL8 RPMs on CentOS Stream 8') {
+                stage('Test EL8 RPMs on CentOS Stream 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                daos_pkg_version: daosPackagesVersion(next_version)
+                   }
+                } // stage('Test EL8 RPMs on CentOS Stream 8') {
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true

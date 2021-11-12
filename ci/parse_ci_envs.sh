@@ -11,6 +11,10 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${CHROOT_NAME:=epel-7-x86_64}"
       : "${TARGET:=centos7}"
       ;;
+    *CentOS\ Stream\ 8|*el8s*|*centos8s*)
+      : "${CHROOT_NAME:=centos-stream-8-x86_64}"
+      : "${TARGET:=centos8s}"
+      ;;
     *CentOS\ 8*|*el8*|*centos8*)
       : "${CHROOT_NAME:=epel-8-x86_64}"
       : "${TARGET:=centos8}"
