@@ -2057,7 +2057,7 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 				&user_priv);
 	if (rc != 0) {
 		D_ERROR("ivo_on_get(): "DF_RC"\n", DP_RC(rc));
-		D_GOTO(exit, rc);
+		D_GOTO(exit, rc = -DER_NOMEM);
 	}
 	need_put = true;
 
