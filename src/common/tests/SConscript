@@ -56,10 +56,8 @@ def scons():
     unit_env = tenv.Clone()
     unit_env.AppendUnique(OBJPREFIX='utest_')
 
-    unit_env.AppendUnique(LINKFLAGS=["-Wl,--wrap=socket", "-Wl,--wrap=connect", "-Wl,--wrap=bind",
-                                     "-Wl,--wrap=fcntl", "-Wl,--wrap=listen", "-Wl,--wrap=accept",
-                                     "-Wl,--wrap=close", "-Wl,--wrap=sendmsg", "-Wl,--wrap=recvmsg",
-                                     "-Wl,--wrap=poll", "-Wl,--wrap=unlink"])
+    common_mock_ld_script = "%s/common-mock-ld-opts" % Dir('.').srcnode()
+    unit_env.AppendUnique(LINKFLAGS=['-Wl,@%s' % common_mock_ld_script])
 
     mock_test_utils = unit_env.SharedObject(['test_mocks.c', 'test_utils.c'])
     drpc_test_utils = unit_env.SharedObject(['../drpc.c']) + mock_test_utils
