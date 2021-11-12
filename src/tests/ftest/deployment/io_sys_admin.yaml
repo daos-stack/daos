@@ -75,11 +75,11 @@ container:
 
 largefilecount:
   api:
-    - DFS
+    - MPIIO
     - POSIX
     - HDF5
     - HDF5-VOL
-    - MPIIO
+    - DFS
   object_class:
     - SX
 #    - EC_2P1GX

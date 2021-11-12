@@ -40,6 +40,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
     :avocado: recursive
     """
 
+
     def add_containers(self, oclass=None):
         """Create a list of containers that the various jobs use for storage.
 
@@ -60,6 +61,7 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         if cont_properties is not None:
             container.properties.update(cont_properties)
         container.create()
+
         return container
 
     def run_file_count(self):

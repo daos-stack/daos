@@ -6,24 +6,12 @@
 """
 
 import time
-import os
 
-from small import IorSmall
-from large_file_count import LargeFileCount
-from mdtest.small import MdtestSmall
-from dmg_nvme_scan_test import DmgNvmeScanTest
-from dmg_storage_scan_scm import DmgStorageScanSCMTest
-from config_generate_output import ConfigGenerateOutput
-from daos_control_config import DaosControlConfigTest
-from autotest import ContainerAutotestTest
-from ior_smoke import EcodIor
-from large_file import DmvrPosixLargeFile
-from general_utils import human_to_bytes
+from file_count_test_base import FileCountTestBase
 from data_mover_test_base import DataMoverTestBase
-from ior_test_base import IorTestBase
-from mdtest_test_base import MdtestBase
+from general_utils import human_to_bytes
 
-class IoSysAdmin(LargeFileCount, DataMoverTestBase, DmgNvmeScanTest, DmgStorageScanSCMTest, ConfigGenerateOutput):
+class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class wrapping up tests from four
                                different test classes into one. Intent
@@ -43,124 +31,6 @@ class IoSysAdmin(LargeFileCount, DataMoverTestBase, DmgNvmeScanTest, DmgStorageS
 
         return free_space
 
-    def run_dm_large_file_dep(self, tool):
-        """
-        Test Description:
-            Copy a very large file between daos POSIX containers and
-            an external POSIX file system.
-        Use Cases:
-            Create a pool
-            Create POSIX type cont1.
-            Run ior -a DFS on cont1.
-            Create POSIX type cont2.
-            Copy data from cont1 to cont2.
-            Copy data from cont2 to external POSIX file system.
-            Create POSIX type cont4.
-            Copy data from external POSIX file system to cont4.
-            Run ior -a DFS with read verify on copied directory to verify
-            data in cont3.
-        """
-        # Set the tool to use
-        self.set_tool(tool)
-
-        # Get the number of ior processes
-#        self.ior_processes = self.params.get(
-#            self.tool.lower(), "/run/ior/client_processes/*")
-#        if not self.ior_processes:
-#            self.fail("Failed to get ior processes for {}".format(self.tool))
-
-        # create pool and cont
-#        self.create_pool()
-#        self.create_cont(self.pool[0])
-        cont1 = self.container[-1]
-
-        # update and run ior on cont1
-#        self.run_ior_with_params(
-#            "DAOS", self.ior_cmd.test_file.value,
-#            self.pool[0], self.container[0])
-
-        # create cont2
-        self.container.append(self.add_containers(self.ior_cmd.dfs_oclass.value))
-        cont2 = self.container[-1]
-#        self.create_cont(self.pool[0])
-
-        if tool == 'CONT_CLONE':
-            # Clone cont1 to cont2
-#            self.start_dfuse(self.dfuse_hosts, self.pool, cont1, mount_dir='/tmp/dfuse_cont1')
-#            command = 'ls -l /tmp/dfuse_cont1/*'
-#            self.execute_cmd(command)
-            
-            read_back_cont = self.gen_uuid()
-            self.run_datamover(
-                self.test_id + " (cont1 to cont2)",
-                "DAOS", None, self.pool, cont1,
-                "DAOS", None, self.pool, read_back_cont)
-            read_back_pool = self.pool
-
-#            self.start_dfuse(self.dfuse_hosts, self.pool, read_back_cont, mount_dir='/tmp/dfuse_cont2')
-#            command = 'ls -l /tmp/dfuse_cont2/*'
-#            self.execute_cmd(command)
-        elif tool == 'DSERIAL':
-            # Create pool2
-            pool2 = self.get_pool()
-            # Use dfuse as a shared intermediate for serialize + deserialize
-            dfuse_cont = self.add_containers(self.ior_cmd.dfs_oclass.value)
-            self.start_dfuse(self.dfuse_hosts, self.pool, dfuse_cont)
-            self.serial_tmp_dir = self.dfuse.mount_dir.value
-            
-            # Serialize/Deserialize cont1 to a new cont2 in pool2
-            result = self.run_datamover(
-                self.test_id + " (cont1->HDF5->cont2)",
-                "DAOS_UUID", None, self.pool, cont1,
-                "DAOS_UUID", None, pool2, None)
-
-            # Get the destination cont2 uuid
-            read_back_cont = self.parse_create_cont_uuid(result.stdout_text)
-            read_back_pool = pool2
-        else:
-            # copy from daos cont1 to cont2
-            self.run_datamover(
-                self.test_id + " (cont1 to cont2)",
-                "DAOS", "/", self.pool, cont1,
-                "DAOS", "/", self.pool, cont2)
-
-        
-        if tool in ['FS_COPY', 'DCP']:    
-            posix_path = self.new_posix_test_path(shared=True)
-
-            # copy from daos cont2 to posix file system
-            self.run_datamover(
-                self.test_id + " (cont2 to posix)",
-                "DAOS", "/", self.pool, cont2,
-                "POSIX", posix_path)
-
-            # create cont3
-            self.container.append(self.add_containers(self.ior_cmd.dfs_oclass.value))
-            cont3 = self.container[-1]
-#        self.create_cont(self.pool[0])
-
-            # copy from posix file system to daos cont3
-            self.run_datamover(
-                self.test_id + " (posix to cont3)",
-                "POSIX", posix_path, None, None,
-                "DAOS", "/", self.pool, cont3)
-            read_back_cont = cont3
-            read_back_pool = self.pool
-        # the result is that a NEW directory is created in the destination
-#        print("os.path.basename(posix_path): {}".format(os.path.basename(posix_path)))
-        print("self.ior_cmd.test_file.value: {}".format(self.ior_cmd.test_file.value))
-        if tool == 'FS_COPY':
-            daos_path = "/" + os.path.basename(posix_path) + self.ior_cmd.test_file.value.split(":")[1]
-#        elif tool == 'CONT_CLONE':
-#            daos_path = self.ior_cmd.test_file.value.split(":")[1]
-        else:
-            daos_path = self.ior_cmd.test_file.value
-        # update ior params, read back and verify data from cont3
-#        self.run_ior_with_pool(create_pool=False, create_cont=False)
-        self.run_ior_with_params(
-            "DAOS", daos_path, read_back_pool, read_back_cont,
-            flags="-r -R -F -k")
-
     def test_io_sys_admin(self):
         """
         Test Description: Bundles four tests into one and run in the
@@ -174,7 +44,6 @@ class IoSysAdmin(LargeFileCount, DataMoverTestBase, DmgNvmeScanTest, DmgStorageS
         hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
 
         # run tests
-        self.test_dmg_nvme_scan_basic()
 #        self.test_dmg_storage_scan_scm()
 
 #        self.test_basic_config()
@@ -186,7 +55,9 @@ class IoSysAdmin(LargeFileCount, DataMoverTestBase, DmgNvmeScanTest, DmgStorageS
 #        self.test_min_ssds()
 #        self.test_net_class()
 
-        self.test_largefilecount()
+
+#        self.test_largefilecount()
+        self.run_file_count()
         # create snapshot
         self.container[-1].create_snap()        
         # overwrite the last ior file
@@ -217,10 +88,27 @@ class IoSysAdmin(LargeFileCount, DataMoverTestBase, DmgNvmeScanTest, DmgStorageS
                               nvme_free_space_before_snap_destroy)
             counter += 1
 
-        self.run_dm_large_file_dep("FS_COPY")
-        self.run_dm_large_file_dep("DCP")
-#        self.run_dm_large_file_dep("CONT_CLONE")
-        self.run_dm_large_file_dep("DSERIAL")
+#        for container in self.container:
+#            print("Container: {}".format(container.uuid))
+
+        print("#####Starting FS_COPY Test")
+        self.run_dm_activities_with_ior("FS_COPY", pool=self.pool)
+#        for container in self.container:
+#            print("Container: {}".format(container.uuid))
+        print("#####Starting DCP Test")
+        self.run_dm_activities_with_ior("DCP", pool=self.pool)
+#        for container in self.container:
+#            print("Container: {}".format(container.uuid))
+        print("#####Starting DSERIAL Test")
+        self.run_dm_activities_with_ior("DSERIAL", pool=self.pool)
+        print("#####Completed all Datamover tests")
+#        for container in self.container:
+#            print("Container: {}".format(container.uuid))
+        self.container.pop(0)
+#        self.run_dm_large_file_dep("FS_COPY")
+#        self.run_dm_large_file_dep("DCP")
+##        self.run_dm_large_file_dep("CONT_CLONE")
+#        self.run_dm_large_file_dep("DSERIAL")
 
 #        self.test_dm_large_file_dcp()
 #        self.test_dm_large_file_fs_copy()
@@ -235,33 +123,3 @@ class IoSysAdmin(LargeFileCount, DataMoverTestBase, DmgNvmeScanTest, DmgStorageS
 
 #        self.test_container_autotest()
 
-
-class IoSysAdminDm(DmvrPosixLargeFile):
-    # pylint: disable=too-many-ancestors
-    """Test Class Description: Test class to wrap datamover test to
-                               run as part of basic checkout and verify
-                               connectivity for lustre FS
-    :avocado: recursive
-    """
-
-    def test_io_sys_admin_dm(self):
-        """
-        Test Description: Datamover test to check connection and datamover
-                          functionality with Lustre fs on newly installed
-                          server nodes.
-        :avocado: tags=hw,large
-        :avocado: tags=deployment
-        """
-        # local param
-        dm_ior_options = self.params.get("dm_ior_options", "/run/ior/dm/*")
-
-        # update ior params and run dm test
-        self.ior_cmd.flags.update(dm_ior_options[0])
-        self.ior_cmd.signature.update(dm_ior_options[1])
-        self.ior_cmd.transfer_size.update(dm_ior_options[2])
-        self.ior_cmd.block_size.update(dm_ior_options[3])
-        self.ior_cmd.dfs_dir_oclass.update(dm_ior_options[4])
-        self.ior_cmd.dfs_oclass.update(dm_ior_options[5])
-        self.ior_cmd.test_file.update(dm_ior_options[6])
-        self.ior_cmd.repetitions.update(dm_ior_options[7])
-        self.test_dm_large_file_fs_copy()
