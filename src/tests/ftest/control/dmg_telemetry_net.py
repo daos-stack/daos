@@ -5,13 +5,7 @@
     SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-
-import threading
-import time
 from re import search
-
-import pprint
-pp = pprint.PrettyPrinter(indent=4)
 
 from mdtest_test_base import MdtestBase
 from telemetry_test_base import TestWithTelemetry
@@ -26,10 +20,6 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a Test object."""
-        super().__init__(*args, **kwargs)
 
     def test_net_telemetry(self):
         """Jira ID: DAOS-9020.
@@ -50,17 +40,12 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
 
         all_metrics = self.telemetry.get_all_server_metrics_names(
             self.server_managers[0])
-        metrics_filter = filter(lambda x: search("engine_net_\w+_req_timeout", x),
-                         all_metrics)
-        metrics = list(metrics_filter)
+        p = r"engine_net_\w+_req_timeout"
+        metrics = list(filter(lambda x: search(p, x), all_metrics))
 
-        data = self.telemetry.get_metrics(metrics)
-
+        # Initialize req_timeouts to zero, as we expect no RPC timeouts at
+        # this stage
         req_timeouts = 0
-        for host in data:
-            for metric in data[host]["engine_net_ofi_sockets_req_timeout"]["metrics"]:
-                if metric["value"] > 0:
-                    req_timeouts += metric["value"]
 
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
@@ -96,16 +81,19 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         # Remove the killed host from the clustershell telemetry hostlist
         self.telemetry.hosts.remove(self.hostlist_servers[rank[0]])
 
-        data = self.telemetry.get_metrics(metrics)
+        try:
+            data = self.telemetry.get_metrics(metrics[0])
+        except DaosTestError as error:
+            self.log.info("self.telemetry.get_metrics may failed on at least "
+                          "one host, but may have succeeded elsewhere.")
 
-        req_timeouts = 0
-        for host in data:
-            for metric in data[host]["engine_net_ofi_sockets_req_timeout"]["metrics"]:
+        for host, v1 in data.items():
+            for metric in data[host][metrics[0]]["metrics"].items():
                 req_timeouts += metric["value"]
 
         if req_timeouts > 0:
-            self.log.info("Expected engine_net_ofi_sockets_req_timeout values "
-                          "to be greater than 0, and it is: %d.", req_timeouts)
+            self.log.info("Expected %s values "
+                          "to be greater than 0, and it is: %d.",
+                          req_timeouts, metrics[0])
         else:
-            self.fail("Expected engine_net_ofi_sockets_req_timeout "
-                      "to be greater than 0.")
+            self.fail("Expected {} to be greater than 0.".format(metrics[0]))
