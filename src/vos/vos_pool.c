@@ -668,8 +668,9 @@ lock_pool_memory(struct vos_pool *pool)
 
 	rc = mlock((void *)pool->vp_umm.umm_base, pool->vp_pool_df->pd_scm_sz);
 	if (rc != 0) {
-		D_WARN("Could not lock memory for VOS pool at "DF_X64"; errno=%d (%s)\n",
-		       pool->vp_umm.umm_base, errno, strerror(errno));
+		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
+		       "; errno=%d (%s)\n", pool->vp_pool_df->pd_scm_sz, pool->vp_umm.umm_base,
+		       errno, strerror(errno));
 		return;
 	}
 
@@ -991,14 +992,6 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 		return -DER_NOSYS;
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
-		break;
-	case VOS_PO_CTL_VEA_PLUG:
-		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info, true);
-		break;
-	case VOS_PO_CTL_VEA_UNPLUG:
-		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info, false);
 		break;
 	}
 

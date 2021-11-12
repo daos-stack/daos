@@ -494,7 +494,7 @@ public class IODataDescSync extends IODataDescBase {
       this.descBuffer.release();
       descBuffer = null;
     }
-    if ((releaseFetchBuffer && !updateOrFetch) || isReusable()) {
+    if ((releaseFetchBuffer & !updateOrFetch) | updateOrFetch) {
       akeyEntries.forEach(e -> e.releaseDataBuffer());
       akeyEntries.clear();
     }
