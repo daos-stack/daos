@@ -46,6 +46,9 @@ unsigned int bio_chk_cnt_max;
 static unsigned int bio_chk_cnt_init;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
+/* Debug */
+static const char *g_hotplug_bus_id_low = "0";
+static const char *g_hotplug_bus_id_high = "83";
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -72,6 +75,78 @@ struct bio_nvme_data {
 
 static struct bio_nvme_data nvme_glb;
 uint64_t vmd_led_period;
+
+static int64_t
+hexstr_to_int(const char *src)
+{
+	uint64_t val;
+
+	val = strtoul(src, NULL, 16);
+	if (errno == ERANGE) {
+		D_ERROR("%s hex string out of range\n", src);
+		return -1;
+	}
+
+	D_DEBUG(DB_MGMT, "hex2dec val: %lu\n", val);
+
+	return (int64_t)val;
+}
+
+static int64_t
+traddr_to_bus_id(char *src)
+{
+	char		*tok;
+	int		 i;
+
+	for (i = 0; i < 2; i++) {
+		tok = strtok(src, ":");
+		if (tok == NULL) {
+			D_ERROR("pci address field %d empty\n", i);
+			return -1;
+		}
+		D_DEBUG(DB_MGMT, "pci address field %d: %s\n", i, tok);
+	}
+
+	return hexstr_to_int(tok);
+}
+
+static bool
+hotplug_filter_fn(const struct spdk_pci_addr *addr)
+{
+	char		str[128];
+	int64_t		low;
+	int64_t		high;
+	int64_t		bus_id;
+
+	if (spdk_pci_addr_fmt(str, sizeof(str), addr) != 0) {
+		D_ERROR("unable to format pci address\n");
+		return false;
+	}
+
+	if ((!g_hotplug_bus_id_low) || (!g_hotplug_bus_id_high)) {
+		return false;
+	}
+
+	low = hexstr_to_int(g_hotplug_bus_id_low);
+	if (low < 0) {
+		D_ERROR("low bus id %s invalid\n", g_hotplug_bus_id_low);
+		return false;
+	}
+
+	high = hexstr_to_int(g_hotplug_bus_id_high);
+	if (high < 0) {
+		D_ERROR("high bus id %s invalid\n", g_hotplug_bus_id_high);
+		return false;
+	}
+
+	bus_id = traddr_to_bus_id(str);
+	if (bus_id < 0) {
+		D_ERROR("input transport address %s invalid\n", str);
+		return false;
+	}
+
+	return ((bus_id >= low) && (bus_id <= high));
+}
 
 static int
 bio_spdk_env_init(void)
@@ -107,6 +182,8 @@ bio_spdk_env_init(void)
 		opts.shm_id = nvme_glb.bd_shm_id;
 
 	opts.env_context = (char *)dpdk_cli_override_opts;
+
+	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
