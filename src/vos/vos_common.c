@@ -358,20 +358,58 @@ vos_tls_fini(void *data)
 	umem_fini_txd(&tls->vtl_txd);
 	if (tls->vtl_ts_table)
 		vos_ts_table_free(&tls->vtl_ts_table);
+
+	d_slab_destroy(&tls->vtl_slab);
+
+	if (tls->vtl_lid_type)
+		lrua_slab_fini(tls->vtl_lid_type);
+
 	D_FREE(tls);
 }
+
+#define TLS_NAME_MAX 64
 
 static void *
 vos_tls_init(int xs_id, int tgt_id)
 {
 	struct vos_tls *tls;
+	char		buf[TLS_NAME_MAX];
 	int		rc;
+
+	struct lru_slab_info lid_info	= {
+		.si_cbs			= {0},
+		.si_arg			= NULL,
+		.si_nr_ent		= DTX_ARRAY_LEN,
+		.si_nr_arrays		= DTX_ARRAY_NR,
+		.si_payload_size	= sizeof(struct vos_dtx_act_ent),
+		.si_flags		= LRU_FLAG_REUSE_UNIQUE,
+	};
+
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
 	D_INIT_LIST_HEAD(&tls->vtl_gc_pools);
+
+	if (D_LOG_ENABLED(DB_MEM)) {
+		snprintf(buf, TLS_NAME_MAX, "vos_xs%d_tgt_%d", xs_id, tgt_id);
+		buf[TLS_NAME_MAX - 1] = 0;
+		D_TRACE_ROOT(DB_MEM, tls, buf);
+	}
+	rc = d_slab_init(&tls->vtl_slab, tls);
+	if (rc) {
+		D_ERROR("Error in starting gurt slab manager: "DF_RC"\n", DP_RC(rc));
+		goto failed;
+	}
+
+	rc = lrua_slab_init(&tls->vtl_slab, &lid_info, DTX_MAX_ACTIVE_ARRAYS,
+				  DTX_MAX_FREE_ARRAYS, &tls->vtl_lid_type);
+	if (rc) {
+		D_ERROR("Error in registering lid slab: "DF_RC"\n", DP_RC(rc));
+		goto failed;
+	}
+
 	rc = vos_obj_cache_create(LRU_CACHE_BITS, &tls->vtl_ocache);
 	if (rc) {
 		D_ERROR("Error in creating object cache\n");

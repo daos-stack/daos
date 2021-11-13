@@ -2269,6 +2269,9 @@ enum {
 static int
 aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *epr)
 {
+	/** Take opportunity to restock unused LID tables */
+	vos_slab_restock();
+
 	switch (agg_mode) {
 	default:
 		D_ASSERT(0);

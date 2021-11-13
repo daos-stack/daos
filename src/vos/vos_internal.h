@@ -84,6 +84,8 @@ extern struct dss_module_key vos_module_key;
 /** Up to 1 million lid entries split into 2048 expansion slots */
 #define DTX_ARRAY_LEN		(1 << 20) /* Total array slots for DTX lid */
 #define DTX_ARRAY_NR		(1 << 11)  /* Number of expansion arrays */
+#define DTX_MAX_ACTIVE_ARRAYS	(1000)	  /* Maximum number of active LRU arrays per xstream */
+#define DTX_MAX_FREE_ARRAYS	(64)	  /* Maximum number of unused LRU arrays per xstream */
 
 enum {
 	/** Used for marking an in-tree record committed */
@@ -199,6 +201,8 @@ struct vos_container {
 	daos_handle_t		vc_btr_hdl;
 	/** Array for active DTX records */
 	struct lru_array	*vc_dtx_array;
+	/** Array for active DTX records */
+	struct lru_ref		*vc_dtx_array_ref;
 	/* The handle for active DTX table */
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
@@ -1304,5 +1308,65 @@ struct csum_recalc_args {
 };
 
 int vos_csum_recalc_fn(void *recalc_args);
+
+static inline int
+vos_dtx_array_acquire(struct vos_container *cont)
+{
+	struct lru_ref_type	*type;
+	int			 rc;
+
+	if (cont->vc_dtx_array != NULL)
+		return 0;
+
+	type = vos_dtx_type_get();
+	D_ASSERT(type != NULL);
+
+	rc = d_slab_acquire(type->rt_type, &cont->vc_dtx_array_ref);
+	if (rc == 0 && cont->vc_dtx_array_ref != NULL) {
+		cont->vc_dtx_array = cont->vc_dtx_array_ref->lr_array;
+		D_ASSERT(cont->vc_dtx_array != NULL);
+	}
+
+	return rc;
+}
+
+static inline void
+vos_slab_reclaim(void)
+{
+	struct lru_ref_type	*type;
+	bool			 in_use;
+
+	type = vos_dtx_type_get();
+	in_use = d_slab_reclaim(type->rt_slab_mgr);
+	D_DEBUG(DB_TRACE, "Attempted to reclaim some LID array memory, in_use=%s\n",
+		in_use ? "yes" : "no");
+
+}
+
+static inline void
+vos_slab_restock(void)
+{
+	struct lru_ref_type	*type;
+
+	type = vos_dtx_type_get();
+	d_slab_restock(type->rt_type);
+}
+
+
+static inline void
+vos_dtx_array_release(struct vos_container *cont)
+{
+	struct lru_ref_type	*type;
+
+	if (cont->vc_dtx_array == NULL)
+		return;
+
+	D_ASSERT(cont->vc_dtx_array_ref != NULL);
+	type = vos_dtx_type_get();
+	D_ASSERT(type != NULL);
+	d_slab_release(type->rt_type, cont->vc_dtx_array_ref);
+	cont->vc_dtx_array = NULL;
+	cont->vc_dtx_array_ref = NULL;
+}
 
 #endif /* __VOS_INTERNAL_H__ */

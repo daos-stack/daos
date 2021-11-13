@@ -21,8 +21,10 @@
 #include <daos_srv/dtx_srv.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
+#include <gurt/slab.h>
 
 /* Forward declarations */
+struct lru_ref_type;
 struct vos_ts_table;
 struct dtx_handle;
 
@@ -62,7 +64,11 @@ struct vos_tls {
 		uint64_t		 vtl_hash;
 		bool			 vtl_hash_set;
 	};
-	struct d_tm_node_t		 *vtl_committed;
+	struct d_tm_node_t		*vtl_committed;
+	/** Per thread slab manager */
+	struct d_slab			 vtl_slab;
+	/** Slab for active dtx LID generator */
+	struct lru_ref_type		*vtl_lid_type;
 };
 
 struct bio_xs_context *vos_xsctxt_get(void);
@@ -188,5 +194,11 @@ vos_sched_seq(void)
 	return sched_cur_seq();
 }
 #endif
+
+static inline struct lru_ref_type *
+vos_dtx_type_get(void)
+{
+	return vos_tls_get()->vtl_lid_type;
+}
 
 #endif /* __VOS_TLS_H__ */
