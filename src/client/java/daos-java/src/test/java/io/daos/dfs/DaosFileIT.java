@@ -153,10 +153,13 @@ public class DaosFileIT {
       bytes[i] = (byte) i;
     }
     buffer.writeBytes(bytes);
-
-    long wl = daosFile.write(buffer, 0, 0, length);
-    Assert.assertEquals(length, daosFile.length());
-    Assert.assertEquals(length, wl);
+    try {
+      long wl = daosFile.write(buffer, 0, 0, length);
+      Assert.assertEquals(length, daosFile.length());
+      Assert.assertEquals(length, wl);
+    } finally {
+      buffer.release();
+    }
   }
 
   @Test

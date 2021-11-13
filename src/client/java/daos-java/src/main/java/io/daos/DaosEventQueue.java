@@ -33,6 +33,8 @@ public class DaosEventQueue {
 
   private final String threadName;
 
+  private final long threadId;
+
   private final int nbrOfEvents;
 
   protected final Event[] events;
@@ -90,7 +92,8 @@ public class DaosEventQueue {
    * @throws IOException
    */
   protected DaosEventQueue(String threadName, int nbrOfEvents) throws IOException {
-    this.threadName = threadName;
+    this.threadName = threadName == null ? Thread.currentThread().getName() : threadName;
+    this.threadId = Thread.currentThread().getId();
     if (nbrOfEvents > Short.MAX_VALUE) {
       throw new IllegalArgumentException("number of events should be no larger than " + Short.MAX_VALUE);
     }
@@ -127,7 +130,7 @@ public class DaosEventQueue {
       if (nbrOfEvents <= 0) {
         nbrOfEvents = DEFAULT_NBR_OF_EVENTS;
       }
-      queue = new DaosEventQueue(Thread.currentThread().getName(), nbrOfEvents);
+      queue = new DaosEventQueue(null, nbrOfEvents);
       EQ_MAP.put(tid, queue);
     }
     return queue;
@@ -330,6 +333,10 @@ public class DaosEventQueue {
    */
   public int pollCompleted(List<Attachment> completedList, Class<? extends Attachment> klass,
                            Set<? extends Attachment> candidates, int expNbrOfRet, long timeOutMs) throws IOException {
+    assert Thread.currentThread().getId() == threadId : "current thread " + Thread.currentThread().getId() + "(" +
+        Thread.currentThread().getName() + "), is not expected " + Thread.currentThread().getId() + "(" +
+        threadName + ")";
+
     int aborted;
     int nbr;
     // check detained attachments first.
@@ -457,7 +464,13 @@ public class DaosEventQueue {
     EQ_MAP.clear();
   }
 
+  public String getThreadName() {
+    return threadName;
+  }
 
+  public long getThreadId() {
+    return threadId;
+  }
 
   /**
    * Java represent of DAOS event associated to a event queue identified by
