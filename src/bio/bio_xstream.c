@@ -87,7 +87,7 @@ hexstr_to_int(const char *src)
 		return -1;
 	}
 
-	D_DEBUG(DB_MGMT, "hex2dec val: %lu\n", val);
+	D_INFO("hex2dec val: %lu\n", val);
 
 	return (int64_t)val;
 }
@@ -104,7 +104,7 @@ traddr_to_bus_id(char *src)
 			D_ERROR("pci address field %d empty\n", i);
 			return -1;
 		}
-		D_DEBUG(DB_MGMT, "pci address field %d: %s\n", i, tok);
+		D_INFO("pci address field %d: %s\n", i, tok);
 	}
 
 	return hexstr_to_int(tok);
@@ -123,9 +123,8 @@ hotplug_filter_fn(const struct spdk_pci_addr *addr)
 		return false;
 	}
 
-	if ((!g_hotplug_bus_id_low) || (!g_hotplug_bus_id_high)) {
+	if ((!g_hotplug_bus_id_low) || (!g_hotplug_bus_id_high))
 		return false;
-	}
 
 	low = hexstr_to_int(g_hotplug_bus_id_low);
 	if (low < 0) {
@@ -145,7 +144,15 @@ hotplug_filter_fn(const struct spdk_pci_addr *addr)
 		return false;
 	}
 
-	return ((bus_id >= low) && (bus_id <= high));
+	D_INFO("hotplug: bus id %lX (filter %lX-%lX)\n", bus_id, low, high);
+	if ((bus_id < low) || (bus_id > high)) {
+		D_INFO("hotplug skipped on address %s, not in range %lX-%lX\n",
+			str, low, high);
+		return false;
+	}
+	D_INFO("enable hotplug on address %s\n", str);
+
+	return true;
 }
 
 static int
@@ -157,7 +164,7 @@ bio_spdk_env_init(void)
 	D_ASSERT(nvme_glb.bd_nvme_conf != NULL);
 
 	/* Only print error and more severe to stderr. */
-	spdk_log_set_print_level(SPDK_LOG_ERROR);
+	spdk_log_set_print_level(SPDK_LOG_DEBUG);
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
@@ -183,6 +190,7 @@ bio_spdk_env_init(void)
 
 	opts.env_context = (char *)dpdk_cli_override_opts;
 
+	D_INFO("set hotplug filter\n");
 	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	rc = spdk_env_init(&opts);
