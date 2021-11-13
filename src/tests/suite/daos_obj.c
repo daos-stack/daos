@@ -325,6 +325,31 @@ insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 }
 
 void
+inset_recxs_dkey_uint64(uint64_t *dkey, const char *akey, daos_size_t iod_size,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
+	     daos_size_t data_size, struct ioreq *req)
+{
+	assert_in_range(nr, 1, IOREQ_IOD_NR);
+
+	/* dkey */
+	d_iov_set(&req->dkey, (void *)dkey, sizeof(uint64_t));
+
+	/* akey */
+	ioreq_io_akey_set(req, &akey, 1);
+
+	/* set sgl */
+	if (data != NULL)
+		ioreq_sgl_simple_set(req, &data, &data_size, 1);
+
+	/* iod, recxs */
+	ioreq_iod_recxs_set(req, 0, iod_size, recxs, nr);
+
+	insert_internal_nowait(&req->dkey, 1, req->sgl, req->iod, th, req, 0);
+
+	insert_wait(req);
+}
+
+void
 punch_obj(daos_handle_t th, struct ioreq *req)
 {
 	int rc;

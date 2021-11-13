@@ -137,16 +137,9 @@ test_drpc_call_connect_fails(void **state)
 	Drpc__Response	*resp;
 	int		 rc;
 
-	/*
-	 * errno is not set for the dss_drpc_thread; connect_return = -1 also
-	 * isn't working.
-	 */
-	skip();
-
 	assert_rc_equal(drpc_init(), 0);
 
-	connect_return = -1;
-	errno = EACCES;
+	connect_return = -EACCES;
 
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
 			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
@@ -165,13 +158,9 @@ test_drpc_call_sendmsg_fails(void **state)
 	Drpc__Response	*resp;
 	int		 rc;
 
-	/* See test_drpc_call_connect_fails. */
-	skip();
-
 	assert_rc_equal(drpc_init(), 0);
 
-	sendmsg_return = -1;
-	errno = EACCES;
+	sendmsg_return = -EACCES;
 
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
 			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
