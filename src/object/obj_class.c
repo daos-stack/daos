@@ -289,6 +289,47 @@ static daos_sort_ops_t	ecc_sort_ops = {
 	.so_cmp_key	= ecc_sop_cmp_key,
 };
 
+static inline enum daos_obj_redun
+daos_oclass_id2redun(daos_oclass_id_t oc_id)
+{
+	return (oc_id >> OC_REDUN_SHIFT);
+}
+
+static int
+ecc_sop_redun_cmp(void *array, int a, int b)
+{
+	struct daos_oc_ec_codec **ecc = (struct daos_oc_ec_codec **)array;
+
+	if (daos_oclass_id2redun(ecc[a]->ec_oc_id) >
+	    daos_oclass_id2redun(ecc[b]->ec_oc_id))
+		return 1;
+	if (daos_oclass_id2redun(ecc[a]->ec_oc_id) <
+	    daos_oclass_id2redun(ecc[b]->ec_oc_id))
+		return -1;
+	return 0;
+}
+
+static int
+ecc_sop_redun_cmp_key(void *array, int i, uint64_t key)
+{
+	struct daos_oc_ec_codec **ecc = (struct daos_oc_ec_codec **)array;
+	daos_oclass_id_t id = (daos_oclass_id_t)key;
+
+	if (daos_oclass_id2redun(ecc[i]->ec_oc_id) >
+	    daos_oclass_id2redun(id))
+		return 1;
+	if (daos_oclass_id2redun(ecc[i]->ec_oc_id) <
+	    daos_oclass_id2redun(id))
+		return -1;
+	return 0;
+}
+
+static daos_sort_ops_t	ecc_redun_sort_ops = {
+	.so_swap	= ecc_sop_swap,
+	.so_cmp		= ecc_sop_redun_cmp,
+	.so_cmp_key	= ecc_sop_redun_cmp_key,
+};
+
 void
 obj_ec_codec_fini(void)
 {
@@ -417,7 +458,12 @@ obj_ec_codec_get(daos_oclass_id_t oc_id)
 	int	idx;
 
 	D_ASSERT(ecc_array);
-	idx = daos_array_find(ecc_array, oc_ec_codec_nr, oc_id, &ecc_sort_ops);
+	if (oc_id < (OR_RP_1 << OC_REDUN_SHIFT))
+		idx = daos_array_find(ecc_array, oc_ec_codec_nr,
+				      oc_id, &ecc_sort_ops);
+	else
+		idx = daos_array_find(ecc_array, oc_ec_codec_nr,
+				      oc_id, &ecc_redun_sort_ops);
 	if (idx < 0)
 		return NULL;
 
@@ -466,12 +512,6 @@ static daos_sort_ops_t	oc_ident_sort_ops = {
 	.so_cmp		= oc_sop_ident_cmp,
 	.so_cmp_key	= oc_sop_ident_cmp_key,
 };
-
-static inline enum daos_obj_redun
-daos_oclass_id2redun(daos_oclass_id_t oc_id)
-{
-	return (oc_id >> OC_REDUN_SHIFT);
-}
 
 static int
 oc_sop_redun_cmp(void *array, int a, int b)
