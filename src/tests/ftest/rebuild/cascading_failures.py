@@ -135,7 +135,7 @@ class RbldCascadingFailures(RebuildTestBase):
             reflect a normal status.
 
         Use Cases:
-            Verify rebuild with multiple server failures.
+            Verify rebuild with multiple server failures
 
         :avocado: tags=all,large,full_regression,rebuild
         :avocado: tags=multitarget,cascading
