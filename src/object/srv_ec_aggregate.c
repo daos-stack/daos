@@ -2204,6 +2204,9 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
 			D_GOTO(out, rc = (oid->id_shard == shard->po_shard ? 1 : 0));
 	}
 
+	/* If all parity shards are unavailable, then skip the object via returning -DER_STALE. */
+	rc = -DER_STALE;
+
 out:
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
