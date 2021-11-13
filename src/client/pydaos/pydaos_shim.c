@@ -198,8 +198,8 @@ cont_open(int ret, char *pool, char *cont, int flags)
 		goto out;
 	}
 
-	/** Use flatkv option for root kv */
-	roots->cr_oids[0].hi |= (uint64_t)DAOS_OF_KV_FLAT << OID_FMT_FEAT_SHIFT;
+	/** Use KV type for root kv */
+	roots->cr_oids[0].hi |= (uint64_t)DAOS_OT_KV_HASHED << OID_FMT_TYPE_SHIFT;
 
 	/** Open root object */
 	rc = daos_kv_open(coh, roots->cr_oids[0], DAOS_OO_RW, &oh, NULL);
@@ -338,7 +338,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 	unsigned int		otype;
 	struct pydaos_df	entry;
 	daos_obj_id_t		oid = {0, };
-	daos_ofeat_t		feat;
+	enum daos_otype_t	type;
 	int			rc;
 
 	/* Parse arguments */
@@ -365,10 +365,10 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 
 	/** generate the actual object ID */
 	if (otype == PYDAOS_DICT)
-		feat = DAOS_OF_KV_FLAT;
+		type = DAOS_OT_KV_HASHED;
 	else /** PYDAOS_ARRAY */
-		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY;
-	rc = daos_obj_generate_oid(hdl->coh, &oid, feat, 0, 0, 0);
+		type = DAOS_OT_ARRAY;
+	rc = daos_obj_generate_oid(hdl->coh, &oid, type, 0, 0, 0);
 	if (rc)
 		goto out;
 
@@ -457,21 +457,15 @@ do {				\
 	DEFINE_OC(name, 8);	\
 	DEFINE_OC(name, 16);	\
 	DEFINE_OC(name, 32);	\
-	DEFINE_OC(name, 64);	\
-	DEFINE_OC(name, 128);	\
-	DEFINE_OC(name, 256);	\
-	DEFINE_OC(name, 512);	\
-	DEFINE_OC(name, 1K);	\
-	DEFINE_OC(name, 2K);	\
-	DEFINE_OC(name, 4K);	\
-	DEFINE_OC(name, 8K);	\
 	DEFINE_OC(name, X);	\
 } while (0)
 
 	DEFINE_OC_EXPL(S);		/** OC_S1, OC_S2, ... */
 	DEFINE_OC_EXPL(RP_2G);		/** OC_RP_2G1, OC_RP_2G2, ... */
 	DEFINE_OC_EXPL(RP_3G);		/** OC_RP_3G1, OC_RP_3G2, ... */
-	DEFINE_OC_EXPL(RP_8G);		/** OC_RP_8G1, OC_RP_8G2, ... */
+	DEFINE_OC_EXPL(RP_4G);		/** OC_RP_4G1, OC_RP_4G2, ... */
+	DEFINE_OC_EXPL(RP_5G);		/** OC_RP_5G1, OC_RP_5G2, ... */
+	DEFINE_OC_EXPL(RP_6G);		/** OC_RP_6G1, OC_RP_5G2, ... */
 	DEFINE_OC_EXPL(EC_2P1G);	/** OC_EC_2P1G1, OC_EC_2P1G2, ... */
 	DEFINE_OC_EXPL(EC_2P2G);	/** OC_EC_2P2G1, OC_EC_2P2G2, ... */
 	DEFINE_OC_EXPL(EC_4P1G);	/** OC_EC_4P1G1, OC_EC_4P1G2, ... */
@@ -479,7 +473,6 @@ do {				\
 	DEFINE_OC_EXPL(EC_8P1G);	/** OC_EC_8P1G1, OC_EC_8P1G2, ... */
 	DEFINE_OC_EXPL(EC_8P2G);	/** OC_EC_8P2G1, OC_EC_8P2G2, ... */
 	DEFINE_OC_EXPL(EC_16P1G);	/** OC_EC_16P1G1, OC_EC_16P1G2, ... */
-	DEFINE_OC_EXPL(EC_16P2G);	/** OC_EC_16P2G1, OC_EC_16P2G2, ... */
 	DEFINE_OC_EXPL(EC_16P2G);	/** OC_EC_16P2G1, OC_EC_16P2G2, ... */
 
 #define DEFINE_OC_INTERNAL(name)\

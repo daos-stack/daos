@@ -113,7 +113,7 @@ func (f *ChunkSizeFlag) String() string {
 
 type ObjClassFlag struct {
 	Set   bool
-	Class C.ushort
+	Class C.uint
 }
 
 func (f *ObjClassFlag) UnmarshalFlag(fv string) error {
@@ -124,7 +124,7 @@ func (f *ObjClassFlag) UnmarshalFlag(fv string) error {
 	cObjClass := C.CString(fv)
 	defer freeString(cObjClass)
 
-	f.Class = (C.ushort)(C.daos_oclass_name2id(cObjClass))
+	f.Class = (C.uint)(C.daos_oclass_name2id(cObjClass))
 	if f.Class == C.OC_UNKNOWN {
 		return errors.Errorf("unknown object class %q", fv)
 	}
