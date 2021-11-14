@@ -892,7 +892,7 @@ pipeline {
                                               add_repo "${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos8/"
                                           done
                                       else
-                                          add_repo "$BUILD_URL/artifact/artifacts/centos8/"
+                                          add_repo "${BUILD_URL}artifact/artifacts/centos8/"
                                       fi
                                       PYTHONPATH="${PWD}/src/tests/ftest/util" src/tests/ftest/config_file_gen.py -n localhost -d /tmp/dmg.yml
                                       PYTHONPATH="${PWD}/src/tests/ftest/util" src/tests/ftest/config_file_gen.py -n localhost -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
