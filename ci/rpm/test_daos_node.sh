@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -uex
+
 YUM=dnf
 if [[ $(lsb_release -si) = CentOS* ]]; then
     if [[ $(lsb_release -sr) = 8* ]]; then
@@ -14,7 +16,6 @@ elif [ "$(lsb_release -si)" = "openSUSE" ]; then
     OPENMPI=gnu-openmpi
 fi
 
-set -uex
 sudo $YUM -y install daos-client-"${DAOS_PKG_VERSION}"
 if rpm -q daos-server; then
   echo "daos-server RPM should not be installed as a dependency of daos-client"
@@ -85,8 +86,10 @@ done
 sudo mkdir /tmp/daos_sockets
 sudo chmod 0755 /tmp/daos_sockets
 sudo chown "$me:$me" /tmp/daos_sockets
-sudo mkdir -p /mnt/daos
-sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
+if [ ! -d /mnt/daos ]; then
+    sudo mkdir -p /mnt/daos
+    sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
+fi
 sudo cp /tmp/daos_server.yml /etc/daos/daos_server.yml
 sudo cp /tmp/daos_agent.yml /etc/daos/daos_agent.yml
 sudo cp /tmp/dmg.yml /etc/daos/daos.yml
