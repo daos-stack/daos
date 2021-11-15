@@ -520,8 +520,8 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15"
-                            args '-v /opt/intel:/opt/intel'
+                                                " -t ${sanitized_JOB_NAME}-leap15" +
+                                                " --build-arg COMPILER=icc"
                         }
                     }
                     steps {
