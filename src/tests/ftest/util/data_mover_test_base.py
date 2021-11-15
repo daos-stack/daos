@@ -1195,61 +1195,71 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         return result
 
-    def run_dm_activities_with_ior(self, tool, create_dataset=False):
+    def run_dm_activities_with_ior(self, tool, create_dataset=False, pool=None):
         """Generic method to perform varios datamover activities
            using ior
         Args:
             tool(str): specify the tool name to be used
             create_dataset(bool): boolean to create initial set of
                                   data using ior. Defaults to False.
+            pool(TestPool): Pool object.Defaults to None
         """
         # Set the tool to use
         self.set_tool(tool)
 
+
         if create_dataset:
             # create initial datasets
-            pool1 = self.create_pool()
-            cont1 = self.create_cont(pool1, oclass=self.ior_cmd.dfs_oclass.value)
+            if not pool:
+                pool = self.create_pool()
+            cont1 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
             # update and run ior on cont1
             self.run_ior_with_params(
                 "DAOS", self.ior_cmd.test_file.value,
-                pool1, cont1)
+                pool, cont1)
+        else:
+            if not pool:
+                pool = self.pool[0]
+            cont1 = self.container[-1]
 
         # create cont2
-        cont2 = self.create_cont(pool1, oclass=self.ior_cmd.dfs_oclass.value)
+        cont2 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
         # perform various datamover activities
         if tool == 'CONT_CLONE':
             read_back_cont = self.gen_uuid()
             self.run_datamover(
                 self.test_id + " (cont1 to cont2)",
-                "DAOS", None, pool1, cont1,
-                "DAOS", None, pool1, read_back_cont)
-            read_back_pool = self.pool[0]
+                "DAOS", None, pool, cont1,
+                "DAOS", None, pool, read_back_cont)
+            read_back_pool = pool
         elif tool == 'DSERIAL':
             # Create pool2
-            pool2 = self.create_pool()
+            pool2 = self.get_pool()
             # Use dfuse as a shared intermediate for serialize + deserialize
-            dfuse_cont = self.create_cont(pool1, oclass=self.ior_cmd.dfs_oclass.value)
-            self.start_dfuse(self.dfuse_hosts, pool1, dfuse_cont)
+            dfuse_cont = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+            self.start_dfuse(self.dfuse_hosts, pool, dfuse_cont)
             self.serial_tmp_dir = self.dfuse.mount_dir.value
 
             # Serialize/Deserialize cont1 to a new cont2 in pool2
             result = self.run_datamover(
                 self.test_id + " (cont1->HDF5->cont2)",
-                "DAOS_UUID", None, pool1, cont1,
+                "DAOS_UUID", None, pool, cont1,
                 "DAOS_UUID", None, pool2, None)
 
             # Get the destination cont2 uuid
             read_back_cont = self.parse_create_cont_uuid(result.stdout_text)
             read_back_pool = pool2
-        else:
+        elif tool in ['FS_COPY', 'DCP']:
             # copy from daos cont1 to cont2
             self.run_datamover(
                 self.test_id + " (cont1 to cont2)",
-                "DAOS", "/", pool1, cont1,
-                "DAOS", "/", pool1, cont2)
+                "DAOS", "/", pool, cont1,
+                "DAOS", "/", pool, cont2)
+        else:
+            self.fail("Invalid tool: {}".format(str(self.tool)))
+
 
         # move data from daos to posix FS and vice versa
         if tool in ['FS_COPY', 'DCP']:
@@ -1257,19 +1267,19 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             # copy from daos cont2 to posix file system
             self.run_datamover(
                 self.test_id + " (cont2 to posix)",
-                "DAOS", "/", pool1, cont2,
+                "DAOS", "/", pool, cont2,
                 "POSIX", posix_path)
 
             # create cont3
-            cont3 = self.create_cont(pool1, oclass=self.ior_cmd.dfs_oclass.value)
+            cont3 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
             # copy from posix file system to daos cont3
             self.run_datamover(
                 self.test_id + " (posix to cont3)",
                 "POSIX", posix_path, None, None,
-                "DAOS", "/", pool1, cont3)
+                "DAOS", "/", pool, cont3)
             read_back_cont = cont3
-            read_back_pool = pool1
+            read_back_pool = pool
         # the result is that a NEW directory is created in the destination
         if tool == 'FS_COPY':
             daos_path = "/" + os.path.basename(posix_path) + self.ior_cmd.test_file.value
