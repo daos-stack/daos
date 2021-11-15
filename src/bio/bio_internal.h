@@ -485,6 +485,12 @@ struct media_error_msg {
 	int			 mem_tgt_id;
 };
 
+struct bio_busid_range_info {
+	uint64_t	start;
+	uint64_t	end;
+};
+extern struct bio_busid_range_info bio_hotplug_busid_range;
+
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
 extern unsigned int	bio_chk_sz;
@@ -610,4 +616,5 @@ int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 /* bio_config.c */
 int bio_add_allowed_alloc(const char *json_config_file,
 			  struct spdk_env_opts *opts);
+int bio_get_hotplug_busid_range(const char *json_config_file);
 #endif /* __BIO_INTERNAL_H__ */
