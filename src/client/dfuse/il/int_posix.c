@@ -659,7 +659,8 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont
 	}
 
 	uuid_unparse(il_reply->fir_cont, uuid_str);
-	rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW, &cont->ioc_coh, NULL, NULL);
+	rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW,
+			    &cont->ioc_coh, NULL, NULL);
 	if (rc)
 		return false;
 
