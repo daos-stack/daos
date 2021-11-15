@@ -1,17 +1,20 @@
 #!/bin/bash
 
+set -uex
+
 add_repo() {
     local REPO_URL="$1"
 
-    sudo dnf config-manager --add-repo=$REPO_URL
+    sudo dnf config-manager --add-repo="$REPO_URL"
     repo=${REPO_URL#*://}
     repo="${repo//%/}"
     repo="${repo//\\//_}"
-    sudo dnf config-manager --save --setopt=$repo.gpgcheck=0
+    sudo dnf config-manager --save --setopt="$repo".gpgcheck=0
 }
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
+# shellcheck: disable=SC1091
 . /usr/share/lmod/lmod/init/bash
 
 PR_REPOS="$1"
