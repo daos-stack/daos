@@ -706,11 +706,11 @@ pipeline {
                                           launchable record build --name $BUILD_TAG --source src=."""
                         }
                         sh label: "Run tests on Vagrant nodes",
-                           script: 'NODE=' + env.NODELIST + ' '                        +
+                           script: 'NODE=' + env.NODELIST + ' '                                +
                                    'TEST_TAG="' + commitPragma("Test-tag-vagrant",
-                                                               'basic,hw,-ib2') + '" ' +
-                                   'NODESTRING="vm1,vm2,vm3" '                         +
-                                   'NODE_COUNT=3 '                                     +
+                                                               'always_passes,hw,-ib2') + '" ' +
+                                   'NODESTRING="vm1,vm2,vm3" '                                 +
+                                   'NODE_COUNT=3 '                                             +
                                    'ci/vagrant/main.sh run-tests'
                     }
                     post {
