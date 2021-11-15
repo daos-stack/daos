@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sort"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -516,9 +518,10 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 	for name, tc := range map[string]struct {
 		members        system.Members
-		fanReq         fanoutRequest
+		sysReq         systemReq
 		mResps         []*control.HostResponse
 		hostErrors     control.HostErrorsMap
+		expFanReq      *fanoutRequest
 		expResults     system.MemberResults
 		expRanks       string
 		expMembers     system.Members
@@ -527,28 +530,31 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 		expErrMsg      string
 	}{
 		"nil method in request": {
-			expErrMsg: "fanout request with nil method",
+			expErrMsg: "nil system request",
 		},
 		"hosts and ranks both specified": {
-			fanReq: fanoutRequest{
-				Method: control.PingRanks, Hosts: "foo-[0-99]", Ranks: "0-99",
-			},
+			sysReq:    &mgmtpb.SystemStartReq{Hosts: "foo-[0-99]", Ranks: "0-99"},
 			expErrMsg: "ranklist and hostlist cannot both be set in request",
 		},
 		"empty membership": {
-			fanReq:     fanoutRequest{Method: control.PingRanks},
+			sysReq:     &mgmtpb.SystemStartReq{},
 			expMembers: system.Members{},
+			expFanReq: &fanoutRequest{
+				Method:     control.StartRanks,
+				FullSystem: true,
+				Resp:       new(fanoutResponse),
+			},
 		},
 		"bad hosts in request": {
-			fanReq:    fanoutRequest{Method: control.PingRanks, Hosts: "123"},
+			sysReq:    &mgmtpb.SystemStartReq{Hosts: "123"},
 			expErrMsg: "invalid hostname \"123\"",
 		},
 		"bad ranks in request": {
-			fanReq:    fanoutRequest{Method: control.PingRanks, Ranks: "foo"},
+			sysReq:    &mgmtpb.SystemStartReq{Ranks: "foo"},
 			expErrMsg: "unexpected alphabetic character(s)",
 		},
 		"unfiltered ranks": {
-			fanReq: fanoutRequest{Method: control.PingRanks},
+			sysReq: &mgmtpb.SystemStartReq{},
 			members: system.Members{
 				mockMember(t, 0, 1, "joined"),
 				mockMember(t, 1, 2, "joined"),
@@ -595,6 +601,12 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					Addr:  common.MockHostAddr(4).String(),
 					Error: errors.New("connection refused"),
 				},
+			},
+			expFanReq: &fanoutRequest{
+				Method:     control.StartRanks,
+				Ranks:      system.MustCreateRankSet("0-7"),
+				FullSystem: true,
+				Resp:       new(fanoutResponse),
 			},
 			// results from ranks on failing hosts generated
 			// results from host responses amalgamated
@@ -650,7 +662,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expRanks: "0-7",
 		},
 		"filtered and oversubscribed ranks": {
-			fanReq: fanoutRequest{Method: control.PingRanks, Ranks: "0-3,6-10"},
+			sysReq: &mgmtpb.SystemStartReq{Ranks: "0-3,6-10"},
 			members: system.Members{
 				mockMember(t, 0, 1, "joined"),
 				mockMember(t, 1, 2, "joined"),
@@ -689,6 +701,13 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				{
 					Addr:  common.MockHostAddr(4).String(),
 					Error: errors.New("connection refused"),
+				},
+			},
+			expFanReq: &fanoutRequest{
+				Method: control.StartRanks,
+				Ranks:  system.MustCreateRankSet("0-3,6-7"),
+				Resp: &fanoutResponse{
+					AbsentRanks: system.MustCreateRankSet("8-10"),
 				},
 			},
 			// results from ranks on failing hosts generated
@@ -737,7 +756,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expAbsentRanks: "8-10",
 		},
 		"filtered and oversubscribed hosts": {
-			fanReq: fanoutRequest{Method: control.PingRanks, Hosts: "10.0.0.[1-3,5]"},
+			sysReq: &mgmtpb.SystemStartReq{Hosts: "10.0.0.[1-3,5]"},
 			members: system.Members{
 				mockMember(t, 0, 1, "joined"),
 				mockMember(t, 1, 2, "joined"),
@@ -776,6 +795,13 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				{
 					Addr:  common.MockHostAddr(3).String(),
 					Error: errors.New("connection refused"),
+				},
+			},
+			expFanReq: &fanoutRequest{
+				Method: control.StartRanks,
+				Ranks:  system.MustCreateRankSet("0-5"),
+				Resp: &fanoutResponse{
+					AbsentHosts: hostlist.MustCreateSet("10.0.0.5"),
 				},
 			},
 			// results from ranks on failing hosts generated
@@ -834,13 +860,48 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			if tc.expErrMsg != "" {
 				expErr = errors.New(tc.expErrMsg)
 			}
-			gotResp, gotRankSet, gotErr := svc.rpcFanout(context.TODO(), tc.fanReq, true)
+
+			gotFanReq, gotErr := svc.getFanoutReq(tc.sysReq)
+			common.CmpErr(t, expErr, gotErr)
+			if gotErr != nil && tc.expErrMsg != "" {
+				return
+			}
+
+			switch tc.sysReq.(type) {
+			case *mgmtpb.SystemStartReq:
+				gotFanReq.Method = control.StartRanks
+			default:
+				gotFanReq.Method = control.PingRanks
+			}
+
+			cmpOpts := []cmp.Option{
+				cmp.Comparer(func(a, b fmt.Stringer) bool {
+					switch {
+					case common.InterfaceIsNil(a) && common.InterfaceIsNil(b):
+						return true
+					case a != nil && common.InterfaceIsNil(b):
+						return a.String() == ""
+					case common.InterfaceIsNil(a) && b != nil:
+						return b.String() == ""
+					default:
+						return a.String() == b.String()
+					}
+				}),
+				cmp.Comparer(func(a, b systemRanksFunc) bool {
+					return fmt.Sprintf("%p", a) == fmt.Sprintf("%p", b)
+				}),
+			}
+			if diff := cmp.Diff(tc.expFanReq, gotFanReq, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected fanout request (-want, +got)\n%s\n", diff)
+			}
+
+			gotResp, gotRankSet, gotErr := svc.rpcFanout(context.TODO(), gotFanReq, true)
 			common.CmpErr(t, expErr, gotErr)
 			if tc.expErrMsg != "" {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
+			cmpOpts = []cmp.Option{
 				cmpopts.IgnoreUnexported(system.MemberResult{}, system.Member{}),
 				cmpopts.EquateApproxTime(time.Second),
 			}
@@ -1272,6 +1333,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 	hostRespFail := [][]*control.HostResponse{hrpf, hrsf}
 	hostRespStopFail := [][]*control.HostResponse{hrps, hrsf}
 	hostRespSuccess := [][]*control.HostResponse{hrps, hrss}
+	hostRespStopSuccess := [][]*control.HostResponse{hrss}
 	rankResPrepFail := []*sharedpb.RankResult{
 		mockRankFail("prep shutdown", 0, 1), mockRankSuccess("prep shutdown", 1, 1), mockRankFail("prep shutdown", 3, 2),
 	}
@@ -1298,6 +1360,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 		expAbsentHosts string
 		expAPIErr      error
 		expDispatched  []*events.RASEvent
+		expInvokeCount int
 	}{
 		"nil req": {
 			req:       (*mgmtpb.SystemStopReq)(nil),
@@ -1309,49 +1372,49 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			},
 			expAPIErr: FaultWrongSystem("quack", build.DefaultSystemName),
 		},
-		"unfiltered prep fail": {
-			req:           &mgmtpb.SystemStopReq{},
-			members:       defaultMembers,
-			mResps:        hostRespFail,
-			expResults:    rankResPrepFail,
-			expMembers:    expMembersPrepFail,
-			expDispatched: expEventsPrepFail,
-		},
-		"filtered and oversubscribed ranks prep fail": {
-			req:            &mgmtpb.SystemStopReq{Ranks: "0-1,9"},
-			members:        defaultMembers,
-			mResps:         hostRespFail,
-			expResults:     rankResPrepFail,
-			expMembers:     expMembersPrepFail,
-			expAbsentRanks: "9",
-			expDispatched:  expEventsPrepFail,
-		},
-		"filtered and oversubscribed hosts prep fail": {
-			req:            &mgmtpb.SystemStopReq{Hosts: "10.0.0.[1-3]"},
-			members:        defaultMembers,
-			mResps:         hostRespFail,
-			expResults:     rankResPrepFail,
-			expMembers:     expMembersPrepFail,
-			expAbsentHosts: "10.0.0.3",
-			expDispatched:  expEventsPrepFail,
-		},
 		"prep fail": {
-			req:           &mgmtpb.SystemStopReq{},
-			members:       defaultMembers,
-			mResps:        hostRespFail,
-			expResults:    rankResPrepFail,
-			expMembers:    expMembersPrepFail,
-			expDispatched: expEventsPrepFail,
+			req:            &mgmtpb.SystemStopReq{},
+			members:        defaultMembers,
+			mResps:         hostRespFail,
+			expResults:     rankResPrepFail,
+			expMembers:     expMembersPrepFail,
+			expDispatched:  expEventsPrepFail,
+			expInvokeCount: 1,
 		},
 		"prep success stop fail": {
-			req:           &mgmtpb.SystemStopReq{},
-			members:       defaultMembers,
-			mResps:        hostRespStopFail,
-			expResults:    rankResStopFail,
-			expMembers:    expMembersStopFail,
-			expDispatched: expEventsStopFail,
+			req:            &mgmtpb.SystemStopReq{},
+			members:        defaultMembers,
+			mResps:         hostRespStopFail,
+			expResults:     rankResStopFail,
+			expMembers:     expMembersStopFail,
+			expDispatched:  expEventsStopFail,
+			expInvokeCount: 2,
 		},
-		"prep success stop success": {
+		"stop some ranks": {
+			req:        &mgmtpb.SystemStopReq{Ranks: "0,1"},
+			members:    defaultMembers,
+			mResps:     [][]*control.HostResponse{{hr(1, mockRankSuccess("stop", 0), mockRankSuccess("stop", 1))}},
+			expResults: []*sharedpb.RankResult{mockRankSuccess("stop", 0, 1), mockRankSuccess("stop", 1, 1)},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 3, 2, "joined"),
+			},
+			expInvokeCount: 1, // prep should not be called
+		},
+		"stop with all ranks (same as full system stop)": {
+			req:        &mgmtpb.SystemStopReq{Ranks: "0,1,3"},
+			members:    defaultMembers,
+			mResps:     hostRespSuccess,
+			expResults: rankResStopSuccess,
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expInvokeCount: 2, // prep should be called
+		},
+		"full system stop": {
 			req:        &mgmtpb.SystemStopReq{},
 			members:    defaultMembers,
 			mResps:     hostRespSuccess,
@@ -1361,6 +1424,19 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				mockMember(t, 1, 1, "stopped"),
 				mockMember(t, 3, 2, "stopped"),
 			},
+			expInvokeCount: 2, // prep should be called
+		},
+		"full system stop (forced)": {
+			req:        &mgmtpb.SystemStopReq{Force: true},
+			members:    defaultMembers,
+			mResps:     hostRespStopSuccess,
+			expResults: rankResStopSuccess,
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 1, "stopped"),
+				mockMember(t, 3, 2, "stopped"),
+			},
+			expInvokeCount: 1, // prep should not be called
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1406,6 +1482,9 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			if diff := cmp.Diff(tc.expDispatched, dispatched.rx, defEvtCmpOpts...); diff != "" {
 				t.Fatalf("unexpected events dispatched (-want, +got)\n%s\n", diff)
 			}
+
+			mi := svc.rpcClient.(*control.MockInvoker)
+			common.AssertEqual(t, tc.expInvokeCount, mi.GetInvokeCount(), "rpc client invoke count")
 		})
 	}
 }
