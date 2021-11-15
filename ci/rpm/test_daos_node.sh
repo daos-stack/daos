@@ -88,6 +88,9 @@ done
 sudo mkdir /tmp/daos_sockets
 sudo chmod 0755 /tmp/daos_sockets
 sudo chown "$me:$me" /tmp/daos_sockets
+if [ ! -d /mnt/daos ]; then
+    sudo mkdir -p /mnt/daos
+fi
 sudo cp /tmp/daos_server.yml /etc/daos/daos_server.yml
 sudo cp /tmp/daos_agent.yml /etc/daos/daos_agent.yml
 sudo cp /tmp/dmg.yml /etc/daos/daos.yml
