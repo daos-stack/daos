@@ -163,6 +163,8 @@ enum obj_rpc_flags {
 	ORF_EC_RECOV_SNAP	= (1 << 18),
 	/* EC data recovery from parity */
 	ORF_EC_RECOV_FROM_PARITY = (1 << 19),
+	/* The forward targets array contains leader information. */
+	ORF_CONTAIN_LEADER	= (1 << 20),
 };
 
 /* common for update/fetch */
