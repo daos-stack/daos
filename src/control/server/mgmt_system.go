@@ -663,18 +663,23 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	}
 	var fResp *fanoutResponse
 
-	fReq.Method = control.PrepShutdownRanks
-	// if not forced, update membership on rank error
-	fResp, _, err = svc.rpcFanout(ctx, fReq, !req.Force)
-	if err != nil {
-		return
-	}
-	if !fReq.Force && fResp.Results.Errors() != nil {
-		// return early if not forced and prep shutdown fails
-		resp, err = processStopResp("prep shutdown", fResp, svc.events)
-		return
+	if !req.Force {
+		// First phase: Prepare the ranks for shutdown, but only if the request
+		// does not specify that the stop should be forced.
+		fReq.Method = control.PrepShutdownRanks
+		fResp, _, err = svc.rpcFanout(ctx, fReq, true)
+		if err != nil {
+			return
+		}
+		if fResp.Results.Errors() != nil {
+			// return early if not forced and prep shutdown fails
+			resp, err = processStopResp("prep shutdown", fResp, svc.events)
+			return
+		}
 	}
 
+	// Second phase: Stop the ranks. If the request is forced, we will
+	// kill the ranks immediately without a graceful shutdown.
 	fReq.Method = control.StopRanks
 	fResp, _, err = svc.rpcFanout(ctx, fReq, true)
 	if err != nil {
