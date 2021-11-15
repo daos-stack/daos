@@ -81,10 +81,18 @@ json_value(struct spdk_json_val *key)
 	return key->type == SPDK_JSON_VAL_NAME ? key + 1 : NULL;
 }
 
+static const struct spdk_json_object_decoder
+config_decoder = {"config", offsetof(struct json_config_ctx, config), cap_array_or_null};
+
 static struct spdk_json_object_decoder
 subsystem_decoders[] = {
 	{"subsystem", offsetof(struct json_config_ctx, subsystem_name), cap_string},
-	{"config", offsetof(struct json_config_ctx, config), cap_array_or_null}
+	config_decoder
+};
+
+static struct spdk_json_object_decoder
+daos_data_decoders[] = {
+	config_decoder
 };
 
 struct
@@ -94,9 +102,15 @@ config_entry {
 };
 
 static struct spdk_json_object_decoder
-jsonrpc_cmd_decoders[] = {
+config_entry_decoders[] = {
 	{"method", offsetof(struct config_entry, method), spdk_json_decode_string},
 	{"params", offsetof(struct config_entry, params), cap_object, true}
+};
+
+static struct spdk_json_object_decoder
+busid_range_decoders[] = {
+	{"start", offsetof(struct bio_busid_range_info, start), spdk_json_decode_uint64},
+	{"end", offsetof(struct bio_busid_range_info, end), spdk_json_decode_uint64},
 };
 
 static int
@@ -325,8 +339,8 @@ load_vmd_subsystem_config(struct json_config_ctx *ctx, bool *vmd_enabled)
 	D_ASSERT(ctx->config_it != NULL);
 	D_ASSERT(vmd_enabled != NULL);
 
-	if (spdk_json_decode_object(ctx->config_it, jsonrpc_cmd_decoders,
-				    SPDK_COUNTOF(jsonrpc_cmd_decoders), &cfg)) {
+	if (spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+				    SPDK_COUNTOF(config_entry_decoders), &cfg)) {
 		D_ERROR("Failed to decode config entry\n");
 		return -DER_INVAL;
 	}
@@ -349,8 +363,8 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 
 	D_ASSERT(ctx->config_it != NULL);
 
-	if (spdk_json_decode_object(ctx->config_it, jsonrpc_cmd_decoders,
-				    SPDK_COUNTOF(jsonrpc_cmd_decoders), &cfg)) {
+	if (spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+				    SPDK_COUNTOF(config_entry_decoders), &cfg)) {
 		D_ERROR("Failed to decode config entry\n");
 		return -DER_INVAL;
 	}
@@ -550,6 +564,83 @@ bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
 		goto out;
 
 	rc = add_bdevs_to_opts(ctx, bdev_ss, vmd_enabled, opts);
+out:
+	free(ctx->json_data);
+	free(ctx->values);
+	D_FREE(ctx);
+	return rc;
+}
+
+int
+bio_get_hotplug_busid_range(const char *json_config_file)
+{
+	struct json_config_ctx	*ctx;
+	struct spdk_json_val	*daos_data;
+	struct config_entry	 cfg = {};
+	int			 rc = 0;
+
+	D_ASSERT(json_config_file != NULL);
+
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = read_config(json_config_file, ctx);
+	if (rc != 0) {
+		D_ERROR("No SPDK JSON configuration file.\n");
+		goto out;
+	}
+
+	/* Capture daos object */
+	rc = spdk_json_find(ctx->values, "daos", NULL, &daos_data, SPDK_JSON_VAL_OBJECT_BEGIN);
+	if ((rc < 0) || (daos_data == NULL)) {
+		D_ERROR("No 'daos' key JSON configuration file.\n");
+		goto out; /* non-fatal */
+	}
+
+	/* Capture config array in ctx */
+	if (spdk_json_decode_object(daos_data, daos_data_decoders,
+				    SPDK_COUNTOF(daos_data_decoders), ctx)) {
+		D_ERROR("Failed to parse 'daos' configurations data\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/* Get 'config' array first configuration entry */
+	ctx->config_it = spdk_json_array_first(ctx->config);
+	if (ctx->config_it == NULL) {
+		D_ERROR("Empty 'daos' config section in JSON configuration file\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	while (ctx->config_it != NULL) {
+		if (spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+					    SPDK_COUNTOF(config_entry_decoders), &cfg)) {
+			D_ERROR("Failed to decode config entry\n");
+			rc = -DER_INVAL;
+			goto out;
+		}
+
+		if (strcmp(cfg.method, "hotplug_busid_range") == 0)
+			break;
+
+		/* Move on to next subsystem config*/
+		ctx->config_it = spdk_json_next(ctx->config_it);
+	}
+
+	if (ctx->config_it == NULL)
+		goto out;
+
+	if (spdk_json_decode_object(cfg.params, busid_range_decoders,
+				    SPDK_COUNTOF(busid_range_decoders),
+				    &bio_hotplug_busid_range)) {
+		D_ERROR("Failed to decode daos hotplug range entry\n");
+		rc = -DER_INVAL;
+	}
+
+	D_INFO("Hotplug bus-ID range read from cfg: %lX-%lX\n",
+		bio_hotplug_busid_range.start, bio_hotplug_busid_range.end);
 out:
 	free(ctx->json_data);
 	free(ctx->values);

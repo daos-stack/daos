@@ -46,9 +46,8 @@ unsigned int bio_chk_cnt_max;
 static unsigned int bio_chk_cnt_init;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
-/* Debug */
-static const char *g_hotplug_bus_id_low = "0";
-static const char *g_hotplug_bus_id_high = "83";
+/* Bus ID range to be used to filter hotplug events */
+struct bio_busid_range_info bio_hotplug_busid_range = {};
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -76,24 +75,8 @@ struct bio_nvme_data {
 static struct bio_nvme_data nvme_glb;
 uint64_t vmd_led_period;
 
-static int64_t
-hexstr_to_int(const char *src)
-{
-	uint64_t val;
-
-	val = strtoul(src, NULL, 16);
-	if (errno == ERANGE) {
-		D_ERROR("%s hex string out of range\n", src);
-		return -1;
-	}
-
-	D_INFO("hex2dec val: %lu\n", val);
-
-	return (int64_t)val;
-}
-
-static int64_t
-traddr_to_bus_id(char *src)
+static int
+traddr_to_busid(char *src, uint64_t *dst)
 {
 	char		*tok;
 	int		 i;
@@ -107,52 +90,48 @@ traddr_to_bus_id(char *src)
 		D_INFO("pci address field %d: %s\n", i, tok);
 	}
 
-	return hexstr_to_int(tok);
+	*dst = strtoul(tok, NULL, 16);
+	if (errno == ERANGE) {
+		D_ERROR("%s hex string out of range\n", src);
+		return -DER_INVAL;
+	}
+
+	D_INFO("bus ID: %lu\n", *dst);
+
+	return 0;
 }
 
 static bool
 hotplug_filter_fn(const struct spdk_pci_addr *addr)
 {
-	char		str[128];
-	int64_t		low;
-	int64_t		high;
-	int64_t		bus_id;
+	char		traddr[128];
+	uint64_t	busid;
+	uint64_t	start;
+	uint64_t	end;
 
-	if (spdk_pci_addr_fmt(str, sizeof(str), addr) != 0) {
+	start = bio_hotplug_busid_range.start;
+	end = bio_hotplug_busid_range.end;
+
+	if ((end == 0) || (start > end))
+		return true; /* allow if no or invalid range specified */
+
+	if (spdk_pci_addr_fmt(traddr, sizeof(traddr), addr) != 0) {
 		D_ERROR("unable to format pci address\n");
-		return false;
+		return true; /* allow on error */
 	}
 
-	if ((!g_hotplug_bus_id_low) || (!g_hotplug_bus_id_high))
-		return false;
-
-	low = hexstr_to_int(g_hotplug_bus_id_low);
-	if (low < 0) {
-		D_ERROR("low bus id %s invalid\n", g_hotplug_bus_id_low);
-		return false;
+	if (traddr_to_busid(traddr, &busid) != 0) {
+		D_ERROR("input transport address %s invalid\n", traddr);
+		return true; /* allow on error */
 	}
 
-	high = hexstr_to_int(g_hotplug_bus_id_high);
-	if (high < 0) {
-		D_ERROR("high bus id %s invalid\n", g_hotplug_bus_id_high);
-		return false;
+	if ((busid >= start) && (busid <= end)) {
+		D_INFO("hotplug enabled on address %s\n", traddr);
+		return true;
 	}
+	D_INFO("skip enable hotplug on address %s\n", traddr);
 
-	bus_id = traddr_to_bus_id(str);
-	if (bus_id < 0) {
-		D_ERROR("input transport address %s invalid\n", str);
-		return false;
-	}
-
-	D_INFO("hotplug: bus id %lX (filter %lX-%lX)\n", bus_id, low, high);
-	if ((bus_id < low) || (bus_id > high)) {
-		D_INFO("hotplug skipped on address %s, not in range %lX-%lX\n",
-			str, low, high);
-		return false;
-	}
-	D_INFO("enable hotplug on address %s\n", str);
-
-	return true;
+	return false;
 }
 
 static int
@@ -190,7 +169,7 @@ bio_spdk_env_init(void)
 
 	opts.env_context = (char *)dpdk_cli_override_opts;
 
-	D_INFO("set hotplug filter\n");
+	bio_get_hotplug_busid_range(nvme_glb.bd_nvme_conf);
 	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
 
 	rc = spdk_env_init(&opts);
