@@ -860,7 +860,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable') +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
-                            args '--privileged --tmpfs /mnt/daos'
+                            args '--capp-add SYS_PTRACE --tmpfs /mnt/daos'
                         }
                     }
                     steps {
