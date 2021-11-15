@@ -335,8 +335,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 					DF_OID"): "DF_RC"\n",
 					DP_OID(orw->orw_oid.id_pub),
 					DP_RC(rc));
-				if (iovs_alloc != NULL)
-					D_FREE(iovs_alloc);
+				D_FREE(iovs_alloc);
 				break;
 			}
 		}
@@ -347,8 +346,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
-		if (iovs_alloc != NULL)
-			D_FREE(iovs_alloc);
+		D_FREE(iovs_alloc);
 		if (rc != 0) {
 			bool			 is_ec_obj;
 
@@ -673,7 +671,6 @@ dc_shard_csum_report(tse_task_t *task, crt_endpoint_t *tgt_ep, crt_rpc_t *rpc)
 	return crt_req_send(csum_rpc, csum_report_cb, rpc);
 }
 
-
 static bool
 dc_shard_singv_size_conflict(struct daos_oclass_attr *oca, daos_size_t old_size,
 			     daos_size_t new_size)
@@ -885,7 +882,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * don't log errors in-case of possible conditionals or
 		 * rec2big errors which can be expected.
 		 */
-		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST ||
+		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST || rc == -DER_NO_PERM ||
 		    rc == -DER_EXIST || rc == -DER_RF)
 			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d"
 				" failed: "DF_RC"\n", rw_args->rpc, opc,

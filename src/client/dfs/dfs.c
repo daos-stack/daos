@@ -587,9 +587,8 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	rc = daos_obj_update(oh, th, flags, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		/** don't log error if conditional failed */
-		if (rc != -DER_EXIST)
-			D_ERROR("Failed to insert entry %s, "DF_RC"\n",
-				name, DP_RC(rc));
+		if (rc != -DER_EXIST && rc != -DER_NO_PERM)
+			D_ERROR("Failed to insert entry '%s', "DF_RC"\n", name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -1007,12 +1006,13 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->oclass = parent->d.oclass;
 
 		/** since it's a single conditional op, we don't need a DTX */
-		rc = insert_entry(parent->oh, DAOS_TX_NONE, dir->name, len,
-				  DAOS_COND_DKEY_INSERT, entry);
+		rc = insert_entry(parent->oh, DAOS_TX_NONE, dir->name, len, DAOS_COND_DKEY_INSERT,
+				  entry);
 		if (rc != 0) {
 			daos_obj_close(dir->oh, NULL);
-			D_ERROR("Inserting dir entry %s failed (%d)\n",
-				dir->name, rc);
+			if (rc != EPERM)
+				D_ERROR("Inserting dir entry %s failed (%d)\n",	dir->name, rc);
+			return rc;
 		}
 
 		dir->d.chunk_size = entry->chunk_size;
@@ -1538,15 +1538,14 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	struct daos_prop_entry	*entry;
 	struct daos_prop_co_roots *roots;
 	struct dfs_entry	root_dir;
-	int			amode, obj_mode;
+	int			amode;
 	int			rc;
 
 	if (_dfs == NULL)
 		return EINVAL;
 
 	amode = (flags & O_ACCMODE);
-	obj_mode = get_daos_obj_mode(flags);
-	if (obj_mode == -1)
+	if (get_daos_obj_mode(flags) == -1)
 		return EINVAL;
 
 	prop = daos_prop_alloc(0);
