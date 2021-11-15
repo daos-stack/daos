@@ -8,7 +8,7 @@ add_repo() {
     sudo dnf config-manager --add-repo="$REPO_URL"
     repo=${REPO_URL#*://}
     repo="${repo//%/}"
-    repo="${repo//\\//_}"
+    repo="${repo//\//_}"
     sudo dnf config-manager --save --setopt="$repo".gpgcheck=0
 }
 
