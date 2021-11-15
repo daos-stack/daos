@@ -865,39 +865,8 @@ pipeline {
                     }
                     steps {
                         sh label: "Run test",
-                           script: '''add_repo() {
-                                          local REPO_URL="$1"
-
-                                          sudo dnf config-manager --add-repo=$REPO_URL
-                                          repo=${REPO_URL#*://}
-                                          repo="${repo//%/}"
-                                          repo="${repo//\\//_}"
-                                          sudo dnf config-manager --save --setopt=$repo.gpgcheck=0
-                                      }
-
-                                      . /usr/share/lmod/lmod/init/bash
-                                      PR_REPOS="''' + prRepos() + '''"
-                                      if [ -n "$PR_REPOS" ]; then
-                                          for repo in $PR_REPOS; do
-                                              branch="master"
-                                              build_number="lastSuccessfulBuild"
-                                              if [[ $repo = *@* ]]; then
-                                                  branch="${repo#*@}"
-                                                  repo="${repo%@*}"
-                                                  if [[ $branch = *:* ]]; then
-                                                      build_number="${branch#*:}"
-                                                      branch="${branch%:*}"
-                                                  fi
-                                              fi
-                                              add_repo "${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos8/"
-                                          done
-                                      else
-                                          add_repo "${BUILD_URL}artifact/artifacts/centos8/"
-                                      fi
-                                      PYTHONPATH="${PWD}/src/tests/ftest/util" src/tests/ftest/config_file_gen.py -n localhost -d /tmp/dmg.yml
-                                      PYTHONPATH="${PWD}/src/tests/ftest/util" src/tests/ftest/config_file_gen.py -n localhost -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
-                                      MODULEPATH=/usr/share/Modules/modulefiles:/etc/modulefiles:/usr/share/modulefiles \
-                                      DAOS_PKG_VERSION=''' + daosPackagesVersion(next_version) + ' ci/rpm/test_daos_node.sh'
+                           script: 'ci/rpm/test_daos-docker.sh "' + prRepos() +
+                                   '" "' + daosPackagesVersion(next_version) + '"'
                    }
                 } // stage('Test EL8 RPMs on CentOS Stream 8') {
                 stage('Test CentOS 7 RPMs') {
