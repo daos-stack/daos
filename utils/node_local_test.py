@@ -867,20 +867,21 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """
     my_env = get_base_env()
     prefix = 'dnt_dfuse_il_{}_'.format(get_inc_id())
-    log_file = tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False)
-    my_env['D_LOG_FILE'] = log_file.name
+    with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
+        log_name = log_file.name
+    my_env['D_LOG_FILE'] = log_name
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'], 'lib64', 'libioil.so')
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     my_env['D_IL_REPORT'] = '2'
     ret = subprocess.run(cmd, env=my_env, check=False)
-    print('Logged il to {}'.format(log_file.name))
+    print('Logged il to {}'.format(log_name))
     print(ret)
 
     if dfuse.caching:
         check_fstat = False
 
     try:
-        log_test(dfuse.conf, log_file.name, check_read=check_read, check_write=check_write,
+        log_test(dfuse.conf, log_name, check_read=check_read, check_write=check_write,
                  check_fstat=check_fstat)
         assert ret.returncode == 0
     except NLTestNoFunction as error:
