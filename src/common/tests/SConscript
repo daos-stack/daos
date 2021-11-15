@@ -65,22 +65,33 @@ def scons():
 
     acl_api = unit_env.Object('../acl_api.c')
 
+    Depends('acl_api_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'acl_api_tests',
                     source=['acl_api_tests.c', acl_api, mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('acl_valid_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'acl_valid_tests',
                     source=['acl_valid_tests.c', acl_api, mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('acl_util_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'acl_util_tests',
                     source=['acl_util_tests.c', '../acl_util.c', mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('acl_principal_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'acl_principal_tests',
                     source=['acl_principal_tests.c', '../acl_principal.c', mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
 
+    Depends('drpc_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'drpc_tests',
                     ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c', mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+
+
 
 if __name__ == "SCons.Script":
     scons()
