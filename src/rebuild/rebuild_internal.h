@@ -130,7 +130,6 @@ struct rebuild_global_pool_tracker {
 	uint32_t	rgt_refcount;
 
 	unsigned int	rgt_abort:1,
-			rgt_notify_stable_epoch:1,
 			rgt_init_scan:1;
 };
 
