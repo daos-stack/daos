@@ -1,21 +1,31 @@
 # Container Management
 
-DAOS containers (not to be confused with Linux containers) are datasets (or
-buckets if you are more familiar with cloud object stores) managed
-by the users. A container is the unit of snapshot and has a type. It can be a
-POSIX namespace, an HDF5 file or any other application-specific data model.
-The chapter explains how to manage a container, while the subsequent ones detail
-how to access a DAOS container from applications.
+DAOS containers are datasets managed by the users. Similarly to S3 buckets,
+a DAOS container is a collection of objects that can be presented to applications
+through different interfaces including POSIX I/O (files and directories),
+HDF5, SQL or any other data models of your choice.
 
-## Container Basic Operations
+A container belongs to a single pool and share the space with other containers.
+It is identified by a label selected by the user and a immutable UUID allocated
+when the container is first created.
+
+The container is the unit of data management in DAOS and can be snapshotted or
+cloned.
+
+!!! warning
+    DAOS containers are storage containers should not be confused with Linux
+    containers.
+
+## Container Basics
+
+Containers can be created, queried, relabled, listed and destroyed through the
+`daos(1)` utility or native DAOS API.
 
 ### Creating a Container
 
-Containers can be created and destroyed through the `daos(1)` utility.
-provided to manage containers.
+To create and then query a container labeled `mycont` on a pool
+labeled `tank`:
 
-**To create and then query a container labeled `mycont` on a pool
-(labeled `tank`):**
 ```bash
 $ daos cont create tank --label mycont
   Container UUID : daefe12c-45d4-44f7-8e56-995d02549041
@@ -35,15 +45,17 @@ $ daos cont query tank mycont
   Snapshot Epochs            :
 ```
 
-Like pools, container labels can be up to 127 characters long and must only include
-alphanumeric characters, colon (':'), period ('.'), hyphen ('-') or underscore ('\_').
+While a label is not mandatory, it is highly recommended. Like pools, container
+labels can be up to 127 characters long and must only include alphanumeric
+characters, colon (':'), period ('.'), hyphen ('-') or underscore ('\_').
 Labels that can be parsed as UUID are not allowed.
 
 The container type (i.e., POSIX or HDF5) can be passed via the --type option.
-As shown below, the pool UUID, container UUID, and container attributes can be
-stored in the extended attributes of a POSIX file or directory for convenience.
-Then subsequent invocations of the daos tools need to reference the path
-to the POSIX file or directory.
+
+For convenience, a container can also be identified by a path to a filesystem
+supporting extended attributes. In this case, the pool and container UUIDs
+are stored in an extended attribute of the target file or directory that can
+then be used in subsequent command invocations to identify the container.
 
 ```bash
 $ daos cont create tank --path /tmp/mycontainer --type=POSIX --oclass=SX
@@ -67,7 +79,7 @@ $ daos cont query --path /tmp/mycontainer
 
 ### Listing Containers
 
-**To list all containers available in a pool:**
+To list all containers available in a pool:
 
 ```bash
 $ daos cont list tank
@@ -79,7 +91,7 @@ daefe12c-45d4-44f7-8e56-995d02549041 mycont
 
 ### Destroying a Container
 
-**To destroy a container:**
+To destroy a container:
 ```bash
 $ daos cont destroy tank mycont
 Successfully destroyed container mycont
@@ -88,10 +100,17 @@ $ daos cont destroy --path /tmp/mycontainer
 Successfully destroyed container 30e5d364-62c9-4ddf-9284-1021359455f2
 ```
 
+If the container is in use, the force option (i.e. --force or -f) must be added.
+Active users of a force-deleted container will fail with bad handle error.
+
+!!! note
+    It is orders of magniture faster to delete a container compared to
+    destroying each object individually.
+
 ## Container Properties
 
 Container properties are the main mechanism that one can use to control the
-behavior of container. This includes the type of middleware, whether some
+behavior of containers. This includes the type of middleware, whether some
 features like deduplication or checksum are enabled. Some properties are
 immutable after creation creation, while some others can be dynamically
 changed.

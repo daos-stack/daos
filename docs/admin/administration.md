@@ -461,10 +461,10 @@ device would remain in this state until replaced by a new device.
 
 ## System Operations
 
-The DAOS Control Server acting as the access point records details of DAOS I/O
-Server instances that join the DAOS system. Once an I/O Engine has joined the
-DAOS system, it is identified by a unique system "rank". Multiple ranks can
-reside on the same host machine, accessible via the same network address.
+The DAOS server acting as the access point records details of engines
+that join the DAOS system. Once an engine has joined the DAOS system, it is
+identified by a unique system "rank". Multiple ranks can reside on the same
+host machine, accessible via the same network address.
 
 A DAOS system can be shutdown and restarted to perform maintenance and/or
 reboot hosts. Pool data and state will be maintained providing no changes are
@@ -484,11 +484,6 @@ config file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 specified when starting `daos_server` instances.
 
-!!! warning
-    Controlled start/stop/reformat have some known limitations.
-    While individual system instances can be stopped, if a subset is restarted,
-    existing pools will not be automatically integrated with restarted instances.
-
 ### Membership
 
 The system membership can be queried using the command:
@@ -507,22 +502,38 @@ UUID, in addition to the rank state.
 
 When up and running, the entire system can be shutdown with the command:
 
+`$ dmg system stop [--force]`
+
+The output table will indicate action and result.
+
+While the engines are stopped, the DAOS servers will continue to
+operate and listen on the management network.
+
+!!! warning
+    All engines monitor each other and pro-actively exclude unresponsive
+    members. It is critical to properly stop a DAOS system as with dmg in
+    the case of a planned maintenance on all or a majority of the DAOS
+    storage nodes. An abrupt reboot of the storage nodes might result
+    in massive exclusion that will take time to recover.
+
+The force option can be passed to dmg system stop for cases when a clean
+shutown is not working. Monitoring is not disabled in this case and spurious
+exclusion might happen, but the engines are guaranteed to be killed.
+
+dmg also allows to stop a list of engines identified by ranks or hostnames.
+This is useful to stop (and restart) misbehaving engines.
+
 `$ dmg system stop [--force] [--ranks <rankset>|--host-ranks <hostset>]`
 
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
 - `<hostset>` is a pattern describing host ranges e.g.
 storagehost[0,5-10],10.8.1.[20-100]
 
-The output table will indicate action and result.
-
-DAOS Control Servers will continue to operate and listen on the management
-network.
-
 ### Start
 
-To start the system after a controlled shutdown run the command:
+To start the system after a controlled shutdown, run the command:
 
-`$ dmg system start [--ranks <rankset>|--host-ranks <hostset>]`
+`$ dmg system start`
 
 - `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
 - `<hostset>` is a pattern describing host ranges e.g.
@@ -532,9 +543,21 @@ The output table will indicate action and result.
 
 DAOS I/O Engines will be started.
 
+As for shutdow, a list of engines to restart can be specified on the command
+line:
+
+`$ dmg system start [--ranks <rankset>|--host-ranks <hostset>]`
+
+- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
+- `<hostset>` is a pattern describing host ranges e.g.
+storagehost[0,5-10],10.8.1.[20-100]
+
+If the ranks were excluded from pools (e.g. unclean shutdown), they will need to
+be reintegrated. Please see the pool operation section for more information.
+
 ### Reformat
 
-To reformat the system after a controlled shutdown run the command:
+To reformat the system after a controlled shutdown, run the command:
 
 `$ dmg storage format --reformat`
 
@@ -551,7 +574,9 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
 
 ### Manual Fresh Start
 
-To reset the DAOS metadata across all hosts, the system must be reformatted.
+While it should not be required during normal operations, one may still want to
+restart the DAOS installation from scratch without using the DAOS control plane.
+
 First, ensure all `daos_server` processes on all hosts have been
 stopped, then for each SCM mount specified in the config file
 (`scm_mount` in the `servers` section) umount and wipe FS signatures.
