@@ -76,7 +76,8 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 
 USER root:root
 ARG CACHEBUST
-RUN apt-get update && apt-get -y upgrade && apt-get clean all
+RUN RUN [ -z "$CACHEBUST" ] || \
+    { apt-get update && apt-get -y upgrade && apt-get clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
