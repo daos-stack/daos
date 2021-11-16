@@ -63,23 +63,23 @@ jobs:
           - distro: rocky
             base: centos.8
             with: rockylinux/rockylinux:8
-            JAVA: YES
+            java: YES
           - distro: alma
             base: centos.8
             with: almalinux:8
-            JAVA: YES
+            java: YES
           - distro: centos.8
             base: centos.8
             with: centos:8
-            JAVA: YES
+            java: YES
           - distro: ubuntu.20.04
             base: ubuntu.20.04
             with: ubuntu.20.04
-            JAVA: YES
+            java: YES
           - distro: leap.15
             base: leap.15
             with: leap.15
-            JAVA: YES
+            java: YES
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
