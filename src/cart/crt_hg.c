@@ -433,6 +433,7 @@ crt_provider_dec_cur_ctx_num(int provider)
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
 	prov_data->cpg_ctx_num--;
+	D_INFO("after decrement, cpg_ctx_num=%d\n", prov_data->cpg_ctx_num);
 }
 
 d_list_t

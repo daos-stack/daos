@@ -36,6 +36,8 @@ const (
 	// SystemJoinRetryTimeout defines the amount of time a retry attempt can take. It
 	// should be set low in order to ensure that individual join attempts retry quickly.
 	SystemJoinRetryTimeout = 10 * time.Second
+	// SystemStopTimeout defines the amount of time a system stop attempt can take.
+	SystemStopTimeout = 1 * time.Minute
 )
 
 var (
@@ -394,6 +396,7 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)
 	})
+	req.SetTimeout(SystemStopTimeout)
 	rpcClient.Debugf("DAOS system stop request: %+v", req)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
