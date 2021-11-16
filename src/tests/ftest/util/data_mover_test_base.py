@@ -1261,7 +1261,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 "DAOS", "/", pool, cont,
                 "DAOS", "/", pool, cont2)
         else:
-            self.fail("Invalid tool: {}".format(str(self.tool)))
+            self.fail("Invalid tool: {}".format(tool))
 
 
         # move data from daos to posix FS and vice versa
