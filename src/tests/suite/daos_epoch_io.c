@@ -342,9 +342,9 @@ daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
 		 char **rbuf, daos_size_t *rbuf_size)
 {
 	print_message("add rank %u\n", op->ae_arg.ua_rank);
-	test_rebuild_wait(&arg, 1);
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			  op->ae_arg.ua_rank);
+	test_rebuild_wait(&arg, 1);
 	return 0;
 }
 
@@ -365,6 +365,7 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 				    op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 	}
 
+	test_rebuild_wait(&arg, 1);
 	daos_cont_status_clear(arg->coh, NULL);
 	return 0;
 }
@@ -1259,8 +1260,7 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 					      shard[i]);
 			}
 			fail_val = daos_shard_fail_value(shard, argc - 2);
-			arg->fail_loc = DAOS_FAIL_SHARD_FETCH |
-					DAOS_FAIL_ALWAYS;
+			arg->fail_loc = DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS;
 			arg->fail_value = fail_val;
 		} else if (strcmp(argv[1], "clear") == 0) {
 			arg->fail_loc = 0;

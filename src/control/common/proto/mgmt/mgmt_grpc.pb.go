@@ -70,6 +70,8 @@ type MgmtSvcClient interface {
 	SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error)
+	// Clean up leaked resources for a given node
+	SystemCleanup(ctx context.Context, in *SystemCleanupReq, opts ...grpc.CallOption) (*SystemCleanupResp, error)
 }
 
 type mgmtSvcClient struct {
@@ -305,6 +307,15 @@ func (c *mgmtSvcClient) SystemErase(ctx context.Context, in *SystemEraseReq, opt
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemCleanup(ctx context.Context, in *SystemCleanupReq, opts ...grpc.CallOption) (*SystemCleanupResp, error) {
+	out := new(SystemCleanupResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemCleanup", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MgmtSvcServer is the server API for MgmtSvc service.
 // All implementations must embed UnimplementedMgmtSvcServer
 // for forward compatibility
@@ -360,6 +371,8 @@ type MgmtSvcServer interface {
 	SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error)
+	// Clean up leaked resources for a given node
+	SystemCleanup(context.Context, *SystemCleanupReq) (*SystemCleanupResp, error)
 	mustEmbedUnimplementedMgmtSvcServer()
 }
 
@@ -441,6 +454,9 @@ func (UnimplementedMgmtSvcServer) SystemStart(context.Context, *SystemStartReq) 
 }
 func (UnimplementedMgmtSvcServer) SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemErase not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemCleanup(context.Context, *SystemCleanupReq) (*SystemCleanupResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemCleanup not implemented")
 }
 func (UnimplementedMgmtSvcServer) mustEmbedUnimplementedMgmtSvcServer() {}
 
@@ -905,6 +921,24 @@ func _MgmtSvc_SystemErase_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemCleanup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemCleanupReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemCleanup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemCleanup",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemCleanup(ctx, req.(*SystemCleanupReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MgmtSvc_ServiceDesc is the grpc.ServiceDesc for MgmtSvc service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1011,6 +1045,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemErase",
 			Handler:    _MgmtSvc_SystemErase_Handler,
+		},
+		{
+			MethodName: "SystemCleanup",
+			Handler:    _MgmtSvc_SystemCleanup_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

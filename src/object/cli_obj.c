@@ -76,7 +76,6 @@ struct obj_auxi_args {
 	 * ec_in_recov -- a EC recovery task
 	 */
 	uint32_t			 io_retry:1,
-					 io_task_reinited:1,
 					 args_initialized:1,
 					 to_leader:1,
 					 spec_shard:1,
@@ -935,9 +934,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	}
 shard_open:
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
-	if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
-	    DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_FETCH) &&
-	    daos_shard_in_fail_value(shard + 1)) {
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_OPEN) &&
+		     daos_shard_in_fail_value(shard + 1))) {
 		rc = -DER_NONEXIST;
 		D_ERROR("obj_shard_open failed on shard %d, "DF_RC"\n",
 			shard, DP_RC(rc));
@@ -947,6 +945,12 @@ shard_open:
 		if (obj_op_is_ec_fetch(obj_auxi) && obj_shard->do_rebuilding) {
 			ec_degrade = true;
 			obj_shard_close(obj_shard);
+		}
+		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE && obj_shard->do_reintegrating) {
+			D_ERROR(DF_OID" shard is being reintegrated: %d\n",
+				DP_OID(obj->cob_md.omd_id), -DER_IO);
+			obj_shard_close(obj_shard);
+			D_GOTO(out, rc = -DER_IO);
 		}
 	} else {
 		if (rc == -DER_NONEXIST) {
@@ -1166,7 +1170,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 					 * OSA case, will handle it via internal
 					 * transaction.
 					 */
-					if (tmp->st_tgt_id != last->st_tgt_id)
+					if (tmp->st_rank == DAOS_TGT_IGNORE ||
+					    tmp->st_tgt_id != last->st_tgt_id)
 						continue;
 
 					D_DEBUG(DB_IO, "Modify obj "DF_OID
@@ -1595,7 +1600,7 @@ dc_obj_layout_refresh(daos_handle_t oh)
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
-	     unsigned int srv_pmap_ver)
+	     unsigned int srv_pmap_ver, bool *io_task_reinited)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
@@ -1624,7 +1629,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			D_ERROR("Failed to re-init task (%p)\n", task);
 			D_GOTO(err, rc);
 		}
-		obj_auxi->io_task_reinited = 1;
+		*io_task_reinited = true;
 	} else if (obj_auxi->spec_shard || obj_auxi->spec_group) {
 		/* If the RPC sponsor specifies shard or group, we will NOT
 		 * reschedule the IO, but not prevent the pool map refresh.
@@ -3805,6 +3810,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	struct dc_object	*obj;
 	struct obj_auxi_args	*obj_auxi;
 	bool			pm_stale = false;
+	bool			io_task_reinited = false;
 	int			rc;
 
 	obj_auxi = tse_task_stack_pop(task, sizeof(*obj_auxi));
@@ -3907,17 +3913,17 @@ obj_comp_cb(tse_task_t *task, void *data)
 			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
 	}
 
-	obj_auxi->io_task_reinited = 0;
 	if ((!obj_auxi->no_retry || task->dt_result == -DER_FETCH_AGAIN) &&
 	     (pm_stale || obj_auxi->io_retry)) {
-		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, obj_auxi->map_ver_reply);
+		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, obj_auxi->map_ver_reply,
+				  &io_task_reinited);
 		if (rc) {
 			D_ERROR(DF_OID "retry io failed: %d\n", DP_OID(obj->cob_md.omd_id), rc);
 			D_ASSERT(obj_auxi->io_retry == 0);
 		}
 	}
 
-	if (!obj_auxi->io_task_reinited) {
+	if (!io_task_reinited) {
 		struct obj_ec_fail_info	*fail_info;
 		bool new_tgt_fail = false;
 		d_list_t *head = &obj_auxi->shard_task_head;
@@ -5206,7 +5212,7 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 		 */
 		obj_addref(obj);
 		obj_comp_cb(task, NULL);
-		return dc_tx_convert(obj, DAOS_OBJ_RPC_UPDATE, task);
+		return dc_tx_convert(obj, opc, task);
 	}
 
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
