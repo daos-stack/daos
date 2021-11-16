@@ -22,7 +22,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
     fi
 
     pkgs="$prefix ndctl                \
-          fio patchutils ior           \
+          fio patchutils          	\
           romio-tests                  \
           testmpio                     \
           python$pyver-mpi4py-tests    \
