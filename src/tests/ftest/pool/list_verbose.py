@@ -129,7 +129,7 @@ class ListVerboseTest(IorTestBase):
         """Verify SCM size using the threshold.
 
         SCM size in pool list is slightly higher than the created value. Verify
-        that it's smaller than the threshold.
+        that it's smaller than the threshold (target_count * (4K - 1)).
 
         Args:
             actual (int): SCM size from pool list verbose.
