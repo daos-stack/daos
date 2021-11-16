@@ -136,7 +136,7 @@ class ListVerboseTest(IorTestBase):
             created (int): SCM size used to create the pool.
             rank_count (int): Number of ranks that the pool is created on.
         """
-        targets = self.params.get("targets", "/run/server_config/servers/*/")
+        targets = self.params.get("targets", "/run/server_config/*/")
         total_targets = rank_count * targets
         threshold = total_targets * 3999
         diff = actual - created
