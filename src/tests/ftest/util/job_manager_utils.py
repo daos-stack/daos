@@ -989,6 +989,9 @@ class Systemctl(JobManager):
             if timeout is not None:
                 timed_out = duration > timeout
 
+            if verbose:
+                self.display_log_data(log_data)
+
         # Summarize results
         msg = "{}/{} '{}' messages detected in".format(detected, quantity, pattern)
         runtime = "{}/{} seconds".format(duration, timeout)
@@ -1003,8 +1006,6 @@ class Systemctl(JobManager):
             if log_data:
                 details = ":\n{}".format(self.str_log_data(log_data))
             self.log.info("%s - %s %s%s", reason, msg, runtime, details)
-        elif verbose:
-            self.display_log_data(log_data)
 
         return complete, " ".join([msg, runtime])
 

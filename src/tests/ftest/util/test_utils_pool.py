@@ -611,58 +611,25 @@ class TestPool(TestDaosApiBase):
 
         return status
 
-    def get_rebuild_timestamp(self):
-        """Get the current timestamp for the check_rebuild() method.
-
-        Returns:
-            str: timestamp in the format required by check_rebuild()
-
-        """
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    def check_rebuild(self, server_manager, since, started=True):
-        """Wait for rebuild to start or finish.
-
-        Detect rebuild start or finish messages in the server journalctl logs.
+    def get_rebuild_state(self, verbose=True):
+        """Get the rebuild state from the dmg pool query.
 
         Args:
-            server_manager (DaosServerManager): manager for the servers hosting the pool
-            since (str): search log entries from this date; format="%Y-%m-%d %H:%M:%S"
-            started (bool, optional): whether to check for rebuild start (True) or finish (False).
-                Defaults to True.
-
-        Raises:
-            DaosTestError: if there is a timeout checking for the rebuild messages
+            verbose (bool, optional): whether to display the rebuild data. Defaults to True.
 
         Returns:
-            bool: True if the expected rebuild messages were found; False otherwise.
-
+            [type]: [description]
         """
-        state = "start" if started else "finish"
-        pattern = r"RAS EVENT id:\s+\[pool_rebuild_{}ed\].*pool:\s+\[{}\]".format(state, self.uuid)
-        quantity = 1
-        self.log.info(
-            "Waiting for rebuild to %s%s ...", state,
-            " with a {} second timeout".format(self.rebuild_timeout.value)
-            if self.rebuild_timeout.value is not None else "")
-
+        self.set_query_data()
         try:
-            complete, message = server_manager.manager.search_logs(
-                pattern, since, None, quantity, self.rebuild_timeout.value, True)
-        except AttributeError as error:
-            raise NotImplementedError(
-                "The TestPool.check_rebuild() method does not yet support a DaosServerManager with "
-                "a manager attribute defined as a non-Systemctl class: {}".format(error))
-
-        if complete:
-            self.log.info("Rebuild %s detected - %s", state, message)
-        else:
-            raise DaosTestError(
-                "TIMEOUT detected after {} seconds while for waiting for rebuild to {}.  This "
-                "timeout can be adjusted via the 'pool/rebuild_timeout' test yaml "
-                "parameter.".format(self.rebuild_timeout.value, state))
-
-        return complete
+            if verbose:
+                self.log.info(
+                    "Pool %s query rebuild data: %s\n",
+                    self.uuid, self.query_data["response"]["rebuild"])
+            return self.query_data["response"]["rebuild"]["state"]
+        except KeyError as error:
+            self.log.error("Unable to detect rebuild state: %s", error)
+            return None
 
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
@@ -679,8 +646,13 @@ class TestPool(TestDaosApiBase):
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
 
+        # Expect the state to be 'busy' or 'done' when waiting for rebuild to start or 'done' when
+        # waiting for rebuild to complete.
+        expected_states = ["busy", "done"] if to_start else ["done"]
+
         start = time()
-        while self.rebuild_complete() == to_start:
+        # while self.rebuild_complete() == to_start:
+        while self.get_rebuild_state() not in expected_states:
             self.log.info(
                 "  Rebuild %s ...",
                 "has not yet started" if to_start else "in progress")
