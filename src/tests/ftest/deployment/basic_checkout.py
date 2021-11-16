@@ -11,6 +11,7 @@ from data_mover_test_base import DataMoverTestBase
 from command_utils_base import CommandFailure
 
 class BasicCheckout(IorTestBase, MdtestBase):
+    # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class wrapping up tests from four
                                different test classes into one. Intent
@@ -24,7 +25,10 @@ class BasicCheckout(IorTestBase, MdtestBase):
         Test Description: Bundles four tests into one and run in the
                           following sequence - ior_small, mdtest_small,
                           ec_smoke and autotest.
-        :avocado: tags=installation,basiccheckout
+        :avocado: tags=all,deployment,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=dfuse,ior,mdtest
+        :avocado: tags=basiccheckout
         """
         # local param
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
@@ -46,7 +50,7 @@ class BasicCheckout(IorTestBase, MdtestBase):
                                                     [transfer_block_size[1]],
                                                     [flags[0]], dfuse_mount_dir)
         results = results + results_ec
-        self.log.error("Summary of IOR small test results:")
+        self.log.info("Summary of IOR small test results:")
         errors = False
         for item in results:
             self.log.info("  %s  %s", item[0], item[1])
@@ -71,6 +75,7 @@ class BasicCheckout(IorTestBase, MdtestBase):
 
 class BasicCheckoutDm(DataMoverTestBase):
     # pylint: disable=too-few-public-methods
+    # pylint: disable=attribute-defined-outside-init
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class to wrap datamover test to
                                run as part of basic checkout and verify
@@ -83,19 +88,14 @@ class BasicCheckoutDm(DataMoverTestBase):
         Test Description: Datamover test to check connection and datamover
                           functionality with Lustre fs on newly installed
                           server nodes.
-        :avocado: tags=installation,basiccheckout
+        :avocado: tags=all,deployment,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=datamover,fs_copy,ior
+        :avocado: tags=basiccheckout,basiccheckout_dm
         """
-        # local param
-        dm_ior_options = self.params.get("dm_ior_options", "/run/ior/dm/*")
-
-        # update ior params and run dm test
-        self.ior_cmd.flags.update(dm_ior_options[0])
-        self.ior_cmd.signature.update(dm_ior_options[1])
-        self.ior_cmd.transfer_size.update(dm_ior_options[2])
-        self.ior_cmd.block_size.update(dm_ior_options[3])
-        self.ior_cmd.dfs_dir_oclass.update(dm_ior_options[4])
-        self.ior_cmd.dfs_oclass.update(dm_ior_options[5])
-        self.ior_cmd.test_file.update(dm_ior_options[6])
-        self.ior_cmd.repetitions.update(dm_ior_options[7])
+        # load ior params for dm test
+        self.ior_cmd.namespace = "/run/ior_dm/*"
+        self.ior_cmd.get_params(self)
+        self.processes_per_node = self.params.get("ppn", '/run/ior_dm/client_processes/*')
         #run datamover
         self.run_dm_activities_with_ior("FS_COPY", True)

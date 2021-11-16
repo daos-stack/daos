@@ -49,6 +49,7 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
+        self.processes_per_node = self.params.get("ppn", '/run/ior/client_processes/*')
         self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
         self.ior_timeout = self.params.get("ior_timeout", '/run/ior/*', None)
 
@@ -262,6 +263,8 @@ class IorTestBase(DfuseTestBase):
             manager.working_dir.value = self.dfuse.mount_dir.value
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        if self.processes_per_node:
+            processes = self.processes_per_node * (len(self.hostlist_clients))
         manager.assign_processes(processes)
         manager.assign_environment(env)
 
