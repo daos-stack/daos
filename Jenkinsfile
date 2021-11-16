@@ -13,6 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@daos-9065") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -520,8 +521,8 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15"
-                            args '-v /opt/intel:/opt/intel'
+                                                " -t ${sanitized_JOB_NAME}-leap15" +
+                                                " --build-arg COMPILER=icc"
                         }
                     }
                     steps {
@@ -753,6 +754,7 @@ pipeline {
                     steps {
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
+                                       ci_target: 'leap15t',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
