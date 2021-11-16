@@ -62,5 +62,5 @@ echo ::group::Setting up daos_admin
 echo ::endgroup::
 
 echo ::group::Container copy test
-./utils/node_local_test.py --memcheck no --test cont_copy
+./utils/node_local_test.py --no-root --memcheck no --test cont_copy
 echo ::endgroup::
