@@ -2471,7 +2471,8 @@ retry:
 			if (rc != -DER_INPROGRESS) {
 				daos_anchor_set_flags(&dkey_anchor,
 						      DIOF_WITH_SPEC_EPOCH |
-						      DIOF_TO_SPEC_GROUP);
+						      DIOF_TO_SPEC_GROUP |
+						      DIOF_FOR_MIGRATION);
 				D_DEBUG(DB_REBUILD, "retry to non leader "
 					DF_UOID": "DF_RC"\n",
 					DP_UOID(arg->oid), DP_RC(rc));
