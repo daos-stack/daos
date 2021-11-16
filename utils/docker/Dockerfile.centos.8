@@ -21,6 +21,8 @@ ARG CB0
 # data for installing those keys.  Then the epel-release
 # package must be installed and the GPG key it provides must be
 # installed.
+# Turn off 'best' dependency resolution as this can cause conflicts between
+# rocky and epel when they get slightly out of sync with minor versions.
 ARG REPO_URL
 ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
@@ -43,9 +45,13 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
           -i /etc/dnf/dnf.conf;                                 \
       dnf -y upgrade epel-release;                              \
     else                                                        \
-      dnf -y install epel-release dnf-plugins-core &&           \
+      dnf -y install dnf-plugins-core &&                        \
       dnf config-manager --assumeyes --set-enabled powertools;  \
+      dnf -y install epel-release;                              \
     fi;                                                         \
+    dnf config-manager --save --setopt=assumeyes=True &&        \
+    dnf config-manager --save --setopt=best=False &&            \
+    dnf config-manager --save --setopt=install_weak_deps=False && \
     dnf clean all
 
 # Currently the appstream REPO can not be part of a repo group
@@ -116,7 +122,6 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
@@ -187,12 +192,12 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
       TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
-# force an upgrade to get any newly built RPMs
+# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 USER root:root
 ARG CACHEBUST
-RUN dnf -y upgrade \
-        --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    dnf clean all
+RUN [ -z "$CACHEBUST" ] || \
+    { dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    dnf clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
