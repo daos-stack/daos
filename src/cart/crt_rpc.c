@@ -1432,7 +1432,7 @@ crt_reply_send(crt_rpc_t *req)
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
-	RPC_TRACE(DB_ALL, rpc_priv, "Responding to rpc.\n");
+	D_DEBUG(DB_ALL, "rpc_priv: %p\n", rpc_priv);
 	if (rpc_priv->crp_coll == 1) {
 		struct crt_cb_info	cb_info;
 

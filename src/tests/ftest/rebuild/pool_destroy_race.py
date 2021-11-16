@@ -70,14 +70,15 @@ class RbldPoolDestroyWithIO(IorTestBase):
 
         # Kill the server and trigger rebuild
         self.log.info("Starting rebuild by killing rank %s", rank)
-        since = self.pool.get_rebuild_timestamp()
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start. If True just wait for rebuild to start,
         # if False, wait for rebuild to complete.
         self.log.info("Wait for rebuild to start")
-        self.pool.check_rebuild(self.server_managers[0], since, True)
-        # since = self.pool.get_rebuild_timestamp()
+        self.pool.wait_for_rebuild(True, interval=1)
+
+        # self.log.info("Wait for rebuild to finish")
+        # self.pool.wait_for_rebuild(False, interval=1)
 
         self.pool.set_query_data()
         rebuild_status = self.pool.query_data["response"]["rebuild"]["state"]
@@ -88,9 +89,6 @@ class RbldPoolDestroyWithIO(IorTestBase):
                       rebuild_status)
         self.pool.destroy()
         self.container = None
-
-        # self.log.info("Wait for rebuild to finish")
-        # self.pool.check_rebuild(self.server_managers[0], since, False)
 
         # re-create the pool of full size to verify the space was reclaimed,
         # after re-starting the server on excluded rank
