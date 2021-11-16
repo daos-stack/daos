@@ -444,9 +444,9 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_wait_num > 0);
 		if (msg_logged == false) {
-			D_DEBUG(DB_NET, "destroy context (idx %d, rank %d, "
-				"req_wait_num "DF_U64").\n", ctx->cc_idx,
-				epi->epi_ep.ep_rank, epi->epi_req_wait_num);
+			D_INFO("destroy context (idx %d, rank %d, "
+			       "req_wait_num "DF_U64").\n", ctx->cc_idx,
+			       epi->epi_ep.ep_rank, epi->epi_req_wait_num);
 			msg_logged = true;
 		}
 		/* Just remove from wait_q, decrease the wait_num and destroy
@@ -463,7 +463,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_num > epi->epi_reply_num);
 		if (msg_logged == false) {
-			D_DEBUG(DB_NET,
+			D_INFO(
 				"destroy context (idx %d, rank %d, "
 				"epi_req_num "DF_U64", epi_reply_num "
 				""DF_U64", inflight "DF_U64").\n",
@@ -475,7 +475,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 
 		rc = crt_req_abort(&rpc_priv->crp_pub);
 		if (rc != 0) {
-			D_DEBUG(DB_NET,
+			D_INFO(
 				"crt_req_abort(opc: %#x) failed, rc: %d.\n",
 				rpc_priv->crp_pub.cr_opc, rc);
 			rc = 0;
@@ -483,6 +483,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		}
 	}
 
+	D_INFO("start wait for aborted RPCs\n");
 	ts_start = d_timeus_secdiff(0);
 	while (wait != 0) {
 		/* make sure all above aborting finished */
@@ -507,6 +508,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 			}
 		}
 	}
+	D_INFO("end wait for aborted RPCs\n");
 
 out:
 	D_MUTEX_UNLOCK(&epi->epi_mutex);

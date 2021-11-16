@@ -1245,14 +1245,19 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	}
 	D_ASSERT(rpc_priv->crp_hg_hdl != NULL);
 
-	if (D_LOG_ENABLED(DB_NET)) {
+	if (1 || (D_LOG_ENABLED(DB_NET))) {
 		uint64_t hlc = crt_hlc_get();
 
 		if (hlc > rpc_priv->crp_create_hlc) {
 			uint64_t delay = crt_hlc2msec(hlc - rpc_priv->crp_create_hlc);
 
-			if (delay > 20)
-				RPC_TRACE(DB_NET, rpc_priv, "RPC send took %lu ms.\n", delay);
+			if (delay > 20) {
+				D_INFO("[opc=%#x rpcid=%#lx rank:tag=%d:%d] RPC send took "
+				       "%lu ms.\n", rpc_priv->crp_pub.cr_opc,
+				       rpc_priv->crp_req_hdr.cch_rpcid,
+				       rpc_priv->crp_pub.cr_ep.ep_rank,
+				       rpc_priv->crp_pub.cr_ep.ep_tag, delay);
+			}
 		}
 	}
 
@@ -1639,14 +1644,19 @@ crt_handle_rpc(void *arg)
 	D_ASSERT(rpc_priv->crp_opc_info != NULL);
 	D_ASSERT(rpc_priv->crp_opc_info->coi_rpc_cb != NULL);
 
-	if (D_LOG_ENABLED(DB_NET)) {
+	if (1 || (D_LOG_ENABLED(DB_NET))) {
 		uint64_t hlc = crt_hlc_get();
 
 		if (hlc > rpc_priv->crp_create_hlc) {
 			uint64_t delay = crt_hlc2msec(hlc - rpc_priv->crp_create_hlc);
 
-			if (delay > 20)
-				RPC_TRACE(DB_NET, rpc_priv, "RPC schedule took %lu ms.\n", delay);
+			if (delay > 20) {
+				D_INFO("[opc=%#x rpcid=%#lx rank:tag=%d:%d] RPC schedule took "
+				       "%lu ms.\n", rpc_priv->crp_pub.cr_opc,
+				       rpc_priv->crp_req_hdr.cch_rpcid,
+				       rpc_priv->crp_pub.cr_ep.ep_rank,
+				       rpc_priv->crp_pub.cr_ep.ep_tag, delay);
+			}
 		}
 	}
 

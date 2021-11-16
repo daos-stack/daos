@@ -1220,14 +1220,19 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
-	if (D_LOG_ENABLED(DB_NET)) {
+	if (1 || (D_LOG_ENABLED(DB_NET))) {
 		uint64_t hlc = crt_hlc_get();
 
 		if (hlc > rpc_priv->crp_create_hlc) {
 			uint64_t delay = crt_hlc2msec(hlc - rpc_priv->crp_create_hlc);
 
-			if (delay > 500)
-				RPC_TRACE(DB_NET, rpc_priv, "RPC reply took %lu ms.\n", delay);
+			if (delay > 500) {
+				D_INFO("[opc=%#x rpcid=%#lx rank:tag=%d:%d] RPC reply took "
+				       "%lu ms.\n", rpc_priv->crp_pub.cr_opc,
+				       rpc_priv->crp_req_hdr.cch_rpcid,
+				       rpc_priv->crp_pub.cr_ep.ep_rank,
+				       rpc_priv->crp_pub.cr_ep.ep_tag, delay);
+			}
 		}
 	}
 
