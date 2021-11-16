@@ -9,7 +9,7 @@ hosts:
     - client-A
     - client-B
     - client-C
-timeout: 1000
+timeout: 1200
 server_config:
   engines_per_host: 2
   name: daos_server
