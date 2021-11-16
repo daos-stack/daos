@@ -1824,7 +1824,7 @@ def install_debuginfos():
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5']:
+    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric']:
         try:
             debug_pkg = resolve_debuginfo(pkg)
         except RuntimeError as error:
@@ -1861,7 +1861,8 @@ def install_debuginfos():
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         cmds.append(
             ["sudo", "dnf", "debuginfo-install",
-             "-y"] + dnf_args + ["daos-server"])
+             "-y"] + dnf_args + ["daos-server-" +
+             get_output(["rpm", "-q", "--qf", "%{evr}", "daos"])])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
