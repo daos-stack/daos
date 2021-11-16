@@ -4334,7 +4334,8 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 			if (dcde->dcde_write_cnt != 0) {
 				rc = obj_capa_check(ioc->ioc_coh, true, false);
 				if (rc != 0) {
-					comp_cb(dlh, idx, rc);
+					if (comp_cb != NULL)
+						comp_cb(dlh, idx, rc);
 
 					return rc;
 				}
