@@ -23,6 +23,7 @@ class MdtestBase(DfuseTestBase):
         super().__init__(*args, **kwargs)
         self.mdtest_cmd = None
         self.processes = None
+        self.ppn = None
         self.hostfile_clients_slots = None
 
     def setUp(self):
