@@ -5,10 +5,14 @@
     SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from re import search
+import threading
+import time
 
+from re import search
 from mdtest_test_base import MdtestBase
 from telemetry_test_base import TestWithTelemetry
+from general_utils import DaosTestError
+from command_utils import CommandFailure
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 # pylint: disable=attribute-defined-outside-init
@@ -38,6 +42,8 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         :avocado: tags=test_with_telemetry_net,test_net_telemetry
         """
 
+        # Get the req_timeout metric name, which depends on the libfabric
+        # provider name
         all_metrics = self.telemetry.get_all_server_metrics_names(
             self.server_managers[0])
         p = r"engine_net_\w+_req_timeout"
@@ -72,28 +78,34 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
 
         # create 1st container
         self.add_container(self.pool)
-        # start 1st mdtest run and let it complete
-        self.execute_mdtest()
-        # Kill rank[6] and wait for rebuild to complete
+
+        # start mdtest run
+        thread = threading.Thread(target=self.execute_mdtest)
+        thread.start()
+        time.sleep(5)
 
         self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
+        time.sleep(5)
 
         # Remove the killed host from the clustershell telemetry hostlist
-        self.telemetry.hosts.remove(self.hostlist_servers[rank[0]])
+        self.telemetry.hosts.clear()
+        self.telemetry.hosts.add(self.hostlist_servers[0])
 
+        data = {}
         try:
             data = self.telemetry.get_metrics(metrics[0])
-        except DaosTestError as error:
-            self.log.info("self.telemetry.get_metrics may failed on at least "
-                          "one host, but may have succeeded elsewhere.")
+        except (CommandFailure, DaosTestError) as excep:
+            self.log.info("self.telemetry.get_metrics failed on at least one "
+                          "host with '{}', but may have succeeded elsewhere."
+                          .format(repr(excep)))
+            pass
 
-        for host, v1 in data.items():
-            for metric in data[host][metrics[0]]["metrics"].items():
+        for host, value in data.items():
+            for metric in value[metrics[0]]["metrics"]:
                 req_timeouts += metric["value"]
 
         if req_timeouts > 0:
-            self.log.info("Expected %s values "
-                          "to be greater than 0, and it is: %d.",
-                          req_timeouts, metrics[0])
+            self.log.info("Expected {} values to be greater than 0, and it "
+                          "is: {}.".format(str(metrics[0]), str(req_timeouts)))
         else:
-            self.fail("Expected {} to be greater than 0.".format(metrics[0]))
+            self.fail("Expected {} to be greater than 0.".format(str(metrics[0])))
