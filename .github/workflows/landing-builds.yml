@@ -50,7 +50,7 @@ jobs:
       continue-on-error: true
       with:
         key: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-{hash}
-        restore-keys: none
+        restore-keys: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-
         concurrency: 1
     - name: Prepare base image in Docker
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}

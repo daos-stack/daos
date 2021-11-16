@@ -11,7 +11,7 @@ fi
 
 echo ::group::Rebuild spdk
 rm -rf /opt/daos/prereq/release/spdk
-$SCONS PREFIX=/opt/daos --build-deps=yes --deps-only
+$SCONS --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=yes --deps-only
 echo ::endgroup::
 
 echo "::group::Stack analyzer output (post build)"
