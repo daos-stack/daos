@@ -76,6 +76,7 @@ class BasicCheckout(IorTestBase, MdtestBase):
 class BasicCheckoutDm(DataMoverTestBase):
     # pylint: disable=too-few-public-methods
     # pylint: disable=attribute-defined-outside-init
+    # pylint: disable=too-many-ancestors
     """Test Class Description: Test class to wrap datamover test to
                                run as part of basic checkout and verify
                                connectivity for lustre FS
