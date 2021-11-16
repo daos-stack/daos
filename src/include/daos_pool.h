@@ -6,13 +6,17 @@
 /**
  * DAOS storage pool types and functions
  */
+  /** @defgroup Pools DAOS Pools */
+
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
+/** @addtogroup Pools
+ * @{
+ */
 /** Type of storage target */
 typedef enum {
 	DAOS_TP_UNKNOWN,
@@ -462,5 +466,6 @@ daos_pool_connect_cpp(const uuid_t pool, const char *sys, unsigned int flags, da
 		_ret;							\
 	})
 #endif
-
+/** @}
+ */
 #endif /* __DAOS_POOL_H__ */

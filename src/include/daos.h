@@ -8,6 +8,7 @@
  *
  * DAOS API
  */
+ /** @defgroup DAOSAPI DAOS API */
 
 #ifndef __DAOS_H__
 #define __DAOS_H__
@@ -29,7 +30,9 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
+/** @addtogroup DAOSAPI
+ * @{
+ */
 /**
  * Initialize the DAOS library.
  * Should be invoked prior to any DAOS calls. Can be called multiple times.
@@ -49,5 +52,6 @@ daos_fini(void);
 #if defined(__cplusplus)
 }
 #endif
-
+/** @}
+ */
 #endif /* __DAOS_H__ */

@@ -11,6 +11,7 @@
  * The DAOS Array API provides a 1-D array implementation over the DAOS object
  * data model.
  */
+  /** @defgroup Arrays DAOS Arrays */
 
 #ifndef __DAOS_ARRAY_H__
 #define __DAOS_ARRAY_H__
@@ -18,7 +19,9 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
+/** @addtogroup Arrays
+ * @{
+ */
 /** Range of contiguous records */
 typedef struct {
 	/** Index of the first record in the range */
@@ -453,5 +456,7 @@ daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 #if defined(__cplusplus)
 }
 #endif
+/** @}
+ */
 
 #endif /* __DAOS_ARRAY_H__ */

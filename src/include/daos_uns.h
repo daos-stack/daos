@@ -12,6 +12,7 @@
  * in a system namespace to a location in the DAOS tier (pool and container), in addition to other
  * properties such as object class.
  */
+ /** @defgroup UNS DAOS UNS */
 
 #ifndef __DAOS_UNS_H__
 #define __DAOS_UNS_H__
@@ -19,7 +20,9 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
+/** @addtogroup UNS
+ * @{
+ */
 /** Flags for duns_resolve_path */
 enum {
 	/*
@@ -220,4 +223,6 @@ duns_destroy_attr(struct duns_attr_t *attrp);
 #if defined(__cplusplus)
 }
 #endif
+/** @}
+ */
 #endif /* __DAOS_UNS_H__ */

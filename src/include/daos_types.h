@@ -6,6 +6,7 @@
 /**
  * DAOS Types and Functions Common to Layers/Components
  */
+ /** @defgroup Types DAOS Types */
 
 #ifndef DAOS_TYPES_H
 #define DAOS_TYPES_H
@@ -13,7 +14,9 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
+/** @addtogroup Types
+ * @{
+ */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -210,5 +213,6 @@ typedef struct {
 #if defined(__cplusplus)
 }
 #endif
-
+/** @}
+ */
 #endif /* DAOS_TYPES_H */

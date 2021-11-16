@@ -34,9 +34,14 @@ extern "C" {
 #include <daos_errno.h>
 
 #if !defined(container_of)
+ /** @defgroup Events DAOS Events */
+
 /**
  * Given a pointer @ptr to the field @member embedded into type (usually
  * struct) @type, return pointer to the embedding instance of @type.
+ */
+ /** @addtogroup Events
+ * @{
  */
 # define container_of(ptr, type, member)                \
 		((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
@@ -242,5 +247,6 @@ daos_event_abort(daos_event_t *ev);
 #if defined(__cplusplus)
 }
 #endif
-
+/** @}
+ */
 #endif /*  __DAOS_EVENT_H__ */

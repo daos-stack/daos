@@ -11,7 +11,10 @@
  * The KV API simplify the DAOS 2 key-level object into a simple KV interface
  * for users who are just interested in a traditional KV store API.
  */
-
+ /** @defgroup KV DAOS Key Value Store */
+/** @addtogroup KV
+ * @{
+ */
 #ifndef __DAOS_KV_H__
 #define __DAOS_KV_H__
 
@@ -200,5 +203,6 @@ daos_kv_list(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 #if defined(__cplusplus)
 }
 #endif
-
+/** @}
+ */
 #endif /* __DAOS_KV_H__ */

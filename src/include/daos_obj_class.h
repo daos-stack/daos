@@ -3,13 +3,17 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+  /** @defgroup ObjClass DAOS Object Class */
+
 #ifndef __DAOS_OBJ_CLASS_H__
 #define __DAOS_OBJ_CLASS_H__
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
+/** @addtogroup ObjClass
+ * @{
+ */
 /**
  * Predefined object classes
  * It describes schema of data distribution & protection.
@@ -716,5 +720,6 @@ daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *list,
 #if defined(__cplusplus)
 }
 #endif
-
+/** @}
+ */
 #endif /* __DAOS_OBJ_CLASS_H__ */
