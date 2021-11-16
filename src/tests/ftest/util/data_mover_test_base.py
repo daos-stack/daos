@@ -1195,14 +1195,16 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         return result
 
-    def run_dm_activities_with_ior(self, tool, create_dataset=False, pool=None):
+    def run_dm_activities_with_ior(self, tool, create_dataset=False, pool=None,
+                                   cont=None):
         """Generic method to perform varios datamover activities
            using ior
         Args:
             tool(str): specify the tool name to be used
             create_dataset(bool): boolean to create initial set of
                                   data using ior. Defaults to False.
-            pool(TestPool): Pool object.Defaults to None
+            pool(TestPool): Pool object. Defaults to None
+            cont(TestContainer): Container object. Defaults to None
         """
         # Set the tool to use
         self.set_tool(tool)
@@ -1212,16 +1214,17 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             # create initial datasets
             if not pool:
                 pool = self.create_pool()
-            cont1 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+            cont = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
 
-            # update and run ior on cont1
+            # update and run ior on container 1
             self.run_ior_with_params(
                 "DAOS", self.ior_cmd.test_file.value,
-                pool, cont1)
+                pool, cont)
         else:
             if not pool:
                 pool = self.pool[0]
-            cont1 = self.container[-1]
+            if not cont:
+                cont = self.container[-1]
 
         # create cont2
         cont2 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
@@ -1230,8 +1233,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if tool == 'CONT_CLONE':
             read_back_cont = self.gen_uuid()
             self.run_datamover(
-                self.test_id + " (cont1 to cont2)",
-                "DAOS", None, pool, cont1,
+                self.test_id + " (cont to cont2)",
+                "DAOS", None, pool, cont,
                 "DAOS", None, pool, read_back_cont)
             read_back_pool = pool
         elif tool == 'DSERIAL':
@@ -1242,20 +1245,20 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.start_dfuse(self.dfuse_hosts, pool, dfuse_cont)
             self.serial_tmp_dir = self.dfuse.mount_dir.value
 
-            # Serialize/Deserialize cont1 to a new cont2 in pool2
+            # Serialize/Deserialize container 1 to a new cont2 in pool2
             result = self.run_datamover(
-                self.test_id + " (cont1->HDF5->cont2)",
-                "DAOS_UUID", None, pool, cont1,
+                self.test_id + " (cont->HDF5->cont2)",
+                "DAOS_UUID", None, pool, cont,
                 "DAOS_UUID", None, pool2, None)
 
             # Get the destination cont2 uuid
             read_back_cont = self.parse_create_cont_uuid(result.stdout_text)
             read_back_pool = pool2
         elif tool in ['FS_COPY', 'DCP']:
-            # copy from daos cont1 to cont2
+            # copy from daos cont to cont2
             self.run_datamover(
-                self.test_id + " (cont1 to cont2)",
-                "DAOS", "/", pool, cont1,
+                self.test_id + " (cont to cont2)",
+                "DAOS", "/", pool, cont,
                 "DAOS", "/", pool, cont2)
         else:
             self.fail("Invalid tool: {}".format(str(self.tool)))

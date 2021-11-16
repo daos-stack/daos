@@ -47,9 +47,8 @@ container:
     control_method: daos
 ior:
     client_processes:
-        np_16:
-            np: 16
-        fs_copy: 10
+        ppn_8:
+          ppn: 8
     test_file: daos:testFile
     repetitions: 2
     dfs_destroy: False
@@ -89,8 +88,8 @@ ior:
 ior_dm:
       client_processes:
         fs_copy: 10
-        np_64:
-          np: 16
+        ppn_8:
+          np: 8
       api: DFS
       flags: "-w -F -k"
       signature: "5"
@@ -102,8 +101,8 @@ ior_dm:
 
 mdtest:
   client_processes:
-    np_8:
-      np: 64
+    ppn_8:
+      ppn: 8
   test_dir: "/"
   iteration: 1
   dfs_destroy: True

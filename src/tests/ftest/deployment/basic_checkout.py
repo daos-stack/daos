@@ -25,8 +25,9 @@ class BasicCheckout(IorTestBase, MdtestBase):
         Test Description: Bundles four tests into one and run in the
                           following sequence - ior_small, mdtest_small,
                           ec_smoke and autotest.
-        :avocado: tags=deployment,full_regression
+        :avocado: tags=all,deployment,full_regression
         :avocado: tags=hw,large
+        :avocado: tags=dfuse,ior,mdtest
         :avocado: tags=basiccheckout
         """
         # local param
@@ -74,7 +75,7 @@ class BasicCheckout(IorTestBase, MdtestBase):
 
 class BasicCheckoutDm(DataMoverTestBase):
     # pylint: disable=too-few-public-methods
-    # pylint: disable=too-many-ancestors
+    # pylint: disable=attribute-defined-outside-init
     """Test Class Description: Test class to wrap datamover test to
                                run as part of basic checkout and verify
                                connectivity for lustre FS
@@ -86,12 +87,14 @@ class BasicCheckoutDm(DataMoverTestBase):
         Test Description: Datamover test to check connection and datamover
                           functionality with Lustre fs on newly installed
                           server nodes.
-        :avocado: tags=deployment,full_regression
+        :avocado: tags=all,deployment,full_regression
         :avocado: tags=hw,large
+        :avocado: tags=datamover,fs_copy,ior
         :avocado: tags=basiccheckout,basiccheckout_dm
         """
         # load ior params for dm test
         self.ior_cmd.namespace = "/run/ior_dm/*"
         self.ior_cmd.get_params(self)
+        self.processes_per_node = self.params.get("ppn", '/run/ior_dm/client_processes/*')
         #run datamover
         self.run_dm_activities_with_ior("FS_COPY", True)
