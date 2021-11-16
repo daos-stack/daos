@@ -18,6 +18,8 @@ struct crt_gdata crt_gdata;
 static volatile int   gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 
+/* Hello world */
+
 static void
 dump_envariables(void)
 {
@@ -299,8 +301,7 @@ crt_plugin_fini(void)
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-		if (crt_plugin_gdata.cpg_prog_cbs_old[i])
-			D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
 	}
 
 	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
