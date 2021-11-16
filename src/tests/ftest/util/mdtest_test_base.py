@@ -35,7 +35,7 @@ class MdtestBase(DfuseTestBase):
         # Get the parameters for Mdtest
         self.mdtest_cmd = MdtestCommand()
         self.mdtest_cmd.get_params(self)
-        self.processes_per_node = self.params.get("ppn", '/run/mdtest/client_processes/*')
+        self.ppn = self.params.get("ppn", '/run/mdtest/client_processes/*')
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
 
@@ -106,9 +106,12 @@ class MdtestBase(DfuseTestBase):
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
-        if self.processes_per_node:
-            processes = self.processes_per_node * (len(self.hostlist_clients))
-        manager.assign_processes(processes)
+        if self.ppn is None:
+            manager.assign_processes(processes)
+        else:
+            manager.ppn.update(self.ppn, 'mpirun.ppn')
+            manager.processes.update(None, 'mpirun.np')
+
         manager.assign_environment(env)
 
         if not pool:

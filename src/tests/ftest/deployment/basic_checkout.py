@@ -96,6 +96,6 @@ class BasicCheckoutDm(DataMoverTestBase):
         # load ior params for dm test
         self.ior_cmd.namespace = "/run/ior_dm/*"
         self.ior_cmd.get_params(self)
-        self.processes_per_node = self.params.get("ppn", '/run/ior_dm/client_processes/*')
+        self.ppn = self.params.get("ppn", '/run/ior_dm/client_processes/*')
         #run datamover
         self.run_dm_activities_with_ior("FS_COPY", True)
