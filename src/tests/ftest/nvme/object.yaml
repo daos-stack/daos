@@ -13,7 +13,7 @@ hosts:
   - boro-H
 timeouts:
   test_nvme_object_single_pool: 270
-  test_nvme_object_multiple_pools: 16000
+  test_nvme_object_multiple_pools: 18000
 server_config:
   name: daos_server
   servers:
