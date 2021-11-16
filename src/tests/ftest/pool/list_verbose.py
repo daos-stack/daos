@@ -140,6 +140,8 @@ class ListVerboseTest(IorTestBase):
         total_targets = rank_count * targets
         threshold = total_targets * 3999
         diff = actual - created
+        self.log.debug(
+            "## actual = %d; created = %d; diff = %d", actual, created, diff)
         msg = "Round up amount is too big! Threshold = {}, Diff = {}".format(
             threshold, diff)
         self.assertTrue(diff < threshold, msg)
