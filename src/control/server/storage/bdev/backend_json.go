@@ -28,12 +28,19 @@ const (
 	SpdkBdevNvmeSetHotplug       = "bdev_nvme_set_hotplug"
 	SpdkVmdEnable                = "enable_vmd"
 	SpdkBdevAioCreate            = "bdev_aio_create"
+	SpdkHotplugBusidRange        = "hotplug_busid_range"
 )
 
 // SpdkSubsystemConfigParams is an interface that defines an object that
 // contains details for a subsystem configuration method.
 type SpdkSubsystemConfigParams interface {
 	isSpdkSubsystemConfigParams()
+}
+
+// SpdkDaosConfigParams is an interface that defines an object that
+// contains details for a DAOS configuration method.
+type SpdkDaosConfigParams interface {
+	isSpdkDaosConfigParams()
 }
 
 // SetOptionsParams specifies details for a SpdkBdevSetOptions method.
@@ -87,6 +94,14 @@ type AioCreateParams struct {
 
 func (acp AioCreateParams) isSpdkSubsystemConfigParams() {}
 
+// HotplugBusidRangeParams specifies details for a SpdkHotplugBusidRange method.
+type HotplugBusidRangeParams struct {
+	Begin uint64 `json:"begin"`
+	End   uint64 `json:"end"`
+}
+
+func (hbrp HotplugBusidRangeParams) isSpdkDaosConfigParams() {}
+
 // SpdkSubsystemConfig entries apply to any SpdkSubsystem.
 type SpdkSubsystemConfig struct {
 	Params SpdkSubsystemConfigParams `json:"params"`
@@ -99,9 +114,21 @@ type SpdkSubsystem struct {
 	Configs []*SpdkSubsystemConfig `json:"config"`
 }
 
+// SpdkDaosConfig entries apply to the SpdkDaos entry.
+type SpdkDaosConfig struct {
+	Params SpdkDaosConfigParams `json:"params"`
+	Method string               `json:"method"`
+}
+
+// SpdkDaos entries make up the DaosData field of a SpdkConfig.
+type SpdkDaos struct {
+	Configs []*SpdkDaosConfig `json:"config"`
+}
+
 // SpdkConfig is used to indicate which devices are to be used by SPDK and the
 // desired behavior of SPDK subsystems.
 type SpdkConfig struct {
+	DaosData   *SpdkDaos        `json:"daos_data"`
 	Subsystems []*SpdkSubsystem `json:"subsystems"`
 }
 
@@ -135,7 +162,12 @@ func defaultSpdkConfig() *SpdkConfig {
 		},
 	}
 
+	daosData := &SpdkDaos{
+		Configs: make([]*SpdkDaosConfig, 0),
+	}
+
 	return &SpdkConfig{
+		DaosData:   daosData,
 		Subsystems: subsystems,
 	}
 }
@@ -263,6 +295,14 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 				break
 			}
 		}
+		sc.DaosData.Configs = append(sc.DaosData.Configs, &SpdkDaosConfig{
+			Method: SpdkHotplugBusidRange,
+			Params: HotplugBusidRangeParams{
+				Begin: req.HotplugBusidBegin,
+				End:   req.HotplugBusidEnd,
+			},
+		})
+
 	}
 
 	return sc.WithBdevConfigs(log, req), nil

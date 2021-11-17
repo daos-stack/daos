@@ -37,3 +37,32 @@ func ParsePCIAddress(addr string) (dom, bus, dev, fun uint64, err error) {
 
 	return
 }
+
+// GetRangeLimits takes a string of format <Begin-End> and returns the begin and end values.
+// Number base is detected from the string prefixes e.g. 0x for hexadecimal.
+func GetRangeLimits(numRange string) (begin, end uint64, err error) {
+	if numRange == "" {
+		return
+	}
+
+	split := strings.Split(numRange, "-")
+	if len(split) != 2 {
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
+	}
+
+	begin, err = strconv.ParseUint(split[0], 0, 64)
+	if err != nil {
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+	}
+
+	end, err = strconv.ParseUint(split[1], 0, 64)
+	if err != nil {
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+	}
+
+	if begin > end {
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
+	}
+
+	return
+}
