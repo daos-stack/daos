@@ -1921,6 +1921,47 @@ class posix_tests():
 
         ofd.close()
 
+    def test_cont_ro(self):
+        """Test access to a read-only container"""
+
+        # Update container ACLs so current user has rta permissions only, the minimum required.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'update-acl',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--entry',
+                                      'A::{}@:rta'.format(os.getlogin())])
+        print(rc)
+
+        # Assign the container to someone else.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'set-owner',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--user',
+                                      'root@'])
+        print(rc)
+
+        # Now start dfuse and access the container, this should require read-only opening.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False,
+                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+        dfuse.start(v_hint='cont_ro')
+        print(os.listdir(dfuse.dir))
+
+        try:
+            with open(os.path.join(dfuse.dir, 'testfile'), 'w') as fd:
+                print(fd)
+            assert False
+        except PermissionError:
+            pass
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
     @needs_dfuse
     def test_chmod_ro(self):
         """Test that chmod and fchmod work correctly with files created read-only
