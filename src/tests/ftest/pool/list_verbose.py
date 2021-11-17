@@ -137,11 +137,14 @@ class ListVerboseTest(IorTestBase):
             rank_count (int): Number of ranks that the pool is created on.
         """
         targets = self.params.get("targets", "/run/server_config/*/")
+        self.log.info("rank_count = %d; targets = %d", rank_count, targets)
+
         total_targets = rank_count * targets
         threshold = total_targets * 3999
         diff = actual - created
-        self.log.debug(
-            "## actual = %d; created = %d; diff = %d", actual, created, diff)
+        self.log.info(
+            "actual = %d; created = %d; diff = %d", actual, created, diff)
+
         msg = "Round up amount is too big! Threshold = {}, Diff = {}".format(
             threshold, diff)
         self.assertTrue(diff < threshold, msg)
