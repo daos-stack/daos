@@ -195,6 +195,7 @@ iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns, struct ds_iv_ns **p_ns)
 		if (ns->iv_stop) {
 			D_DEBUG(DB_MD, DF_UUID" stopping\n",
 				DP_UUID(ns->iv_pool_uuid));
+			*p_ns = ns;
 			return -DER_SHUTDOWN;
 		}
 		ds_iv_ns_get(ns);
@@ -628,7 +629,8 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 
 	rc = iv_ns_lookup_by_ivns(ivns, &ns);
 	if (rc != 0) {
-		ds_iv_ns_put(ns); /* balance ivc_on_get */
+		if (ns != NULL)
+			ds_iv_ns_put(ns); /* balance ivc_on_get */
 		return rc;
 	}
 	D_ASSERT(ns != NULL);

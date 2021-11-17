@@ -51,15 +51,22 @@ obj_ioc2ec_ss(struct obj_io_context *ioc)
  * NOT contains the original leader information.
  */
 static int
-obj_gen_dtx_mbs(struct daos_shard_tgt *tgts, bool is_ec, uint32_t *tgt_cnt,
+obj_gen_dtx_mbs(uint32_t flags, uint32_t *tgt_cnt, struct daos_shard_tgt **p_tgts,
 		struct dtx_memberships **p_mbs)
 {
-	struct dtx_memberships	*mbs;
+	struct daos_shard_tgt	*tgts = *p_tgts;
+	struct dtx_memberships	*mbs = NULL;
 	size_t			 size;
 	int			 i;
 	int			 j;
 
 	D_ASSERT(tgts != NULL);
+
+	if (*tgt_cnt == 1 && flags & ORF_CONTAIN_LEADER) {
+		*tgt_cnt = 0;
+		*p_tgts = NULL;
+		goto out;
+	}
 
 	size = sizeof(struct dtx_daos_target) * *tgt_cnt;
 	D_ALLOC(mbs, sizeof(*mbs) + size);
@@ -70,20 +77,32 @@ obj_gen_dtx_mbs(struct daos_shard_tgt *tgts, bool is_ec, uint32_t *tgt_cnt,
 		if (tgts[i].st_rank == DAOS_TGT_IGNORE)
 			continue;
 
+		mbs->dm_tgts[j].ddt_shard = tgts[i].st_shard;
 		mbs->dm_tgts[j++].ddt_id = tgts[i].st_tgt_id;
 	}
 
-	if (j == 0) {
+	if (j == 0 || (j == 1 && flags & ORF_CONTAIN_LEADER)) {
 		D_FREE(mbs);
 		*tgt_cnt = 0;
-	} else {
-		mbs->dm_tgt_cnt = j;
-		mbs->dm_grp_cnt = 1;
-		mbs->dm_data_size = size;
-		if (!is_ec)
-			mbs->dm_flags = DMF_SRDG_REP;
+		*p_tgts = NULL;
+		goto out;
 	}
 
+	mbs->dm_tgt_cnt = j;
+	mbs->dm_grp_cnt = 1;
+	mbs->dm_data_size = size;
+	mbs->dm_flags = DMF_SORTED_SAD_IDX;
+
+	if (flags & ORF_CONTAIN_LEADER) {
+		mbs->dm_flags |= DMF_CONTAIN_LEADER;
+		--(*tgt_cnt);
+		*p_tgts = ++tgts;
+	}
+
+	if (!(flags & ORF_EC))
+		mbs->dm_flags |= DMF_SRDG_REP;
+
+out:
 	*p_mbs = mbs;
 
 	return 0;
@@ -2285,8 +2304,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
 	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(tgts, orw->orw_flags & ORF_EC,
-				     &tgt_cnt, &mbs);
+		rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -2516,8 +2534,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION)
 			dtx_flags = DTX_FOR_MIGRATION;
-		if (orw->orw_flags & ORF_DTX_REFRESH)
-			dtx_flags |= DTX_FORCE_REFRESH;
 
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0, orw->orw_map_ver,
 			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
@@ -2533,8 +2549,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
 	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(tgts, orw->orw_flags & ORF_EC,
-				     &tgt_cnt, &mbs);
+		rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -2579,14 +2594,11 @@ again1:
 	}
 
 again2:
-	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
+	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL && tgt_cnt != 0) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
-					 NULL, 0, &ioc.ioc_oca,
-					 orw->orw_shard_tgts.ca_count,
-					 orw->orw_shard_tgts.ca_arrays,
-					 &split_req);
+					 NULL, 0, &ioc.ioc_oca, tgt_cnt, tgts, &split_req);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": obj_ec_rw_req_split failed, rc %d.\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -2877,8 +2889,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION)
 		flags = DTX_FOR_MIGRATION;
-	if (oei->oei_flags & ORF_DTX_REFRESH)
-		flags |= DTX_FORCE_REFRESH;
 
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,
@@ -3247,8 +3257,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	tgt_cnt = opi->opi_shard_tgts.ca_count;
 
 	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(tgts, opi->opi_flags & ORF_EC,
-				     &tgt_cnt, &mbs);
+		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -3432,8 +3441,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	tgt_cnt = opi->opi_shard_tgts.ca_count;
 
 	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(tgts, opi->opi_flags & ORF_EC,
-				     &tgt_cnt, &mbs);
+		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -4334,7 +4342,8 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 			if (dcde->dcde_write_cnt != 0) {
 				rc = obj_capa_check(ioc->ioc_coh, true, false);
 				if (rc != 0) {
-					comp_cb(dlh, idx, rc);
+					if (comp_cb != NULL)
+						comp_cb(dlh, idx, rc);
 
 					return rc;
 				}
