@@ -729,12 +729,12 @@ dc_array_open(tse_task_t *task)
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
 	if (!args->open_with_attr && otype != DAOS_OT_ARRAY) {
-		D_ERROR("Array Open must have DAOS_OT_ARRAY type (OID type).\n");
+		D_ERROR("Array open must be of DAOS_OT_ARRAY type (OID type).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
-	if (args->open_with_attr && otype != DAOS_OT_ARRAY_BYTE) {
-		D_ERROR("Array open_with_attr must have DAOS_OT_ARRAY_BYTE type"
-			" (OID type).\n");
+	if (args->open_with_attr && otype == DAOS_OT_ARRAY) {
+		D_ERROR("Array open_with_attr must be of DAOS_OT_ARRAY_{BYTE,ATTR} "
+			"type (OID type).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}
 

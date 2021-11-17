@@ -166,7 +166,7 @@ simple_array_mgmt(void **state)
 
 	/** Test the open_with_attr interface */
 
-	/** Open_with_attr with DAOS_OF_ARRAY, should fail */
+	/** Open_with_attr with DAOS_OT_ARRAY, should fail */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 	rc = daos_array_open_with_attr(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
 				       4, chunk_size, &oh, NULL);
