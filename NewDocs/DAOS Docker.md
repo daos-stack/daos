@@ -47,11 +47,6 @@ Once the image has been created, a container will need to be started to run the 
 ### Setting Hugepages (Work in Progress)
 At this stage, depending on how hugepages are configured on your host system, you may get errors when the `docker run` command is issued. So for this demonstration, we will be configuring hugepages before issuing the `docker run` command:
 
-Depending on the CPU involved, the quantity of available1G  hugepages changes, for example.
-- Cascade Lake 16 pages
-- Icelake 64 pages
-- Saphire Rapids 96 pages
-
 In this situation of using a Cascade Lake CPU, the 2mb hugepage capacity at 1024 pages, so we set the hugepages by using the following commands:
 
 ```bash
@@ -75,6 +70,15 @@ Hugetlb:         2097152 kB
 ```
 
 For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages) and the white paper [Intel Architecture Optimization with Large Code Pages](https://www.intel.com/content/dam/develop/external/us/en/documents/runtimeperformanceoptimizationblueprint-largecodepages-q1update.pdf)
+
+### Notes on 1g Huge pages (inclusion TBD)
+Depending on the CPU involved, the quantity of available1G  hugepages changes, for example.
+- Cascade Lake 16 pages
+- Icelake 64 pages
+- Saphire Rapids 96 pages
+
+https://docs.01.org/clearlinux/latest/guides/maintenance/configure-hugepages.html
+
 
 ## Starting the Docker Container
 Now we need to start the docker container by invoking the "docker run" command
