@@ -195,29 +195,6 @@ daos_is_akey_uint64(daos_obj_id_t oid)
 }
 
 static inline bool
-daos_is_flatkv_type(enum daos_otype_t type)
-{
-	switch (type) {
-	case DAOS_OT_KV_HASHED:
-	case DAOS_OT_KV_UINT64:
-	case DAOS_OT_KV_LEXICAL:
-	case DAOS_OT_ARRAY:
-	case DAOS_OT_ARRAY_ATTR:
-	case DAOS_OT_ARRAY_BYTE:
-		return true;
-	default:
-		return false;
-
-	}
-}
-
-static inline bool
-daos_is_flatkv(daos_obj_id_t oid)
-{
-	return daos_is_flatkv_type(daos_obj_id2type(oid));
-}
-
-static inline bool
 daos_is_array_type(enum daos_otype_t type)
 {
 	switch (type) {
