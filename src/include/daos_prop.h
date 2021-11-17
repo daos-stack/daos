@@ -6,6 +6,7 @@
 /**
  * DAOS pool/container initialization properties
  */
+ /** @defgroup PoolContainer DAOS Pool/Container Initialization */
 
 #ifndef __DAOS_PROP_H__
 #define __DAOS_PROP_H__
@@ -16,7 +17,9 @@ extern "C" {
 
 #include <ctype.h>
 #include <daos_types.h>
-
+/** @addtogroup PoolContainer
+ * @{
+ */
 /**
  * DAOS pool property types
  * valid in range (DAOS_PROP_PO_MIN, DAOS_PROP_PO_MAX)
@@ -624,5 +627,6 @@ daos_prop_has_ptr(struct daos_prop_entry *entry);
 #if defined(__cplusplus)
 }
 #endif
-
+/** @}
+ */
 #endif /* __DAOS_PROP_H__ */

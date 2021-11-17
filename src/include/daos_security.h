@@ -9,6 +9,7 @@
  *
  * DAOS API methods for security and access control
  */
+ /** @defgroup Security DAOS Security */
 
 #ifndef __DAOS_SECURITY_H__
 #define __DAOS_SECURITY_H__
@@ -16,7 +17,9 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
+/** @addtogroup Security
+ * @{
+ */
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -628,4 +631,6 @@ daos_acl_to_stream(FILE *stream, struct daos_acl *acl, bool verbose);
 #if defined(__cplusplus)
 }
 #endif
+/** @}
+ */
 #endif /* __DAOS_SECURITY_H__ */

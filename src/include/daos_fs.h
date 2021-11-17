@@ -12,6 +12,7 @@
  * on top of the DAOS API. The namespace is encapsulated under a single DAOS
  * container where directories and files are objects in that container.
  */
+ /** @defgroup Filesystem DAOS Filesystem */
 
 #ifndef __DAOS_FS_H__
 #define __DAOS_FS_H__
@@ -22,7 +23,9 @@ extern "C" {
 
 #include <dirent.h>
 #include <sys/stat.h>
-
+/** @addtogroup Filesystem
+ * @{
+ */
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX
 /** Maximum PATH length */
@@ -937,6 +940,7 @@ dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, dao
 		_ret;							\
 	})
 
-
+/** @}
+ */
 #endif /* __cplusplus */
 #endif /* __DAOS_FS_H__ */

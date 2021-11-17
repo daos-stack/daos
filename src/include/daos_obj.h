@@ -3,13 +3,17 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+  /** @defgroup Object DAOS Object */
+
 #ifndef __DAOS_OBJ_H__
 #define __DAOS_OBJ_H__
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
+/** @addtogroup Object
+ * @{
+ */
 #include <daos_types.h>
 #include <daos_event.h>
 #include <daos_obj_class.h>
@@ -1006,5 +1010,6 @@ daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 #if defined(__cplusplus)
 }
 #endif
-
+/** @}
+ */
 #endif /* __DAOS_OBJ_H__ */

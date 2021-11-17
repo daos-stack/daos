@@ -8,6 +8,7 @@
  *
  * DAOS API methods
  */
+ /** @defgroup Containers DAOS Containers */
 
 #ifndef __DAOS_CONT_H__
 #define __DAOS_CONT_H__
@@ -17,6 +18,9 @@ extern "C" {
 #endif
 
 #include <daos_security.h>
+/** @addtogroup Containers
+ * @{
+ */
 
 /**
  * DAOS_COO_RO opens the container for reading only. This flag conflicts with
@@ -789,4 +793,6 @@ daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_pro
 	})
 
 #endif /* __cplusplus */
+/** @}
+ */
 #endif /* __DAOS_CONT_H__ */

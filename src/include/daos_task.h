@@ -6,6 +6,7 @@
 /**
  * DAOS task-based API
  */
+ /** @defgroup Tasks DAOS Tasks */
 
 #ifndef __DAOS_TASK_H__
 #define __DAOS_TASK_H__
@@ -13,7 +14,9 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
-
+/** @addtogroup Tasks
+ * @{
+ */
 #include <daos_types.h>
 #include <daos_obj.h>
 #include <daos_kv.h>
@@ -1064,5 +1067,6 @@ daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty);
 #if defined(__cplusplus)
 }
 #endif
-
+/** @}
+ */
 #endif /*  __DAOS_TASK_H__ */

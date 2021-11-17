@@ -1,0 +1,77 @@
+var group___obj_class =
+[
+    [ "daos_oclass_attr", "structdaos__oclass__attr.html", [
+      [ "ca_grp_nr", "structdaos__oclass__attr.html#a17e6e44a36d3526b3d40c17410603e8c", null ],
+      [ "ca_resil", "structdaos__oclass__attr.html#a5c04728f0f26559cbbd6e6f451875e36", null ],
+      [ "ca_resil_degree", "structdaos__oclass__attr.html#a6912a44f91a6a741f46917baa388108a", null ],
+      [ "ca_schema", "structdaos__oclass__attr.html#a1787c3ebe216f351cc5e5657df4ed314", null ],
+      [ "e_k", "structdaos__oclass__attr.html#a5cc770c0b4ba4f4dc8a01d554984aca2", null ],
+      [ "e_len", "structdaos__oclass__attr.html#ad2bee4b5d002a0caa45e354df58aacfa", null ],
+      [ "e_p", "structdaos__oclass__attr.html#a270236fe33067544b3302be503bb44df", null ],
+      [ "ec", "structdaos__oclass__attr.html#ab4385be38f8a364661b752d985edc3c7", null ],
+      [ "r_num", "structdaos__oclass__attr.html#a2596b44c5152c9a7a4005a43886b0590", null ],
+      [ "r_proto", "structdaos__oclass__attr.html#aea8e66a3714bc82fb0ad724c71467285", null ],
+      [ "rp", "structdaos__oclass__attr.html#a8c075d16ab2e3d15a9145ab4d09b24aa", null ],
+      [ "u", "structdaos__oclass__attr.html#a89d1859a797591e7d2bcd9bb5be4c8d9", null ]
+    ] ],
+    [ "daos_oclass_list", "structdaos__oclass__list.html", [
+      [ "cl_cattrs", "structdaos__oclass__list.html#a308c28b277e3fdffadc2a423425fb1d1", null ],
+      [ "cl_cids", "structdaos__oclass__list.html#a7b46f661d8c0721149e5e7e9f12db845", null ],
+      [ "cl_nr", "structdaos__oclass__list.html#a07b1e513e7b205f6fe1a3439604da2c2", null ],
+      [ "cl_nr_out", "structdaos__oclass__list.html#a6e14bb7ae93ef111f956cda8200a6c06", null ]
+    ] ],
+    [ "daos_oclass_hints_t", "group___obj_class.html#ga3b8f3311463c936d904f349c817862f1", null ],
+    [ "daos_oclass_id_t", "group___obj_class.html#ga697f542a81cf2b46e3642a31ad289728", null ],
+    [ "daos_ofeat_t", "group___obj_class.html#ga209e09a39a0f553b2c1e9a5f7f558e2e", [
+      [ "OC_BACK_COMPAT", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2dae59effcd6151e65a272be8495ebf9e5a", null ],
+      [ "OC_TINY", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2daf8e0a521e71d2f6b90325a69aae14a0f", null ],
+      [ "OC_SMALL", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da5684520712fd25d2bbd75328744fd8a7", null ],
+      [ "OC_LARGE", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da6f8967535d72885c8d10a9e22f32863e", null ],
+      [ "OC_MAX", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da5cdccc060bb8084089f58a675c9972cf", null ],
+      [ "OC_RP_TINY", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da8b2527a1500b3db2f554fab390878b05", null ],
+      [ "OC_RP_SMALL", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2dac371f932c8f5fd2ea87d9ef3c236cb5e", null ],
+      [ "OC_RP_LARGE", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da4a697c738a66e0d9b62fba07af99f1cf", null ],
+      [ "OC_RP_MAX", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da19b873879fa9293e7a3c90b1764cd5ec", null ],
+      [ "OC_RP_SF_TINY", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da219014c2e153fbc47961b2202c729214", null ],
+      [ "OC_RP_SF_SMALL", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2dab595aeeb2e2a823cdb6a711dd68e9c4c", null ],
+      [ "OC_RP_SF_LARGE", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da59a62418adcc4aae8274940428024e59", null ],
+      [ "OC_RP_SF_MAX", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da3043ba54666f4bdfbe25c8e1b0b86c0b", null ],
+      [ "OC_RP_XSF", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2daf402030cba5682fc25a1a7dd45c5a391", null ],
+      [ "OC_EC_TINY", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2dabd8784a85c393cb330f5a0e41f452f7e", null ],
+      [ "OC_EC_SMALL", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2daf1dfd821f9d8eff615f05f2c69d2ce08", null ],
+      [ "OC_EC_LARGE", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da59d9fadf28fe8698f3cfa4ae93ce272d", null ],
+      [ "OC_EC_MAX", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2dac88dce5b60b1cddc5e793ff69aa27a6f", null ],
+      [ "OC_S1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2daea43d95e3d2481b62ff62cea17e712cc", null ],
+      [ "OC_RP_2G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2dadc3b6be58bd874df06b643fe0f3d5a56", null ],
+      [ "OC_RP_3G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2dab5ede49dc02eb3f37bf3463c50a47fab", null ],
+      [ "OC_RP_4G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da8f7d7dc57d668a5e05baa4abacd05bae", null ],
+      [ "OC_RP_6G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2dab1b2c5874a20f5e311900f48bdf7adaa", null ],
+      [ "OC_RP_8G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da444b32008cb1807f7f34b8b9d8d2e5d6", null ],
+      [ "OC_EC_2P1G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da4fac8fb50a633a2cad1dfbc1815b52b4", null ],
+      [ "OC_EC_2P2G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da6d9391ddb5d947394533b16c92146f00", null ],
+      [ "OC_EC_4P1G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da0a9da19bd29b61bd39b62e1a4ca4d349", null ],
+      [ "OC_EC_4P2G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2daa4497d20f25f706ae526645050faa65a", null ],
+      [ "OC_EC_8P1G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da2d81f8eca8f155dac82900ce02549741", null ],
+      [ "OC_EC_8P2G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2dab6ea6eda07f1ea32854a1fb3cd036e36", null ],
+      [ "OC_EC_16P1G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2daac6c0cb027e93852228de096aca5db31", null ],
+      [ "OC_EC_16P2G1", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da9b1d979966b7c9a1c73e35c9e2dbcefb", null ],
+      [ "OC_RESERVED", "group___obj_class.html#gga0411cd49bb5b71852cecd93bcbf0ca2da8cb2c22a8e074214bc182ade16569231", null ]
+    ] ],
+    [ "daos_obj_resil", "group___obj_class.html#gaca42b0245376dc966f212d5fb3763760", [
+      [ "DAOS_RES_EC", "group___obj_class.html#ggaca42b0245376dc966f212d5fb3763760abc9f861809b7e2219a303ef75a747368", null ],
+      [ "DAOS_RES_REPL", "group___obj_class.html#ggaca42b0245376dc966f212d5fb3763760a00d7ff18cae0d582e71f06b0c74aae1d", null ]
+    ] ],
+    [ "daos_obj_schema", "group___obj_class.html#gac58a276a9d26cdd8aaeacf7fe8efb5ad", [
+      [ "DAOS_OS_SINGLE", "group___obj_class.html#ggac58a276a9d26cdd8aaeacf7fe8efb5ada5b769344addaa37932e3f38aeb17bf00", null ],
+      [ "DAOS_OS_STRIPED", "group___obj_class.html#ggac58a276a9d26cdd8aaeacf7fe8efb5adabe41da26dc75a940996cd8d9b960f061", null ],
+      [ "DAOS_OS_DYN_STRIPED", "group___obj_class.html#ggac58a276a9d26cdd8aaeacf7fe8efb5ada952ea649640f61c24ac523bbfd586538", null ],
+      [ "DAOS_OS_DYN_CHUNKED", "group___obj_class.html#ggac58a276a9d26cdd8aaeacf7fe8efb5adac4d5ebcb662226bc26439a2a93bf3cd4", null ]
+    ] ],
+    [ "daos_obj_list_class", "group___obj_class.html#ga77954593529b4d3b6098044dc9786fcb", null ],
+    [ "daos_obj_query_class", "group___obj_class.html#ga2773bc2f6633b73c15df64d704b7956c", null ],
+    [ "daos_obj_register_class", "group___obj_class.html#ga81d6a5ee3e28b34e9159616f04cb08bb", null ],
+    [ "daos_oclass_id2name", "group___obj_class.html#ga0d3dbc7f891f30178d87b7c1e85afd51", null ],
+    [ "daos_oclass_name2id", "group___obj_class.html#ga24b8c5689d8d76e745febc30318e2557", null ],
+    [ "daos_oclass_names_list", "group___obj_class.html#gab53903c34477f1fda0e7b1d1205357a9", null ],
+    [ "daos_oclass_nr", "group___obj_class.html#ga73ee945bc6bc2fd5d8ca10ee0e22f93a", null ]
+];
