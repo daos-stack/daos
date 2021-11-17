@@ -28,8 +28,9 @@ class EcodFioRebuild(ErasureCodeFio):
         Args:
             rebuild_mode: On-line or off-line rebuild mode
         """
-        # Kill last server rank first
-        self.rank_to_kill = self.server_count - 1
+        # Choose some ranks to kill
+        ranks_to_kill = self.pool.choose_rebuild_ranks(num_ranks=2)
+        self.rank_to_kill = ranks_to_kill[0]
 
         if 'on-line' in rebuild_mode:
             # Enabled on-line rebuild for the test
@@ -44,7 +45,7 @@ class EcodFioRebuild(ErasureCodeFio):
 
         if 'off-line' in rebuild_mode:
             self.server_managers[0].stop_ranks(
-                [self.server_count - 1], self.d_log, force=True)
+                [ranks_to_kill[0]], self.d_log, force=True)
 
         # Read and verify the original data.
         self.fio_cmd._jobs['test'].rw.value = self.read_option
@@ -54,7 +55,7 @@ class EcodFioRebuild(ErasureCodeFio):
         if int(self.container.properties.value.split(":")[1]) == 2:
             self.log.info("RF is 2,So kill another server and verify data")
             # Kill one more server rank
-            self.server_managers[0].stop_ranks([self.server_count - 2],
+            self.server_managers[0].stop_ranks([ranks_to_kill[1]],
                                                self.d_log, force=True)
             # Read and verify the original data.
             self.fio_cmd.run()

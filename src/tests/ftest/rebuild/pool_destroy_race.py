@@ -40,12 +40,14 @@ class RbldPoolDestroyWithIO(IorTestBase):
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*/0/*")
-        rank = self.params.get("rank_to_kill", "/run/testparams/*")
         engines_per_host = self.params.get("engines_per_host",
                                            "/run/server_config/*")
 
         # create pool
         self.create_pool()
+
+        # get a rank to kill
+        rank = self.pool.choose_rebuild_ranks(num_ranks=1)[0]
 
         # make sure pool looks good before we start
         checks = {

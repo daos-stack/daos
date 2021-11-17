@@ -30,11 +30,14 @@ class EcodOfflineRebuildSingle(ErasureCodeSingle):
         :avocado: tags=ec_offline_rebuild_single
 
         """
+        # Get a set of ranks to kill
+        ranks_to_kill = self.pool.choose_rebuild_ranks(num_ranks=2)
+
         # Write single type data set with all the EC object type
         self.write_single_type_dataset()
 
-        # Kill the last server rank
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
+        # Kill a server rank
+        self.server_managers[0].stop_ranks([ranks_to_kill[0]], self.d_log,
                                            force=True)
 
         # Wait for rebuild to complete
@@ -43,8 +46,8 @@ class EcodOfflineRebuildSingle(ErasureCodeSingle):
         # Read data set and verify for different EC object for parity 1 and 2.
         self.read_single_type_dataset()
 
-        # Kill the another server rank
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
+        # Kill another server rank
+        self.server_managers[0].stop_ranks([ranks_to_kill[1]], self.d_log,
                                            force=True)
 
         # Wait for rebuild to complete

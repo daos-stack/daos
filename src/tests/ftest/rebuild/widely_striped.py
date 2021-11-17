@@ -51,11 +51,13 @@ class RbldWidelyStriped(MdtestBase):
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
-        rank = self.params.get("rank_to_kill", "/run/testparams/*")
         self.dmg = self.get_dmg_command()
 
         # create pool
         self.add_pool(connect=False)
+
+        # choose 4 ranks
+        ranks = self.pool.choose_rebuild_ranks(num_ranks=4)
 
         # make sure pool looks good before we start
         checks = {
@@ -77,8 +79,8 @@ class RbldWidelyStriped(MdtestBase):
         self.add_container(self.pool)
         # start 1st mdtest run and let it complete
         self.execute_mdtest()
-        # Kill rank[6] and wait for rebuild to complete
-        self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
+        # Kill a rank and wait for rebuild to complete
+        self.server_managers[0].stop_ranks([ranks[0]], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
 
         # create 2nd container
@@ -88,9 +90,9 @@ class RbldWidelyStriped(MdtestBase):
         thread.start()
         time.sleep(3)
 
-        # Kill rank[5] in the middle of mdtest run and
+        # Kill another rank in the middle of mdtest run and
         # wait for rebuild to complete
-        self.server_managers[0].stop_ranks([rank[1]], self.d_log, force=True)
+        self.server_managers[0].stop_ranks([ranks[1]], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
         # wait for mdtest to complete
         thread.join()
@@ -103,8 +105,8 @@ class RbldWidelyStriped(MdtestBase):
         thread.start()
         time.sleep(3)
 
-        # Kill 2 server ranks [3,4]
-        self.server_managers[0].stop_ranks(rank[2], self.d_log, force=True)
+        # Kill 2 more ranks
+        self.server_managers[0].stop_ranks(ranks[2:3], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
         # wait for mdtest to complete
         thread.join()

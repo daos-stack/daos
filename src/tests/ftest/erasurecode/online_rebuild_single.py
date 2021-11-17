@@ -36,8 +36,9 @@ class EcodOnlineRebuildSingle(ErasureCodeSingle):
         :avocado: tags=ec,ec_single,ec_online_rebuild,rebuild
         :avocado: tags=ec_online_rebuild_single
         """
-        # Kill last server rank
-        self.rank_to_kill = self.server_count - 1
+        # Get non-svc ranks to kill
+        ranks_to_kill = self.pool.choose_rebuild_ranks(num_ranks=2)
+        self.rank_to_kill = ranks_to_kill[0]
 
         # Run only object type which matches the server count and
         # remove other objects
@@ -59,7 +60,7 @@ class EcodOnlineRebuildSingle(ErasureCodeSingle):
         # Enabled Online rebuild during Read phase
         self.set_online_rebuild = True
         # Kill another server rank
-        self.rank_to_kill = self.server_count - 2
+        self.rank_to_kill = ranks_to_kill[1]
         # Read data and verify while another server being killed during read
         # EC data was written with +2 parity so after killing Two servers data
         # should be intact and no data corruption observed.

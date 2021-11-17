@@ -40,6 +40,5 @@ ior:
         write_flg: "-C -k -e -w -g -G 27 -D 300 -Q 1 -vv"
         read_flg: "-C -k -e -r -R -g -G 27 -D 300 -Q 1 -vv"
     transfer_blk_size_rebld:
-        rank_to_kill: 3
         transfer_size: '1M'
         block_size: '64M'

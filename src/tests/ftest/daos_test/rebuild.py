@@ -226,7 +226,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         """Jira ID: DAOS-2770
 
         Test Description:
-            Run daos_test -r -s3 -u subtests=27
+            Run daos_test -r -s7 -u subtests=27
 
         Use cases:
             Core tests for daos_test rebuild

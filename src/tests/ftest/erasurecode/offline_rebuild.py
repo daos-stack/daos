@@ -29,11 +29,14 @@ class EcodOfflineRebuild(ErasureCodeIor):
         :avocado: tags=ec_offline_rebuild_array
 
         """
+        # Get a set of ranks to kill
+        ranks_to_kill = self.pool.choose_rebuild_ranks(num_ranks=2)
+
         # Write IOR data set with different EC object and different sizes
         self.ior_write_dataset()
 
-        # Kill the last server rank
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
+        # Kill a server rank
+        self.server_managers[0].stop_ranks([ranks_to_kill[0]], self.d_log,
                                            force=True)
 
         # Wait for rebuild to complete
@@ -43,8 +46,8 @@ class EcodOfflineRebuild(ErasureCodeIor):
         # written before killing the single server
         self.ior_read_dataset()
 
-        # Kill the another server rank
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
+        # Kill another server rank
+        self.server_managers[0].stop_ranks([ranks_to_kill[1]], self.d_log,
                                            force=True)
 
         # Wait for rebuild to complete

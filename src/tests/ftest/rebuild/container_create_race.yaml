@@ -13,9 +13,6 @@ server_config:
   name: daos_server
   servers:
     targets: 2
-testparams:
-  ranks:
-    rank_to_kill: 3
 pool:
   mode: 146
   name: daos_server

@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
+from general_utils import convert_list
 
 
 class DestroyRebuild(TestWithServers):
@@ -15,9 +16,6 @@ class DestroyRebuild(TestWithServers):
 
     :avocado: recursive
     """
-
-    # also remove the commented line form yaml file for rank 0
-    CANCEL_FOR_TICKET = [["DAOS-4891", "rank_to_kill", "[0]"]]
 
     def test_destroy_while_rebuilding(self):
         """Jira ID: DAOS-xxxx.
@@ -35,10 +33,12 @@ class DestroyRebuild(TestWithServers):
         """
         # Get the test parameters
         targets = self.params.get("targets", "/run/server_config/servers/*")
-        ranks = self.params.get("rank_to_kill", "/run/testparams/*")
 
         # Create a pool
         self.add_pool()
+
+        # kill 2 ranks, including 1 svc rank
+        ranks = self.pool.choose_rebuild_ranks(num_ranks=2, num_svc=1)
 
         # Verify the pool information before starting rebuild
         checks = {
@@ -58,5 +58,5 @@ class DestroyRebuild(TestWithServers):
         self.pool.destroy()
 
         self.log.info("Test Passed")
-        self.get_dmg_command().system_start(",".join(ranks))
-        self.server_managers[0].update_expected_states(",".join(ranks), ["joined"])
+        self.get_dmg_command().system_start(convert_list(ranks))
+        self.server_managers[0].update_expected_states(ranks, ["joined"])

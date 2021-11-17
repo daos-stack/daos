@@ -29,6 +29,9 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
         :avocado: tags=ec_disabled_rebuild_single
 
         """
+        # Choose some ranks to kill
+        ranks_to_kill = self.pool.choose_rebuild_ranks(num_ranks=2)
+
         # Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")
 
@@ -38,10 +41,10 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
         # Read data set with given all the EC object type
         self.read_single_type_dataset()
 
-        # Kill the last server rank and wait for 20 seconds,
+        # Kill a server rank and wait for 20 seconds,
         # Rebuild is disabled so data will not be rebuild.
         self.server_managers[0].stop_ranks(
-            [self.server_count - 1], self.d_log, force=True)
+            [ranks_to_kill[0]], self.d_log, force=True)
         time.sleep(20)
 
         # Read data set and verify for different EC object for parity 1 and 2.
@@ -50,7 +53,7 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
         # Kill another server rank and wait for 20 seconds,
         # Rebuild is disabled so data will not be rebuild.
         self.server_managers[0].stop_ranks(
-            [self.server_count - 2], self.d_log, force=True)
+            [ranks_to_kill[1]], self.d_log, force=True)
         time.sleep(20)
 
         # Read data set and verify for different EC object for 2 only.

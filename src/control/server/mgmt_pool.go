@@ -316,7 +316,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		if len(req.GetRanks()) < DefaultPoolServiceReps {
 			req.Numsvcreps = 1
 		}
-	} else if req.GetNumsvcreps() > maxSvcReps {
+	} else if req.GetNumsvcreps() > maxSvcReps || req.GetNumsvcreps()%2 == 0 {
 		return nil, FaultPoolInvalidServiceReps(maxSvcReps)
 	}
 

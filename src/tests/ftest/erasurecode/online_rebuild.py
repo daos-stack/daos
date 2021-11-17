@@ -33,8 +33,9 @@ class EcodOnlineRebuild(ErasureCodeIor):
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild
         :avocado: tags=ec_online_rebuild_array
         """
-        # Kill last server rank
-        self.rank_to_kill = self.server_count - 1
+        # Choose some ranks to kill
+        ranks_to_kill = self.pool.choose_rebuild_ranks(num_ranks=2)
+        self.rank_to_kill = ranks_to_kill[0]
 
         # Run only object type which matches the server count and
         # remove other objects
@@ -57,7 +58,7 @@ class EcodOnlineRebuild(ErasureCodeIor):
         # Enabled Online rebuild during Read phase
         self.set_online_rebuild = True
         # Kill another server rank
-        self.rank_to_kill = self.server_count - 2
+        self.rank_to_kill = ranks_to_kill[1]
         # Read IOR data and verify for EC object again
         # EC data was written with +2 parity so after killing Two servers data
         # should be intact and no data corruption observed.

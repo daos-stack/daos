@@ -1162,10 +1162,10 @@ rebuild_fail_all_replicas(void **state)
 	int		i;
 
 	/* This test will kill 3 replicas, which might include the ranks
-	 * in svcs, so make sure there are at least 6 ranks in svc, so
+	 * in svcs, so make sure there are at least 7 ranks in svc, so
 	 * the new leader can be chosen.
 	 */
-	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 6) {
+	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 7) {
 		print_message("need at least 6 svcs, -s6\n");
 		return;
 	}

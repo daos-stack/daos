@@ -47,5 +47,3 @@ pool:
   pool_query_interval: 1
   test_data_list: [1048576]
   oclass: "OC_RP_2G1"
-rebuild:
-  rank_to_kill: 1

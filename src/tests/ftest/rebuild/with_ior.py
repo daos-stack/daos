@@ -46,11 +46,12 @@ class RbldWithIOR(IorTestBase):
                                         "/run/ior/transfer_blk_size_rebld/*")
         block_size = self.params.get("block_size",
                                      "/run/ior/transfer_blk_size_rebld/*")
-        rank = self.params.get("rank_to_kill",
-                               "/run/ior/transfer_blk_size_rebld/*")
 
         # create pool
         self.create_pool()
+
+        # choose a non-svc rank to kill
+        rank = self.pool.choose_rebuild_ranks(num_ranks=1)[0]
 
         # make sure pool looks good before we start
         checks = {

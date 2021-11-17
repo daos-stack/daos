@@ -29,6 +29,9 @@ class EcodDisabledRebuild(ErasureCodeIor):
         :avocado: tags=ec_disabled_rebuild_array
 
         """
+        # Choose some ranks to kill
+        ranks_to_kill = self.pool.choose_rebuild_ranks(num_ranks=2)
+
         # Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")
         # self.pool.set_property("reclaim", "disabled")
@@ -40,9 +43,9 @@ class EcodDisabledRebuild(ErasureCodeIor):
         if not any(check_aggregation_status(self.pool).values()):
             self.fail("Aggregation failed to start..")
 
-        # Kill the last server rank and wait for 20 seconds, Rebuild is disabled
+        # Kill a server rank and wait for 20 seconds, Rebuild is disabled
         # so data should not be rebuild
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
+        self.server_managers[0].stop_ranks([ranks_to_kill[0]], self.d_log,
                                            force=True)
         time.sleep(20)
 
@@ -50,9 +53,9 @@ class EcodDisabledRebuild(ErasureCodeIor):
         # written before killing the single server
         self.ior_read_dataset()
 
-        # Kill the another server rank and wait for 20 seconds,Rebuild will
+        # Kill another server rank and wait for 20 seconds,Rebuild will
         # not happens because i's disabled.Read/verify data with Parity 2.
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
+        self.server_managers[0].stop_ranks([ranks_to_kill[1]], self.d_log,
                                            force=True)
         time.sleep(20)
 

@@ -18,15 +18,15 @@ class RbldContainerCreate(IorTestBase):
     :avocado: recursive
     """
 
-    def add_containers_during_rebuild(self, qty=10, index=-1):
+    def add_containers_during_rebuild(self, rank, qty=10, index=-1):
         """Add containers to a pool while rebuild is still in progress.
         Args:
+            rank (int): rank to write objects to
             qty (int, optional): the number of containers to create
             index (int, optional): the container index to perform write
                 during rebuild
 
         """
-        rank = self.params.get("rank_to_kill", "/run/testparams/*")
         object_qty = self.params.get("object_qty", "/run/io/*")
         record_qty = self.params.get("record_qty", "/run/io/*")
         data_size = self.params.get("data_size", "/run/io/*")
@@ -96,13 +96,15 @@ class RbldContainerCreate(IorTestBase):
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
-        rank = self.params.get("rank_to_kill", "/run/testparams/*")
         ior_loop = self.params.get("ior_test_loop", "/run/ior/*")
         cont_qty = self.params.get("cont_qty", "/run/io/*")
         node_qty = len(self.hostlist_servers)
 
         # create pool
         self.create_pool()
+
+        # choose a rank to kill
+        rank = self.pool.choose_rebuild_ranks(num_ranks=1)[0]
 
         # make sure pool looks good before we start
         info_checks = {
@@ -141,7 +143,7 @@ class RbldContainerCreate(IorTestBase):
 
         # Race condition, create containers write and read during rebuild.
         self.log.info("..(4)Create containers, write/read during rebuild")
-        self.add_containers_during_rebuild(qty=cont_qty)
+        self.add_containers_during_rebuild(rank, qty=cont_qty)
         self.access_container()
 
         # Wait for rebuild to complete.

@@ -42,8 +42,11 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         # Read IOR data and verify content
         self.ior_read_dataset()
 
+        # Choose some ranks to kill
+        ranks_to_kill = self.pool.choose_rebuild_ranks(num_ranks=2)
+
         # Kill the last server rank
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
+        self.server_managers[0].stop_ranks([ranks_to_kill[0]], self.d_log,
                                            force=True)
 
         # Wait for rebuild to complete
@@ -54,7 +57,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         self.ior_read_dataset()
 
         # Kill the another server rank
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
+        self.server_managers[0].stop_ranks([ranks_to_kill[1]], self.d_log,
                                            force=True)
 
         # Wait for rebuild to complete
@@ -130,6 +133,9 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
         :avocado: tags=ec_offline_agg_during_rebuild
         """
+        # Choose some ranks to kill
+        ranks_to_kill = self.pool.choose_rebuild_ranks(num_ranks=2)
+
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
         self.pool.connect()
@@ -144,9 +150,9 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         self.pool.set_property("reclaim", "time")
 
         # Aggregation will start in 20 seconds after it sets to time mode.
-        # So wait for 20 seconds and kill the last server rank
+        # So wait for 20 seconds and kill a server rank
         time.sleep(20)
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
+        self.server_managers[0].stop_ranks([ranks_to_kill[0]], self.d_log,
                                            force=True)
 
         # Verify if Aggregation is getting started
@@ -160,8 +166,8 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         # written before killing the single server
         self.ior_read_dataset()
 
-        # Kill the another server rank
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
+        # Kill another server rank
+        self.server_managers[0].stop_ranks([ranks_to_kill[1]], self.d_log,
                                            force=True)
 
         # Wait for rebuild to complete

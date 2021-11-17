@@ -36,8 +36,8 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
         :avocado: tags=ec,ec_array,mdtest,ec_online_rebuild
         :avocado: tags=ec_online_rebuild_array,ec_online_rebuild_mdtest
         """
-        # Kill last server rank
-        self.rank_to_kill = self.server_count - 1
+        # Kill a non-svc rank
+        self.rank_to_kill = self.pool.choose_rebuild_ranks(num_ranks=1)[0]
 
         # Run only object type which matches the server count and
         # remove other objects
