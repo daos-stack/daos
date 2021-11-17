@@ -1535,7 +1535,7 @@ run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(ec_tests);
 		sub_tests = NULL;
@@ -1545,7 +1545,7 @@ run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 				sub_tests, sub_tests_size, ec_setup,
 				test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 
 	return rc;
 }

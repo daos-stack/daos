@@ -664,9 +664,9 @@ main(int argc, char **argv)
 	ts_dkey_prefix = PF_DKEY_PREF;
 	ts_flags = 0;
 
-	MPI_Init(&argc, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
+	par_init(&argc, &argv);
+	par_rank(&ts_ctx.tsc_mpi_rank);
+	par_size(&ts_ctx.tsc_mpi_size);
 
 	rc = perf_alloc_opts(perf_vos_opts, ARRAY_SIZE(perf_vos_opts),
 			     perf_vos_optstr, &ts_opts, &ts_optstr);
@@ -752,7 +752,8 @@ main(int argc, char **argv)
 
 		snprintf(id, sizeof(id), "%d", ts_ctx.tsc_mpi_rank);
 		strncat(ts_pmem_file, id,
-			(sizeof(ts_pmem_file) - strlen(ts_pmem_file)));
+			(sizeof(ts_pmem_file) - strlen(ts_pmem_file) - 1));
+		ts_pmem_file[PATH_MAX - 1] = 0;
 	}
 	ts_ctx.tsc_pmem_file = ts_pmem_file;
 
@@ -840,7 +841,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 
 	rc = run_commands(cmds, pf_tests);
 
@@ -852,7 +853,7 @@ main(int argc, char **argv)
 	stride_buf_fini();
 	dts_ctx_fini(&ts_ctx);
 
-	MPI_Finalize();
+	par_fini();
 
 	if (ts_uoids)
 		free(ts_uoids);
