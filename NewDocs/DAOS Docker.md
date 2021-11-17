@@ -71,13 +71,12 @@ Hugetlb:         2097152 kB
 
 For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages) and the white paper [Intel Architecture Optimization with Large Code Pages](https://www.intel.com/content/dam/develop/external/us/en/documents/runtimeperformanceoptimizationblueprint-largecodepages-q1update.pdf)
 
-### Notes on 1g Huge pages (inclusion TBD)
-Depending on the CPU involved, the quantity of available1G  hugepages changes, for example.
-- Cascade Lake 16 pages
-- Icelake 64 pages
-- Saphire Rapids 96 pages
-
-https://docs.01.org/clearlinux/latest/guides/maintenance/configure-hugepages.html
+> Notes on 1g Huge pages (inclusion TBD)
+> Depending on the CPU involved, the quantity of available1G  hugepages changes, for example.
+> - Cascade Lake 16 pages
+> - Icelake 64 pages
+>- Saphire Rapids 96 pages
+> https://docs.01.org/clearlinux/latest/guides/maintenance/configure-hugepages.html
 
 
 ## Starting the Docker Container
