@@ -54,7 +54,7 @@ echo 1024 | sudo tee /proc/sys/VM/nr_hugepages
 cat /proc/meminfo | grep Huge
 ```
 
-This command should provide an output similar to:
+The "cat" command should provide an output similar to:
 
 ```bash
 AnonHugePages:         0 kB
