@@ -135,7 +135,6 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	/* Insert the initial free extent */
 	free_ext.vfe_blk_off = hdr_blks;
 	free_ext.vfe_blk_cnt = tot_blks;
-	free_ext.vfe_flags = 0;
 	free_ext.vfe_age = VEA_EXT_AGE_MAX;
 
 	d_iov_set(&key, &free_ext.vfe_blk_off,
@@ -370,17 +369,14 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	struct vea_free_extent vfe = {0};
 	uint64_t		 seq_max = 0, seq_min = 0;
 	uint64_t		 off_c = 0, off_p = 0;
-	uint64_t		 cur_time;
+	uint32_t		 cur_age;
 	unsigned int		 seq_cnt = 0;
 	int			 rc = 0;
 
 	if (d_list_empty(resrvd_list))
 		return 0;
 
-	rc = daos_gettime_coarse(&cur_time);
-	if (rc)
-		return rc;
-
+	cur_age = get_current_age();
 	vfe.vfe_blk_off = 0;
 	vfe.vfe_blk_cnt = 0;
 
@@ -407,7 +403,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		}
 
 		if (vfe.vfe_blk_cnt != 0) {
-			vfe.vfe_age = cur_time;
+			vfe.vfe_age = cur_age;
 			rc = publish ? persistent_alloc(vsi, &vfe) :
 				       compound_free(vsi, &vfe, 0);
 			if (rc)
@@ -419,7 +415,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	}
 
 	if (vfe.vfe_blk_cnt != 0) {
-		vfe.vfe_age = cur_time;
+		vfe.vfe_age = cur_age;
 		rc = publish ? persistent_alloc(vsi, &vfe) :
 			       compound_free(vsi, &vfe, 0);
 		if (rc)
