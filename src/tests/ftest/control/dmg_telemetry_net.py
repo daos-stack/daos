@@ -37,7 +37,7 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
           * Ensure engine_net_ofi_sockets_req_timeout is greater than 0.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=control,telemetry,net
         :avocado: tags=test_with_telemetry_net,test_net_telemetry
         """
@@ -109,3 +109,6 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
                           "is: {}.".format(str(metrics[0]), str(req_timeouts)))
         else:
             self.fail("Expected {} to be greater than 0.".format(str(metrics[0])))
+
+        # wait for mdtest to complete
+        thread.join()
