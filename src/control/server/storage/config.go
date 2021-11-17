@@ -53,8 +53,8 @@ func (c *Class) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func (s Class) String() string {
-	return string(s)
+func (c Class) String() string {
+	return string(c)
 }
 
 // Class type definitions.
@@ -78,8 +78,8 @@ func NewTierConfig() *TierConfig {
 	return new(TierConfig)
 }
 
-func (c *TierConfig) IsSCM() bool {
-	switch c.Class {
+func (tc *TierConfig) IsSCM() bool {
+	switch tc.Class {
 	case ClassDcpm, ClassRam:
 		return true
 	default:
@@ -87,8 +87,8 @@ func (c *TierConfig) IsSCM() bool {
 	}
 }
 
-func (c *TierConfig) IsBdev() bool {
-	switch c.Class {
+func (tc *TierConfig) IsBdev() bool {
+	switch tc.Class {
 	case ClassNvme, ClassFile, ClassKdev:
 		return true
 	default:
@@ -96,149 +96,119 @@ func (c *TierConfig) IsBdev() bool {
 	}
 }
 
-func (c *TierConfig) Validate() error {
-	if c.IsSCM() {
-		return c.Scm.Validate(c.Class)
+func (tc *TierConfig) Validate() error {
+	if tc.IsSCM() {
+		return tc.Scm.Validate(tc.Class)
 	}
-	if c.IsBdev() {
-		return c.Bdev.Validate(c.Class)
+	if tc.IsBdev() {
+		return tc.Bdev.Validate(tc.Class)
 	}
 
 	return errors.New("no storage class set")
 }
 
-func (c *TierConfig) WithTier(tier int) *TierConfig {
-	c.Tier = tier
-	return c
+func (tc *TierConfig) WithTier(tier int) *TierConfig {
+	tc.Tier = tier
+	return tc
 }
 
 // WithScmClass defines the type of SCM storage to be configured.
-func (c *TierConfig) WithScmClass(scmClass string) *TierConfig {
-	c.Class = Class(scmClass)
-	return c
+func (tc *TierConfig) WithScmClass(scmClass string) *TierConfig {
+	tc.Class = Class(scmClass)
+	return tc
 }
 
 // WithScmMountPoint sets the path to the device used for SCM storage.
-func (c *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
-	c.Scm.MountPoint = scmPath
-	return c
+func (tc *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
+	tc.Scm.MountPoint = scmPath
+	return tc
 }
 
 // WithScmRamdiskSize sets the size (in GB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
-func (c *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
-	c.Scm.RamdiskSize = size
-	return c
+func (tc *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
+	tc.Scm.RamdiskSize = size
+	return tc
 }
 
 // WithScmDeviceList sets the list of devices to be used for SCM storage.
-func (c *TierConfig) WithScmDeviceList(devices ...string) *TierConfig {
-	c.Scm.DeviceList = devices
-	return c
+func (tc *TierConfig) WithScmDeviceList(devices ...string) *TierConfig {
+	tc.Scm.DeviceList = devices
+	return tc
 }
 
 // WithBdevClass defines the type of block device storage to be used.
-func (c *TierConfig) WithBdevClass(bdevClass string) *TierConfig {
-	c.Class = Class(bdevClass)
-	return c
+func (tc *TierConfig) WithBdevClass(bdevClass string) *TierConfig {
+	tc.Class = Class(bdevClass)
+	return tc
 }
 
 // WithBdevDeviceList sets the list of block devices to be used.
-func (c *TierConfig) WithBdevDeviceList(devices ...string) *TierConfig {
-	c.Bdev.DeviceList = devices
-	return c
+func (tc *TierConfig) WithBdevDeviceList(devices ...string) *TierConfig {
+	tc.Bdev.DeviceList = devices
+	return tc
 }
 
 // WithBdevDeviceCount sets the number of devices to be created when BdevClass is malloc.
-func (c *TierConfig) WithBdevDeviceCount(count int) *TierConfig {
-	c.Bdev.DeviceCount = count
-	return c
+func (tc *TierConfig) WithBdevDeviceCount(count int) *TierConfig {
+	tc.Bdev.DeviceCount = count
+	return tc
 }
 
 // WithBdevFileSize sets the backing file size (used when BdevClass is malloc or file).
-func (c *TierConfig) WithBdevFileSize(size int) *TierConfig {
-	c.Bdev.FileSize = size
-	return c
+func (tc *TierConfig) WithBdevFileSize(size int) *TierConfig {
+	tc.Bdev.FileSize = size
+	return tc
+}
+
+// WithBdevBusidRange sets the bus-ID range to be used to filter hot plug events.
+func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
+	tc.Bdev.BusidRange = rangeStr
+	return tc
 }
 
 type TierConfigs []*TierConfig
 
-func (sc *Config) Validate() error {
-	if err := sc.Tiers.Validate(); err != nil {
-		return errors.Wrap(err, "storage config validation failed")
-	}
-
-	var pruned TierConfigs
-	for _, tier := range sc.Tiers {
-		if tier.IsBdev() && len(tier.Bdev.DeviceList) == 0 {
-			continue // prune empty bdev tier
-		}
-		pruned = append(pruned, tier)
-	}
-	sc.Tiers = pruned
-
-	scmCfgs := sc.Tiers.ScmConfigs()
-	bdevCfgs := sc.Tiers.BdevConfigs()
-
-	if len(scmCfgs) == 0 {
-		return errors.New("missing scm storage tier in config")
-	}
-
-	// set persistent location for engine bdev config file to be consumed by
-	// provider backend, set to empty when no devices specified
-	sc.ConfigOutputPath = ""
-	if len(bdevCfgs) > 0 {
-		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
-
-		switch bdevCfgs[0].Class {
-		case ClassFile, ClassKdev:
-			sc.VosEnv = "AIO"
-		case ClassNvme:
-			sc.VosEnv = "NVME"
-		}
-	}
-
-	return nil
-}
-
-func (c TierConfigs) CfgHasBdevs() bool {
-	for _, bc := range c.BdevConfigs() {
+func (tcs TierConfigs) CfgHasBdevs() bool {
+	for _, bc := range tcs.BdevConfigs() {
 		if len(bc.Bdev.DeviceList) > 0 {
 			return true
 		}
 	}
+
 	return false
 }
 
-func (c TierConfigs) Validate() error {
-	for _, cfg := range c {
+func (tcs TierConfigs) Validate() error {
+	for _, cfg := range tcs {
 		if err := cfg.Validate(); err != nil {
 			return errors.Wrapf(err, "tier %d failed validation", cfg.Tier)
 		}
 	}
-
 	return nil
 }
 
-func (c TierConfigs) ScmConfigs() (out []*TierConfig) {
-	for _, cfg := range c {
+func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
+	for _, cfg := range tcs {
 		if cfg.IsSCM() {
 			out = append(out, cfg)
 		}
 	}
+
 	return
 }
 
-func (c TierConfigs) BdevConfigs() (out []*TierConfig) {
-	for _, cfg := range c {
+func (tcs TierConfigs) BdevConfigs() (out []*TierConfig) {
+	for _, cfg := range tcs {
 		if cfg.IsBdev() {
 			out = append(out, cfg)
 		}
 	}
+
 	return
 }
 
-func (c *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var tmp []*TierConfig
 	if err := unmarshal(&tmp); err != nil {
 		return err
@@ -249,7 +219,7 @@ func (c *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			tmp[i].Tier = i
 		}
 	}
-	*c = tmp
+	*tcs = tmp
 
 	return nil
 }
@@ -295,6 +265,7 @@ type BdevConfig struct {
 	DeviceList  []string `yaml:"bdev_list,omitempty"`
 	DeviceCount int      `yaml:"bdev_number,omitempty"`
 	FileSize    int      `yaml:"bdev_size,omitempty"`
+	BusidRange  string   `yaml:"bdev_busid_range,omitempty"`
 }
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
@@ -352,4 +323,55 @@ type Config struct {
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	EnableHotplug    bool        `yaml:"-"`
+}
+
+func (c *Config) Validate() error {
+	if err := c.Tiers.Validate(); err != nil {
+		return errors.Wrap(err, "storage config validation failed")
+	}
+
+	var pruned TierConfigs
+	for _, tier := range c.Tiers {
+		if tier.IsBdev() && len(tier.Bdev.DeviceList) == 0 {
+			continue // prune empty bdev tier
+		}
+		pruned = append(pruned, tier)
+	}
+	c.Tiers = pruned
+
+	scmCfgs := c.Tiers.ScmConfigs()
+	bdevCfgs := c.Tiers.BdevConfigs()
+
+	if len(scmCfgs) == 0 {
+		return errors.New("missing scm storage tier in config")
+	}
+
+	// set persistent location for engine bdev config file to be consumed by provider
+	// backend, set to empty when no devices specified
+	if len(bdevCfgs) == 0 {
+		c.ConfigOutputPath = ""
+		return nil
+	}
+	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
+	fbc := bdevCfgs[0]
+
+	// set vos environment variable based on class of first bdev config
+	if fbc.Class == ClassFile || fbc.Class == ClassKdev {
+		c.VosEnv = "AIO"
+		return nil
+	}
+
+	if fbc.Class != ClassNvme {
+		return nil
+	}
+
+	c.VosEnv = "NVME"
+
+	// if the first bdev config is of class nvme, validate bus-id range params
+	if _, _, err := common.GetRangeLimits(fbc.Bdev.BusidRange); err != nil {
+		return errors.Wrap(err, "parse busid range limits")
+	}
+
+	return nil
 }

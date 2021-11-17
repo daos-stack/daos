@@ -21,7 +21,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -254,7 +253,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithScmRamdiskSize(16),
 				storage.NewTierConfig().
 					WithBdevClass("nvme").
-					WithBdevDeviceList("0000:81:00.0"),
+					WithBdevDeviceList("0000:81:00.0").
+					WithBdevBusidRange("0x80-0x8f"),
 			).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
@@ -282,7 +282,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithBdevClass("file").
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-					WithBdevFileSize(16),
+					WithBdevFileSize(16).
+					WithBdevBusidRange("0xd0-0xdf"),
 			).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
@@ -565,7 +566,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 
 		lcp := strings.Split(legacyConfig, "/")
 		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
-		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
+		if err := CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
 			return nil, err
 		}
 
@@ -1020,7 +1021,7 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 
 			cfg.SaveActiveConfig(log)
 
-			common.AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
+			AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
 				fmt.Sprintf("expected %q in %q", tc.expLogOut, buf.String()))
 		})
 	}

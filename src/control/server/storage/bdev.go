@@ -337,14 +337,16 @@ type (
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
 	BdevWriteConfigRequest struct {
 		pbin.ForwardableRequest
-		ConfigOutputPath string
-		OwnerUID         int
-		OwnerGID         int
-		TierProps        []BdevTierProperties
-		VMDEnabled       bool
-		HotplugEnabled   bool
-		Hostname         string
-		BdevCache        *BdevScanResponse
+		ConfigOutputPath  string
+		OwnerUID          int
+		OwnerGID          int
+		TierProps         []BdevTierProperties
+		VMDEnabled        bool
+		HotplugEnabled    bool
+		HotplugBusidBegin uint64
+		HotplugBusidEnd   uint64
+		Hostname          string
+		BdevCache         *BdevScanResponse
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.

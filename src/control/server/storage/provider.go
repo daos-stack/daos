@@ -14,6 +14,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
@@ -325,9 +326,19 @@ func BdevWriteConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWrit
 
 	bdevTiers := cfg.Tiers.BdevConfigs()
 	req.TierProps = make([]BdevTierProperties, 0, len(bdevTiers))
-	for _, tier := range bdevTiers {
-		tierProps := BdevTierPropertiesFromConfig(tier)
-		req.TierProps = append(req.TierProps, tierProps)
+	for idx, tier := range bdevTiers {
+		req.TierProps = append(req.TierProps, BdevTierPropertiesFromConfig(tier))
+
+		// populate hotplug bus-ID range limits from the first bdev tier
+		// to limit hotplug activity of a specific engine to a ssd device set
+		if req.HotplugEnabled && idx == 0 {
+			begin, end, err := common.GetRangeLimits(tier.Bdev.BusidRange)
+			if err != nil {
+				return req, errors.Wrap(err, "parse busid range limits")
+			}
+			req.HotplugBusidBegin = begin
+			req.HotplugBusidEnd = end
+		}
 	}
 
 	return req, nil

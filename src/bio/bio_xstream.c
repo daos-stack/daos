@@ -106,13 +106,13 @@ hotplug_filter_fn(const struct spdk_pci_addr *addr)
 {
 	char		traddr[128];
 	uint64_t	busid;
-	uint64_t	start;
+	uint64_t	begin;
 	uint64_t	end;
 
-	start = bio_hotplug_busid_range.start;
+	begin = bio_hotplug_busid_range.begin;
 	end = bio_hotplug_busid_range.end;
 
-	if ((end == 0) || (start > end))
+	if ((end == 0) || (begin > end))
 		return true; /* allow if no or invalid range specified */
 
 	if (spdk_pci_addr_fmt(traddr, sizeof(traddr), addr) != 0) {
@@ -125,7 +125,7 @@ hotplug_filter_fn(const struct spdk_pci_addr *addr)
 		return true; /* allow on error */
 	}
 
-	if ((busid >= start) && (busid <= end)) {
+	if ((busid >= begin) && (busid <= end)) {
 		D_INFO("hotplug enabled on address %s\n", traddr);
 		return true;
 	}

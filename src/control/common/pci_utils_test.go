@@ -230,3 +230,55 @@ func TestPCIUtils_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 		})
 	}
 }
+
+func TestCommon_GetRangeLimits(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rangeStr string
+		expBegin uint64
+		expEnd   uint64
+		expErr   error
+	}{
+		"hexadecimal": {
+			rangeStr: "0x80-0x8f",
+			expBegin: 0x80,
+			expEnd:   0x8f,
+		},
+		"incorrect hexadecimal": {
+			rangeStr: "0x8g-0x8f",
+			expErr:   errors.New("parsing \"0x8g\""),
+		},
+		"hexadecimal upper": {
+			rangeStr: "0x80-0x8F",
+			expBegin: 0x80,
+			expEnd:   0x8F,
+		},
+		"decimal": {
+			rangeStr: "128-143",
+			expBegin: 0x80,
+			expEnd:   0x8F,
+		},
+		"bad range": {
+			rangeStr: "128-143-0",
+			expErr:   errors.New("invalid busid range \"128-143-0\""),
+		},
+		"reverse range": {
+			rangeStr: "143-0",
+			expErr:   errors.New("invalid busid range \"143-0\""),
+		},
+		"bad separator": {
+			rangeStr: "143:0",
+			expErr:   errors.New("invalid busid range \"143:0\""),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			begin, end, err := GetRangeLimits(tc.rangeStr)
+			CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
+			AssertEqual(t, tc.expEnd, end, "bad ending limit")
+		})
+	}
+}

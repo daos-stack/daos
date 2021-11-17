@@ -486,7 +486,7 @@ struct media_error_msg {
 };
 
 struct bio_busid_range_info {
-	uint64_t	start;
+	uint64_t	begin;
 	uint64_t	end;
 };
 extern struct bio_busid_range_info bio_hotplug_busid_range;
