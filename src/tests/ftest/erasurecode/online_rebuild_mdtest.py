@@ -13,6 +13,7 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
     Test Class Description: To validate Erasure code object type classes works
                             fine for MDtest benchmark for on-line rebuild.
 
+
     :avocado: recursive
     """
     def __init__(self, *args, **kwargs):
