@@ -402,6 +402,18 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 			expErr: FaultPoolInvalidServiceReps(uint32(MaxPoolServiceReps - 2)),
 		},
+		"svc replicas even number": {
+			targetCount: 1,
+			memberCount: MaxPoolServiceReps,
+			req: &mgmt.PoolCreateReq{
+				Uuid:       common.MockUUID(0),
+				Totalbytes: 100 * humanize.GByte,
+				Tierratio:  []float64{0.06, 0.94},
+				Numsvcreps: 2,
+				Properties: testPoolLabelProp(),
+			},
+			expErr: FaultPoolInvalidServiceReps(uint32(MaxPoolServiceReps)),
+		},
 		"no label": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
