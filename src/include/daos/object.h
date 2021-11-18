@@ -161,7 +161,7 @@ enum daos_io_mode {
 typedef struct {
 	/** Public section, high level object ID */
 	daos_obj_id_t		id_pub;
-	/** Private section, object shard index */
+	/** Private section, object shard identifier */
 	uint32_t		id_shard;
 	/** Padding */
 	uint32_t		id_pad_32;
