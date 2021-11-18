@@ -9,28 +9,28 @@ This article shows how to get started using Distributed Asynchronous Object Stor
 On Mac, please make sure that the Docker settings under "Preferences/{Disk, Memory}" are configured accordingly.
 
 ## What is DAOS
-The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non-Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware. For additional information, see the following articles articles:
+The Distributed Asynchronous Object Storage (DAOS) is an open-source object store that leverages Non-Volatile Memory (NVM), such as Storage Class Memory (SCM) and NVM Express (NVMe). The storage process uses a key-value storage interface on top of NVM hardware. For additional information, see the following articles:
 - [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
 - [DAOS: Revolutionizing High-Performance Storage with Intel® Optane™ Technology](https://www.intel.com/content/dam/www/public/us/en/documents/solution-briefs/high-performance-storage-brief.pdf)
 
-## Hardware used for this demonstration
+## Hardware 
+The hardware used to demonstrate the set up of a DAOS cluster is: 
 - Server Board: Wolf Pass
 - CPU: Cascade Lake (2)
 - OS: Ubuntu 20.0.4LTE. freshly Installed
-- RAM: 192GB  (12)x16GB
+- Memory: 192GB  (12)x16GB
 - PMEM: First Gen 1.5TB (12)x128GB 
 
 ## Building a Docker Image
-
-To build the Docker image, we can do it one of two ways:
+The first step is to set up a Docker image base for the OS of your choice. Fortunately, we can use the preconfigures scripts located on the DAOS Github page to do most of the work for us by giving two methods too build the Docker image:
 - Local clone of the GitHub DAOS repo
 - Directly from GitHub
 
-If you prefer a different base than CentOS7, replace the filename "Dockerfile.centos.8" in the command strings below with one of the following."
+If you prefer a different base than CentOS8, replace the filename "Dockerfile.centos.8" in the command strings below with one of the following."
 - Dockerfile.centos.7
 - Dockerfile.ubuntu.20.04
 
-> To perform the steps below, you will need a minimum of 5GB of DDR and 16GB of storage. 
+> To perform the steps below yourself, you will need a minimum of 5GB of DDR and 16GB of storage. 
 
 ### 1. Build From Local Clone
 
@@ -44,13 +44,15 @@ docker build  . -f utils/docker/Dockerfile.centos.8 -t daos
 ### 2. Build From Remote Github Repo
 In this step, we create a CentOS 8 image and fetches the latest DAOS version from [GitHub/daos-stack](https://github.com/daos-stack/daos/tree/master/utils/docker), builds it, and install it in the image.
 
+> Note: This can easily take 15+ minutes
+
 `docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.8 -t daos`
 
 ## Docker Setup
 Once the image has been created, a container will need to be started to run the DAOS service. 
 
-### Setting Hugepages (Work in Progress)
-At this stage, depending on how hugepages are configured on your host system, you may get errors when the `docker run` command is issued. So for this demonstration, we will be configuring 50% (3276 pages) of the available memory into 2mb hugepages, prior to issuing the `docker run` command:
+### Setting Hugepages (optional)
+At this stage, depending on how hugepages are configured on your host system, you may get errors when the `docker run` command is issued. So for this demonstration, we will be configuring 50% (3276 pages) of the available memory into 2MB hugepages, before issuing the `docker run` command:
 
 We set the hugepages by using the following commands:
 
@@ -76,13 +78,12 @@ Hugetlb:        67108864 kB
 For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages) and the white paper [Intel Architecture Optimization with Large Code Pages](https://www.intel.com/content/dam/develop/external/us/en/documents/runtimeperformanceoptimizationblueprint-largecodepages-q1update.pdf)
 
 ### Starting the Docker Container
-Now we need to start the docker container by invoking the "docker run" command
-
-`sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages-1G:/dev/hugepages-1G`
-
-Alternatively, you can use standard hugepages or no hugepages as well. In those cases, the docker container would need to be started as follows:
+Now that we have a docker image created, we now need to start the docker container by invoking the "docker run" command:
 
 `sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages:/dev/hugepages daos`
+Alternatively, you can use 1g hugepages or no hugepages as well. In those cases, the docker container would need to be started as follows:
+
+`sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages-1G:/dev/hugepages-1G`
 
 or
 
@@ -92,15 +93,11 @@ or
 `sudo docker run -it -d --privileged --cap-add=ALL --name server`
 
 ### Start the DAOS Service
-Now that the DAOS Docker image is running, we need to enable the DAOS Service 
-
-The DAOS service can be started in the docker container as follows:
+Now that the DAOS Docker image is running, we need to enable the DAOS Service. To do so, we issue the following command:
 
 `sudo docker exec server sudo /opt/daos/bin/daos_server start -o /home/daos/daos/utils/config/examples/daos_server_local.yml`
 
 > The daos_server_local.yml configuration file sets up a simple local DAOS system with a single server instance running in the container. By default, it uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp. The storage size can be changed in the yaml file if necessary.
-
-> Note: Please make sure that the uio_pci_generic module is loaded on the host. **Need to research**
 
 ## Format the DAOS storage
 Once started, the DAOS server waits for the administrator to format the system. The formatting needs to be triggered in a different shell, using the following command:
@@ -116,10 +113,6 @@ Format Summary:
   localhost 1           1
 ```
 
-## Creating DAOS Pools (Work in Progress)
-
-`sudo docker exec server dmg pool create --size 15GB`
-
 ## Saving the Docker changes (optional)
 Now that we have started the service and formatted the storage, you may want to save the changes at this point. You do that by running the following commands:
 
@@ -129,12 +122,14 @@ Locate the container ID in the output and copy it, then run the following comman
 
 `sudo docker commit [CONTAINER_ID] [new_image_name]`
 
-You will now see in your list of images, including your new_image_name
+Example `sudo docker commit server server2`
+
+You will now see in your list of images the image you created:
 
 `sudo docker images`
 
-## Next Steps (work in Progress)
-
+## Next Steps 
+The next step is to start [configuring DAOS pools](https://docs.daos.io/admin/pool_operations/) and what is not specific to your individual needs.
 
 ## Resources
 - [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
