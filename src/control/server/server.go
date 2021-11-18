@@ -41,7 +41,11 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 	}
 
 	lookupNetIF := func(name string) (netInterface, error) {
-		return net.InterfaceByName(name)
+		iface, err := net.InterfaceByName(name)
+		if err != nil {
+			return nil, errors.Wrapf(err, "unable to retrieve interface %q", name)
+		}
+		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
@@ -332,7 +336,25 @@ func (srv *server) registerEvents() {
 			srv.mgmtSvc.startJoinLoop(ctx)
 			registerLeaderSubscriptions(srv)
 			srv.log.Debugf("requesting sync GroupUpdate after leader change")
-			srv.mgmtSvc.reqGroupUpdate(ctx, true)
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						// Wait for at least one engine to be ready to service the
+						// GroupUpdate request.
+						for _, ei := range srv.harness.Instances() {
+							if ei.IsReady() {
+								srv.mgmtSvc.reqGroupUpdate(ctx, true)
+								return
+							}
+						}
+						srv.log.Debugf("no engines ready for GroupUpdate; waiting %s", groupUpdateInterval)
+						time.Sleep(groupUpdateInterval)
+					}
+				}
+			}()
 			return nil
 		},
 		func(ctx context.Context) error {

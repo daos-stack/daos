@@ -104,7 +104,10 @@ gc_ult(void *arg)
 			break;
 
 		/* It'll be woke up by container destroy or aggregation */
-		sched_req_sleep(child->spc_gc_req, 10ULL * 1000);
+		if (rc > 0)
+			sched_req_yield(child->spc_gc_req);
+		else
+			sched_req_sleep(child->spc_gc_req, 10UL * 1000);
 	}
 
 out:
@@ -281,7 +284,6 @@ pool_child_delete_one(void *uuid)
 
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
-	stop_gc_ult(child);
 	ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
@@ -292,6 +294,10 @@ pool_child_delete_one(void *uuid)
 		return dss_abterr2der(rc);
 
 	ABT_eventual_free(&child->spc_ref_eventual);
+
+	/* only stop gc ULT when all ops ULTs are done */
+	stop_gc_ult(child);
+
 	/* ds_pool_child must be freed here to keep
 	 * spc_ref_enventual usage safe
 	 */

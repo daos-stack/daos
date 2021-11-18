@@ -19,6 +19,8 @@
 /** default placement map when none are specified */
 #define DEFAULT_PL_TYPE PL_TYPE_JUMP_MAP
 
+#define NIL_BITMAP	(NULL)
+
 /** types of placement maps */
 typedef enum {
 	PL_TYPE_UNKNOWN,
@@ -58,10 +60,11 @@ struct pl_target_grp {
 };
 
 struct pl_obj_shard {
-	uint32_t	po_shard;	/* shard index */
+	uint32_t	po_shard;	/* shard identifier */
 	uint32_t	po_target;	/* target id */
 	uint32_t	po_fseq;	/* The latest failure sequence */
-	uint32_t	po_rebuilding:1; /* rebuilding status */
+	uint32_t	po_rebuilding:1, /* rebuilding status */
+			po_reintegrating:1; /* reintegrating status */
 };
 
 struct pl_obj_layout {
@@ -163,6 +166,7 @@ pl_obj_get_shard(void *data, int idx)
 }
 
 int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
+		     uint8_t *bit_map, struct dtx_memberships *mbs,
 		     int *tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
 void obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);

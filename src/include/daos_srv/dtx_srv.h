@@ -79,8 +79,6 @@ struct dtx_handle {
 					 dth_dist:1,
 					 /* For data migration. */
 					 dth_for_migration:1,
-					 /* Force refresh for non-committed */
-					 dth_force_refresh:1,
 					 /* Has prepared locally, for resend. */
 					 dth_prepared:1,
 					 /* Ignore other uncommitted DTXs. */
@@ -187,7 +185,7 @@ enum dtx_flags {
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
 	/** Resent request. */
 	DTX_RESEND		= (1 << 5),
-	/** Force DTX refresh if hit non-committed DTX on non-leader. */
+	/** Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
 	DTX_FORCE_REFRESH	= (1 << 6),
 	/** Transaction has been prepared locally. */
 	DTX_PREPARED		= (1 << 7),
