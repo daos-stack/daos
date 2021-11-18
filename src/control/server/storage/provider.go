@@ -327,6 +327,7 @@ func BdevWriteConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWrit
 	bdevTiers := cfg.Tiers.BdevConfigs()
 	req.TierProps = make([]BdevTierProperties, 0, len(bdevTiers))
 	for idx, tier := range bdevTiers {
+		log.Debugf("hp %v bdev tier %d, %+v", req.HotplugEnabled, idx, tier)
 		req.TierProps = append(req.TierProps, BdevTierPropertiesFromConfig(tier))
 
 		// populate hotplug bus-ID range limits from the first bdev tier

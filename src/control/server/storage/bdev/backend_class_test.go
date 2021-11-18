@@ -92,8 +92,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 		confIn            storage.TierConfig
 		enableVmd         bool
 		enableHotplug     bool
-		hotplugBusidBegin uint64
-		hotplugBusidEnd   uint64
+		hotplugBusidRange string
 		expErr            error
 		expOut            string
 	}{
@@ -215,12 +214,13 @@ func TestBackend_writeJSONFile(t *testing.T) {
 }
 `,
 		},
-		"nvme; multiple ssds; vmd enabled": {
+		"nvme; multiple ssds; vmd enabled; bus-id range": {
 			confIn: storage.TierConfig{
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: common.MockPCIAddrs(1, 2),
+					BusidRange: "0x80-0x8f",
 				},
 			},
 			enableVmd: true,
@@ -294,11 +294,10 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: common.MockPCIAddrs(1, 2),
+					BusidRange: "0x80-0x8f",
 				},
 			},
-			enableHotplug:     true,
-			hotplugBusidBegin: 128,
-			hotplugBusidEnd:   256,
+			enableHotplug: true,
 			expOut: `
 {
   "daos_data": {
@@ -306,7 +305,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
       {
         "params": {
           "begin": 128,
-          "end": 256
+          "end": 143
         },
         "method": "hotplug_busid_range"
       }
@@ -467,15 +466,13 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					&tc.confIn,
 				).
 				WithStorageConfigOutputPath(cfgOutputPath).
-				WithStorageHotplugBusidBegin(tc.hotplugBusidBegin).
-				WithStorageHotplugBusidEnd(tc.hotplugBusidEnd)
+				WithStorageEnableHotplug(tc.enableHotplug)
 
 			req, err := storage.BdevWriteConfigRequestFromConfig(log, &engineConfig.Storage)
 			if err != nil {
 				t.Fatal(err)
 			}
 			req.VMDEnabled = tc.enableVmd
-			req.HotplugEnabled = tc.enableHotplug
 
 			gotErr := writeJSONConfig(log, &req)
 			common.CmpErr(t, tc.expErr, gotErr)

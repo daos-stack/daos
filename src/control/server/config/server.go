@@ -475,7 +475,8 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
 						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
 						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
-						WithBdevFileSize(ec.LegacyStorage.FileSize),
+						WithBdevFileSize(ec.LegacyStorage.FileSize).
+						WithBdevBusidRange(ec.LegacyStorage.BdevConfig.BusidRange),
 				)
 			}
 			ec.WithStorage(tierCfgs...)
