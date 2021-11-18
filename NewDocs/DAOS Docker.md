@@ -57,28 +57,25 @@ At this stage, depending on how hugepages are configured on your host system, yo
 We set the hugepages by using the following commands:
 
 ```bash
-echo 3276 | sudo tee /proc/sys/VM/nr_hugepages
+echo 32768 | sudo tee /proc/sys/vm/nr_hugepages
 cat /proc/meminfo | grep Huge
 ```
 
-The "cat" command should provide an output similar to:
+The "cat" command will provide an output similar to:
 
 ```bash
 AnonHugePages:         0 kB
 ShmemHugePages:        0 kB
 FileHugePages:         0 kB
-HugePages_Total:    3276
-HugePages_Free:     3275
+HugePages_Total:   32768
+HugePages_Free:    32768
 HugePages_Rsvd:        0
 HugePages_Surp:        0
-Hugepagesize:       ??? kB
-Hugetlb:         ??? kB
-
+Hugepagesize:       2048 kB
+Hugetlb:        67108864 kB
 ```
 
 For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages) and the white paper [Intel Architecture Optimization with Large Code Pages](https://www.intel.com/content/dam/develop/external/us/en/documents/runtimeperformanceoptimizationblueprint-largecodepages-q1update.pdf)
-
-
 
 ## Starting the Docker Container
 Now we need to start the docker container by invoking the "docker run" command
@@ -147,3 +144,4 @@ You will now see in your list of images, including your new_image_name
 - [daos.io](https://docs.daos.io/)
 - [Intel Architecture Optimization with Large Code Pages](https://www.intel.com/content/dam/develop/external/us/en/documents/runtimeperformanceoptimizationblueprint-largecodepages-q1update.pdf)
 - [Designing DAOS Storage Solutions with Lenovo ThinkSystem SR630 Servers](https://lenovopress.com/lp1398-designing-daos-storage-solutions-with-sr630)
+- [Configure Huge Pages: Clear Linux](https://docs.01.org/clearlinux/latest/guides/maintenance/configure-hugepages.html)
