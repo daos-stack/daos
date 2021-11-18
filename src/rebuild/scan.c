@@ -864,6 +864,21 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_rebuild_ver);
 
+	/* If PS leader has been changed, and rebuild version is also increased
+	 * due to adding new failure targets for rebuild, let's abort previous
+	 * rebuild.
+	 */
+	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
+		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
+		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) {
+			D_INFO(DF_UUID" rebuild %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
+			       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
+			       rpt->rt_leader_term, rsi->rsi_rebuild_ver,
+			       rsi->rsi_leader_term);
+			rpt->rt_abort = 1;
+		}
+	}
+
 	/* check if the rebuild is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
 	if (rpt != NULL) {
