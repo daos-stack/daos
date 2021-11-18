@@ -1443,7 +1443,7 @@ crt_reply_send(crt_rpc_t *req)
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
-	D_DEBUG(DB_ALL, "rpc_priv: %p\n", rpc_priv);
+	D_DEBUG(DB_TRACE, "rpc_priv: %p\n", rpc_priv);
 	if (rpc_priv->crp_coll == 1) {
 		struct crt_cb_info	cb_info;
 
@@ -1455,7 +1455,7 @@ crt_reply_send(crt_rpc_t *req)
 
 		crt_corpc_reply_hdlr(&cb_info);
 	} else {
-		D_DEBUG(DB_ALL, "call crt_hg_reply_send: rpc_priv: %p\n",
+		D_DEBUG(DB_TRACE, "call crt_hg_reply_send: rpc_priv: %p\n",
 			rpc_priv);
 		rc = crt_hg_reply_send(rpc_priv);
 		if (rc != 0)

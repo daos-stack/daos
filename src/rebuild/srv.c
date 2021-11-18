@@ -1101,6 +1101,8 @@ re_dist:
 		D_GOTO(out, rc);
 	}
 
+	D_DEBUG(DB_REBUILD, "rebuild iv map "DF_UUID", rebuild version=%u, op=%s\n",
+		DP_UUID(pool->sp_uuid), rebuild_ver, RB_OP_STR(rebuild_op));
 	/* IV bcast the pool map in case for offline rebuild */
 	rc = ds_pool_iv_map_update(pool, map_buf_iov.iov_buf, map_ver);
 	D_FREE(map_buf_iov.iov_buf);
@@ -1122,12 +1124,16 @@ re_dist:
 		}
 	}
 
+	D_DEBUG(DB_REBUILD, "rebuild prop fetch "DF_UUID", rebuild version=%u, op=%s\n",
+		DP_UUID(pool->sp_uuid), rebuild_ver, RB_OP_STR(rebuild_op));
 	rc = ds_pool_prop_fetch(pool, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc) {
 		D_ERROR("pool prop fetch failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
+	D_DEBUG(DB_REBUILD, "rebuild iv prop update "DF_UUID", rebuild version=%u, op=%s\n",
+		DP_UUID(pool->sp_uuid), rebuild_ver, RB_OP_STR(rebuild_op));
 	/* Update pool properties by IV */
 	rc = ds_pool_iv_prop_update(pool, prop);
 	if (rc) {
