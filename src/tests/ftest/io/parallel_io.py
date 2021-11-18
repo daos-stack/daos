@@ -144,14 +144,18 @@ class ParallelIo(FioBase, IorTestBase):
         threads = []
 
         # Create a pool and start dfuse.
+        self.log("(1)Create a pool and start dfuse")
         self.create_pool()
         self.start_dfuse(self.hostlist_clients, self.pool[0], None)
+
         # create multiple containers
+        self.log("(2)Create multiple containers per pool")
         for _ in range(self.cont_count):
             self.create_cont(self.pool[0])
 
         # check if all the created containers can be accessed and perform
         # io on each container using fio in parallel
+        self.log("(3)Check containers and launch io in paralle")
         for _, cont in enumerate(self.container):
             dfuse_cont_dir = self.dfuse.mount_dir.value + "/" + cont.uuid
             cmd = "ls -a {}".format(dfuse_cont_dir)
@@ -169,9 +173,9 @@ class ParallelIo(FioBase, IorTestBase):
                         "hosts: {}".format(cmd, error_hosts))
             # report error if any command fails
             except CommandFailure as error:
-                self.log.error("ParallelIo Test Failed: %s",
+                self.log.error("##ParallelIo Test Failed: %s",
                                str(error))
-                self.fail("Test was expected to pass but "
+                self.fail("##Test was expected to pass but "
                           "it failed.\n")
             # run fio on all containers
             thread = threading.Thread(target=self.execute_fio, args=(
@@ -180,28 +184,35 @@ class ParallelIo(FioBase, IorTestBase):
             thread.start()
 
         # wait for all fio jobs to be finished
+        self.log("(4)wait for all fio jobs to be finished")
         for job in threads:
             job.join()
 
         # destroy first container
+        self.log("(5)destroy first container")
         container_to_destroy = self.container[0].uuid
         self.container[0].destroy(1)
 
         # check dfuse if it is running fine
+        self.log("(6)heck dfuse if it is running fine")
         self.dfuse.check_running()
 
         # try accessing destroyed container, it should fail
+        self.log("(7)try accessing destroyed container, it should fail")
         try:
             self.execute_fio(
                 self.dfuse.mount_dir.value + "/" + container_to_destroy, False)
             self.fail(
-                "Fio was able to access destroyed container: {}".format(
+                "##Fio was able to access a destroyed container: {}".format(
                     self.container[0].uuid))
         except CommandFailure as error:
-            self.log.info("This run is expected to fail")
+            self.log.info("==Negative test, try accessing destroyed container",
+                          " is expected to fail")
 
         # check dfuse is still running after attempting to access deleted
         # container.
+            self.log.info("(8)check dfuse is still runnin after attempting to ",
+                          "access deleted container.")
             self.dfuse.check_running()
 
     def test_multipool_parallelio(self):
