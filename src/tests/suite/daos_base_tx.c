@@ -470,7 +470,7 @@ dtx_11(void **state)
 }
 
 static void
-dtx_handle_resend(void **state, uint64_t fail_loc, uint16_t oclass)
+dtx_handle_resend(void **state, uint64_t fail_loc, daos_oclass_id_t oclass)
 {
 	test_arg_t	*arg = *state;
 	char		*update_buf;
@@ -654,7 +654,7 @@ dtx_17(void **state)
 }
 
 static void
-dtx_resend_delay(test_arg_t *arg, uint16_t oclass)
+dtx_resend_delay(test_arg_t *arg, daos_oclass_id_t oclass)
 {
 	char		*update_buf;
 	char		*fetch_buf;
