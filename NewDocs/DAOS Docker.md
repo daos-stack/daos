@@ -13,6 +13,13 @@ The Distributed Asynchronous Object Storage (DAOS) is an open-source object stor
 - [DAOS Sets New Records with Intel® Optane™ Persistent Memory](https://www.intel.com/content/www/us/en/developer/articles/technical/daos-sets-new-records-with-intel-optane-persistent-memory.html)
 - [DAOS: Revolutionizing High-Performance Storage with Intel® Optane™ Technology](https://www.intel.com/content/dam/www/public/us/en/documents/solution-briefs/high-performance-storage-brief.pdf)
 
+## Hardware used for this demonstration
+- Server Board: WolfPass
+- CPU: Cascade Lake(2)
+- OS: Ubuntu 20.0.4LTE. freshly Installed
+- RAM: 192GB  (12)x16GB
+- PMEM: First Gen 1.5TB (12)x128GB 
+
 ## Building a Docker Image
 
 To build the Docker image, we can do it one of two ways:
@@ -25,7 +32,7 @@ If you prefer a different base than CentOS7, replace the filename "Dockerfile.ce
 - Dockerfile.centos.8
 - Dockerfile.ubuntu.20.04
 
-> All commands shown here are on a two-socket Cascade Lake server running a new install of Ubuntu 20.0.4LTE. To perform the steps below, you will need a minimum of 5GB of DDR and 16GB of storage. 
+> To perform the steps below, you will need a minimum of 5GB of DDR and 16GB of storage. 
 
 ### 1. Build From Local Clone
 
@@ -45,12 +52,12 @@ In this step, we create a CentOS 7 image and fetches the latest DAOS version fro
 Once the image has been created, a container will need to be started to run the DAOS service. 
 
 ### Setting Hugepages (Work in Progress)
-At this stage, depending on how hugepages are configured on your host system, you may get errors when the `docker run` command is issued. So for this demonstration, we will be configuring hugepages before issuing the `docker run` command:
+At this stage, depending on how hugepages are configured on your host system, you may get errors when the `docker run` command is issued. So for this demonstration, we will be configuring 50% (3276 pages) of the available memory into 2mb hugepages, prior to issuing the `docker run` command:
 
-In this situation of using a Cascade Lake CPU, the 2mb hugepage capacity at 1024 pages, so we set the hugepages by using the following commands:
+We set the hugepages by using the following commands:
 
 ```bash
-echo 1024 | sudo tee /proc/sys/VM/nr_hugepages
+echo 3276 | sudo tee /proc/sys/VM/nr_hugepages
 cat /proc/meminfo | grep Huge
 ```
 
@@ -60,23 +67,17 @@ The "cat" command should provide an output similar to:
 AnonHugePages:         0 kB
 ShmemHugePages:        0 kB
 FileHugePages:         0 kB
-HugePages_Total:    1024
-HugePages_Free:     1023
+HugePages_Total:    3276
+HugePages_Free:     3275
 HugePages_Rsvd:        0
 HugePages_Surp:        0
-Hugepagesize:       2048 kB
-Hugetlb:         2097152 kB
+Hugepagesize:       ??? kB
+Hugetlb:         ??? kB
 
 ```
 
 For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages) and the white paper [Intel Architecture Optimization with Large Code Pages](https://www.intel.com/content/dam/develop/external/us/en/documents/runtimeperformanceoptimizationblueprint-largecodepages-q1update.pdf)
 
-> Notes on 1g Huge pages (inclusion TBD)
-> Depending on the CPU involved, the quantity of available1G  hugepages changes, for example.
-> - Cascade Lake 16 pages
-> - Icelake 64 pages
->- Saphire Rapids 96 pages
-> https://docs.01.org/clearlinux/latest/guides/maintenance/configure-hugepages.html
 
 
 ## Starting the Docker Container
