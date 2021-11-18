@@ -19,7 +19,6 @@ The hardware used to demonstrate the set up of a DAOS cluster is:
 - CPU: Cascade Lake (2)
 - OS: Ubuntu 20.0.4LTE. freshly Installed
 - Memory: 192GB  (12)x16GB
-- PMEM: First Gen 1.5TB (12)x128GB 
 
 ## Building a Docker Image
 The first step is to set up a Docker image base for the OS of your choice. Fortunately, we can use the preconfigures scripts located on the DAOS Github page to do most of the work for us by giving two methods too build the Docker image:
