@@ -41,7 +41,7 @@ def getuid() {
     return cached_uid
 }
 pipeline {
-    agent { label 'lightweight' }
+    agent { label 'lightweight-wolf-34' }
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
