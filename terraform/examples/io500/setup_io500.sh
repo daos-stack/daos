@@ -9,6 +9,9 @@ source ./configure.sh
 # Clean and configure DAOS servers
 source ./clean.sh
 
+# Copy SSH keys to client nodes
+pdcp -w ^hosts -r .ssh ~
+
 echo "Copy agent config files from server"
 rm -f .ssh/known_hosts
 scp ${DAOS_FIRST_SERVER}:/etc/daos/daos_agent.yml .
@@ -78,7 +81,7 @@ sed -i "s/^blockSize.*/blockSize = 1000000m/g" temp.ini
 sed -i "s/^filePerProc.*/filePerProc = TRUE /g" temp.ini
 sed -i "s/^nproc.*/nproc = $(( ${NUMBER_OF_CLIENTS_INSTANCES} * $(nproc --all) ))/g" temp.ini
 
-# Run IO500 benchmark
+echo "# Run IO500 benchmark"
 mpirun --hostfile hosts -env I_MPI_OFI_PROVIDER="tcp;ofi_rxm" --bind-to socket -np $(( ${NUMBER_OF_CLIENTS_INSTANCES} * $(nproc --all) )) /usr/local/io500/io500 temp.ini
 
 echo "Cleaning up after run ..."

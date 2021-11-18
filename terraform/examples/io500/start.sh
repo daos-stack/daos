@@ -26,8 +26,10 @@ terraform plan -out=tfplan -input=false
 terraform apply -input=false tfplan
 popd
 
-echo "#  Wait for instances"
-sleep 10
+echo "#  Wait for DAOS client instances"
+gcloud compute instance-groups managed wait-until ${TF_VAR_client_template_name} --stable --zone ${TF_VAR_zone}
+echo "#  Wait for DAOS server instances"
+gcloud compute instance-groups managed wait-until ${TF_VAR_server_template_name} --stable --zone ${TF_VAR_zone}
 
 echo "# Add external IP to first client, so that it will be accessible over normal SSH"
 gcloud compute instances add-access-config ${DAOS_FIRST_CLIENT} --zone ${TF_VAR_zone} && sleep 10
@@ -37,17 +39,20 @@ echo "##########################"
 echo "#  Configure SSH access  #"
 echo "##########################"
 echo "# Prepare SSH key"
-rm -f ./id_rsa* ; ssh-keygen -t rsa -b 4096 -C "root" -N '' -f id_rsa
+rm -f ./id_rsa* ; ssh-keygen -t rsa -b 4096 -C "${SSH_USER}" -N '' -f id_rsa
 echo "${SSH_USER}:$(cat id_rsa.pub)" > keys.txt
 
+echo "#  Configuring SSH on nodes"
 for node in $ALL_NODES
 do
-    echo "#  Configuring SSH on ${node}"
     # Disable OSLogin to be able to connect with SSH keys uploaded in next command
-    gcloud compute instances add-metadata ${node} --metadata enable-oslogin=FALSE
+    gcloud compute instances add-metadata ${node} --metadata enable-oslogin=FALSE && \
     # Upload SSH key to instance, so that you could login to instance over SSH
-    gcloud compute instances add-metadata ${node} --metadata-from-file ssh-keys=keys.txt
+    gcloud compute instances add-metadata ${node} --metadata-from-file ssh-keys=keys.txt &
 done
+
+# Wait for SSH configuring tasks to finish
+wait
 
 echo "# Copy SSH key to first DAOS client"
 scp -i id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
