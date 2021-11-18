@@ -884,7 +884,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		if (fs_handle->dpi_info->di_caching) {
 			rc = dfuse_cont_get_cache(dfc);
 			if (rc == ENODATA) {
-				/* If there is no container specific attributes then use defaults */
+				/* If there are no container attributes then use defaults */
 				DFUSE_TRA_INFO(dfc, "Using default caching values");
 				dfuse_set_default_cont_cache_values(dfc);
 				rc = 0;
