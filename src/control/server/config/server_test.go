@@ -540,18 +540,25 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 func TestServerConfig_Parsing(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
 
-	cfgFromFile := func(t *testing.T, testFile, matchText, replaceText string) (*Server, error) {
+	cfgFromFile := func(t *testing.T, testFile string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
-		if matchText != "" {
-			replaceFile(t, testFile, matchText, replaceText)
+		if len(matchText) != len(replaceText) {
+			return nil, errors.New("number of text matches and replacements must be equal")
+		}
+
+		for i, m := range matchText {
+			if m == "" {
+				continue
+			}
+			replaceFile(t, testFile, m, replaceText[i])
 		}
 
 		return mockConfigFromFile(t, testFile)
 	}
 
 	// load a config based on the server config with all options uncommented.
-	loadFromDefaultFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+	loadFromDefaultFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		defaultConfigFile := filepath.Join(testDir, sConfigUncomment)
@@ -561,7 +568,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 	}
 
 	// load a config file with a legacy storage config
-	loadFromLegacyFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+	loadFromLegacyFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		lcp := strings.Split(legacyConfig, "/")
@@ -573,7 +580,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 		return cfgFromFile(t, testLegacyConfigFile, matchText, replaceText)
 	}
 
-	loadFromFile := func(t *testing.T, testDir, matchText, replaceText string, legacy bool) (*Server, error) {
+	loadFromFile := func(t *testing.T, testDir string, matchText, replaceText []string, legacy bool) (*Server, error) {
 		if legacy {
 			return loadFromLegacyFile(t, testDir, matchText, replaceText)
 		}
@@ -584,6 +591,8 @@ func TestServerConfig_Parsing(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inTxt          string
 		outTxt         string
+		inTxtList      []string
+		outTxtList     []string
 		legacyStorage  bool
 		extraConfig    func(c *Server) *Server
 		expParseErr    error
@@ -673,6 +682,29 @@ func TestServerConfig_Parsing(t *testing.T) {
 				return nil
 			},
 		},
+		"legacy storage; non-empty bdev_busid_range": {
+			legacyStorage: true,
+			inTxtList: []string{
+				"  bdev_list: []", "  bdev_busid_range: \"\"",
+			},
+			outTxtList: []string{
+				"  bdev_list: [0000:80:00.0]", "  bdev_busid_range: \"0x00-0x80\"",
+			},
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 2 {
+					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+				}
+
+				want := "0x00-0x80"
+				got := c.Engines[0].Storage.Tiers.BdevConfigs()[0].Bdev.BusidRange
+				if want != got {
+					return errors.Errorf("want %s bus-id range, got %s", want, got)
+				}
+
+				return nil
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -685,7 +717,22 @@ func TestServerConfig_Parsing(t *testing.T) {
 				tt.extraConfig = noopExtra
 			}
 
-			config, errParse := loadFromFile(t, testDir, tt.inTxt, tt.outTxt, tt.legacyStorage)
+			if tt.inTxtList != nil {
+				if tt.inTxt != "" {
+					t.Fatal("bad test params")
+				}
+			} else {
+				tt.inTxtList = []string{tt.inTxt}
+			}
+			if tt.outTxtList != nil {
+				if tt.outTxt != "" {
+					t.Fatal("bad test params")
+				}
+			} else {
+				tt.outTxtList = []string{tt.outTxt}
+			}
+
+			config, errParse := loadFromFile(t, testDir, tt.inTxtList, tt.outTxtList, tt.legacyStorage)
 			CmpErr(t, tt.expParseErr, errParse)
 			if tt.expParseErr != nil {
 				return
