@@ -14,8 +14,8 @@ The Distributed Asynchronous Object Storage (DAOS) is an open-source object stor
 - [DAOS: Revolutionizing High-Performance Storage with Intel® Optane™ Technology](https://www.intel.com/content/dam/www/public/us/en/documents/solution-briefs/high-performance-storage-brief.pdf)
 
 ## Hardware used for this demonstration
-- Server Board: WolfPass
-- CPU: Cascade Lake(2)
+- Server Board: Wolf Pass
+- CPU: Cascade Lake (2)
 - OS: Ubuntu 20.0.4LTE. freshly Installed
 - RAM: 192GB  (12)x16GB
 - PMEM: First Gen 1.5TB (12)x128GB 
