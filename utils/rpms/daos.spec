@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -159,7 +159,7 @@ Requires: ndctl
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
 # When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj1 = 1.11.0-3suse1500
+Requires: libpmemobj1 = 1.11.0-3.suse1500
 %else
 Requires: ipmctl > 02.00.00.3816
 # When 1.11.2 is released, we can change this to >= 1.11.2
@@ -516,8 +516,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Tue Nov 16 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-7
+* Thu Nov 18 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-8
 - Fix name of daos serialize package
+
+* Tue Nov 16 2021 Wang Shilong <shilong.wang@intel.com> 2.1.100-7
+- Update for libdaos major version bump
+- Fix version of libpemobj1 for SUSE
 
 * Sat Nov 13 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-6
 - Update OFI to v1.14.0rc3
