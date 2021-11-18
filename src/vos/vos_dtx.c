@@ -138,10 +138,6 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 		goto out;
 	}
 
-	if (!dth->dth_force_refresh && !dth->dth_dist &&
-	    dth->dth_ver <= DAE_VER(dae) && DAE_MBS_FLAGS(dae) & DMF_SRDG_REP)
-		goto out;
-
 	s_try = true;
 
 	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
@@ -187,11 +183,9 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 out:
 	D_DEBUG(DB_IO,
-		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (force %s, "
-		"dist %s), lid=%d, flags %x/%x, may need %s retry.\n",
-		hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
-		dth, dth != NULL && dth->dth_force_refresh ? "yes" : "no",
-		dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
+		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (dist %s), lid=%d, flags %x/%x, "
+		"may need %s retry.\n", hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
+		dth, dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
 		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" : "client");
 
 	return -DER_INPROGRESS;
@@ -1193,9 +1187,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	    DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 		return ALB_UNAVAILABLE;
 
-	if (dth != NULL && !(DAE_FLAGS(dae) & DTE_LEADER) &&
-	    (!(DAE_MBS_FLAGS(dae) & DMF_SRDG_REP) ||
-	     dth->dth_force_refresh)) {
+	if (dth != NULL && !(DAE_FLAGS(dae) & DTE_LEADER)) {
 		struct dtx_share_peer	*dsp;
 
 		d_list_for_each_entry(dsp, &dth->dth_share_cmt_list, dsp_link) {
