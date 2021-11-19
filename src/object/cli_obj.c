@@ -633,6 +633,22 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver, uint8_t
 	return rc;
 }
 
+static int
+obj_ptr2poh(struct dc_object *obj, daos_handle_t *ph)
+{
+	daos_handle_t   coh;
+
+	coh = obj->cob_coh;
+	if (daos_handle_is_inval(coh))
+		return -DER_NO_HDL;
+
+	*ph = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(*ph))
+		return -DER_NO_HDL;
+
+	return 0;
+}
+
 /* If the client has been asked to fetch (list/query) from leader replica,
  * then means that related data is associated with some prepared DTX that
  * may be committable on the leader replica. According to our current DTX
@@ -653,17 +669,31 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver, uint8_t
 int
 obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 {
+	struct dc_pool	*pool;
+	daos_handle_t	ph;
 	int		grp_size;
 	uint64_t	grp_idx;
+	int		rc;
+
+	rc = obj_ptr2poh(obj, &ph);
+	if (rc < 0)
+		return rc;
+
+	pool = dc_hdl2pool(ph);
+	if (pool == NULL)
+		return -DER_NO_HDL;
 
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
-	if (obj->cob_version != map_ver) {
+	if (obj->cob_version != map_ver ||
+	    map_ver < pool_map_get_version(pool->dp_map)) {
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		dc_pool_put(pool);
 		return -DER_STALE;
 	}
+	dc_pool_put(pool);
 
 	D_ASSERT(obj->cob_shards_nr >= grp_size);
 
@@ -1211,22 +1241,6 @@ obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
 	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "
 		  DF_OID": %u/%u\n",
 		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
-}
-
-static int
-obj_ptr2poh(struct dc_object *obj, daos_handle_t *ph)
-{
-	daos_handle_t   coh;
-
-	coh = obj->cob_coh;
-	if (daos_handle_is_inval(coh))
-		return -DER_NO_HDL;
-
-	*ph = dc_cont_hdl2pool_hdl(coh);
-	if (daos_handle_is_inval(*ph))
-		return -DER_NO_HDL;
-
-	return 0;
 }
 
 /* Get pool map version from object handle */

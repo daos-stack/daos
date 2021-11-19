@@ -22,7 +22,7 @@ hosts:
   test_clients:
     - client-A
     - client-B
-timeout: 500
+timeout: 600
 setup:
   start_agents_once: False
   start_servers_once: False
@@ -65,18 +65,18 @@ mdtest:
   client_processes:
     np_48:
       np: 48
-      num_of_files_dirs: 50
+      num_of_files_dirs: 100
   mdtest_api:
     dfs:
       api: 'DFS'
   test_dir: "/"
-  iteration: 3
+  iteration: 5
   dfs_destroy: True
   manager: "MPICH"
   flags: "-u"
   write_bytes: 4194304
   read_bytes: 4194304
-  depth: 10
+  depth: 20
   # EC does not supported for directory so for now running with RP
   dfs_dir_oclass: "RP_3G1"
   objectclass:
