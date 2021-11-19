@@ -255,9 +255,10 @@ read_file(const char *filename, size_t *size)
 	FILE *file = fopen(filename, "r");
 	void *data;
 
-	if (file == NULL)
+	if (file == NULL) {
 		/* errno is set by fopen */
 		return NULL;
+	}
 
 	data = spdk_posix_file_load(file, size);
 	fclose(file);
