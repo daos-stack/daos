@@ -1,0 +1,16 @@
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-C
+timeout: 1200
+server_config:
+  name: daos_server
+pool:
+  size: 16G
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+dfuse:
+  mount_dir: "/tmp/daos_dfuse/"
