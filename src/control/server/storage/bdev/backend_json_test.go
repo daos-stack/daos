@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
@@ -28,14 +29,44 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 	tierID := 84
 	host, _ := os.Hostname()
 
+	multiCtrlrConfs := func() []*SpdkSubsystemConfig {
+		return append(defaultSpdkConfig().Subsystems[0].Configs,
+			[]*SpdkSubsystemConfig{
+				{
+					Method: SpdkBdevNvmeAttachController,
+					Params: NvmeAttachControllerParams{
+						TransportType:    "PCIe",
+						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierID),
+						TransportAddress: common.MockPCIAddr(1),
+					},
+				},
+				{
+					Method: SpdkBdevNvmeAttachController,
+					Params: NvmeAttachControllerParams{
+						TransportType:    "PCIe",
+						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierID),
+						TransportAddress: common.MockPCIAddr(2),
+					},
+				},
+			}...)
+	}
+
+	hotplugConfs := multiCtrlrConfs()
+	hotplugConfs[2].Params = NvmeSetHotplugParams{
+		Enable: true, PeriodUsec: uint64((5 * time.Second).Microseconds()),
+	}
+
 	tests := map[string]struct {
 		class              storage.Class
 		fileSizeGB         int
 		devList            []string
 		enableVmd          bool
+		enableHotplug      bool
+		busidRange         string
 		vosEnv             string
-		expExtraBdevCfgs   []*SpdkSubsystemConfig
 		expExtraSubsystems []*SpdkSubsystem
+		expBdevCfgs        []*SpdkSubsystemConfig
+		expDaosCfgs        []*SpdkDaosConfig
 		expValidateErr     error
 		expErr             error
 	}{
@@ -45,50 +76,15 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			expValidateErr: errors.New("unexpected pci address"),
 		},
 		"multiple controllers": {
-			class:   storage.ClassNvme,
-			devList: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
-			expExtraBdevCfgs: []*SpdkSubsystemConfig{
-				{
-					Method: SpdkBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierID),
-						TransportAddress: common.MockPCIAddr(1),
-					},
-				},
-				{
-					Method: SpdkBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierID),
-						TransportAddress: common.MockPCIAddr(2),
-					},
-				},
-			},
-			vosEnv: "NVME",
+			class:       storage.ClassNvme,
+			devList:     []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			expBdevCfgs: multiCtrlrConfs(),
 		},
 		"multiple controllers; vmd enabled": {
-			class:     storage.ClassNvme,
-			enableVmd: true,
-			devList:   []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
-			expExtraBdevCfgs: []*SpdkSubsystemConfig{
-				{
-					Method: SpdkBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierID),
-						TransportAddress: common.MockPCIAddr(1),
-					},
-				},
-				{
-					Method: SpdkBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierID),
-						TransportAddress: common.MockPCIAddr(2),
-					},
-				},
-			},
+			class:       storage.ClassNvme,
+			enableVmd:   true,
+			devList:     []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			expBdevCfgs: multiCtrlrConfs(),
 			expExtraSubsystems: []*SpdkSubsystem{
 				{
 					Name: "vmd",
@@ -100,7 +96,21 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					},
 				},
 			},
-			vosEnv: "NVME",
+		},
+		"multiple controllers; hotplug enabled; bus-id range specified": {
+			class:         storage.ClassNvme,
+			devList:       []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			enableHotplug: true,
+			busidRange:    "0x8a-0x8f",
+			expBdevCfgs:   hotplugConfs,
+			expDaosCfgs: []*SpdkDaosConfig{
+				{
+					Method: SpdkHotplugBusidRange,
+					Params: HotplugBusidRangeParams{
+						Begin: 138, End: 143,
+					},
+				},
+			},
 		},
 		"AIO file class; multiple files; zero file size": {
 			class:          storage.ClassFile,
@@ -111,45 +121,47 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			class:      storage.ClassFile,
 			fileSizeGB: 1,
 			devList:    []string{"/path/to/myfile", "/path/to/myotherfile"},
-			expExtraBdevCfgs: []*SpdkSubsystemConfig{
-				{
-					Method: SpdkBdevAioCreate,
-					Params: AioCreateParams{
-						BlockSize:  humanize.KiByte * 4,
-						DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
-						Filename:   "/path/to/myfile",
+			expBdevCfgs: append(defaultSpdkConfig().Subsystems[0].Configs,
+				[]*SpdkSubsystemConfig{
+					{
+						Method: SpdkBdevAioCreate,
+						Params: AioCreateParams{
+							BlockSize:  humanize.KiByte * 4,
+							DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
+							Filename:   "/path/to/myfile",
+						},
 					},
-				},
-				{
-					Method: SpdkBdevAioCreate,
-					Params: AioCreateParams{
-						BlockSize:  humanize.KiByte * 4,
-						DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
-						Filename:   "/path/to/myotherfile",
+					{
+						Method: SpdkBdevAioCreate,
+						Params: AioCreateParams{
+							BlockSize:  humanize.KiByte * 4,
+							DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
+							Filename:   "/path/to/myotherfile",
+						},
 					},
-				},
-			},
+				}...),
 			vosEnv: "AIO",
 		},
 		"AIO kdev class; multiple devices": {
 			class:   storage.ClassKdev,
 			devList: []string{"/dev/sdb", "/dev/sdc"},
-			expExtraBdevCfgs: []*SpdkSubsystemConfig{
-				{
-					Method: SpdkBdevAioCreate,
-					Params: AioCreateParams{
-						DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
-						Filename:   "/dev/sdb",
+			expBdevCfgs: append(defaultSpdkConfig().Subsystems[0].Configs,
+				[]*SpdkSubsystemConfig{
+					{
+						Method: SpdkBdevAioCreate,
+						Params: AioCreateParams{
+							DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
+							Filename:   "/dev/sdb",
+						},
 					},
-				},
-				{
-					Method: SpdkBdevAioCreate,
-					Params: AioCreateParams{
-						DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
-						Filename:   "/dev/sdc",
+					{
+						Method: SpdkBdevAioCreate,
+						Params: AioCreateParams{
+							DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
+							Filename:   "/dev/sdc",
+						},
 					},
-				},
-			},
+				}...),
 			vosEnv: "AIO",
 		},
 	}
@@ -165,10 +177,14 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				Bdev: storage.BdevConfig{
 					DeviceList: tc.devList,
 					FileSize:   tc.fileSizeGB,
+					BusidRange: tc.busidRange,
 				},
 			}
 			if tc.class != "" {
 				cfg.Class = tc.class
+			}
+			if tc.vosEnv == "" {
+				tc.vosEnv = "NVME"
 			}
 
 			engineConfig := engine.NewConfig().
@@ -181,7 +197,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 						WithScmDeviceList("foo").
 						WithScmMountPoint(mockMntpt),
 					cfg,
-				)
+				).
+				WithStorageEnableHotplug(tc.enableHotplug)
 
 			gotValidateErr := engineConfig.Validate() // populate output path
 			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
@@ -201,8 +218,15 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			}
 
 			expCfg := defaultSpdkConfig()
-			expCfg.Subsystems[0].Configs = append(expCfg.Subsystems[0].Configs, tc.expExtraBdevCfgs...)
-			expCfg.Subsystems = append(expCfg.Subsystems, tc.expExtraSubsystems...)
+			if tc.expExtraSubsystems != nil {
+				expCfg.Subsystems = append(expCfg.Subsystems, tc.expExtraSubsystems...)
+			}
+			if tc.expBdevCfgs != nil {
+				expCfg.Subsystems[0].Configs = tc.expBdevCfgs
+			}
+			if tc.expDaosCfgs != nil {
+				expCfg.DaosData.Configs = tc.expDaosCfgs
+			}
 
 			if diff := cmp.Diff(expCfg, gotCfg); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)

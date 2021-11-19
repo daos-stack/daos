@@ -327,11 +327,10 @@ func BdevWriteConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWrit
 	bdevTiers := cfg.Tiers.BdevConfigs()
 	req.TierProps = make([]BdevTierProperties, 0, len(bdevTiers))
 	for idx, tier := range bdevTiers {
-		log.Debugf("hp %v bdev tier %d, %+v", req.HotplugEnabled, idx, tier)
 		req.TierProps = append(req.TierProps, BdevTierPropertiesFromConfig(tier))
 
-		// populate hotplug bus-ID range limits from the first bdev tier
-		// to limit hotplug activity of a specific engine to a ssd device set
+		// Populate hotplug bus-ID range limits from the first bdev tier
+		// to limit hotplug activity of a specific engine to a ssd device set.
 		if req.HotplugEnabled && idx == 0 {
 			begin, end, err := common.GetRangeLimits(tier.Bdev.BusidRange)
 			if err != nil {
