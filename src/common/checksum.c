@@ -24,7 +24,7 @@ static int
 checksum_sgl_cb(uint8_t *buf, size_t len, void *args);
 
 static bool
-is_array(const daos_iod_t *iod)
+is_array_iod(const daos_iod_t *iod)
 {
 	return iod->iod_type == DAOS_IOD_ARRAY;
 }
@@ -334,7 +334,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
 			rec_chunksize = daos_csummer_get_rec_chunksize(obj,
 							       iod->iod_size);
 
-			csum_count = is_array(iod) ?
+			csum_count = is_array_iod(iod) ?
 				     daos_recx_calc_chunks(*recx, iod->iod_size,
 							   rec_chunksize) :
 				     daos_singv_calc_chunks(singv_los, i);
@@ -422,7 +422,7 @@ daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			uint32_t		 csum_count;
 
 			csum_info = &iod_csum->ic_data[j];
-			if (is_array(iod)) {
+			if (is_array_iod(iod)) {
 				daos_recx_t *recx;
 
 				recx = &iod->iod_recxs[j];
@@ -840,7 +840,7 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
 		daos_iom_t *map = maps == NULL ? NULL : &maps[i];
 
-		rc = is_array(iod) ?
+		rc = is_array_iod(iod) ?
 		     calc_csum_recx(obj, &sgls[i], iod->iod_size,
 				    iod->iod_recxs, iod->iod_nr,
 				    csums->ic_data, map) :

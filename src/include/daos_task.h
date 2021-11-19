@@ -80,8 +80,7 @@ typedef enum {
 	DAOS_OPC_TX_RESTART,
 
 	/** Object APIs */
-	DAOS_OPC_OBJ_REGISTER_CLASS = 43,
-	DAOS_OPC_OBJ_QUERY_CLASS,
+	DAOS_OPC_OBJ_QUERY_CLASS = 44,
 	DAOS_OPC_OBJ_LIST_CLASS,
 	DAOS_OPC_OBJ_OPEN,
 	DAOS_OPC_OBJ_CLOSE,
@@ -171,6 +170,16 @@ typedef struct {
 	/** Target array */
 	struct d_tgt_list	*tgts;
 } daos_pool_update_t;
+
+/** Object class register args */
+struct daos_obj_register_class_t {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** Object class ID. */
+	daos_oclass_id_t	cid;
+	/** Object class attributes. */
+	struct daos_oclass_attr	*cattr;
+};
 
 /** pool query args */
 typedef struct {
@@ -537,16 +546,6 @@ typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
 } daos_tx_restart_t;
-
-/** Object class register args */
-typedef struct {
-	/** Container open handle. */
-	daos_handle_t		coh;
-	/** Object class ID. */
-	daos_oclass_id_t	cid;
-	/** Object class attributes. */
-	struct daos_oclass_attr	*cattr;
-} daos_obj_register_class_t;
 
 /** Object class query args */
 typedef struct {
