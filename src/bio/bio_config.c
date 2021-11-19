@@ -9,6 +9,7 @@
 #include <spdk/util.h>
 #include <spdk/json.h>
 #include <spdk/thread.h>
+#include <spdk/nvme.h>
 #include <spdk/nvmf_spec.h>
 #include "bio_internal.h"
 
@@ -107,10 +108,17 @@ config_entry_decoders[] = {
 	{"params", offsetof(struct config_entry, params), cap_object, true}
 };
 
+struct busid_range_info {
+	uint64_t	begin;
+	uint64_t	end;
+};
+/* PCI address bus-ID range to be used to filter hotplug events */
+struct busid_range_info hotplug_busid_range = {};
+
 static struct spdk_json_object_decoder
 busid_range_decoders[] = {
-	{"begin", offsetof(struct bio_busid_range_info, begin), spdk_json_decode_uint64},
-	{"end", offsetof(struct bio_busid_range_info, end), spdk_json_decode_uint64},
+	{"begin", offsetof(struct busid_range_info, begin), spdk_json_decode_uint64},
+	{"end", offsetof(struct busid_range_info, end), spdk_json_decode_uint64},
 };
 
 static int
@@ -485,7 +493,7 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "subsystem '%.*s': found", ctx->subsystem_name->len,
+	D_DEBUG(DB_MGMT, "subsystem '%.*s': found\n", ctx->subsystem_name->len,
 		(char *)ctx->subsystem_name->start);
 
 	/* Get 'config' array first configuration entry */
@@ -504,7 +512,7 @@ out:
 }
 
 int
-bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
+bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts)
 {
 	struct json_config_ctx	*ctx;
 	struct spdk_json_val	*bdev_ss = NULL;
@@ -512,14 +520,14 @@ bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
 	bool			 vmd_enabled = false;
 	int			 rc = 0;
 
-	D_ASSERT(json_config_file != NULL);
+	D_ASSERT(nvme_conf != NULL);
 	D_ASSERT(opts != NULL);
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	rc = read_config(json_config_file, ctx);
+	rc = read_config(nvme_conf, ctx);
 	if (rc < 0)
 		goto out;
 
@@ -577,21 +585,21 @@ out:
 	return rc;
 }
 
-int
-bio_get_hotplug_busid_range(const char *json_config_file)
+static int
+get_hotplug_busid_range(const char *nvme_conf)
 {
 	struct json_config_ctx	*ctx;
 	struct spdk_json_val	*daos_data;
 	struct config_entry	 cfg = {};
 	int			 rc = 0;
 
-	D_ASSERT(json_config_file != NULL);
+	D_ASSERT(nvme_conf != NULL);
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	rc = read_config(json_config_file, ctx);
+	rc = read_config(nvme_conf, ctx);
 	if (rc < 0) {
 		D_ERROR("No config file\n");
 		goto out;
@@ -645,7 +653,7 @@ bio_get_hotplug_busid_range(const char *json_config_file)
 
 	rc = spdk_json_decode_object(cfg.params, busid_range_decoders,
 				     SPDK_COUNTOF(busid_range_decoders),
-				     &bio_hotplug_busid_range);
+				     &hotplug_busid_range);
 	if (rc < 0) {
 		D_ERROR("Failed to decode 'hotplug_busid_range' entry (rc: %d)\n", rc);
 		rc = -DER_INVAL;
@@ -653,10 +661,83 @@ bio_get_hotplug_busid_range(const char *json_config_file)
 	}
 
 	D_INFO("Hotplug bus-ID range read from config: %lX-%lX\n",
-		bio_hotplug_busid_range.begin, bio_hotplug_busid_range.end);
+		hotplug_busid_range.begin, hotplug_busid_range.end);
 out:
 	free(ctx->json_data);
 	free(ctx->values);
 	D_FREE(ctx);
+	return rc;
+}
+
+static int
+traddr_to_busid(char *src, uint64_t *dst)
+{
+	char		*tok;
+	int		 i;
+
+	for (i = 0; i < 2; i++) {
+		tok = strtok(src, ":");
+		if (tok == NULL) {
+			D_ERROR("pci address field %d empty\n", i);
+			return -1;
+		}
+		D_DEBUG(DB_MGMT, "pci address field %d: %s\n", i, tok);
+	}
+
+	*dst = strtoul(tok, NULL, 16);
+	if (errno == ERANGE) {
+		D_ERROR("%s hex string out of range\n", src);
+		return -DER_INVAL;
+	}
+
+	D_DEBUG(DB_MGMT, "bus ID: %lu\n", *dst);
+
+	return 0;
+}
+
+static bool
+hotplug_filter_fn(const struct spdk_pci_addr *addr)
+{
+	char		traddr[128];
+	uint64_t	busid;
+	uint64_t	begin;
+	uint64_t	end;
+
+	begin = hotplug_busid_range.begin;
+	end = hotplug_busid_range.end;
+
+	if ((end == 0) || (begin > end))
+		return true; /* allow if no or invalid range specified */
+
+	if (spdk_pci_addr_fmt(traddr, sizeof(traddr), addr) != 0) {
+		D_ERROR("unable to format pci address\n");
+		return true; /* allow on error */
+	}
+
+	if (traddr_to_busid(traddr, &busid) != 0) {
+		D_ERROR("input transport address %s invalid\n", traddr);
+		return true; /* allow on error */
+	}
+
+	if ((busid >= begin) && (busid <= end)) {
+		D_INFO("hotplug enabled on address %s\n", traddr);
+		return true;
+	}
+	D_INFO("skip enable hotplug on address %s\n", traddr);
+
+	return false;
+}
+
+int
+bio_set_hotplug_filter(const char *nvme_conf) {
+	int	rc = 0;
+
+	rc = get_hotplug_busid_range(nvme_conf);
+	if (rc < 0) {
+		return rc;
+	}
+
+	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
+
 	return rc;
 }

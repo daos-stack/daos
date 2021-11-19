@@ -46,8 +46,6 @@ unsigned int bio_chk_cnt_max;
 static unsigned int bio_chk_cnt_init;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
-/* Bus ID range to be used to filter hotplug events */
-struct bio_busid_range_info bio_hotplug_busid_range = {};
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -74,65 +72,6 @@ struct bio_nvme_data {
 
 static struct bio_nvme_data nvme_glb;
 uint64_t vmd_led_period;
-
-static int
-traddr_to_busid(char *src, uint64_t *dst)
-{
-	char		*tok;
-	int		 i;
-
-	for (i = 0; i < 2; i++) {
-		tok = strtok(src, ":");
-		if (tok == NULL) {
-			D_ERROR("pci address field %d empty\n", i);
-			return -1;
-		}
-		D_INFO("pci address field %d: %s\n", i, tok);
-	}
-
-	*dst = strtoul(tok, NULL, 16);
-	if (errno == ERANGE) {
-		D_ERROR("%s hex string out of range\n", src);
-		return -DER_INVAL;
-	}
-
-	D_INFO("bus ID: %lu\n", *dst);
-
-	return 0;
-}
-
-static bool
-hotplug_filter_fn(const struct spdk_pci_addr *addr)
-{
-	char		traddr[128];
-	uint64_t	busid;
-	uint64_t	begin;
-	uint64_t	end;
-
-	begin = bio_hotplug_busid_range.begin;
-	end = bio_hotplug_busid_range.end;
-
-	if ((end == 0) || (begin > end))
-		return true; /* allow if no or invalid range specified */
-
-	if (spdk_pci_addr_fmt(traddr, sizeof(traddr), addr) != 0) {
-		D_ERROR("unable to format pci address\n");
-		return true; /* allow on error */
-	}
-
-	if (traddr_to_busid(traddr, &busid) != 0) {
-		D_ERROR("input transport address %s invalid\n", traddr);
-		return true; /* allow on error */
-	}
-
-	if ((busid >= begin) && (busid <= end)) {
-		D_INFO("hotplug enabled on address %s\n", traddr);
-		return true;
-	}
-	D_INFO("skip enable hotplug on address %s\n", traddr);
-
-	return false;
-}
 
 static int
 bio_spdk_env_init(void)
@@ -169,8 +108,11 @@ bio_spdk_env_init(void)
 
 	opts.env_context = (char *)dpdk_cli_override_opts;
 
-	bio_get_hotplug_busid_range(nvme_glb.bd_nvme_conf);
-	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
+	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
+	if (rc != 0) {
+		D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
 
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
