@@ -2077,7 +2077,12 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	uint32_t			flags;
 	int				opc;
 	int				ret = task->dt_result;
+	bool				check = true;
+	bool				changed = false;
+	bool				first;
+	bool				is_ec_obj;
 	int				rc = 0;
+
 	crt_rpc_t			*rpc;
 
 	cb_args = (struct obj_query_key_cb_args *)data;
@@ -2089,6 +2094,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	flags = okqi->okqi_api_flags;
 	opc = opc_get(cb_args->rpc->cr_opc);
 
+	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 	if (ret != 0) {
 		D_ERROR("RPC %d failed, "DF_RC"\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
@@ -2123,15 +2129,11 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 				cb_args->rpc, opc, rc);
 		D_GOTO(out, rc);
 	}
-	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 
 	D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
 
-	bool check = true;
-	bool changed = false;
-	bool first = (cb_args->dkey->iov_len == 0);
-	bool is_ec_obj = obj_is_ec(cb_args->obj);
-
+	first = (cb_args->dkey->iov_len == 0);
+	is_ec_obj = obj_is_ec(cb_args->obj);
 	if (flags & DAOS_GET_DKEY) {
 		uint64_t *val = (uint64_t *)okqo->okqo_dkey.iov_buf;
 		uint64_t *cur = (uint64_t *)cb_args->dkey->iov_buf;
