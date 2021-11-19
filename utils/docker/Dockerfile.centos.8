@@ -21,8 +21,6 @@ ARG CB0
 # data for installing those keys.  Then the epel-release
 # package must be installed and the GPG key it provides must be
 # installed.
-RUN echo -e "assumeyes=True\n\
-install_weak_deps=False" >> /etc/dnf/dnf.conf
 ARG REPO_URL
 ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
@@ -36,18 +34,21 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
-      dnf install --disablerepo extras --disablerepo baseos     \
+      dnf -y install --disablerepo extras --disablerepo baseos  \
           epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
-      dnf config-manager --quiet --disable                      \
+      dnf config-manager --assumeyes --quiet --disable          \
           baseos powertools epel epel-modular extras;           \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
           -i /etc/dnf/dnf.conf;                                 \
-      dnf upgrade epel-release;                                 \
+      dnf -y upgrade epel-release;                              \
     else                                                        \
-      dnf install epel-release dnf-plugins-core &&              \
-      dnf config-manager --set-enabled powertools;              \
+      dnf -y install dnf-plugins-core &&                        \
+      dnf -y config-manager --set-enabled powertools;           \
+      dnf -y install epel-release;                              \
     fi;                                                         \
+    dnf config-manager --save --setopt=assumeyes=True &&        \
+    dnf config-manager --save --setopt=install_weak_deps=False && \
     dnf clean all
 
 # Currently the appstream REPO can not be part of a repo group
