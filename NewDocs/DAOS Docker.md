@@ -26,7 +26,7 @@ The first step is to set up a Docker image base for the OS of your choice. Fortu
 - Directly from GitHub
 
 If you prefer a different base than CentOS8, replace the filename "Dockerfile.centos.8" in the command strings below with one of the following."
-- Dockerfile.centos.7
+- Dockerfile.centos.8
 - Dockerfile.ubuntu.20.04
 
 > To perform the steps below yourself, you will need a minimum of 5GB of DDR and 16GB of storage. 
@@ -37,15 +37,15 @@ If you prefer a different base than CentOS8, replace the filename "Dockerfile.ce
 git clone https://github.com/daos-stack/daos.git 
 git submodule init; git submodule update
 cd daos
-docker build  . -f utils/docker/Dockerfile.centos.8 -t daos
+docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 
 ### 2. Build From Remote Github Repo
-In this step, we create a CentOS 8 image and fetches the latest DAOS version from [GitHub/daos-stack](https://github.com/daos-stack/daos/tree/master/utils/docker), builds it, and install it in the image.
+In this step, we create a CentOS 7 image and fetches the latest DAOS version from [GitHub/daos-stack](https://github.com/daos-stack/daos/tree/master/utils/docker), builds it, and install it in the image.
 
 > Note: This can easily take 15+ minutes
 
-`docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.8 -t daos`
+`docker build https://github.com/daos-stack/daos.git#release/1.2 -f utils/docker/Dockerfile.centos.7 -t daos`
 
 ## Docker Setup
 Once the image has been created, a container will need to be started to run the DAOS service. 
@@ -74,19 +74,19 @@ Hugepagesize:       2048 kB
 Hugetlb:        67108864 kB
 ```
 
+Alternatively, you can use 1g hugepages or no hugepages as well. Configuration of 1g Hugepages required changes in the kernal and is beyond the scope of this docment.
+
 For more help on hugepages see the [Ubuntu Documentation page](https://help.ubuntu.com/community/KVM%20-%20Using%20Hugepages) and the white paper [Intel Architecture Optimization with Large Code Pages](https://www.intel.com/content/dam/develop/external/us/en/documents/runtimeperformanceoptimizationblueprint-largecodepages-q1update.pdf)
 
-### Starting the Docker Container
-Now that we have a docker image created, we now need to start the docker container by invoking the "docker run" command:
+### Starting the Docker Container(not complete)
+Now that we have a docker image created, we now need to start the docker container by invoking the "docker run" command icluding the switches for the 2mb hugepages:
 
 `sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages:/dev/hugepages daos`
-Alternatively, you can use 1g hugepages or no hugepages as well. In those cases, the docker container would need to be started as follows:
 
-`sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev/hugepages-1G:/dev/hugepages-1G`
+To configure for other hugpage options, the -v parameters need to be altered to reflect either no hugepages or 1g page size.
 
-or
-
-`sudo docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev`
+- 1g Hugepages `-v /dev/hugepages-1G:/dev/hugepages-1G`
+- no Hugepages `-v /dev:/dev`
 
 > Warning: If Docker is being run on a non-Linux system, the "-v" parameter should be removed from the command line. Example:
 `sudo docker run -it -d --privileged --cap-add=ALL --name server`
