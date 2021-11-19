@@ -1952,6 +1952,8 @@ class posix_tests():
         print(os.fstat(ofd.fileno()))
 
         ofd.close()
+        if dfuse.stop():
+            self.fatal_errors = True
 
     @needs_dfuse
     def test_chmod_ro(self):
