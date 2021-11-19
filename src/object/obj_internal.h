@@ -462,10 +462,10 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
-int
-dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
-	      daos_oclass_id_t *oc_id_);
+int dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
+		  enum daos_otype_t otype, daos_oclass_hints_t hints,
+		  enum daos_obj_redun *ord, uint32_t *nr);
+
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
@@ -761,7 +761,7 @@ obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 	if (dkey == NULL)
 		return 0;
 
-	if (daos_obj_id2feat(oid) & DAOS_OF_DKEY_UINT64)
+	if (daos_is_dkey_uint64(oid))
 		return *(uint64_t *)dkey->iov_buf;
 
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,
