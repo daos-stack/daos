@@ -470,8 +470,13 @@ dss_srv_handler(void *arg)
 	/* wait until all xstreams are ready, otherwise it is not safe
 	 * to run lock-free dss_collective, although this race is not
 	 * realistically possible in the DAOS stack.
+	 *
+	 * The SWIM xstream, however, needs to start progressing crt quickly to
+	 * respond to incoming pings. It is out of the scope of
+	 * dss_{thread,task}_collective.
 	 */
-	ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
+	if (dx->dx_xs_id != 1 /* DSS_XS_SWIM */)
+		ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
 	signal_caller = false;
