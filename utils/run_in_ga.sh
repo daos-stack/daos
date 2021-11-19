@@ -2,6 +2,8 @@
 
 set -e
 
+cd daos
+
 SCONS=scons
 
 if [ ! -e /usr/bin/scons ]
