@@ -809,29 +809,24 @@ func GetDeviceNames() ([]string, error) {
 	return netNames, nil
 }
 
-// GetSupportedProviders returns a []string containing all supported Mercury providers
-func GetSupportedProviders() []string {
-	return []string{"ofi+gni", "ofi+psm2", "ofi+tcp", "ofi+sockets", "ofi+verbs", "ofi_rxm"}
-}
-
 // mercuryToLibFabric converts a single Mercury fabric provider string into a libfabric compatible provider string
-func mercuryToLibFabric(provider string) (string, error) {
+func mercuryToLibFabric(provider string) string {
 	switch provider {
 	case "ofi+sockets":
-		return "sockets", nil
+		return "sockets"
 	case "ofi+tcp":
-		return "tcp", nil
+		return "tcp"
 	case "ofi+verbs":
-		return "verbs", nil
+		return "verbs"
 	case "ofi_rxm":
-		return "ofi_rxm", nil
+		return "ofi_rxm"
 	case "ofi+psm2":
-		return "psm2", nil
+		return "psm2"
 	case "ofi+gni":
-		return "gni", nil
+		return "gni"
 	default:
+		return provider
 	}
-	return "", errors.Errorf("unknown fabric provider %q", provider)
 }
 
 // convertMercuryToLibFabric converts a Mercury provider string containing one or more providers
@@ -846,34 +841,29 @@ func convertMercuryToLibFabric(provider string) (string, error) {
 
 	tmp := strings.Split(provider, ";")
 	for _, subProvider := range tmp {
-		libFabricProvider, err := mercuryToLibFabric(subProvider)
-		if err != nil {
-			return "", errors.Errorf("unknown fabric provider %q", subProvider)
-		}
-		libFabricProviderList += libFabricProvider + ";"
+		libFabricProviderList += mercuryToLibFabric(subProvider) + ";"
 	}
 	return strings.TrimSuffix(libFabricProviderList, ";"), nil
 }
 
 // libFabricToMercury converts a single libfabric provider string into a Mercury compatible provider string
-func libFabricToMercury(provider string) (string, error) {
+func libFabricToMercury(provider string) string {
 	switch provider {
 	case "sockets":
-		return "ofi+sockets", nil
+		return "ofi+sockets"
 	case "tcp":
-		return "ofi+tcp", nil
+		return "ofi+tcp"
 	case "verbs":
-		return "ofi+verbs", nil
+		return "ofi+verbs"
 	case "ofi_rxm":
-		return "ofi_rxm", nil
+		return "ofi_rxm"
 	case "psm2":
-		return "ofi+psm2", nil
+		return "ofi+psm2"
 	case "gni":
-		return "ofi+gni", nil
+		return "ofi+gni"
 	default:
+		return provider
 	}
-
-	return "", errors.Errorf("unknown fabric provider %q", provider)
 }
 
 // convertLibFabricToMercury converts a libfabric provider string containing one or more providers
@@ -888,14 +878,7 @@ func convertLibFabricToMercury(provider string) (string, error) {
 
 	tmp := strings.Split(provider, ";")
 	for _, subProvider := range tmp {
-		mercuryProvider, err := libFabricToMercury(subProvider)
-		// It's non-fatal if libFabricToMercury returns an error.  It just means that
-		// this individual provider could not be converted.  It is only an error when
-		// none of the providers can be converted.
-		if err != nil {
-			continue
-		}
-		mercuryProviderList += mercuryProvider + ";"
+		mercuryProviderList += libFabricToMercury(subProvider) + ";"
 	}
 
 	// Success if we converted at least one provider

@@ -71,7 +71,8 @@ main(int argc, char **argv)
 	oid.hi = 5;
 
 	/* initial placement when all nodes alive */
-	daos_obj_set_oid(&oid, 0, OC_RP_4G2, 0);
+	rc = daos_obj_set_oid_by_class(&oid, 0, OC_RP_4G2, 0);
+	assert_success(rc == 0);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
 	assert_success(plt_obj_place(oid, &lo_1, pl_map, true));
 	plt_obj_layout_check(lo_1, COMPONENT_NR, 0);
