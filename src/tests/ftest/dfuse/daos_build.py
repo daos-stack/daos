@@ -29,7 +29,7 @@ class BuildDaos(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=vm
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild
         """
