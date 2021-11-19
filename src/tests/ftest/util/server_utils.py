@@ -373,7 +373,7 @@ class DaosServerManager(SubprocessManager):
         self.manager.job.update_pattern("normal", hosts_qty)
         args = [self.manager.process]
         if self.detect_start_via_dmg:
-            args.append(self.detect_engine_start)
+            args.append(self.get_detected_engine_count)
         if not self.manager.check_subprocess_status(*args):
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
