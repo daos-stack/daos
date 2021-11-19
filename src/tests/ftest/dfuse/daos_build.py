@@ -6,9 +6,10 @@
 """
 
 import os
-import errno
+import general_utils
 
 from dfuse_test_base import DfuseTestBase
+from command_utils import CommandFailure
 
 class BuildDaos(DfuseTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
@@ -44,15 +45,14 @@ class BuildDaos(DfuseTestBase):
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'scons-3 -C {} build --build-deps=yes'.format(build_dir)]
-        try:
-            ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=300)
-            print(ret)
-            if 0 not in ret_code:
-                error_hosts = NodeSet(",".join(
-                    [str(node_set) for code, node_set in
-                     list(ret_code.items()) if code != 0]))
+        for cmd in cmds:
+            try:
+                ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=300)
+                print(ret_code)
+                if 0 in ret_code:
+                    continue
                 raise CommandFailure("Error running '{}'".format(cmd))
-            # report error if any command fails
-        except CommandFailure as error:
-            self.log.error("BashCmd Test Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+                # report error if any command fails
+            except CommandFailure as error:
+                self.log.error("BashCmd Test Failed: %s", str(error))
+                self.fail("Test was expected to pass but it failed.\n")
