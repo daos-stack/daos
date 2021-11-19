@@ -211,7 +211,7 @@ class ParallelIo(FioBase, IorTestBase):
 
         # check dfuse is still running after attempting to access deleted
         # container.
-            self.log.info("(8)check dfuse is still runnin after attempting to "
+            self.log.info("(8)check dfuse is still running after attempting to "
                           "access deleted container.")
             self.dfuse.check_running()
 
