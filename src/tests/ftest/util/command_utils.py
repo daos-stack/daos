@@ -23,7 +23,7 @@ from command_utils_base import \
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout
+    get_subprocess_stdout, get_detected_pattern_count
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -674,7 +674,7 @@ class SubProcessCommand(CommandWithSubCommand):
             names[index] = "sub_command_class"
         return names
 
-    def check_subprocess_status(self, sub_process):
+    def check_subprocess_status(self, sub_process, detect_method=get_detected_pattern_count):
         """Verify the status of the command started as a subprocess.
 
         Continually search the subprocess output for a pattern (self.pattern)
@@ -684,6 +684,7 @@ class SubProcessCommand(CommandWithSubCommand):
 
         Args:
             sub_process (process.SubProcess): subprocess used to run the command
+            detect_method (object): method used to detect the number of patterns
 
         Returns:
             bool: whether or not the command progress has been detected
@@ -699,14 +700,14 @@ class SubProcessCommand(CommandWithSubCommand):
             complete = False
             timed_out = False
             start = time.time()
+            args = [sub_process, self.pattern]
 
             # Search for patterns in the subprocess output until:
             #   - the expected number of pattern matches are detected (success)
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                output = get_subprocess_stdout(sub_process)
-                detected = len(re.findall(self.pattern, output))
+                detected = detect_method(*args)
                 complete = detected == self.pattern_count
                 timed_out = time.time() - start > self.pattern_timeout.value
 

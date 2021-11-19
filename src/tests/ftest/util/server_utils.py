@@ -122,6 +122,9 @@ class DaosServerManager(SubprocessManager):
         # Storage and network information
         self.information = DaosServerInformation(self.dmg)
 
+        # Flag used to determine which method is used to detect that the server has started
+        self.detect_start_via_dmg = False
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -368,7 +371,10 @@ class DaosServerManager(SubprocessManager):
             hosts_qty = len(self._hosts)
         self.log.info("<SERVER> Waiting for the daos_engine to start")
         self.manager.job.update_pattern("normal", hosts_qty)
-        if not self.manager.check_subprocess_status(self.manager.process):
+        args = [self.manager.process]
+        if self.detect_start_via_dmg:
+            args.append(self.detect_engine_start)
+        if not self.manager.check_subprocess_status(*args):
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
@@ -377,6 +383,38 @@ class DaosServerManager(SubprocessManager):
 
         # Define the expected states for each rank
         self._expected_states = self.get_current_state()
+
+    def get_detected_engine_count(self):
+        """Get the number of detected joined engines.
+
+        Args:
+            pattern (str): pattern to detect in the output
+            sub_process (process.SubProcess): subprocess used to run the command
+
+        Returns:
+            int: number of patterns detected in the job output
+
+        """
+        detected = 0
+        expected_states = ["joined"]
+
+        # Run dmg system query to get the current state of each engine
+        states = self.get_current_state()
+
+        # Display a table of the engine states and count the number of running engines
+        log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
+        self.log.info(
+                log_format, "Rank", "Host", "UUID", "Expected State", "Current State", "Result")
+        self.log.info(log_format, "-" * 4, "-" * 15, "-" * 36, "-" * 22, "-" * 14, "-" * 6)
+        for rank in sorted(states):
+            result = states[rank]["state"].lower() in expected_states
+            self.log.info(
+                    log_format, rank, states[rank]["host"], states[rank]["uuid"],
+                    "|".join(expected_states), states[rank]["state"], result)
+            if result:
+                detected += 1
+
+        return detected
 
     def reset_storage(self):
         """Reset the server storage.

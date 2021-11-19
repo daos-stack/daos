@@ -1215,6 +1215,20 @@ def get_subprocess_stdout(subprocess):
     return output
 
 
+def get_detected_pattern_count(sub_process, pattern):
+    """Get the number of detected patterns in the subprocess output.
+
+    Args:
+        sub_process (process.SubProcess): subprocess used to run the command
+        pattern (str): pattern to detect in the subprocess output
+
+    Returns:
+        int: number of patterns detected in the subprocess output
+
+    """
+    return len(re.findall(pattern, get_subprocess_stdout(sub_process)))
+
+
 def create_string_buffer(value, size=None):
     """Create a ctypes string buffer.
 
