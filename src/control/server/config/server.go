@@ -320,8 +320,8 @@ func DefaultServer() *Server {
 		Hyperthreads:       false,
 		Path:               defaultConfigPath,
 		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
-		validateProviderFn: netdetect.ValidateProviderStub,
-		validateNUMAFn:     netdetect.ValidateNUMAStub,
+		validateProviderFn: netdetect.ValidateProviderConfig,
+		validateNUMAFn:     netdetect.ValidateNUMAConfig,
 		GetDeviceClassFn:   netdetect.GetDeviceClass,
 		EnableVMD:          false, // disabled by default
 		EnableHotplug:      false, // disabled by default
