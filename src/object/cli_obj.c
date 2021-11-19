@@ -454,12 +454,14 @@ obj_init_oca(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oca;
 	bool			 priv;
+	uint32_t		 nr_grps;
 
-	oca = daos_oclass_attr_find(obj->cob_md.omd_id, &priv);
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id, &priv, &nr_grps);
 	if (!oca)
 		return -DER_INVAL;
 
 	obj->cob_oca = *oca;
+	obj->cob_oca.ca_grp_nr = nr_grps;
 	if (daos_oclass_is_ec(oca) && !priv) {
 		struct cont_props	props;
 
@@ -934,9 +936,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	}
 shard_open:
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
-	if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH &&
-	    DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_FETCH) &&
-	    daos_shard_in_fail_value(shard + 1)) {
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_OPEN) &&
+		     daos_shard_in_fail_value(shard + 1))) {
 		rc = -DER_NONEXIST;
 		D_ERROR("obj_shard_open failed on shard %d, "DF_RC"\n",
 			shard, DP_RC(rc));
@@ -1171,7 +1172,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 					 * OSA case, will handle it via internal
 					 * transaction.
 					 */
-					if (tmp->st_tgt_id != last->st_tgt_id)
+					if (tmp->st_rank == DAOS_TGT_IGNORE ||
+					    tmp->st_tgt_id != last->st_tgt_id)
 						continue;
 
 					D_DEBUG(DB_IO, "Modify obj "DF_OID
@@ -1938,9 +1940,8 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 		  d_sg_list_t *sgls, bool update, bool size_fetch,
 		  bool spec_shard)
 {
-	int		i, j;
-	daos_ofeat_t	ofeat = daos_obj_id2feat(oid);
-	int		rc;
+	int i, j;
+	int rc;
 
 	if (iods == NULL) {
 		if (nr == 0)
@@ -1954,7 +1955,7 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 			D_ERROR("Invalid argument of NULL akey\n");
 			return -DER_INVAL;
 		}
-		if (ofeat & DAOS_OF_AKEY_UINT64 &&
+		if (daos_is_akey_uint64(oid) &&
 		    iods[i].iod_name.iov_len > sizeof(uint64_t))
 			return -DER_INVAL;
 		for (j = 0; j < iods[i].iod_nr; j++) {
@@ -2036,8 +2037,6 @@ static int
 check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 		  daos_key_t *akey, daos_recx_t *recx)
 {
-	daos_ofeat_t ofeat = daos_obj_id2feat(oid);
-
 	if (!(flags & (DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX))) {
 		D_ERROR("Key type or recx not specified in flags.\n");
 		return -DER_INVAL;
@@ -2069,7 +2068,7 @@ check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 	}
 
 	if (flags & DAOS_GET_DKEY) {
-		if (!(ofeat & DAOS_OF_DKEY_UINT64)) {
+		if (!daos_is_dkey_uint64(oid)) {
 			D_ERROR("Can't query non UINT64 typed Dkeys.\n");
 			return -DER_INVAL;
 		}
@@ -2081,7 +2080,7 @@ check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 	}
 
 	if (flags & DAOS_GET_AKEY) {
-		if (!(ofeat & DAOS_OF_AKEY_UINT64)) {
+		if (!(daos_is_akey_uint64(oid))) {
 			D_ERROR("Can't query non UINT64 typed Akeys.\n");
 			return -DER_INVAL;
 		}
@@ -2098,14 +2097,12 @@ check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 static inline bool
 obj_key_valid(daos_obj_id_t oid, daos_key_t *key, bool check_dkey)
 {
-	daos_ofeat_t ofeat = daos_obj_id2feat(oid);
-
 	if (check_dkey) {
-		if (ofeat & DAOS_OF_DKEY_UINT64 &&
+		if (daos_is_dkey_uint64(oid) &&
 		    key->iov_len > sizeof(uint64_t))
 			return false;
 	} else {
-		if (ofeat & DAOS_OF_AKEY_UINT64 &&
+		if (daos_is_akey_uint64(oid) &&
 		    key->iov_len > sizeof(uint64_t))
 			return false;
 	}
@@ -5740,14 +5737,45 @@ daos_dc_obj2id(void *ptr, daos_obj_id_t *id)
 	*id = obj->cob_md.omd_id;
 }
 
+/** Disable backward compat code */
+#undef daos_obj_generate_oid
+
 int
 daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
-		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
+		      enum daos_otype_t in, daos_oclass_id_t cid,
 		      daos_oclass_hints_t hints, uint32_t args)
+{
+	daos_ofeat_t	feat = (daos_ofeat_t)in;
+
+	return daos_obj_generate_oid2(coh, oid, daos_obj_feat2type(feat), cid, hints, args);
+}
+
+/**
+ * Create version that uses the deprecated daos_ofeat_t
+ */
+int
+daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
+		       daos_ofeat_t feat, daos_oclass_id_t cid,
+		       daos_oclass_hints_t hints, uint32_t args)
+{
+	return daos_obj_generate_oid(coh, oid, (enum daos_otype_t)feat, cid,
+				     hints, args);
+}
+
+/**
+ * Real latest & greatest implementation of container create.
+ * Used by anyone including the daos_obj.h header file.
+ */
+int
+daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
+		       enum daos_otype_t type, daos_oclass_id_t cid,
+		       daos_oclass_hints_t hints, uint32_t args)
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
 	struct pl_map_attr	attr;
+	enum daos_obj_redun	ord;
+	uint32_t		nr_grp;
 	int			rc;
 
 	/** select the oclass */
@@ -5770,28 +5798,31 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 
 		rf_factor = dc_cont_hdl2redunfac(coh);
 		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-				   attr.pa_target_nr, ofeats, hints, &cid);
+				   attr.pa_target_nr, type, hints, &ord,
+				   &nr_grp);
 	} else {
 		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
-					 attr.pa_target_nr, &cid);
+					 attr.pa_target_nr, &ord, &nr_grp);
 	}
 
 	if (rc)
 		return rc;
 
-	daos_obj_set_oid(oid, ofeats, cid, args);
+	daos_obj_set_oid(oid, type, ord, nr_grp, args);
 
 	return rc;
 }
 
 int
 daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
-			    daos_obj_id_t *oid, daos_ofeat_t ofeats,
+			    daos_obj_id_t *oid, enum daos_otype_t type,
 			    daos_oclass_id_t cid, daos_oclass_hints_t hints,
 			    uint32_t args)
 {
 	struct dc_pool		*pool;
 	struct pl_map_attr	attr;
+	enum daos_obj_redun	ord;
+	uint32_t		nr_grp;
 	int			rc;
 
 	pool = dc_hdl2pool(poh);
@@ -5803,28 +5834,31 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 
 	if (cid == OC_UNKNOWN)
 		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-				   attr.pa_target_nr, ofeats, hints, &cid);
+				   attr.pa_target_nr, type, hints, &ord,
+				   &nr_grp);
 	else
 		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
-					 attr.pa_target_nr, &cid);
+					 attr.pa_target_nr, &ord, &nr_grp);
 	if (rc)
 		return rc;
 
-	daos_obj_set_oid(oid, ofeats, cid, args);
+	daos_obj_set_oid(oid, type, ord, nr_grp, args);
 
 	return rc;
 }
 
 daos_oclass_id_t
 daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
-		  daos_oclass_hints_t hints, uint32_t args)
+		    daos_oclass_hints_t hints, uint32_t args)
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
 	struct pl_map_attr	attr;
 	uint64_t		rf_factor;
-	daos_oclass_id_t	cid;
 	int			rc;
+	enum daos_obj_redun	ord;
+	uint32_t		nr_grp;
+	enum daos_otype_t	type = daos_obj_feat2type(ofeats);
 
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);
@@ -5840,9 +5874,10 @@ daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
 
 	rf_factor = dc_cont_hdl2redunfac(coh);
 	rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-			   attr.pa_target_nr, ofeats, hints, &cid);
+			   attr.pa_target_nr, type, hints,
+			   &ord, &nr_grp);
 	if (rc)
 		return 0;
 
-	return cid;
+	return (ord << OC_REDUN_SHIFT) | nr_grp;
 }

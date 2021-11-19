@@ -1260,8 +1260,7 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 					      shard[i]);
 			}
 			fail_val = daos_shard_fail_value(shard, argc - 2);
-			arg->fail_loc = DAOS_FAIL_SHARD_FETCH |
-					DAOS_FAIL_ALWAYS;
+			arg->fail_loc = DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS;
 			arg->fail_value = fail_val;
 		} else if (strcmp(argv[1], "clear") == 0) {
 			arg->fail_loc = 0;
