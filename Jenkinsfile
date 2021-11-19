@@ -452,7 +452,8 @@ pipeline {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild()) +
+                                                                qb: quickBuild(),
+                                                                deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"' +
@@ -463,6 +464,7 @@ pipeline {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    scons_exe: 'scons-3',
+                                   build_deps: "no",
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -664,6 +666,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
                                                                 qb: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
@@ -674,6 +677,7 @@ pipeline {
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
                                    parallel_build: parallelBuild(),
+                                   build_deps: "no",
                                    scons_exe: 'scons-3'
                     }
                     post {
