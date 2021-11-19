@@ -1932,6 +1932,7 @@ class posix_tests():
                                       '--entry',
                                       'A::{}@:rta'.format(os.getlogin())])
         print(rc)
+        assert rc.returncode == 0
 
         # Assign the container to someone else.
         rc = run_daos_cmd(self.conf, ['container',
@@ -1941,6 +1942,7 @@ class posix_tests():
                                       '--user',
                                       'root@'])
         print(rc)
+        assert rc.returncode == 0
 
         # Now start dfuse and access the container, this should require read-only opening.
         dfuse = DFuse(self.server,
