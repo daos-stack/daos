@@ -1,8 +1,15 @@
-daos (2.1.100-7) unstable; urgency=medium
+daos (2.1.100-8) unstable; urgency=medium
   [ Alexander Oganezov ]
-  * Update mercury to v2.1.0rc3
+  * Update mercury to v2.1.0rc4
 
- -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 16 Nov 2021 10:00:01 -0100
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Thu, 18 Nov 2021 10:00:01 -0100
+
+daos (2.1.100-7) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Update for libdaos major version bump
+  * Fix version of libpemobj1 for SUSE
+
+ -- Wang Shilong <shilong.wang@intel.com>  Tue, 16 Nov 2021 12:42:54 -0400
 
 daos (2.1.100-6) unstable; urgency=medium
   [ Alexander Oganezov ]

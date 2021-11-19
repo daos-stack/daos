@@ -178,11 +178,9 @@ dc_kv_open(tse_task_t *task)
 	daos_kv_open_t		*args = daos_task_get_args(task);
 	tse_task_t		*open_task = NULL;
 	daos_obj_open_t		*open_args;
-	daos_ofeat_t		ofeat;
 	int			rc;
 
-	ofeat = daos_obj_id2feat(args->oid);
-	if (!(ofeat & DAOS_OF_KV_FLAT)) {
+	if (!daos_is_kv(args->oid)) {
 		D_ERROR("KV object must be of type Flat KV (OID feats).\n");
 		D_GOTO(err_ptask, rc = -DER_INVAL);
 	}

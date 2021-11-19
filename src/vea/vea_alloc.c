@@ -39,9 +39,7 @@ compound_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		/* Adjust in-tree offset & length */
 		remain->vfe_blk_off += vfe->vfe_blk_cnt;
 		remain->vfe_blk_cnt -= vfe->vfe_blk_cnt;
-		rc = daos_gettime_coarse(&remain->vfe_age);
-		if (rc)
-			return rc;
+		remain->vfe_age = get_current_age();
 
 		rc = free_class_add(vsi, entry);
 	}
@@ -154,9 +152,7 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 		if (tot_blks > (half_blks + blk_cnt)) {
 			vfe.vfe_blk_off = blk_off + half_blks + blk_cnt;
 			vfe.vfe_blk_cnt = tot_blks - half_blks - blk_cnt;
-			rc = daos_gettime_coarse(&vfe.vfe_age);
-			if (rc)
-				return rc;
+			vfe.vfe_age = get_current_age();
 
 			rc = compound_free(vsi, &vfe, VEA_FL_NO_MERGE |
 						VEA_FL_NO_ACCOUNTING);
