@@ -123,6 +123,9 @@ crt_context_set_timeout(crt_context_t crt_ctx, uint32_t timeout_sec);
 int
 crt_context_destroy(crt_context_t crt_ctx, int force);
 
+int
+crt_context_destroy_debug(crt_context_t crt_ctx, int force, int id);
+
 /**
  * check if the endpoint associated with \a crt_ctx is empty i.e. has no pending
  * RPCs

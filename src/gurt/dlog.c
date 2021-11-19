@@ -657,6 +657,8 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	if (flush)
 		last_flush = tv.tv_sec;
 
+	/* kccain hack - having some issues with D_LOG_FLUSH=DEBUG */
+	flush = true;
 	rc = d_log_write(b, tlen, flush);
 	if (rc < 0)
 		errno = save_errno;

@@ -48,9 +48,13 @@ is_listener_running(void)
 static void
 set_listener_running(bool enable)
 {
+	D_INFO("want to lock status.running_mutex\n");
 	ABT_mutex_lock(status.running_mutex);
+	D_INFO("locked status.running_mutex, running=%d before\n", status.running);
 	status.running = enable;
+	D_INFO("(still) locked status.running_mutex, running=%d after\n", status.running);
 	ABT_mutex_unlock(status.running_mutex);
+	D_INFO("unlocked status.running_mutex\n");
 }
 
 /*
@@ -182,11 +186,15 @@ drpc_listener_stop(void)
 
 	set_listener_running(false);
 
+	D_INFO("set listener running=false\n");
+
 	rc = ABT_thread_join(status.thread);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT error re-joining thread: %d\n", rc);
 		return dss_abterr2der(rc);
 	}
+
+	D_INFO("joined with drpc listener ULT (we think/hope)\n");
 
 	return 0;
 }
@@ -199,17 +207,23 @@ drpc_listener_fini(void)
 
 	rc = drpc_listener_stop();
 
+	D_INFO("drpc listener ULT stopped (we think/hope)\n");
+
 	tmp_rc = ABT_thread_free(&status.thread);
 	if (tmp_rc != ABT_SUCCESS) {
 		D_ERROR("ABT error freeing thread: %d\n", tmp_rc);
 		rc = dss_abterr2der(tmp_rc);
 	}
 
+	D_INFO("drpc listener ULT freed\n");
+
 	tmp_rc = ABT_mutex_free(&status.running_mutex);
 	if (tmp_rc != ABT_SUCCESS) {
 		D_ERROR("ABT error freeing mutex: %d\n", tmp_rc);
 		rc = dss_abterr2der(tmp_rc);
 	}
+
+	D_INFO("drpc listener running_mutex freed\n");
 
 	D_FREE(drpc_listener_socket_path);
 
