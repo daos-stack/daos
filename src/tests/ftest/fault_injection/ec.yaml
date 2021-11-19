@@ -8,7 +8,7 @@ hosts:
     - server-F
     - server-G
   test_clients:
-    - server-H
+    - client-A
 timeout: 300
 setup:
   start_agents_once: False
