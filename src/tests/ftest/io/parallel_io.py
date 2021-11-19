@@ -144,18 +144,18 @@ class ParallelIo(FioBase, IorTestBase):
         threads = []
 
         # Create a pool and start dfuse.
-        self.info.log("(1)Create a pool and start dfuse")
+        self.log.info("(1)Create a pool and start dfuse")
         self.create_pool()
         self.start_dfuse(self.hostlist_clients, self.pool[0], None)
 
         # create multiple containers
-        self.info.log("(2)Create multiple containers per pool")
+        self.log.info("(2)Create multiple containers per pool")
         for _ in range(self.cont_count):
             self.create_cont(self.pool[0])
 
         # check if all the created containers can be accessed and perform
         # io on each container using fio in parallel
-        self.info.log("(3)Check containers and launch io in paralle")
+        self.log.info("(3)Check containers and launch io in paralle")
         for _, cont in enumerate(self.container):
             dfuse_cont_dir = self.dfuse.mount_dir.value + "/" + cont.uuid
             cmd = "ls -a {}".format(dfuse_cont_dir)
@@ -184,21 +184,21 @@ class ParallelIo(FioBase, IorTestBase):
             thread.start()
 
         # wait for all fio jobs to be finished
-        self.info.log("(4)wait for all fio jobs to be finished")
+        self.log.info("(4)wait for all fio jobs to be finished")
         for job in threads:
             job.join()
 
         # destroy first container
-        self.info.log("(5)destroy first container")
+        self.log.info("(5)destroy first container")
         container_to_destroy = self.container[0].uuid
         self.container[0].destroy(1)
 
         # check dfuse if it is running fine
-        self.info.log("(6)heck dfuse if it is running fine")
+        self.log.info("(6)heck dfuse if it is running fine")
         self.dfuse.check_running()
 
         # try accessing destroyed container, it should fail
-        self.info.log("(7)try accessing destroyed container, it should fail")
+        self.log.info("(7)try accessing destroyed container, it should fail")
         try:
             self.execute_fio(
                 self.dfuse.mount_dir.value + "/" + container_to_destroy, False)
