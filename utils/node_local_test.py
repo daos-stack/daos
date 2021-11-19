@@ -3446,6 +3446,26 @@ def test_dfuse_start(server, conf, wf):
 
     container = create_cont(conf, pool, ctype='POSIX')
 
+    run_daos_cmd(conf,
+                 ['container', 'set-attr', pool, container,
+                  '--attr', 'dfuse-direct-io-disable', '--value', 'off'])
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr', pool, container,
+                  '--attr', 'dfuse-data-cache', '--value', 'on'])
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr', pool, container,
+                  '--attr', 'dfuse-attr-time', '--value', '1m'])
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr', pool, container,
+                  '--attr', 'dfuse-dentry-time', '--value', '1m'])
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr', pool, container,
+                  '--attr', 'dfuse-ndentry-time', '--value', '1m'])
+
     mount_point = os.path.join(conf.dfuse_parent_dir, 'fi-mount')
 
     os.mkdir(mount_point)
