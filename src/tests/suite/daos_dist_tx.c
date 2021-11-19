@@ -110,7 +110,7 @@ dtx_2(void **state)
 
 static void
 dtx_update_multiple_objs(test_arg_t *arg, daos_iod_type_t i_type,
-			 uint32_t size, uint16_t oclass)
+			 uint32_t size, daos_oclass_id_t oclass)
 {
 	const char	*dkey = dts_dtx_dkey;
 	const char	*akey = dts_dtx_akey;
@@ -863,7 +863,7 @@ dtx_19(void **state)
 	size_t		 max_size = 0;
 	daos_iod_type_t	 i_type;
 	int		 i;
-	uint16_t	 oclass;
+	daos_oclass_id_t oclass;
 
 	print_message("DTX19: misc rep and EC object update in same TX.\n");
 
@@ -939,14 +939,14 @@ dtx_19(void **state)
 
 static void
 dtx_init_oid_req_akey(test_arg_t *arg, daos_obj_id_t *oids, struct ioreq *reqs,
-		      uint16_t *ocs, daos_iod_type_t *types, char *akeys[],
+		      daos_oclass_id_t *ocs, daos_iod_type_t *types, char *akeys[],
 		      int oid_req_cnt, int akey_cnt, uint8_t ofeats)
 {
 	int	i;
 
 	for (i = 0; i < oid_req_cnt; i++) {
-		oids[i] = daos_test_oid_gen(arg->coh, ocs[i], ofeats, 0,
-					    arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, ocs[i],
+				daos_obj_feat2type(ofeats), 0, arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], types[i], arg);
 	}
 
@@ -982,7 +982,7 @@ dtx_20(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_SINGLE, DAOS_IOD_ARRAY };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G1 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G1 };
 	size_t		 size = (1 << 20) + 3;
 	int		 i;
 	int		 rc;
@@ -1079,7 +1079,7 @@ dtx_21(void **state)
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	daos_iod_type_t	 type = DAOS_IOD_ARRAY;
-	uint16_t	 oc = OC_RP_2G2;
+	daos_oclass_id_t oc = OC_RP_2G2;
 	size_t		 size = 32;
 	int		 i;
 	int		 rc;
@@ -1187,7 +1187,7 @@ dtx_22(void **state)
 	struct ioreq	 reqs[2];
 	uint64_t	 vals[2] = { 0 };
 	daos_iod_type_t	 types[2] = { DAOS_IOD_SINGLE, DAOS_IOD_ARRAY };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G1 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G1 };
 	int		 i, j;
 	int		 rc;
 
@@ -1283,7 +1283,7 @@ dtx_23(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G1 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G1 };
 	uint32_t	 vals[2];
 	int		 rc;
 	bool		 once = false;
@@ -1804,7 +1804,7 @@ dtx_29(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
 	uint64_t	 data[DTX_NC_CNT] = { 0 };
 	daos_off_t	 offsets[DTX_NC_CNT];
 	daos_size_t	 rec_sizes[DTX_NC_CNT];
@@ -1934,7 +1934,7 @@ dtx_30(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
 	int		 base = 10000;
 	int		 akey_size = 32;
 	daos_size_t	 buf_len = DTX_NC_CNT * 2 * akey_size;
@@ -2045,7 +2045,7 @@ dtx_31(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
 	uint64_t	 val;
 	int		 i;
 
@@ -2107,7 +2107,7 @@ dtx_32(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
 	uint64_t	 data[IOREQ_SG_IOD_NR] = { 0 };
 	int		 rx_nr[IOREQ_SG_IOD_NR];
 	daos_off_t	 offsets[IOREQ_SG_IOD_NR];
@@ -2182,7 +2182,7 @@ dtx_33(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_ARRAY };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
 	daos_handle_t	 th = { 0 };
 	daos_iod_t	 iod = { 0 };
 	d_sg_list_t	 sgl = { 0 };
@@ -2292,7 +2292,7 @@ dtx_34(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
 	daos_key_t	 api_dkey1;
 	daos_key_t	 api_dkey2;
 	daos_key_t	 api_akeys[DTX_NC_CNT];
@@ -2394,7 +2394,7 @@ dtx_35(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
-	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
+	daos_oclass_id_t ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
 	uint64_t	 val;
 	int		 i;
 
@@ -2498,7 +2498,7 @@ dtx_36(void **state)
 	struct ioreq	 reqs[2];
 	uint64_t	 vals[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
-	uint16_t	 ocs[2] = { OC_RP_3G2, OC_RP_3G1 };
+	daos_oclass_id_t ocs[2] = { OC_RP_3G2, OC_RP_3G1 };
 	daos_handle_t	 th = { 0 };
 	d_rank_t	 w_ranks[3];
 	d_rank_t	 r_ranks[6];
@@ -2620,7 +2620,7 @@ dtx_37(void **state)
 	struct ioreq	 req;
 	uint64_t	 val;
 	daos_iod_type_t	 type = DAOS_IOD_SINGLE;
-	uint16_t	 oc = OC_RP_3G2;
+	daos_oclass_id_t oc = OC_RP_3G2;
 	daos_handle_t	 th = { 0 };
 	d_rank_t	 kill_rank = CRT_NO_RANK;
 	int		 i;
@@ -2751,7 +2751,7 @@ dtx_38(void **state)
 	daos_obj_id_t	 oids[2];
 	struct ioreq	 reqs[2];
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
-	uint16_t	 ocs[2] = { OC_RP_3G2, OC_S1 };
+	daos_oclass_id_t ocs[2] = { OC_RP_3G2, OC_S1 };
 	uint64_t	 val;
 	daos_handle_t	 th = { 0 };
 	d_rank_t	 kill_ranks[2];
