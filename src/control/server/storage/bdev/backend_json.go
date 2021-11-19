@@ -295,6 +295,7 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 				break
 			}
 		}
+
 		sc.DaosData.Configs = append(sc.DaosData.Configs, &SpdkDaosConfig{
 			Method: SpdkHotplugBusidRange,
 			Params: HotplugBusidRangeParams{
@@ -302,7 +303,6 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 				End:   req.HotplugBusidEnd,
 			},
 		})
-
 	}
 
 	return sc.WithBdevConfigs(log, req), nil

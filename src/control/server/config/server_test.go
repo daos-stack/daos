@@ -636,6 +636,12 @@ func TestServerConfig_Parsing(t *testing.T) {
 			},
 			expValidateErr: errors.New("bdev_list contains duplicate pci"),
 		},
+		"bad busid range": {
+			// fail first engine storage
+			inTxt:          "    bdev_busid_range: 0x80-0x8f",
+			outTxt:         "    bdev_busid_range: 0x80-0x8g",
+			expValidateErr: errors.New("\"0x8g\": invalid syntax"),
+		},
 		"legacy storage; empty bdev_list": {
 			legacyStorage: true,
 			expCheck: func(c *Server) error {
@@ -738,7 +744,6 @@ func TestServerConfig_Parsing(t *testing.T) {
 				return
 			}
 			config = tt.extraConfig(config)
-			log.Debugf("%+v", config)
 
 			CmpErr(t, tt.expValidateErr, config.Validate(log))
 

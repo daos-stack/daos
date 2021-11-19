@@ -538,15 +538,8 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}
 
-	if cfg.EnableHotplug {
-		log.Debug("enable hotplug requested in config")
-	}
-	if cfg.DisableVFIO {
-		log.Debug("disable vfio requested in config")
-	}
-	if cfg.EnableVMD {
-		log.Debug("enable vmd requested in config")
-	}
+	log.Debugf("hotplug=%v vfio=%v vmd=%v requested in config", cfg.EnableHotplug,
+		!cfg.DisableVFIO, cfg.EnableVMD)
 
 	return nil
 }
