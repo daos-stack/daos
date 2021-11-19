@@ -1502,7 +1502,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	dsc_cont_get_props(coh, &props);
 	rc = dsc_obj_id2oc_attr(mrone->mo_oid.id_pub, &props, &mrone->mo_oca);
 	if (rc) {
-		D_ERROR("Unknown object class: %d\n",
+		D_ERROR("Unknown object class: %u\n",
 			daos_obj_id2class(mrone->mo_oid.id_pub));
 		D_GOTO(obj_close, rc);
 	}
@@ -2393,7 +2393,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	dsc_cont_get_props(coh, &props);
 	rc = dsc_obj_id2oc_attr(arg->oid.id_pub, &props, &unpack_arg.oc_attr);
 	if (rc) {
-		D_ERROR("Unknown object class: %d\n",
+		D_ERROR("Unknown object class: %u\n",
 			daos_obj_id2class(arg->oid.id_pub));
 		D_GOTO(out_cont, rc);
 	}
