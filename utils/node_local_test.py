@@ -2323,6 +2323,10 @@ def run_posix_tests(server, conf, test=None):
                                            label=fn)
                 pt.container_label = fn
                 rc = obj()
+                for fuse in server.fuse_procs:
+                    conf.wf.add_test_case('{} fuse leak'.format(pt.test_name),
+                                          'Test leaked dfuse instance at {}'.format(fuse),
+                                          test_class='test',)
                 destroy_container(conf, pool.id(), pt.container_label, valgrind=False)
                 pt.container = None
             except Exception as inst:
@@ -2337,9 +2341,7 @@ def run_posix_tests(server, conf, test=None):
             duration = time.time() - start
             print('rc from {} is {}'.format(fn, rc))
             print('Took {:.1f} seconds'.format(duration))
-            conf.wf.add_test_case(pt.test_name,
-                                  test_class='test',
-                                  duration = duration)
+            conf.wf.add_test_case(pt.test_name, test_class='test', duration = duration)
             if not pt.needs_more:
                 break
             pt.call_index = pt.call_index + 1
