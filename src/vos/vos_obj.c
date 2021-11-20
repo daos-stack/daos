@@ -30,8 +30,26 @@ struct vos_key_info {
 	bool			 ki_non_empty;
 	bool			 ki_has_uncommitted;
 	const void		*ki_first;
-	daos_handle_t		 ki_toh;
 };
+
+static inline int
+key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund, d_iov_t *keybuf,
+		      daos_anchor_t *anchor)
+{
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
+	struct dcs_csum_info	 csum;
+
+	tree_rec_bundle2iov(rbund, &riov);
+
+	rbund->rb_iov	= keybuf;
+	rbund->rb_csum	= &csum;
+
+	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
+	ci_set_null(rbund->rb_csum);
+
+	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
+}
 
 /** This callback is invoked only if the tree is not empty */
 static int
@@ -39,8 +57,10 @@ empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 		 vos_iter_type_t type, vos_iter_param_t *param, void *cb_arg,
 		 unsigned int *acts)
 {
+	struct vos_iterator	*iter;
+	struct vos_obj_iter	*oiter;
 	struct vos_rec_bundle	 rbund = {0};
-	d_iov_t			 val_iov;
+	d_iov_t			 key_iov;
 	struct umem_instance	*umm;
 	struct vos_key_info	*kinfo = cb_arg;
 	int			 rc;
@@ -59,12 +79,14 @@ empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 	}
 
-	d_iov_set(&val_iov, &rbund, sizeof(rbund));
-	rc = dbtree_fetch(kinfo->ki_toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &entry->ie_key, NULL,
-			  &val_iov);
+	iter = vos_hdl2iter(ih);
+	oiter = vos_iter2oiter(iter);
+	rc = key_iter_fetch_helper(oiter, &rbund, &key_iov, NULL);
 	if (rc != 0)
 		return rc;
 
+	D_ASSERT(key_iov.iov_len == entry->ie_key.iov_len);
+	D_ASSERT(memcmp(key_iov.iov_buf, entry->ie_key.iov_buf, key_iov.iov_len) == 0);
 	kinfo->ki_non_empty = true;
 	umm = vos_obj2umm(kinfo->ki_obj);
 	rc = umem_tx_add_ptr(umm, kinfo->ki_known_key, sizeof(*(kinfo->ki_known_key)));
@@ -94,7 +116,6 @@ tree_is_empty(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 	if (*known_key != UMOFF_NULL && (*known_key & 0x1) == 0)
 		return 0;
 
-	kinfo.ki_toh = toh;
 	kinfo.ki_obj = obj;
 	kinfo.ki_known_key = known_key;
 
@@ -683,24 +704,6 @@ fail:
  * - iterate a-key (array)
  * - iterate recx
  */
-static int
-key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund,
-		      d_iov_t *keybuf, daos_anchor_t *anchor)
-{
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
-	struct dcs_csum_info	 csum;
-
-	tree_rec_bundle2iov(rbund, &riov);
-
-	rbund->rb_iov	= keybuf;
-	rbund->rb_csum	= &csum;
-
-	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
-	ci_set_null(rbund->rb_csum);
-
-	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
-}
 
 static int
 key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
