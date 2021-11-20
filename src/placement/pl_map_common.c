@@ -130,7 +130,7 @@ op_get_grp_size(unsigned int domain_nr, unsigned int *grp_size,
 {
 	struct daos_oclass_attr *oc_attr;
 
-	oc_attr = daos_oclass_attr_find(oid, NULL);
+	oc_attr = daos_oclass_attr_find(oid, NULL, NULL);
 
 	*grp_size = daos_oclass_grp_size(oc_attr);
 	D_ASSERT(*grp_size != 0);
@@ -465,6 +465,9 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 		new_shards[grp_idx].po_target = f_shard->fs_tgt_id;
 		if (f_shard->fs_status != PO_COMP_ST_DRAIN)
 			new_shards[grp_idx].po_rebuilding = 1;
+
+		if (f_shard->fs_status == PO_COMP_ST_UP)
+			new_shards[grp_idx].po_reintegrating = 1;
 	}
 
 	layout->ol_grp_size += max_fail_grp;
