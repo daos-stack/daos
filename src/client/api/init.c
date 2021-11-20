@@ -23,6 +23,7 @@
 #include <daos/btree_class.h>
 #include <daos/placement.h>
 #include <daos/job.h>
+#include <daos/pipeline.h>
 #include "task_internal.h"
 #include <pthread.h>
 
@@ -122,6 +123,9 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_kv_put, sizeof(daos_kv_put_t)},
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
 	{dc_kv_list, sizeof(daos_kv_list_t)},
+
+	/** Pipeline */
+	{dc_pipeline_run__dummy, sizeof(daos_pipeline_run_t)},
 };
 
 /**
@@ -198,9 +202,16 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+	/** set up pipeline */
+	rc = dc_pipeline_init();
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
+
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
+out_obj:
+	dc_obj_fini();
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -251,6 +262,7 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	dc_pipeline_fini();
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();

@@ -24,6 +24,7 @@ extern "C" {
 #include <daos_pool.h>
 #include <daos_mgmt.h>
 #include <daos/tse.h>
+#include <daos_pipeline.h>
 
 /** DAOS operation codes for task creation */
 typedef enum {
@@ -117,6 +118,9 @@ typedef enum {
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_KV_LIST,
+
+	/** Pipeline APIs */
+	DAOS_OPC_PIPELINE_RUN,
 
 	DAOS_OPC_MAX
 } daos_opc_t;
@@ -963,6 +967,13 @@ typedef struct {
 	/** Hash anchor for the next call. */
 	daos_anchor_t		*anchor;
 } daos_kv_list_t;
+
+/** Pipeline run args */
+typedef struct {
+	daos_handle_t		oh;
+	daos_handle_t		th;
+	daos_pipeline_t		pipeline;
+} daos_pipeline_run_t;
 
 /**
  * Create an asynchronous task and associate it with a daos client operation.

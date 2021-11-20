@@ -6,6 +6,9 @@
 #define D_LOGFAC	DD_FAC(client)
 
 #include <daos/pipeline.h>
+#include <daos/task.h>
+#include "client_internal.h"
+#include "task_internal.h"
 
 
 void
@@ -87,6 +90,22 @@ int
 daos_pipeline_check(daos_pipeline_t *pipeline)
 {
 	return dc_pipeline_check(pipeline);
+}
+
+int
+daos_pipeline_run__dummy(daos_handle_t coh, daos_handle_t oh, daos_handle_t th,
+			 daos_pipeline_t pipeline)
+{
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_pipeline_run_task_create(coh, oh, th, pipeline, NULL, NULL,
+					 &task); 
+	if (rc)
+	{
+		return rc;
+	}
+	return dc_task_schedule(task, true);
 }
 
 int

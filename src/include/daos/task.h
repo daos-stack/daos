@@ -246,6 +246,12 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 			    daos_event_t *ev, tse_sched_t *tse,
 			    d_iov_t *csum, tse_task_t **task);
 
+int
+dc_pipeline_run_task_create(daos_handle_t coh, daos_handle_t oh,
+			    daos_handle_t th, daos_pipeline_t pipeline,
+			    daos_event_t *ev, tse_sched_t *tse,
+			    tse_task_t **task);
+
 void *
 dc_task_get_args(tse_task_t *task);
 #endif

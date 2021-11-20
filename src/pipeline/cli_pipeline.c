@@ -3,11 +3,22 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(object)
+#define D_LOGFAC	DD_FAC(pipeline)
 
+#include <daos/common.h>
 #include <daos_pipeline.h>
-#include <daos_api.h>
+#include <daos/task.h>
+#include <daos_task.h>
+#include <daos/pool.h>
+#include <daos/container.h>
+#include <daos/object.h>
+#include <daos_types.h>
+#include <daos/dtx.h>
+#include <daos/placement.h>
+#include <daos/event.h>
+#include <daos/mgmt.h>
 #include <math.h>
+#include "pipeline_rpc.h"
 
 static void
 pipeline_filter_get_data(daos_filter_part_t *part, d_iov_t *dkey,
@@ -783,6 +794,10 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 	return true;
 }
 
+
+/**************************/
+
+
 int dc_pipeline_check(daos_pipeline_t *pipeline)
 {
 	size_t i;
@@ -876,6 +891,473 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 	}
 
 	return 0;
+}
+
+struct pipeline_auxi_args {
+	int		opc;
+	int		result;
+	uint32_t	map_ver_req;
+	uint32_t	initial_shard;
+	daos_obj_id_t	omd_id;
+	tse_task_t	*pipeline_task;
+	d_list_t	shard_task_head;
+};
+
+struct shard_pipeline_run_args {
+	struct dtx_epoch		pra_epoch;
+	uint32_t			pra_map_ver;
+	uint32_t			pra_shard;
+	uint32_t			pra_target;
+
+	daos_pipeline_run_t		*pra_api_args;
+	struct dtx_id			pra_dti;
+	uuid_t				pra_coh_uuid;
+	uuid_t				pra_cont_uuid;
+	//uint64_t			pra_dkey_hash; // ??
+	
+	struct pipeline_auxi_args	*pipeline_auxi;
+};
+
+struct pipeline_run_cb_args {
+	crt_rpc_t		*rpc;
+	unsigned int		*map_ver;
+	struct dtx_epoch	epoch;
+	daos_handle_t		th;
+};
+
+static int
+pipeline_comp_cb(tse_task_t *task, void *data)
+{
+	if (task->dt_result != 0)
+	{
+		D_DEBUG(DB_IO, "pipeline_comp_db task=%p result=%d\n",
+			task, task->dt_result);
+	}
+
+	return 0;
+}
+
+static int
+pipeline_shard_run_cb(tse_task_t *task, void *data)
+{
+	struct pipeline_run_cb_args	*cb_args;
+	struct pipeline_run_in		*pri;
+	struct pipeline_run_out		*pro;
+	int				opc;
+	int				ret = task->dt_result;
+	int				rc = 0;
+	crt_rpc_t			*rpc;
+
+	cb_args		= (struct pipeline_run_cb_args *) data;
+	rpc		= cb_args->rpc;
+	pri		= crt_req_get(rpc);
+	D_ASSERT(pri != NULL);
+	opc = opc_get(rpc->cr_opc);
+
+	if (ret != 0)
+	{
+		D_ERROR("RPC %d failed, "DF_RC"\n", opc, DP_RC(ret));
+		D_GOTO(out, ret);
+	}
+
+	pro	= crt_reply_get(rpc);
+	//rc	= obj_reply_get_status(rpc); //TODO ?
+	/*if (daos_handle_is_valid(cb_args->th)) // ???
+	{
+		int rc_tmp;
+
+		rc_tmp = dc_tx_op_end(task, cb_args->th, &cb_args->epoch, rc,
+				      pro->pro_epoch);
+		if (rc_tmp != 0)
+		{
+			D_ERROR("failed to end transaction operation (rc=%d "
+				"epoch="DF_U64": "DF_RC"\n", rc,
+				pro->pro_epoch, DP_RC(rc_tmp));
+			goto out;
+		}
+	}*/
+
+	if (rc != 0)
+	{
+		if (rc == -DER_NONEXIST)
+		{
+			D_GOTO(out, rc = 0);
+		}
+		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY)
+		{
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
+				rpc, opc, rc);
+		}
+		else
+		{
+			D_ERROR("rpc %p RPC %d failed: %d\n", rpc, opc, rc);
+		}
+		D_GOTO(out, rc);
+	}
+	pro = (struct pipeline_run_out *) crt_reply_get(rpc);
+
+	fprintf(stdout, "(shard callback) RESULT = %lu\n", pro->pro_pong);
+	fflush(stdout);
+
+out:
+	crt_req_decref(rpc);
+	if (ret == 0) // || obj_retry_error(rc)) TODO
+	{
+		ret = rc;
+	}
+	return ret;
+}
+
+static int
+shard_pipeline_run_task(tse_task_t *task)
+{
+	struct shard_pipeline_run_args	*args;
+	crt_rpc_t			*req;
+	crt_context_t			crt_ctx;
+	crt_opcode_t			opcode;
+	crt_endpoint_t			tgt_ep;
+	daos_handle_t			coh;
+	daos_handle_t			poh;
+	struct dc_pool			*pool = NULL;
+	struct pool_target		*map_tgt;
+	struct pipeline_run_cb_args	cb_args;
+	struct pipeline_run_in		*pri;
+	int				rc;
+
+	args = tse_task_buf_embedded(task, sizeof(*args));
+	crt_ctx	= daos_task2ctx(task);
+	opcode	= DAOS_RPC_OPCODE(DAOS_PIPELINE_RPC_RUN,
+				  DAOS_PIPELINE_MODULE,
+				  DAOS_PIPELINE_VERSION);
+
+	coh	= dc_obj_hdl2cont_hdl(args->pra_api_args->oh);
+	poh	= dc_cont_hdl2pool_hdl(coh);
+	pool	= dc_hdl2pool(poh);
+	if (pool == NULL)
+	{
+		D_WARN("Cannot find valid pool\n");
+		D_GOTO(out, rc = -DER_NO_HDL);
+	}
+	rc = dc_cont_tgt_idx2ptr(coh, args->pra_target, &map_tgt);
+	if (rc != 0)
+	{
+		D_GOTO(out, rc);
+	}
+
+	tgt_ep.ep_grp	= pool->dp_sys->sy_group;
+	tgt_ep.ep_tag	= daos_rpc_tag(DAOS_REQ_IO, map_tgt->ta_comp.co_index);
+	tgt_ep.ep_rank	= map_tgt->ta_comp.co_rank;
+
+	rc = crt_req_create(crt_ctx, &tgt_ep, opcode, &req);
+	if (rc != 0)
+	{
+		D_GOTO(out, rc);
+	}
+	crt_req_addref(req);
+	cb_args.rpc		= req;
+	cb_args.map_ver		= &args->pra_map_ver;
+	cb_args.epoch		= args->pra_epoch;
+	cb_args.th		= args->pra_api_args->th;
+
+	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+	{
+		D_GOTO(out_req, rc);
+	}
+
+	pri = crt_req_get(req); //TODO
+	D_ASSERT(pri != NULL);
+	pri->pri_ping		= 12345;
+	pri->pri_epoch		= args->pra_epoch.oe_value;
+	pri->pri_epoch_first	= args->pra_epoch.oe_first;
+
+	rc = daos_rpc_send(req, task);
+	dc_pool_put(pool);
+	return rc;
+out_req:
+	crt_req_decref(req);
+	crt_req_decref(req);
+out:
+	if (pool)
+	{
+		dc_pool_put(pool);
+	}
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+static int
+shard_pipeline_task_abort(tse_task_t *task, void *arg)
+{
+	int	rc = *((int *)arg);
+
+	tse_task_list_del(task);
+	tse_task_decref(task);
+	tse_task_complete(task, rc);
+
+	return 0;
+}
+
+static int
+queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout,
+			      struct pipeline_auxi_args *pipeline_auxi,
+			      struct dtx_epoch *epoch, int shard,
+			      unsigned int map_ver, struct dtx_id *dti,
+			      uuid_t coh_uuid, uuid_t cont_uuid)
+{
+	daos_pipeline_run_t		*api_args;
+	tse_sched_t			*sched;
+	tse_task_t			*task;
+	struct shard_pipeline_run_args	*args;
+	int				rc;
+
+	/** queue task for leader shard */
+	api_args	= dc_task_get_args(api_task);
+	sched		= tse_task2sched(api_task);
+	rc		= tse_task_create(shard_pipeline_run_task, // TODO
+					  sched, NULL, &task);
+	if (rc != 0)
+	{
+		tse_task_complete(task, rc);
+		D_GOTO(out_task, rc);
+	}
+
+	args = tse_task_buf_embedded(task,
+				     sizeof(*args));
+	args->pra_api_args	= api_args;
+	args->pra_epoch		= *epoch;
+	args->pra_map_ver	= map_ver;
+	args->pra_shard		= shard;
+	args->pra_dti		= *dti;
+	args->pipeline_auxi	= pipeline_auxi;
+	uuid_copy(args->pra_coh_uuid, coh_uuid);
+	uuid_copy(args->pra_cont_uuid, cont_uuid);
+	args->pra_target	= layout->ol_shards[shard].po_target;
+	rc = tse_task_register_deps(api_task, 1, &task);
+	if (rc != 0)
+	{
+		tse_task_complete(task, rc);
+		D_GOTO(out_task, rc);
+	}
+	tse_task_addref(task);
+	tse_task_list_add(task, &pipeline_auxi->shard_task_head);
+
+out_task:
+	if (rc)
+	{
+		tse_task_complete(task, rc);
+	}
+	return rc;
+}
+
+struct shard_task_sched_args {
+	struct dtx_epoch	tsa_epoch;
+	bool			tsa_scheded;
+};
+
+static int
+shard_task_sched(tse_task_t *task, void *arg)
+{
+	struct shard_task_sched_args	*sched_arg = arg;
+	int				rc = 0;
+
+	/** TODO: Retry I/O 
+	* ...
+	* ...
+	* ...
+	*/
+
+	tse_task_schedule(task, true);
+	sched_arg->tsa_scheded = true;
+
+	return rc;
+}
+
+int
+dc_pipeline_run__dummy(tse_task_t *api_task)
+{
+	daos_pipeline_run_t		*api_args = dc_task_get_args(api_task);
+	struct pl_obj_layout		*layout = NULL;
+	struct dc_pool			*pool;
+	struct pl_map			*map;
+	daos_handle_t			coh;
+	daos_handle_t			poh;
+	struct daos_obj_md		obj_md;
+	struct daos_oclass_attr		*oca;
+	int				rc;
+	uint32_t			i;
+	d_list_t			*head = NULL;
+	struct dtx_id			dti;
+	struct dtx_epoch		epoch;
+	uint32_t			map_ver;
+	uuid_t				coh_uuid;
+	uuid_t				cont_uuid;
+	struct pipeline_auxi_args	*pipeline_auxi;
+	bool				priv;
+	struct shard_task_sched_args	sched_arg;
+
+	/** -- Layout create */
+
+	coh	= dc_obj_hdl2cont_hdl(api_args->oh);
+	rc	= dc_obj_hdl2obj_md(api_args->oh, &obj_md);
+	if (rc != 0)
+	{
+		D_GOTO(out, rc);
+	}
+	poh	= dc_cont_hdl2pool_hdl(coh);
+	pool	= dc_hdl2pool(poh);
+	if (pool == NULL)
+	{
+		D_WARN("Cannot find valid pool\n");
+		D_GOTO(out, rc = -DER_NO_HDL);
+	}
+	rc = dc_cont_hdl2uuid(coh, &coh_uuid, &cont_uuid);
+	if (rc != 0)
+	{
+		D_GOTO(out, rc);
+	}
+
+	map = pl_map_find(pool->dp_pool, obj_md.omd_id);
+	if (map == NULL)
+	{
+		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
+		dc_pool_put(pool);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	obj_md.omd_ver = dc_pool_get_version(pool);
+	dc_pool_put(pool);
+	rc = pl_obj_place(map, &obj_md, NULL, &layout);
+	pl_map_decref(map);
+	if (rc != 0)
+	{
+		D_DEBUG(DB_PL, "Failed to generate object layout\n");
+		D_GOTO(out, rc);
+	}
+	D_DEBUG(DB_PL, "Place object on %d targets ver %d\n", layout->ol_nr,
+		layout->ol_ver);
+	D_ASSERT(layout->ol_nr == layout->ol_grp_size * layout->ol_grp_nr);
+
+	if (daos_handle_is_valid(api_args->th))
+	{
+		rc = dc_tx_hdl2dti(api_args->th, &dti);
+		D_ASSERTF(rc == 0, "%d\n", rc);
+		rc = dc_tx_hdl2epoch_pmv(api_args->th, &epoch, &map_ver);
+		if (rc != 0)
+		{
+			D_GOTO(out, rc);
+		}
+	}
+	else
+	{
+		daos_dti_gen(&dti, true /* zero */);
+		dc_io_set_epoch(&epoch);
+		D_DEBUG(DB_IO, "set fetch epoch "DF_U64"\n", epoch.oe_value);
+	}
+	if (map_ver == 0)
+	{
+		map_ver = layout->ol_ver;
+	}
+
+	/** -- Create auxi object */
+
+	pipeline_auxi = tse_task_stack_push(api_task, sizeof(*pipeline_auxi));
+	pipeline_auxi->opc		= DAOS_PIPELINE_RPC_RUN;
+	pipeline_auxi->map_ver_req	= map_ver;
+	pipeline_auxi->omd_id		= obj_md.omd_id;
+	head				= &pipeline_auxi->shard_task_head;
+	D_INIT_LIST_HEAD(head);
+	rc = tse_task_register_comp_cb(api_task, pipeline_comp_cb, NULL, 0);
+	if (rc != 0)
+	{
+		D_ERROR("task %p, register_comp_cb "DF_RC"\n", api_task, DP_RC(rc));
+		tse_task_stack_pop(api_task, sizeof(struct pipeline_auxi_args));
+		D_GOTO(out, rc);
+	}
+
+	/** -- Iterate over shards */
+
+	oca = daos_oclass_attr_find(obj_md.omd_id, &priv);
+	if (oca == NULL)
+	{
+		D_DEBUG(DB_PL, "Failed to find oclass attr\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	D_ASSERT(d_list_empty(head));
+
+	for (i = 0; i < layout->ol_grp_nr; i++)
+	{
+		int start_shard;
+		int j;
+
+		/** Try leader for current group */
+		start_shard = i * layout->ol_grp_size;
+		if (!daos_oclass_is_ec(oca) ||
+				likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY)))
+		{
+			int leader;
+
+			leader =
+			     pl_select_leader(obj_md.omd_id,
+					      start_shard / layout->ol_grp_size,
+					      layout->ol_grp_size, NULL,
+					      pl_obj_get_shard, layout);
+			if (leader >= 0)
+			{
+				rc = queue_shard_pipeline_run_task(api_task, layout,
+								   pipeline_auxi,
+								   &epoch, leader,
+								   map_ver, &dti,
+								   coh_uuid, cont_uuid);
+				if (rc)
+				{
+					D_GOTO(out, rc);
+				}
+				continue;
+			}
+			if (!daos_oclass_is_ec(oca))
+			{
+				/* There has to be a leader for non-EC object */
+				D_ERROR(DF_OID" no valid shard, rc " DF_RC"\n",
+					DP_OID(obj_md.omd_id), DP_RC(leader));
+				D_GOTO(out, rc = leader);
+			}
+		}
+
+		/** Then try non-leader shards */
+		D_DEBUG(DB_IO, DF_OID" try non-leader shards for group %d.\n",
+			DP_OID(obj_md.omd_id), i);
+		for (j = start_shard; j < start_shard + oca->u.ec.e_k; j++) {
+			rc = queue_shard_pipeline_run_task(api_task, layout, pipeline_auxi,
+							   &epoch, j, map_ver, &dti,
+							   coh_uuid, cont_uuid);
+			if (rc)
+			{
+				D_GOTO(out, rc);
+			}
+		}
+	}
+
+	D_ASSERT(!d_list_empty(head));
+	sched_arg.tsa_scheded	= false;
+	sched_arg.tsa_epoch	= epoch;
+	tse_task_list_traverse(head, shard_task_sched, &sched_arg);
+	if (sched_arg.tsa_scheded == false)
+	{
+		tse_task_complete(api_task, 0);
+	}
+
+	return rc;
+out:
+	if (head != NULL && !d_list_empty(head))
+	{
+		tse_task_list_traverse(head, shard_pipeline_task_abort, &rc);
+	}
+	
+	tse_task_complete(api_task, rc);
+
+	return rc;
 }
 
 int

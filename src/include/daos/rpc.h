@@ -53,6 +53,7 @@ enum daos_module_id {
 	DAOS_DTX_MODULE		= 10, /** DTX */
 
 	DAOS_NR_MODULE		= 11, /** number of defined modules */
+	DAOS_PIPELINE_MODULE	= 12,
 	DAOS_MAX_MODULE		= 64  /** Size of uint64_t see dmg profile */
 };
 

@@ -8,6 +8,9 @@
 #ifndef __DD_PIPE_H__
 #define __DD_PIPE_H__
 
+#include <daos/common.h>
+#include <daos/tse.h>
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -16,7 +19,16 @@ extern "C" {
 #include <daos_pipeline.h>
 
 int
+dc_pipeline_init(void);
+
+void
+dc_pipeline_fini(void);
+
+int
 dc_pipeline_check(daos_pipeline_t *pipeline);
+
+int
+dc_pipeline_run__dummy(tse_task_t *api_task);
 
 int
 dc_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
