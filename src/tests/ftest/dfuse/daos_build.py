@@ -47,7 +47,7 @@ class BuildDaos(DfuseTestBase):
                 'scons-3 -C {} build --build-deps=yes'.format(build_dir)]
         for cmd in cmds:
             try:
-                ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=300)
+                ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=3600)
                 print(ret_code)
                 if 0 in ret_code:
                     continue
