@@ -6,11 +6,8 @@ hosts:
 timeout: 1200
 server_config:
   name: daos_server
-  servers:
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
 pool:
-  scm_size: 1000000000
+  size: 5GiB
   control_method: dmg
 container:
   type: POSIX
