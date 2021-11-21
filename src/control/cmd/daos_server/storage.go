@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 )
 
 type storageCmd struct {
@@ -33,7 +34,6 @@ type storagePrepareCmd struct {
 	logCmd
 	commands.StoragePrepareCmd
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
-	EnableVMD     bool   `long:"enable-vmd" description:"Additionally try to prepare any discovered VMD NVMe devices."`
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
@@ -64,7 +64,20 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	scanErrors := make([]error, 0, 2)
 
 	if prepNvme {
-		cmd.log.Info(op + " locally-attached NVMe storage...")
+		msg := op + " locally-attached NVMe storage..."
+		vmdEnabled := false
+
+		vmdAddrs, err := bdev.DetectVMD()
+		if err != nil {
+			return errors.Wrap(err, "attempting to detect vmd")
+		}
+		cmd.log.Debugf("volume management devices detected: %v", vmdAddrs)
+		if !vmdAddrs.IsEmpty() {
+			msg += " (VMD enabled)"
+			vmdEnabled = true
+		}
+
+		cmd.log.Info(msg)
 
 		if cmd.TargetUser == "" {
 			runningUser, err := user.Current()
@@ -81,7 +94,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			PCIAllowList:  cmd.PCIAllowList,
 			PCIBlockList:  cmd.PCIBlockList,
 			Reset_:        cmd.Reset,
-			EnableVMD:     cmd.EnableVMD,
+			EnableVMD:     vmdEnabled,
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}
@@ -129,12 +142,31 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 type storageScanCmd struct {
 	logCmd
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
+	if cmd.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
+			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
+		}
+	}
+
 	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
 
-	cmd.log.Info("Scanning locally-attached storage...")
+	msg := "Scanning locally-attached storage..."
+
+	vmdAddrs, err := bdev.DetectVMD()
+	if err != nil {
+		return errors.Wrap(err, "attempting to detect vmd")
+	}
+	cmd.log.Debugf("volume management devices detected: %v", vmdAddrs)
+	if !vmdAddrs.IsEmpty() {
+		msg += " (VMD enabled)"
+		svc.WithVMDEnabled()
+	}
+
+	cmd.log.Info(msg)
 
 	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)
