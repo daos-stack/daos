@@ -6,7 +6,7 @@
 The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.  This document includes
 instructions for CentOS. For setup instructions on OpenSuse, refer to the [OpenSuse setup](../suse_setup/). 
 For more details reference the DAOS administration guide:
-<https://daos-stack.github.io/admin/hardware/>
+<https://docs.daos.io/v2.0/admin/hardware/>
 
 ## Requirements
 
@@ -31,7 +31,7 @@ In addition the server nodes should also have:
 -   IOMMU is enabled:
 
 
-    <https://daos-stack.github.io/admin/predeployment_check/#enable-iommu-optional>
+    <https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu>
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -76,12 +76,12 @@ of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
 1.  Configure access to the DAOS package repository at
-    <https://packages.daos.io/v1.2>.
+    <https://packages.daos.io/v2.0>.
 
 
 		pdsh -w $ALL_NODES 'sudo wget -O
 		/etc/yum.repos.d/daos-packages.repo
-		https://packages.daos.io/v1.2/CentOS7/packages/x86_64/daos_packages.repo'
+		https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
 
 
 2. Import GPG key on all nodes:
@@ -216,7 +216,7 @@ Server nodes require the following certificate files:
     daos_server user
 
 See
-<https://daos-stack.github.io/admin/deployment/#certificate-configuration>
+<https://docs.daos.io/v2.0/admin/deployment/#server-configuration-file>
 for more information.
 
 !!!note
@@ -288,7 +288,7 @@ for more information.
 
 In this section the `daos_server`, `daos_agent`, and dmg command
 configuration files will be defined. Examples are available at
-<https://github.com/daos-stack/daos/tree/release/1.2/utils/config/examples>
+<https://github.com/daos-stack/daos/tree/release/2.0/utils/config/examples>
 
 1.  Determine the addresses for the NVMe devices on the server
     nodes:
@@ -306,7 +306,7 @@ configuration files will be defined. Examples are available at
 
 	An example of the daos_server.yml is presented below.  Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml.
 
-	More details on configuring the daos_server.yml file are available at [Server configuration file details](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml).
+	More details on configuring the daos_server.yml file are available at [Server configuration file details](https://github.com/daos-stack/daos/blob/release/2.0/utils/config/daos_server.yml).
 
 		name: daos_server
 
@@ -357,7 +357,7 @@ configuration files will be defined. Examples are available at
 
 1. Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
-1. Create an agent configuration file by modifying the default `/etc/daos/daos_agent.yml` file on the client nodes.  The following is an example daos_agent.yml. Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`. More details on configuring the daos_agent.yml file are available at [Agent configuration file details](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml)
+1. Create an agent configuration file by modifying the default `/etc/daos/daos_agent.yml` file on the client nodes.  The following is an example daos_agent.yml. Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`. More details on configuring the daos_agent.yml file are available at [Agent configuration file details](https://github.com/daos-stack/daos/blob/release/2.0/utils/config/daos_agent.yml)
 
 		name: daos_server
 		access_points: ['node-4']
@@ -372,7 +372,7 @@ configuration files will be defined. Examples are available at
 		runtime_dir: /var/run/daos_agent
 		log_file: /tmp/daos_agent.log
 
-1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node. The following is an example of the `daos_control.yml`. More details on configuring the `daos_control.yml` file are available in the [DMG configuration file details](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml).
+1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node. The following is an example of the `daos_control.yml`. More details on configuring the `daos_control.yml` file are available in the [DMG configuration file details](https://github.com/daos-stack/daos/blob/release/2.0/utils/config/daos_control.yml).
 
 		name: daos_server
 		port: 10001
