@@ -1859,10 +1859,12 @@ def install_debuginfos():
                     "install_debuginfos(): Unsupported distro: {}".format(
                         distro_info))
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
+        rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"])
         cmds.append(
             ["sudo", "dnf", "debuginfo-install",
-             "-y"] + dnf_args + ["daos-{client,server,tests}-" +
-             get_output(["rpm", "-q", "--qf", "%{evr}", "daos"])])
+             "-y"] + dnf_args + ["daos-client-" + rpm_version,
+                                 "daos-server-" + rpm_version,
+                                 "daos-tests-" + rpm_version])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
