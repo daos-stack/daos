@@ -21,8 +21,6 @@ ARG CB0
 # data for installing those keys.  Then the epel-release
 # package must be installed and the GPG key it provides must be
 # installed.
-# Turn off 'best' dependency resolution as this can cause conflicts between
-# rocky and epel when they get slightly out of sync with minor versions.
 ARG REPO_URL
 ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
@@ -50,7 +48,6 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       dnf -y install epel-release;                              \
     fi;                                                         \
     dnf config-manager --save --setopt=assumeyes=True &&        \
-    dnf config-manager --save --setopt=best=False &&            \
     dnf config-manager --save --setopt=install_weak_deps=False && \
     dnf clean all
 
