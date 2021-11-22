@@ -21,7 +21,7 @@
 #include <daos/container.h>
 
 static void
-rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
+rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 		    int kill_parity_nr, int write_type)
 {
 	test_arg_t		*arg = *state;
@@ -206,7 +206,7 @@ rebuild_ec_multi_stripes(void **state)
 	fail_shards[0] = 2;
 	fail_shards[1] = 1;
 	daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
-	daos_fail_loc_set(DAOS_FAIL_SHARD_FETCH | DAOS_FAIL_ALWAYS);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
 	for (i = 0; i < TEST_STRIPE_NR; i++) {
 		start = i * 4 * CELL_SIZE;
 		recxs[i * 2].rx_idx = start;
@@ -892,7 +892,7 @@ rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	data_size = ec_data_nr_get(oid) * EC_CELL_SIZE + 1000;
+	data_size = ec_data_nr_get(oid) * (uint64_t)EC_CELL_SIZE + 1000;
 	data = (char *)malloc(data_size);
 	assert_true(data != NULL);
 	verify_data = (char *)malloc(data_size);

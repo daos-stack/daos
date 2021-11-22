@@ -89,7 +89,7 @@ ior_dm:
       client_processes:
         fs_copy: 10
         ppn_8:
-          np: 8
+          ppn: 8
       api: DFS
       flags: "-w -F -k"
       signature: "5"
