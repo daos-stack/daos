@@ -804,8 +804,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
 		bool solo, bool sync, bool dist, bool migration,
-		bool ignore_uncommitted, bool force_refresh, bool resent,
-		bool prepared, struct dtx_handle *dth)
+		bool ignore_uncommitted, bool resent, bool prepared, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -835,7 +834,6 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_dist = dist ? 1 : 0;
 	dth->dth_for_migration = migration ? 1 : 0;
 	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
-	dth->dth_force_refresh = force_refresh ? 1 : 0;
 	dth->dth_prepared = prepared ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
@@ -1082,7 +1080,6 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_SYNC) ? true : false,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
-			     (flags & DTX_FORCE_REFRESH) ? true : false,
 			     (flags & DTX_RESEND) ? true : false,
 			     (flags & DTX_PREPARED) ? true : false, dth);
 
@@ -1397,7 +1394,6 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
 			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
-			     (flags & DTX_FORCE_REFRESH) ? true : false,
 			     (flags & DTX_RESEND) ? true : false, false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "

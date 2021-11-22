@@ -867,28 +867,25 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """
     my_env = get_base_env()
     prefix = 'dnt_dfuse_il_{}_'.format(get_inc_id())
-    log_file = tempfile.NamedTemporaryFile(prefix=prefix,
-                                           suffix='.log',
-                                           delete=False)
-    my_env['D_LOG_FILE'] = log_file.name
-    my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
-                                        'lib64', 'libioil.so')
+    with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
+        log_name = log_file.name
+    my_env['D_LOG_FILE'] = log_name
+    my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'], 'lib64', 'libioil.so')
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     my_env['D_IL_REPORT'] = '2'
     ret = subprocess.run(cmd, env=my_env, check=False)
-    print('Logged il to {}'.format(log_file.name))
+    print('Logged il to {}'.format(log_name))
     print(ret)
 
+    if dfuse.caching:
+        check_fstat = False
+
     try:
-        log_test(dfuse.conf,
-                 log_file.name,
-                 check_read=check_read,
-                 check_write=check_write,
+        log_test(dfuse.conf, log_name, check_read=check_read, check_write=check_write,
                  check_fstat=check_fstat)
         assert ret.returncode == 0
     except NLTestNoFunction as error:
-        print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
-                                                              error.function))
+        print("ERROR: command '{}' did not log via {}".format(' '.join(cmd), error.function))
         ret.returncode = 1
 
     return ret
@@ -1310,11 +1307,13 @@ def _create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, 
     if label:
         cmd.extend(['--properties',
                     'label:{}'.format(label)])
-    if ctype:
-        cmd.extend(['--type', ctype])
 
     if path:
         cmd.extend(['--path', path])
+        ctype = 'POSIX'
+
+    if ctype:
+        cmd.extend(['--type', ctype])
 
     if cont:
         cmd.extend(['--cont', cont])
@@ -1469,6 +1468,24 @@ def needs_dfuse_with_cache(method):
         return rc
     return _helper
 
+def needs_dfuse_no_cache(method):
+    """Decorator function for starting dfuse under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           caching=False,
+                           pool=self.pool.dfuse_mount_name(),
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__)
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
+        return rc
+    return _helper
+
 # This is test code where methods are tests, so we want to have lots of them.
 # pylint: disable=too-many-public-methods
 class posix_tests():
@@ -1587,7 +1604,7 @@ class posix_tests():
             assert rc.returncode == 0, rc
 
         child_path = os.path.join(self.dfuse.dir, 'new_cont')
-        new_cont = create_cont(self.conf, self.pool.uuid, path=child_path, ctype="POSIX")
+        new_cont = create_cont(self.conf, self.pool.uuid, path=child_path)
         print(new_cont)
         _check_cmd(child_path)
         _check_cmd(self.dfuse.dir)
@@ -1816,6 +1833,48 @@ class posix_tests():
         assert rc.returncode == 0
 
     @needs_dfuse
+    def test_il(self):
+        """Run a basic interception library test"""
+
+        create_and_read_via_il(self.dfuse, self.dfuse.dir)
+
+        sub_cont_dir = os.path.join(self.dfuse.dir, 'child')
+        create_cont(self.conf, path=sub_cont_dir)
+
+        # Create a file natively.
+        f = os.path.join(self.dfuse.dir, 'file')
+        with open(f, 'w') as fd:
+            fd.write('Hello')
+        # Copy it across containers.
+        ret = il_cmd(self.dfuse, ['cp', f, sub_cont_dir])
+        assert ret.returncode == 0
+
+        # Copy it within the container.
+        child_dir = os.path.join(self.dfuse.dir, 'new_dir')
+        os.mkdir(child_dir)
+        il_cmd(self.dfuse, ['cp', f, child_dir])
+        assert ret.returncode == 0
+
+        # Copy something into a container
+        ret = il_cmd(self.dfuse, ['cp', '/bin/bash', sub_cont_dir], check_read=False)
+        assert ret.returncode == 0
+        # Read it from within a container
+        # TODO:                              # pylint: disable=W0511
+        # change this to something else, md5sum uses fread which isn't
+        # intercepted.
+        ret = il_cmd(self.dfuse, ['md5sum', os.path.join(sub_cont_dir, 'bash')],
+                     check_read=False, check_write=False, check_fstat=False)
+        assert ret.returncode == 0
+        ret = il_cmd(self.dfuse, ['dd',
+                                  'if={}'.format(os.path.join(sub_cont_dir, 'bash')),
+                                  'of={}'.format(os.path.join(sub_cont_dir, 'bash_copy')),
+                                  'iflag=direct',
+                                  'oflag=direct',
+                                  'bs=128k'],
+                     check_fstat=False)
+        assert ret.returncode == 0
+
+    @needs_dfuse
     def test_xattr(self):
         """Perform basic tests with extended attributes"""
 
@@ -1888,7 +1947,7 @@ class posix_tests():
     def test_uns_create(self):
         """Simple test to create a container using a path in dfuse"""
         path = os.path.join(self.dfuse.dir, 'mycont')
-        create_cont(self.conf, path=path, ctype="POSIX")
+        create_cont(self.conf, path=path)
         stbuf = os.stat(path)
         print(stbuf)
         assert stbuf.st_ino < 100
@@ -2072,7 +2131,7 @@ class posix_tests():
         tmp_dir = tempfile.mkdtemp()
 
         cont_path = os.path.join(tmp_dir, 'my-cont')
-        create_cont(self.conf, self.pool.uuid, ctype="POSIX", path=cont_path)
+        create_cont(self.conf, self.pool.uuid, path=cont_path)
 
         dfuse = DFuse(self.server,
                       self.conf,
@@ -2107,11 +2166,7 @@ class posix_tests():
         uns_path = os.path.join(dfuse.dir, 'ep0')
         uns_container = str(uuid.uuid4())
         print('Inserting entry point')
-        create_cont(conf,
-                    pool=pool,
-                    cont=uns_container,
-                    path=uns_path,
-                    ctype="POSIX")
+        create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
 
@@ -2140,11 +2195,7 @@ class posix_tests():
 
         # Make a link within the new container.
         print('Inserting entry point')
-        create_cont(conf,
-                    pool=pool,
-                    cont=uns_container,
-                    path=uns_path,
-                    ctype="POSIX")
+        create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
 
         # List the root container again.
         print(os.listdir(os.path.join(dfuse.dir, pool, container)))
@@ -2210,7 +2261,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    @needs_dfuse
+    @needs_dfuse_no_cache
     def test_daos_fs_tool(self):
         """Create a UNS entry point"""
 
@@ -2222,11 +2273,7 @@ class posix_tests():
         uns_path = os.path.join(dfuse.dir, 'ep1')
         uns_container = str(uuid.uuid4())
         print('Inserting entry point')
-        create_cont(conf,
-                    pool=pool,
-                    cont=uns_container,
-                    path=uns_path,
-                    ctype="POSIX")
+        create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
 
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
@@ -2763,7 +2810,7 @@ def run_duns_overlay_test(server, conf):
 
     uns_dir = os.path.join(parent_dir.name, 'uns_ep')
 
-    create_cont(conf, pool=pool, path=uns_dir, ctype="POSIX")
+    create_cont(conf, pool=pool, path=uns_dir)
 
     dfuse = DFuse(server, conf, mount_path=uns_dir, caching=False)
 
@@ -2789,7 +2836,6 @@ def run_dfuse(server, conf):
     except OSError:
         umount(dfuse.dir)
         raise
-    container = str(uuid.uuid4())
     dfuse.start(v_hint='no_pool')
     print(os.statvfs(dfuse.dir))
     subprocess.run(['df', '-h'], check=True) # nosec
@@ -2801,27 +2847,26 @@ def run_dfuse(server, conf):
     pool_stat = os.stat(os.path.join(dfuse.dir, pool))
     print('stat for {}'.format(pool))
     print(pool_stat)
+    container = create_cont(server.conf, pool, ctype="POSIX")
     cdir = os.path.join(dfuse.dir, pool, container)
-    os.mkdir(cdir)
     #create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
 
-    container2 = str(uuid.uuid4())
     dfuse = DFuse(server, conf, pool=pool, caching=False)
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_only')
     print('Running dfuse with pool only')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
+    container2 = create_cont(server.conf, pool, ctype="POSIX")
     cpath = os.path.join(dfuse.dir, container2)
-    os.mkdir(cpath)
+    print(os.listdir(cpath))
     cdir = os.path.join(dfuse.dir, container)
     create_and_read_via_il(dfuse, cdir)
 
     fatal_errors.add_result(dfuse.stop())
 
-    dfuse = DFuse(server, conf, pool=pool, container=container,
-                  caching=False)
+    dfuse = DFuse(server, conf, pool=pool, container=container, caching=False)
     dfuse.cores = 2
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_and_cont')
@@ -2840,73 +2885,6 @@ def run_dfuse(server, conf):
     else:
         print('Reached the end, no errors')
     return fatal_errors.errors
-
-def run_il_test(server, conf):
-    """Run a basic interception library test"""
-
-    pool = server.get_test_pool()
-
-    # TODO:                       # pylint: disable=W0511
-    # Implement a test which copies across two pools.
-
-    dfuse = DFuse(server, conf, caching=False)
-    dfuse.start()
-
-    dirs = []
-
-    for _ in range(2):
-        # Use a unique ID for each container to avoid DAOS-5109
-        container = str(uuid.uuid4())
-
-        d = os.path.join(dfuse.dir, pool, container)
-        try:
-            print('Making directory {}'.format(d))
-            os.mkdir(d)
-        except FileExistsError:
-            pass
-        dirs.append(d)
-
-    # Create a file natively.
-    f = os.path.join(dirs[0], 'file')
-    fd = open(f, 'w')
-    fd.write('Hello')
-    fd.close()
-    # Copy it across containers.
-    ret = il_cmd(dfuse, ['cp', f, dirs[-1]])
-    assert ret.returncode == 0
-
-    # Copy it within the container.
-    child_dir = os.path.join(dirs[0], 'new_dir')
-    os.mkdir(child_dir)
-    il_cmd(dfuse, ['cp', f, child_dir])
-    assert ret.returncode == 0
-
-    # Copy something into a container
-    ret = il_cmd(dfuse, ['cp', '/bin/bash', dirs[-1]], check_read=False)
-    assert ret.returncode == 0
-    # Read it from within a container
-    # TODO:                              # pylint: disable=W0511
-    # change this to something else, md5sum uses fread which isn't
-    # intercepted.
-    ret = il_cmd(dfuse,
-                 ['md5sum', os.path.join(dirs[-1], 'bash')],
-                 check_read=False, check_write=False, check_fstat=False)
-    assert ret.returncode == 0
-    ret = il_cmd(dfuse, ['dd',
-                         'if={}'.format(os.path.join(dirs[-1], 'bash')),
-                         'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
-                         'iflag=direct',
-                         'oflag=direct',
-                         'bs=128k'],
-                 check_fstat=False)
-
-    print(ret)
-    assert ret.returncode == 0
-
-    for my_dir in dirs:
-        create_and_read_via_il(dfuse, my_dir)
-
-    dfuse.stop()
 
 def run_in_fg(server, conf):
     """Run dfuse in the foreground.
@@ -3627,23 +3605,18 @@ def test_alloc_fail_cat(server, conf):
     """
 
     pool = server.get_test_pool()
+    container = create_cont(conf, pool, ctype='POSIX', label='fault_inject')
 
-    dfuse = DFuse(server, conf, pool=pool)
+    dfuse = DFuse(server, conf, pool=pool, container=container)
     dfuse.use_valgrind = False
     dfuse.start()
 
-    container = str(uuid.uuid4())
+    target_file = os.path.join(dfuse.dir, 'test_file')
 
-    os.mkdir(os.path.join(dfuse.dir, container))
-    target_file = os.path.join(dfuse.dir, container, 'test_file')
+    with open(target_file, 'w') as fd:
+        fd.write('Hello there')
 
-    fd = open(target_file, 'w')
-    fd.write('Hello there')
-    fd.close()
-
-    cmd = ['cat', target_file]
-
-    test_cmd = AllocFailTest(conf, 'il-cat', cmd)
+    test_cmd = AllocFailTest(conf, 'il-cat', ['cat', target_file])
     test_cmd.use_il = True
     test_cmd.check_stderr = False
     test_cmd.wf = conf.wf
@@ -3757,8 +3730,6 @@ def run(wf, args):
         try:
             if args.mode == 'launch':
                 run_in_fg(server, conf)
-            elif args.mode == 'il':
-                fatal_errors.add_result(run_il_test(server, conf))
             elif args.mode == 'kv':
                 test_pydaos_kv(server, conf)
             elif args.mode == 'overlay':
@@ -3768,7 +3739,6 @@ def run(wf, args):
             elif args.mode == 'all':
                 fi_test_dfuse = True
                 fatal_errors.add_result(run_posix_tests(server, conf))
-                fatal_errors.add_result(run_il_test(server, conf))
                 fatal_errors.add_result(run_dfuse(server, conf))
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
                 test_pydaos_kv(server, conf)
@@ -3779,7 +3749,6 @@ def run(wf, args):
                 fatal_errors.add_result(run_posix_tests(server, conf, args.test))
             else:
                 fatal_errors.add_result(run_posix_tests(server, conf))
-                fatal_errors.add_result(run_il_test(server, conf))
                 fatal_errors.add_result(run_dfuse(server, conf))
                 fatal_errors.add_result(set_server_fi(server))
         finally:
