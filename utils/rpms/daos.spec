@@ -349,7 +349,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
-sysctl -p %{_sysconfdir}/sysctl.d/%{sysctl_script_name}
+%sysctl_apply %{sysctl_script_name}
 %preun server
 %systemd_preun %{server_svc_name}
 %postun server
