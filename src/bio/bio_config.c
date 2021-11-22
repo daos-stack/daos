@@ -351,7 +351,7 @@ load_vmd_subsystem_config(struct json_config_ctx *ctx, bool *vmd_enabled)
 	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
 				     SPDK_COUNTOF(config_entry_decoders), &cfg);
 	if (rc < 0) {
-		D_ERROR("Failed to decode config entry: %s\n", strerror(rc));
+		D_ERROR("Failed to decode config entry: %s\n", strerror(-rc));
 		return -DER_INVAL;
 	}
 
@@ -376,7 +376,7 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
 				     SPDK_COUNTOF(config_entry_decoders), &cfg);
 	if (rc < 0) {
-		D_ERROR("Failed to decode config entry: %s\n", strerror(rc));
+		D_ERROR("Failed to decode config entry: %s\n", strerror(-rc));
 		return -DER_INVAL;
 	}
 
@@ -451,7 +451,7 @@ add_bdevs_to_opts(struct json_config_ctx *ctx, struct spdk_json_val *bdev_ss, bo
 	rc = spdk_json_decode_object(bdev_ss, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
 				     ctx);
 	if (rc < 0) {
-		D_ERROR("Failed to parse bdev subsystem: %s\n", strerror(rc));
+		D_ERROR("Failed to parse bdev subsystem: %s\n", strerror(-rc));
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -488,7 +488,7 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 	rc = spdk_json_decode_object(vmd_ss, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
 				     ctx);
 	if (rc < 0) {
-		D_ERROR("Failed to parse vmd subsystem: %s\n", strerror(rc));
+		D_ERROR("Failed to parse vmd subsystem: %s\n", strerror(-rc));
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -534,7 +534,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts)
 	/* Capture subsystems array */
 	rc = spdk_json_find_array(ctx->values, "subsystems", NULL, &ctx->subsystems);
 	if (rc < 0) {
-		D_ERROR("Failed to find subsystems key: %s\n", strerror(rc));
+		D_ERROR("Failed to find subsystems key: %s\n", strerror(-rc));
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -552,7 +552,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts)
 		rc = spdk_json_decode_object(ctx->subsystems_it, subsystem_decoders,
 					     SPDK_COUNTOF(subsystem_decoders), ctx);
 		if (rc < 0) {
-			D_ERROR("Failed to parse subsystem configuration: %s\n", strerror(rc));
+			D_ERROR("Failed to parse subsystem configuration: %s\n", strerror(-rc));
 			rc = -DER_INVAL;
 			goto out;
 		}
@@ -609,7 +609,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
 			    SPDK_JSON_VAL_OBJECT_BEGIN);
 	if (rc < 0) {
-		D_ERROR("Failed to find 'daos_data' key: %s\n", strerror(rc));
+		D_ERROR("Failed to find 'daos_data' key: %s\n", strerror(-rc));
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -618,7 +618,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 	rc = spdk_json_decode_object(daos_data, daos_data_decoders,
 				     SPDK_COUNTOF(daos_data_decoders), ctx);
 	if (rc < 0) {
-		D_ERROR("Failed to parse 'daos_data' entry: %s\n", strerror(rc));
+		D_ERROR("Failed to parse 'daos_data' entry: %s\n", strerror(-rc));
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -627,6 +627,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 	ctx->config_it = spdk_json_array_first(ctx->config);
 	if (ctx->config_it == NULL) {
 		D_DEBUG(DB_MGMT, "Empty 'daos_data' section\n");
+		rc = 0;
 		goto out; /* non-fatal */
 	}
 
@@ -634,7 +635,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
 					    SPDK_COUNTOF(config_entry_decoders), &cfg);
 		if (rc < 0) {
-			D_ERROR("Failed to decode 'config' entry: %s\n", strerror(rc));
+			D_ERROR("Failed to decode 'config' entry: %s\n", strerror(-rc));
 			rc = -DER_INVAL;
 			goto out;
 		}
@@ -648,6 +649,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 
 	if (ctx->config_it == NULL) {
 		D_DEBUG(DB_MGMT, "No 'hotplug_busid_range' entry\n");
+		rc = 0;
 		goto out; /* non-fatal */
 	}
 
@@ -660,6 +662,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 		goto out;
 	}
 
+	rc = 0;
 	D_INFO("Hotplug bus-ID range read from config: %lX-%lX\n",
 		hotplug_busid_range.begin, hotplug_busid_range.end);
 out:
@@ -679,7 +682,7 @@ traddr_to_busid(char *src, uint64_t *dst)
 		tok = strtok(src, ":");
 		if (tok == NULL) {
 			D_ERROR("pci address field %d empty\n", i);
-			return -1;
+			return -DER_INVAL;
 		}
 		D_DEBUG(DB_MGMT, "pci address field %d: %s\n", i, tok);
 	}
