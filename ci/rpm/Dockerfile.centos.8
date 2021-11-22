@@ -23,7 +23,8 @@ ARG REPO_URL
 ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
       rpm --import /etc/pki/rpm-gpg/*;                          \
-      os_ver=$(lsb_release -sr)                                 \
+      set -x;                                                   \
+      os_ver=$(lsb_release -sr);                                \
       if [ "$os_ver" != "8.5.2111" ]; then                      \
           os_ver=${os_ver%.*};                                  \
       fi;                                                       \
