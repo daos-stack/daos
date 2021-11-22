@@ -1,0 +1,124 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+  test_clients:
+    - client-F
+    - client-G
+timeout: 2700
+server_config:
+    name: daos_server
+    engines_per_host: 2
+    servers:
+        0:
+          pinned_numa_node: 0
+          nr_xs_helpers: 1
+          fabric_iface: ib0
+          fabric_iface_port: 31317
+          log_file: daos_server0.log
+          bdev_class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          pinned_numa_node: 1
+          nr_xs_helpers: 1
+          fabric_iface: ib1
+          fabric_iface_port: 31417
+          log_file: daos_server1.log
+          bdev_class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 25G
+    nvme_size: 250G
+    control_method: dmg
+container:
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
+ior:
+    client_processes:
+        ppn_8:
+          ppn: 8
+    test_file: daos:testFile
+    repetitions: 2
+    dfs_destroy: False
+    iorflags:
+          ior_flags:
+            - "-v -W -w -r -R"
+            - "-v -W -w -r -R -F"
+          ior_api:
+            - DFS
+            - POSIX
+            - HDF5
+            - HDF5-VOL
+            - MPIIO
+          transfer_block_size:
+            - [256B, 2M]
+            - [1M, 32M]
+          obj_class:
+            - "SX"
+            - "RP_2GX"
+    ec_objectclass:
+      ec_oclass:
+      - "EC_2P1G1"
+      - "EC_2P1G8"
+      - "EC_2P1GX"
+      - "EC_2P2G1"
+      - "EC_2P2G8"
+      - "EC_2P2GX"
+      - "EC_4P1G1"
+      - "EC_4P1G8"
+      - "EC_4P1GX"
+      - "EC_4P2G1"
+      - "EC_4P2G8"
+      - "EC_4P2GX"
+      - "EC_8P2G1"
+      - "EC_8P2G8"
+      - "EC_8P2GX"
+ior_dm:
+      client_processes:
+        fs_copy: 10
+        ppn_8:
+          ppn: 8
+      api: DFS
+      flags: "-w -F -k"
+      signature: "5"
+      transfer_size: 1M
+      block_size: 1M
+      dfs_oclass: "EC_2P2GX"
+      test_file: "/testFile"
+      dfs_destroy: False
+
+mdtest:
+  client_processes:
+    ppn_8:
+      ppn: 8
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: True
+  manager: "MPICH"
+  mdtest_params:
+#     [api, write, read, branching_factor, num_of_dir_files, depth, flags]
+    - [DFS, 4096, 4096, 1, 1000, 0, ' ']
+    - [DFS, 4096, 4096, 1, 1000, 20, ' ']
+    - [POSIX, 0, 0, 1, 1000, 0, ' ']
+    - [POSIX, 0, 0, 1, 1000, 20, ' ']
+    - [DFS, 4096, 4096, 2, 10, 5, ' ']
+    - [POSIX, 4096, 4096, 2, 10, 5, ' ']
+    - [DFS, 4096, 4096, 1, 1000, 20, '-u']
+    - [POSIX, 0, 0, 2, 10, 5, '-u']
+dfuse:
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_caching: True
+hdf5_vol:
+    plugin_path: /usr/lib64/mpich/lib
