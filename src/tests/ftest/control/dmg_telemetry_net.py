@@ -37,7 +37,7 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
           * Ensure engine_net_ofi_sockets_req_timeout is greater than 0.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,large
         :avocado: tags=control,telemetry,net
         :avocado: tags=test_with_telemetry_net,test_net_telemetry
         """
