@@ -23,50 +23,70 @@ ARG REPO_URL
 ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
       rpm --import /etc/pki/rpm-gpg/*;                          \
-      MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
-      MY_NAME="${MY_REPO#*//}";                                 \
-      MY_NAME="${MY_NAME//\//_}";                               \
-      echo -e "[${MY_NAME}]\n\
+      os_ver=$(lsb_release -sr)                                 \
+      if [ "$os_ver" != "8.5.2111" ]; then                      \
+          os_ver=${os_ver%.*};                                  \
+      fi;                                                       \
+      for repo in centos-${os_ver}-{base,extras,powertools}; do \
+          MY_REPO="${REPO_URL}repository/$repo-x86_64-proxy";   \
+          MY_NAME="${MY_REPO#*//}";                             \
+          MY_NAME="${MY_NAME//\//_}";                           \
+          echo -e "[${MY_NAME}]\n\
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
-      dnf -y install --disablerepo extras --disablerepo baseos  \
-          epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;      \
+      done;                                                     \
+      dnf -y --disablerepo=baseos,powertools,extras             \
+          install dnf-plugins-core dnf-utils;                   \
+      dnf -y --quiet config-manager --disable                   \
+          baseos powertools extras;                             \
+      dnf -y install epel-release;                              \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
-      dnf config-manager --assumeyes --quiet --disable          \
-          baseos powertools epel epel-modular extras;           \
+      dnf -y --quiet config-manager --disable                   \
+          epel epel-modular;                                    \
+      for repo in epel-el-8; do                                 \
+          MY_REPO="${REPO_URL}repository/$repo-x86_64-proxy";   \
+          MY_NAME="${MY_REPO#*//}";                             \
+          MY_NAME="${MY_NAME//\//_}";                           \
+          echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;      \
+      done;                                                     \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
           -i /etc/dnf/dnf.conf;                                 \
       dnf -y upgrade epel-release;                              \
     else                                                        \
       dnf -y install epel-release dnf-plugins-core &&           \
-      dnf config-manager --assumeyes --set-enabled powertools;  \
+      dnf -y config-manager --set-enabled powertools;           \
     fi;                                                         \
     dnf clean all
 
 # Currently the appstream REPO can not be part of a repo group
-ARG REPO_APSTREAM
-RUN if [ -n "$REPO_APPSTREAM" ]; then                           \
-      rpm --import /etc/pki/rpm-gpg/*;                          \
-      MY_REPO="${REPO_URL}${REPO_APPSTREAM}/";                  \
-      MY_NAME="${MY_REPO#*//}";                                 \
-      MY_NAME="${MY_NAME//\//_}";                               \
+ARG REPO_APPSTREAM
+RUN if [ -n "$REPO_APPSTREAM" ]; then                                \
+      MY_REPO="${REPO_URL}${REPO_APPSTREAM/8.?/$(lsb_release -sr)}"; \
+      MY_NAME="${MY_REPO#*//}";                                      \
+      MY_NAME="${MY_NAME//\//_}";                                    \
       echo -e "[${MY_NAME}]\n\
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
-repo_gpgcheck=1\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
-      dnf config-manager --assumeyes --quiet --disable          \
-          appstream;                                            \
+repo_gpgcheck=0\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;       \
+      dnf -y --quiet config-manager --assumeyes --disable            \
+          appstream;                                                 \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
 ARG REPO_DAOS
 RUN if [ -n "$REPO_DAOS" ]; then                                \
+      REPO_DAOS="repository/daos-stack-el-8-x86_64-stable-local"; \
       MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \
       MY_NAME="${MY_NAME//\//_}";                               \
@@ -96,19 +116,7 @@ name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos8/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
-        cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
-        dnf repolist; \
-        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
-
-RUN dnf config-manager --add-repo=${REPO_URL}/repository/daos-stack-el-8-x86_64-stable-local/ && \
-    repo=${REPO_URL#*://}repository/daos-stack-el-8-x86_64-stable-local/;                        \
-    repo="${repo//%/}";                                                                          \
-    repo="${repo//\//_}";                                                                        \
-    dnf config-manager --save --setopt=${repo}.gpgcheck=0
-
-# needed because the group repo is for 8.3
-RUN dnf config-manager --add-repo=${REPO_URL}/repository/centos-8.4-base-x86_64-proxy/
 
 RUN dnf -y install epel-release dnf-plugins-core && \
     dnf config-manager --set-enabled powertools &&  \
