@@ -43,7 +43,7 @@ class BuildDaos(DfuseTestBase):
 
         cmds = ['git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git --git-dir {0}/.git --work-tree {0} submodule init'.format(build_dir),
-                'git --git-dir {0}/.git --work-tree {0} {} submodule update'.format(build_dir),
+                'git --git-dir {0}/.git --work-tree {0} submodule update'.format(build_dir),
                 'sudo yum -y install meson',
                 'python3 -m pip --disable-pip-version-check install --user pyelftools',
                 'scons-3 -C {} --jobs 50 build --build-deps=yes'.format(build_dir)]
