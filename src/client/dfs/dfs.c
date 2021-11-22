@@ -271,28 +271,6 @@ check_tx(daos_handle_t th, int rc)
 	return rc;
 }
 
-int
-dfs_oclass_select(daos_handle_t poh, daos_oclass_id_t oc_id,
-		  daos_oclass_id_t *oc_id_p)
-{
-	struct dc_pool		*pool;
-	struct pl_map_attr	 attr;
-	int			 rc;
-
-	pool = dc_hdl2pool(poh);
-	D_ASSERT(pool);
-
-	rc = pl_map_query(pool->dp_pool, &attr);
-	D_ASSERT(rc == 0);
-	dc_pool_put(pool);
-
-	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
-		attr.pa_domain_nr, attr.pa_target_nr);
-
-	return daos_oclass_fit_max(oc_id, attr.pa_domain_nr,
-				   attr.pa_target_nr, oc_id_p);
-}
-
 #define MAX_OID_HI ((1UL << 32) - 1)
 
 /*
@@ -307,8 +285,8 @@ dfs_oclass_select(daos_handle_t poh, daos_oclass_id_t oc_id,
 static int
 oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 {
-	daos_ofeat_t	feat = 0;
-	int		rc;
+	enum daos_otype_t type = DAOS_OT_MULTI_HASHED;
+	int rc;
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
@@ -330,11 +308,10 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
 	if (file)
-		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
-			DAOS_OF_ARRAY_BYTE;
+		type = DAOS_OT_ARRAY_BYTE;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	rc = daos_obj_generate_oid(dfs->coh, oid, feat, oclass, 0, 0);
+	rc = daos_obj_generate_oid(dfs->coh, oid, type, oclass, 0, 0);
 	if (rc) {
 		D_ERROR("daos_obj_generate_oid() failed "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
@@ -4678,7 +4655,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	daos_key_t	dkey;
 	daos_handle_t	oh;
 	int		rc;
-	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -4688,13 +4664,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
-
-	mode = obj->mode;
-
-	/* Patch in user read permissions here for trusted namespaces */
-	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
-	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
-		mode |= S_IRUSR;
 
 	xname = concat("x:", name);
 	if (xname == NULL)
@@ -4758,7 +4727,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	daos_handle_t	oh;
 	uint64_t	cond = 0;
 	int		rc;
-	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -4770,13 +4738,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
-
-	mode = obj->mode;
-
-	/* Patch in user read permissions here for trusted namespaces */
-	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
-	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
-		mode |= S_IRUSR;
 
 	xname = concat("x:", name);
 	if (xname == NULL)

@@ -135,7 +135,6 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	/* Insert the initial free extent */
 	free_ext.vfe_blk_off = hdr_blks;
 	free_ext.vfe_blk_cnt = tot_blks;
-	free_ext.vfe_flags = 0;
 	free_ext.vfe_age = VEA_EXT_AGE_MAX;
 
 	d_iov_set(&key, &free_ext.vfe_blk_off,
@@ -199,7 +198,7 @@ vea_unload(struct vea_space_info *vsi)
 int
 vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	 struct vea_space_df *md, struct vea_unmap_context *unmap_ctxt,
-	 struct vea_space_info **vsip)
+	 void *metrics, struct vea_space_info **vsip)
 {
 	struct umem_attr uma;
 	struct vea_space_info *vsi;
@@ -232,6 +231,7 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	vsi->vsi_agg_time = 0;
 	vsi->vsi_agg_scheduled = false;
 	vsi->vsi_unmap_ctxt = *unmap_ctxt;
+	vsi->vsi_metrics = metrics;
 
 	rc = create_free_class(&vsi->vsi_class, md);
 	if (rc)
@@ -309,6 +309,9 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 	hint_get(hint, &resrvd->vre_hint_off);
 
 retry:
+	/* Trigger free extents migration */
+	migrate_free_exts(vsi, false);
+
 	/* Reserve from hint offset */
 	rc = reserve_hint(vsi, blk_cnt, resrvd);
 	if (rc != 0)
@@ -336,8 +339,6 @@ retry:
 	if (rc == -DER_NOSPACE && retry) {
 		vsi->vsi_agg_time = 0; /* force free extents migration */
 		retry = false;
-		/* Trigger free extents migration */
-		migrate_free_exts(vsi, false);
 		goto retry;
 	} else if (rc != 0) {
 		goto error;
@@ -346,10 +347,7 @@ done:
 	D_ASSERT(resrvd->vre_blk_off != VEA_HINT_OFF_INVAL);
 	D_ASSERT(resrvd->vre_blk_cnt == blk_cnt);
 
-	D_ASSERTF(vsi->vsi_stat[STAT_FREE_BLKS] >= blk_cnt,
-		  "free:"DF_U64" < rsrvd:%u\n",
-		  vsi->vsi_stat[STAT_FREE_BLKS], blk_cnt);
-	vsi->vsi_stat[STAT_FREE_BLKS] -= blk_cnt;
+	dec_stats(vsi, STAT_FREE_BLKS, blk_cnt);
 
 	/* Update hint offset */
 	hint_update(hint, resrvd->vre_blk_off + blk_cnt,
@@ -371,17 +369,14 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	struct vea_free_extent vfe = {0};
 	uint64_t		 seq_max = 0, seq_min = 0;
 	uint64_t		 off_c = 0, off_p = 0;
-	uint64_t		 cur_time;
+	uint32_t		 cur_age;
 	unsigned int		 seq_cnt = 0;
 	int			 rc = 0;
 
 	if (d_list_empty(resrvd_list))
 		return 0;
 
-	rc = daos_gettime_coarse(&cur_time);
-	if (rc)
-		return rc;
-
+	cur_age = get_current_age();
 	vfe.vfe_blk_off = 0;
 	vfe.vfe_blk_cnt = 0;
 
@@ -408,7 +403,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		}
 
 		if (vfe.vfe_blk_cnt != 0) {
-			vfe.vfe_age = cur_time;
+			vfe.vfe_age = cur_age;
 			rc = publish ? persistent_alloc(vsi, &vfe) :
 				       compound_free(vsi, &vfe, 0);
 			if (rc)
@@ -420,7 +415,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	}
 
 	if (vfe.vfe_blk_cnt != 0) {
-		vfe.vfe_age = cur_time;
+		vfe.vfe_age = cur_age;
 		rc = publish ? persistent_alloc(vsi, &vfe) :
 			       compound_free(vsi, &vfe, 0);
 		if (rc)
@@ -678,8 +673,7 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 	}
 
 	if (stat != NULL) {
-		struct vea_free_class	*vfc = &vsi->vsi_class;
-		int			 i, rc;
+		int	rc;
 
 		stat->vs_free_persistent = 0;
 		rc = dbtree_iterate(vsi->vsi_md_free_btr, DAOS_INTENT_DEFAULT,
@@ -695,51 +689,28 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 		if (rc != 0)
 			return rc;
 
-		stat->vs_large_frags = d_binheap_size(&vfc->vfc_heap);
-
-		stat->vs_small_frags = 0;
-		stat->vs_largest_blks = 0;
-		for (i = 0; i < vfc->vfc_lru_cnt; i++) {
-			struct vea_entry	*ve;
-			d_list_t		*lru = &vfc->vfc_lrus[i];
-
-			d_list_for_each_entry(ve, lru, ve_link) {
-				stat->vs_small_frags++;
-				if (ve->ve_ext.vfe_blk_cnt >
-						stat->vs_largest_blks)
-					stat->vs_largest_blks =
-						ve->ve_ext.vfe_blk_cnt;
-			}
-		}
-
-		if (!d_binheap_is_empty(&vfc->vfc_heap)) {
-			struct d_binheap_node	*root;
-			struct vea_entry	*entry;
-
-			root = d_binheap_root(&vfc->vfc_heap);
-			entry = container_of(root, struct vea_entry, ve_node);
-			stat->vs_largest_blks = entry->ve_ext.vfe_blk_cnt;
-		}
-
 		stat->vs_resrv_hint = vsi->vsi_stat[STAT_RESRV_HINT];
 		stat->vs_resrv_large = vsi->vsi_stat[STAT_RESRV_LARGE];
 		stat->vs_resrv_small = vsi->vsi_stat[STAT_RESRV_SMALL];
-		stat->vs_resrv_vec = vsi->vsi_stat[STAT_RESRV_VEC];
+		stat->vs_frags_large = vsi->vsi_stat[STAT_FRAGS_LARGE];
+		stat->vs_frags_small = vsi->vsi_stat[STAT_FRAGS_SMALL];
+		stat->vs_frags_aging = vsi->vsi_stat[STAT_FRAGS_AGING];
 	}
 
 	return 0;
 }
 
-void
-vea_flush(struct vea_space_info *vsi, bool plug)
+int
+vea_flush(struct vea_space_info *vsi, bool force)
 {
 	D_ASSERT(vsi != NULL);
 
-	if (plug) {
-		vsi->vsi_agg_time = UINT64_MAX;
-		return;
-	}
+	if (d_list_empty(&vsi->vsi_agg_lru))
+		return 0;
 
-	vsi->vsi_agg_time = 0;
+	if (force)
+		vsi->vsi_agg_time = 0;
 	migrate_free_exts(vsi, false);
+
+	return 1;
 }
