@@ -69,18 +69,18 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;      \
 
 # Currently the appstream REPO can not be part of a repo group
 ARG REPO_APPSTREAM
-RUN if [ -n "$REPO_APPSTREAM" ]; then                                                    \
-      MY_REPO="${REPO_URL}${REPO_APPSTREAM/8.?/$(sed -e 's/.* //' /etc/redhat-release)"; \
-      MY_NAME="${MY_REPO#*//}";                                                          \
-      MY_NAME="${MY_NAME//\//_}";                                                        \
+RUN if [ -n "$REPO_APPSTREAM" ]; then                                                     \
+      MY_REPO="${REPO_URL}${REPO_APPSTREAM/8.?/$(sed -e 's/.* //' /etc/redhat-release)}"; \
+      MY_NAME="${MY_REPO#*//}";                                                           \
+      MY_NAME="${MY_NAME//\//_}";                                                         \
       echo -e "[${MY_NAME}]\n\
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;                           \
-      dnf -y --quiet config-manager --assumeyes --disable                                \
-          appstream;                                                                     \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;                            \
+      dnf -y --quiet config-manager --assumeyes --disable                                 \
+          appstream;                                                                      \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
