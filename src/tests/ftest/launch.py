@@ -1861,7 +1861,7 @@ def install_debuginfos():
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         cmds.append(
             ["sudo", "dnf", "debuginfo-install",
-             "-y"] + dnf_args + ["daos-server-" +
+             "-y"] + dnf_args + ["daos-{client,server,tests}-" +
              get_output(["rpm", "-q", "--qf", "%{evr}", "daos"])])
     else:
         # We're not using the yum API to install packages
