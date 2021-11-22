@@ -835,6 +835,7 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test EL8 RPMs on CentOS Stream 8') {
+                /* method code too large and not likely to fail
                 stage('Test EL8 RPMs on CentOS Stream 8') {
                     when {
                         beforeAgent true
@@ -848,6 +849,7 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test EL8 RPMs on CentOS Stream 8') {
+                */
                 stage('Test CentOS 8 RPMs in Docker') {
                     when {
                         beforeAgent true
