@@ -69,6 +69,7 @@ extern d_iov_t ds_pool_prop_scrub_cred;		/* uint64_t */
 struct pool_hdl {
 	uint64_t	ph_flags;
 	uint64_t	ph_sec_capas;
+	char		ph_machine[MAXHOSTNAMELEN+1];
 };
 
 /*

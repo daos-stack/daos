@@ -773,7 +773,7 @@ rebuild_objects(void **state)
 }
 
 static void
-rebuild_sx_object_internal(void **state, uint16_t oclass)
+rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -1032,7 +1032,7 @@ rebuild_multiple_group(void **state)
 	if (!test_runable(arg, 7))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, OC_RP_2G3, 0, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G4, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	print_message("Insert %d kv record in object "DF_OID"\n",

@@ -152,7 +152,8 @@ scrubbing_ult(void *arg)
 
 	C_TRACE(DF_PTGT": Scrubbing ULT started\n", DP_PTGT(pool_uuid, tgt_id));
 
-	D_ASSERT(child->spc_scrubbing_req != NULL);
+	if (child->spc_scrubbing_req == NULL)
+		return;
 
 	uuid_copy(ctx.sc_pool_uuid, pool_uuid);
 	ctx.sc_vos_pool_hdl = poh;

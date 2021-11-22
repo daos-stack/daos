@@ -24,55 +24,55 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
+struct vos_key_info {
+	bool			 ki_non_empty;
+	bool			 ki_has_uncommitted;
+};
+
 /** This callback is invoked only if the tree is not empty */
 static int
 empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 		 vos_iter_type_t type, vos_iter_param_t *param, void *cb_arg,
 		 unsigned int *acts)
 {
-	bool	*empty = cb_arg;
+	struct vos_key_info	*kinfo = cb_arg;
 
-	*empty = false;
+	if (entry->ie_vis_flags == VOS_IT_UNCOMMITTED) {
+		kinfo->ki_has_uncommitted = true;
+		return 0;
+	}
+
+	kinfo->ki_non_empty = true;
 
 	return 1; /* Return positive number to break iteration */
 }
 
 static int
-tree_is_empty(struct vos_object *obj, daos_handle_t toh,
+tree_is_empty(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 	      const daos_epoch_range_t *epr, vos_iter_type_t type)
 {
 	struct dtx_handle	*dth = vos_dth_get();
-	bool			 empty = true;
+	struct vos_key_info	 kinfo = {0};
 	int			 rc;
 
-	/** First ignore any uncommitted entries because they only matter
-	 *  when there are no committed entries
-	 */
 	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
-			     &empty, dth);
+			     &kinfo, dth, NULL);
 
 	if (rc < 0)
 		return rc;
 
-	if (!empty)
+	if (kinfo.ki_non_empty)
 		return 0;
 
-	/** Ok, there are no committed entries.  We need to run the iterator
-	 *  on more time to ensure there are no uncommitted entries.  If there
-	 *  are, this will return -DER_INPROGRESS.
-	 */
-	rc = vos_iterate_key(obj, toh, type, epr, false, empty_tree_check,
-			     &empty, dth);
-
-	if (rc < 0)
-		return rc;
+	if (kinfo.ki_has_uncommitted)
+		return -DER_INPROGRESS;
 
 	/** The tree is empty */
 	return 1;
 }
 
 static int
-vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
+vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 		    struct vos_ts_set *ts_set, const daos_epoch_range_t *epr,
 		    vos_iter_type_t type)
 {
@@ -93,9 +93,7 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		/** DAOS-4698.  Don't do emptiness check on dkey or propagate
-		 *  to object until this rebuild bug is fixed.
-		 */
+		/** Skip object punch propagation until performation is addressed */
 		return 0;
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
@@ -111,7 +109,7 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 	 */
 	vos_ts_set_append_cflags(ts_set, read_flag);
 
-	rc = tree_is_empty(obj, toh, epr, type);
+	rc = tree_is_empty(obj, known_key, toh, epr, type);
 	if (rc > 0) {
 		/** tree is now empty, set the flags so we can punch
 		 *  the parent
@@ -203,7 +201,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	for (i = 0; i < akey_nr; i++) {
 		rbund.rb_iov = &akeys[i];
 		rc = key_tree_punch(obj, toh, epoch, bound, &akeys[i], &riov,
-				    flags, ts_set, &info->ki_dkey,
+				    flags, ts_set, &krec->kr_known_akey, &info->ki_dkey,
 				    &info->ki_akey);
 		if (rc != 0) {
 			VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
@@ -214,7 +212,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 
 	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
 		/** Check if we need to propagate the punch */
-		rc = vos_propagate_check(obj, toh, ts_set, &epr,
+		rc = vos_propagate_check(obj, &krec->kr_known_akey, toh, ts_set, &epr,
 					 VOS_ITER_AKEY);
 	}
 
@@ -227,13 +225,14 @@ punch_dkey:
 	rbund.rb_tclass	= VOS_BTR_DKEY;
 
 	rc = key_tree_punch(obj, obj->obj_toh, epoch, bound, dkey, &riov,
-			    flags, ts_set, &info->ki_obj, &info->ki_dkey);
+			    flags, ts_set, &obj->obj_df->vo_known_dkey, &info->ki_obj,
+			    &info->ki_dkey);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
 		/** Check if we need to propagate to object */
-		rc = vos_propagate_check(obj, obj->obj_toh, ts_set,
+		rc = vos_propagate_check(obj, &obj->obj_df->vo_known_dkey, obj->obj_toh, ts_set,
 					 &epr, VOS_ITER_DKEY);
 	}
  out:
@@ -679,17 +678,22 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 				 check_existence, NULL);
 	if (rc == -DER_NONEXIST)
 		return IT_OPC_NEXT;
-	if (rc != 0)
-		return rc;
+	if (rc != 0) {
+		if (!oiter->it_iter.it_show_uncommitted || rc != -DER_INPROGRESS)
+			return rc;
+		/** Mark the entry as uncommitted but return it to the iterator */
+		ent->ie_vis_flags = VOS_IT_UNCOMMITTED;
+	} else {
+		ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
+		if (oiter->it_ilog_info.ii_create == 0) {
+			/* The key has no visible subtrees so mark it covered */
+			ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
+		}
+	}
 
 	ent->ie_epoch = epr.epr_hi;
 	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
 	ent->ie_obj_punch = oiter->it_obj->obj_ilog_info.ii_next_punch;
-	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-	if (oiter->it_ilog_info.ii_create == 0) {
-		/* The key has no visible subtrees so mark it covered */
-		ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
-	}
 	vos_ilog_last_update(&krec->kr_ilog, ts_type, &ent->ie_last_update);
 
 	return 0;
