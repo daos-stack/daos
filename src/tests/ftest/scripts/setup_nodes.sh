@@ -62,7 +62,7 @@ if [ \"\$(ulimit -l)\" != \"unlimited\" ]; then
 fi
 ulimit -a
 echo \"/var/tmp/core.%e.%t.%p\" > /proc/sys/kernel/core_pattern"
-rm -f /var/tmp/core.*
+sudo rm -f /var/tmp/core.*
 if [ "${HOSTNAME%%.*}" != "$FIRST_NODE" ]; then
     if grep /mnt/daos\  /proc/mounts; then
         sudo umount /mnt/daos
