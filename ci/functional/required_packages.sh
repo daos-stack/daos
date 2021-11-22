@@ -21,7 +21,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
         openmpi="openmpi3"
     fi
 
-    pkgs="$prefix ndctl fio patchutils
+    pkgs="$prefix ndctl fio patchutils"
 else
     echo "I don't know which packages should be installed for distro"
          "\"$distro\""
