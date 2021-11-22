@@ -909,7 +909,8 @@ pipeline {
                                 target: 'el8.4',
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
-                } // stage('Test CentOS 7 RPMs')
+                } // stage('Test CentOS Stream 8 RPMs on EL8.4.2105') {
+                /* method code too large
                 stage('Test CentOS Stream 8 RPMs on EL8.5.2111') {
                     when {
                         beforeAgent true
@@ -923,7 +924,8 @@ pipeline {
                                 target: 'el8.5',
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
-                } // stage('Test CentOS 7 RPMs')
+                } // stage('Test CentOS Stream 8 RPMs on EL8.5.2111') {
+                */
                 stage('Test CentOS Stream 8 RPMs on EL8.3.2011') {
                     when {
                         beforeAgent true
@@ -937,7 +939,7 @@ pipeline {
                                 target: 'el8.3',
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
-                } // stage('Test CentOS 7 RPMs')
+                } // stage('Test CentOS Stream 8 RPMs on EL8.3.2011') {
                 stage('Test Leap 15.2 RPMs') {
                     when {
                         beforeAgent true
