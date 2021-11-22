@@ -566,14 +566,12 @@ class DaosServer():
 
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
-            fd = open(os.path.join(self._io_server_dir.name,
-                                   'daos_engine'), 'w')
-            fd.write('#!/bin/sh\n')
-            fd.write('export PATH={}:$PATH\n'.format(
-                os.path.join(self.conf['PREFIX'], 'bin')))
-            fd.write('exec valgrind {} daos_engine "$@"\n'.format(
-                ' '.join(valgrind_args)))
-            fd.close()
+            with open(os.path.join(self._io_server_dir.name, 'daos_engine'), 'w') as fd:
+                fd.write('#!/bin/sh\n')
+                fd.write('export PATH={}:$PATH\n'.format(
+                    os.path.join(self.conf['PREFIX'], 'bin')))
+                fd.write('exec valgrind {} daos_engine "$@"\n'.format(
+                    ' '.join(valgrind_args)))
 
             os.chmod(os.path.join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
@@ -3648,9 +3646,6 @@ def run(wf, args):
     fi_test_dfuse = False
 
     fatal_errors = BoolRatchet()
-
-    if args.server_valgrind:
-        args.mode = 'kv'
 
     if args.mode == 'fi':
         fi_test = True
