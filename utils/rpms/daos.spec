@@ -420,7 +420,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
-%{_sysconfdir}/sysctl.d/%{sysctl_script_name}
+%{_sysctldir}/%{sysctl_script_name}
 
 %files client
 %{_libdir}/libdaos_common.so
