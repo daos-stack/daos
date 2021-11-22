@@ -62,6 +62,23 @@ dmg:
 #    insecure: False
 #    transport_config:
 #      allow_insecure: True
+pool_1:
+    control_method: dmg
+    name: daos_server
+    scm_size: 128MiB
+    nvme_size: 16GiB
+
+pool_2:
+    control_method: dmg
+    name: daos_server
+    scm_size: 10GiB
+    nvme_size: 50GiB
+pool_3:
+    control_method: dmg
+    name: daos_server
+    scm_size: 30GiB
+    nvme_size: 250GiB
+
 pool:
     mode: 146
     name: daos_server
