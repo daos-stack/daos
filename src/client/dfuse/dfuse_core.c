@@ -386,9 +386,8 @@ d_hash_table_ops_t cont_hops = {
  * Return code is a system errno.
  */
 int
-dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
-			const char *label,
-			struct dfuse_pool **_dfp)
+dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char *label,
+			    struct dfuse_pool **_dfp)
 {
 	struct dfuse_pool	*dfp;
 	daos_pool_info_t        p_info = {};
@@ -403,17 +402,13 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
-	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group,
-			       DAOS_PC_RW, &dfp->dfp_poh, &p_info, NULL);
+	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group, DAOS_PC_RO, &dfp->dfp_poh,
+			       &p_info, NULL);
 	if (rc) {
 		if (rc == -DER_NO_PERM)
-			DFUSE_TRA_INFO(dfp,
-				"daos_pool_connect() failed, "
-				DF_RC, DP_RC(rc));
+			DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
 		else
-			DFUSE_TRA_ERROR(dfp,
-					"daos_pool_connect() failed, "
-					DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	}
 
@@ -467,8 +462,7 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 	d_list_t		*rlink;
 	int			rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_pool_table,
-				pool, sizeof(*pool));
+	rlink = d_hash_rec_find(&fs_handle->dpi_pool_table, pool, sizeof(*pool));
 	if (rlink) {
 		*_dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 		return 0;
@@ -482,27 +476,21 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
-	DFUSE_TRA_DEBUG(dfp, "New pool "DF_UUIDF,
-			DP_UUID(pool));
+	DFUSE_TRA_DEBUG(dfp, "New pool "DF_UUIDF, DP_UUID(pool));
 
 	if (uuid_is_null(*pool) == 0) {
 		char uuid_str[37];
 
 		uuid_copy(dfp->dfp_pool, *pool);
 		uuid_unparse(dfp->dfp_pool, uuid_str);
-		rc = daos_pool_connect(uuid_str,
-				       fs_handle->dpi_info->di_group,
-				       DAOS_PC_RW,
+		rc = daos_pool_connect(uuid_str, fs_handle->dpi_info->di_group, DAOS_PC_RO,
 				       &dfp->dfp_poh, NULL, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM)
-				DFUSE_TRA_INFO(dfp,
-					       "daos_pool_connect() failed, "
-					       DF_RC, DP_RC(rc));
+				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, "DF_RC, DP_RC(rc));
 			else
-				DFUSE_TRA_ERROR(dfp,
-						"daos_pool_connect() failed, "
-						DF_RC, DP_RC(rc));
+				DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed, "DF_RC,
+						DP_RC(rc));
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 	}
