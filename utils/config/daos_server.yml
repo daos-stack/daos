@@ -353,7 +353,6 @@
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    bdev_busid_range: 0x80-0x8f
-#    #bdev_busid_range: 0x80-0x8F
 #    #bdev_busid_range: 128-143
 
 #-
@@ -497,5 +496,4 @@
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    bdev_busid_range: 0xd0-0xdf
-#    #bdev_busid_range: 0xD0-0xDF
 #    #bdev_busid_range: 208-223
