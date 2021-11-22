@@ -2517,8 +2517,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION)
 			dtx_flags = DTX_FOR_MIGRATION;
-		if (orw->orw_flags & ORF_DTX_REFRESH)
-			dtx_flags |= DTX_FORCE_REFRESH;
 
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
 			       orw->orw_map_ver, &orw->orw_oid,
@@ -2880,8 +2878,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION)
 		flags = DTX_FOR_MIGRATION;
-	if (oei->oei_flags & ORF_DTX_REFRESH)
-		flags |= DTX_FORCE_REFRESH;
 
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,
