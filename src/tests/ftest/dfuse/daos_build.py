@@ -45,6 +45,7 @@ class BuildDaos(DfuseTestBase):
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'sudo yum -y install meson',
+                'python3 -m pip --disable-pip-version-check install --user pyelftools'
                 'scons-3 -C {} build --build-deps=yes'.format(build_dir)]
         for cmd in cmds:
             try:
