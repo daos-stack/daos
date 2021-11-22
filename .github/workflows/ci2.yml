@@ -104,11 +104,6 @@ jobs:
           bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-
           bc-${{ matrix.distro }}-
         skip-save: true
-    - name: Update dependencies in image.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_BUILD=no
     - name: Build in docker.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                           --build-arg DEPS_JOBS
