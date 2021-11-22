@@ -32,6 +32,7 @@ RDB_STRING_KEY(ds_pool_attr_, user);
 RDB_STRING_KEY(ds_pool_prop_, scrub_sched);
 RDB_STRING_KEY(ds_pool_prop_, scrub_freq);
 RDB_STRING_KEY(ds_pool_prop_, scrub_cred);
+RDB_STRING_KEY(ds_pool_prop_, scrub_thresh);
 
 /** default properties, should cover all optional pool properties */
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
@@ -73,6 +74,9 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_CREDITS,
 		.dpe_val	= 1,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_SCRUB_THRESH,
+		.dpe_val	= 0,
 	}
 };
 

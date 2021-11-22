@@ -87,6 +87,7 @@ enum daos_pool_props {
 	 * default: 1 (will yield after every credit consumed)
 	 */
 	DAOS_PROP_PO_SCRUB_CREDITS,
+	DAOS_PROP_PO_SCRUB_THRESH,
 	DAOS_PROP_PO_MAX,
 };
 

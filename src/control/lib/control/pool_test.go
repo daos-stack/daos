@@ -702,6 +702,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Numval{1024},
 						},
 						{
+							Number: propWithVal("scrub-thresh", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{0},
+						},
+						{
 							Number: propWithVal("scrub-cred", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{1},
 						},
@@ -718,6 +722,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("scrub", "continuous"),
 				propWithVal("scrub-cred", "1"),
 				propWithVal("scrub-freq", "1024"),
+				propWithVal("scrub-thresh", "0"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
 			},

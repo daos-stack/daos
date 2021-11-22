@@ -42,6 +42,8 @@ const (
 	PoolPropertyScrubFreq = C.DAOS_PROP_PO_SCRUB_FREQ
 	// PoolPropertyScrubCred Checksum scrubbing credits
 	PoolPropertyScrubCred = C.DAOS_PROP_PO_SCRUB_CREDITS
+	// PoolPropertyScrubThresh Checksum scrubbing threshold
+	PoolPropertyScrubThresh = C.DAOS_PROP_PO_SCRUB_THRESH
 )
 
 const (
