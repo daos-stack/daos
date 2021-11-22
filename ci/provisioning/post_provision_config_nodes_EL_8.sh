@@ -20,7 +20,8 @@ distro_custom() {
         # now upgrade to CentOS 8 Stream
         # TODO: move this to the start of distro_custom, but for now leave here
         #       to verify that it is getting upgraded to Stream
-        sed -i -e '/repo\.dc\.hpdd\.intel\.com/s/8.3[^-]*/8-stream/g' /etc/yum.repos.d/repo.dc.hpdd.intel.com_repository_centos-8.3*
+        sed -i -e '/repo\.dc\.hpdd\.intel\.com/s/8.3[^-]*/8-stream/g' \
+            /etc/yum.repos.d/repo.dc.hpdd.intel.com_repository_centos-8.3*
         if ! retry_cmd 600 dnf -y upgrade --allowerasing --exclude "$EXCLUDE_UPGRADE"; then
             dump_repos
             exit 1
