@@ -67,7 +67,6 @@ pool_1:
     name: daos_server
     scm_size: 128MiB
     nvme_size: 16GiB
-
 pool_2:
     control_method: dmg
     name: daos_server

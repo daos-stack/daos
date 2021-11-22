@@ -45,16 +45,17 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
 #        sys_admin_pool_sizes = self.params.get("pool_sizes", '/run/sys_admin/*')
 
-        self.add_pool_qty(1, namespace="/run/pool_1/", create=False)
-        PoolTestBase.check_pool_creation(self, 30)
-        self.destroy_pools(self.pool)
-        self.pool = None
-        self.add_pool_qty(1, namespace="/run/pool_2/", create=False)
-        PoolTestBase.check_pool_creation(self, 30)
-        self.destroy_pools(self.pool)
-        self.pool = None
-        self.add_pool_qty(1, namespace="/run/pool_3/", create=False)
-        PoolTestBase.check_pool_creation(self, 60)
+        for idx in range(1, 4):
+            self.add_pool_qty(1, namespace="/run/pool_{}/".format(idx), create=False)
+            PoolTestBase.check_pool_creation(self, 60)
+            self.destroy_pools(self.pool)
+            self.pool = None
+#        self.add_pool_qty(1, namespace="/run/pool_2/", create=False)
+#        PoolTestBase.check_pool_creation(self, 30)
+#        self.destroy_pools(self.pool)
+#        self.pool = None
+#        self.add_pool_qty(1, namespace="/run/pool_3/", create=False)
+#        PoolTestBase.check_pool_creation(self, 60)
 
         dmg = self.get_dmg_command()
         dmg.pool_list()
