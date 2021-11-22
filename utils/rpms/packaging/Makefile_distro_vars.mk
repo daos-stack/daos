@@ -44,6 +44,15 @@ DISTRO_VERSION  ?= $(VERSION_ID)
 ORIG_TARGET_VER := 8
 SED_EXPR        := 1s/$(DIST)//p
 endif
+ifeq ($(CHROOT_NAME),centos-stream-8-x86_64)
+DIST            := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
+VERSION_ID      := 8
+DISTRO_ID       := el8
+DISTRO_BASE     := EL_8S
+DISTRO_VERSION  ?= $(VERSION_ID)
+ORIG_TARGET_VER := 8
+SED_EXPR        := 1s/$(DIST)//p
+endif
 ifeq ($(CHROOT_NAME),opensuse-leap-15.2-x86_64)
 VERSION_ID      := 15.2
 DISTRO_ID       := sl15.2

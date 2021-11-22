@@ -339,6 +339,11 @@ ifeq ($(LOCAL_REPOS),true)
     #DISTRO_REPOS = $(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)
     #$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)|$(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)/
     #endif
+    # hard code these until Jenkins is exporting them
+    DAOS_STACK_EL_8S_LOCAL_REPO       := repository/daos-stack-el-8-x86_64-stable-local
+    DAOS_STACK_EL_8S_STABLE_REPO      := repository/daos-stack-centos-8-stream-x86_64-stable-group
+    DAOS_STACK_EL_8S_APPSTREAM_REPO   := repository/centos-8-stream-appstream-x86_64-proxy
+    DAOS_STACK_EL_8S_POWERTOOLS_REPO  := repository/centos-8-stream-powertools-x86_64-proxy
     ifneq ($(DAOS_STACK_$(DISTRO_BASE)_$(DAOS_REPO_TYPE)_REPO),)
       ifeq ($(ID_LIKE),debian)
         # $(DISTRO_BASE)_LOCAL_REPOS is a list separated by | because you cannot pass lists
@@ -348,7 +353,10 @@ ifeq ($(LOCAL_REPOS),true)
         $(DISTRO_BASE)_LOCAL_REPOS := $(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO)
         DISTRO_REPOS = disabled # any non-empty value here works and is not used beyond testing if the value is empty or not
       endif # ifeq ($(ID_LIKE),debian)
-      ifeq ($(DISTRO_BASE), EL_8)
+      ifeq ($(DISTRO_BASE), EL_8S)
+        # hack to use stream 8 non-group repos on EL_8S
+        $(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)|$(subst $(ORIG_TARGET_VER),$(DISTRO_VERSION),$(REPOSITORY_URL)repository/centos-8-stream-base-x86_64-proxy|$(REPOSITORY_URL)repository/centos-8-stream-extras-x86_64-proxy|$(REPOSITORY_URL)repository/epel-el-8-x86_64-proxy)
+      else ifeq ($(DISTRO_BASE), EL_8)
         # hack to use 8.3 non-group repos on EL_8
         $(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)|$(subst $(ORIG_TARGET_VER),$(DISTRO_VERSION),$(REPOSITORY_URL)repository/centos-8.3-base-x86_64-proxy|$(REPOSITORY_URL)repository/centos-8.3-extras-x86_64-proxy|$(REPOSITORY_URL)repository/epel-el-8-x86_64-proxy)
       else ifeq ($(DISTRO_BASE), EL_7)

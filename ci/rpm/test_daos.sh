@@ -19,4 +19,5 @@ scp -i ci_key /tmp/daos_agent.yml /tmp/dmg.yml /tmp/daos_server.yml \
 ssh "$SSH_KEY_ARGS" jenkins@"${nodelist[0]}" \
   "NODE=${nodelist[0]}                       \
    DAOS_PKG_VERSION=$DAOS_PKG_VERSION        \
+   OFI_INTERFACE=eth0                        \
    $(cat "$mydir/test_daos_node.sh")"
