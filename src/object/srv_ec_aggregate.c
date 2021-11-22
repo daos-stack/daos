@@ -2236,7 +2236,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = dsc_obj_id2oc_attr(entry->ie_oid.id_pub, &info->api_props, &oca);
 	if (rc) {
-		D_ERROR("SKip object("DF_OID") with unknown class(%d)\n",
+		D_ERROR("SKip object("DF_OID") with unknown class(%u)\n",
 			DP_OID(entry->ie_oid.id_pub),
 			daos_obj_id2class(entry->ie_oid.id_pub));
 		*acts |= VOS_ITER_CB_SKIP;
