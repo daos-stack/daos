@@ -42,11 +42,11 @@ class BuildDaos(DfuseTestBase):
         build_dir = os.path.join(mount_dir, 'daos')
 
         cmds = ['git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
-                'git -C {} submodule init'.format(build_dir),
-                'git -C {} submodule update'.format(build_dir),
+                'git --git-dir {0}/.git --work-tree {0} submodule init'.format(build_dir),
+                'git --git-dir {0}/.git --work-tree {0} {} submodule update'.format(build_dir),
                 'sudo yum -y install meson',
                 'python3 -m pip --disable-pip-version-check install --user pyelftools',
-                'scons-3 -C {} build --build-deps=yes'.format(build_dir)]
+                'scons-3 -C {} --jobs 50 build --build-deps=yes'.format(build_dir)]
         for cmd in cmds:
             try:
                 ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=3600)
