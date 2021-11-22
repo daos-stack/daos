@@ -240,36 +240,35 @@ dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		D_DEBUG(DF_DSMC, DF_UUID": init pool map: %u\n",
-			DP_UUID(pool->dp_pool), pool_map_get_version(map));
+		D_INFO(DF_UUID": init pool map: %u\n", DP_UUID(pool->dp_pool), map_version);
 		D_GOTO(out_update, rc = 0);
 	}
 
 	if (map_version < pool_map_get_version(pool->dp_map)) {
-		D_DEBUG(DF_DSMC, DF_UUID": got older pool map: %u -> %u %p\n",
-			DP_UUID(pool->dp_pool),
-			pool_map_get_version(pool->dp_map), map_version, pool);
+		D_DEBUG(DB_MD, DF_UUID": ignore pool map: %u -> %u\n", DP_UUID(pool->dp_pool),
+			pool_map_get_version(pool->dp_map), map_version);
 		D_GOTO(out, rc = 0);
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID": updating pool map: %u -> %u\n",
-		DP_UUID(pool->dp_pool),
-		pool->dp_map == NULL ?
-		0 : pool_map_get_version(pool->dp_map), map_version);
-
 	rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 	if (rc != 0) {
-		D_ERROR("Failed to refresh placement map: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR(DF_UUID": failed to refresh placement map: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	D_INFO(DF_UUID": update pool map: %u -> %u\n", DP_UUID(pool->dp_pool),
+	       pool_map_get_version(pool->dp_map), map_version);
 
 	pool_map_decref(pool->dp_map);
 out_update:
 	pool_map_addref(map);
 	pool->dp_map = map;
-	if (pool->dp_map_version_known < map_version)
+	if (pool->dp_map_version_known < map_version) {
+		D_DEBUG(DB_MD, DF_UUID": map_version_known: %u -> %u\n", DP_UUID(pool->dp_pool),
+			pool->dp_map_version_known, map_version);
 		pool->dp_map_version_known = map_version;
+	}
 out:
 	return rc;
 }
@@ -1694,8 +1693,11 @@ map_refresh(tse_task_t *task)
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
 
 	/* Update the highest known pool map version in all cases. */
-	if (pool->dp_map_version_known < arg->mra_map_version)
+	if (pool->dp_map_version_known < arg->mra_map_version) {
+		D_DEBUG(DB_MD, DF_UUID": map_version_known: %u -> %u\n", DP_UUID(pool->dp_pool),
+			pool->dp_map_version_known, arg->mra_map_version);
 		pool->dp_map_version_known = arg->mra_map_version;
+	}
 
 	if (arg->mra_map_version != 0 && !map_known_stale(pool)) {
 		D_RWLOCK_UNLOCK(&pool->dp_map_lock);

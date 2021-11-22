@@ -1252,11 +1252,9 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	     pool_map_get_version(pool->sp_map) < map_version)) {
 		struct pool_map *tmp = pool->sp_map;
 
-		D_DEBUG(DB_MD, DF_UUID
-			": update pool_map version: %p/%d -> %p/%d\n",
-			DP_UUID(pool->sp_uuid), pool->sp_map,
-			pool->sp_map ? pool_map_get_version(pool->sp_map) : -1,
-			map, pool_map_get_version(map));
+		D_INFO(DF_UUID": update pool map: %u -> %u (%p -> %p)\n", DP_UUID(pool->sp_uuid),
+		       pool->sp_map == NULL ? 0 : pool_map_get_version(pool->sp_map),
+		       pool_map_get_version(map), pool->sp_map, map);
 
 		rc = update_pool_group(pool, map);
 		if (rc != 0) {
@@ -1289,10 +1287,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 
 	/* Check if the pool map on each xstream needs to update */
 	if (pool->sp_map_version < map_version) {
-		D_DEBUG(DB_MD, DF_UUID
-			": changed cached map version: %u -> %u\n",
-			DP_UUID(pool->sp_uuid), pool->sp_map_version,
-			map_version);
+		D_INFO(DF_UUID": update pool map version: %u -> %u\n", DP_UUID(pool->sp_uuid),
+		       pool->sp_map_version, map_version);
 
 		pool->sp_map_version = map_version;
 		rc = dss_task_collective(update_child_map, pool, 0);
@@ -1320,9 +1316,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			D_FREE(arg);
 		}
 	} else {
-		D_WARN("Ignore update pool "DF_UUID" %d -> %d\n",
-		       DP_UUID(pool->sp_uuid), pool->sp_map_version,
-		       map_version);
+		D_DEBUG(DB_MD, DF_UUID": ignore pool map: %u -> %u\n", DP_UUID(pool->sp_uuid),
+			pool_map_get_version(pool->sp_map), map_version);
 	}
 out:
 	ABT_rwlock_unlock(pool->sp_lock);
