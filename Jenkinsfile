@@ -940,6 +940,8 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
                 } // stage('Test CentOS Stream 8 RPMs on EL8.3.2011') {
+                /* method code too large
+                   and we already know 15.2 cannot run 15.3 binaries
                 stage('Test Leap 15.2 RPMs') {
                     when {
                         beforeAgent true
@@ -953,7 +955,8 @@ pipeline {
                                 target: 'leap15.2',
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
-                } // stage('Test Leap 15 RPMs')
+                } // stage('Test Leap 15.2 RPMs')
+                */
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
