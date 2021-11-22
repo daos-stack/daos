@@ -2,16 +2,17 @@ name: Test landings and prepare docker images.
 
 on:
   push:
-    branches:    
+    branches:
       - gha-dev
+      - master
 
 jobs:
 
-  # Build a base Docker image, and save it with a key based on the hash of the dependencies.
-  # If the source hasn't changed then this will be a cache-read, followed by a cache-write which
-  # will fail as the cache exists, but the read will put it to the front of the LRU queue.
-  # If the source has changed then the cache-read will fail, a new build will be performed and
-  # saved to the cache with a new key.
+  # Build a base Docker image, and save it with a key based on the hash of the dependencies, and a
+  # copy of the git hash.  Do not attempt to load the cache here, but rather start each build
+  # cleanly.  As the file hash comes before the git hash then each master build gets to populate
+  # a new hash key, PRs then fetch based only on the file hash so they get the most recent master
+  # build to complete.
   # This workflow only runs on landings, so the cache will only be built/saved when this changes,
   # builds for specific PRs will attempt to read this cache only, but not save anything.
   # For that reason set concurrency to 1 here for maximum reliability.
@@ -44,12 +45,19 @@ jobs:
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
+    outputs:
+      output1: ${{ steps.commit-hash.outputs.sha }}
     steps:
-    - uses: actions/checkout@v2
-    - uses: satackey/action-docker-layer-caching@v0.0.11
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Setup git hash
+      run: echo "::set-output name=sha::`git rev-parse --short HEAD`"
+      id: commit-hash
+    - name: Setup docker cache
+      uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-{hash}
+        key: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-${{ steps.commit-hash.outputs.sha }}-{hash}
         restore-keys: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-
         concurrency: 1
     - name: Prepare base image in Docker
@@ -83,8 +91,10 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-{hash}
-        restore-keys: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-
+        key: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-${{ needs.Prepare.outputs.output1 }}-{hash}
+        restore-keys: |
+          bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-${{ needs.Prepare.outputs.output1 }}-
+          bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-
         skip-save: true
     - name: Update dependencies in image.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
@@ -150,8 +160,10 @@ jobs:
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
-        key: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-{hash}
-        restore-keys: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-
+        key: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-${{ needs.Prepare.outputs.output1 }}-{hash}
+        restore-keys: |
+          bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-${{ needs.Prepare.outputs.output1 }}-
+          bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-
         skip-save: true
     - name: Update dependencies in image.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}

@@ -25,7 +25,8 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: satackey/action-docker-layer-caching@v0.0.11
+    - name: Fetch docker images from cache.
+      uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
         key: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-{hash}
@@ -93,7 +94,9 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: satackey/action-docker-layer-caching@v0.0.11
+    - name: Fetch docker images from cache.
+      # See landing-build.yml for an explanation of the keys used here.
+      uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
         key: bc-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github/workflows/landing-builds.yml', '.dockerignore') }}-{hash}
