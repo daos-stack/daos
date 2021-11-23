@@ -53,7 +53,7 @@ class Cmd(DfuseTestBase):
             The test will fail if DAOS performance is lower than the
             challenger performance.
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,manual
         :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,dfuse
         :avocado: tags=findcmd_perf

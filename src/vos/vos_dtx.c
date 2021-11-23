@@ -138,10 +138,6 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 		goto out;
 	}
 
-	if (!dth->dth_force_refresh && !dth->dth_dist &&
-	    dth->dth_ver <= DAE_VER(dae) && DAE_MBS_FLAGS(dae) & DMF_SRDG_REP)
-		goto out;
-
 	s_try = true;
 
 	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
@@ -187,11 +183,9 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 out:
 	D_DEBUG(DB_IO,
-		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (force %s, "
-		"dist %s), lid=%d, flags %x/%x, may need %s retry.\n",
-		hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
-		dth, dth != NULL && dth->dth_force_refresh ? "yes" : "no",
-		dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
+		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (dist %s), lid=%d, flags %x/%x, "
+		"may need %s retry.\n", hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
+		dth, dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
 		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" : "client");
 
 	return -DER_INPROGRESS;
@@ -879,62 +873,6 @@ out:
 	return rc;
 }
 
-static int
-vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
-		  struct dtx_id *dti, struct vos_dtx_act_ent **dae_p,
-		  bool *fatal)
-{
-	struct vos_dtx_act_ent	*dae;
-	d_iov_t			 riov;
-	d_iov_t			 kiov;
-	int			 rc;
-
-	d_iov_set(&kiov, dti, sizeof(*dti));
-	d_iov_set(&riov, NULL, 0);
-	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-	if (rc != 0)
-		goto out;
-
-	dae = riov.iov_buf;
-	if (dae->dae_committable || dae->dae_committed) {
-		D_ERROR("NOT allow to abort a committed DTX "DF_DTI"\n",
-			DP_DTI(dti));
-		D_GOTO(out, rc = -DER_NONEXIST);
-	}
-
-	/* It has been aborted before, but failed to be removed
-	 * from the active table, just remove it again.
-	 */
-	if (dae->dae_aborted) {
-		rc = dbtree_delete(cont->vc_dtx_active_hdl,
-				   BTR_PROBE_BYPASS, &kiov, &dae);
-		if (rc == 0) {
-			dtx_act_ent_cleanup(cont, dae, NULL, true);
-			dtx_evict_lid(cont, dae);
-		}
-
-		goto out;
-	}
-
-	if (DAE_EPOCH(dae) > epoch)
-		D_GOTO(out, rc = -DER_NONEXIST);
-
-	rc = dtx_rec_release(cont, dae, true);
-	if (rc != 0) {
-		*fatal = true;
-		goto out;
-	}
-
-	D_ASSERT(dae_p != NULL);
-	*dae_p = dae;
-
-out:
-	D_DEBUG(DB_IO, "Abort the DTX "DF_DTI": rc = "DF_RC"\n",
-		DP_DTI(dti), DP_RC(rc));
-
-	return rc;
-}
-
 static inline const char *
 vos_dtx_flags2name(uint32_t flags)
 {
@@ -948,53 +886,6 @@ vos_dtx_flags2name(uint32_t flags)
 	}
 
 	return NULL;
-}
-
-static int
-vos_dtx_set_flags_one(struct vos_container *cont, struct dtx_id *dti,
-		      uint32_t flags, bool *fatal)
-{
-	struct umem_instance		*umm = vos_cont2umm(cont);
-	struct vos_dtx_act_ent		*dae;
-	struct vos_dtx_act_ent_df	*dae_df;
-	d_iov_t				 riov;
-	d_iov_t				 kiov;
-	int				 rc;
-
-	/* Only allow set single flags. */
-	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN) {
-		D_ERROR("Try to set unrecognized flags %x on DTX "
-			DF_DTI"\n", flags, DP_DTI(dti));
-		return -DER_INVAL;
-	}
-
-	d_iov_set(&kiov, dti, sizeof(*dti));
-	d_iov_set(&riov, NULL, 0);
-	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-	if (rc != 0)
-		goto out;
-
-	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-
-	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted)
-		D_GOTO(out, rc = -DER_NONEXIST);
-
-	dae_df = umem_off2ptr(umm, dae->dae_df_off);
-	D_ASSERT(dae_df != NULL);
-
-	rc = umem_tx_add_ptr(umm, &dae_df->dae_flags,
-			     sizeof(dae_df->dae_flags));
-	if (rc == 0) {
-		dae_df->dae_flags |= flags;
-		DAE_FLAGS(dae) |= flags;
-	}
-
-out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN,
-		 "Mark the DTX entry "DF_DTI" as %s: "DF_RC"\n",
-		 DP_DTI(dti), vos_dtx_flags2name(flags), DP_RC(rc));
-
-	return rc;
 }
 
 static bool
@@ -1296,9 +1187,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	    DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 		return ALB_UNAVAILABLE;
 
-	if (dth != NULL && !(DAE_FLAGS(dae) & DTE_LEADER) &&
-	    (!(DAE_MBS_FLAGS(dae) & DMF_SRDG_REP) ||
-	     dth->dth_force_refresh)) {
+	if (dth != NULL && !(DAE_FLAGS(dae) & DTE_LEADER)) {
 		struct dtx_share_peer	*dsp;
 
 		d_list_for_each_entry(dsp, &dth->dth_share_cmt_list, dsp_link) {
@@ -2138,19 +2027,26 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count, bool *rm_cos)
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
+	struct vos_dtx_act_ent	 *dae = NULL;
+	struct vos_dtx_cmt_ent	 *dce = NULL;
 	struct vos_container	 *cont;
 	int			  committed = 0;
 	int			  rc = 0;
 
 	D_ASSERT(count > 0);
 
-	D_ALLOC_ARRAY(daes, count);
-	if (daes == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	if (count > 1) {
+		D_ALLOC_ARRAY(daes, count);
+		if (daes == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(dces, count);
-	if (dces == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_ALLOC_ARRAY(dces, count);
+		if (dces == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	} else {
+		daes = &dae;
+		dces = &dce;
+	}
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
@@ -2171,92 +2067,119 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count, bool *rm_cos)
 	}
 
 out:
-	D_FREE(daes);
-	D_FREE(dces);
+	if (daes != &dae)
+		D_FREE(daes);
+	if (dces != &dce)
+		D_FREE(dces);
 
 	return rc < 0 ? rc : committed;
 }
 
 int
-vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
-	      int count)
+vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 {
-	struct vos_dtx_act_ent	**daes = NULL;
-	struct vos_container	 *cont;
-	int			  aborted = 0;
-	int			  rc;
-	int			  i;
-	bool			  fatal = false;
-
-	D_ASSERT(count > 0);
-
-	D_ALLOC_ARRAY(daes, count);
-	if (daes == NULL)
-		return -DER_NOMEM;
+	struct vos_container	*cont;
+	struct umem_instance	*umm;
+	struct vos_dtx_act_ent	*dae = NULL;
+	d_iov_t			 riov;
+	d_iov_t			 kiov;
+	int			 rc;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	/* Abort multiple DTXs via single PMDK transaction. */
-	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
-	if (rc == 0) {
-		for (i = 0; i < count; i++) {
-			rc = vos_dtx_abort_one(cont, epoch, &dtis[i], &daes[i],
-					       &fatal);
-			if (fatal) {
-				aborted = rc;
-				break;
-			}
+	d_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc != 0)
+		goto out;
 
-			if (rc == 0 && daes[i] != NULL)
-				aborted++;
-		}
-
-		rc = umem_tx_end(vos_cont2umm(cont), aborted > 0 ? 0 : rc);
-		if (rc == 0)
-			vos_dtx_post_handle(cont, daes, NULL, count,
-					    true, false);
+	dae = riov.iov_buf;
+	if (dae->dae_committable || dae->dae_committed) {
+		D_ERROR("NOT allow to abort a committed DTX "DF_DTI"\n", DP_DTI(dti));
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	D_FREE(daes);
+	/* It has been aborted before, but failed to be removed from the active table
+	 * at that time, then need to be removed again via vos_dtx_post_handle().
+	 */
+	if (dae->dae_aborted)
+		D_GOTO(out, rc = -DER_ALREADY);
 
-	return rc < 0 ? rc : aborted;
+	if (DAE_EPOCH(dae) > epoch)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	umm = vos_cont2umm(cont);
+	rc = umem_tx_begin(umm, NULL);
+	if (rc == 0) {
+		rc = dtx_rec_release(cont, dae, true);
+		rc = umem_tx_end(umm, rc);
+	}
+
+out:
+	D_DEBUG(DB_IO, "Abort the DTX "DF_DTI": "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
+
+	if (rc == -DER_ALREADY)
+		rc = 0;
+	if (rc == 0)
+		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
+
+	return rc;
 }
 
 int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dtis, int count,
-		  uint32_t flags)
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 {
-	struct vos_container	*cont;
-	int			 set = 0;
-	int			 rc;
-	int			 i;
-	bool			 fatal = false;
-
-	D_ASSERT(count > 0);
+	struct vos_container		*cont;
+	struct umem_instance		*umm;
+	struct vos_dtx_act_ent		*dae;
+	struct vos_dtx_act_ent_df	*dae_df;
+	d_iov_t				 riov;
+	d_iov_t				 kiov;
+	int				 rc;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	/* Set multiple DTXs via single PMDK transaction. */
-	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
-	if (rc == 0) {
-		for (i = 0; i < count; i++) {
-			rc = vos_dtx_set_flags_one(cont, &dtis[i],
-						   flags, &fatal);
-			if (fatal) {
-				set = rc;
-				break;
-			}
-
-			if (rc == 0)
-				set++;
-		}
-
-		rc = umem_tx_end(vos_cont2umm(cont), set > 0 ? 0 : rc);
+	/* Only allow set single flags. */
+	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN) {
+		D_ERROR("Try to set unrecognized flags %x on DTX "
+			DF_DTI"\n", flags, DP_DTI(dti));
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	return rc < 0 ? rc : set;
+	d_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc != 0)
+		goto out;
+
+	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	umm = vos_cont2umm(cont);
+	dae_df = umem_off2ptr(umm, dae->dae_df_off);
+	D_ASSERT(dae_df != NULL);
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto out;
+
+	rc = umem_tx_add_ptr(umm, &dae_df->dae_flags, sizeof(dae_df->dae_flags));
+	if (rc == 0)
+		dae_df->dae_flags |= flags;
+
+	rc = umem_tx_end(umm, rc);
+	if (rc == 0)
+		DAE_FLAGS(dae) |= flags;
+
+out:
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN,
+		 "Mark the DTX entry "DF_DTI" as %s: "DF_RC"\n",
+		 DP_DTI(dti), vos_dtx_flags2name(flags), DP_RC(rc));
+
+	return rc;
 }
 
 int
