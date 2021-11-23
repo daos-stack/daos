@@ -1681,147 +1681,38 @@ def resolve_debuginfo(pkg):
         dict: dictionary of debug package information
 
     """
-    # pylint: disable=import-error,import-outside-toplevel,unused-import
-    try:
-        import dnf
-        print("Calling resolve_debuginfo_dnf(%s)" % pkg)
-        return resolve_debuginfo_dnf(pkg)
-    except ImportError:
-        try:
-            import yum
-            print("Calling resolve_debuginfo_yum(%s)" % pkg)
-            return resolve_debuginfo_yum(pkg)
-
-        except ImportError:
-            print("Calling resolve_debuginfo_rpm(%s)" % pkg)
-            return resolve_debuginfo_rpm(pkg)
-
-
-def resolve_debuginfo_rpm(pkg):
-    """Return the debuginfo package for a given package name.
-
-    Args:
-        pkg (str): a package name
-
-    Returns:
-        dict: dictionary of debug package information
-
-    """
     package_info = None
-    rpm_query = get_output(["rpm", "-qa"])
-    regex = r"({})-([0-9a-z~\.]+)-([0-9a-z~\.]+)\.x".format(pkg)
-    matches = re.findall(regex, rpm_query)
-    if matches:
+    try:
+        # TODO: use python libraries for this rather than exec()ing out
+        name, version, release, epoch = \
+            get_output(["rpm", "-q", "--qf",
+                        "%{name} %{version} %{release} %{epoch}",
+                        pkg], check=False).split()
         debuginfo_map = {"glibc": "glibc-debuginfo-common"}
         try:
-            debug_pkg = debuginfo_map[matches[0][0]]
+            debug_pkg = debuginfo_map[name]
         except KeyError:
-            debug_pkg = matches[0][0] + "-debuginfo"
+            debug_pkg = "{}-debuginfo".format(name)
         package_info = {
             "name": debug_pkg,
-            "version": matches[0][1],
-            "release": matches[0][2],
+            "version": version,
+            "release": release,
+            "epoch": epoch
         }
-    else:
+    except ValueError:
         print("Package {} not installed, skipping debuginfo".format(pkg))
 
     return package_info
 
 
-def resolve_debuginfo_yum(pkg):
-    """Return the debuginfo package for a given package name.
-
-    Args:
-        pkg (str): a package name
-
-    Returns:
-        dict: dictionary of debug package information
-
-    """
-    import yum      # pylint: disable=import-error,import-outside-toplevel
-    yum_base = yum.YumBase()
-    yum_base.conf.assumeyes = True
-    yum_base.setCacheDir(force=True, reuse=True)
-    yum_base.repos.enableRepo('*debug*')
-
-    debuginfo_map = {'glibc':   'glibc-debuginfo-common'}
-    try:
-        debug_pkg = debuginfo_map[pkg]
-    except KeyError:
-        debug_pkg = pkg + "-debuginfo"
-
-    try:
-        pkg_data = yum_base.rpmdb.returnNewestByName(name=pkg)[0]
-    except yum.Errors.PackageSackError as expn:
-        if expn.__str__().rstrip() == "No Package Matching " + pkg:
-            print("Package {} not installed, "
-                  "skipping debuginfo".format(pkg))
-            return None
-        raise
-
-    return {'name': debug_pkg,
-            'version': pkg_data['version'],
-            'release': pkg_data['release'],
-            'epoch': pkg_data['epoch']}
-
-
-def resolve_debuginfo_dnf(pkg):
-    """Return the debuginfo package for a given package name.
-
-    Args:
-        pkg (str): a package name
-
-    Returns:
-        dict: dictionary of debug package information
-
-    """
-    import dnf      # pylint: disable=import-error,import-outside-toplevel
-    dnf_base = dnf.Base()
-    dnf_base.conf.assumeyes = True
-    dnf_base.read_all_repos()
-    try:
-        dnf_base.fill_sack()
-    except OSError as error:
-        print("Got an OSError trying to fill_sack(): ", error)
-        raise RuntimeError("resolve_debuginfo_dnf() "
-                           "failed: ", error)
-
-    query = dnf_base.sack.query()
-    latest = query.latest()
-    latest_info = latest.filter(name=pkg)
-    print("latest_info: %s" % latest_info)
-
-    debuginfo = None
-    try:
-        package = list(latest_info)[0]
-    except IndexError as error:
-        raise RuntimeError("Could not find package info for "
-                           "{}".format(pkg))
-
-    print("package: %s" % package)
-    if package:
-        debuginfo_map = {"glibc": "glibc-debuginfo-common"}
-        try:
-            debug_pkg = debuginfo_map[pkg]
-        except KeyError:
-            debug_pkg = "{}-debuginfo".format(package.name)
-
-        print("debug_pkg: %s" % debug_pkg)
-        debuginfo = {
-            "name": debug_pkg,
-            "version": package.version,
-            "release": package.release,
-            "epoch": package.epoch
-        }
-    else:
-        print("Package {} not installed, skipping debuginfo".format(pkg))
-
-    print("debuginfo: %s" % debuginfo)
-    return debuginfo
-
-
 def install_debuginfos():
-    """Install debuginfo packages."""
+    """Install debuginfo packages.
+
+       NOTE: This does assume that the same daos packages that are installed
+             on the nodes that could have caused the core dump are installed
+             on this node also.
+
+    """
     distro_info = detect()
     if "centos" in distro_info.name.lower():
         install_pkgs = [{'name': 'gdb'}, {'name': 'python3-debuginfo'}]
@@ -1833,8 +1724,7 @@ def install_debuginfos():
     # -debuginfo packages that don't get installed with debuginfo-install
     for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric']:
         try:
-            debug_pkg = resolve_debuginfo(pkg) + '-' + \
-                        get_output(["rpm", "-q", "--qf", "%{evr}", pkg])
+            debug_pkg = resolve_debuginfo(pkg)
         except RuntimeError as error:
             print("Failed trying to install_debuginfos(): ", error)
             raise
