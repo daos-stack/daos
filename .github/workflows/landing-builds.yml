@@ -16,11 +16,13 @@ jobs:
   # This workflow only runs on landings, so the cache will only be built/saved when this changes,
   # builds for specific PRs will attempt to read this cache only, but not save anything.
   # For that reason set concurrency to 1 here for maximum reliability.
+  # Set max-parallel and cache concurrency to 1 to avoid https 429 errors on cache save.
   Prepare:
     name: Build docker images
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         distro: [ubuntu.20.04, centos.8, leap.15, fedora, rocky, alma]
         include:
