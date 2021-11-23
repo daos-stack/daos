@@ -4,7 +4,7 @@
 
 import os
 import sys
-import subprocess
+import subprocess #nosec
 
 BUILD_FILES = ['site_scons',
                'utils/build.config',
