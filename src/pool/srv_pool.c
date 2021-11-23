@@ -5522,7 +5522,7 @@ out:
  */
 int
 ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version, int *tgt_id)
+			 struct dtx_memberships *mbs, uint32_t version, int *tgt_id)
 {
 	struct daos_oclass_attr *oca;
 	struct pl_map		*map;
@@ -5533,8 +5533,8 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 
 	map = pl_map_find(pool->sp_uuid, oid->id_pub);
 	if (map == NULL) {
-		D_WARN("Failed to find pool map tp select leader for "
-		       DF_UOID" version = %d\n", DP_UOID(*oid), version);
+		D_ERROR("Failed to find pool map to select leader for "
+			DF_UOID" version = %d\n", DP_UOID(*oid), version);
 		return -DER_INVAL;
 	}
 
@@ -5546,7 +5546,8 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 
 	oca = daos_oclass_attr_find(oid->id_pub, NULL, NULL);
 	leader_idx = pl_select_leader(oid->id_pub, oid->id_shard / daos_oclass_grp_size(oca),
-				      layout->ol_grp_size, tgt_id, pl_obj_get_shard, layout);
+				      layout->ol_grp_size, NIL_BITMAP, mbs, tgt_id,
+				      pl_obj_get_shard, layout);
 	if (leader_idx < 0) {
 		D_WARN("Failed to select leader for "DF_UOID
 		       "version = %d: rc = %d\n",
@@ -5564,59 +5565,6 @@ out:
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
 	pl_map_decref(map);
-	return rc;
-}
-
-/**
- * Check whether the leader replica of the given object resides
- * on current server or not.
- *
- * \param [IN]	pool		Pointer to the pool
- * \param [IN]	oid		The OID of the object to be checked
- * \param [IN]	version		The pool map version
- *
- * \return			+1 if leader is on current server.
- * \return			Zero if the leader resides on another server,
- *				or the oid->id_shard is not the leader shard.
- * \return			Negative value if error.
- */
-int
-ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version, bool check_shard)
-{
-	struct pool_target	*target;
-	d_rank_t		 myrank;
-	int			 leader_tgt;
-	int			 leader_shard;
-	int			 rc;
-
-	rc = ds_pool_elect_dtx_leader(pool, oid, version, &leader_tgt);
-	if (rc < 0)
-		return rc;
-	leader_shard = rc;
-
-	rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
-	if (rc < 0)
-		D_GOTO(out, rc);
-
-	if (rc != 1)
-		D_GOTO(out, rc = -DER_INVAL);
-
-	rc = crt_group_rank(NULL, &myrank);
-	if (rc < 0)
-		D_GOTO(out, rc);
-
-	if (myrank != target->ta_comp.co_rank) {
-		rc = 0;
-	} else {
-		rc = 1;
-		if (check_shard && oid->id_shard != leader_shard)
-			rc = 0;
-	}
-
-out:
-	D_DEBUG(DB_TRACE, DF_UOID" get new leader shard/tgtid %d/%d: %d\n",
-		DP_UOID(*oid), leader_shard, leader_tgt, rc);
 	return rc;
 }
 
