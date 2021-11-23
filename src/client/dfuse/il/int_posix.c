@@ -650,6 +650,7 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont
 	int			rc;
 	struct ioil_pool       *pool = cont->ioc_pool;
 	char			uuid_str[37];
+	int			dfs_flags = O_RDWR;
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
 		uuid_unparse(il_reply->fir_pool, uuid_str);
@@ -659,12 +660,16 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont
 	}
 
 	uuid_unparse(il_reply->fir_cont, uuid_str);
-	rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW,
-			    &cont->ioc_coh, NULL, NULL);
+	rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW, &cont->ioc_coh, NULL, NULL);
+	if (rc == -DER_NO_PERM) {
+		dfs_flags = O_RDONLY;
+		rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RO, &cont->ioc_coh, NULL,
+				    NULL);
+	}
 	if (rc)
 		return false;
 
-	rc = dfs_mount(pool->iop_poh, cont->ioc_coh, O_RDWR, &cont->ioc_dfs);
+	rc = dfs_mount(pool->iop_poh, cont->ioc_coh, dfs_flags, &cont->ioc_dfs);
 	if (rc)
 		return false;
 

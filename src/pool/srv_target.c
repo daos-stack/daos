@@ -39,6 +39,22 @@
 
 /* ds_pool_child **************************************************************/
 
+static void
+stop_gc_ult(struct ds_pool_child *child)
+{
+	D_ASSERT(child != NULL);
+	/* GC ULT is not started */
+	if (child->spc_gc_req == NULL)
+		return;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
+		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	sched_req_wait(child->spc_gc_req, true);
+	sched_req_put(child->spc_gc_req);
+	child->spc_gc_req = NULL;
+}
+
 struct ds_pool_child *
 ds_pool_child_lookup(const uuid_t uuid)
 {
@@ -71,6 +87,10 @@ ds_pool_child_put(struct ds_pool_child *child)
 			DP_UUID(child->spc_uuid));
 		D_ASSERT(d_list_empty(&child->spc_list));
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
+
+		/* only stop gc ULT when all ops ULTs are done */
+		stop_gc_ult(child);
+
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
 		ABT_eventual_set(child->spc_ref_eventual,
@@ -145,22 +165,6 @@ start_gc_ult(struct ds_pool_child *child)
 	}
 
 	return 0;
-}
-
-static void
-stop_gc_ult(struct ds_pool_child *child)
-{
-	D_ASSERT(child != NULL);
-	/* GC ULT is not started */
-	if (child->spc_gc_req == NULL)
-		return;
-
-	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
-		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
-
-	sched_req_wait(child->spc_gc_req, true);
-	sched_req_put(child->spc_gc_req);
-	child->spc_gc_req = NULL;
 }
 
 struct pool_child_lookup_arg {
@@ -294,9 +298,6 @@ pool_child_delete_one(void *uuid)
 		return dss_abterr2der(rc);
 
 	ABT_eventual_free(&child->spc_ref_eventual);
-
-	/* only stop gc ULT when all ops ULTs are done */
-	stop_gc_ult(child);
 
 	/* ds_pool_child must be freed here to keep
 	 * spc_ref_enventual usage safe

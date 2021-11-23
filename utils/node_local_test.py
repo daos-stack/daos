@@ -1395,6 +1395,24 @@ def needs_dfuse_with_cache(method):
         return rc
     return _helper
 
+def needs_dfuse_no_cache(method):
+    """Decorator function for starting dfuse under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           caching=False,
+                           pool=self.pool.dfuse_mount_name(),
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__)
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
+        return rc
+    return _helper
+
 # This is test code where methods are tests, so we want to have lots of them.
 # pylint: disable=too-many-public-methods
 class posix_tests():
@@ -1974,6 +1992,49 @@ class posix_tests():
 
         ofd.close()
 
+    def test_cont_ro(self):
+        """Test access to a read-only container"""
+
+        # Update container ACLs so current user has rta permissions only, the minimum required.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'update-acl',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--entry',
+                                      'A::{}@:rta'.format(os.getlogin())])
+        print(rc)
+        assert rc.returncode == 0
+
+        # Assign the container to someone else.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'set-owner',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--user',
+                                      'root@'])
+        print(rc)
+        assert rc.returncode == 0
+
+        # Now start dfuse and access the container, this should require read-only opening.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False,
+                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+        dfuse.start(v_hint='cont_ro')
+        print(os.listdir(dfuse.dir))
+
+        try:
+            with open(os.path.join(dfuse.dir, 'testfile'), 'w') as fd:
+                print(fd)
+            assert False
+        except PermissionError:
+            pass
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
     @needs_dfuse
     def test_chmod_ro(self):
         """Test that chmod and fchmod work correctly with files created read-only
@@ -2137,7 +2198,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    @needs_dfuse
+    @needs_dfuse_no_cache
     def test_daos_fs_tool(self):
         """Create a UNS entry point"""
 
@@ -3129,6 +3190,9 @@ class AllocFailTestRun():
                                        'interval': self.loc,
                                        'max_faults': 1})
 
+            if self.aft.skip_daos_init:
+                fc['fault_config'].append({'id': 101, 'probability_x': 1})
+
         # pylint: disable=consider-using-with
         self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_', suffix='.yaml')
 
@@ -3300,6 +3364,8 @@ class AllocFailTest():
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
+        # Instruct the fault injection code to skip daos_init().
+        self.skip_daos_init = True
 
     def launch(self):
         """Run all tests for this command"""
@@ -3327,7 +3393,7 @@ class AllocFailTest():
         print('Maximum number of spawned tests will be {}'.format(max_child))
 
         active = []
-        fid = 1
+        fid = 2
         max_count = 0
         finished = False
 
@@ -3470,6 +3536,7 @@ def test_alloc_fail_copy(server, conf, wf):
         return cmd
 
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
+    test_cmd.skip_daos_init = False
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
