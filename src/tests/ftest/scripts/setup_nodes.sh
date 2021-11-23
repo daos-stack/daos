@@ -57,7 +57,7 @@ if [ \"\$(ulimit -c)\" != \"unlimited\" ]; then
     echo \"*  soft  core  unlimited\" >> /etc/security/limits.conf
 fi
 echo \"/var/tmp/core.%e.%t.%p\" > /proc/sys/kernel/core_pattern"
-rm -f /var/tmp/core.*
+sudo rm -f /var/tmp/core.*
 if [ "${HOSTNAME%%.*}" != "$FIRST_NODE" ]; then
     if grep /mnt/daos\  /proc/mounts; then
         sudo umount /mnt/daos
