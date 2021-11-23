@@ -26,6 +26,7 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: true
+        fetch-depth: 100
     - name: Setup git hash
       run: ./ci/gha_helper.py
       id: commit-hash
@@ -98,6 +99,7 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: true
+        fetch-depth: 100
     - name: Setup git hash
       run: ./ci/gha_helper.py
       id: commit-hash
