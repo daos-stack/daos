@@ -20,6 +20,7 @@ jobs:
     env:
       DEPS_JOBS: 10
       COMPILER: clang
+      BASE_DISTRO: ${{ matrix.distro }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v2

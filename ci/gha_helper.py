@@ -7,7 +7,6 @@ import sys
 import subprocess
 
 BUILD_FILES = ['site_scons',
-               'utils/docker',
                'utils/build.config',
                'SConstruct',
                '.github/workflows/landing-builds.yml'
@@ -27,6 +26,8 @@ def main():
 
     single = '--single' in sys.argv
 
+    base_distro = os.getenv('BASE_DISTRO', None)
+
     cmd = ['git', 'rev-list', '--abbrev-commit']
 
     if single:
@@ -35,6 +36,13 @@ def main():
         cmd.extend(['--max-count=2', '--since=7.days'])
     cmd.extend(['HEAD', '--'])
     cmd.extend(BUILD_FILES)
+
+    if base_distro:
+        cmd.append('utils/docker/Dockerfile.{}'.format(base_distro))
+    else:
+        cmd.append('utils/docker')
+        base_distro = ''
+
     rc = subprocess.run(cmd, check=True, capture_output=True)
     commits = rc.stdout.decode('utf-8').strip()
 
@@ -44,8 +52,6 @@ def main():
     else:
         lines = commits.splitlines()
         build_hash = lines.pop(0)
-
-    base_distro = os.getenv('BASE_DISTRO', '')
 
     if single:
         # Landings builds, embed the current commit in the hash name, load either the exact commit
