@@ -155,7 +155,7 @@ RUN [ "$COMPILER" != "icc" ] || \
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST
 RUN [ -z "$CACHEBUST" ] || \
-    { RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+    { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
     zypper --non-interactive update && \
     zypper clean --all; }
 USER daos_server:daos_server
