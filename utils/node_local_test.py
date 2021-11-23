@@ -3173,6 +3173,9 @@ class AllocFailTestRun():
                                        'interval': self.loc,
                                        'max_faults': 1})
 
+            if self.aft.skip_daos_init:
+                fc['fault_config'].append({'id': 101, 'probability_x': 1})
+
         # pylint: disable=consider-using-with
         self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_', suffix='.yaml')
 
@@ -3344,6 +3347,8 @@ class AllocFailTest():
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
+        # Instruct the fault injection code to skip daos_init().
+        self.skip_daos_init = True
 
     def launch(self):
         """Run all tests for this command"""
@@ -3371,7 +3376,7 @@ class AllocFailTest():
         print('Maximum number of spawned tests will be {}'.format(max_child))
 
         active = []
-        fid = 1
+        fid = 2
         max_count = 0
         finished = False
 
@@ -3514,6 +3519,7 @@ def test_alloc_fail_copy(server, conf, wf):
         return cmd
 
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
+    test_cmd.skip_daos_init = False
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
