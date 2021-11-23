@@ -762,7 +762,7 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 	char *oclass_names;
 	char oclass[64];
 	daos_oclass_id_t *oclass_id;
-	uint32_t length = 0;
+	ssize_t length = 0;
 	uint32_t num_oclass = 0;
 	uint32_t oclass_str_index = 0;
 	uint32_t i, oclass_index;
@@ -772,6 +772,8 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 		return -1;
 
 	length = daos_oclass_names_list(str_size, oclass_names);
+	if (length < 0)
+		return length;
 
 	for (i = 0; i < length; ++i) {
 		if (oclass_names[i] == ',')
