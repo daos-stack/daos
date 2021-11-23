@@ -118,6 +118,8 @@ class LogLine():
     re_uiod = re.compile(r"\d{1,20}\.\d{1,20}.(\d{1,10})")
     # Match a RPCID from RPC_TRACE macro.
     re_rpcid = re.compile(r"rpcid=0x[0-9a-f]{1,16}")
+    # Match DF_CONT
+    re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
     def __init__(self, line):
         fields = line.split()
@@ -245,6 +247,10 @@ class LogLine():
                 r = self.re_rpcid.fullmatch(entry)
                 if r:
                     field = 'rpcid=<rpcid>'
+            if not field:
+                r = self.re_cont.fullmatch(entry)
+                if r:
+                    field = 'pool/cont{}'.format(r.group(1))
             if field:
                 fields.append(field)
             else:
