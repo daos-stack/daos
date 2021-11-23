@@ -1,8 +1,6 @@
 # DAOS Set-Up on CentOS
 
 
-
-
 The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.  This document includes
 instructions for CentOS. For setup instructions on OpenSuse, refer to the [OpenSuse setup](../suse_setup/). 
 For more details reference the DAOS administration guide:
@@ -107,14 +105,6 @@ daos-server RPM.
 
 		pdsh -w $ALL_NODES -x $SERVER_NODES 'sudo yum install -y
 		daos-client'
-
-
-
-22. (Optionally) Install the DAOS test RPMs on the client nodes -
-    typically not required
-
-		pdsh -w $ALL_NODES -x $SERVER_NODES 'sudo yum install -y'
-		daos-tests\'
 
 
 ## Hardware Provisioning

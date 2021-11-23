@@ -218,7 +218,9 @@ func (srv *server) initStorage() error {
 	}
 
 	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
-	return srv.ctlSvc.Setup()
+	srv.ctlSvc.Setup()
+
+	return nil
 }
 
 func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
