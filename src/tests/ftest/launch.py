@@ -1684,13 +1684,16 @@ def resolve_debuginfo(pkg):
     # pylint: disable=import-error,import-outside-toplevel,unused-import
     try:
         import dnf
+        print("Calling resolve_debuginfo_dnf(%s)" % pkg)
         return resolve_debuginfo_dnf(pkg)
     except ImportError:
         try:
             import yum
+        print("Calling resolve_debuginfo_yum(%s)" % pkg)
             return resolve_debuginfo_yum(pkg)
 
         except ImportError:
+            print("Calling resolve_debuginfo_rpm(%s)" % pkg)
             return resolve_debuginfo_rpm(pkg)
 
 
@@ -1786,6 +1789,7 @@ def resolve_debuginfo_dnf(pkg):
     query = dnf_base.sack.query()
     latest = query.latest()
     latest_info = latest.filter(name=pkg)
+    print("latest_info: %s" % latest_info)
 
     debuginfo = None
     try:
@@ -1794,6 +1798,7 @@ def resolve_debuginfo_dnf(pkg):
         raise RuntimeError("Could not find package info for "
                            "{}".format(pkg))
 
+    print("package: %s" % package)
     if package:
         debuginfo_map = {"glibc": "glibc-debuginfo-common"}
         try:
@@ -1801,6 +1806,7 @@ def resolve_debuginfo_dnf(pkg):
         except KeyError:
             debug_pkg = "{}-debuginfo".format(package.name)
 
+        print("debug_pkg: %s" % debug_pkg)
         debuginfo = {
             "name": debug_pkg,
             "version": package.version,
@@ -1810,6 +1816,7 @@ def resolve_debuginfo_dnf(pkg):
     else:
         print("Package {} not installed, skipping debuginfo".format(pkg))
 
+    print("debuginfo: %s" % debuginfo)
     return debuginfo
 
 
@@ -1826,7 +1833,8 @@ def install_debuginfos():
     # -debuginfo packages that don't get installed with debuginfo-install
     for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric']:
         try:
-            debug_pkg = resolve_debuginfo(pkg)
+            debug_pkg = resolve_debuginfo(pkg) + '-' + \
+                        get_output(["rpm", "-q", "--qf", "%{evr}", pkg])
         except RuntimeError as error:
             print("Failed trying to install_debuginfos(): ", error)
             raise
