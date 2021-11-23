@@ -247,7 +247,7 @@ set_test_oid(daos_unit_oid_t *oid, uint64_t oid_lo)
 	oid->id_shard	= 1;
 	oid->id_pad_32	= 0;
 	oid->id_pub.lo = oid_lo;
-	daos_obj_set_oid(&oid->id_pub, 0, OC_SX, 0);
+	daos_obj_set_oid(&oid->id_pub, 0, OR_RP_1, MAX_NUM_GROUPS, 0);
 }
 
 static int
@@ -577,7 +577,7 @@ test_yield_deletes_extent(void *arg)
 	oid.id_shard	= 0;
 	oid.id_pad_32	= 0;
 	oid.id_pub.lo = 1;
-	daos_obj_set_oid(&oid.id_pub, 0, OC_SX, 0);
+	daos_obj_set_oid(&oid.id_pub, 0, OR_RP_1, MAX_NUM_GROUPS, 0);
 
 	/* insert another extent at a later epoch so the original extent is
 	 * deleted by vos_aggregation.

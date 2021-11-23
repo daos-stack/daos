@@ -1386,6 +1386,24 @@ def needs_dfuse_with_cache(method):
         return rc
     return _helper
 
+def needs_dfuse_no_cache(method):
+    """Decorator function for starting dfuse under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           caching=False,
+                           pool=self.pool.dfuse_mount_name(),
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__)
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
+        return rc
+    return _helper
+
 # This is test code where methods are tests, so we want to have lots of them.
 # pylint: disable=too-many-public-methods
 class posix_tests():
@@ -2125,7 +2143,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    @needs_dfuse
+    @needs_dfuse_no_cache
     def test_daos_fs_tool(self):
         """Create a UNS entry point"""
 
