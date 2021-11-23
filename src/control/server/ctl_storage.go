@@ -85,7 +85,6 @@ func (c *StorageControlService) Setup() {
 	}
 
 	c.storage.SetBdevCache(*nvmeScanResp)
-	return
 }
 
 func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.ScmNamespace {
