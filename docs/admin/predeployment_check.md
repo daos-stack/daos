@@ -268,6 +268,8 @@ For non-RPM installations where `daos_server` has been built from source,
 `rmem_default` and `rmem_max` settings should be set to >= 1MB.
 Optionally, the `utils/rpms/10-daos_server.conf` can be copied to `/etc/sysctl.d/`
 to apply the settings automatically on boot.
+Running `sysctl -p /etc/sysctl.d/10-daos_server.conf` will apply these settings
+immediately (prior to a reboot) but will not persist after a reboot.
 For further information see
 [this article on network kernel settings](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/5/html/tuning_and_optimizing_red_hat_enterprise_linux_for_oracle_9i_and_10g_databases/sect-oracle_9i_and_10g_tuning_guide-adjusting_network_settings-changing_network_kernel_settings)
 using any of the methods described in
