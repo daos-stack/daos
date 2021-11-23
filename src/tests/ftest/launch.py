@@ -1689,7 +1689,7 @@ def resolve_debuginfo(pkg):
     except ImportError:
         try:
             import yum
-        print("Calling resolve_debuginfo_yum(%s)" % pkg)
+            print("Calling resolve_debuginfo_yum(%s)" % pkg)
             return resolve_debuginfo_yum(pkg)
 
         except ImportError:
