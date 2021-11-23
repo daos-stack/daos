@@ -502,7 +502,7 @@ class DaosServerManager(SubprocessManager):
                     self.manager.command, error))
 
         # Kill any leftover processes that may not have been stopped correctly
-        self.manager.kill()
+        self.kill()
 
         if self.manager.job.using_nvme:
             # Reset the storage
