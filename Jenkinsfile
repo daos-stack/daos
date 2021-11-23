@@ -623,7 +623,7 @@ pipeline {
                                                      'covc_vm_test/**']
                         }
                     }
-                } // stage('Unit test Bullseye')
+                }
                 stage('Unit Test with memcheck on CentOS 8') {
                     when {
                       beforeAgent true
@@ -645,7 +645,7 @@ pipeline {
                                          valgrind_stash: 'centos8-gcc-unit-memcheck'
                         }
                     }
-                } // stage('Unit Test with memcheck')
+                }
             }
         }
         stage('Test') {
@@ -684,7 +684,7 @@ pipeline {
                             coverityPost condition: 'unsuccessful'
                         }
                     }
-                } // stage('Coverity on CentOS 8')
+                }
                 stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
@@ -703,7 +703,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 7')
+                }
                 stage('Functional on CentOS 8 with Valgrind') {
                     when {
                         beforeAgent true
@@ -722,7 +722,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8 with Valgrind')
+                }
                 stage('Functional on CentOS 8') {
                     when {
                         beforeAgent true
@@ -741,7 +741,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8')
+                }
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
@@ -760,7 +760,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     } // post
-                } // stage('Functional on Leap 15')
+                }
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -779,7 +779,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     } // post
-                } // stage('Functional on Ubuntu 20.04')
+                }
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -792,7 +792,7 @@ pipeline {
                         testRpm inst_repos: daosRepos(),
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
-                } // stage('Test CentOS 7 RPMs')
+                }
                 stage('Test CentOS 8.3.2011 RPMs') {
                     when {
                         beforeAgent true
@@ -806,7 +806,7 @@ pipeline {
                                 target: 'el8.3',
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
-                } // stage('Test CentOS 8.3.2011 RPMs') {
+                }
                 stage('Test Leap 15.2 RPMs') {
                     when {
                         beforeAgent true
@@ -820,7 +820,7 @@ pipeline {
                                 target: 'leap15.2',
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
-                } // stage('Test Leap 15.2 RPMs')
+                }
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -838,7 +838,7 @@ pipeline {
                             junit 'maldetect.xml'
                         }
                     }
-                } // stage('Scan CentOS 7 RPMs')
+                }
                 stage('Scan CentOS 8 RPMs') {
                     when {
                         beforeAgent true
@@ -856,7 +856,7 @@ pipeline {
                             junit 'maldetect.xml'
                         }
                     }
-                } // stage('Scan CentOS 8 RPMs')
+                }
                 stage('Scan Leap 15 RPMs') {
                     when {
                         beforeAgent true
@@ -874,7 +874,7 @@ pipeline {
                             junit 'maldetect.xml'
                         }
                     }
-                } // stage('Scan Leap 15 RPMs')
+                }
                 stage('Fault injection testing on CentOS 8') {
                     when {
                         beforeAgent true
@@ -917,7 +917,7 @@ pipeline {
                             archiveArtifacts artifacts: 'nlt_logs/centos8.fault-injection/'
                         }
                     }
-                } // stage('Fault inection testing')
+                }
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep') {
@@ -932,7 +932,7 @@ pipeline {
                 storagePrepTest inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version)
             }
-        } // stage('Test Storage Prep')
+        }
         stage('Test Hardware') {
             when {
                 beforeAgent true
@@ -958,7 +958,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional_Hardware_Small')
+                }
                 stage('Functional Hardware Medium') {
                     when {
                         beforeAgent true
@@ -978,7 +978,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional_Hardware_Medium')
+                }
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
@@ -998,7 +998,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional_Hardware_Large')
+                }
             } // parallel
         } // stage('Test Hardware')
         stage ('Test Report') {
@@ -1030,7 +1030,7 @@ pipeline {
                                                                statementCoverage: 0],
                                             ignore_failure: true
                     }
-                } // stage('Bullseye Report')
+                }
             } // parallel
         } // stage ('Test Report')
     } // stages
@@ -1042,5 +1042,5 @@ pipeline {
         unsuccessful {
             notifyBrokenBranch branches: target_branch
         }
-    } // post
+    }
 }
