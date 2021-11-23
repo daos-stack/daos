@@ -3,7 +3,6 @@ name: Test landings and prepare docker images.
 on:
   push:
     branches:
-      - gha-dev
       - master
 
 jobs:
