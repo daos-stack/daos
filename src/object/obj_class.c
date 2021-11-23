@@ -104,14 +104,14 @@ daos_oclass_name2id(const char *name)
 }
 
 /** Return the list of registered oclass names */
-size_t
+ssize_t
 daos_oclass_names_list(size_t size, char *str)
 {
 	struct daos_obj_class   *oc;
-	size_t len = 0;
+	ssize_t len = 0;
 
 	if (size <= 0 || str == NULL)
-		return -1;
+		return -DER_INVAL;
 
 	*str = '\0';
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
@@ -119,6 +119,8 @@ daos_oclass_names_list(size_t size, char *str)
 		if (len < size) {
 			strcat(str, oc->oc_name);
 			strcat(str, ", ");
+		} else {
+			return -DER_OVERFLOW;
 		}
 	}
 	return len;
