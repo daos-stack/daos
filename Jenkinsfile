@@ -902,6 +902,7 @@ pipeline {
                     steps {
                         testRpm inst_repos: daosRepos(),
                                 target: 'el8.4',
+                                ignore_failure: true,
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
                 } // stage('Test CentOS Stream 8 RPMs on EL8.4.2105') {
@@ -932,6 +933,7 @@ pipeline {
                     steps {
                         testRpm inst_repos: daosRepos(),
                                 target: 'el8.3',
+                                ignore_failure: true,
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
                 } // stage('Test CentOS Stream 8 RPMs on EL8.3.2011') {
