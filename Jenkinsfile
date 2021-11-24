@@ -720,21 +720,21 @@ pipeline {
                     post {
                       always {
                             echo functionalTestPostV2()
-                            unitTestPost artifacts: ['**/valgrind.*.memcheck.xml'],
-                                         testResults:      'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
-                                         valgrind_pattern: 'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
-                                         valgrind_stash: 'centos7-gcc-cart-memcheck',
-                                         skip_post_script: true,
-                                         ignore_failure: true
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreFailedBuilds: false,
-                                         ignoreQualityGate: true,
-                                         name: "CaRT Valgrind leaks",
-                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
-                                         tool: issues(pattern: '**/valgrind.*.memcheck.xml',
-                                           name: 'CaRT Valgrind results',
-                                           id: 'CaRT_Valgrind_server')
+                            sh "echo 'find .'"
+                            sh "find ."
+                            publishValgrind failBuildOnInvalidReports: true,
+                                            failBuildOnMissingReports: true,
+                                            failThresholdDefinitelyLost: '0',
+                                            failThresholdInvalidReadWrite: '0',
+                                            failThresholdTotal: '0',
+                                            pattern: 'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
+                                            publishResultsForAbortedBuilds: false,
+                                            publishResultsForFailedBuilds: true,
+                                            sourceSubstitutionPaths: '',
+                                            unstableThresholdDefinitelyLost: '0',
+                                            unstableThresholdInvalidReadWrite: '0',
+                                            unstableThresholdTotal: '0'
+
                         }
                     }
                 } // stage('Functional on CentOS 8 with Valgrind')
@@ -1052,8 +1052,7 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck',
-                                                     'centos7-gcc-cart-memcheck']
+                                                     'centos7-gcc-unit-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
