@@ -88,8 +88,7 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         time.sleep(5)
 
         # Remove the killed host from the clustershell telemetry hostlist
-        self.telemetry.hosts.clear()
-        self.telemetry.hosts.add(self.hostlist_servers[0])
+        self.telemetry.hosts.remove(self.hostlist_servers[rank[0]])
 
         data = {}
         try:
