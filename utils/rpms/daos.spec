@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.1.0~rc2-1%{?dist}
-%global libfabric_version 1.13.2~rc1-1
+%global libfabric_version 1.14.0~rc3-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       6%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -159,7 +159,7 @@ Requires: ndctl
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
 # When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj1 = 1.11.0-3suse1500
+Requires: libpmemobj1 = 1.11.0-3.suse1500
 %else
 Requires: ipmctl > 02.00.00.3816
 # When 1.11.2 is released, we can change this to >= 1.11.2
@@ -516,9 +516,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Mon Nov 08 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-6
+* Wed Nov 24 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-8
 - Remove invalid "%%else if" syntax
 - Fix a few other rpmlint warnings
+
+* Tue Nov 16 2021 Wang Shilong <shilong.wang@intel.com> 2.1.100-7
+- Update for libdaos major version bump
+- Fix version of libpemobj1 for SUSE
+
+* Sat Nov 13 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-6
+- Update OFI to v1.14.0rc3
 
 * Tue Oct 26 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-5
 - Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
