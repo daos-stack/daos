@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from cart_utils import CartTest
-from apricot import skipForTicket
 
 class CartGhostRankRpcOneNodeTest(CartTest):
     # pylint: disable=too-few-public-methods
