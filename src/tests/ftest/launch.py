@@ -1714,10 +1714,9 @@ def install_debuginfos():
 
     """
     distro_info = detect()
+    install_pkgs = [{'name': 'gdb'}]
     if "centos" in distro_info.name.lower():
-        install_pkgs = [{'name': 'gdb'}, {'name': 'python3-debuginfo'}]
-    else:
-        install_pkgs = []
+        install_pkgs.append[{'name': 'python3-debuginfo'}]
 
     cmds = []
 
