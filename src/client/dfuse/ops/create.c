@@ -91,7 +91,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 	}
 
 	if (*_mode != mode)
-		DFUSE_TRA_ERROR(parent, "Updated mode from %#o to %#o", *_mode, mode);
+		DFUSE_TRA_DEBUG(parent, "Updated mode from %#o to %#o", *_mode, mode);
 
 	*_mode = mode;
 	return 0;
