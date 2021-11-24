@@ -354,10 +354,7 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	daos_handle_t		 btr_hdl = vsi->vsi_agg_btr;
 	int			 rc;
 
-	rc = daos_gettime_coarse(&vfe->vfe_age);
-	if (rc)
-		return rc;
-
+	vfe->vfe_age = get_current_age();
 	rc = merge_free_ext(vsi, vfe, VEA_TYPE_AGGREGATE, 0);
 	if (rc < 0)
 		return rc;
@@ -414,18 +411,14 @@ migrate_end_cb(void *data, bool noop)
 	struct vea_free_extent	 vfe;
 	struct vea_unmap_extent	*vue, *tmp_vue;
 	d_list_t		 unmap_list;
-	uint64_t		 cur_time = 0;
+	uint32_t		 cur_time;
 	int			 rc, frags = 0;
 
 	if (noop)
 		return;
 
-	rc = daos_gettime_coarse(&cur_time);
-	if (rc)
-		return;
-
-	if (vsi->vsi_agg_time == UINT64_MAX ||
-	    cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+	cur_time = get_current_age();
+	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
 		return;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
@@ -526,7 +519,7 @@ migrate_end_cb(void *data, bool noop)
 void
 migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb)
 {
-	uint64_t	cur_time;
+	uint32_t	cur_time;
 	int		rc;
 
 	/* Perform the migration instantly if not in a transaction */
@@ -546,12 +539,9 @@ migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb)
 	 * Check aggregation time in advance to avoid unnecessary
 	 * umem_tx_add_callback() calls.
 	 */
-	rc = daos_gettime_coarse(&cur_time);
-	if (rc)
-		return;
+	cur_time = get_current_age();
 
-	if (vsi->vsi_agg_time == UINT64_MAX ||
-	    cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
 		return;
 
 	/* Schedule one migrate_end_cb() is enough */

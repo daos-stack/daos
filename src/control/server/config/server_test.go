@@ -976,6 +976,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotNetDevCls, gotErr := DefaultServer().
+				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithFabricProvider("test").
 				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithEngines(tc.configA, tc.configB).

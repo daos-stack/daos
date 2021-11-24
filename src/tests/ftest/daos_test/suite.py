@@ -373,11 +373,11 @@ class DaosCoreTest(DaosCoreBase):
         """
         self.run_subtest()
 
-    def test_daos_degraded_ec_0to6(self):
+    def test_daos_degraded_ec(self):
         """Jira ID: DAOS-1568
 
         Test Description:
-            Run daos_test -X -u subtests="0-6"
+            Run daos_test -X
 
         Use cases:
             Core tests for daos_test

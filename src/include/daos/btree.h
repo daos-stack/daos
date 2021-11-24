@@ -553,6 +553,7 @@ enum {
 	BTR_ITER_EMBEDDED	= (1 << 0),
 };
 
+int dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
