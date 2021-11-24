@@ -165,7 +165,7 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	dresp, err := ei.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "GetBioHealth dRPC call")
 	}
 
 	resp := &ctlpb.BioHealthResp{}
@@ -174,7 +174,7 @@ func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealth
 	}
 
 	if resp.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "getBioHealth failed")
+		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "GetBioHealth response status")
 	}
 
 	return resp, nil
@@ -198,6 +198,23 @@ func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 	return resp, nil
 }
 
+func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevResp_Device) (*storage.SmdDevice, error) {
+	smdDev := new(storage.SmdDevice)
+	if err := convert.Types(smd, smdDev); err != nil {
+		return nil, errors.Wrap(err, "convert smd")
+	}
+
+	engineRank, err := ei.GetRank()
+	if err != nil {
+		return nil, errors.Wrapf(err, "get rank")
+	}
+
+	smdDev.Rank = engineRank
+	smdDev.TrAddr = smd.GetTrAddr()
+
+	return smdDev, nil
+}
+
 // updateInUseBdevs updates-in-place the input list of controllers with
 // new NVMe health stats and SMD metadata info.
 //
@@ -212,52 +229,49 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 	}
 
 	hasUpdatedHealth := make(map[string]bool)
-	for _, dev := range smdDevs.Devices {
+	for _, smd := range smdDevs.Devices {
 		msg := fmt.Sprintf("instance %d: smd %s with transport address %s",
-			ei.Index(), dev.GetUuid(), dev.GetTrAddr())
+			ei.Index(), smd.GetUuid(), smd.GetTrAddr())
 
-		ctrlr, exists := ctrlrMap[dev.GetTrAddr()]
+		ctrlr, exists := ctrlrMap[smd.GetTrAddr()]
 		if !exists {
 			return errors.Errorf("%s: didn't match any known controllers", msg)
 		}
 
-		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-			DevUuid: dev.GetUuid(),
-		})
+		smdDev, err := ei.getSmdDetails(smd)
 		if err != nil {
-			return errors.Wrapf(err, "instance %d getBioHealth()", ei.Index())
+			return errors.Wrapf(err, "collect smd info for ctrlr %s", ctrlr.PciAddr)
 		}
 
-		health := new(storage.NvmeHealth)
-		if err := convert.Types(pbStats, health); err != nil {
-			return errors.Wrapf(err, msg)
-		}
+		// don't fetch health stats for uninitialized (NEW) smd entries
+		if smdDev.State != storage.SmdStateNew {
+			pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
+				DevUuid: smd.GetUuid(),
+			})
+			if err != nil {
+				return errors.Wrapf(err, "instance %d", ei.Index())
+			}
 
-		// multiple updates for the same key expected when
-		// more than one controller namespaces (and resident
-		// blobstores) exist, stats will be the same for each
-		if _, already := hasUpdatedHealth[ctrlr.PciAddr]; !already {
-			ctrlr.HealthStats = health
-			msg = fmt.Sprintf("%s: health stats updated", msg)
-			hasUpdatedHealth[ctrlr.PciAddr] = true
-		}
+			// populate space usage for each smd device from health stats
+			smdDev.TotalBytes = pbStats.TotalBytes
+			smdDev.AvailBytes = pbStats.AvailBytes
+			msg = fmt.Sprintf("%s: smd space usage updated", msg)
 
-		smdDev := new(storage.SmdDevice)
-		if err := convert.Types(dev, smdDev); err != nil {
-			return errors.Wrapf(err, "convert smd for ctrlr %s", ctrlr.PciAddr)
+			// multiple updates for the same key expected when more than one controller
+			// namespaces (and resident blobstores) exist, stats will be same for each
+			if _, already := hasUpdatedHealth[ctrlr.PciAddr]; !already {
+				ctrlr.HealthStats = new(storage.NvmeHealth)
+				if err := convert.Types(pbStats, ctrlr.HealthStats); err != nil {
+					return errors.Wrap(err, "convert health stats")
+				}
+
+				msg = fmt.Sprintf("%s: health stats updated", msg)
+				hasUpdatedHealth[ctrlr.PciAddr] = true
+			}
 		}
-		engineRank, err := ei.GetRank()
-		if err != nil {
-			return errors.Wrapf(err, "get rank")
-		}
-		smdDev.Rank = engineRank
-		smdDev.TrAddr = dev.GetTrAddr()
-		// space utilization stats for each smd device
-		smdDev.TotalBytes = pbStats.TotalBytes
-		smdDev.AvailBytes = pbStats.AvailBytes
 
 		ctrlr.UpdateSmd(smdDev)
-		ei.log.Debugf("%s: smd usage updated", msg)
+		ei.log.Debug(msg)
 	}
 
 	return nil

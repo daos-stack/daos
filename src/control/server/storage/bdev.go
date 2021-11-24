@@ -7,6 +7,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -22,6 +23,46 @@ import (
 
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
 const BdevPciAddrSep = " "
+
+// SmdState represents the health state of SMD structure on an NVMe device (namespace).
+type SmdState int
+
+const (
+	// SmdstateUnknown is the default invalid state.
+	SmdStateUnknown SmdState = 0x0000
+	// SmdStateNew indicates the SMD entry has been created but not initialized.
+	SmdStateNew SmdState = 0x0001
+	// SmdStateNormal indicates the SMD entry has been created and initialized.
+	SmdStateNormal SmdState = 0x0002
+	// SmdStateFaulty indicates the SMD entry has been identified as faulty.
+	SmdStateFaulty SmdState = 0x0004
+)
+
+func (ss SmdState) String() string {
+	switch ss {
+	case SmdStateNew:
+		return "NEW"
+	case SmdStateNormal:
+		return "NORMAL"
+	case SmdStateFaulty:
+		return "FAULTY"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func smdStateFromString(in string) SmdState {
+	switch strings.ToUpper(in) {
+	case "NEW":
+		return SmdStateNew
+	case "NORMAL":
+		return SmdStateNormal
+	case "FAULTY":
+		return SmdStateFaulty
+	default:
+		return SmdStateUnknown
+	}
+}
 
 type (
 	// NvmeHealth represents a set of health statistics for a NVMe device
@@ -79,7 +120,7 @@ type (
 	SmdDevice struct {
 		UUID       string      `json:"uuid"`
 		TargetIDs  []int32     `hash:"set" json:"tgt_ids"`
-		State      string      `json:"state"`
+		State      SmdState    `json:"-"`
 		Rank       system.Rank `json:"rank"`
 		TotalBytes uint64      `json:"total_bytes"`
 		AvailBytes uint64      `json:"avail_bytes"`
@@ -118,6 +159,49 @@ func (nch *NvmeHealth) TempC() float32 {
 // TempF returns controller temperature in degrees Fahrenheit.
 func (nch *NvmeHealth) TempF() float32 {
 	return (nch.TempC() * (9.0 / 5.0)) + 32.0
+}
+
+// MarshalJSON marshals SmdDevice to JSON.
+func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
+	if sd == nil {
+		return nil, errors.New("tried to marshal nil SmdDevice")
+	}
+
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON SmdDevice
+	return json.Marshal(&struct {
+		State string `json:"state"`
+		*toJSON
+	}{
+		State:  sd.State.String(),
+		toJSON: (*toJSON)(sd),
+	})
+}
+
+// UnmarshalJSON unmarshals SmdDevice from JSON.
+func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	// use a type alias to leverage the default unmarshal for
+	// most fields
+	type fromJSON SmdDevice
+	from := &struct {
+		State string `json:"state"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sd),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	sd.State = smdStateFromString(from.State)
+
+	return nil
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.

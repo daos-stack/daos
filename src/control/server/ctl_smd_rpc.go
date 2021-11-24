@@ -17,38 +17,39 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func queryRank(reqRank uint32, srvRank system.Rank) bool {
+func queryRank(reqRank uint32, engineRank system.Rank) bool {
 	rr := system.Rank(reqRank)
 	if rr.Equals(system.NilRank) {
 		return true
 	}
-	return rr.Equals(srvRank)
+	return rr.Equals(engineRank)
 }
 
 func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
-	for _, srv := range svc.harness.Instances() {
-		if !srv.IsReady() {
+	for _, ei := range svc.harness.Instances() {
+		if !ei.IsReady() {
 			svc.log.Debugf("skipping not-ready instance")
 			continue
 		}
 
-		srvRank, err := srv.GetRank()
+		engineRank, err := ei.GetRank()
 		if err != nil {
 			return err
 		}
-		if !queryRank(req.GetRank(), srvRank) {
+		if !queryRank(req.GetRank(), engineRank) {
 			continue
 		}
 
 		rResp := new(ctlpb.SmdQueryResp_RankResp)
-		rResp.Rank = srvRank.Uint32()
+		rResp.Rank = engineRank.Uint32()
 
-		listDevsResp, err := srv.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
+		listDevsResp, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
 		if err != nil {
-			return errors.Wrapf(err, "rank %d", srvRank)
+			return errors.Wrapf(err, "rank %d", engineRank)
 		}
 
 		if err := convert.Types(listDevsResp.Devices, &rResp.Devices); err != nil {
@@ -97,10 +98,10 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 
 		for _, dev := range rResp.Devices {
 			/* Skip health query if the device is in "NEW" state */
-			if dev.State == "NEW" {
+			if dev.State == storage.SmdStateNew.String() {
 				continue
 			}
-			health, err := srv.GetBioHealth(ctx, &ctlpb.BioHealthReq{
+			health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
 				DevUuid: dev.Uuid,
 			})
 			if err != nil {
@@ -113,24 +114,24 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 }
 
 func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
-	for _, srv := range svc.harness.Instances() {
-		if !srv.IsReady() {
+	for _, ei := range svc.harness.Instances() {
+		if !ei.IsReady() {
 			svc.log.Debugf("skipping not-ready instance")
 			continue
 		}
 
-		srvRank, err := srv.GetRank()
+		engineRank, err := ei.GetRank()
 		if err != nil {
 			return err
 		}
-		if !queryRank(req.GetRank(), srvRank) {
+		if !queryRank(req.GetRank(), engineRank) {
 			continue
 		}
 
 		rResp := new(ctlpb.SmdQueryResp_RankResp)
-		rResp.Rank = srvRank.Uint32()
+		rResp.Rank = engineRank.Uint32()
 
-		dresp, err := srv.CallDrpc(ctx, drpc.MethodSmdPools, new(ctlpb.SmdPoolReq))
+		dresp, err := ei.CallDrpc(ctx, drpc.MethodSmdPools, new(ctlpb.SmdPoolReq))
 		if err != nil {
 			return err
 		}
@@ -141,7 +142,8 @@ func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQuer
 		}
 
 		if rankDevResp.Status != 0 {
-			return errors.Wrapf(drpc.DaosStatus(rankDevResp.Status), "rank %d ListPools failed", srvRank)
+			return errors.Wrapf(drpc.DaosStatus(rankDevResp.Status),
+				"rank %d ListPools failed", engineRank)
 		}
 
 		if err := convert.Types(rankDevResp.Pools, &rResp.Pools); err != nil {
@@ -203,17 +205,17 @@ func (svc *ControlService) smdSetFaulty(ctx context.Context, req *ctlpb.SmdQuery
 		return nil, errors.Errorf("smdSetFaulty on %s did not match any devices", req.Uuid)
 	}
 
-	srvs, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
+	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
 	if err != nil {
 		return nil, err
 	}
-	if len(srvs) == 0 {
+	if len(eis) == 0 {
 		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
 	}
 
 	svc.log.Debugf("calling set-faulty on rank %d for %s", rank, req.Uuid)
 
-	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodSetFaultyState, &ctlpb.DevStateReq{
+	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodSetFaultyState, &ctlpb.DevStateReq{
 		DevUuid: req.Uuid,
 	})
 	if err != nil {
@@ -254,17 +256,17 @@ func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryRe
 		return nil, errors.Errorf("smdReplace on %s did not match any devices", req.Uuid)
 	}
 
-	srvs, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
+	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
 	if err != nil {
 		return nil, err
 	}
-	if len(srvs) == 0 {
+	if len(eis) == 0 {
 		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
 	}
 
 	svc.log.Debugf("calling storage replace on rank %d for %s", rank, req.Uuid)
 
-	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &ctlpb.DevReplaceReq{
+	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &ctlpb.DevReplaceReq{
 		OldDevUuid: req.Uuid,
 		NewDevUuid: req.ReplaceUUID,
 		NoReint:    req.NoReint,
@@ -307,17 +309,17 @@ func (svc *ControlService) smdIdentify(ctx context.Context, req *ctlpb.SmdQueryR
 		return nil, errors.Errorf("smdIdentify on %s did not match any devices", req.Uuid)
 	}
 
-	srvs, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
+	eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rank))
 	if err != nil {
 		return nil, err
 	}
-	if len(srvs) == 0 {
+	if len(eis) == 0 {
 		return nil, errors.Errorf("failed to retrieve instance for rank %d", rank)
 	}
 
 	svc.log.Debugf("calling storage identify on rank %d for %s", rank, req.Uuid)
 
-	dresp, err := srvs[0].CallDrpc(ctx, drpc.MethodIdentifyStorage, &ctlpb.DevIdentifyReq{
+	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodIdentifyStorage, &ctlpb.DevIdentifyReq{
 		DevUuid: req.Uuid,
 	})
 	if err != nil {

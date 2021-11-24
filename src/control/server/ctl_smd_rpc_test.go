@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -69,7 +70,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{
 						Message: &ctlpb.DevStateResp{
 							DevUuid:  common.MockUUID(),
-							DevState: "FAULTY",
+							DevState: storage.SmdStateFaulty.String(),
 						},
 					},
 				},
@@ -80,7 +81,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
 								Uuid:  common.MockUUID(),
-								State: "FAULTY",
+								State: storage.SmdStateFaulty.String(),
 							},
 						},
 					},
@@ -401,7 +402,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
 									Uuid:  common.MockUUID(1),
-									State: "FAULTY",
+									State: storage.SmdStateFaulty.String(),
 								},
 							},
 						},
@@ -422,7 +423,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
 								Uuid:  common.MockUUID(1),
-								State: "FAULTY",
+								State: storage.SmdStateFaulty.String(),
 								Health: &ctlpb.BioHealthResp{
 									Temperature: 1000000,
 									TempWarn:    true,
@@ -458,7 +459,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
 									Uuid:  common.MockUUID(1),
-									State: "FAULTY",
+									State: storage.SmdStateFaulty.String(),
 								},
 							},
 						},
@@ -498,7 +499,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 								{
 									Uuid:   common.MockUUID(1),
 									TgtIds: []int32{0},
-									State:  "FAULTY",
+									State:  storage.SmdStateFaulty.String(),
 								},
 							},
 						},
@@ -519,7 +520,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 							{
 								Uuid:   common.MockUUID(1),
 								TgtIds: []int32{0},
-								State:  "FAULTY",
+								State:  storage.SmdStateFaulty.String(),
 								Health: &ctlpb.BioHealthResp{
 									Temperature: 1000000,
 									TempWarn:    true,
