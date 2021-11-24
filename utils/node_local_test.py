@@ -1968,50 +1968,6 @@ class posix_tests():
         for fd in fds:
             fd.close()
 
-    @needs_dfuse
-    def test_complex_rename(self):
-        """Test for rename semantics, and that rename is correctly updating the dfuse data for
-        the moved rile.
-
-        # Create a file, read/write to it.
-        # Check fstat works.
-        # Rename it from the backend
-        # Check fstat - it should not work.
-        # Rename the file into a new directory, this should allow the kernel to 'find' the file
-        # again and update the name/parent.
-        # check fstat works.
-        """
-
-        fname = os.path.join(self.dfuse.dir, 'file')
-        ofd = open(fname, 'w')
-        print(os.fstat(ofd.fileno()))
-
-        dfuse = DFuse(self.server,
-                      self.conf,
-                      pool=self.pool.id(),
-                      container=self.container,
-                      caching=False,
-                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
-        dfuse.start(v_hint='rename')
-
-        os.mkdir(os.path.join(dfuse.dir, 'step_dir'))
-        os.mkdir(os.path.join(dfuse.dir, 'new_dir'))
-        os.rename(os.path.join(dfuse.dir, 'file'), os.path.join(dfuse.dir, 'step_dir', 'file-new'))
-
-        # This should fail, because the file has been deleted.
-        try:
-            print(os.fstat(ofd.fileno()))
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() replaced file')
-
-        os.rename(os.path.join(self.dfuse.dir, 'step_dir', 'file-new'),
-                  os.path.join(self.dfuse.dir, 'new_dir', 'my-file'))
-
-        print(os.fstat(ofd.fileno()))
-
-        ofd.close()
-
     def test_cont_rw(self):
         """Test write access to another users container"""
 
@@ -2091,6 +2047,50 @@ class posix_tests():
 
         if dfuse.stop():
             self.fatal_errors = True
+
+    @needs_dfuse
+    def test_complex_rename(self):
+        """Test for rename semantics, and that rename is correctly updating the dfuse data for
+        the moved rile.
+
+        # Create a file, read/write to it.
+        # Check fstat works.
+        # Rename it from the backend
+        # Check fstat - it should not work.
+        # Rename the file into a new directory, this should allow the kernel to 'find' the file
+        # again and update the name/parent.
+        # check fstat works.
+        """
+
+        fname = os.path.join(self.dfuse.dir, 'file')
+        ofd = open(fname, 'w')
+        print(os.fstat(ofd.fileno()))
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False,
+                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+        dfuse.start(v_hint='rename')
+
+        os.mkdir(os.path.join(dfuse.dir, 'step_dir'))
+        os.mkdir(os.path.join(dfuse.dir, 'new_dir'))
+        os.rename(os.path.join(dfuse.dir, 'file'), os.path.join(dfuse.dir, 'step_dir', 'file-new'))
+
+        # This should fail, because the file has been deleted.
+        try:
+            print(os.fstat(ofd.fileno()))
+            self.fail()
+        except FileNotFoundError:
+            print('Failed to fstat() replaced file')
+
+        os.rename(os.path.join(self.dfuse.dir, 'step_dir', 'file-new'),
+                  os.path.join(self.dfuse.dir, 'new_dir', 'my-file'))
+
+        print(os.fstat(ofd.fileno()))
+
+        ofd.close()
 
     @needs_dfuse
     def test_chmod_ro(self):
