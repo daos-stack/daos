@@ -14,7 +14,6 @@ class CartGhostRankRpcOneNodeTest(CartTest):
     :avocado: recursive
     """
 
-    @skipForTicket("CART-986")
     def test_cart_ghost_rank_rpc(self):
         """Test ghost rank RPC.
 
