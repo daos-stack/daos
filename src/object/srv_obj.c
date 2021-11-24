@@ -1984,12 +1984,14 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 	bool			 priv;
+	uint32_t                 nr_grps;
 
-	oca = daos_oclass_attr_find(oid, &priv);
+	oca = daos_oclass_attr_find(oid, &priv, &nr_grps);
 	if (!oca)
 		return -DER_INVAL;
 
 	ioc->ioc_oca = *oca;
+	ioc->ioc_oca.ca_grp_nr = nr_grps;
 	if (daos_oclass_is_ec(oca) && !priv) {
 		/* don't ovewrite cell size of private class */
 		D_ASSERT(ioc->ioc_coc != NULL);
@@ -2337,8 +2339,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			  (orw->orw_bulks.ca_arrays != NULL ||
 			   orw->orw_bulks.ca_count != 0) ? true : false);
 	if (rc != 0)
-		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid),
-			DP_RC(rc));
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
+			 DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
 
 out:
 	if (dth != NULL)
