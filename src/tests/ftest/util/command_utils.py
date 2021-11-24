@@ -655,6 +655,7 @@ class SubProcessCommand(CommandWithSubCommand):
         self.pattern = None
         self.pattern_count = 1
         self.pattern_timeout = BasicParameter(timeout, timeout)
+        self.pattern_detect_method = get_detected_pattern_count
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -674,7 +675,7 @@ class SubProcessCommand(CommandWithSubCommand):
             names[index] = "sub_command_class"
         return names
 
-    def check_subprocess_status(self, sub_process, detect_method=get_detected_pattern_count):
+    def check_subprocess_status(self, sub_process):
         """Verify the status of the command started as a subprocess.
 
         Continually search the subprocess output for a pattern (self.pattern)
@@ -684,7 +685,6 @@ class SubProcessCommand(CommandWithSubCommand):
 
         Args:
             sub_process (process.SubProcess): subprocess used to run the command
-            detect_method (object): method used to detect the number of patterns
 
         Returns:
             bool: whether or not the command progress has been detected
@@ -700,14 +700,13 @@ class SubProcessCommand(CommandWithSubCommand):
             complete = False
             timed_out = False
             start = time.time()
-            args = [sub_process, self.pattern]
 
             # Search for patterns in the subprocess output until:
             #   - the expected number of pattern matches are detected (success)
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                detected = detect_method(*args)
+                detected = self.pattern_detect_method(sub_process, self.pattern)
                 complete = detected == self.pattern_count
                 timed_out = time.time() - start > self.pattern_timeout.value
 

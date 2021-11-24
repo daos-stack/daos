@@ -369,12 +369,14 @@ class DaosServerManager(SubprocessManager):
         """
         if host_qty is None:
             hosts_qty = len(self._hosts)
-        self.log.info("<SERVER> Waiting for the daos_engine to start")
-        self.manager.job.update_pattern("normal", hosts_qty)
-        args = [self.manager.process]
         if self.detect_start_via_dmg:
-            args.append(self.get_detected_engine_count)
-        if not self.manager.check_subprocess_status(*args):
+            self.log.info("<SERVER> Waiting for the daos_engine to start via dmg system query")
+            self.manager.pattern_detect_method = self.get_detected_engine_count
+            self.manager.job.update_pattern("joined", hosts_qty)
+        else:
+            self.log.info("<SERVER> Waiting for the daos_engine to start")
+            self.manager.job.update_pattern("dmg", hosts_qty)
+        if not self.manager.check_subprocess_status(self.manager.process):
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
@@ -384,22 +386,25 @@ class DaosServerManager(SubprocessManager):
         # Define the expected states for each rank
         self._expected_states = self.get_current_state()
 
-    def get_detected_engine_count(self):
+    def get_detected_engine_count(self, sub_process, pattern):
         """Get the number of detected joined engines.
 
         Args:
-            pattern (str): pattern to detect in the output
             sub_process (process.SubProcess): subprocess used to run the command
+            pattern (str): pattern to detect in the subprocess output
 
         Returns:
             int: number of patterns detected in the job output
 
         """
         detected = 0
-        expected_states = ["joined"]
+        expected_states = pattern.split(",")
 
         # Run dmg system query to get the current state of each engine
+        stored = self.dmg.verbose
+        self.dmg.verbose = False
         states = self.get_current_state()
+        self.dmg.verbose = stored
 
         # Display a table of the engine states and count the number of running engines
         log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
