@@ -23,7 +23,7 @@ from command_utils_base import \
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout, get_detected_pattern_count
+    get_subprocess_stdout
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -655,7 +655,6 @@ class SubProcessCommand(CommandWithSubCommand):
         self.pattern = None
         self.pattern_count = 1
         self.pattern_timeout = BasicParameter(timeout, timeout)
-        self.pattern_detect_method = get_detected_pattern_count
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -706,44 +705,50 @@ class SubProcessCommand(CommandWithSubCommand):
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                detected = self.pattern_detect_method(sub_process, self.pattern)
+                detected = len(re.findall(self.pattern, get_subprocess_stdout(sub_process)))
                 complete = detected == self.pattern_count
                 timed_out = time.time() - start > self.pattern_timeout.value
 
             # Summarize results
-            msg = "{}/{} '{}' messages detected in".format(
-                detected, self.pattern_count, self.pattern)
-            runtime = "{}/{} seconds".format(
-                time.time() - start, self.pattern_timeout.value)
-
-            if not complete:
-                # Report the error / timeout
-                reason = "ERROR detected"
-                details = ""
-                if timed_out:
-                    reason = "TIMEOUT detected, exceeded {} seconds".format(
-                        self.pattern_timeout.value)
-                    runtime = "{} seconds".format(time.time() - start)
-                if not self.verbose:
-                    # Include the stdout if verbose is not enabled
-                    details = ":\n{}".format(get_subprocess_stdout(sub_process))
-                self.log.info("%s - %s %s%s", reason, msg, runtime, details)
-                if timed_out:
-                    self.log.debug(
-                        "If needed the %s second timeout can be adjusted via "
-                        "the 'pattern_timeout' test yaml parameter under %s",
-                        self.pattern_timeout.value, self.namespace)
-
-                # Stop the timed out process
-                if timed_out:
-                    self.stop()
-            else:
-                # Report the successful start
-                self.log.info(
-                    "%s subprocess startup detected - %s %s",
-                    self._command, msg, runtime)
+            self.report_subprocess_status(start, detected, complete, timed_out, sub_process)
 
         return complete
+
+    def report_subprocess_status(self, start, detected, complete, timed_out, sub_process):
+        """Summarize the results of checking the status of the command.
+
+        Args:
+            start (float): start time of check
+            detected (int): number of patterns detected in the check
+            complete (bool): whether the check succeeded
+            timed_out (bool): whether the check timed out
+            sub_process (process.SubProcess): subprocess used to run the command
+        """
+        msg = "{}/{} '{}' messages detected in".format(detected, self.pattern_count, self.pattern)
+        runtime = "{}/{} seconds".format(time.time() - start, self.pattern_timeout.value)
+
+        if not complete:
+            # Report the error / timeout
+            reason = "ERROR detected"
+            details = ""
+            if timed_out:
+                reason = "TIMEOUT detected, exceeded {} seconds".format(self.pattern_timeout.value)
+                runtime = "{} seconds".format(time.time() - start)
+            if not self.verbose:
+                # Include the stdout if verbose is not enabled
+                details = ":\n{}".format(get_subprocess_stdout(sub_process))
+            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+            if timed_out:
+                self.log.debug(
+                    "If needed the %s second timeout can be adjusted via the 'pattern_timeout' "
+                    "test yaml parameter under %s", self.pattern_timeout.value, self.namespace)
+
+            # Stop the timed out process
+            if timed_out:
+                self.stop()
+        else:
+            # Report the successful start
+            self.log.info("%s subprocess startup detected - %s %s", self._command, msg, runtime)
 
 
 class YamlCommand(SubProcessCommand):

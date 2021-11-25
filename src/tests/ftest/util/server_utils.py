@@ -369,14 +369,17 @@ class DaosServerManager(SubprocessManager):
         """
         if host_qty is None:
             hosts_qty = len(self._hosts)
+
         if self.detect_start_via_dmg:
             self.log.info("<SERVER> Waiting for the daos_engine to start via dmg system query")
-            self.manager.pattern_detect_method = self.get_detected_engine_count
-            self.manager.job.update_pattern("joined", hosts_qty)
+            self.manager.job.update_pattern("dmg", hosts_qty)
+            started = self.get_detected_engine_count(self.manager.process)
         else:
             self.log.info("<SERVER> Waiting for the daos_engine to start")
-            self.manager.job.update_pattern("dmg", hosts_qty)
-        if not self.manager.check_subprocess_status(self.manager.process):
+            self.manager.job.update_pattern("normal", hosts_qty)
+            started = self.manager.check_subprocess_status(self.manager.process)
+
+        if not started:
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
@@ -386,39 +389,53 @@ class DaosServerManager(SubprocessManager):
         # Define the expected states for each rank
         self._expected_states = self.get_current_state()
 
-    def get_detected_engine_count(self, sub_process, pattern):
+    def get_detected_engine_count(self, sub_process):
         """Get the number of detected joined engines.
 
         Args:
             sub_process (process.SubProcess): subprocess used to run the command
-            pattern (str): pattern to detect in the subprocess output
 
         Returns:
             int: number of patterns detected in the job output
 
         """
+        expected_states = self.manager.job.pattern.split(",")
         detected = 0
-        expected_states = pattern.split(",")
+        complete = False
+        timed_out = False
+        start = time.time()
 
-        # Run dmg system query to get the current state of each engine
-        stored = self.dmg.verbose
-        self.dmg.verbose = False
+        # Search for patterns in the dmg system query output:
+        #   - the expected number of pattern matches are detected (success)
+        #   - the time out is reached (failure)
+        #   - the subprocess is no longer running (failure)
+        while not complete and not timed_out and sub_process.poll() is None:
+            detected = self.detect_engine_states(expected_states)
+            complete = detected == self.manager.job.pattern_count
+            timed_out = time.time() - start > self.manager.job.pattern_timeout.value
+            if not complete and not timed_out:
+                time.sleep(1)
+
+        # Summarize results
+        self.manager.job.report_subprocess_status(start, detected, complete, timed_out, sub_process)
+
+        return complete
+
+    def detect_engine_states(self, expected_states):
+        """Detect the number of engine states that match the expected states.
+
+        Args:
+            expected_states (list): a list of engine state strings to detect
+
+        Returns:
+            int: number of engine states that match the expected states
+
+        """
+        detected = 0
         states = self.get_current_state()
-        self.dmg.verbose = stored
-
-        # Display a table of the engine states and count the number of running engines
-        log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
-        self.log.info(
-                log_format, "Rank", "Host", "UUID", "Expected State", "Current State", "Result")
-        self.log.info(log_format, "-" * 4, "-" * 15, "-" * 36, "-" * 22, "-" * 14, "-" * 6)
         for rank in sorted(states):
-            result = states[rank]["state"].lower() in expected_states
-            self.log.info(
-                    log_format, rank, states[rank]["host"], states[rank]["uuid"],
-                    "|".join(expected_states), states[rank]["state"], result)
-            if result:
+            if states[rank]["state"].lower() in expected_states:
                 detected += 1
-
         return detected
 
     def reset_storage(self):
