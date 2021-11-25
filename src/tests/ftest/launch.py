@@ -1893,10 +1893,10 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         return False
 
     for corefile in cores:
-        print(run_command(['ls', '-l', corefile]))
         if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
             continue
         corefile_fqpn = os.path.join(daos_cores_dir, corefile)
+        print(run_command(['ls', '-l', corefile_fqpn]))
         # can't use the file python magic binding here due to:
         # https://bugs.astron.com/view.php?id=225, fixed in:
         # https://github.com/file/file/commit/6faf2eba2b8c65fbac7acd36602500d757614d2f
