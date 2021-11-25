@@ -9,12 +9,12 @@
 %if (0%{?rhel} >= 8)
 # https://bugzilla.redhat.com/show_bug.cgi?id=1955184
 %define _use_internal_dependency_generator 0
-%define __find_requires %{_sourcedir}/bz-1955184_find-requires
+%define __find_requires %{SOURCE1}
 %endif
 
 Name:          daos
 Version:       2.1.100
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -324,7 +324,7 @@ mv test.cov{,-build}
       %{?compiler_args}
 
 %if ("%{?compiler_args}" == "COMPILER=covc")
-mv test.cov-build %{buildroot}/usr/lib/daos/TESTING/ftest/test.cov
+mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
@@ -332,7 +332,7 @@ mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
 install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
-%else if (0%{?rhel} == 8 or  %{?suse_version} == 1500)
+%else
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
@@ -452,8 +452,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_mandir}/man8/dmg.8*
 
 %files client-tests
-%dir %{_prefix}/lib/daos
-%{_prefix}/lib/daos/TESTING
+%dir %{daoshome}
+%{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
 %{_bindir}/io_conf
@@ -468,8 +468,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
-%{_prefix}/lib/daos/.build_vars.json
-%{_prefix}/lib/daos/.build_vars.sh
+%{daoshome}/.build_vars.json
+%{daoshome}/.build_vars.sh
 
 %files client-tests-openmpi
 %{_bindir}/crt_launch
@@ -516,6 +516,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Wed Nov 24 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-8
+- Remove invalid "%%else if" syntax
+- Fix a few other rpmlint warnings
+
 * Tue Nov 16 2021 Wang Shilong <shilong.wang@intel.com> 2.1.100-7
 - Update for libdaos major version bump
 - Fix version of libpemobj1 for SUSE
@@ -534,7 +538,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Wed Oct 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-3
 - Explicitly require 1.11.0-3 of PMDK
 
-* Mon Oct 13 2021 David Quigley <david.quigley@intel.com> 2.1.100-2
+* Wed Oct 13 2021 David Quigley <david.quigley@intel.com> 2.1.100-2
 - Add defusedxml as a required dependency for the test package.
 
 * Wed Oct 13 2021 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-1
@@ -543,7 +547,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Tue Oct 12 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.106-1
 - Version bump to 1.3.106 for 2.0 test build 6
 
-* Wed Oct 8 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.13.105-4
+* Fri Oct 8 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.13.105-4
 - Update OFI to v1.13.2rc1
 
 * Wed Sep 15 2021 Li Wei <wei.g.li@intel.com> 1.3.105-3
@@ -698,7 +702,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - Update to mercury v2.0.1rc1
 
 * Fri Jan 22 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-5
-- Install daos_metrics utility to %{_bindir}
+- Install daos_metrics utility to %%{_bindir}
 
 * Wed Jan 20 2021 Kenneth Cain <kenneth.c.cain@intel.com> 1.1.2.1-4
 - Version update for API major version 1, libdaos.so.1 (1.0.0)
@@ -904,7 +908,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - Update BR: libisal-devel for Leap
 
 * Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-8
-- Use BR: cart-devel-%{cart_sha1} if available
+- Use BR: cart-devel-%%{cart_sha1} if available
 - Remove cart's BRs as it's -devel Requires them now
 
 * Tue Oct 01 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-7
