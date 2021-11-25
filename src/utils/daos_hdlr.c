@@ -2226,6 +2226,11 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 {
 	struct duns_attr_t	dattr = {0};
 	int			rc = 0;
+	char			*tmp_path1 = NULL;
+	char			*path_dirname = NULL;
+	char			*tmp_path2 = NULL;
+	char			*path_basename = NULL;
+	char			*tmp = NULL;
 
 	rc = duns_resolve_path(path, &dattr);
 	if (rc == 0) {
@@ -2236,19 +2241,59 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 		} else {
 			strncpy(path, dattr.da_rel_path, path_len);
 		}
-	} else if (rc == ENOMEM) {
-		/* TODO: Take this path of rc != ENOENT? */
-		D_GOTO(out, rc);
-	} else if (strncmp(path, "daos://", 7) == 0) {
-		/* Error, since we expect a DAOS path */
-		D_GOTO(out, rc = EINVAL);
 	} else {
-		/* not a DAOS path, set type to POSIX,
-		 * POSIX dir will be checked with stat
-		 * at the beginning of fs_copy
+		/* If basename does not exist yet then duns_resolve_path will fail even if
+		 * dirname is a UNS path
 		 */
-		rc = 0;
-		file->type = POSIX;
+
+		/* get dirname */
+		D_STRNDUP(tmp_path1, path, path_len);
+		if (tmp_path1 == NULL)
+			D_GOTO(out, rc = ENOMEM);
+		path_dirname = dirname(tmp_path1);
+		/* reset before calling duns_resolve_path with new string */
+		memset(&dattr, 0, sizeof(struct duns_attr_t));
+
+		/* Check if this path represents a daos pool and/or container. */
+		rc = duns_resolve_path(path_dirname, &dattr);
+		/* if it succeeds get the basename and append it to the rel_path */
+		if (rc == 0) {
+			/* if duns_resolve_path succeeds then concat basename to da_rel_path */
+			D_STRNDUP(tmp_path2, path, path_len);
+			if (tmp_path2 == NULL)
+				D_GOTO(out, rc = ENOMEM);
+			path_basename = basename(tmp_path2);
+
+			/* dirname might be root uns path, if that is the case,
+			 * then da_rel_path might be NULL
+			 */
+			if (dattr.da_rel_path == NULL)
+				D_ALLOC(tmp, path_len);
+			else
+				tmp = realloc(dattr.da_rel_path, path_len);
+			if (tmp == NULL)
+				D_GOTO(out, rc = ENOMEM);
+			dattr.da_rel_path = tmp;
+			strcat(dattr.da_rel_path, "/");
+			strcat(dattr.da_rel_path, path_basename);
+
+			snprintf(*pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+			snprintf(*cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
+			strncpy(path, dattr.da_rel_path, path_len);
+		} else if (rc == ENOMEM) {
+			/* TODO: Take this path of rc != ENOENT? */
+			D_GOTO(out, rc);
+		} else if (strncmp(path, "daos://", 7) == 0) {
+			/* Error, since we expect a DAOS path */
+			D_GOTO(out, rc = EINVAL);
+		} else {
+			/* not a DAOS path, set type to POSIX,
+			 * POSIX dir will be checked with stat
+			 * at the beginning of fs_copy
+			 */
+			rc = 0;
+			file->type = POSIX;
+		}
 	}
 out:
 	duns_destroy_attr(&dattr);
