@@ -241,7 +241,7 @@ class WarningsFactory():
         self.close()
 
     def add_test_case(self, name, failure=None, test_class='core',
-                      output=None,
+                      output=None, stdout=None,
                       duration=None):
         """Add a test case to the results
 
@@ -254,7 +254,7 @@ class WarningsFactory():
 
         tc = junit_xml.TestCase(name,
                                 classname=self._class_name(test_class),
-                                elapsed_sec=duration)
+                                elapsed_sec=duration, stdout=stdout)
         if failure:
             tc.add_failure_info(failure, output=output)
         self.ts.test_cases.append(tc)
@@ -2384,6 +2384,31 @@ class posix_tests():
         destroy_container(self.conf, self.pool.id(), container)
 # pylint: enable=too-many-public-methods
 
+
+class nlt_stdout_wrapper():
+
+    def __init__(self):
+        self._stdout = sys.stdout
+        self._outputs = {}
+        sys.stdout = self
+
+    def write(self, value):
+        thread = threading.current_thread()
+        if not thread.daemon:
+            self._stdout.write(value)
+            return
+        thread_id = thread.ident
+        try:
+            self._outputs[thread_id] += value
+        except KeyError:
+            self._outputs[thread_id] = value
+
+    def flush(self):
+        self._stdout.flush()
+
+    def __del__(self):
+        sys.stdout = self._stdout
+
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests
 
@@ -2425,6 +2450,7 @@ def run_posix_tests(server, conf, test=None):
             print('rc from {} is {}'.format(function, rc))
             print('Took {:.1f} seconds'.format(duration))
             conf.wf.add_test_case(ptl.test_name,
+                                  stdout = out_wrapper._outputs[threading.get_ident()],
                                   test_class='test',
                                   duration = duration)
             if not ptl.needs_more:
@@ -2442,6 +2468,7 @@ def run_posix_tests(server, conf, test=None):
         _run_test(ptl=pto, test_cb=obj, function=fn)
     else:
 
+        out_wrapper = nlt_stdout_wrapper()
         threads = []
 
         for fn in sorted(dir(pto)):
@@ -2474,6 +2501,8 @@ def run_posix_tests(server, conf, test=None):
 
         for thread in threads:
             thread.join()
+
+        out_wrapper = None
 
     return pto.fatal_errors
 
