@@ -240,8 +240,7 @@ class WarningsFactory():
         self.ts = None
         self.close()
 
-    def add_test_case(self, name, failure=None, test_class='core',
-                      output=None, stdout=None,
+    def add_test_case(self, name, failure=None, test_class='core', output=None, stdout=None,
                       duration=None):
         """Add a test case to the results
 
@@ -252,9 +251,8 @@ class WarningsFactory():
         if not self.ts:
             return
 
-        tc = junit_xml.TestCase(name,
-                                classname=self._class_name(test_class),
-                                elapsed_sec=duration, stdout=stdout)
+        tc = junit_xml.TestCase(name, classname=self._class_name(test_class), elapsed_sec=duration,
+                                stdout=stdout)
         if failure:
             tc.add_failure_info(failure, output=output)
         self.ts.test_cases.append(tc)
@@ -1604,7 +1602,7 @@ class posix_tests():
             self.fatal_errors = True
 
     @needs_dfuse
-    def test_a_readdir_25(self):
+    def test_readdir_25(self):
         """Test reading a directory with 25 entries"""
         self.readdir_test(25, test_all=True)
 
@@ -2102,7 +2100,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    def test_a_uns_basic(self):
+    def test_uns_basic(self):
         """Create a UNS entry point and access it via both EP and path"""
 
         pool = self.pool.uuid
@@ -2217,7 +2215,7 @@ class posix_tests():
             self.fatal_errors = True
 
     @needs_dfuse_no_cache
-    def test_a_daos_fs_tool(self):
+    def test_daos_fs_tool(self):
         """Create a UNS entry point"""
 
         dfuse = self.dfuse
@@ -2384,8 +2382,8 @@ class posix_tests():
         destroy_container(self.conf, self.pool.id(), container)
 # pylint: enable=too-many-public-methods
 
-
 class nlt_stdout_wrapper():
+    """Class for capturing stdout from threads"""
 
     def __init__(self):
         self._stdout = sys.stdout
@@ -2393,6 +2391,8 @@ class nlt_stdout_wrapper():
         sys.stdout = self
 
     def write(self, value):
+        """Print to stdout.  If this is the main thread then print it, else save it"""
+
         thread = threading.current_thread()
         if not thread.daemon:
             self._stdout.write(value)
@@ -2403,7 +2403,19 @@ class nlt_stdout_wrapper():
         except KeyError:
             self._outputs[thread_id] = value
 
+    def sprint(self, value):
+        """Really print something to stdout"""
+        self._stdout.write(value + '\n')
+
+    def get_thread_output(self):
+        """Return the stdout by the calling thread, and reset for next time"""
+        thread_id = threading.get_ident()
+        data = self._outputs[thread_id]
+        del self._outputs[thread_id]
+        return data
+
     def flush(self):
+        """Flush"""
         self._stdout.flush()
 
     def __del__(self):
@@ -2422,6 +2434,7 @@ def run_posix_tests(server, conf, test=None):
             ptl.needs_more = False
             ptl.test_name = function
             start = time.time()
+            out_wrapper.sprint('Calling {}'.format(function))
             print('Calling {}'.format(function))
 
             # Do this with valgrind disabled as this code is run often and valgrind has a big
@@ -2440,17 +2453,18 @@ def run_posix_tests(server, conf, test=None):
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
                 duration = time.time() - start
+                out_wrapper.sprint('{} Failed'.format(function))
                 conf.wf.add_test_case(ptl.test_name,
                                       repr(inst),
+                                      stdout = out_wrapper.get_thread_output(),
                                       output = trace,
                                       test_class='test',
                                       duration = duration)
                 raise
             duration = time.time() - start
-            print('rc from {} is {}'.format(function, rc))
-            print('Took {:.1f} seconds'.format(duration))
+            out_wrapper.sprint('Test {} took {:.1f} seconds'.format(function, duration))
             conf.wf.add_test_case(ptl.test_name,
-                                  stdout = out_wrapper._outputs[threading.get_ident()],
+                                  stdout = out_wrapper.get_thread_output(),
                                   test_class='test',
                                   duration = duration)
             if not ptl.needs_more:
@@ -2460,6 +2474,8 @@ def run_posix_tests(server, conf, test=None):
     server.get_test_pool()
     pool = server.test_pool
 
+    out_wrapper = nlt_stdout_wrapper()
+
     pto = posix_tests(server, conf, pool=pool)
     if test:
         fn = 'test_{}'.format(test)
@@ -2468,10 +2484,18 @@ def run_posix_tests(server, conf, test=None):
         _run_test(ptl=pto, test_cb=obj, function=fn)
     else:
 
-        out_wrapper = nlt_stdout_wrapper()
         threads = []
 
-        for fn in sorted(dir(pto)):
+        slow_tests = ['test_readdir_25', 'test_uns_basic', 'test_daos_fs_tool']
+
+        tests = sorted(dir(pto))
+        for test in slow_tests:
+            tests.remove(test)
+
+        all_tests = list(slow_tests)
+        all_tests.extend(tests)
+
+        for fn in all_tests:
             if not fn.startswith('test'):
                 continue
 
@@ -2486,23 +2510,28 @@ def run_posix_tests(server, conf, test=None):
                                       kwargs={'ptl': ptl, 'test_cb': obj, 'function': fn},
                                       daemon=True)
             thread.start()
-            threads.append(thread)
+            threads.append({'thread': thread, 'ptl': ptl})
 
             # Limit the number of concurrent tests, but poll all active threads so there's no
-            # expectation for them to complete in order.  At the minute we only have two
+            # expectation for them to complete in order.  At the minute we only have a handlful of
             # long-running tests which dominate the time, so whilst a higher value here would
-            # work there's no benefit in rushing to finish the quicker tests.
+            # work there's no benefit in rushing to finish the quicker tests.  The long-running
+            # tests are started first.
             while len(threads) > 5:
-                for thread in threads:
-                    thread.join(timeout=0)
-                    if thread.is_alive():
+                for td in threads:
+                    td['thread'].join(timeout=0)
+                    if td['thread'].is_alive():
                         continue
-                    threads.remove(thread)
+                    threads.remove(td)
+                    if td['ptl'].fatal_errors:
+                        pto.fatal_errors = True
 
-        for thread in threads:
-            thread.join()
+        for td in threads:
+            td['thread'].join()
+            if td['ptl'].fatal_errors:
+                pto.fatal_errors = True
 
-        out_wrapper = None
+    out_wrapper = None
 
     return pto.fatal_errors
 
