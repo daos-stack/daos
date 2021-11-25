@@ -125,10 +125,7 @@ class NLTConf():
         """
 
         # pylint: disable=consider-using-with
-
         self._compress_procs[:] = (proc for proc in self._compress_procs if proc.poll())
-        # Give everyone read permissions on the file.
-        os.chmod(filename, stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
         self._compress_procs.append(subprocess.Popen(['bzip2', '--best', filename]))
 
     def flush_bz2(self):
