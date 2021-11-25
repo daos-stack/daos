@@ -240,8 +240,8 @@ class WarningsFactory():
         self.ts = None
         self.close()
 
-    def add_test_case(self, name, failure=None, test_class='core', output=None, stdout=None,
-                      duration=None):
+    def add_test_case(self, name, failure=None, test_class='core', output=None, duration=None,
+                      stdout=None, stderr=None):
         """Add a test case to the results
 
         class and other metadata will be set automatically,
@@ -252,7 +252,7 @@ class WarningsFactory():
             return
 
         tc = junit_xml.TestCase(name, classname=self._class_name(test_class), elapsed_sec=duration,
-                                stdout=stdout)
+                                stdout=stdout, stderr=stderr)
         if failure:
             tc.add_failure_info(failure, output=output)
         self.ts.test_cases.append(tc)
@@ -2421,6 +2421,44 @@ class nlt_stdout_wrapper():
     def __del__(self):
         sys.stdout = self._stdout
 
+class nlt_stderr_wrapper():
+    """Class for capturing stderr from threads"""
+
+    def __init__(self):
+        self._stderr = sys.stderr
+        self._outputs = {}
+        sys.stderr = self
+
+    def write(self, value):
+        """Print to stderr.  If this is the main thread then print it, else save it"""
+
+        thread = threading.current_thread()
+        self._stderr.write(value)
+        thread_id = thread.ident
+        if not thread.daemon:
+            return
+        try:
+            self._outputs[thread_id] += value
+        except KeyError:
+            self._outputs[thread_id] = value
+
+    def get_thread_err(self):
+        """Return the stderr by the calling thread, and reset for next time"""
+        thread_id = threading.get_ident()
+        try:
+            data = self._outputs[thread_id]
+            del self._outputs[thread_id]
+            return data
+        except KeyError:
+            return None
+
+    def flush(self):
+        """Flush"""
+        self._stderr.flush()
+
+    def __del__(self):
+        sys.stderr = self._stderr
+
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests
 
@@ -2445,11 +2483,11 @@ def run_posix_tests(server, conf, test=None):
                                             pool.id(),
                                             ctype="POSIX",
                                             valgrind=False,
-                                            log_parse=False,
+                                            log_check=False,
                                             label=function)
                 ptl.container_label = function
                 test_cb()
-                destroy_container(conf, pool.id(), ptl.container_label, valgrind=False, log_parse=False)
+                destroy_container(conf, pool.id(), ptl.container_label, valgrind=False, log_check=False)
                 ptl.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
@@ -2458,6 +2496,7 @@ def run_posix_tests(server, conf, test=None):
                 conf.wf.add_test_case(ptl.test_name,
                                       repr(inst),
                                       stdout = out_wrapper.get_thread_output(),
+                                      stderr = err_wrapper.get_thread_err(),
                                       output = trace,
                                       test_class='test',
                                       duration = duration)
@@ -2466,6 +2505,7 @@ def run_posix_tests(server, conf, test=None):
             out_wrapper.sprint('Test {} took {:.1f} seconds'.format(function, duration))
             conf.wf.add_test_case(ptl.test_name,
                                   stdout = out_wrapper.get_thread_output(),
+                                  stderr = err_wrapper.get_thread_err(),
                                   test_class='test',
                                   duration = duration)
             if not ptl.needs_more:
@@ -2476,6 +2516,7 @@ def run_posix_tests(server, conf, test=None):
     pool = server.test_pool
 
     out_wrapper = nlt_stdout_wrapper()
+    err_wrapper = nlt_stderr_wrapper()
 
     pto = posix_tests(server, conf, pool=pool)
     if test:
@@ -2533,6 +2574,7 @@ def run_posix_tests(server, conf, test=None):
                 pto.fatal_errors = True
 
     out_wrapper = None
+    err_wrapper = None
 
     return pto.fatal_errors
 
