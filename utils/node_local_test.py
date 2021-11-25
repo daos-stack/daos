@@ -1296,9 +1296,6 @@ def create_cont(conf,
     if ctype:
         cmd.extend(['--type', ctype])
 
-    if label:
-        cmd.extend(['--properties', 'label:{}'.format(label)])
-
     if cont:
         cmd.extend(['--cont', cont])
 
