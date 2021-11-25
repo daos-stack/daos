@@ -138,7 +138,11 @@ class ErasureCodeIor(ServerFillUp):
             percent(int): %of storage to be filled. Default it will use the given parameters in
                             yaml file.
         """
-        self.log.info(self.pool.pool_percentage_used())
+        try:
+            self.log.info(self.pool.pool_percentage_used())
+        except ZeroDivisionError:
+            self.log.info("Either SCM or NVMe is used so ignore the error")
+
         self.ior_param_update(oclass, sizes)
 
         # Create the new container with correct redundancy factor for EC
