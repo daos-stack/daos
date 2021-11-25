@@ -18,7 +18,7 @@ class ContainerAutotestTest(TestWithServers):
     def test_container_autotest(self):
         """Test container autotest.
 
-        :avocado: tags=all,full_regression,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=container,autotest,containerautotest,quick
         """

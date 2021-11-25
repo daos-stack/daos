@@ -443,56 +443,6 @@ out:
 }
 
 static int
-cont_start_agg_ult(struct ds_cont_child *cont, void (*func)(void *),
-		   struct sched_request **req)
-{
-	struct dss_module_info	*dmi = dss_get_module_info();
-	struct sched_req_attr	 attr;
-	ABT_thread		 agg_ult = ABT_THREAD_NULL;
-	int			 rc;
-
-	D_ASSERT(cont != NULL);
-	if (*req != NULL)
-		return 0;
-
-	rc = dss_ult_create(func, cont, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ,
-			    &agg_ult);
-	if (rc) {
-		D_ERROR(DF_CONT"[%d]: Failed to create aggregation ULT. %d\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			dmi->dmi_tgt_id, rc);
-		return rc;
-	}
-
-	D_ASSERT(agg_ult != ABT_THREAD_NULL);
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &cont->sc_pool->spc_uuid);
-	*req = sched_req_get(&attr, agg_ult);
-	if (*req == NULL) {
-		D_CRIT(DF_CONT"[%d]: Failed to get req for aggregation ULT\n",
-		       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		       dmi->dmi_tgt_id);
-		ABT_thread_free(&agg_ult);
-		return -DER_NOMEM;
-	}
-
-	return 0;
-}
-
-static void
-cont_stop_agg_ult(struct ds_cont_child *cont, struct sched_request *req)
-{
-	if (req == NULL)
-		return;
-
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Stopping aggregation ULT\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		dss_get_module_info()->dmi_tgt_id);
-
-	sched_req_wait(req, true);
-	sched_req_put(req);
-}
-
-static int
 cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		      bool full_scan, struct agg_param *param, uint64_t *msecs)
 {
@@ -567,40 +517,60 @@ cont_ec_agg_ult(void *arg)
 	ds_obj_ec_aggregate(arg);
 }
 
-static int
-cont_start_agg(struct ds_cont_child *cont)
-{
-	int rc;
-
-	if (likely(!ec_agg_disabled)) {
-		rc = cont_start_agg_ult(cont, cont_ec_agg_ult,
-					&cont->sc_ec_agg_req);
-		if (rc)
-			return rc;
-	}
-
-	rc = cont_start_agg_ult(cont, cont_agg_ult, &cont->sc_agg_req);
-	if (rc) {
-		if (cont->sc_ec_agg_req)
-			cont_stop_agg_ult(cont, cont->sc_ec_agg_req);
-		cont->sc_ec_agg_req = NULL;
-		return rc;
-	}
-	return 0;
-}
-
 static void
 cont_stop_agg(struct ds_cont_child *cont)
 {
-	if (cont->sc_ec_agg_req) {
-		cont_stop_agg_ult(cont, cont->sc_ec_agg_req);
+	if (cont->sc_ec_agg_req != NULL) {
+		D_DEBUG(DB_EPC, DF_CONT"[%d]: Stopping EC aggregation ULT\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			dss_get_module_info()->dmi_tgt_id);
+
+		sched_req_wait(cont->sc_ec_agg_req, true);
+		sched_req_put(cont->sc_ec_agg_req);
 		cont->sc_ec_agg_req = NULL;
 	}
 
-	if (cont->sc_agg_req) {
-		cont_stop_agg_ult(cont, cont->sc_agg_req);
+	if (cont->sc_agg_req != NULL) {
+		D_DEBUG(DB_EPC, DF_CONT"[%d]: Stopping VOS aggregation ULT\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			dss_get_module_info()->dmi_tgt_id);
+
+		sched_req_wait(cont->sc_agg_req, true);
+		sched_req_put(cont->sc_agg_req);
 		cont->sc_agg_req = NULL;
 	}
+}
+
+static int
+cont_start_agg(struct ds_cont_child *cont)
+{
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &cont->sc_pool->spc_uuid);
+
+	if (likely(!ec_agg_disabled)) {
+		D_ASSERT(cont->sc_ec_agg_req == NULL);
+		cont->sc_ec_agg_req = sched_create_ult(&attr, cont_ec_agg_ult, cont,
+						       DSS_DEEP_STACK_SZ);
+		if (cont->sc_ec_agg_req == NULL) {
+			D_ERROR(DF_CONT"[%d]: Failed to create EC aggregation ULT.\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id);
+			return -DER_NOMEM;
+		}
+	}
+
+	D_ASSERT(cont->sc_agg_req == NULL);
+	cont->sc_agg_req = sched_create_ult(&attr, cont_agg_ult, cont, DSS_DEEP_STACK_SZ);
+	if (cont->sc_agg_req == NULL) {
+		D_ERROR(DF_CONT"[%d]: Failed to create VOS aggregation ULT.\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id);
+
+		cont_stop_agg(cont);
+		return -DER_NOMEM;
+	}
+
+	return 0;
 }
 
 /* Per VOS container DTX re-index ULT ***************************************/
