@@ -140,27 +140,17 @@ start_gc_ult(struct ds_pool_child *child)
 {
 	struct dss_module_info	*dmi = dss_get_module_info();
 	struct sched_req_attr	 attr;
-	ABT_thread		 gc = ABT_THREAD_NULL;
-	int			 rc;
 
 	D_ASSERT(child != NULL);
 	D_ASSERT(child->spc_gc_req == NULL);
 
-	rc = dss_ult_create(gc_ult, child, DSS_XS_SELF, 0, 0, &gc);
-	if (rc) {
-		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT. %d\n",
-			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, rc);
-		return rc;
-	}
-
-	D_ASSERT(gc != ABT_THREAD_NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
-	child->spc_gc_req = sched_req_get(&attr, gc);
+
+	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, 0);
 	if (child->spc_gc_req == NULL) {
-		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
-		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_free(&gc);
+		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT.\n",
+			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 		return -DER_NOMEM;
 	}
 
@@ -586,31 +576,21 @@ static int
 ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 {
 	struct sched_req_attr	attr;
-	ABT_thread		ec_eph_query_ult = ABT_THREAD_NULL;
-	int			rc;
 
 	if (unlikely(ec_agg_disabled))
 		return 0;
 
-	rc = dss_ult_create(tgt_ec_eph_query_ult, pool, DSS_XS_SYS, 0,
-			    DSS_DEEP_STACK_SZ, &ec_eph_query_ult);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed create ec eph equery ult: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
-		return rc;
-	}
-
-	D_ASSERT(ec_eph_query_ult != ABT_THREAD_NULL);
+	D_ASSERT(pool->sp_ec_ephs_req == NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &pool->sp_uuid);
-	pool->sp_ec_ephs_req = sched_req_get(&attr, ec_eph_query_ult);
+	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_ec_eph_query_ult, pool,
+						DSS_DEEP_STACK_SZ);
 	if (pool->sp_ec_ephs_req == NULL) {
-		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
+		D_ERROR(DF_UUID": failed create ec eph equery ult.\n",
 			DP_UUID(pool->sp_uuid));
-		ABT_thread_free(&ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
 
-	return rc;
+	return 0;
 }
 
 static void
