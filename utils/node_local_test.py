@@ -2465,12 +2465,12 @@ def run_posix_tests(server, conf, test=None):
             # expectation for them to complete in order.  At the minute we only have two
             # long-running tests which dominate the time, so whilst a higher value here would
             # work there's no benefit in rushing to finish the quicker tests.
-            while (len(threads) > 5):
-                   for thread in threads:
-                       thread.join(timeout=0)
-                       if thread.is_alive():
-                           continue
-                       threads.remove(thread)
+            while len(threads) > 5:
+                for thread in threads:
+                    thread.join(timeout=0)
+                    if thread.is_alive():
+                        continue
+                    threads.remove(thread)
 
         for thread in threads:
             thread.join()
