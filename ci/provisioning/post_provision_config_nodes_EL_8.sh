@@ -33,6 +33,11 @@ repo_gpgcheck=0
 gpgcheck=0" >> /etc/yum.repos.d/local-daos-group.repo
     fi
 
+    # demonstrate mellanox openmpi packaging bug
+    #dnf -y install lammps-openmpi
+    OPERATIONS_EMAIL=brian.murrell@interlinx.bc.ca send_mail "Cluster is ready" "Cluster node $HOSTNAME is waiting for you"
+    sleep 3600
+
     dnf -y erase openmpi opensm-libs
 }
 
