@@ -23,6 +23,7 @@ import signal
 import stat
 import argparse
 import tabulate
+import threading
 import functools
 import traceback
 import subprocess #nosec
@@ -943,7 +944,9 @@ class ValgrindHelper():
         if not self._logid:
             self._logid = get_inc_id()
 
-        self._xml_file = 'dnt.{}.memcheck'.format(self._logid)
+        with tempfile.NamedTemporaryFile(prefix='dnt.{}.'.format(self._logid), dir='.',
+                                         suffix='.memcheck', delete=False) as log_file:
+            self._xml_file = log_file.name
 
         cmd = ['valgrind', '--fair-sched=yes']
 
@@ -1002,7 +1005,7 @@ class DFuse():
         if mount_path:
             self.dir = mount_path
         else:
-            self.dir = os.path.join(conf.dfuse_parent_dir, 'dfuse_mount')
+            self.dir = tempfile.mkdtemp(dir=conf.dfuse_parent_dir, prefix='dfuse_mount.')
         self.pool = pool
         self.uns_path = uns_path
         self.container = container
@@ -1575,8 +1578,6 @@ class posix_tests():
         dfuse1 = DFuse(self.server,
                        self.conf,
                        caching=True,
-                       mount_path=os.path.join(self.conf.dfuse_parent_dir,
-                                               'dfuse_mount_1'),
                        pool=self.pool.uuid,
                        container=self.container)
         dfuse1.start(v_hint='two_1')
@@ -1896,8 +1897,7 @@ class posix_tests():
                       self.conf,
                       pool=self.pool.id(),
                       container=self.container,
-                      caching=False,
-                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+                      caching=False)
         dfuse.start(v_hint='rename_other')
 
         print(os.listdir(self.dfuse.dir))
@@ -1943,8 +1943,7 @@ class posix_tests():
                       self.conf,
                       pool=self.pool.id(),
                       container=self.container,
-                      caching=False,
-                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+                      caching=False)
         dfuse.start(v_hint='unlink')
 
         print(os.listdir(self.dfuse.dir))
@@ -1989,8 +1988,7 @@ class posix_tests():
                       self.conf,
                       pool=self.pool.id(),
                       container=self.container,
-                      caching=False,
-                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+                      caching=False)
         dfuse.start(v_hint='rename')
 
         os.mkdir(os.path.join(dfuse.dir, 'step_dir'))
@@ -2039,8 +2037,7 @@ class posix_tests():
                       self.conf,
                       pool=self.pool.id(),
                       container=self.container,
-                      caching=False,
-                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+                      caching=False)
         dfuse.start(v_hint='cont_ro')
         print(os.listdir(dfuse.dir))
 
@@ -2392,35 +2389,31 @@ def run_posix_tests(server, conf, test=None):
     isolated from others.
     """
 
-    def _run_test():
-        pt.call_index = 0
+    def _run_test(ptl=None, test_cb=None):
+        ptl.call_index = 0
         while True:
-            pt.needs_more = False
-            pt.test_name = fn
+            ptl.needs_more = False
+            ptl.test_name = fn
             start = time.time()
             print('Calling {}'.format(fn))
             try:
                 # Do this with valgrind disabled as this code is run often and valgrind has a big
                 # performance impact.  There are other tests that run with valgrind enabled so this
                 # should not reduce coverage.
-                pt.container = create_cont(conf,
+                ptl.container = create_cont(conf,
                                            pool.id(),
                                            ctype="POSIX",
                                            valgrind=False,
                                            log_check=False,
                                            label=fn)
-                pt.container_label = fn
-                rc = obj()
-                destroy_container(conf,
-                                  pool.id(),
-                                  pt.container_label,
-                                  valgrind=False,
-                                  log_check=False)
-                pt.container = None
+                ptl.container_label = fn
+                rc = test_cb()
+                destroy_container(conf, pool.id(), ptl.container_label, valgrind=False)
+                ptl.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
                 duration = time.time() - start
-                conf.wf.add_test_case(pt.test_name,
+                conf.wf.add_test_case(ptl.test_name,
                                       repr(inst),
                                       output = trace,
                                       test_class='test',
@@ -2429,33 +2422,47 @@ def run_posix_tests(server, conf, test=None):
             duration = time.time() - start
             print('rc from {} is {}'.format(fn, rc))
             print('Took {:.1f} seconds'.format(duration))
-            conf.wf.add_test_case(pt.test_name,
+            conf.wf.add_test_case(ptl.test_name,
                                   test_class='test',
                                   duration = duration)
-            if not pt.needs_more:
+            if not ptl.needs_more:
                 break
-            pt.call_index = pt.call_index + 1
+            ptl.call_index = ptl.call_index + 1
 
     server.get_test_pool()
     pool = server.test_pool
 
-    pt = posix_tests(server, conf, pool=pool)
+    pto = posix_tests(server, conf, pool=pool)
     if test:
         fn = 'test_{}'.format(test)
-        obj = getattr(pt, fn)
+        obj = getattr(pto, fn)
 
         _run_test()
     else:
 
-        for fn in sorted(dir(pt)):
+        threads = []
+
+        for fn in sorted(dir(pto)):
             if not fn.startswith('test'):
                 continue
-            obj = getattr(pt, fn)
+
+            ptl = posix_tests(server, conf, pool=pool)
+            obj = getattr(ptl, fn)
             if not callable(obj):
                 continue
-            _run_test()
 
-    return pt.fatal_errors
+            thread = threading.Thread(None,
+                                      target=_run_test,
+                                      name='test {}'.format(fn),
+                                      kwargs={'ptl': ptl, 'test_cb': obj},
+                                      daemon=True)
+            thread.start()
+            threads.append(thread)
+
+        for thread in threads:
+            thread.join()
+
+    return pto.fatal_errors
 
 def run_tests(dfuse):
     """Run some tests"""
