@@ -21,18 +21,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
         openmpi="openmpi3"
     fi
 
-    pkgs="$prefix ndctl                \
-          fio patchutils ior           \
-          romio-tests                  \
-          testmpio                     \
-          python$pyver-mpi4py-tests    \
-          hdf5-mpich-tests             \
-          hdf5-$openmpi-tests          \
-          hdf5-vol-daos-$openmpi-tests \
-          hdf5-vol-daos-mpich-tests    \
-          MACSio-mpich                 \
-          MACSio-$openmpi              \
-          mpifileutils-mpich"
+    pkgs="$prefix ndctl fio patchutils"
 else
     echo "I don't know which packages should be installed for distro"
          "\"$distro\""
