@@ -1604,7 +1604,7 @@ class posix_tests():
             self.fatal_errors = True
 
     @needs_dfuse
-    def test_readdir_25(self):
+    def test_a_readdir_25(self):
         """Test reading a directory with 25 entries"""
         self.readdir_test(25, test_all=True)
 
@@ -2102,7 +2102,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    def test_uns_basic(self):
+    def test_a_uns_basic(self):
         """Create a UNS entry point and access it via both EP and path"""
 
         pool = self.pool.uuid
@@ -2144,11 +2144,11 @@ class posix_tests():
         uns_path = os.path.join(dfuse.dir, pool, container, 'ep0', 'ep')
         second_path = os.path.join(dfuse.dir, pool, uns_container)
 
-        uns_container = str(uuid.uuid4())
+        uns_container_2 = str(uuid.uuid4())
 
         # Make a link within the new container.
         print('Inserting entry point')
-        create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
+        create_cont(conf, pool=pool, cont=uns_container_2, path=uns_path)
 
         # List the root container again.
         print(os.listdir(os.path.join(dfuse.dir, pool, container)))
@@ -2164,7 +2164,7 @@ class posix_tests():
         print(uns_stat)
         assert uns_stat.st_ino == direct_stat.st_ino
 
-        third_path = os.path.join(dfuse.dir, pool, uns_container)
+        third_path = os.path.join(dfuse.dir, pool, uns_container_2)
         third_stat = os.stat(third_path)
         print(third_stat)
         assert third_stat.st_ino == direct_stat.st_ino
@@ -2175,6 +2175,8 @@ class posix_tests():
         dfuse = DFuse(server, conf, caching=False)
         dfuse.start('uns-3')
 
+        second_path = os.path.join(dfuse.dir, pool, uns_container)
+        uns_path = os.path.join(dfuse.dir, pool, container, 'ep0', 'ep')
         files = os.listdir(second_path)
         print(files)
         print(os.listdir(uns_path))
@@ -2215,7 +2217,7 @@ class posix_tests():
             self.fatal_errors = True
 
     @needs_dfuse_no_cache
-    def test_daos_fs_tool(self):
+    def test_a_daos_fs_tool(self):
         """Create a UNS entry point"""
 
         dfuse = self.dfuse
@@ -2389,24 +2391,24 @@ def run_posix_tests(server, conf, test=None):
     isolated from others.
     """
 
-    def _run_test(ptl=None, test_cb=None):
+    def _run_test(ptl=None, function=None, test_cb=None):
         ptl.call_index = 0
         while True:
             ptl.needs_more = False
-            ptl.test_name = fn
+            ptl.test_name = function
             start = time.time()
-            print('Calling {}'.format(fn))
+            print('Calling {}'.format(function))
+
+            # Do this with valgrind disabled as this code is run often and valgrind has a big
+            # performance impact.  There are other tests that run with valgrind enabled so this
+            # should not reduce coverage.
             try:
-                # Do this with valgrind disabled as this code is run often and valgrind has a big
-                # performance impact.  There are other tests that run with valgrind enabled so this
-                # should not reduce coverage.
                 ptl.container = create_cont(conf,
-                                           pool.id(),
-                                           ctype="POSIX",
-                                           valgrind=False,
-                                           log_check=False,
-                                           label=fn)
-                ptl.container_label = fn
+                                            pool.id(),
+                                            ctype="POSIX",
+                                            valgrind=False,
+                                            label=function)
+                ptl.container_label = function
                 rc = test_cb()
                 destroy_container(conf, pool.id(), ptl.container_label, valgrind=False)
                 ptl.container = None
@@ -2420,7 +2422,7 @@ def run_posix_tests(server, conf, test=None):
                                       duration = duration)
                 raise
             duration = time.time() - start
-            print('rc from {} is {}'.format(fn, rc))
+            print('rc from {} is {}'.format(function, rc))
             print('Took {:.1f} seconds'.format(duration))
             conf.wf.add_test_case(ptl.test_name,
                                   test_class='test',
@@ -2437,7 +2439,7 @@ def run_posix_tests(server, conf, test=None):
         fn = 'test_{}'.format(test)
         obj = getattr(pto, fn)
 
-        _run_test()
+        _run_test(ptl=pto, test_cb=obj, function=fn)
     else:
 
         threads = []
@@ -2454,10 +2456,21 @@ def run_posix_tests(server, conf, test=None):
             thread = threading.Thread(None,
                                       target=_run_test,
                                       name='test {}'.format(fn),
-                                      kwargs={'ptl': ptl, 'test_cb': obj},
+                                      kwargs={'ptl': ptl, 'test_cb': obj, 'function': fn},
                                       daemon=True)
             thread.start()
             threads.append(thread)
+
+            # Limit the number of concurrent tests, but poll all active threads so there's no
+            # expectation for them to complete in order.  At the minute we only have two
+            # long-running tests which dominate the time, so whilst a higher value here would
+            # work there's no benefit in rushing to finish the quicker tests.
+            while (len(threads) > 5):
+                   for thread in threads:
+                       thread.join(timeout=0)
+                       if thread.is_alive():
+                           continue
+                       threads.remove(thread)
 
         for thread in threads:
             thread.join()

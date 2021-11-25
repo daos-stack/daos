@@ -300,3 +300,14 @@
    fun:fi_tsend
    ...
 }
+{
+   goboringcrypto
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlopen*
+   fun:_goboringcrypto_DLOPEN_OPENSSL
+   ...
+   fun:runtime.asmcgocall
+}
