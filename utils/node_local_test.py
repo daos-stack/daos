@@ -1286,6 +1286,9 @@ def create_cont(conf,
     if pool:
         cmd.append(pool)
 
+    if label:
+        cmd.extend(['--properties', 'label:{}'.format(label)])
+
     if path:
         cmd.extend(['--path', path])
         ctype = 'POSIX'
@@ -1295,12 +1298,6 @@ def create_cont(conf,
 
     if label:
         cmd.extend(['--properties', 'label:{}'.format(label)])
-
-    if ctype:
-        cmd.extend(['--type', ctype])
-
-    if path:
-        cmd.extend(['--path', path])
 
     if cont:
         cmd.extend(['--cont', cont])
