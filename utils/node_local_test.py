@@ -2445,10 +2445,11 @@ def run_posix_tests(server, conf, test=None):
                                             pool.id(),
                                             ctype="POSIX",
                                             valgrind=False,
+                                            log_parse=False,
                                             label=function)
                 ptl.container_label = function
-                rc = test_cb()
-                destroy_container(conf, pool.id(), ptl.container_label, valgrind=False)
+                test_cb()
+                destroy_container(conf, pool.id(), ptl.container_label, valgrind=False, log_parse=False)
                 ptl.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
@@ -2489,8 +2490,8 @@ def run_posix_tests(server, conf, test=None):
         slow_tests = ['test_readdir_25', 'test_uns_basic', 'test_daos_fs_tool']
 
         tests = sorted(dir(pto))
-        for test in slow_tests:
-            tests.remove(test)
+        for stest in slow_tests:
+            tests.remove(stest)
 
         all_tests = list(slow_tests)
         all_tests.extend(tests)
