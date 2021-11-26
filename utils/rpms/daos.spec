@@ -524,7 +524,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 # No files in a meta-package
 
-%package mofed_shim
+%files mofed_shim
 # No files in a shim package
 
 %changelog
