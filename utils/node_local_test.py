@@ -1213,9 +1213,8 @@ class daos_cmd_return():
             output += "\nProcess ran under valgrind with '{}'".format(' '.join(self.valgrind))
 
         try:
-            json = self.rc.json
             pp = pprint.PrettyPrinter()
-            output += '\njson output:\n' + pp.pformat(json)
+            output += '\njson output:\n' + pp.pformat(self.rc.json)
         except AttributeError:
             for line in self.rc.stdout.splitlines():
                 output += '\nstdout: {}'.format(line)
@@ -2430,7 +2429,7 @@ class nlt_stdout_wrapper():
         sys.stdout = self
 
     def write(self, value):
-        """Print to stdout.  If this is the main thread then print it, else save it"""
+        """Print to stdout.  If this is the main thread then print it, always save it"""
 
         thread = threading.current_thread()
         if not thread.daemon:
@@ -2471,13 +2470,11 @@ class nlt_stderr_wrapper():
         sys.stderr = self
 
     def write(self, value):
-        """Print to stderr.  If this is the main thread then print it, else save it"""
+        """Print to stderr.  Always print it, always save it"""
 
         thread = threading.current_thread()
         self._stderr.write(value)
         thread_id = thread.ident
-        if not thread.daemon:
-            return
         try:
             self._outputs[thread_id] += value
         except KeyError:
