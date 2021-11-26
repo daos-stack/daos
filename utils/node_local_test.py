@@ -20,6 +20,7 @@ import uuid
 import json
 import copy
 import signal
+import pprint
 import stat
 import argparse
 import tabulate
@@ -1192,6 +1193,38 @@ def import_daos(server, conf):
     daos = __import__('pydaos')
     return daos
 
+class daos_cmd_return():
+    """Class to enable pretty printing of daos output"""
+
+    def __init__(self):
+        self.rc = None
+        self.valgrind = []
+        self.cmd = []
+
+    def __getattr__(self, item):
+        return getattr(self.rc, item)
+
+    def __str__(self):
+        if not self.rc:
+            return 'daos_command_return, process not yet run'
+        output = "CompletedDaosCommand(cmd='{}')".format(' '.join(self.cmd))
+        output += '\nReturncode is {}'.format(self.rc.returncode)
+        if self.valgrind:
+            output += "\nProcess ran under valgrind with '{}'".format(' '.join(self.valgrind))
+
+        try:
+            json = self.rc.json
+            pp = pprint.PrettyPrinter()
+            output += '\njson output:\n' + pp.pformat(json)
+        except AttributeError:
+            for line in self.rc.stdout.splitlines():
+                output += '\nstdout: {}'.format(line)
+
+        if self.rc.stderr != b'':
+            for line in self.rc.stderr.splitlines():
+                output += '\nstderr: {}'.format(line)
+        return output
+
 def run_daos_cmd(conf,
                  cmd,
                  show_stdout=False,
@@ -1207,6 +1240,8 @@ def run_daos_cmd(conf,
     if prefix is set to False do not run a DAOS command, but instead run what's
     provided, however run it under the IL.
     """
+
+    dcr = daos_cmd_return()
     vh = ValgrindHelper(conf)
 
     if conf.args.memcheck == 'no':
@@ -1216,10 +1251,13 @@ def run_daos_cmd(conf,
         vh.use_valgrind = False
 
     exec_cmd = vh.get_cmd_prefix()
-    exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
+    dcr.valgrind = list(exec_cmd)
+    daos_cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos')]
     if use_json:
-        exec_cmd.append('--json')
-    exec_cmd.extend(cmd)
+        daos_cmd.append('--json')
+    daos_cmd.extend(cmd)
+    dcr.cmd = daos_cmd
+    exec_cmd.extend(daos_cmd)
 
     cmd_env = get_base_env()
     if not log_check:
@@ -1269,7 +1307,8 @@ def run_daos_cmd(conf,
         rc.returncode = 0
     if use_json:
         rc.json = json.loads(rc.stdout.decode('utf-8'))
-    return rc
+    dcr.rc = rc
+    return dcr
 
 def create_cont(conf,
                 pool=None,
@@ -1303,8 +1342,7 @@ def create_cont(conf,
         """Helper function for create_cont"""
 
         rc = run_daos_cmd(conf, cmd, use_json=True, log_check=log_check, valgrind=valgrind)
-        print('rc is {}'.format(rc))
-        print(rc.json)
+        print(rc)
         return rc
 
     rc = _create_cont()
@@ -1469,6 +1507,7 @@ class posix_tests():
         """Test daos container list"""
 
         rc = run_daos_cmd(self.conf, ['container', 'list', self.pool.id()])
+        print(rc)
         assert rc.returncode == 0, rc
 
     def test_cache(self):
