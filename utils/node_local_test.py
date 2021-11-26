@@ -2396,7 +2396,6 @@ class nlt_stdout_wrapper():
         thread = threading.current_thread()
         if not thread.daemon:
             self._stdout.write(value)
-            return
         thread_id = thread.ident
         try:
             self._outputs[thread_id] += value
@@ -2410,9 +2409,12 @@ class nlt_stdout_wrapper():
     def get_thread_output(self):
         """Return the stdout by the calling thread, and reset for next time"""
         thread_id = threading.get_ident()
-        data = self._outputs[thread_id]
-        del self._outputs[thread_id]
-        return data
+        try:
+            data = self._outputs[thread_id]
+            del self._outputs[thread_id]
+            return data
+        except KeyError:
+            return None
 
     def flush(self):
         """Flush"""
@@ -2487,7 +2489,10 @@ def run_posix_tests(server, conf, test=None):
                                             label=function)
                 ptl.container_label = function
                 test_cb()
-                destroy_container(conf, pool.id(), ptl.container_label, valgrind=False, log_check=False)
+                destroy_container(conf, pool.id(),
+                                  ptl.container_label,
+                                  valgrind=False,
+                                  log_check=False)
                 ptl.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
