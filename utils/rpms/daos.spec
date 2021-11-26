@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -278,6 +278,15 @@ Requires: hdf5
 This is the package needed to use the DAOS serialization and deserialization
 tools, as well as the preserve option for the filesystem copy tool.
 
+%package mofed_shim
+Summary: A shim to bridge MOFED's openmpi to distribution dependency tags
+Provides: libmpi.so.40()(64bit)(openmpi-x86_64)
+Requires: libmpi.so.40()(64bit)
+
+%description mofed_shim
+This is the package that bridges the difference between the MOFED openmpi
+"Provides" and distribution-openmpi consumers "Requires".
+
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
 %global _debuginfo_subpackages 0
@@ -515,7 +524,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 # No files in a meta-package
 
+%package mofed_shim
+# No files in a shim package
+
 %changelog
+* Fri Nov 26 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-9
+- Create a shim package to allow daos openmpi packages built with the
+  distribution openmpi to install on MOFED systems
+
 * Wed Nov 24 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-8
 - Remove invalid "%%else if" syntax
 - Fix a few other rpmlint warnings
