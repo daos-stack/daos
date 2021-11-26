@@ -1221,18 +1221,17 @@ def run_daos_cmd(conf,
     exec_cmd.extend(cmd)
 
     cmd_env = get_base_env()
-    if log_check:
-        with tempfile.NamedTemporaryFile(prefix='dnt_cmd_{}_'.format(get_inc_id()),
-                                         suffix='.log',
-                                         dir=conf.tmp_dir,
-                                         delete=False) as lf:
-            log_name = lf.name
-        cmd_env['D_LOG_FILE'] = log_name
-    else:
-        log_name = None
+    if not log_check:
         del cmd_env['DD_MASK']
         del cmd_env['DD_SUBSYS']
         del cmd_env['D_LOG_MASK']
+
+    with tempfile.NamedTemporaryFile(prefix='dnt_cmd_{}_'.format(get_inc_id()),
+                                     suffix='.log',
+                                     dir=conf.tmp_dir,
+                                     delete=False) as lf:
+        log_name = lf.name
+        cmd_env['D_LOG_FILE'] = log_name
 
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
@@ -1257,8 +1256,7 @@ def run_daos_cmd(conf,
     if rc.returncode < 0:
         show_memleaks = False
 
-    if log_name:
-        rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks)
+    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks)
     vh.convert_xml()
     # If there are valgrind errors here then mark them for later reporting but
     # do not abort.  This allows a full-test run to report all valgrind issues
@@ -2598,6 +2596,9 @@ def log_test(conf,
     if os.path.exists('{}.old'.format(filename)):
         raise Exception('Log file exceeded max size')
     fstat = os.stat(filename)
+    if fstat.st_size == 0:
+        os.unlink(filename)
+        return None
     if not quiet:
         print('Running log_test on {} {}'.format(filename,
                                                  sizeof_fmt(fstat.st_size)))
