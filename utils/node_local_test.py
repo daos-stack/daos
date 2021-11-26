@@ -3735,45 +3735,47 @@ def run(wf, args):
         args.server_debug = 'INFO'
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
-        server = DaosServer(conf, test_class='no-debug')
-        server.start()
-        try:
-            if fi_test:
-                # Most of the fault injection tests go here, they are then run on docker containers
-                # so can be performed in parallel.
 
-                wf_client = WarningsFactory('nlt-client-leaks.json')
+        for iter in range(10):
+            server = DaosServer(conf, test_class='no-debug-{}'.format(iter))
+            server.start()
+            try:
+                if fi_test:
+                    # Most of the fault injection tests go here, they are then run on docker containers
+                    # so can be performed in parallel.
 
-                # dfuse startup, uses custom fault to force exit if no other faults injected.
-                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+                    wf_client = WarningsFactory('nlt-client-leaks.json')
 
-                # list-container test.
-                fatal_errors.add_result(test_alloc_fail(server, conf))
+                    # dfuse startup, uses custom fault to force exit if no other faults injected.
+                    fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
-                # Container attribute tests
+                    # list-container test.
+                    fatal_errors.add_result(test_alloc_fail(server, conf))
 
-                # Tests work but report failures.
-                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                    # Container attribute tests
 
-                # filesystem copy test.
-                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                    # Tests work but report failures.
+                    # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                    # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-                wf_client.close()
+                    # filesystem copy test.
+                    fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
-            if fi_test_dfuse:
-                # We cannot yet run dfuse inside docker containers and some of the failure modes
-                # aren't well handled so continue to run the dfuse fault injection test on real
-                # hardware.
+                    wf_client.close()
 
-                # Read-via-IL test, requires dfuse.
-                fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+                if fi_test_dfuse:
+                    # We cannot yet run dfuse inside docker containers and some of the failure modes
+                    # aren't well handled so continue to run the dfuse fault injection test on real
+                    # hardware.
 
-            if args.perf_check:
-                check_readdir_perf(server, conf)
-        finally:
-            if server.stop(wf_server) != 0:
-                fatal_errors.fail()
+                    # Read-via-IL test, requires dfuse.
+                    fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+
+                if args.perf_check:
+                    check_readdir_perf(server, conf)
+            finally:
+                if server.stop(wf_server) != 0:
+                    fatal_errors.fail()
 
     if fatal_errors.errors:
         wf.add_test_case('Errors', 'Significant errors encountered')
