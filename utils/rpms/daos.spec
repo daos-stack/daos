@@ -228,6 +228,9 @@ Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
+Requires: lua-lmod
+%else
+Requires: Lmod
 %endif
 
 %description client-tests
