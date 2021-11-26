@@ -1357,13 +1357,13 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	 */
 	RPC_ADDREF(rpc_priv);
 
+	rpc_priv->crp_complete_cb = complete_cb;
+	rpc_priv->crp_arg = arg;
+
 	if (req->cr_ctx == NULL) {
 		D_ERROR("invalid parameter (NULL req->cr_ctx).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-
-	rpc_priv->crp_complete_cb = complete_cb;
-	rpc_priv->crp_arg = arg;
 
 	if (rpc_priv->crp_coll) {
 		rc = crt_corpc_req_hdlr(rpc_priv);
