@@ -82,18 +82,15 @@ json_value(struct spdk_json_val *key)
 	return key->type == SPDK_JSON_VAL_NAME ? key + 1 : NULL;
 }
 
-static const struct spdk_json_object_decoder
-config_decoder = {"config", offsetof(struct json_config_ctx, config), cap_array_or_null};
-
 static struct spdk_json_object_decoder
 subsystem_decoders[] = {
 	{"subsystem", offsetof(struct json_config_ctx, subsystem_name), cap_string},
-	config_decoder
+	{"config", offsetof(struct json_config_ctx, config), cap_array_or_null}
 };
 
 static struct spdk_json_object_decoder
 daos_data_decoders[] = {
-	config_decoder
+	{"config", offsetof(struct json_config_ctx, config), cap_array_or_null}
 };
 
 struct
