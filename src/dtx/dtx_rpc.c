@@ -79,6 +79,7 @@ struct dtx_req_rec {
 	uint32_t			 drr_tag; /* The VOS ID */
 	int				 drr_count; /* DTX count */
 	int				 drr_result; /* The RPC result */
+	uint32_t			 drr_completed:1;
 	struct dtx_id			*drr_dti; /* The DTX array */
 	struct dtx_share_peer		**drr_cb_args; /* Used by dtx_req_cb. */
 };
@@ -207,6 +208,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 
 out:
 	drr->drr_result = rc;
+	drr->drr_completed = 1;
 	rc = ABT_future_set(dra->dra_future, drr);
 	D_ASSERTF(rc == ABT_SUCCESS,
 		  "ABT_future_set failed for opc %x to %d/%d: rc = %d.\n",
@@ -223,7 +225,7 @@ static int
 dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 {
 	struct dtx_req_args	*dra = drr->drr_parent;
-	crt_rpc_t		*req;
+	crt_rpc_t		*req = NULL;
 	crt_endpoint_t		 tgt_ep;
 	crt_opcode_t		 opc;
 	struct dtx_in		*din = NULL;
@@ -251,9 +253,12 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		drr->drr_tag, req, dra->dra_future,
 		din != NULL ? din->di_epoch : 0, rc);
 
-	if (rc != 0) {
+	if (rc != 0 && !drr->drr_completed) {
 		drr->drr_result = rc;
+		drr->drr_completed = 1;
 		ABT_future_set(dra->dra_future, drr);
+		if (unlikely(req != NULL))
+			crt_req_decref(req);
 	}
 
 	return rc;
@@ -418,6 +423,7 @@ dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	drr->drr_rank = dcrb->dcrb_rank;
 	drr->drr_tag = dcrb->dcrb_tag;
 	drr->drr_count = 1;
+	drr->drr_completed = 0;
 	drr->drr_dti[0] = *dcrb->dcrb_dti;
 	d_list_add_tail(&drr->drr_link, dcrb->dcrb_head);
 	++(*dcrb->dcrb_length);

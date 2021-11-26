@@ -130,6 +130,7 @@ struct dtx_handle {
 struct dtx_sub_status {
 	struct daos_shard_tgt		dss_tgt;
 	int				dss_result;
+	uint32_t			dss_completed:1;
 };
 
 struct dtx_leader_handle;

@@ -37,17 +37,16 @@ struct obj_remote_cb_arg {
 };
 
 static void
-shard_update_req_cb(const struct crt_cb_info *cb_info)
+do_shard_update_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 {
-	crt_rpc_t			*req = cb_info->cci_rpc;
-	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
 	crt_rpc_t			*parent_req = arg->parent_req;
 	struct obj_rw_out		*orwo = crt_reply_get(req);
 	struct obj_rw_in		*orw_parent = crt_req_get(parent_req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	int				rc = cb_info->cci_rc;
+	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
 	int				rc1 = 0;
 
+	sub->dss_completed = 1;
 	if (orw_parent->orw_map_ver < orwo->orw_map_version) {
 		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
 			DP_UOID(orw_parent->orw_oid), orw_parent->orw_map_ver,
@@ -67,6 +66,12 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 	D_FREE(arg);
 }
 
+static void
+shard_update_req_cb(const struct crt_cb_info *cb_info)
+{
+	do_shard_update_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
+}
+
 /* Execute update on the remote target */
 int
 ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
@@ -78,7 +83,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	struct daos_shard_tgt		*shard_tgt;
 	crt_endpoint_t			 tgt_ep;
 	crt_rpc_t			*parent_req = obj_exec_arg->rpc;
-	crt_rpc_t			*req;
+	crt_rpc_t			*req = NULL;
 	struct dtx_sub_status		*sub;
 	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct obj_remote_cb_arg	*remote_arg = NULL;
@@ -89,6 +94,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	D_ASSERT(idx < dlh->dlh_sub_cnt);
 	sub = &dlh->dlh_subs[idx];
+	sub->dss_completed = 0;
 	shard_tgt = &sub->dss_tgt;
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
 		/* to trigger retry on all other shards */
@@ -145,8 +151,14 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
 		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = crt_req_send(req, shard_update_req_cb, remote_arg);
-	if (rc != 0)
+	if (rc != 0) {
+		if (unlikely(!sub->dss_completed)) {
+			do_shard_update_req_cb(req, remote_arg, rc);
+			crt_req_decref(req);
+		}
+
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
+	}
 	return rc;
 
 out:
@@ -163,17 +175,16 @@ out:
 }
 
 static void
-shard_punch_req_cb(const struct crt_cb_info *cb_info)
+do_shard_punch_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 {
-	crt_rpc_t			*req = cb_info->cci_rpc;
-	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
 	crt_rpc_t			*parent_req = arg->parent_req;
 	struct obj_punch_out		*opo = crt_reply_get(req);
 	struct obj_punch_in		*opi_parent = crt_req_get(req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	int				rc = cb_info->cci_rc;
+	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
 	int				rc1 = 0;
 
+	sub->dss_completed = 1;
 	if (opi_parent->opi_map_ver < opo->opo_map_version) {
 		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
 			DP_UOID(opi_parent->opi_oid), opi_parent->opi_map_ver,
@@ -193,6 +204,12 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 	D_FREE(arg);
 }
 
+static void
+shard_punch_req_cb(const struct crt_cb_info *cb_info)
+{
+	do_shard_punch_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
+}
+
 /* Execute punch on the remote target */
 int
 ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
@@ -205,7 +222,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	struct dtx_sub_status		*sub;
 	crt_endpoint_t			 tgt_ep;
 	crt_rpc_t			*parent_req = obj_exec_arg->rpc;
-	crt_rpc_t			*req;
+	crt_rpc_t			*req = NULL;
 	struct obj_punch_in		*opi;
 	struct obj_punch_in		*opi_parent;
 	crt_opcode_t			opc;
@@ -213,6 +230,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	D_ASSERT(idx < dlh->dlh_sub_cnt);
 	sub = &dlh->dlh_subs[idx];
+	sub->dss_completed = 0;
 	shard_tgt = &sub->dss_tgt;
 	D_ALLOC_PTR(remote_arg);
 	if (remote_arg == NULL)
@@ -257,8 +275,14 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 		DP_UOID(opi->opi_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = crt_req_send(req, shard_punch_req_cb, remote_arg);
-	if (rc != 0)
+	if (rc != 0) {
+		if (unlikely(!sub->dss_completed)) {
+			do_shard_punch_req_cb(req, remote_arg, rc);
+			crt_req_decref(req);
+		}
+
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
+	}
 	return rc;
 
 out:
@@ -275,13 +299,13 @@ out:
 }
 
 static void
-shard_cpd_req_cb(const struct crt_cb_info *cb_info)
+do_shard_cpd_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 {
-	crt_rpc_t			*req = cb_info->cci_rpc;
-	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
 	struct obj_cpd_out		*oco = crt_reply_get(req);
-	int				rc = cb_info->cci_rc;
+	struct dtx_leader_handle	*dlh = arg->dlh;
+	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
 
+	sub->dss_completed = 1;
 	if (rc >= 0)
 		rc = oco->oco_ret;
 
@@ -293,6 +317,12 @@ shard_cpd_req_cb(const struct crt_cb_info *cb_info)
 	D_FREE(arg->cpd_dcsr);
 	D_FREE(arg->cpd_dcde);
 	D_FREE(arg);
+}
+
+static void
+shard_cpd_req_cb(const struct crt_cb_info *cb_info)
+{
+	do_shard_cpd_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
 }
 
 static int
@@ -410,6 +440,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	D_ASSERT(idx < dlh->dlh_sub_cnt);
 
 	sub = &dlh->dlh_subs[idx];
+	sub->dss_completed = 0;
 	shard_tgt = &sub->dss_tgt;
 
 	D_ALLOC_PTR(head_dcs);
@@ -509,8 +540,14 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		tgt_ep.ep_rank, tgt_ep.ep_tag, idx, DP_DTI(&dcsh->dcsh_xid));
 
 	rc = crt_req_send(req, shard_cpd_req_cb, remote_arg);
-	if (rc != 0)
+	if (rc != 0) {
+		if (unlikely(!sub->dss_completed)) {
+			do_shard_cpd_req_cb(req, remote_arg, rc);
+			crt_req_decref(req);
+		}
+
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
+	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
 		 "Forwarded CPD RPC to rank:%d tag:%d idx %u for DXT "
