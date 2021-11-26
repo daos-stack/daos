@@ -1284,17 +1284,6 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(rpc_priv != NULL);
 
-	if (D_LOG_ENABLED(DB_NET)) {
-		uint64_t hlc = crt_hlc_get();
-
-		if (hlc > rpc_priv->crp_create_hlc) {
-			uint64_t delay = crt_hlc2msec(hlc - rpc_priv->crp_create_hlc);
-
-			if (delay > 500)
-				RPC_TRACE(DB_NET, rpc_priv, "RPC reply took %lu ms.\n", delay);
-		}
-	}
-
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
 			    rpc_priv, &rpc_priv->crp_pub.cr_output);
