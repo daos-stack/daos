@@ -285,6 +285,8 @@ tools, as well as the preserve option for the filesystem copy tool.
 Summary: A shim to bridge MOFED's openmpi to distribution dependency tags
 Provides: libmpi.so.40()(64bit)(openmpi-x86_64)
 Requires: libmpi.so.40()(64bit)
+Provides: libmpi_cxx.so.40()(64bit)(openmpi-x86_64)
+Provides: libmpi_cxx.so.40()(64bit)
 
 %description mofed_shim
 This is the package that bridges the difference between the MOFED openmpi
