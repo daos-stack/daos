@@ -756,16 +756,10 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout, void
 			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	} else if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
-		/*
-		 * Change only for very long timeout to avoid confusing of DAOS scheduler.
-		 * NB: !!! Mercury only supports milli-second timeout !!!
-		 */
-		if (timeout > 1000) {
-			uint64_t hlc = crt_hlc_get();
+		uint64_t now = swim_now_ms();
 
-			if (hlc < ctx->sc_next_event)
-				timeout = crt_hlc2msec(ctx->sc_next_event - hlc);
-		}
+		if (now < ctx->sc_next_event)
+			timeout = ctx->sc_next_event - now;
 	} else if (rc) {
 		D_ERROR("swim_progress(): "DF_RC"\n", DP_RC(rc));
 	}
@@ -1075,11 +1069,7 @@ void crt_swim_accommodate(void)
 		else if (average > max_timeout)
 			average = max_timeout;
 
-		/*
-		 * (x >> 5) is just (x / 32) but a way faster.
-		 * This should avoid changes for small deltas.
-		 */
-		if ((average >> 5) != (ping_timeout >> 5)) {
+		if (average != ping_timeout) {
 			D_INFO("change PING timeout from %lu ms to %lu ms\n",
 			       ping_timeout, average);
 			swim_ping_timeout_set(average);
