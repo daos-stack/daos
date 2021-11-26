@@ -64,20 +64,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	scanErrors := make([]error, 0, 2)
 
 	if prepNvme {
-		msg := op + " locally-attached NVMe storage..."
-		vmdEnabled := false
-
-		vmdAddrs, err := bdev.DetectVMD()
-		if err != nil {
-			return errors.Wrap(err, "attempting to detect vmd")
-		}
-		cmd.log.Debugf("volume management devices detected: %v", vmdAddrs)
-		if !vmdAddrs.IsEmpty() {
-			msg += " (VMD enabled)"
-			vmdEnabled = true
-		}
-
-		cmd.log.Info(msg)
+		cmd.log.Info(op + " locally-attached NVMe storage...")
 
 		if cmd.TargetUser == "" {
 			runningUser, err := user.Current()
@@ -94,7 +81,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			PCIAllowList:  cmd.PCIAllowList,
 			PCIBlockList:  cmd.PCIBlockList,
 			Reset_:        cmd.Reset,
-			EnableVMD:     vmdEnabled,
+			EnableVMD:     true, // vmd will be prepared if available
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}
@@ -156,6 +143,8 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 
 	msg := "Scanning locally-attached storage..."
 
+	// because we are running in stand-alone mode, manually detect vmd availability and set
+	// storage provider flag appropriately, in daemon/service mode this is automatic
 	vmdAddrs, err := bdev.DetectVMD()
 	if err != nil {
 		return errors.Wrap(err, "attempting to detect vmd")
