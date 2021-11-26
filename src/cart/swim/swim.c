@@ -861,7 +861,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 
 	hlc = crt_hlc_get();
 	if (timeout > 0)
-		end = hlc + crt_msec2hlc(timeout);
+		end = hlc + crt_usec2hlc(timeout); /* timeout is usec */
 	ctx->sc_next_event = hlc + crt_msec2hlc(swim_period_get());
 
 	if (hlc > ctx->sc_expect_progress_time &&
