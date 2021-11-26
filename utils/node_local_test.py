@@ -758,6 +758,7 @@ class DaosServer():
                       .format(len(procs), self.engines)
             entry['message'] = message
             self.conf.wf.issues.append(entry)
+            self._add_test_case('server_stop', failure=message)
         rc = self.run_dmg(['system', 'stop'])
         if rc.returncode != 0:
             print(rc)
