@@ -403,6 +403,8 @@ int dc_mgmt_net_cfg(const char *name)
 		/* If the client env didn't provide a domain, we can assume we don't need one. */
 		if (ofi_domain)
 			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+		else
+			D_WARN("Client didn't provide OFI_DOMAIN, assuming we don't need one");
 	}
 
 	D_DEBUG(DB_MGMT,
