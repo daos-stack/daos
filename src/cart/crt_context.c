@@ -926,39 +926,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (crt_gdata.cg_swim_inited) {
-		struct crt_grp_priv	*gp = crt_gdata.cg_grp->gg_primary_grp;
-		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
-		swim_id_t		 self_id = swim_self_get(csm->csm_ctx);
-
-		if (crt_ctx->cc_last_unpack_hlc > csm->csm_last_unpack_hlc)
-			csm->csm_last_unpack_hlc = crt_ctx->cc_last_unpack_hlc;
-
-		/*
-		 * Check for network idle in all contexts.
-		 * If the time passed from last received RPC till now is more
-		 * than 2/3 of suspicion timeout suspends eviction.
-		 * The max_delay should be less suspicion timeout to guarantee
-		 * the already suspected members will not be expired.
-		 */
-		if (self_id != SWIM_ID_INVALID && csm->csm_alive_count > 2) {
-			uint64_t hlc1 = csm->csm_last_unpack_hlc;
-			uint64_t hlc2 = crt_hlc_get();
-			uint64_t delay = crt_hlc2msec(hlc2 - hlc1);
-			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
-
-			if (delay > max_delay) {
-				D_ERROR("Network outage detected (idle during "
-					"%lu.%lu sec >  maximum allowed "
-					"%lu.%lu sec).\n",
-					delay / 1000, delay % 1000,
-					max_delay / 1000, max_delay % 1000);
-				swim_net_glitch_update(csm->csm_ctx, self_id, delay);
-				csm->csm_last_unpack_hlc = hlc2;
-			}
-		}
-	}
-
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
 
@@ -1071,7 +1038,6 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	/* add the RPC req to crt_ep_inflight */
 	D_MUTEX_LOCK(&epi->epi_mutex);
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
-	crt_set_timeout(rpc_priv);
 	rpc_priv->crp_epi = epi;
 	RPC_ADDREF(rpc_priv);
 
@@ -1091,6 +1057,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		rpc_priv->crp_state = RPC_STATE_QUEUED;
 		rc = CRT_REQ_TRACK_IN_WAITQ;
 	} else {
+		crt_set_timeout(rpc_priv);
 		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 		rc = crt_req_timeout_track(rpc_priv);
 		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
