@@ -118,12 +118,6 @@ daos-server RPM.
 
 
 
-22. (Optionally) Install the DAOS test RPMs on the client nodes -
-    typically not required
-
-		pdsh -w $ALL_NODES -x $SERVER_NODES 'sudo zypper install -y daos-tests'
-
-
 ## Hardware Provisioning
 
 In this section, PMem (Intel(R) Optane(TM) persistent memory) and NVME
