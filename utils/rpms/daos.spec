@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -521,7 +521,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Wed Nov 10 2021 Tom Nabarro <tom.nabarro@intel.com> 2.1.100-6
+* Sun Nov 27 2021 Tom Nabarro <tom.nabarro@intel.com> 2.1.100-9
 - Set rmem_{max,default} sysctl values on server package install to enable
   SPDK pci_event module to operate in unprivileged process (daos_engine).
 
