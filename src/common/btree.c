@@ -3297,36 +3297,45 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 
 /** destroy all tree nodes and records, then release the root */
 static int
-btr_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
+btr_tree_drain(struct btr_context *tcx, void *args, bool *destroy)
 {
 	struct btr_root *root;
 	bool		 empty = true;
+	bool		 destroyed = false;
 	int		 rc = 0;
 
-	D_DEBUG(DB_TRACE, "Destroy "DF_X64", order %d\n",
-		tcx->tc_tins.ti_root_off, tcx->tc_order);
+	D_DEBUG(DB_TRACE, "Drain "DF_X64", order %d, drain %d\n",
+		tcx->tc_tins.ti_root_off, tcx->tc_order, *destroy);
 
 	root = tcx->tc_tins.ti_root;
-	if (root && !UMOFF_IS_NULL(root->tr_node)) {
-		/* destroy the root and all descendants */
+	if (root && !UMOFF_IS_NULL(root->tr_node))
+		/* destroy the root node and all descendants */
 		rc = btr_node_destroy(tcx, root->tr_node, args, &empty);
+
+	if (rc == 0 && empty) {
+		if (*destroy) {
+			rc = btr_root_free(tcx);
+			if (rc == 0)
+				destroyed = true;
+		} else {
+			rc = btr_tree_init(tcx, tcx->tc_tins.ti_root);
+		}
 	}
-	*destroyed = empty;
-	if (!rc && empty)
-		rc = btr_root_free(tcx);
+
+	*destroy = destroyed;
 
 	return rc;
 }
 
 static int
-btr_tx_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
+btr_tx_tree_drain(struct btr_context *tcx, void *args, bool *destroy)
 {
 	int      rc = 0;
 
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
-	rc = btr_tree_destroy(tcx, args, destroyed);
+	rc = btr_tree_drain(tcx, args, destroy);
 
 	return btr_tx_end(tcx, rc);
 }
@@ -3342,7 +3351,7 @@ int
 dbtree_destroy(daos_handle_t toh, void *args)
 {
 	struct btr_context *tcx;
-	bool		    destroyed;
+	bool		    destroy = true;
 	int		    rc;
 
 	tcx = btr_hdl2tcx(toh);
@@ -3350,8 +3359,8 @@ dbtree_destroy(daos_handle_t toh, void *args)
 		return -DER_NO_HDL;
 
 	D_ASSERT(!tcx->tc_creds_on);
-	rc = btr_tx_tree_destroy(tcx, args, &destroyed);
-	D_ASSERT(rc || destroyed);
+	rc = btr_tx_tree_drain(tcx, args, &destroy);
+	D_ASSERT(rc || destroy);
 
 	btr_context_decref(tcx);
 	return rc;
@@ -3366,10 +3375,11 @@ dbtree_destroy(daos_handle_t toh, void *args)
  * \param toh		[IN]	 Tree open handle.
  * \param credits	[IN/OUT] Input and returned drain credits
  * \param args		[IN]	 user parameter for btr_ops_t::to_rec_free
- * \param destroy	[OUT]	 Tree is empty and destroyed
+ * \param destroy	[IN/OUT] IN: destroy when the tree is empty
+ *				 OUT: true if the tree is destroyed
  */
 int
-dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed)
+dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroy)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -3388,7 +3398,7 @@ dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed)
 		tcx->tc_creds_on = 1;
 	}
 
-	rc = btr_tx_tree_destroy(tcx, args, destroyed);
+	rc = btr_tx_tree_drain(tcx, args, destroy);
 	if (rc)
 		goto failed;
 

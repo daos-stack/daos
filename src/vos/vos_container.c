@@ -473,8 +473,29 @@ vos_cont_close(daos_handle_t coh)
 		  DP_UUID(cont->vc_id), cont->vc_open_count);
 
 	cont->vc_open_count--;
-	if (cont->vc_open_count == 0)
+	if (cont->vc_open_count == 0) {
 		vos_obj_cache_evict(vos_obj_cache_current(), cont);
+
+		/* Shrink active DTX LRU array when close the container. */
+		if (cont->vc_dtx_array != NULL)
+			lrua_array_aggregate(cont->vc_dtx_array);
+
+		/* Drain the DTX committed table, but do NOT destroy it. The tree may be still
+		 * accessed by DTX commit and DTX refresh later. There may be some new entries
+		 * added after the drain, that is no matter. Here, the main purpose is to free
+		 * some DRAM when close the container, the tree will be finally destroyed when
+		 * the container is removed from DRAM.
+		 */
+		if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
+			int	rc;
+			bool	destroy = false;
+
+			rc = dbtree_drain(cont->vc_dtx_committed_hdl, NULL, NULL, &destroy);
+			if (rc != 0)
+				D_WARN("Failed to drain DTX committed table for cont "DF_UUID": "
+				       DF_RC"\n", DP_UUID(cont->vc_id), DP_RC(rc));
+		}
+	}
 
 	D_DEBUG(DB_TRACE, "Close cont "DF_UUID", open count: %d\n",
 		DP_UUID(cont->vc_id), cont->vc_open_count);

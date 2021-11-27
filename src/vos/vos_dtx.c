@@ -1819,6 +1819,10 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 
 			return DTX_ST_COMMITTED;
 		}
+
+		/* Local container is closed, not sure whether the DTX exists on-disk or not. */
+		if (rc == -DER_NONEXIST && cont->vc_open_count == 0)
+			return -DER_INPROGRESS;
 	}
 
 	if (rc == -DER_NONEXIST && for_resent && cont->vc_reindex_cmt_dtx)
@@ -2029,7 +2033,7 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count, bool *rm_cos)
 	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_dtx_act_ent	 *dae = NULL;
 	struct vos_dtx_cmt_ent	 *dce = NULL;
-	struct vos_container	 *cont;
+	struct vos_container	 *cont = NULL;
 	int			  committed = 0;
 	int			  rc = 0;
 
@@ -2072,7 +2076,14 @@ out:
 	if (dces != &dce)
 		D_FREE(dces);
 
-	return rc < 0 ? rc : committed;
+	if (rc >= 0)
+		rc = committed;
+
+	/* Shrink active DTX LRU array if local container has already been closed. */
+	if (rc > 0 && cont->vc_open_count == 0)
+		lrua_array_aggregate(cont->vc_dtx_array);
+
+	return rc;
 }
 
 int
@@ -2207,7 +2218,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	if (dbd == NULL || dbd->dbd_count == 0)
 		return 0;
 
-	/** Take the opportunity to free some memory if we can */
+	/* Take the opportunity to free some memory if we can */
 	lrua_array_aggregate(cont->vc_dtx_array);
 
 	rc = umem_tx_begin(umm, NULL);

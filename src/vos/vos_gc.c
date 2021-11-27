@@ -81,6 +81,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 {
 	daos_handle_t	toh;
 	int		rc;
+	bool		destroy = true;
 
 	rc = dbtree_open_inplace_ex(root, &pool->vp_uma, coh, pool, &toh);
 	if (rc == -DER_NONEXIST) { /* empty tree */
@@ -92,10 +93,12 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_DEBUG(DB_TRACE, "drain btree for %s, creds=%d\n",
 		gc->gc_name, *credits);
-	rc = dbtree_drain(toh, credits, vos_hdl2cont(coh), empty);
+	rc = dbtree_drain(toh, credits, vos_hdl2cont(coh), &destroy);
 	dbtree_close(toh);
 	if (rc)
 		goto failed;
+
+	*empty = destroy;
 
 	D_ASSERT(*credits >= 0);
 	D_ASSERT(*empty || *credits == 0);

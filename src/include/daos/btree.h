@@ -528,7 +528,7 @@ int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 			    daos_handle_t coh, void *priv, daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
-int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);
+int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroy);
 int  dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out);
 int  dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,

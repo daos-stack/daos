@@ -847,7 +847,7 @@ ik_btr_drain(void **state)
 	ik_btr_query(NULL);
 	while (1) {
 		int	creds = drain_creds;
-		bool	empty = false;
+		bool	empty = true;
 		int	rc;
 
 		rc = dbtree_drain(ik_toh, &creds, NULL, &empty);
