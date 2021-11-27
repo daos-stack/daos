@@ -17,7 +17,7 @@ from mdtest_test_base import MdtestBase
 from fio_test_base import FioBase
 from pydaos.raw import DaosApiError
 from command_utils_base import CommandFailure
-from general_utils import DaosTestError
+from general_utils import DaosTestError, run_pcmd
 
 
 def get_data_parity_number(log, oclass):
@@ -138,7 +138,11 @@ class ErasureCodeIor(ServerFillUp):
             percent(int): %of storage to be filled. Default it will use the given parameters in
                             yaml file.
         """
-        self.log.info(self.pool.pool_percentage_used())
+        try:
+            self.log.info(self.pool.pool_percentage_used())
+        except ZeroDivisionError:
+            self.log.info("Either SCM or NVMe is used so ignore the error")
+
         self.ior_param_update(oclass, sizes)
 
         # Create the new container with correct redundancy factor for EC
@@ -467,6 +471,21 @@ class ErasureCodeFio(FioBase):
         # Create Pool
         self.add_pool()
         self.out_queue = queue.Queue()
+
+    def stop_job_managers(self):
+        """Cleanup dfuse in case of test failure."""
+        error_list = []
+        dfuse_cleanup_cmd = ["pkill dfuse --signal KILL",
+                             "fusermount3 -uz {}".format(self.dfuse.mount_dir.value)]
+
+        for cmd in dfuse_cleanup_cmd:
+            results = run_pcmd(self.hostlist_clients, cmd)
+            for result in results:
+                if result["exit_status"] != 0:
+                    error_list.append("Errors detected during cleanup cmd %s on node %s",
+                                      cmd, str(result["hosts"]))
+                    error_list.extend(super().stop_job_managers())
+        return error_list
 
     def write_single_fio_dataset(self, results):
         """Run Fio Benchmark.
