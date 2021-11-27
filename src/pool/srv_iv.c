@@ -1054,9 +1054,15 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_MAP, pool->sp_uuid,
 			    iv_entry, iv_entry_size, CRT_IV_SHORTCUT_NONE,
 			    CRT_IV_SYNC_EAGER, false);
-	if (rc != 0)
+	ABT_rwlock_wrlock(pool->sp_lock);
+	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID": map_ver=%u: %d\n",
 			DP_UUID(pool->sp_uuid), map_ver, rc);
+		pool->sp_iv_update_version = 0;
+	} else {
+		pool->sp_iv_update_version = buf == NULL ? 0 : pool->sp_map_version;
+	}
+	ABT_rwlock_unlock(pool->sp_lock);
 
 	D_DEBUG(DB_MD, DF_UUID": map_ver=%u: %d\n", DP_UUID(pool->sp_uuid),
 		map_ver, rc);

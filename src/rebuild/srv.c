@@ -1248,6 +1248,14 @@ done:
 
 		if (task->dst_rebuild_op == RB_OP_FAIL
 		    || task->dst_rebuild_op == RB_OP_DRAIN) {
+
+			/* The rgt->rgt_rebuild_ver will be smaller than pool->sp_map_version
+			 * after ds_pool_tgt_exclude_out() until ds_pool_iv_map_update() done.
+			 */
+			ABT_rwlock_wrlock(pool->sp_lock);
+			pool->sp_iv_update_version = rgt->rgt_rebuild_ver;
+			ABT_rwlock_rdlock(pool->sp_lock);
+
 			rc = ds_pool_tgt_exclude_out(pool->sp_uuid,
 						     &task->dst_tgts);
 			D_DEBUG(DB_REBUILD, "mark failed target %d of "DF_UUID
@@ -1283,6 +1291,18 @@ iv_stop:
 			D_DEBUG(DB_REBUILD, "rank %u != master %u\n",
 				myrank, pool->sp_iv_ns->iv_master_rank);
 			D_GOTO(try_reschedule, rc);
+		}
+
+		while (!rgt->rgt_abort && rgt->rgt_status.rs_errno == 0) {
+			ABT_rwlock_rdlock(pool->sp_lock);
+			if (pool->sp_iv_update_version == 0 ||
+			    pool->sp_iv_update_version == pool->sp_map_version) {
+				ABT_rwlock_unlock(pool->sp_lock);
+				break;
+			}
+
+			ABT_rwlock_unlock(pool->sp_lock);
+			ABT_thread_yield();
 		}
 
 		uuid_copy(iv.riv_pool_uuid, task->dst_pool_uuid);
