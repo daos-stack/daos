@@ -329,8 +329,8 @@ mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
-mkdir -p %{buildroot}/%{_sysconfdir}/sysctl.d/
-install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysconfdir}/sysctl.d
+mkdir -p %{buildroot}/%{_sysctldir}
+install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
 mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
@@ -521,7 +521,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Sun Nov 27 2021 Tom Nabarro <tom.nabarro@intel.com> 2.1.100-9
+* Sun Nov 28 2021 Tom Nabarro <tom.nabarro@intel.com> 2.1.100-9
 - Set rmem_{max,default} sysctl values on server package install to enable
   SPDK pci_event module to operate in unprivileged process (daos_engine).
 
