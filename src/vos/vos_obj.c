@@ -86,14 +86,17 @@ empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 
 	D_ASSERT(key_iov.iov_len == entry->ie_key.iov_len);
-	D_ASSERT(memcmp(key_iov.iov_buf, entry->ie_key.iov_buf, key_iov.iov_len) == 0);
-	kinfo->ki_non_empty = true;
+	D_ASSERT(((char *)key_iov.iov_buf)[0] == ((char *)entry->ie_key.iov_buf)[0]);
+	D_ASSERT(((char *)key_iov.iov_buf)[key_iov.iov_len - 1] ==
+		 ((char *)entry->ie_key.iov_buf)[key_iov.iov_len - 1]);
 	umm = vos_obj2umm(kinfo->ki_obj);
 	rc = umem_tx_add_ptr(umm, kinfo->ki_known_key, sizeof(*(kinfo->ki_known_key)));
 	if (rc != 0)
 		return rc;
 
 	*(kinfo->ki_known_key) = umem_ptr2off(umm, rbund.rb_krec);
+
+	kinfo->ki_non_empty = true;
 
 	return 1; /* Return positive number to break iteration */
 }
@@ -104,6 +107,7 @@ tree_is_empty(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 {
 	daos_anchor_t		 anchor = {0};
 	struct dtx_handle	*dth = vos_dth_get();
+	struct umem_instance	*umm;
 	d_iov_t			 key;
 	struct vos_key_info	 kinfo = {0};
 	struct vos_krec_df	*krec;
@@ -147,6 +151,14 @@ tail:
 
 	if (kinfo.ki_non_empty)
 		return 0;
+
+	/** We didn't find any committed entries, so reset to an unknown key */
+	umm = vos_obj2umm(obj);
+	rc = umem_tx_add_ptr(umm, known_key, sizeof(*known_key));
+	if (rc != 0)
+		return rc;
+
+	*known_key = UMOFF_NULL;
 
 	if (kinfo.ki_has_uncommitted)
 		return -DER_INPROGRESS;
