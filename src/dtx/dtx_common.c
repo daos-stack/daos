@@ -1737,6 +1737,7 @@ dtx_leader_exec_ops_ult(void *arg)
 	struct dtx_leader_handle  *dlh = ult_arg->dlh;
 	ABT_future		  future = dlh->dlh_future;
 	uint32_t		  i;
+	uint32_t		  saved = dlh->dlh_sub_cnt;
 	int			  rc = 0;
 
 	D_ASSERT(future != ABT_FUTURE_NULL);
@@ -1760,6 +1761,15 @@ dtx_leader_exec_ops_ult(void *arg)
 		if (rc) {
 			sub->dss_result = rc;
 			break;
+		}
+
+		/* Yield to avoid holding CPU for too long time. */
+		if (i >= DTX_RPC_YIELD_THD) {
+			ABT_thread_yield();
+			D_ASSERTF(saved == dlh->dlh_sub_cnt, "corruption after yield (1): %d %d\n",
+				  saved, dlh->dlh_sub_cnt);
+			D_ASSERTF(i < dlh->dlh_sub_cnt, "corruption after yield (2): %d %d\n",
+				  i, dlh->dlh_sub_cnt);
 		}
 	}
 
