@@ -246,6 +246,11 @@ ccreate(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
+	if (domain_nr < 2) {
+		step_skip("Group size 2 is larger than domain_nr(%d)", domain_nr);
+		return 0;
+	}
+
 	/** Create container with RF=1 */
 	daos_prop_t	*prop;
 
@@ -258,6 +263,11 @@ ccreate(void)
 	daos_prop_free(prop);
 	if (rc)
 		D_GOTO(fail, rc);
+
+	if (domain_nr < 3) {
+		step_skip("Group size 3 is larger than domain_nr(%d)", domain_nr);
+		return 0;
+	}
 
 	/** Create container with RF=2 */
 	daos_prop_t	*prop2;
@@ -290,13 +300,17 @@ copen(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
-	rc = daos_cont_open(poh, cuuid2, DAOS_COO_RW, &coh2, NULL, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 2) {
+		rc = daos_cont_open(poh, cuuid2, DAOS_COO_RW, &coh2, NULL, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
-	rc = daos_cont_open(poh, cuuid3, DAOS_COO_RW, &coh3, NULL, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 3) {
+		rc = daos_cont_open(poh, cuuid3, DAOS_COO_RW, &coh3, NULL, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
 	step_success("");
 	return 0;
@@ -640,7 +654,7 @@ kv_insert128(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -739,7 +753,7 @@ kv_insert4k(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
@@ -802,7 +816,7 @@ kv_insert1m(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -868,7 +882,7 @@ kv_insertrf1(void)
 		D_GOTO(skip_step, rc = -DER_INVAL);
 
 	new_oid2();
-	daos_obj_generate_oid(coh2, &oid2, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh2, &oid2, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -944,7 +958,7 @@ kv_insertrf2(void)
 		D_GOTO(skip_step, rc = -DER_INVAL);
 
 	new_oid3();
-	daos_obj_generate_oid(coh3, &oid3, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh3, &oid3, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -1019,13 +1033,17 @@ cclose(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
-	rc = daos_cont_close(coh2, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 2) {
+		rc = daos_cont_close(coh2, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
-	rc = daos_cont_close(coh3, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 3) {
+		rc = daos_cont_close(coh3, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
 	step_success("");
 	return 0;
@@ -1044,13 +1062,17 @@ cdestroy(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
-	rc = daos_cont_destroy(poh, cuuid2, force, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (cuuid2) {
+		rc = daos_cont_destroy(poh, cuuid2, force, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
-	rc = daos_cont_destroy(poh, cuuid3, force, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (cuuid3) {
+		rc = daos_cont_destroy(poh, cuuid3, force, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
 	step_success("");
 	return 0;
