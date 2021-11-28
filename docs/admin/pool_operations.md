@@ -418,8 +418,8 @@ will be decided based on the remaining ACL rules.
 ### Exclusion & Self-healing
 
 An operator can exclude one or more engines or targets from a specific DAOS pool
-using the rank the target resides on as well as the target idx on that rank.
-If a target idx list is not provided then all targets on the rank will be excluded.
+using the rank the target resides, as well as the target idx on that rank.
+If a target idx list is not provided, all targets on the rank will be excluded.
 Excluding a target will automatically start the rebuild process.
 
 To exclude a target from a pool:
@@ -435,7 +435,7 @@ The pool target exclude command accepts 2 parameters:
 
 ### Drain
 
-Alternatively when an operator would like to remove one or more engines or
+Alternatively, when an operator would like to remove one or more engines or
 targets without the system operating in degraded mode, the drain operation can
 be used.
 A pool drain operation initiates rebuild without excluding the designated engine
@@ -458,7 +458,7 @@ The pool target drain command accepts 2 parameters:
 
 ### Reintegration
 
-After a engine failure and exclusion, an operator can fix the underlying issue
+After an engine failure and exclusion, an operator can fix the underlying issue
 and reintegrate the affected engines or targets to restore the pool to its
 original state.
 The operator can either reintegrate specific targets for an engine rank by
@@ -496,7 +496,7 @@ $ dmg pool reintegrate --rank=5 --target-idx=0,1 <pool_label>
     pool, there is currently no way to list the targets that have actually
     been disabled. As a result, it is recommended for now to try to reintegrate
     all engine ranks one after the other via `for i in seq $NR_RANKs; do dmg
-    pool reintegrate --rank=$i; done`. This limitation will be address in the
+    pool reintegrate --rank=$i; done`. This limitation will be addressed in the
     next release.
 
 ## Pool Extension

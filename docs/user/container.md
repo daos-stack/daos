@@ -5,20 +5,20 @@ a DAOS container is a collection of objects that can be presented to application
 through different interfaces including POSIX I/O (files and directories),
 HDF5, SQL or any other data models of your choice.
 
-A container belongs to a single pool and share the space with other containers.
-It is identified by a label selected by the user and a immutable UUID allocated
+A container belongs to a single pool and shares the space with other containers.
+It is identified by a label selected by the user and an immutable UUID allocated
 when the container is first created.
 
 The container is the unit of data management in DAOS and can be snapshotted or
 cloned.
 
 !!! warning
-    DAOS containers are storage containers should not be confused with Linux
+    DAOS containers are storage containers and should not be confused with Linux
     containers.
 
 ## Container Basics
 
-Containers can be created, queried, relabled, listed and destroyed through the
+Containers can be created, queried, relabeled, listed and destroyed through the
 `daos(1)` utility or native DAOS API.
 
 ### Creating a Container
@@ -100,8 +100,8 @@ $ daos cont destroy --path /tmp/mycontainer
 Successfully destroyed container 30e5d364-62c9-4ddf-9284-1021359455f2
 ```
 
-If the container is in use, the force option (i.e. --force or -f) must be added.
-Active users of a force-deleted container will fail with bad handle error.
+If the container is in use, the force option (i.e., --force or -f) must be added.
+Active users of a force-deleted container will fail with a bad handle error.
 
 !!! note
     It is orders of magniture faster to delete a container compared to
@@ -322,15 +322,15 @@ data copies in order to decrease capacity requirements. DAOS has some initial
 support of inline dedup.
 
 When dedup is enabled, each DAOS server maintains a per-pool table indexing
-extents by their hash (i.e. checksum). Any new I/Os bigger than the
+extents by their hash (i.e., checksum). Any new I/Os bigger than the
 deduplication threshold will thus be looked up in this table to find out
 whether an existing extent with the same signature has already been stored.
 If an extent is found, then two options are provided:
 
 - Transferring the data from the client to the server and doing a memory compare
-  (i.e. memcmp) of the two extents to verify that they are indeed identical.
+  (i.e., memcmp) of the two extents to verify that they are indeed identical.
 - Trusting the hash function and skipping the data transfer. To minimize issue
-  with hash collision, a cryptographic hash function (i.e. SHA256) is used in
+  with hash collision, a cryptographic hash function (i.e., SHA256) is used in
   this case. The benefit of this approarch is that the data to be written does
   not need to be transferred to the server. Data processing is thus greatly
   accelerated.

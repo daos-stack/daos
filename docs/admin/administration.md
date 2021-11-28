@@ -490,8 +490,8 @@ The system membership can be queried using the command:
 
 `$ dmg system query [--verbose] [--ranks <rankset>|--host-ranks <hostset>]`
 
-- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.
+- `<rankset>` is a pattern describing rank ranges e.g., 0,5-10,20-100
+- `<hostset>` is a pattern describing host ranges e.g.,
 storagehost[0,5-10],10.8.1.[20-100]
 - `--verbose` flag gives more information on each rank
 
@@ -525,8 +525,8 @@ This is useful to stop (and restart) misbehaving engines.
 
 `$ dmg system stop [--force] [--ranks <rankset>|--host-ranks <hostset>]`
 
-- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.
+- `<rankset>` is a pattern describing rank ranges e.g., 0,5-10,20-100
+- `<hostset>` is a pattern describing host ranges e.g.,
 storagehost[0,5-10],10.8.1.[20-100]
 
 ### Start
@@ -535,24 +535,24 @@ To start the system after a controlled shutdown, run the command:
 
 `$ dmg system start`
 
-- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.
+- `<rankset>` is a pattern describing rank ranges e.g., 0,5-10,20-100
+- `<hostset>` is a pattern describing host ranges e.g.,
 storagehost[0,5-10],10.8.1.[20-100]
 
 The output table will indicate action and result.
 
 DAOS I/O Engines will be started.
 
-As for shutdow, a list of engines to restart can be specified on the command
+As for shutdown, a list of engines to restart can be specified on the command
 line:
 
 `$ dmg system start [--ranks <rankset>|--host-ranks <hostset>]`
 
-- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.
+- `<rankset>` is a pattern describing rank ranges e.g., 0,5-10,20-100
+- `<hostset>` is a pattern describing host ranges e.g.,
 storagehost[0,5-10],10.8.1.[20-100]
 
-If the ranks were excluded from pools (e.g. unclean shutdown), they will need to
+If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
 be reintegrated. Please see the pool operation section for more information.
 
 ### Reformat
@@ -595,7 +595,7 @@ Example illustration with two IO instances specified in the config file:
 
 ### Fault Domain
 
-Details on how to drain an individual storage node or fault domain (e.g.
+Details on how to drain an individual storage node or fault domain (e.g.,
 rack) in preparation for maintenance activity and how to reintegrate it
 will be provided in a future revision.
 
