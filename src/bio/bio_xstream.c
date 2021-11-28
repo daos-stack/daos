@@ -142,13 +142,29 @@ bypass_health_collect()
 }
 
 int
-bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-	      int hugepage_size, int tgt_nr, struct sys_db *db,
-	      bool bypass_health_collect)
+bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
+	      unsigned int hugepage_size, unsigned int tgt_nr,
+	      struct sys_db *db, bool bypass_health_collect)
 {
 	char		*env;
 	int		 rc, fd;
 	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
+
+	if (tgt_nr <= 0 || mem_size <= 0 || hugepage_size <= 0) {
+		D_ERROR("tgt_nr: %u, mem_size: %u, hugepage_size: %u should be > 0\n",
+			 tgt_nr, mem_size, hugepage_size);
+		return -DER_INVAL;
+	}
+	/*
+	 * Hugepages are not enough to sustain average I/O workload
+	 * (~1GB per xstream).
+	 */
+	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
+		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
+		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
+			mem_size, (mem_size / tgt_nr));
+		return -DER_INVAL;
+	}
 
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
@@ -186,20 +202,6 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		return 0;
 	}
 	close(fd);
-
-	D_ASSERT(tgt_nr > 0);
-	D_ASSERT(mem_size > 0);
-	D_ASSERT(hugepage_size > 0);
-	/*
-	 * Hugepages are not enough to sustain average I/O workload
-	 * (~1GB per xstream).
-	 */
-	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
-		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
-		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
-			mem_size, (mem_size / tgt_nr));
-		return -DER_INVAL;
-	}
 
 	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
