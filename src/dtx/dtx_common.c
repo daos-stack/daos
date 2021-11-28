@@ -1761,6 +1761,17 @@ dtx_leader_exec_ops_ult(void *arg)
 			sub->dss_result = rc;
 			break;
 		}
+
+		/* Yield to avoid holding CPU for too long time. */
+		if (i >= DTX_RPC_YIELD_THD) {
+			uint32_t	saved = dlh->dlh_sub_cnt;
+
+			ABT_thread_yield();
+			D_ASSERTF(saved == dlh->dlh_sub_cnt, "corruption after yield(1): %u, %u\n",
+				  saved, dlh->dlh_sub_cnt);
+			D_ASSERTF(i < dlh->dlh_sub_cnt, "corruption after yield(2): %u, %u\n",
+				  i, dlh->dlh_sub_cnt);
+		}
 	}
 
 	if (rc != 0) {
