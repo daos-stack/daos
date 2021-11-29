@@ -46,6 +46,7 @@ EOF
 
     # Mellanox OFED hack
     if ls -d /usr/mpi/gcc/openmpi-*; then
+        mkdir -p /etc/modulefiles/mpi/
         cat <<EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
 #%Module 1.0
 #
