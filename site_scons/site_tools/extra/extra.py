@@ -39,10 +39,10 @@ def _supports_custom_format(clang_exe):
         return False
 
     match = re.search(r"version (\d+)\.", output)
-    if match and int(match.group(1)) >= 11:
+    if match and int(match.group(1)) >= 12:
         return True
 
-    print("Custom .clang-format wants version 11+. Using Mozilla style.")
+    print("Custom .clang-format wants version 12+. Using Mozilla style.")
     return False
 
 def _find_indent():
