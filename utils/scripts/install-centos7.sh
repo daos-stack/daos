@@ -10,8 +10,9 @@
 
 set -e
 
-dnf --assumeyes upgrade
-dnf --assumeyes install \
+dnf -y install deltarpm
+dnf -y upgrade
+dnf -y install \
     boost-python36-devel \
     clang-analyzer \
     cmake \
