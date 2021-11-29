@@ -53,7 +53,6 @@ typedef struct {
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
-
 /**
  * Generate a rank list from a string with a separator argument. This is a
  * convenience function to generate the rank list required by
@@ -313,7 +312,6 @@ daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
  */
 int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
-
 
 /**
  * Clear container status, to clear container's DAOS_PROP_CO_STATUS property
