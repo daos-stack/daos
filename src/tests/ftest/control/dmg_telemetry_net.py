@@ -100,7 +100,11 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
             pass
 
         for host, value in data.items():
+            print('DEBUG log: line 105, value = ', value )
+            print('DEBUG log: line 105, host  = ', host )
+
             for metric in value[metrics[0]]["metrics"]:
+                print('DEBUG log: line 105, metric = ', metric )
                 req_timeouts += metric["value"]
 
         if req_timeouts > 0:
