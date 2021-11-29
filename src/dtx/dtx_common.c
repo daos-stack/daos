@@ -1736,6 +1736,7 @@ dtx_leader_exec_ops_ult(void *arg)
 	struct dtx_ult_arg	  *ult_arg = arg;
 	struct dtx_leader_handle  *dlh = ult_arg->dlh;
 	ABT_future		  future = dlh->dlh_future;
+	uint32_t		  saved = dlh->dlh_sub_cnt;
 	uint32_t		  i;
 	int			  rc = 0;
 
@@ -1760,6 +1761,13 @@ dtx_leader_exec_ops_ult(void *arg)
 		if (rc) {
 			sub->dss_result = rc;
 			break;
+		}
+
+		/* Yield to avoid holding CPU for too long time. */
+		if (i >= DTX_RPC_YIELD_THD) {
+			ABT_thread_yield();
+			D_ASSERTF(saved == dlh->dlh_sub_cnt, "corrupted after yield: %u, %u\n",
+				  saved, dlh->dlh_sub_cnt);
 		}
 	}
 
@@ -1805,6 +1813,25 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		D_ERROR("ABT_future_create failed %d.\n", rc);
 		D_FREE_PTR(ult_arg);
 		return dss_abterr2der(rc);
+	}
+
+	if (dlh->dlh_sub_cnt == 79 || dlh->dlh_sub_cnt == 77) {
+		ABT_thread	thread;
+		ABT_thread_attr	attr;
+		size_t		size = 0;
+
+		ABT_thread_self(&thread);
+		rc = ABT_thread_get_attr(thread, &attr);
+		D_ASSERT(rc == ABT_SUCCESS);
+
+		rc = ABT_thread_attr_get_stacksize(attr, &size);
+		D_ASSERT(rc == ABT_SUCCESS);
+
+		if (size < DSS_DEEP_STACK_SZ)
+			D_ERROR("Current ULT stack is too small: %ld, expect %d\n",
+				size, DSS_DEEP_STACK_SZ);
+
+		ABT_thread_attr_free(&attr);
 	}
 
 	/*
