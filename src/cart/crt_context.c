@@ -925,7 +925,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	uint64_t			 ts_now;
 
 	D_ASSERT(crt_ctx != NULL);
-
+#if 0
 	if (crt_gdata.cg_swim_inited) {
 		struct crt_grp_priv	*gp = crt_gdata.cg_grp->gg_primary_grp;
 		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
@@ -958,7 +958,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			}
 		}
 	}
-
+#endif
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
 
