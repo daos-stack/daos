@@ -183,7 +183,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
- *			-DER_RF		number of failures exceed RF, data possibly lost
+ *			-DER_RF		Number of failures exceed RF, data possibly lost
  */
 int
 daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
