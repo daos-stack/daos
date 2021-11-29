@@ -26,7 +26,7 @@ type SystemProvider interface {
 
 // Provider provides storage specific capabilities.
 type Provider struct {
-	sync.RWMutex
+	sync.Mutex
 	log           logging.Logger
 	engineIndex   int
 	engineStorage *Config
@@ -288,11 +288,11 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 			continue
 		}
 
-		p.RLock()
+		p.Lock()
 		req.BdevCache = &p.bdevCache
 		req.VMDEnabled = p.vmdEnabled
 		results[i].Result, results[i].Error = p.bdev.Format(req)
-		p.RUnlock()
+		p.Unlock()
 
 		if err := results[i].Error; err != nil {
 			p.log.Errorf("Instance %d: format failed (%s)", err)
@@ -341,8 +341,8 @@ func (p *Provider) WriteNvmeConfig() error {
 		return err
 	}
 
-	p.RLock()
-	defer p.RUnlock()
+	p.Lock()
+	defer p.Unlock()
 
 	req.BdevCache = &p.bdevCache
 	req.VMDEnabled = p.vmdEnabled
@@ -374,7 +374,7 @@ func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierSc
 			continue
 		}
 
-		p.RLock()
+		p.Lock()
 		req := BdevScanRequest{
 			DeviceList:  cfg.Bdev.DeviceList,
 			BypassCache: direct,
@@ -382,7 +382,7 @@ func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierSc
 		}
 
 		bsr, err := scanBdevs(p.log, req, &p.bdevCache, scan)
-		p.RUnlock()
+		p.Unlock()
 		if err != nil {
 			return nil, err
 		}
@@ -419,8 +419,8 @@ func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResp
 // ScanBdevs either calls into backend bdev provider to scan SSDs or returns
 // cached results if BypassCache is set to false in the request.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
-	p.RLock()
-	defer p.RUnlock()
+	p.Lock()
+	defer p.Unlock()
 
 	req.VMDEnabled = p.vmdEnabled
 	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)

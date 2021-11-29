@@ -46,7 +46,7 @@ func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 type MockNvmeCfg struct {
 	DiscoverCtrlrs storage.NvmeControllers
 	DiscoverErr    error
-	FormatRes      []*FormatResult
+	FormatRes      FormatResults
 	FormatErr      error
 	UpdateErr      error
 }
@@ -54,13 +54,6 @@ type MockNvmeCfg struct {
 // MockNvmeImpl is an implementation of the Nvme interface.
 type MockNvmeImpl struct {
 	Cfg MockNvmeCfg
-}
-
-// CleanLockfiles removes SPDK lockfiles after binding operations.
-func (n *MockNvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
-	log.Debugf("mock clean lockfiles pci addresses: %v", pciAddrs)
-
-	return nil
 }
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
@@ -75,7 +68,7 @@ func (n *MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, er
 }
 
 // Format device at given pci address, destructive operation!
-func (n *MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
+func (n *MockNvmeImpl) Format(log logging.Logger) (FormatResults, error) {
 	log.Debug("mock format nvme ssds")
 
 	if n.Cfg.FormatErr != nil {
@@ -83,7 +76,7 @@ func (n *MockNvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	}
 
 	if n.Cfg.FormatRes == nil {
-		return make([]*FormatResult, 0), nil
+		return make(FormatResults, 0), nil
 	}
 
 	return n.Cfg.FormatRes, nil
