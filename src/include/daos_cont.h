@@ -187,7 +187,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
- *			-DER_RF		#failures exceed RF, data possibly lost
+ *			-DER_RF		number of failures exceed RF, data possibly lost
  */
 int
 daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
@@ -269,7 +269,7 @@ daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *
  *			-DER_NO_HDL	Invalid container handle
  */
 int
-daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
+daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 		daos_prop_t *cont_prop, daos_event_t *ev);
 
 /**
@@ -292,8 +292,8 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
  *			-DER_NO_HDL	Invalid container handle
  */
 int
-daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
-		  daos_event_t *ev);
+daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev);
+
 /**
  * Sets the container properties.
  *
