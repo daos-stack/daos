@@ -252,7 +252,22 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
+	if (t_attr == ABT_THREAD_ATTR_NULL) {
+		ABT_thread_attr		attr;
+
+		rc = ABT_thread_attr_create(&attr);
+		if (rc != ABT_SUCCESS)
+			return dss_abterr2der(rc);
+
+		rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ / 2);
+		D_ASSERT(rc == ABT_SUCCESS);
+
+		rc = ABT_thread_create(abt_pool, func, arg, attr, thread);
+		ABT_thread_attr_free(&attr);
+	} else {
+		rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
+	}
+
 	return dss_abterr2der(rc);
 }
 
