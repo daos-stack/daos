@@ -26,17 +26,11 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu.20.04, centos.8, leap.15, fedora, rocky, centos.7, alma]
+        distro: [ubuntu.20.04, centos.8, leap.15, fedora]
         include:
           - distro: fedora
             base: centos.8
             with: fedora:34
-          - distro: rocky
-            base: centos.8
-            with: rockylinux/rockylinux:8
-          - distro: alma
-            base: centos.8
-            with: almalinux:8
           - distro: centos.8
             base: centos.8
             with: centos:8
@@ -46,9 +40,6 @@ jobs:
           - distro: leap.15
             base: leap.15
             with: leap.15
-          - distro: centos.7
-            base: centos.7
-            with: centos:7
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -140,14 +131,6 @@ jobs:
             base: centos.8
             with: fedora:34
             java: NO
-          - distro: rocky
-            base: centos.8
-            with: rockylinux/rockylinux:8
-            java: YES
-          - distro: alma
-            base: centos.8
-            with: almalinux:8
-            java: YES
           - distro: centos.8
             base: centos.8
             with: centos:8
@@ -217,10 +200,6 @@ jobs:
       matrix:
         distro: [rocky, centos.7, alma]
         include:
-          - distro: fedora
-            base: centos.8
-            with: fedora:34
-            java: NO
           - distro: rocky
             base: centos.8
             with: rockylinux/rockylinux:8
@@ -229,17 +208,9 @@ jobs:
             base: centos.8
             with: almalinux:8
             java: YES
-          - distro: centos.8
-            base: centos.8
-            with: centos:8
-            java: YES
-          - distro: ubuntu.20.04
-            base: ubuntu.20.04
-            with: ubuntu.20.04
-            java: YES
-          - distro: leap.15
-            base: leap.15
-            with: leap.15
+          - distro: centos.7
+            base: centos.7
+            with: centos.7
             java: YES
     env:
       DEPS_JOBS: 10
@@ -251,7 +222,8 @@ jobs:
       with:
         submodules: true
     - name: Build dependencies in image.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                          --build-arg BASE_DISTRO
                           --build-arg DAOS_BUILD=no
                           --build-arg DEPS_JOBS
     - name: Build in docker with clang

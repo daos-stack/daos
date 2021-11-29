@@ -15,8 +15,6 @@ BUILD_FILES = ['site_scons',
 
 COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 
-TARGET_BRANCH = 'master'
-
 def set_output(key, value):
     """ Set a key-value pair in github actions metadata"""
 
@@ -25,9 +23,15 @@ def set_output(key, value):
 def main():
     """Parse git histrory to load caches for GHA"""
 
-    for env, value in os.environ.items():
-        print('{}={}'.format(env, value))
-    
+    # Try and use the right hash key.  For chained PRs on release branches this won't be correct
+    # however most of the time it should be right, and the build should still work on cache miss
+    # although it will take longer.
+    base_ref = os.getenv('GITHUB_BASE_REF', 'master')
+    if base_ref.startswith('release/'):
+        target_branch = base_ref
+    else:
+        target_branch = 'master'
+
     single = '--single' in sys.argv
 
     base_distro = os.getenv('BASE_DISTRO', None)
@@ -63,29 +67,30 @@ def main():
         rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
         commit_hash = rc.stdout.decode('utf-8').strip()
 
-        key = 'bc-{}-{}-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash, commit_hash, '{hash}')
+        key = 'bc-{}-{}-{}-{}-{}'.format(target_branch,
+                                         base_distro, build_hash, commit_hash, '{hash}')
         set_output('key', key)
 
-        restore = 'bc-{}-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash, commit_hash)
+        restore = 'bc-{}-{}-{}-{}'.format(target_branch, base_distro, build_hash, commit_hash)
         set_output('restore', restore)
 
-        restore_prev = 'bc-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash)
+        restore_prev = 'bc-{}-{}-{}'.format(target_branch, base_distro, build_hash)
         set_output('restore_prev', restore_prev)
 
     else:
         # PR builds.  Do not embed the current commit in the hash name, load the most recent build
         # scripts, and fall back to the most recent version of the build script from the last week
         # or anything if that isn't found.
-        key = 'bc-{}-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash, '{hash}')
+        key = 'bc-{}-{}-{}-{}'.format(target_branch, base_distro, build_hash, '{hash}')
         set_output('key', key)
 
-        restore = 'bc-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash)
+        restore = 'bc-{}-{}-{}'.format(target_branch, base_distro, build_hash)
         set_output('restore', restore)
 
         if len(lines):
-            restore_prev = 'bc-{}-{}-{}'.format(TARGET_BRANCH, base_distro, lines[0])
+            restore_prev = 'bc-{}-{}-{}'.format(target_branch, base_distro, lines[0])
         else:
-            restore_prev = 'bc-{}-{}-'.format(TARGET_BRANCH, base_distro)
+            restore_prev = 'bc-{}-{}-'.format(target_branch, base_distro)
         set_output('restore_prev', restore_prev)
 
 if __name__ == '__main__':
