@@ -165,7 +165,7 @@
 ## Number of hugepages to allocate for DMA buffer memory
 #
 ## Specifies the number (not size) of hugepages to allocate for use by DMA
-## buffer memory, this is mandatory with NVME SSD configued and optional
+## buffer memory, this is mandatory with NVME SSD configured and optional
 ## without SSDs configured. This indicates the number to be used for each
 ## spawned I/O Engines, so the total will be this number * number of I/O Engines.
 ## Default system hugepage size will be used. For the best of performance,

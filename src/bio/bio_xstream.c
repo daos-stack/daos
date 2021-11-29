@@ -178,15 +178,16 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
-	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
-	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
-	       bio_chk_cnt_max, size_mb);
-
 	/* No nvme configured and hugepages disabled */
 	if (!is_nvme_configued && mem_size == 0) {
 		D_INFO("NVMe config or hugepages are not specified, skip NVMe setup.\n");
 		return 0;
 	}
+
+	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
+	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
+	       bio_chk_cnt_max, size_mb);
+
 	/*
 	 * Hugepages are not enough to sustain average I/O workload
 	 * (~1GB per xstream).
