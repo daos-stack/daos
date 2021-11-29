@@ -19,6 +19,8 @@ jobs:
   # builds for specific PRs will attempt to read this cache only, but not save anything.
   # For that reason set concurrency to 1 here for maximum reliability.
   # Set max-parallel and cache concurrency to 1 to avoid https 429 errors on cache save.
+  # Distros where we build on PR should be covered here as the cache is populated for PRs to read,
+  # for distros where we only want to build on master and not PRs see the Build-branch job below.
   Prepare:
     name: Build docker images
     runs-on: ubuntu-20.04
@@ -130,19 +132,19 @@ jobs:
           - distro: fedora
             base: centos.8
             with: fedora:34
-            java: NO
+            java: no
           - distro: centos.8
             base: centos.8
             with: centos:8
-            java: YES
+            java: yes
           - distro: ubuntu.20.04
             base: ubuntu.20.04
             with: ubuntu.20.04
-            java: YES
+            java: yes
           - distro: leap.15
             base: leap.15
             with: leap.15
-            java: YES
+            java: yes
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -203,15 +205,15 @@ jobs:
           - distro: rocky
             base: centos.8
             with: rockylinux/rockylinux:8
-            java: YES
+            java: yes
           - distro: alma
             base: centos.8
             with: almalinux:8
-            java: YES
+            java: yes
           - distro: centos.7
             base: centos.7
             with: centos.7
-            java: YES
+            java: yes
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -223,9 +225,9 @@ jobs:
         submodules: true
     - name: Build dependencies in image.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                          --build-arg DEPS_JOBS
                           --build-arg BASE_DISTRO
                           --build-arg DAOS_BUILD=no
-                          --build-arg DEPS_JOBS
     - name: Build in docker with clang
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                           --build-arg DEPS_JOBS

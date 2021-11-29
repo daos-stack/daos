@@ -68,15 +68,15 @@ jobs:
           - distro: fedora
             base: centos.8
             with: fedora:34
-            java: NO
+            java: no
           - distro: centos.8
             base: centos.8
             with: centos:8
-            java: YES
+            java: yes
           - distro: leap.15
             base: leap.15
             with: leap.15
-            java: YES
+            java: yes
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
