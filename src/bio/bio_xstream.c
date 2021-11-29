@@ -79,21 +79,19 @@ bio_spdk_env_init(void)
 	struct spdk_env_opts	 opts;
 	int			 rc;
 
-	D_ASSERT(nvme_glb.bd_nvme_conf != NULL);
-
 	/* Only print error and more severe to stderr. */
 	spdk_log_set_print_level(SPDK_LOG_ERROR);
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
 
-	rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
-	if (rc != 0) {
-		D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
-			DP_RC(rc));
-		if (opts.pci_allowed != NULL)
-			D_FREE(opts.pci_allowed);
-		return rc;
+	if (nvme_glb.bd_nvme_conf != NULL) {
+		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
+		if (rc != 0) {
+			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
+				DP_RC(rc));
+			goto out;
+		}
 	}
 
 	/*
@@ -149,22 +147,15 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	char		*env;
 	int		 rc, fd;
 	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
+	int		 is_nvme_configued = 0;
 
-	if (tgt_nr <= 0 || mem_size <= 0 || hugepage_size <= 0) {
-		D_ERROR("tgt_nr: %u, mem_size: %u, hugepage_size: %u should be > 0\n",
-			 tgt_nr, mem_size, hugepage_size);
+	if (tgt_nr <= 0) {
+		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
 		return -DER_INVAL;
 	}
-	/*
-	 * Hugepages are not enough to sustain average I/O workload
-	 * (~1GB per xstream).
-	 */
-	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
-		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
-		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
-			mem_size, (mem_size / tgt_nr));
-		return -DER_INVAL;
-	}
+
+	if (nvme_conf && strlen(nvme_conf) > 0)
+		is_nvme_configued = 1;
 
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
@@ -187,25 +178,39 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
-	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
-	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
-
-	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
-		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
-		return 0;
-	}
-
-	fd = open(nvme_conf, O_RDONLY, 0600);
-	if (fd < 0) {
-		D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
-		       nvme_conf, DP_RC(daos_errno2der(errno)));
-		return 0;
-	}
-	close(fd);
-
 	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
 	       bio_chk_cnt_max, size_mb);
+
+	/* No nvme configured and hugepages disabled */
+	if (!is_nvme_configued && mem_size == 0) {
+		D_INFO("NVMe config or hugepages are not specified, skip NVMe setup.\n");
+		return 0;
+	}
+	/*
+	 * Hugepages are not enough to sustain average I/O workload
+	 * (~1GB per xstream).
+	 */
+	if ((mem_size / tgt_nr) < DAOS_DMA_MIN_UB_BUF_MB) {
+		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
+		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
+			mem_size, (mem_size / tgt_nr));
+		bio_chk_cnt_max = 0;
+		return -DER_INVAL;
+	}
+
+	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
+	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
+
+	if (is_nvme_configued) {
+		fd = open(nvme_conf, O_RDONLY, 0600);
+		if (fd < 0) {
+			D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
+			       nvme_conf, DP_RC(daos_errno2der(errno)));
+			goto init_spdk;
+		}
+		close(fd);
+	}
 
 	rc = smd_init(db);
 	if (rc != 0) {
@@ -213,6 +218,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 		goto free_cond;
 	}
 
+init_spdk:
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
@@ -235,6 +241,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	rc = bio_spdk_env_init();
 	if (rc) {
 		nvme_glb.bd_nvme_conf = NULL;
+		bio_chk_cnt_max = 0;
 		goto fini_smd;
 	}
 
@@ -253,7 +260,7 @@ free_mutex:
 static void
 bio_spdk_env_fini(void)
 {
-	if (nvme_glb.bd_nvme_conf != NULL) {
+	if (bio_chk_cnt_max > 0) {
 		spdk_thread_lib_fini();
 		spdk_env_fini();
 	}

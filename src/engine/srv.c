@@ -423,7 +423,7 @@ dss_srv_handler(void *arg)
 		goto crt_destroy;
 	}
 
-	if (dx->dx_main_xs && bio_nvme_configured()) {
+	if (dx->dx_main_xs) {
 		ABT_thread_attr attr;
 
 		/* Initialize NVMe context for main XS which accesses NVME */
