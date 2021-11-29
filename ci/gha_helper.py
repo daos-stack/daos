@@ -37,9 +37,6 @@ def main():
         # If this isn't a PR then it must be a landing build, so simply use the branch name.
         target_branch = os.getenv('GITHUB_REF_NAME')
 
-    # Test for / in cache names.
-
-    target_branch = 'release/2.0'
     single = '--single' in sys.argv
 
     base_distro = os.getenv('BASE_DISTRO', None)
