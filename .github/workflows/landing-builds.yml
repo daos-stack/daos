@@ -1,18 +1,83 @@
-name: Build
+name: Test landings and prepare docker images.
 
 on:
-   pull_request:
-
-concurrency:
-  group: ci2-${{ github.head_ref }}
-  cancel-in-progress: true
+  push:
+    branches:
+      - master
 
 jobs:
 
-  # Re-use the cache from the landing-builds workflow if available, if not then build the images
-  # from scratch, but do not save them.
+  # Build a base Docker image, and save it with a key based on the hash of the dependencies, and a
+  # copy of the git hash.  Do not attempt to load the cache here, but rather start each build
+  # cleanly.  As the file hash comes before the git hash then each master build gets to populate
+  # a new hash key, PRs then fetch based only on the file hash so they get the most recent master
+  # build to complete.
+  # This workflow only runs on landings, so the cache will only be built/saved when this changes,
+  # builds for specific PRs will attempt to read this cache only, but not save anything.
+  # For that reason set concurrency to 1 here for maximum reliability.
+  # Set max-parallel and cache concurrency to 1 to avoid https 429 errors on cache save.
+  Prepare:
+    name: Build docker images
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        distro: [ubuntu.20.04, centos.8, leap.15, fedora, rocky, alma]
+        include:
+          - distro: fedora
+            base: centos.8
+            with: fedora:34
+          - distro: rocky
+            base: centos.8
+            with: rockylinux/rockylinux:8
+          - distro: alma
+            base: centos.8
+            with: almalinux:8
+          - distro: centos.8
+            base: centos.8
+            with: centos:8
+          - distro: ubuntu.20.04
+            base: ubuntu.20.04
+            with: ubuntu.20.04
+          - distro: leap.15
+            base: leap.15
+            with: leap.15
+    env:
+      DEPS_JOBS: 10
+      BASE_DISTRO: ${{ matrix.with }}
+    outputs:
+      key: ${{ steps.commit-hash.outputs.key }}
+      restore: ${{ steps.commit-hash.outputs.restore }}
+      restore_prev: ${{ steps.commit-hash.outputs.restore_prev }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Setup git hash
+      run: ./ci/gha_helper.py --single
+      id: commit-hash
+    - name: Setup docker cache
+      uses: satackey/action-docker-layer-caching@v0.0.11
+      with:
+        key: ${{ steps.commit-hash.outputs.key }}
+        restore-keys: ${{ steps.commit-hash.outputs.restore }}
+        concurrency: 1
+    - name: Prepare base image in Docker
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                          --build-arg DAOS_DEPS_BUILD=no
+                          --build-arg DEPS_JOBS
+                          --build-arg BASE_DISTRO
+    - name: Build dependencies in Docker
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                          --build-arg DAOS_BUILD=no
+                          --build-arg DEPS_JOBS
+                          --build-arg BASE_DISTRO
+    - name: Prune images not required for build.
+      run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
+
   Build-and-test:
     name: Run DAOS/NLT tests
+    needs: Prepare
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -26,12 +91,10 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: true
-        fetch-depth: 100
     - name: Setup git hash
-      run: ./ci/gha_helper.py
+      run: ./ci/gha_helper.py --single
       id: commit-hash
-    - name: Fetch docker images from cache.
-      uses: satackey/action-docker-layer-caching@v0.0.11
+    - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
         key: ${{ steps.commit-hash.outputs.key }}
@@ -58,9 +121,11 @@ jobs:
 
   Build:
     name: Build DAOS
+    needs: Prepare
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         distro: [ubuntu.20.04, centos.8, leap.15, fedora, rocky, alma]
         compiler: [clang, gcc]
@@ -99,12 +164,10 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: true
-        fetch-depth: 100
     - name: Setup git hash
-      run: ./ci/gha_helper.py
+      run: ./ci/gha_helper.py --single
       id: commit-hash
-    - name: Fetch docker images from cache.
-      uses: satackey/action-docker-layer-caching@v0.0.11
+    - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:
         key: ${{ steps.commit-hash.outputs.key }}
