@@ -2,8 +2,10 @@
 
 # Script to run doxygen against modified headers and report results.
 # see .github/workflows/doxygen.yml
-# Just run against all installed headers, use github actions trigger to control when
-# job runs.
+
+# Github only annotates the first 10 warnings, and we currently have more than that
+# in our include dir, so create a copy of the modified source files and run doxygen
+# on them only.
 
 set -e
 
