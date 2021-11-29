@@ -2,6 +2,8 @@ name: Create Release
 # This workflow is triggered on pushes to the master branch of the repository.
 on:
   push:
+    paths:
+    - 'TAG'
     branches:
     - master
     - 'release/**'
