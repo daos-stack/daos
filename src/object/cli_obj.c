@@ -369,6 +369,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		obj_shard->do_target_id = layout->ol_shards[i].po_target;
 		obj_shard->do_fseq = layout->ol_shards[i].po_fseq;
 		obj_shard->do_rebuilding = layout->ol_shards[i].po_rebuilding;
+		obj_shard->do_reintegrating = layout->ol_shards[i].po_reintegrating;
 	}
 out:
 	if (layout)
@@ -779,7 +780,7 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj, daos_
 {
 	daos_size_t			 size_iod, size_sgl, size_oiod;
 	daos_size_t			 size_recx, size_tgt_nr, size_singv;
-	daos_size_t			 size_sorter, size_array, size_size_set, buf_size;
+	daos_size_t			 size_sorter, size_array, size_fetch_stat, buf_size;
 	daos_iod_t			*uiod, *riod;
 	struct obj_ec_recx_array	*ec_recx;
 	void				*buf;
@@ -794,12 +795,12 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj, daos_
 	size_sorter = roundup(sizeof(struct obj_ec_seg_sorter) * iod_nr, 8);
 	size_singv = roundup(sizeof(struct dcs_layout) * iod_nr, 8);
 	size_array = sizeof(daos_size_t) * obj_get_grp_size(obj) * iod_nr;
-	size_size_set = sizeof(daos_size_t) * iod_nr;
+	size_fetch_stat = sizeof(struct shard_fetch_stat) * iod_nr;
 	/* for oer_tgt_recx_nrs/_idxs */
 	size_tgt_nr = roundup(sizeof(uint32_t) * obj_get_grp_size(obj), 8);
 	buf_size = size_iod + size_sgl + size_oiod + size_recx + size_sorter +
 		   size_singv + size_array + size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN +
-		   size_size_set;
+		   size_fetch_stat;
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
 		return -DER_NOMEM;
@@ -821,8 +822,8 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj, daos_
 	tmp_ptr += size_array;
 	reasb_req->tgt_bitmap = (void *)tmp_ptr;
 	tmp_ptr += OBJ_TGT_BITMAP_LEN;
-	reasb_req->orr_size_set = (void *)tmp_ptr;
-	tmp_ptr += size_size_set;
+	reasb_req->orr_fetch_stat = (void *)tmp_ptr;
+	tmp_ptr += size_fetch_stat;
 
 	for (i = 0; i < iod_nr; i++) {
 		uiod = &iods[i];
@@ -881,11 +882,10 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
 	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetched) {
-		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n",
-			DP_OID(oid));
+		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n", DP_OID(oid));
 		D_ASSERTF(reasb_req->orr_iod_nr == args->nr, "%d != %d.\n",
 			  reasb_req->orr_iod_nr, args->nr);
-		memset(reasb_req->orr_size_set, 0, args->nr * sizeof(*reasb_req->orr_size_set));
+		memset(reasb_req->orr_fetch_stat, 0, args->nr * sizeof(*reasb_req->orr_fetch_stat));
 		return 0;
 	}
 	obj_auxi->iod_nr = args->nr;
@@ -1025,7 +1025,7 @@ ec_deg_get:
 		D_ASSERT(ec_deg_tgt >=
 			 obj_ec_data_tgt_nr(obj_auxi->reasb_req.orr_oca));
 		if (obj_auxi->ec_in_recov ||
-		    obj_auxi->reasb_req.orr_singv_only) {
+		    (obj_auxi->reasb_req.orr_singv_only && !obj_auxi->reasb_req.orr_size_fetch)) {
 			D_DEBUG(DB_IO, DF_OID" shard %d failed in recovery(%d) "
 				"or singv fetch(%d).\n",
 				DP_OID(obj->cob_md.omd_id), shard,
@@ -1691,6 +1691,24 @@ recov_task_abort(tse_task_t *task, void *arg)
 	return 0;
 }
 
+static int
+recov_task_cb(tse_task_t *task, void *data)
+{
+	struct obj_auxi_args	*obj_auxi = *((struct obj_auxi_args **)data);
+	daos_obj_fetch_t	*fetch_arg = dc_task_get_args(task);
+	int			 i;
+
+	if (task->dt_result != -DER_FETCH_AGAIN)
+		return 0;
+
+	/* For the case of EC singv overwritten, in degraded fetch data recovery possibly always
+	 * hit conflict case and need fetch again. Should update iod_size to avoid endless retry.
+	 */
+	for (i = 0; i < obj_auxi->reasb_req.orr_iod_nr; i++)
+		obj_auxi->reasb_req.orr_uiods[i].iod_size = fetch_arg->iods[i].iod_size;
+	return 0;
+}
+
 static void
 obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		struct obj_auxi_args *obj_auxi, d_iov_t *csum_iov)
@@ -1748,19 +1766,25 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 					      fail_info, csum_iov,
 					      NULL, sched, &sub_task);
 		if (rc) {
-			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create "
-				"failed "DF_RC"\n", task,
-				DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create failed "DF_RC"\n",
+				task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 			goto out;
 		}
 
 		tse_task_list_add(sub_task, &task_list);
 
+		rc = tse_task_register_comp_cb(sub_task, recov_task_cb, &obj_auxi,
+					       sizeof(obj_auxi));
+		if (rc) {
+			D_ERROR("task %p "DF_OID" tse_task_register_comp_cb failed "DF_RC"\n",
+				task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+			goto out;
+		}
+
 		rc = dc_task_depend(task, 1, &sub_task);
-		if (rc != 0) {
-			D_ERROR("task %p "DF_OID" dc_task_depend failed "DF_RC
-				"\n", task, DP_OID(obj->cob_md.omd_id),
-				DP_RC(rc));
+		if (rc) {
+			D_ERROR("task %p "DF_OID" dc_task_depend failed "DF_RC"\n",
+				task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 			goto out;
 		}
 	}
@@ -4048,8 +4072,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 			if (obj_auxi->ec_wait_recov && task->dt_result == 0) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 
-				obj_ec_recov_data(&obj_auxi->reasb_req,
-					obj->cob_md.omd_id, args->nr);
+				if (!obj_auxi->reasb_req.orr_size_fetch)
+					obj_ec_recov_data(&obj_auxi->reasb_req, obj->cob_md.omd_id,
+							  args->nr);
 
 				obj_reasb_io_fini(obj_auxi, false);
 			} else {
