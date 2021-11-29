@@ -15,6 +15,7 @@ BUILD_FILES = ['site_scons',
 
 COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 
+TARGET_BRANCH = 'master'
 
 def set_output(key, value):
     """ Set a key-value pair in github actions metadata"""
@@ -24,6 +25,9 @@ def set_output(key, value):
 def main():
     """Parse git histrory to load caches for GHA"""
 
+    for env, value in os.environ.items():
+        print('{}={}'.format(env, value))
+    
     single = '--single' in sys.argv
 
     base_distro = os.getenv('BASE_DISTRO', None)
@@ -59,29 +63,29 @@ def main():
         rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
         commit_hash = rc.stdout.decode('utf-8').strip()
 
-        key = 'bc-{}-{}-{}-{}'.format(base_distro, build_hash, commit_hash, '{hash}')
+        key = 'bc-{}-{}-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash, commit_hash, '{hash}')
         set_output('key', key)
 
-        restore = 'bc-{}-{}-{}'.format(base_distro, build_hash, commit_hash)
+        restore = 'bc-{}-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash, commit_hash)
         set_output('restore', restore)
 
-        restore_prev = 'bc-{}-{}'.format(base_distro, build_hash)
+        restore_prev = 'bc-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash)
         set_output('restore_prev', restore_prev)
 
     else:
         # PR builds.  Do not embed the current commit in the hash name, load the most recent build
         # scripts, and fall back to the most recent version of the build script from the last week
         # or anything if that isn't found.
-        key = 'bc-{}-{}-{}'.format(base_distro, build_hash, '{hash}')
+        key = 'bc-{}-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash, '{hash}')
         set_output('key', key)
 
-        restore = 'bc-{}-{}'.format(base_distro, build_hash)
+        restore = 'bc-{}-{}-{}'.format(TARGET_BRANCH, base_distro, build_hash)
         set_output('restore', restore)
 
         if len(lines):
-            restore_prev = 'bc-{}-{}'.format(base_distro, lines[0])
+            restore_prev = 'bc-{}-{}-{}'.format(TARGET_BRANCH, base_distro, lines[0])
         else:
-            restore_prev = 'bc-{}-'.format(base_distro)
+            restore_prev = 'bc-{}-{}-'.format(TARGET_BRANCH, base_distro)
         set_output('restore_prev', restore_prev)
 
 if __name__ == '__main__':

@@ -62,28 +62,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu.20.04, centos.8, leap.15, fedora, rocky, alma]
+        distro: [centos.8, leap.15, fedora]
         compiler: [clang, gcc]
         include:
           - distro: fedora
             base: centos.8
             with: fedora:34
             java: NO
-          - distro: rocky
-            base: centos.8
-            with: rockylinux/rockylinux:8
-            java: YES
-          - distro: alma
-            base: centos.8
-            with: almalinux:8
-            java: YES
           - distro: centos.8
             base: centos.8
             with: centos:8
-            java: YES
-          - distro: ubuntu.20.04
-            base: ubuntu.20.04
-            with: ubuntu.20.04
             java: YES
           - distro: leap.15
             base: leap.15
