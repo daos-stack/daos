@@ -32,6 +32,9 @@ def main():
     else:
         target_branch = 'master'
 
+    for env, value in os.environ.items():
+        print('{}={}'.format(env, value))
+
     single = '--single' in sys.argv
 
     base_distro = os.getenv('BASE_DISTRO', None)

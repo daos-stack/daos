@@ -5,8 +5,7 @@ on:
     branches:
       - master
       - release/**
-  # Just for testing, do not land.
-  pull_request:
+      - gha-fewer-builds
 
 jobs:
 
