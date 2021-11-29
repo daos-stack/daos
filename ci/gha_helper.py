@@ -26,15 +26,20 @@ def main():
     # Try and use the right hash key.  For chained PRs on release branches this won't be correct
     # however most of the time it should be right, and the build should still work on cache miss
     # although it will take longer.
-    base_ref = os.getenv('GITHUB_BASE_REF', 'master')
-    if base_ref.startswith('release/'):
-        target_branch = base_ref
+    base_ref = os.getenv('GITHUB_BASE_REF', None)
+    if base_ref:
+        # If it's a PR check if it's against a release, if so use it else use master.
+        if base_ref.startswith('release/'):
+            target_branch = base_ref
+        else:
+            target_branch = 'master'
     else:
-        target_branch = 'master'
+        # If this isn't a PR then it must be a landing build, so simply use the branch name.
+        target_branch = os.getenv('GITHUB_REF_NAME')
 
-    for env, value in os.environ.items():
-        print('{}={}'.format(env, value))
+    # Test for / in cache names.
 
+    target_branch = 'release/2.0'
     single = '--single' in sys.argv
 
     base_distro = os.getenv('BASE_DISTRO', None)
