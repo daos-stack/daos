@@ -19,6 +19,7 @@ pool:
   mode: 511
   name: daos_server
   scm_size: 134217728
+  svcn: 5
   control_method: dmg
   pool_query_timeout: 30
 testparams:
