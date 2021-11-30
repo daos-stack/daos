@@ -58,7 +58,7 @@ dfuse_cb_forget_multi(fuse_req_t req, size_t count,
 
 	fuse_reply_none(req);
 
-	DFUSE_TRA_INFO(fs_handle, "Forgetting %zi", count);
+	DFUSE_TRA_DEBUG(fs_handle, "Forgetting %zi", count);
 
 	for (i = 0; i < count; i++)
 		dfuse_forget_one(fs_handle, forgets[i].ino, forgets[i].nlookup);
