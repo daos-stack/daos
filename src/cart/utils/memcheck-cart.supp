@@ -300,3 +300,9 @@
    fun:fi_tsend
    ...
 }
+{
+  getpwnam_r
+  Memcheck:Leak
+  ...
+  fun:getpwnam_r
+}
