@@ -1335,6 +1335,9 @@ ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint3
 	char		*fetch_buf;
 	uint32_t	 length;
 	daos_size_t	 size;
+	bool		 degraded_test = false;
+	uint16_t	 fail_shards[2];
+	uint64_t	 fail_val;
 	int		 rc;
 
 	/** open object */
@@ -1377,12 +1380,35 @@ ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint3
 		length = old_len;
 	}
 
+deg_test:
+	size = new_len != 0 ? new_len : old_len;
+	if (degraded_test) {
+		fail_shards[0] = 1;
+		fail_shards[1] = 4;
+		fail_val = daos_shard_fail_value(fail_shards, 2);
+		daos_fail_value_set(fail_val);
+		daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
+	}
+
 	/** fetch record size */
 	print_message("fetch iod_size with NULL sgl\n");
 	iod.iod_size	= DAOS_REC_ANY;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(iod.iod_size, size);
+
+	/** fetch with unknown size and matched buffer */
+	size = length;
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+	print_message("fetch with unknown size and matched buffer\n");
+	d_iov_set(&sg_iov, fetch_buf, size);
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, length);
+	assert_memory_equal(buf, fetch_buf, length);
+	D_FREE(fetch_buf);
 
 	/** fetch with larger buffer */
 	size = length + 17 * 1024;
@@ -1429,6 +1455,15 @@ ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint3
 	assert_memory_equal(buf, fetch_buf, length);
 	memset(fetch_buf, 0, size);
 
+	if (!degraded_test) {
+		degraded_test = true;
+		print_message("run same tests in degraded mode ...\n");
+		goto deg_test;
+	}
+
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -1466,6 +1501,8 @@ ec_singv_diff_size_fetch(void **state)
 	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 16 * 1024, 11);
 	print_message("test OC_EC_4P2G1, singv 133B overwritten by 17KB\n");
 	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 133, 17 * 1024);
+	print_message("test OC_EC_4P2G1, singv 12KB overwritten by 4000B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 12 * 1024, 4000);
 }
 
 static int
