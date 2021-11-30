@@ -19,6 +19,7 @@
 #include <daos/common.h>
 #include <daos/placement.h>
 #include <daos/pool.h>
+#include <daos/kv.h>
 
 #include "daos_hdlr.h"
 #include "math.h"
@@ -726,7 +727,8 @@ kv_punch(void)
 		return rc;
 	}
 
-	punch_rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
+	punch_rc = daos_obj_punch(daos_kv2objhandle(oh), DAOS_TX_NONE,
+				  0, NULL);
 	rc = daos_kv_close(oh, NULL);
 
 	if (punch_rc) {
