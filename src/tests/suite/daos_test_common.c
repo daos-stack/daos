@@ -932,35 +932,23 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 {
 	int		tgts_per_node;
 	int		disable_nodes;
-	int		failures = 0;
-	int		max_failure;
-	int		i;
 	int		rc;
 	char		dmg_cmd[DTS_CFG_MAX];
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
 			tgts_per_node;
-	max_failure = (svc->rl_nr - 1) / 2;
-	for (i = 0; i < svc->rl_nr; i++) {
-		if (svc->rl_ranks[i] >=
-		    arg->srv_nnodes - disable_nodes - 1)
-			failures++;
-	}
-
-	if (failures > max_failure) {
-		print_message("Already kill %d targets with %d replica,"
-			      " (max_kill %d) can not kill anymore\n",
-			      arg->srv_disabled_ntgts, svc->rl_nr, max_failure);
-		return;
-	}
 
 	if ((int)rank == -1)
 		rank = arg->srv_nnodes - disable_nodes - 1;
 
+	/* if there is only 1 svc rank, don't kill it */
+	if (svc->rl_nr == 1 && d_rank_in_rank_list(svc, rank)) {
+		print_message("\tNot killing only svc rank %d\n", rank);
+		return;
+	}
+
 	arg->srv_disabled_ntgts += tgts_per_node;
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr--;
 	print_message("\tKilling rank %d (total of %d with %d already "
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);

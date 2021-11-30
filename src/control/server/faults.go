@@ -55,7 +55,7 @@ var (
 func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {
 	return serverFault(
 		code.ServerPoolInvalidServiceReps,
-		fmt.Sprintf("pool service replicas number should be an odd number between 1 and %d", maxSvcReps),
+		fmt.Sprintf("pool service replicas number should be an odd number from 1 to %d", maxSvcReps),
 		"retry the request with a valid number of pool service replicas",
 	)
 }

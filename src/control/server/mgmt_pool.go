@@ -304,6 +304,11 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		if allRanks > MaxPoolServiceReps {
 			return uint32(MaxPoolServiceReps)
 		}
+		// Must be an odd number.
+		if allRanks%2 == 0 {
+			allRanks--
+		}
+
 		return uint32(allRanks)
 	}(len(req.GetRanks()))
 
