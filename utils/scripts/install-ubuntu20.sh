@@ -58,7 +58,6 @@ apt-get -y install \
     python3-pyxattr \
     python3-tabulate \
     scons \
-    sudo \
     uuid-dev \
     valgrind \
     yasm
