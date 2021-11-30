@@ -25,9 +25,31 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
 struct vos_key_info {
+	umem_off_t		*ki_known_key;
+	struct vos_object	*ki_obj;
 	bool			 ki_non_empty;
 	bool			 ki_has_uncommitted;
+	const void		*ki_first;
 };
+
+static inline int
+key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund, d_iov_t *keybuf,
+		      daos_anchor_t *anchor)
+{
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
+	struct dcs_csum_info	 csum;
+
+	tree_rec_bundle2iov(rbund, &riov);
+
+	rbund->rb_iov	= keybuf;
+	rbund->rb_csum	= &csum;
+
+	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
+	ci_set_null(rbund->rb_csum);
+
+	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
+}
 
 /** This callback is invoked only if the tree is not empty */
 static int
@@ -35,12 +57,44 @@ empty_tree_check(daos_handle_t ih, vos_iter_entry_t *entry,
 		 vos_iter_type_t type, vos_iter_param_t *param, void *cb_arg,
 		 unsigned int *acts)
 {
+	struct vos_iterator	*iter;
+	struct vos_obj_iter	*oiter;
+	struct vos_rec_bundle	 rbund = {0};
+	d_iov_t			 key_iov;
+	struct umem_instance	*umm;
 	struct vos_key_info	*kinfo = cb_arg;
+	int			 rc;
+
+	if (kinfo->ki_first == entry->ie_key.iov_buf)
+		return 1; /** We've seen this one before */
+
+	/** Save the first thing we see so we can stop iteration early
+	 *  if we see it again on 2nd pass.
+	 */
+	if (kinfo->ki_first == NULL)
+		kinfo->ki_first = entry->ie_key.iov_buf;
 
 	if (entry->ie_vis_flags == VOS_IT_UNCOMMITTED) {
 		kinfo->ki_has_uncommitted = true;
 		return 0;
 	}
+
+	iter = vos_hdl2iter(ih);
+	oiter = vos_iter2oiter(iter);
+	rc = key_iter_fetch_helper(oiter, &rbund, &key_iov, NULL);
+	if (rc != 0)
+		return rc;
+
+	D_ASSERT(key_iov.iov_len == entry->ie_key.iov_len);
+	D_ASSERT(((char *)key_iov.iov_buf)[0] == ((char *)entry->ie_key.iov_buf)[0]);
+	D_ASSERT(((char *)key_iov.iov_buf)[key_iov.iov_len - 1] ==
+		 ((char *)entry->ie_key.iov_buf)[key_iov.iov_len - 1]);
+	umm = vos_obj2umm(kinfo->ki_obj);
+	rc = umem_tx_add_ptr(umm, kinfo->ki_known_key, sizeof(*(kinfo->ki_known_key)));
+	if (rc != 0)
+		return rc;
+
+	*(kinfo->ki_known_key) = umem_ptr2off(umm, rbund.rb_krec);
 
 	kinfo->ki_non_empty = true;
 
@@ -51,10 +105,44 @@ static int
 tree_is_empty(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 	      const daos_epoch_range_t *epr, vos_iter_type_t type)
 {
+	daos_anchor_t		 anchor = {0};
 	struct dtx_handle	*dth = vos_dth_get();
+	struct umem_instance	*umm;
+	d_iov_t			 key;
 	struct vos_key_info	 kinfo = {0};
+	struct vos_krec_df	*krec;
 	int			 rc;
 
+	/** The address of the known_key, which actually points at the krec is guaranteed by PMDK
+	 *  to be allocated at an 8 byte alignment so the low order bit is available to mark it as
+	 *  punched.
+	 */
+	if (*known_key != UMOFF_NULL && (*known_key & 0x1) == 0)
+		return 0;
+
+	kinfo.ki_obj = obj;
+	kinfo.ki_known_key = known_key;
+
+	if (*known_key == UMOFF_NULL)
+		goto tail;
+
+	krec = umem_off2ptr(vos_obj2umm(obj), (*known_key & ~(1ULL)));
+	d_iov_set(&key, vos_krec2key(krec), krec->kr_size);
+	dbtree_key2anchor(toh, &key, &anchor);
+
+	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
+			     &kinfo, dth, &anchor);
+
+	if (rc < 0)
+		return rc;
+
+	if (kinfo.ki_non_empty)
+		return 0;
+
+	/** Start from beginning one more time.  It will iterate until it
+	 *  sees the first thing it saw
+	 */
+tail:
 	rc = vos_iterate_key(obj, toh, type, epr, true, empty_tree_check,
 			     &kinfo, dth, NULL);
 
@@ -63,6 +151,14 @@ tree_is_empty(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 
 	if (kinfo.ki_non_empty)
 		return 0;
+
+	/** We didn't find any committed entries, so reset to an unknown key */
+	umm = vos_obj2umm(obj);
+	rc = umem_tx_add_ptr(umm, known_key, sizeof(*known_key));
+	if (rc != 0)
+		return rc;
+
+	*known_key = UMOFF_NULL;
 
 	if (kinfo.ki_has_uncommitted)
 		return -DER_INPROGRESS;
@@ -93,8 +189,7 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		/** Skip object punch propagation until performation is addressed */
-		return 0;
+		break;
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
@@ -621,24 +716,6 @@ fail:
  * - iterate a-key (array)
  * - iterate recx
  */
-static int
-key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund,
-		      d_iov_t *keybuf, daos_anchor_t *anchor)
-{
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
-	struct dcs_csum_info	 csum;
-
-	tree_rec_bundle2iov(rbund, &riov);
-
-	rbund->rb_iov	= keybuf;
-	rbund->rb_csum	= &csum;
-
-	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
-	ci_set_null(rbund->rb_csum);
-
-	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
-}
 
 static int
 key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
