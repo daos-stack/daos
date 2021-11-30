@@ -23,7 +23,6 @@
    Memcheck:Leak
    ...
    fun:fi_ini
-   fun:fi_getinfo@@FABRIC_1.3
    ...
 }
 {
@@ -261,6 +260,17 @@
    <insert_a_suppression_name_here>
    Memcheck:Leak
    match-leak-kinds: reachable
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlopen*
+   fun:_goboringcrypto_DLOPEN_OPENSSL
+   fun:_cgo_*_Cfunc__goboringcrypto_DLOPEN_OPENSSL
+   fun:runtime.asmcgocall
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: reachable
    fun:malloc
    fun:hg_dlog_mkcount32
    fun:na_ofi_domain_open
@@ -304,5 +314,5 @@
   getpwnam_r
   Memcheck:Leak
   ...
-  fun:getpwnam_r
+  fun:getpwnam_r*
 }
