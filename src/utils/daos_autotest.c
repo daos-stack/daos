@@ -731,7 +731,7 @@ kv_punch(void)
 
 	if (punch_rc) {
 		step_fail("failed to punch object: %s", d_errdesc(punch_rc));
-		return rc;
+		return punch_rc;
 	}
 
 	if (rc) {
@@ -764,7 +764,7 @@ kv_insert4k(void)
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return rc;
+		return put_rc;
 	}
 
 	if (rc) {
@@ -794,7 +794,7 @@ kv_read4k(void)
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return rc;
+		return get_rc;
 	}
 
 	if (rc) {
@@ -857,7 +857,7 @@ kv_read1m(void)
 
 	if (get_rc) {
 		step_fail("failed to insert: %s", d_errdesc(get_rc));
-		return rc;
+		return get_rc;
 	}
 
 	if (rc) {
@@ -1006,7 +1006,7 @@ kv_readrf2(void)
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return rc;
+		return get_rc;
 	}
 
 	if (rc) {
@@ -1202,7 +1202,8 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 
 		if (rc) {
 			force = 1;
-			ret = rc;
+			if (!ret)
+				ret = rc;
 			resume = s->clean_step;
 		}
 	}
