@@ -173,14 +173,14 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 # force an upgrade to get any newly built RPMs
 USER root:root
 ARG CACHEBUST
-RUN dnf -y upgrade \
-        --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    dnf clean all
+RUN [ -z "$CACHEBUST" ] || \
+    { dnf -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    dnf clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.
-LABEL DAOS=stage1
+LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -207,10 +207,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
-
-USER root:root
-LABEL DAOS=true
-USER daos_server:daos_server
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java

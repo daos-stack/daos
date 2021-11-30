@@ -62,7 +62,7 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
-        buildDiscarder(logRotator(artifactDaysToKeepStr: '100'))
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '100', daysToKeepStr: '730'))
     }
 
     parameters {
@@ -901,7 +901,7 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: false,
+                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
                                                         [threshold: 1, type: 'TOTAL_HIGH'],

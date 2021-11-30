@@ -83,7 +83,6 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
@@ -155,14 +154,15 @@ RUN [ "$COMPILER" != "icc" ] || \
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST
-RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+RUN [ -z "$CACHEBUST" ] || \
+    { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
     zypper --non-interactive update && \
-    zypper clean --all
+    zypper clean --all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.
-LABEL DAOS=stage1
+LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -188,10 +188,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
-
-USER root:root
-LABEL DAOS=true
-USER daos_server:daos_server
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java
