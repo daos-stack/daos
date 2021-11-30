@@ -496,7 +496,7 @@ kv_put(daos_handle_t oh, daos_size_t size)
 				evp);
 
 		/*
-		 * We are limited by writting 1/10th of the
+		 * We are limited by writing 1/10th of the
 		 * available free space or 30s.
 		 */
 		current = clock();
@@ -750,26 +750,29 @@ kv_read128(void)
 	return 0;
 }
 
-/**
- * Disable since it triggers an assertion error on the client.
- * Will be enabled once problem is fixed.
- */
 static int
 kv_punch(void)
 {
-	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	daos_handle_t	kv_oh = DAOS_HDL_INVAL; /** kv object handle */
+	daos_handle_t	oh;
 	int		punch_rc;
 	int		rc;
 
-	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &kv_oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
 		return rc;
 	}
 
-	punch_rc = daos_obj_punch(daos_kv2objhandle(oh), DAOS_TX_NONE,
+	oh = daos_kv2objhandle(kv_oh);
+	if (!daos_handle_is_valid(oh)) {
+		rc = daos_kv_close(kv_oh, NULL);
+		return -DER_INVAL;
+	}
+
+	punch_rc = daos_obj_punch(daos_kv2objhandle(kv_oh), DAOS_TX_NONE,
 				  0, NULL);
-	rc = daos_kv_close(oh, NULL);
+	rc = daos_kv_close(kv_oh, NULL);
 
 	if (punch_rc) {
 		step_fail("failed to punch object: %s", d_errdesc(punch_rc));
