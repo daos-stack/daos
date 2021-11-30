@@ -243,15 +243,8 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 			return errors.Wrapf(err, "collect smd info for ctrlr %s", ctrlr.PciAddr)
 		}
 
-		// don't fetch health stats for uninitialized (NEW) smd entries
-		if smdDev.State != storage.SmdStateNew {
-			pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-				DevUuid: smd.GetUuid(),
-			})
-			if err != nil {
-				return errors.Wrapf(err, "instance %d", ei.Index())
-			}
-
+		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smd.GetUuid()})
+		if err == nil {
 			// populate space usage for each smd device from health stats
 			smdDev.TotalBytes = pbStats.TotalBytes
 			smdDev.AvailBytes = pbStats.AvailBytes
@@ -268,6 +261,13 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 				msg = fmt.Sprintf("%s: health stats updated", msg)
 				hasUpdatedHealth[ctrlr.PciAddr] = true
 			}
+		} else {
+			if smdDev.State == storage.SmdStateNormal {
+				return errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(),
+					ctrlr.PciAddr)
+			}
+			// fetch health/usage stats may fail for smd devices not in normal state
+			msg = fmt.Sprintf("%s: stats not updated (state=%s)", msg, smdDev.State)
 		}
 
 		ctrlr.UpdateSmd(smdDev)
