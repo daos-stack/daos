@@ -28,6 +28,7 @@ class DaosServerCommand(YamlCommand):
     NORMAL_PATTERN = "DAOS I/O Engine.*started"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
+    SYSTEM_QUERY_PATTERN = "joined"
 
     DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
 
@@ -118,6 +119,8 @@ class DaosServerCommand(YamlCommand):
             self.pattern = self.FORMAT_PATTERN
         elif mode == "reformat":
             self.pattern = self.REFORMAT_PATTERN
+        elif mode == "dmg":
+            self.pattern = self.SYSTEM_QUERY_PATTERN
         else:
             self.pattern = self.NORMAL_PATTERN
         self.pattern_count = host_qty * len(self.yaml.engine_params)

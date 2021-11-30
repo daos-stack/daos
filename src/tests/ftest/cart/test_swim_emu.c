@@ -84,7 +84,7 @@ static int test_send_message(struct swim_context *ctx, swim_id_t id,
 		item->np_to    = to;
 		item->np_upds  = upds;
 		item->np_nupds = nupds;
-		item->np_time  = crt_hlc_get();
+		item->np_time  = swim_now_ms();
 
 		D_SPIN_LOCK(&g.lock);
 		TAILQ_INSERT_TAIL(&g.pkts, item, np_link);
@@ -217,7 +217,7 @@ int test_run(void)
 {
 	enum swim_member_status s;
 	struct timespec now;
-	uint64_t time = crt_hlc_get();
+	uint64_t time = swim_now_ms();
 	int i, j, cs, cd, tick, rc = 0;
 
 	sleep(1);
@@ -320,7 +320,7 @@ static void deliver_pkt(struct network_pkt *item)
 	int i, rc = 0;
 
 	max_delay = swim_ping_timeout_get() / 2;
-	rcv_delay = crt_hlc2msec(crt_hlc_get() - item->np_time);
+	rcv_delay = swim_now_ms() - item->np_time;
 
 	for (i = 0; i < item->np_nupds; i++) {
 		id = item->np_upds[i].smu_id;
@@ -470,6 +470,10 @@ int test_fini(void)
 
 	return rc;
 }
+
+#ifdef USE_CART_FOR_DEBUG_LOG
+extern int crt_init_opt(char *grpid, uint32_t flags, void *opt);
+#endif
 
 int test_init(void)
 {

@@ -88,8 +88,9 @@ class DaosAdminPrivTest(TestWithServers):
         if result is None:
             self.fail("Failed to format storage")
 
-        # Verify format success when all the daos_engine start
+        # Verify format success when all the daos_engine start. Use dmg to detect server start.
         try:
+            self.server_managers[0].detect_start_via_dmg = True
             self.server_managers[0].detect_engine_start()
         except ServerFailed as error:
             self.fail(
