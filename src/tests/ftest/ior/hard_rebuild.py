@@ -51,6 +51,9 @@ class EcodIorHardRebuild(ErasureCodeIor):
         # is in progress.
         self.ior_write_dataset()
 
+        # Do not change the stoneWallingStatusFile during read
+        self.ior_cmd.sw_wearout.update(None)
+
         # Disabled Online rebuild
         self.set_online_rebuild = False
         # Read IOR data and verify for different EC object kill single server while IOR Read phase
