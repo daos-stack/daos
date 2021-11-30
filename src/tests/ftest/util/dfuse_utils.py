@@ -269,10 +269,8 @@ class Dfuse(DfuseCommand):
             raise CommandFailure(
                 "Dfuse missing environment variables for D_LOG_FILE")
 
-        print(self.env)
-
-        self.env['DD_MASK'] = 'all'
-        self.env['DD_SUBSYS'] = 'all'
+        # self.env['DD_MASK'] = 'all'
+        # self.env['DD_SUBSYS'] = 'all'
         self.env['D_LOG_MASK'] = 'INFO'
 
         # create dfuse dir if does not exist

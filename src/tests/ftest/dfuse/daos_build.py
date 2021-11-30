@@ -50,11 +50,10 @@ class BuildDaos(DfuseTestBase):
         for cmd in cmds:
             try:
                 ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=3600)
-                print(ret_code)
                 if 0 in ret_code:
                     continue
+                print(ret_code)
                 raise CommandFailure("Error running '{}'".format(cmd))
-                # report error if any command fails
             except CommandFailure as error:
-                self.log.error("BashCmd Test Failed: %s", str(error))
+                self.log.error("BuildDaos Test Failed: %s", str(error))
                 self.fail("Test was expected to pass but it failed.\n")
