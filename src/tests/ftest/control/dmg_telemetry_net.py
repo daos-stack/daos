@@ -49,14 +49,28 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         p = r"engine_net_\w+_req_timeout"
         metrics = list(filter(lambda x: search(p, x), all_metrics))
 
-        # Initialize req_timeouts to zero, as we expect no RPC timeouts at
-        # this stage
-        req_timeouts = 0
+        # Initialize req_timeouts based on what's already populated in the
+        # telemtry system, which may or may not be zero.
+        req_timeouts_start = 0
+
+        data = {}
+        try:
+            data = self.telemetry.get_metrics(metrics[0])
+        except (CommandFailure, DaosTestError) as excep:
+            self.log.info("self.telemetry.get_metrics failed on at least one "
+                          "host with '{}', but may have succeeded elsewhere."
+                          .format(repr(excep)))
+            pass
+
+        for host, value in data.items():
+            for metric in value[metrics[0]]["metrics"]:
+                req_timeouts_start += metric["value"]
+
+        req_timeouts_finish = req_timeouts_start
 
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
-        self.dmg = self.get_dmg_command()
 
         # create pool
         self.add_pool(connect=False)
@@ -71,11 +85,6 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
             self.pool.check_pool_info(**checks),
             "Invalid pool information detected before rebuild")
 
-        self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_done=1,
-                                           rs_obj_nr=0, rs_rec_nr=0),
-            "Invalid pool rebuild info detected before rebuild")
-
         # create 1st container
         self.add_container(self.pool)
 
@@ -85,33 +94,42 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         time.sleep(5)
 
         self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
-        time.sleep(5)
+        time.sleep(10)
 
         # Remove the killed host from the clustershell telemetry hostlist
         self.telemetry.hosts.remove(self.hostlist_servers[rank[0]])
+
+        # metric in question is not found on this host
+        self.telemetry.hosts.clear()
+        self.telemetry.hosts.add(self.hostlist_servers[0])
 
         data = {}
         try:
             data = self.telemetry.get_metrics(metrics[0])
         except (CommandFailure, DaosTestError) as excep:
             self.log.info("self.telemetry.get_metrics failed on at least one "
-                          "host with '{}', but may have succeeded elsewhere."
+                          "host with {}, but may have succeeded elsewhere."
                           .format(repr(excep)))
             pass
 
         for host, value in data.items():
-            print('DEBUG log: line 105, value = ', value )
-            print('DEBUG log: line 105, host  = ', host )
-
             for metric in value[metrics[0]]["metrics"]:
-                print('DEBUG log: line 105, metric = ', metric )
-                req_timeouts += metric["value"]
+                req_timeouts_finish += metric["value"]
 
-        if req_timeouts > 0:
-            self.log.info("Expected {} values to be greater than 0, and it "
-                          "is: {}.".format(str(metrics[0]), str(req_timeouts)))
+        req_timeouts_delta = req_timeouts_finish - req_timeouts_start
+        if req_timeouts_delta > 0:
+            self.log.info("Expected {} values to increase by more than 0 "
+                          "during this test, and they did: {}."
+                          .format(str(metrics[0]), str(req_timeouts_delta)))
         else:
-            self.fail("Expected {} to be greater than 0.".format(str(metrics[0])))
+            self.fail("Expected {} to increase by more than 0 during this "
+                      "test.".format(str(metrics[0])))
 
-        # wait for mdtest to complete
-        thread.join()
+        # wait (but not too long) for mdtest to complete
+        try:
+            thread.join(timeout=5)
+        except Exception as excep:
+            self.log.info("MDtest threw an exception ({}), but this is not "
+                          "entirely unexpected, since we killed one of it's "
+                          "ranks.".format(repr(excep)))
+            pass
