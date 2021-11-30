@@ -63,7 +63,6 @@ zypper --non-interactive install \
     python3-tabulate \
     scons \
     sg3_utils \
-    sudo \
     valgrind-devel \
     which \
     yasm

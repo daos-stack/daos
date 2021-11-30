@@ -824,14 +824,13 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
  * Only used for command line labels, not for paths in dfuse.
  */
 int
-dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
-			struct dfuse_pool *dfp,
-			const char *label,
-			struct dfuse_cont **_dfc)
+dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
+			 const char *label, struct dfuse_cont **_dfc)
 {
-	struct dfuse_cont *dfc;
-	daos_cont_info_t c_info = {};
-	int rc;
+	struct dfuse_cont	*dfc;
+	daos_cont_info_t	c_info = {};
+	int			dfs_flags = O_RDWR;
+	int			rc;
 
 	D_ALLOC_PTR(dfc);
 	if (dfc == NULL)
@@ -839,27 +838,24 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
 
 	DFUSE_TRA_UP(dfc, dfp, "dfc");
 
-	rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh,
-			    &c_info, NULL);
+	rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh, &c_info, NULL);
+	if (rc == -DER_NO_PERM) {
+		dfs_flags = O_RDONLY;
+		rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh, &c_info, NULL);
+	}
 	if (rc == -DER_NONEXIST) {
-		DFUSE_TRA_INFO(dfc,
-			"daos_cont_open() failed: "
-			DF_RC, DP_RC(rc));
+		DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: "	DF_RC, DP_RC(rc));
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	} else if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(dfc,
-				"daos_cont_open() failed: "
-				DF_RC, DP_RC(rc));
+		DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	}
 
 	uuid_copy(dfc->dfs_cont, c_info.ci_uuid);
 
-	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR, &dfc->dfs_ns);
+	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfc,
-				"dfs_mount() failed: (%s)",
-				strerror(rc));
+		DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: (%s)", strerror(rc));
 		D_GOTO(err_close, rc);
 	}
 
@@ -964,25 +960,26 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		dfc->dfc_ndentry_timeout = 5;
 
 	} else if (*_dfc == NULL) {
-		char	str[37];
+		char str[37];
+		int  dfs_flags = O_RDWR;
 
 		dfc->dfs_ops = &dfuse_dfs_ops;
 		uuid_copy(dfc->dfs_cont, *cont);
 		uuid_unparse(dfc->dfs_cont, str);
-		rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW,
-				    &dfc->dfs_coh, NULL, NULL);
+		rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW, &dfc->dfs_coh, NULL, NULL);
+		if (rc == -DER_NO_PERM) {
+			dfs_flags = O_RDONLY;
+			rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RO, &dfc->dfs_coh, NULL,
+					    NULL);
+		}
 		if (rc == -DER_NONEXIST) {
-			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: "DF_RC,
-				       DP_RC(rc));
+			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		} else if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: "
-					DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
-
-		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR,
-			       &dfc->dfs_ns);
+		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 		if (rc) {
 			DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: %d (%s)", rc, strerror(rc));
 			D_GOTO(err_close, rc);
@@ -991,19 +988,15 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		if (fs_handle->dpi_info->di_caching) {
 			rc = dfuse_cont_get_cache(dfc);
 			if (rc == ENODATA) {
-				/* If there is no container specific
-				 * attributes then use defaults
-				 */
-				DFUSE_TRA_INFO(dfc,
-					"Using default caching values");
+				/* If there are no container attributes then use defaults */
+				DFUSE_TRA_INFO(dfc, "Using default caching values");
 				dfuse_set_default_cont_cache_values(dfc);
 				rc = 0;
 			} else if (rc != 0) {
 				D_GOTO(err_umount, rc);
 			}
 		} else {
-			DFUSE_TRA_INFO(dfc,
-				"Caching disabled");
+			DFUSE_TRA_INFO(dfc, "Caching disabled");
 		}
 	} else {
 		/* This is either a container where a label is set on the
