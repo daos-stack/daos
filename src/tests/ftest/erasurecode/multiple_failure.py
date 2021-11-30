@@ -36,7 +36,7 @@ class EcodOnlineMultFail(ErasureCodeIor):
     def test_ec_multiple_rank_failure(self):
         """Jira ID: DAOS-7344.
 
-        Test Description: Test Erasure code object with IOR with multiple targets failure
+        Test Description: Test Erasure code object with IOR with multiple rank failure
         Use Case: Create the pool, run IOR with supported EC object type class, kill multiple
                   server ranks, while IOR Write phase is in progress, verify all IOR write
                   finish.Read and verify data.
@@ -50,24 +50,24 @@ class EcodOnlineMultFail(ErasureCodeIor):
         self.rank_to_kill = [self.server_count - 1, self.server_count - 3]
         self.run_ior_cascade_failure()
 
-    def test_ec_multiple_rank_on_same_targets(self):
+    def test_ec_multiple_targets_on_same_rank(self):
         """Jira ID: DAOS-7344.
 
         Test Description: Test Erasure code object with IOR with multiple targets failure
         Use Case: Create the pool, run IOR with supported EC object type class, kill multiple
-                  server ranks, while IOR Write phase is in progress, verify all IOR write
+                  targets on same rank, while IOR Write phase is in progress, verify all IOR write
                   finish.Read and verify data.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=ec_multiple_rank_on_same_target_failure
+        :avocado: tags=ec_multiple_target_on_same_rank_failure
         """
         # Kill Two targets 2,4 from same rank 2
         self.pool_exclude[2] = "2,4"
         self.run_ior_cascade_failure()
 
-    def test_ec_multiple_rank_on_diff_targets(self):
+    def test_ec_multiple_targets_on_diff_ranks(self):
         """Jira ID: DAOS-7344.
 
         Test Description: Test Erasure code object with IOR with multiple targets failure
@@ -85,18 +85,18 @@ class EcodOnlineMultFail(ErasureCodeIor):
         self.pool_exclude[3] = "3"
         self.run_ior_cascade_failure()
 
-    def test_ec_multiple_target_rank_failure(self):
+    def test_ec_single_target_rank_failure(self):
         """Jira ID: DAOS-7344.
 
-        Test Description: Test Erasure code object with IOR with multiple targets failure
-        Use Case: Create the pool, run IOR with supported EC object type class, kill multiple
-                  server ranks, while IOR Write phase is in progress, verify all IOR write
+        Test Description: Test Erasure code object with IOR with single target and rank failure
+        Use Case: Create the pool, run IOR with supported EC object type class, kill single
+                  server rank and target, while IOR Write phase is in progress, verify all IOR write
                   finish.Read and verify data.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_online_rebuild,rebuild,ec_fault,ec_multiple_failure
-        :avocado: tags=ec_multiple_target_rank_failure
+        :avocado: tags=ec_single_target_rank_failure
         """
         # Kill One server rank
         self.rank_to_kill = [self.server_count - 1]
