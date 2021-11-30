@@ -389,6 +389,25 @@ oSX(void)
 	return 0;
 }
 
+static int pool_space_usage_ratio(void)
+{
+	int rc;
+	daos_pool_info_t pinfo = {0};
+	struct daos_pool_space *ps = &pinfo.pi_space;
+
+	pinfo.pi_bits = DPI_ALL;
+	rc = daos_pool_query(poh, NULL, &pinfo, NULL, NULL);
+	if (rc)
+		return rc;
+
+	if (ps->ps_space.s_total[DAOS_MEDIA_NVME] > 0)
+		return 100 - (ps->ps_space.s_free[DAOS_MEDIA_NVME] * 100 /
+			      ps->ps_space.s_total[DAOS_MEDIA_NVME]);
+
+	return 100 - (ps->ps_space.s_free[DAOS_MEDIA_SCM] * 100 /
+		      ps->ps_space.s_total[DAOS_MEDIA_SCM]);
+}
+
 static int
 kv_put(daos_handle_t oh, daos_size_t size)
 {
@@ -397,16 +416,21 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	char		key[MAX_INFLIGHT][10];
 	char		*val;
 	daos_event_t	*evp;
-	int		rc;
+	int		rc, usage_ratio1, usage_ratio2;
 	int		eq_rc;
 	double		timeout;
 	double		step_adj;
 	double		t;
+	clock_t		last_query = start, current;
 
 	deadline_count = 1;
 
 	total_nr = ticks;
 	setup_progress();
+
+	usage_ratio1 = pool_space_usage_ratio();
+	if (usage_ratio1 < 0)
+		return usage_ratio1;
 
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
@@ -471,8 +495,24 @@ kv_put(daos_handle_t oh, daos_size_t size)
 		rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_cur, size, val_cur,
 				evp);
 
-		if (start + deadline_limit <= clock()) {
+		/*
+		 * We are limited by writting 1/10th of the
+		 * available free space or 30s.
+		 */
+		current = clock();
+		if (start + deadline_limit <= current)
 			break;
+
+		if (last_query + CLOCKS_PER_SEC < current) {
+			last_query = current;
+			usage_ratio2 = pool_space_usage_ratio();
+			if (usage_ratio2 < 0) {
+				rc = usage_ratio2;
+				break;
+			}
+			if ((usage_ratio2 - usage_ratio1) >=
+			    (100 - usage_ratio1) / 10)
+				break;
 		}
 
 		if (rc)
