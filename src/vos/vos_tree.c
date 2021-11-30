@@ -1177,8 +1177,10 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	if (rc != 0)
 		goto done;
 
-	if (*known_key == umem_ptr2off(vos_obj2umm(obj), krec)) {
-		/** Set the value to UMOFF_NULL so punch propagation will run full check */
+	if (*known_key != umem_ptr2off(vos_obj2umm(obj), krec)) {
+		/** Set the bit to mark the key as punched.   Since this version doesn't support
+		 *  the optimization, this makes it compatible with versions that do.
+		 */
 		rc = umem_tx_add_ptr(vos_obj2umm(obj), known_key, sizeof(*known_key));
 		if (rc)
 			D_GOTO(done, rc);

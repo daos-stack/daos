@@ -900,7 +900,7 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: true,
+                                         ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
                                                         [threshold: 1, type: 'TOTAL_HIGH'],
