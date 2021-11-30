@@ -183,6 +183,10 @@ class ManagementServiceResilience(TestWithServers):
                 },
         }
         self.start_servers(server_groups)
+
+        # Give SWIM some time to stabilize before we start killing stuff (DAOS-9116)
+        time.sleep(5)
+
         return replicas
 
     def kill_servers(self, leader, replicas, N):
