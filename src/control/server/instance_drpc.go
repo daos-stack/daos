@@ -215,13 +215,54 @@ func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevResp_Device) (*storage.
 	return smdDev, nil
 }
 
-// updateInUseBdevs updates-in-place the input list of controllers with
-// new NVMe health stats and SMD metadata info.
+func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdDevice, ctrlr *storage.NvmeController) (bool, error) {
+	msg := fmt.Sprintf("instance %d: smd %s with transport address %s", ei.Index(),
+		smdDev.UUID, smdDev.TrAddr)
+
+	pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
+	if err != nil {
+		// is cause an expected non-existent error?
+		status, ok := errors.Cause(err).(drpc.DaosStatus)
+		if ok && status != drpc.DaosNonexistant {
+			ok = false
+		}
+
+		// if not non-existent error or smd is in normal state then fail
+		if !ok || smdDev.State == storage.SmdStateNormal {
+			return false, errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(),
+				ctrlr.PciAddr)
+		}
+
+		// otherwise ignore error as health stats may not exist if smd device is
+		// not in a normal state
+		ei.log.Debugf("%s: stats not found (state=%s)", msg, smdDev.State)
+		return false, nil
+	}
+
+	// populate space usage for each smd device from health stats
+	smdDev.TotalBytes = pbStats.TotalBytes
+	smdDev.AvailBytes = pbStats.AvailBytes
+	msg = fmt.Sprintf("%s: smd space usage updated", msg)
+
+	if ctrlr == nil {
+		ei.log.Debug(msg)
+		return false, nil
+	}
+
+	ctrlr.HealthStats = new(storage.NvmeHealth)
+	if err := convert.Types(pbStats, ctrlr.HealthStats); err != nil {
+		return false, errors.Wrap(err, "convert health stats")
+	}
+
+	ei.log.Debugf("%s: health stats updated", msg)
+	return true, nil
+}
+
+// updateInUseBdevs updates-in-place the input list of controllers with new NVMe health stats and
+// SMD metadata info.
 //
-// Query each SmdDevice on each I/O Engine instance for health stats,
-// map input controllers to their concatenated model+serial keys then
-// retrieve metadata and health stats for each SMD device (blobstore) on
-// a given I/O Engine instance. Update input map with new stats/smd info.
+// Query each SmdDevice on each I/O Engine instance for health stats and update existing controller
+// data in ctrlrMap using PCI address key.
 func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
 	smdDevs, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
@@ -230,12 +271,10 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 
 	hasUpdatedHealth := make(map[string]bool)
 	for _, smd := range smdDevs.Devices {
-		msg := fmt.Sprintf("instance %d: smd %s with transport address %s",
-			ei.Index(), smd.GetUuid(), smd.GetTrAddr())
-
 		ctrlr, exists := ctrlrMap[smd.GetTrAddr()]
 		if !exists {
-			return errors.Errorf("%s: didn't match any known controllers", msg)
+			return errors.Errorf("instance %d: smd %s: unknown controller %s",
+				ei.Index(), smd.GetUuid(), smd.GetTrAddr())
 		}
 
 		smdDev, err := ei.getSmdDetails(smd)
@@ -243,35 +282,24 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 			return errors.Wrapf(err, "collect smd info for ctrlr %s", ctrlr.PciAddr)
 		}
 
-		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smd.GetUuid()})
-		if err == nil {
-			// populate space usage for each smd device from health stats
-			smdDev.TotalBytes = pbStats.TotalBytes
-			smdDev.AvailBytes = pbStats.AvailBytes
-			msg = fmt.Sprintf("%s: smd space usage updated", msg)
+		// multiple updates for the same key expected when more than one controller
+		// namespaces (and resident blobstores) exist, stats will be the same for each
+		// so only pass valid ctrlr reference when stats haven't yet been updated
+		var ctrlrRef *storage.NvmeController
+		if _, already := hasUpdatedHealth[ctrlr.PciAddr]; !already {
+			ctrlrRef = ctrlr
+		}
 
-			// multiple updates for the same key expected when more than one controller
-			// namespaces (and resident blobstores) exist, stats will be same for each
-			if _, already := hasUpdatedHealth[ctrlr.PciAddr]; !already {
-				ctrlr.HealthStats = new(storage.NvmeHealth)
-				if err := convert.Types(pbStats, ctrlr.HealthStats); err != nil {
-					return errors.Wrap(err, "convert health stats")
-				}
+		ctrlrUpdated, err := ei.addBdevStats(ctx, smdDev, ctrlrRef)
+		if err != nil {
+			return err
+		}
 
-				msg = fmt.Sprintf("%s: health stats updated", msg)
-				hasUpdatedHealth[ctrlr.PciAddr] = true
-			}
-		} else {
-			if smdDev.State == storage.SmdStateNormal {
-				return errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(),
-					ctrlr.PciAddr)
-			}
-			// fetch health/usage stats may fail for smd devices not in normal state
-			msg = fmt.Sprintf("%s: stats not updated (state=%s)", msg, smdDev.State)
+		if ctrlrUpdated {
+			hasUpdatedHealth[ctrlr.PciAddr] = true
 		}
 
 		ctrlr.UpdateSmd(smdDev)
-		ei.log.Debug(msg)
 	}
 
 	return nil

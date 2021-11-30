@@ -943,7 +943,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		// Sometimes when more than a few ssds are assigned to engine without many targets,
 		// some of the smd entries for the latter ssds are in state "NEW" rather than
 		// "NORMAL", when in this state, health is unavailable and DER_NONEXIST is returned.
-		"bdev scan; meta; non-existent smd health": {
+		"bdev scan; meta; new state; non-existent smd health": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
@@ -964,7 +964,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				0: {
 					{Message: smdDevRespStateNew},
 					{
-						Message: &ctlpb.DevStateResp{
+						Message: &ctlpb.BioHealthResp{
 							Status: int32(drpc.DaosNonexistant),
 						},
 					},
@@ -974,6 +974,82 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{ctrlrPBwMetaNew},
 					State:  new(ctlpb.ResponseState),
+				},
+				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+			},
+		},
+		"bdev scan; meta; new state; nomem smd health": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  new(ctlpb.ScanScmReq),
+				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{newCtrlr(1)},
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{Message: smdDevRespStateNew},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Status: int32(drpc.DaosFreeMemError),
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					State: &ctlpb.ResponseState{
+						Error: fmt.Sprintf("instance 0, ctrlr %s: GetBioHealth response status: %s",
+							newCtrlr(1).PciAddr, drpc.DaosFreeMemError.Error()),
+						Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+					},
+				},
+				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+			},
+		},
+		"bdev scan; meta; normal state; non-existent smd health": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  new(ctlpb.ScanScmReq),
+				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{newCtrlr(1)},
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{Message: newSmdDevResp(1)},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Status: int32(drpc.DaosNonexistant),
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					State: &ctlpb.ResponseState{
+						Error: fmt.Sprintf("instance 0, ctrlr %s: GetBioHealth response status: %s",
+							newCtrlr(1).PciAddr, drpc.DaosNonexistant.Error()),
+						Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+					},
 				},
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
@@ -1019,14 +1095,15 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				// share bdev cache with control service
 				sp.SetBdevCache(*nvmeScanResp)
 				ne := newTestEngine(log, false, sp)
+
 				// mock drpc responses
 				dcc := new(mockDrpcClientConfig)
 				if tc.junkResp {
 					dcc.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
 				} else if len(tc.drpcResps) > i {
-					for _, mock := range tc.drpcResps[i] {
-						dcc.setSendMsgResponseList(t, mock)
-					}
+					dcc.setSendMsgResponseList(t, tc.drpcResps[i]...)
+				} else {
+					t.Fatal("drpc response mocks unpopulated")
 				}
 				ne.setDrpcClient(newMockDrpcClient(dcc))
 				ne._superblock.Rank = system.NewRankPtr(uint32(i + 1))
