@@ -110,6 +110,20 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
+/* to record EC singv fetch stat from different shards */
+struct shard_fetch_stat {
+	/* iod_size for array; or iod_size for EC singv on shard 0 or parity shards, those shards
+	 * always be updated when EC singv being overwritten.
+	 */
+	daos_size_t		sfs_size;
+	/* iod_size on other shards, possibly be missed when EC singv overwritten. */
+	daos_size_t		sfs_size_other;
+	/* rc on shard 0 or parity shards */
+	int32_t			sfs_rc;
+	/* rc on other data shards */
+	int32_t			sfs_rc_other;
+};
+
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending
@@ -147,12 +161,10 @@ struct obj_reasb_req {
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
-	/* target bitmap, one bit for each target (from first data cell to last
-	 * parity cell.
-	 */
+	/* target bitmap, one bit for each target (from first data cell to last parity cell. */
 	uint8_t				*tgt_bitmap;
-	/* iod_size is set by IO reply, one per iod */
-	daos_size_t			*orr_size_set;
+	/* fetch stat, one per iod */
+	struct shard_fetch_stat		*orr_fetch_stat;
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
