@@ -5,7 +5,7 @@ is managed by the administrator. The amount of space allocated to a pool
 is decided at creation time and can eventually be expanded through the
 management interface or the `dmg` utility.
 
-## Basic Operations
+## Pool Basics
 
 ### Creating a Pool
 
@@ -358,7 +358,7 @@ noted above for container creation.
 To replace a pool's ACL with a new ACL:
 
 ```bash
-$ dmg pool overwrite-acl --pool <UUID> --acl-file <path>
+$ dmg pool overwrite-acl --acl-file <path> <pool_label>
 ```
 
 #### Adding and Updating ACEs
@@ -417,12 +417,12 @@ will be decided based on the remaining ACL rules.
 
 ### Exclusion & Self-healing
 
-An operator can exclude one or more targets from a specific DAOS pool using the rank
-the target resides on as well as the target idx on that rank. If a target idx list is
-not provided then all targets on the rank will be excluded. Excluding a target will
-automatically start the rebuild process.
+An operator can exclude one or more engines or targets from a specific DAOS pool
+using the rank the target resides, as well as the target idx on that rank.
+If a target idx list is not provided, all targets on the rank will be excluded.
+Excluding a target will automatically start the rebuild process.
 
-**To exclude a target from a pool:**
+To exclude a target from a pool:
 
 ```bash
 $ dmg pool exclude --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
@@ -435,15 +435,17 @@ The pool target exclude command accepts 2 parameters:
 
 ### Drain
 
-Alternatively when an operator would like to remove one or more pool targets
-without the system operating in degraded mode Drain can be used. A pool drain operation will
-initiate rebuild without excluding the designated target until after the rebuild is complete.
-This allows the target(s) drained to continue to perform I/O while the rebuild
+Alternatively, when an operator would like to remove one or more engines or
+targets without the system operating in degraded mode, the drain operation can
+be used.
+A pool drain operation initiates rebuild without excluding the designated engine
+or target until after the rebuild is complete.
+This allows the drained entity to continue to perform I/O while the rebuild
 operation is ongoing. Drain additionally enables non-replicated data to be
 rebuilt onto another target whereas in a conventional failure scenario non-replicated
 data would not be integrated into a rebuild and would be lost.
 
-**To drain a target from a pool:**
+To drain a target from a pool:
 
 ```bash
 $ dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
@@ -456,10 +458,11 @@ The pool target drain command accepts 2 parameters:
 
 ### Reintegration
 
-After a target failure an operator can fix the underlying issue and reintegrate the
-affected targets to restore the pool to its original state. The operator can either
-reintegrate specific targets for a rank by supplying a target idx list, or reintegrate
-an entire rank by omitting the list.
+After an engine failure and exclusion, an operator can fix the underlying issue
+and reintegrate the affected engines or targets to restore the pool to its
+original state.
+The operator can either reintegrate specific targets for an engine rank by
+supplying a target idx list, or reintegrate an entire rank by omitting the list.
 
 ```
 $ dmg pool reintegrate --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
@@ -467,9 +470,9 @@ $ dmg pool reintegrate --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx
 
 The pool reintegrate command accepts 3 parameters:
 
-* The pool UUID of the pool that the targets will be reintegrated into.
-* The rank of the affected targets.
-* The target Indices of the targets to be reintegrated on that rank (optional).
+* The label or UUID of the pool that the targets will be reintegrated into.
+* The engine rank of the affected targets.
+* The target indices of the targets to be reintegrated on that rank (optional).
 
 When rebuild is triggered it will list the operations and their related targets by their rank ID
 and target index.
@@ -488,6 +491,14 @@ These should be the same values used when reintegrating the targets.
 $ dmg pool reintegrate --rank=5 --target-idx=0,1 <pool_label>
 ```
 
+!!! warning
+    While dmg pool query and list show how many targets are disabled for each
+    pool, there is currently no way to list the targets that have actually
+    been disabled. As a result, it is recommended for now to try to reintegrate
+    all engine ranks one after the other via `for i in seq $NR_RANKs; do dmg
+    pool reintegrate --rank=$i; done`. This limitation will be addressed in the
+    next release.
+
 ## Pool Extension
 
 ### Addition & Space Rebalancing
@@ -504,7 +515,7 @@ This will automatically trigger a server rebalance operation where objects
 within the extended pool will be rebalanced across the new storage.
 
 ```
-$ dmg pool extend --pool=${puuid} --ranks=${rank1},${rank2}... <pool_label>
+$ dmg pool extend --ranks=${rank1},${rank2}... <pool_label>
 ```
 
 The pool extend command accepts one required parameter which is a comma
