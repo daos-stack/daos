@@ -650,7 +650,7 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 		D_ERROR("failed to read property attribute %s\n", prop_str);
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	entry->dpe_val_ptr = (void *)roots;
+	entry->dpe_val_ptr = roots;
 out:
 	if (rc != 0)
 		D_FREE(roots);

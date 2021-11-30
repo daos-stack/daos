@@ -28,8 +28,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         super().setUp()
 
         # Get the parameters
-        self.ior_flags = self.params.get(
-            "ior_flags", "/run/ior/*")
+        self.ior_flags = self.params.get("ior_flags", "/run/ior/*")
         self.test_file = self.ior_cmd.test_file.value
 
         # For dataset_gen and dataset_verify
@@ -78,7 +77,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         # move data from POSIX path to DAOS and read container properties in hdf5 file to cont2
         result = self.run_datamover(
             self.test_id + " posix to cont2 (empty cont)",
-            "POSIX", posix_path + "/" + self.test_file, None, None,
+            "POSIX", posix_path, None, None,
             "DAOS", "/", pool1, None)
 
         cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
