@@ -70,6 +70,10 @@ high-speed network port per DAOS engine.
 (It is possible that two DAOS engines on a 2-socket server share a
 single high-speed network port for development and testing purposes,
 but this is not supported in a production environment.)
+It is strongly recommended that all DAOS engines in a DAOS system use the same
+model of high-speed fabric adapter.
+Heterogeneous adapter population across DAOS engines has *not* been tested,
+and running with such configurations may cause unexpected behaviour.
 Please refer to "Fabric Support" below for more details.
 
 
@@ -225,10 +229,18 @@ On InfiniBand fabrics with the `verbs` provider, DAOS requires that the
 software stack is installed on the DAOS servers and DAOS clients.
 DAOS Version 2.0 has been validated with MLNX\_OFED Version 5.3-1 and
 Version 5.4-1.
+
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of MLNX\_OFED, and that the InfiniBand adapters are
 updated to the firmware levels that are included in that MLNX\_OFED
 distribution.
+It is also strongly recommended that the same model of
+InfiniBand fabric adapter is used in all DAOS servers.
+DAOS Version 2.0 has *not* been tested with heterogeneous InfiniBand
+adapter configurations.
+The only exception to this recommendation is the mix of single-port
+and dual-port adapters of the same generation, where only one of the ports
+of the dual-port adapter(s) is used by DAOS.
 
 
 ## DAOS Scaling
