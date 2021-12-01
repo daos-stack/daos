@@ -110,12 +110,12 @@ ioil_shrink_pool(struct ioil_pool *pool)
 }
 
 static int
-ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool skip_count_check)
+ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 {
 	struct ioil_pool	*pool;
 	int			rc;
 
-	if (cont->ioc_open_count != 0 && !skip_count_check)
+	if (cont->ioc_open_count != 0 && !force)
 		return 0;
 
 	if (cont->ioc_dfs != NULL) {
