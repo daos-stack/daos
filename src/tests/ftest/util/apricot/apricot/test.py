@@ -350,6 +350,8 @@ class Test(avocadoTest):
                     "*** TEARDOWN called due to TIMEOUT: "
                     "%s second timeout exceeded ***", str(self.timeout))
                 self.log.info("test execution has been terminated by avocado")
+                # XXX could we assume that the engines stacks been already
+                # dumped due to (self.status == 'INTERRUPTED') ?
             else:
                 # Normal operation
                 remaining = str(self.timeout - self.time_elapsed)
@@ -473,6 +475,9 @@ class TestWithServers(TestWithoutServers):
 
     :avocado: recursive
     """
+
+    # whether engines ULT stacks have been already dumped
+    dumped_engines_stacks = False
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
@@ -1171,6 +1176,12 @@ class TestWithServers(TestWithoutServers):
 
     def tearDown(self):
         """Tear down after each test case."""
+
+        # dump engines ULT stacks upon test failure
+        if self.dumped_engines_stacks is False and self.status != 'PASS' and self.status != 'SKIP':
+            self.dumped_engines_stacks = True
+            dump_engines_stacks(self.hostlist_servers)
+
         # Report whether or not the timeout has expired
         self.report_timeout()
 
@@ -1391,6 +1402,9 @@ class TestWithServers(TestWithoutServers):
                 errors.append(
                     "ERROR: At least one multi-variant server was not found in "
                     "its expected state; stopping all servers")
+                # dump engines stacks if not already done
+                if self.dumped_engines_stacks is False:
+                    dump_engines_stacks(self.hostlist_servers)
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
