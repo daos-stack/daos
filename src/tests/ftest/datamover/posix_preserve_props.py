@@ -66,7 +66,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         src_props = self.write_cont(cont1)
 
         # Create a posix source path
-        posix_path = join(self.new_posix_test_path(), self.test_file)
+        posix_path = self.new_posix_test_path()
 
         # move data from DAOS to POSIX path and record container properties in hdf5 file
         self.run_datamover(
@@ -75,9 +75,11 @@ class DmvrPreserveProps(DataMoverTestBase):
             "POSIX", posix_path, None, None)
 
         # move data from POSIX path to DAOS and read container properties in hdf5 file to cont2
+        # don't copy test directory back to DAOS, only test file needs to be verified with ior
+        posix_file_path = join(posix_path, self.test_file)
         result = self.run_datamover(
             self.test_id + " posix to cont2 (empty cont)",
-            "POSIX", posix_path + "/" + self.test_file, None, None,
+            "POSIX", posix_file_path, None, None,
             "DAOS", "/", pool1, None)
 
         cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
