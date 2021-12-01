@@ -1245,17 +1245,6 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	}
 	D_ASSERT(rpc_priv->crp_hg_hdl != NULL);
 
-	if (D_LOG_ENABLED(DB_NET)) {
-		uint64_t hlc = crt_hlc_get();
-
-		if (hlc > rpc_priv->crp_create_hlc) {
-			uint64_t delay = crt_hlc2msec(hlc - rpc_priv->crp_create_hlc);
-
-			if (delay > 20)
-				RPC_TRACE(DB_NET, rpc_priv, "RPC send took %lu ms.\n", delay);
-		}
-	}
-
 	/* set state ahead to avoid race with completion cb */
 	rpc_priv->crp_state = RPC_STATE_REQ_SENT;
 	rc = crt_hg_req_send(rpc_priv);
@@ -1614,7 +1603,6 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	crt_rpc_inout_buff_init(rpc_priv);
 
 	rpc_priv->crp_timeout_sec = ctx->cc_timeout_sec;
-	rpc_priv->crp_create_hlc = crt_hlc_get();
 
 exit:
 	return rc;
@@ -1638,17 +1626,6 @@ crt_handle_rpc(void *arg)
 	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
 	D_ASSERT(rpc_priv->crp_opc_info != NULL);
 	D_ASSERT(rpc_priv->crp_opc_info->coi_rpc_cb != NULL);
-
-	if (D_LOG_ENABLED(DB_NET)) {
-		uint64_t hlc = crt_hlc_get();
-
-		if (hlc > rpc_priv->crp_create_hlc) {
-			uint64_t delay = crt_hlc2msec(hlc - rpc_priv->crp_create_hlc);
-
-			if (delay > 20)
-				RPC_TRACE(DB_NET, rpc_priv, "RPC schedule took %lu ms.\n", delay);
-		}
-	}
 
 	/*
 	 * for user initiated corpc if it delivered to itself, in user's RPC
@@ -1723,8 +1700,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	if (!rpc_priv->crp_opc_info->coi_no_reply)
 		rpc_priv->crp_reply_pending = 1;
 
-	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub) &&
-	    !crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc)) {
+	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub)) {
 		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
 					&rpc_priv->crp_pub,
 					crt_handle_rpc,
@@ -1785,7 +1761,7 @@ timeout_bp_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
 	rpc_priv_a = container_of(a, struct crt_rpc_priv, crp_timeout_bp_node);
 	rpc_priv_b = container_of(b, struct crt_rpc_priv, crp_timeout_bp_node);
 
-	return rpc_priv_a->crp_expire_hlc < rpc_priv_b->crp_expire_hlc;
+	return rpc_priv_a->crp_timeout_ts < rpc_priv_b->crp_timeout_ts;
 }
 
 struct d_binheap_ops crt_timeout_bh_ops = {
