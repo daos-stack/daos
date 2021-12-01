@@ -27,7 +27,7 @@ from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing
+    get_default_config_file, pcmd, get_file_listing, dump_engines_stacks
 from logger_utils import TestLogger
 from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
@@ -350,7 +350,7 @@ class Test(avocadoTest):
                     "*** TEARDOWN called due to TIMEOUT: "
                     "%s second timeout exceeded ***", str(self.timeout))
                 self.log.info("test execution has been terminated by avocado")
-                # XXX could we assume that the engines stacks been already
+                # XXX could we assume that the engines stacks have been already
                 # dumped due to (self.status == 'INTERRUPTED') ?
             else:
                 # Normal operation

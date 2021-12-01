@@ -693,7 +693,7 @@ def dump_engine_stacks(hosts, verbose=True, timeout=60, added_filter=None):
 
     if added_filter:
         ps_cmd = "/usr/bin/ps xa | grep daos_engine | grep -vE {}".format(
-            pattern, added_filter)
+            added_filter)
     else:
         ps_cmd = "/usr/bin/pgrep --list-full daos_engine"
 
