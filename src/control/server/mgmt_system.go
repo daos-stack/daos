@@ -663,18 +663,23 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	}
 	var fResp *fanoutResponse
 
-	fReq.Method = control.PrepShutdownRanks
-	// if not forced, update membership on rank error
-	fResp, _, err = svc.rpcFanout(ctx, fReq, !req.Force)
-	if err != nil {
-		return
-	}
-	if !fReq.Force && fResp.Results.Errors() != nil {
-		// return early if not forced and prep shutdown fails
-		resp, err = processStopResp("prep shutdown", fResp, svc.events)
-		return
+	if !req.Force {
+		// First phase: Prepare the ranks for shutdown, but only if the request
+		// does not specify that the stop should be forced.
+		fReq.Method = control.PrepShutdownRanks
+		fResp, _, err = svc.rpcFanout(ctx, fReq, true)
+		if err != nil {
+			return
+		}
+		if fResp.Results.Errors() != nil {
+			// return early if not forced and prep shutdown fails
+			resp, err = processStopResp("prep shutdown", fResp, svc.events)
+			return
+		}
 	}
 
+	// Second phase: Stop the ranks. If the request is forced, we will
+	// kill the ranks immediately without a graceful shutdown.
 	fReq.Method = control.StopRanks
 	fResp, _, err = svc.rpcFanout(ctx, fReq, true)
 	if err != nil {
@@ -863,4 +868,67 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 	// Finally, take care of the leader on the way out.
 	return pbResp, errors.Wrap(svc.eraseAndRestart(true), "erasing and restarting leader")
+}
+
+// SystemCleanup implements the method defined for the Management Service.
+//
+// Signal to the data plane to find all resources associted with a given machine
+// and release them. This includes releasing all container and pool handles associated
+// with the machine.
+//
+func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanupReq) (*mgmtpb.SystemCleanupResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("Received SystemCleanup RPC: %+v", req)
+
+	if req.Machine == "" {
+		return nil, errors.New("SystemCleanup requires a machine name.")
+	}
+
+	psList, err := svc.sysdb.PoolServiceList(false)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.SystemCleanupResp)
+	evictReq := new(mgmtpb.PoolEvictReq)
+
+	evictReq.Sys = req.Sys
+	evictReq.Machine = req.Machine
+
+	for _, ps := range psList {
+		var errmsg string = ""
+
+		// Use our incoming request and just replace the uuid on each iteration
+		evictReq.Id = ps.PoolUUID.String()
+
+		dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, evictReq)
+		if err != nil {
+			return nil, err
+		}
+
+		res := &mgmtpb.PoolEvictResp{}
+		if err = proto.Unmarshal(dresp.Body, res); err != nil {
+			res.Status = int32(drpc.DaosIOInvalid)
+			errmsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
+			res.Count = 0
+		}
+
+		if res.Status != int32(drpc.DaosSuccess) {
+			errmsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
+		}
+
+		svc.log.Debugf("Response from pool evict in cleanup: %+v", res)
+		resp.Results = append(resp.Results, &mgmtpb.SystemCleanupResp_CleanupResult{
+			Status: res.Status,
+			Msg:    errmsg,
+			PoolId: evictReq.Id,
+			Count:  uint32(res.Count),
+		})
+	}
+
+	svc.log.Debugf("Responding to SystemCleanup RPC: %+v", resp)
+
+	return resp, nil
 }

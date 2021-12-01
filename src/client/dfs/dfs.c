@@ -271,28 +271,6 @@ check_tx(daos_handle_t th, int rc)
 	return rc;
 }
 
-int
-dfs_oclass_select(daos_handle_t poh, daos_oclass_id_t oc_id,
-		  daos_oclass_id_t *oc_id_p)
-{
-	struct dc_pool		*pool;
-	struct pl_map_attr	 attr;
-	int			 rc;
-
-	pool = dc_hdl2pool(poh);
-	D_ASSERT(pool);
-
-	rc = pl_map_query(pool->dp_pool, &attr);
-	D_ASSERT(rc == 0);
-	dc_pool_put(pool);
-
-	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
-		attr.pa_domain_nr, attr.pa_target_nr);
-
-	return daos_oclass_fit_max(oc_id, attr.pa_domain_nr,
-				   attr.pa_target_nr, oc_id_p);
-}
-
 #define MAX_OID_HI ((1UL << 32) - 1)
 
 /*
@@ -307,8 +285,8 @@ dfs_oclass_select(daos_handle_t poh, daos_oclass_id_t oc_id,
 static int
 oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 {
-	daos_ofeat_t	feat = 0;
-	int		rc;
+	enum daos_otype_t type = DAOS_OT_MULTI_HASHED;
+	int rc;
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
@@ -330,11 +308,10 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
 	if (file)
-		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
-			DAOS_OF_ARRAY_BYTE;
+		type = DAOS_OT_ARRAY_BYTE;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	rc = daos_obj_generate_oid(dfs->coh, oid, feat, oclass, 0, 0);
+	rc = daos_obj_generate_oid(dfs->coh, oid, type, oclass, 0, 0);
 	if (rc) {
 		D_ERROR("daos_obj_generate_oid() failed "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
@@ -587,9 +564,8 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	rc = daos_obj_update(oh, th, flags, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		/** don't log error if conditional failed */
-		if (rc != -DER_EXIST)
-			D_ERROR("Failed to insert entry %s, "DF_RC"\n",
-				name, DP_RC(rc));
+		if (rc != -DER_EXIST && rc != -DER_NO_PERM)
+			D_ERROR("Failed to insert entry '%s', "DF_RC"\n", name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -1007,12 +983,13 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->oclass = parent->d.oclass;
 
 		/** since it's a single conditional op, we don't need a DTX */
-		rc = insert_entry(parent->oh, DAOS_TX_NONE, dir->name, len,
-				  DAOS_COND_DKEY_INSERT, entry);
+		rc = insert_entry(parent->oh, DAOS_TX_NONE, dir->name, len, DAOS_COND_DKEY_INSERT,
+				  entry);
 		if (rc != 0) {
 			daos_obj_close(dir->oh, NULL);
-			D_ERROR("Inserting dir entry %s failed (%d)\n",
-				dir->name, rc);
+			if (rc != EPERM)
+				D_ERROR("Inserting dir entry %s failed (%d)\n",	dir->name, rc);
+			return rc;
 		}
 
 		dir->d.chunk_size = entry->chunk_size;
@@ -1538,15 +1515,14 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	struct daos_prop_entry	*entry;
 	struct daos_prop_co_roots *roots;
 	struct dfs_entry	root_dir;
-	int			amode, obj_mode;
+	int			amode;
 	int			rc;
 
 	if (_dfs == NULL)
 		return EINVAL;
 
 	amode = (flags & O_ACCMODE);
-	obj_mode = get_daos_obj_mode(flags);
-	if (obj_mode == -1)
+	if (get_daos_obj_mode(flags) == -1)
 		return EINVAL;
 
 	prop = daos_prop_alloc(0);
@@ -4671,7 +4647,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 	daos_key_t	dkey;
 	daos_handle_t	oh;
 	int		rc;
-	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -4681,13 +4656,6 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
-
-	mode = obj->mode;
-
-	/* Patch in user read permissions here for trusted namespaces */
-	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
-	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
-		mode |= S_IRUSR;
 
 	xname = concat("x:", name);
 	if (xname == NULL)
@@ -4751,7 +4719,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	daos_handle_t	oh;
 	uint64_t	cond = 0;
 	int		rc;
-	mode_t		mode;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -4763,13 +4730,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
-
-	mode = obj->mode;
-
-	/* Patch in user read permissions here for trusted namespaces */
-	if (!strncmp(name, XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN) ||
-	    !strncmp(name, XATTR_SYSTEM_PREFIX, XATTR_SYSTEM_PREFIX_LEN))
-		mode |= S_IRUSR;
 
 	xname = concat("x:", name);
 	if (xname == NULL)
