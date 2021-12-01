@@ -2295,6 +2295,8 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 		}
 	}
 out:
+	D_FREE(tmp_path1);
+	D_FREE(tmp_path2);
 	duns_destroy_attr(&dattr);
 	return daos_errno2der(rc);
 }
