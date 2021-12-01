@@ -224,9 +224,10 @@ daos_key2str(daos_key_t *key)
 	if (!key->iov_buf || key->iov_len == 0) {
 		strcpy(buf, "<NULL>");
 	} else {
-		size_t	len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
+		int	len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
 		char	*akey = key->iov_buf;
 		bool	can_print = true;
+		bool	is_int = key->iov_len == sizeof(uint64_t);
 		int	i;
 
 		for (i = 0 ; i < len ; i++) {
@@ -238,15 +239,16 @@ daos_key2str(daos_key_t *key)
 			}
 		}
 
-		if (can_print)
-			snprintf(buf, len, "%s", (char *)key->iov_buf);
-		else
+		if (can_print) {
+			if (is_int)
+				snprintf(buf, DF_KEY_STR_SIZE, "%*s uint64:"DF_U64, len, akey,
+					 *(uint64_t *)akey);
+			else
+				snprintf(buf, DF_KEY_STR_SIZE, "%*s", len, akey);
+		} else if (is_int) {
+			snprintf(buf, DF_KEY_STR_SIZE, "uint64:"DF_U64, *(uint64_t *)akey);
+		} else {
 			sprintf(buf, "????");
-
-		if (key->iov_len == sizeof(uint64_t)) {
-			/* Make sure there is enough space */
-			D_ASSERTF(strlen(buf) + 32 < DF_KEY_STR_SIZE, "%zu\n", strlen(buf));
-			sprintf(buf + strlen(buf), " uint64:"DF_U64, *(uint64_t *)key->iov_buf);
 		}
 	}
 	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
