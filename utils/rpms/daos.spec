@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.106
-Release:       7%{?relval}%{?dist}
+Version:       2.0.0
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -516,6 +516,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Thu Dec 2 2021 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-1
+- Version bump to 2.0.0
+
 * Wed Nov 24 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.106-7
 - Remove invalid "%%else if" syntax
 - Fix a few other rpmlint warnings
