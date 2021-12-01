@@ -11,7 +11,7 @@ import time
 from re import search
 from mdtest_test_base import MdtestBase
 from telemetry_test_base import TestWithTelemetry
-from general_utils import DaosTestError
+from general_utils import DaosTestError, pcmd
 from command_utils import CommandFailure
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
@@ -24,6 +24,17 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
 
     :avocado: recursive
     """
+
+    def pre_tear_down(self):
+        """Tear down any test-specific steps prior to running tearDown().
+
+        Returns:
+            list: a list of error strings to report after all tear down
+            steps have been attempted
+
+        """
+        # kill any hanging mdtest processes
+        pcmd(self.hostlist_servers, "pkill -9 mdtest", True)
 
     def test_net_telemetry(self):
         """Jira ID: DAOS-9020.
@@ -96,10 +107,7 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
         time.sleep(10)
 
-        # Remove the killed host from the clustershell telemetry hostlist
-        self.telemetry.hosts.remove(self.hostlist_servers[rank[0]])
-
-        # metric in question is not found on this host
+        # _req_timeout metric may not be on all hosts
         self.telemetry.hosts.clear()
         self.telemetry.hosts.add(self.hostlist_servers[0])
 
@@ -125,7 +133,7 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
             self.fail("Expected {} to increase by more than 0 during this "
                       "test.".format(str(metrics[0])))
 
-        # wait (but not too long) for mdtest to complete
+        # wait a bit for mdtest to complete
         try:
             thread.join(timeout=5)
         except Exception as excep:
