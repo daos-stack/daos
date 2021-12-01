@@ -776,6 +776,8 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	} else if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
+		uint64_t now = swim_now_ms();
+
 		crt_swim_update_last_unpack_hlc(csm);
 
 		/*
@@ -801,16 +803,8 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 			}
 		}
 
-		/*
-		 * Change only for very long timeout to avoid confusing of DAOS scheduler.
-		 * NB: !!! Mercury only supports milli-second timeout !!!
-		 */
-		if (timeout_us > 1000) {
-			uint64_t now = swim_now_ms();
-
-			if (now < ctx->sc_next_event)
-				timeout_us = (ctx->sc_next_event - now) * 1000; /* timeout in us */
-		}
+		if (now < ctx->sc_next_event)
+			timeout_us = min(timeout_us, (ctx->sc_next_event - now) * 1000);
 	} else if (rc) {
 		D_ERROR("swim_progress(): "DF_RC"\n", DP_RC(rc));
 	}
