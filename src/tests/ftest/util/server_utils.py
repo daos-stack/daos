@@ -205,15 +205,6 @@ class DaosServerManager(SubprocessManager):
         # Clean up any files that exist on the hosts
         self.clean_files()
 
-        if storage:
-            # Prepare server storage
-            if self.manager.job.using_nvme or self.manager.job.using_dcpm:
-                self.log.info("Preparing storage in <format> mode")
-                self.prepare_storage("root")
-                if hasattr(self.manager, "mca"):
-                    self.manager.mca.update(
-                        {"plm_rsh_args": "-l root"}, "orterun.mca", True)
-
         # Verify the socket directory exists when using a non-systemctl manager
         self.verify_socket_directory(getuser())
 
