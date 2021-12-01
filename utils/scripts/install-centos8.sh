@@ -66,6 +66,7 @@ dnf install \
     python3-scons \
     python3-yaml \
     sg3_utils \
+    sudo \
     valgrind-devel \
     yasm \
     zip
