@@ -2256,7 +2256,6 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 
 		/* Check if this path represents a daos pool and/or container. */
 		rc = duns_resolve_path(path_dirname, &dattr);
-		/* if it succeeds get the basename and append it to the rel_path */
 		if (rc == 0) {
 			/* if duns_resolve_path succeeds then concat basename to da_rel_path */
 			D_STRNDUP(tmp_path2, path, path_len);
@@ -2270,7 +2269,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 			if (dattr.da_rel_path == NULL)
 				D_ALLOC(tmp, path_len);
 			else
-				tmp = realloc(dattr.da_rel_path, path_len);
+				D_REALLOC(tmp, dattr.da_rel_path, path_len, path_len);
 			if (tmp == NULL)
 				D_GOTO(out, rc = ENOMEM);
 			dattr.da_rel_path = tmp;
@@ -2285,7 +2284,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 			D_GOTO(out, rc);
 		} else if (strncmp(path, "daos://", 7) == 0) {
 			/* Error, since we expect a DAOS path */
-			D_GOTO(out, rc = EINVAL);
+			D_GOTO(out, rc);
 		} else {
 			/* not a DAOS path, set type to POSIX,
 			 * POSIX dir will be checked with stat

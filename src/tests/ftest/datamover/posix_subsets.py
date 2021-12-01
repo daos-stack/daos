@@ -56,10 +56,10 @@ class DmvrPosixSubsets(DataMoverTestBase):
 	# create dfuse containers to test copying to dfuse subdirectories
         dfuse_cont1 = self.create_cont(pool1)
         dfuse_cont2 = self.create_cont(pool1)
-        dfuse_cont1_dir = str(join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid))
+        dfuse_cont1_dir = join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
 	# destination directory should be created by program
         dfuse_cont2_dir = self.new_posix_test_path(create=False,
-            parent=str(join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid)))
+            parent=join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
         # Create a special container to hold UNS entries
         uns_cont = self.create_cont(pool1)
 
@@ -133,8 +133,7 @@ class DmvrPosixSubsets(DataMoverTestBase):
                 dst[0], dst[1], dst[2], dst[3])
             self.read_verify_location(*dst)
             if self.tool == "FS_COPY":
-                fs_copy_search = re.search(r"Successfully copied to DAOS", result.stdout_text)
-                if not fs_copy_search.group(0) == "Successfully copied to DAOS":
+                if not re.search(r"Successfully copied to DAOS", result.stdout_text):
                     self.fail("Failed to copy to DAOS")
 
     def write_location(self, param_type, path, pool=None, cont=None):
