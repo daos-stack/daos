@@ -720,21 +720,12 @@ pipeline {
                     post {
                       always {
                             echo functionalTestPostV2()
-                            sh "echo 'find .'"
-                            sh "find ."
-                            publishValgrind failBuildOnInvalidReports: true,
-                                            failBuildOnMissingReports: true,
-                                            failThresholdDefinitelyLost: '0',
-                                            failThresholdInvalidReadWrite: '0',
-                                            failThresholdTotal: '0',
-                                            pattern: 'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
-                                            publishResultsForAbortedBuilds: false,
-                                            publishResultsForFailedBuilds: true,
-                                            sourceSubstitutionPaths: '',
-                                            unstableThresholdDefinitelyLost: '0',
-                                            unstableThresholdInvalidReadWrite: '0',
-                                            unstableThresholdTotal: '0'
-
+                            unitTestPost artifacts: ['**/valgrind.*.memcheck.xml'],
+                                         testResults: 'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
+                                         always_script: '/bin/true',
+                                         valgrind_stash: 'centos7-gcc-cart-memcheck',
+                                         valgrind_pattern: '**/valgrind.*.memcheck.xml',
+                                         ignore_failure: true
                         }
                     }
                 } // stage('Functional on CentOS 8 with Valgrind')
@@ -1052,7 +1043,8 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck']
+                                                     'centos7-gcc-unit-memcheck',
+                                                     'centos7-gcc-cart-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
