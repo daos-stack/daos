@@ -594,13 +594,28 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 	return reprobe;
 }
 
+static inline int
+vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
+	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts)
+{
+	uint64_t	start_seq = vos_sched_seq();
+	int		rc;
+
+	D_ASSERT(iter_cb != NULL);
+	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
+	if (start_seq != vos_sched_seq())
+		*acts |= VOS_ITER_CB_YIELD;
+
+	return rc;
+}
+
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
  */
 static int
 vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
-		     bool recursive, bool ignore_inprogress,
+		     bool recursive, bool show_uncommitted,
 		     struct vos_iter_anchors *anchors,
 		     vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg,
 		     struct dtx_handle *dth)
@@ -640,10 +655,15 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	}
 
 	iter = vos_hdl2iter(ih);
-	if (ignore_inprogress || (dth != NULL && dth->dth_ignore_uncommitted))
-		iter->it_ignore_uncommitted = 1;
-	else
+	iter->it_show_uncommitted = 0;
+	if (show_uncommitted) {
+		iter->it_show_uncommitted = 1;
 		iter->it_ignore_uncommitted = 0;
+	} else if (dth != NULL && dth->dth_ignore_uncommitted) {
+		iter->it_ignore_uncommitted = 1;
+	} else {
+		iter->it_ignore_uncommitted = 0;
+	}
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	if (!daos_anchor_is_zero(anchor))
@@ -674,7 +694,7 @@ probe:
 		skipped = false;
 		if (pre_cb) {
 			acts = 0;
-			rc = pre_cb(ih, &iter_ent, type, param, arg, &acts);
+			rc = vos_iter_cb(pre_cb, ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
 
@@ -745,7 +765,7 @@ probe:
 
 		if (post_cb) {
 			acts = 0;
-			rc = post_cb(ih, &iter_ent, type, param, arg, &acts);
+			rc = vos_iter_cb(post_cb, ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
 
@@ -798,7 +818,7 @@ out:
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 		const daos_epoch_range_t *epr, bool ignore_inprogress,
-		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth)
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth, daos_anchor_t *anchor)
 {
 	struct vos_iter_anchors	*anchors = NULL;
 	vos_iter_param_t	 param = {0};
@@ -810,6 +830,13 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 
 	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
 	D_ASSERT(daos_handle_is_valid(toh));
+
+	if (anchor != NULL) {
+		if (type == VOS_ITER_DKEY)
+			memcpy(&anchors->ia_dkey, anchor, sizeof(*anchor));
+		else
+			memcpy(&anchors->ia_akey, anchor, sizeof(*anchor));
+	}
 
 	param.ip_hdl = toh;
 	param.ip_epr = *epr;

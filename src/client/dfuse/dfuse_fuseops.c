@@ -39,8 +39,18 @@ dfuse_show_flags(void *handle, unsigned int in)
 	SHOW_FLAG(handle, in, FUSE_CAP_POSIX_ACL);
 	SHOW_FLAG(handle, in, FUSE_CAP_HANDLE_KILLPRIV);
 
+#ifdef FUSE_CAP_CACHE_SYMLINKS
+	SHOW_FLAG(handle, in, FUSE_CAP_CACHE_SYMLINKS);
+#endif
+#ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
+	SHOW_FLAG(handle, in, FUSE_CAP_NO_OPENDIR_SUPPORT);
+#endif
+#ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
+	SHOW_FLAG(handle, in, FUSE_CAP_EXPLICIT_INVAL_DATA);
+#endif
+
 	if (in)
-		DFUSE_TRA_ERROR(handle, "Unknown flags %#x", in);
+		DFUSE_TRA_WARNING(handle, "Unknown flags %#x", in);
 }
 
 /* Called on filesystem init.  It has the ability to both observe configuration
@@ -645,12 +655,6 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
-static void
-dfuse_fuse_destroy(void *userdata)
-{
-	D_FREE(userdata);
-}
-
 /* dfuse ops that are used for accessing dfs mounts */
 struct dfuse_inode_ops dfuse_dfs_ops = {
 	.lookup		= dfuse_cb_lookup,
@@ -672,7 +676,6 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 
 struct dfuse_inode_ops dfuse_cont_ops = {
 	.lookup		= dfuse_cont_lookup,
-	.mknod		= dfuse_cont_mknod,
 	.statfs		= dfuse_cb_statfs,
 };
 
@@ -681,42 +684,32 @@ struct dfuse_inode_ops dfuse_pool_ops = {
 	.statfs		= dfuse_cb_statfs,
 };
 
-/* Return the ops that should be passed to fuse */
-struct fuse_lowlevel_ops
-*dfuse_get_fuse_ops()
-{
-	struct fuse_lowlevel_ops *fuse_ops;
-
-	D_ALLOC_PTR(fuse_ops);
-	if (!fuse_ops)
-		return NULL;
-
+struct fuse_lowlevel_ops dfuse_ops = {
 	/* Ops that support per-inode indirection */
-	fuse_ops->getattr	= df_ll_getattr;
-	fuse_ops->lookup	= df_ll_lookup;
-	fuse_ops->mkdir		= df_ll_mkdir;
-	fuse_ops->opendir	= df_ll_opendir;
-	fuse_ops->releasedir	= df_ll_releasedir;
-	fuse_ops->unlink	= df_ll_unlink;
-	fuse_ops->rmdir		= df_ll_unlink;
-	fuse_ops->readdir	= df_ll_readdir;
-	fuse_ops->readdirplus	= df_ll_readdirplus;
-	fuse_ops->create	= df_ll_create;
-	fuse_ops->mknod		= df_ll_mknod;
-	fuse_ops->rename	= df_ll_rename;
-	fuse_ops->symlink	= df_ll_symlink;
-	fuse_ops->setxattr	= df_ll_setxattr;
-	fuse_ops->getxattr	= df_ll_getxattr;
-	fuse_ops->listxattr	= df_ll_listxattr;
-	fuse_ops->removexattr	= df_ll_removexattr;
-	fuse_ops->setattr	= df_ll_setattr;
-	fuse_ops->statfs	= df_ll_statfs;
+	.getattr	= df_ll_getattr,
+	.lookup		= df_ll_lookup,
+	.mkdir		= df_ll_mkdir,
+	.opendir	= df_ll_opendir,
+	.releasedir	= df_ll_releasedir,
+	.unlink		= df_ll_unlink,
+	.rmdir		= df_ll_unlink,
+	.readdir	= df_ll_readdir,
+	.readdirplus	= df_ll_readdirplus,
+	.create		= df_ll_create,
+	.mknod		= df_ll_mknod,
+	.rename		= df_ll_rename,
+	.symlink	= df_ll_symlink,
+	.setxattr	= df_ll_setxattr,
+	.getxattr	= df_ll_getxattr,
+	.listxattr	= df_ll_listxattr,
+	.removexattr	= df_ll_removexattr,
+	.setattr	= df_ll_setattr,
+	.statfs		= df_ll_statfs,
 
 	/* Ops that do not need to support per-inode indirection */
-	fuse_ops->init = dfuse_fuse_init;
-	fuse_ops->forget = dfuse_cb_forget;
-	fuse_ops->forget_multi = dfuse_cb_forget_multi;
-	fuse_ops->destroy = dfuse_fuse_destroy;
+	.init		 = dfuse_fuse_init,
+	.forget		 = dfuse_cb_forget,
+	.forget_multi	 = dfuse_cb_forget_multi,
 
 	/* Ops that do not support per-inode indirection
 	 *
@@ -725,12 +718,10 @@ struct fuse_lowlevel_ops
 	 * operations.
 	 *
 	 */
-	fuse_ops->open		= dfuse_cb_open;
-	fuse_ops->release	= dfuse_cb_release;
-	fuse_ops->write_buf	= dfuse_cb_write;
-	fuse_ops->read		= dfuse_cb_read;
-	fuse_ops->readlink	= dfuse_cb_readlink;
-	fuse_ops->ioctl		= dfuse_cb_ioctl;
-
-	return fuse_ops;
-}
+	.open		= dfuse_cb_open,
+	.release	= dfuse_cb_release,
+	.write_buf	= dfuse_cb_write,
+	.read		= dfuse_cb_read,
+	.readlink	= dfuse_cb_readlink,
+	.ioctl		= dfuse_cb_ioctl,
+};

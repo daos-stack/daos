@@ -52,21 +52,22 @@ type Server struct {
 	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool             `yaml:"disable_vfio"`
 	EnableVMD           bool             `yaml:"enable_vmd"`
+	EnableHotplug       bool             `yaml:"enable_hotplug"`
 	NrHugepages         int              `yaml:"nr_hugepages"`
 	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
 	ControlLogFile      string           `yaml:"control_log_file"`
 	ControlLogJSON      bool             `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string           `yaml:"helper_log_file"`
 	FWHelperLogFile     string           `yaml:"firmware_helper_log_file"`
-	RecreateSuperblocks bool             `yaml:"recreate_superblocks"`
+	RecreateSuperblocks bool             `yaml:"recreate_superblocks,omitempty"`
 	FaultPath           string           `yaml:"fault_path"`
-	TelemetryPort       int              `yaml:"telemetry_port"`
+	TelemetryPort       int              `yaml:"telemetry_port,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
 	SocketDir  string              `yaml:"socket_dir"`
 	Fabric     engine.FabricConfig `yaml:",inline"`
-	Modules    string
+	Modules    string              `yaml:"-"`
 
 	AccessPoints []string `yaml:"access_points"`
 
@@ -74,7 +75,7 @@ type Server struct {
 	FaultCb      string `yaml:"fault_cb"`
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
-	Path string // path to config file
+	Path string `yaml:"-"` // path to config file
 
 	// pointer to a function that validates the chosen provider
 	validateProviderFn networkProviderValidation
@@ -184,6 +185,7 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	engineCfg.SystemName = cfg.SystemName
 	engineCfg.SocketDir = cfg.SocketDir
 	engineCfg.Modules = cfg.Modules
+	engineCfg.Storage.EnableHotplug = cfg.EnableHotplug
 }
 
 // WithEngines sets the list of engine configurations.
@@ -247,14 +249,20 @@ func (cfg *Server) WithDisableVFIO(disabled bool) *Server {
 
 // WithEnableVMD can be used to set the state of VMD functionality,
 // if enabled then VMD devices will be used if they exist.
-func (cfg *Server) WithEnableVMD(enabled bool) *Server {
-	cfg.EnableVMD = enabled
+func (cfg *Server) WithEnableVMD(enable bool) *Server {
+	cfg.EnableVMD = enable
+	return cfg
+}
+
+// WithEnableHotplug can be used to enable hotplug
+func (cfg *Server) WithEnableHotplug(enable bool) *Server {
+	cfg.EnableHotplug = enable
 	return cfg
 }
 
 // WithHyperthreads enables or disables hyperthread support.
-func (cfg *Server) WithHyperthreads(enabled bool) *Server {
-	cfg.Hyperthreads = enabled
+func (cfg *Server) WithHyperthreads(enable bool) *Server {
+	cfg.Hyperthreads = enable
 	return cfg
 }
 
@@ -312,10 +320,11 @@ func DefaultServer() *Server {
 		Hyperthreads:       false,
 		Path:               defaultConfigPath,
 		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
-		validateProviderFn: netdetect.ValidateProviderStub,
-		validateNUMAFn:     netdetect.ValidateNUMAStub,
+		validateProviderFn: netdetect.ValidateProviderConfig,
+		validateNUMAFn:     netdetect.ValidateNUMAConfig,
 		GetDeviceClassFn:   netdetect.GetDeviceClass,
 		EnableVMD:          false, // disabled by default
+		EnableHotplug:      false, // disabled by default
 	}
 }
 
@@ -632,7 +641,7 @@ func (cfg *Server) CheckFabric(ctx context.Context) (uint32, error) {
 	for index, engine := range cfg.Engines {
 		ndc, err := cfg.GetDeviceClassFn(engine.Fabric.Interface)
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "unable to detect device class for %q", engine.Fabric.Interface)
 		}
 		if index == 0 {
 			netDevClass = ndc

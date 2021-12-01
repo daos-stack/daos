@@ -33,7 +33,7 @@ import (
 const (
 	sConfigUncomment = "daos_server_uncomment.yml"
 	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
-	psm2Example      = "../../../../utils/config/examples/daos_server_psm2.yml"
+	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
@@ -132,7 +132,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 	}{
 		"uncommented default config": {inPath: "uncommentedDefault"},
 		"socket example config":      {inPath: socketsExample},
-		"psm2 example config":        {inPath: psm2Example},
+		"verbs example config":       {inPath: verbsExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
 			inPath: "/foo/bar/baz.yml",
@@ -217,8 +217,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithControlPort(10001).
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
-		WithDisableVFIO(true). // vfio enabled by default
-		WithEnableVMD(true).   // vmd disabled by default
+		WithDisableVFIO(true).   // vfio enabled by default
+		WithEnableVMD(true).     // vmd disabled by default
+		WithEnableHotplug(true). // hotplug disabled by default
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
@@ -227,7 +228,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
-		WithCrtCtxShareAddr(1).
+		WithCrtCtxShareAddr(0).
 		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
@@ -235,52 +236,72 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithHyperthreads(true). // hyper-threads disabled by default
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub).
-		WithEngines(
-			engine.NewConfig().
-				WithRank(0).
-				WithTargetCount(16).
-				WithHelperStreamCount(6).
-				WithServiceThreadCore(0).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmMountPoint("/mnt/daos/1").
-						WithScmClass("ram").
-						WithScmRamdiskSize(16),
-					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList("0000:81:00.0"),
-				).
-				WithFabricInterface("qib0").
-				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(&numaNode0).
-				WithBypassHealthChk(&bypass).
-				WithEnvVars("CRT_TIMEOUT=30").
-				WithLogFile("/tmp/daos_engine.0.log").
-				WithLogMask("WARN"),
-			engine.NewConfig().
-				WithRank(1).
-				WithTargetCount(16).
-				WithHelperStreamCount(6).
-				WithServiceThreadCore(22).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmMountPoint("/mnt/daos/2").
-						WithScmClass("dcpm").
-						WithScmDeviceList("/dev/pmem1"),
-					storage.NewTierConfig().
-						WithBdevClass("file").
-						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-						WithBdevFileSize(16),
-				).
-				WithFabricInterface("qib1").
-				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(&numaNode1).
-				WithEnvVars("CRT_TIMEOUT=100").
-				WithLogFile("/tmp/daos_engine.1.log").
-				WithLogMask("WARN"),
-		)
+		WithGetNetworkDeviceClass(getDeviceClassStub)
+
+	// add engines explicitly to test functionality applied in WithEngines()
+	constructed.Engines = []*engine.Config{
+		engine.NewConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("./.daos/daos_server").
+			WithRank(0).
+			WithTargetCount(16).
+			WithHelperStreamCount(4).
+			WithServiceThreadCore(0).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos/1").
+					WithScmClass("ram").
+					WithScmRamdiskSize(16),
+				storage.NewTierConfig().
+					WithBdevClass("nvme").
+					WithBdevDeviceList("0000:81:00.0"),
+			).
+			WithFabricInterface("ib0").
+			WithFabricInterfacePort(20000).
+			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithCrtCtxShareAddr(0).
+			WithCrtTimeout(30).
+			WithPinnedNumaNode(&numaNode0).
+			WithBypassHealthChk(&bypass).
+			WithEnvVars("CRT_TIMEOUT=30").
+			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogMask("WARN").
+			WithStorageEnableHotplug(true),
+		engine.NewConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("./.daos/daos_server").
+			WithRank(1).
+			WithTargetCount(16).
+			WithHelperStreamCount(4).
+			WithServiceThreadCore(22).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos/2").
+					WithScmClass("dcpm").
+					WithScmDeviceList("/dev/pmem1"),
+				storage.NewTierConfig().
+					WithBdevClass("file").
+					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
+					WithBdevFileSize(16),
+			).
+			WithFabricInterface("ib1").
+			WithFabricInterfacePort(20000).
+			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithCrtCtxShareAddr(0).
+			WithCrtTimeout(30).
+			WithPinnedNumaNode(&numaNode1).
+			WithBypassHealthChk(&bypass).
+			WithEnvVars("CRT_TIMEOUT=100").
+			WithLogFile("/tmp/daos_engine.1.log").
+			WithLogMask("WARN").
+			WithStorageEnableHotplug(true),
+	}
 	constructed.Path = testFile // just to avoid failing the cmp
+
+	for i := range constructed.Engines {
+		t.Logf("constructed: %+v", constructed.Engines[i])
+		t.Logf("default: %+v", defaultCfg.Engines[i])
+	}
 
 	if diff := cmp.Diff(defaultCfg, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
@@ -591,7 +612,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
 					engine.NewConfig().
-						WithFabricInterface("qib0").
+						WithFabricInterface("ib0").
 						WithFabricInterfacePort(20000).
 						WithStorage(
 							storage.NewTierConfig().
@@ -955,6 +976,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotNetDevCls, gotErr := DefaultServer().
+				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithFabricProvider("test").
 				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithEngines(tc.configA, tc.configB).

@@ -7,6 +7,8 @@
 #ifndef __DAOS_HDLR_H__
 #define __DAOS_HDLR_H__
 
+#include <daos_fs.h>
+
 enum fs_op {
 	FS_COPY,
 	FS_SET_ATTR,
@@ -76,10 +78,10 @@ struct cmd_args_s {
 	enum sh_op		sh_op;		/* DAOS shell sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
-	char			*pool_label;	/* pool label */
+	char			pool_str[DAOS_PROP_LABEL_MAX_LEN + 1]; /* pool label or uuid */
 	daos_handle_t		pool;
 	uuid_t			c_uuid;		/* --cont */
-	char			*cont_label;	/* container label */
+	char			cont_str[DAOS_PROP_LABEL_MAX_LEN + 1]; /* container label or uuid */
 	daos_handle_t		cont;
 	int			force;		/* --force */
 	char			*attrname_str;	/* --attr attribute name */
@@ -109,6 +111,10 @@ struct cmd_args_s {
 	/* DFS related */
 	char			*dfs_prefix;	/* --dfs-prefix name */
 	char			*dfs_path;	/* --dfs-path file/dir */
+
+	/* autotest related */
+	bool			skip_big;	/* skip big tests */
+	int			deadline_limit;	/* deadline limit for tests */
 
 	FILE			*ostream;	/* help_hdlr() stream */
 	char			*outfile;	/* --outfile path */
@@ -193,25 +199,18 @@ int pool_autotest_hdlr(struct cmd_args_s *ap);
 /* filesystem operations */
 int fs_copy_hdlr(struct cmd_args_s *ap);
 int fs_dfs_hdlr(struct cmd_args_s *ap);
+int fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs);
 int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
 
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
-int cont_query_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
-int cont_destroy_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
-int cont_get_prop_hdlr(struct cmd_args_s *ap);
 int cont_set_prop_hdlr(struct cmd_args_s *ap);
-int cont_list_attrs_hdlr(struct cmd_args_s *ap);
-int cont_set_attr_hdlr(struct cmd_args_s *ap);
-int cont_get_attr_hdlr(struct cmd_args_s *ap);
-int cont_del_attr_hdlr(struct cmd_args_s *ap);
 int cont_create_snap_hdlr(struct cmd_args_s *ap);
 int cont_list_snaps_hdlr(struct cmd_args_s *ap);
 int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
-int cont_get_acl_hdlr(struct cmd_args_s *ap);
 int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
 int cont_update_acl_hdlr(struct cmd_args_s *ap);
 int cont_delete_acl_hdlr(struct cmd_args_s *ap);

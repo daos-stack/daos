@@ -29,6 +29,10 @@
 
 #define DATA_SIZE	(1048576 * 2 + 512)
 
+#if 0
+/* Disable inflight IO due to DAOS-8775 for 2.0, and re-enable it until inflight I/O
+ * during reintegrated are supported.
+ */
 static int
 reintegrate_inflight_io(void *data)
 {
@@ -62,6 +66,7 @@ reintegrate_inflight_io(void *data)
 				      NULL);
 	return 0;
 }
+#endif
 
 static void
 reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
@@ -80,9 +85,10 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 					 0, arg->myrank);
 	inflight_oid = dts_oid_set_rank(inflight_oid, rank);
 
+#if 0
 	arg->rebuild_cb = reintegrate_inflight_io;
 	arg->rebuild_cb_arg = &inflight_oid;
-
+#endif
 	/* To make sure the IO will be done before reintegration is done */
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -773,7 +779,7 @@ rebuild_objects(void **state)
 }
 
 static void
-rebuild_sx_object_internal(void **state, uint16_t oclass)
+rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -1032,7 +1038,7 @@ rebuild_multiple_group(void **state)
 	if (!test_runable(arg, 7))
 		return;
 
-	oid = daos_test_oid_gen(arg->coh, OC_RP_2G3, 0, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G4, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	print_message("Insert %d kv record in object "DF_OID"\n",
@@ -1174,6 +1180,7 @@ rebuild_with_dfs_open_create_punch(void **state)
 	dfs_obj_t	*obj;
 	dfs_obj_t	*dir;
 	uuid_t		co_uuid;
+	char		str[37];
 	char		filename[32];
 	d_rank_t	rank;
 	daos_obj_id_t	oid;
@@ -1184,8 +1191,7 @@ rebuild_with_dfs_open_create_punch(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs_mt);
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -1232,7 +1238,8 @@ rebuild_with_dfs_open_create_punch(void **state)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 }
 

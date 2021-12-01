@@ -7,6 +7,7 @@
 import traceback
 import threading
 import random
+import base64
 
 from apricot import TestWithServers
 from general_utils import DaosTestError, get_random_bytes
@@ -48,16 +49,16 @@ class ContainerAttributeTest(TestWithServers):
         """
         data_set = {}
         for index in range(1024):
-            size = random.randint(1, 100)
+            size = random.randint(1, 100) #nosec
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set
 
-    def verify_list_attr(self, indata, outdata, mode="sync"):
+    def verify_list_attr(self, indata, attributes_list, mode="sync"):
         """
         Args:
             indata: Dict used to set attr
-            outdata: Dict obtained from list attr
+            attributes_list: List obtained from list attr
             mode: sync or async
 
         Verify the length of the Attribute names
@@ -69,7 +70,6 @@ class ContainerAttributeTest(TestWithServers):
         if mode == "async":
             length += 1
 
-        attributes_list = outdata["attrs"]
         size = 0
         for attr in attributes_list:
             size += len(attr)
@@ -103,18 +103,26 @@ class ContainerAttributeTest(TestWithServers):
         """
         verify the Attributes value after get_attr
         """
+        decoded = {}
+        for key, val in outdata.items():
+            if isinstance(val, bytes):
+                # The API returns the values as bytes already.
+                decoded[key.decode()] = val
+            else:
+                # The JSON output encodes the bytes as base64, so
+                # we need to decode them for comparison.
+                decoded[key] = base64.b64decode(val)
+
         self.log.info("Verifying get_attr output:")
         self.log.info("  get_attr data: %s", indata)
-        self.log.info("  set_attr data: %s", outdata)
+        self.log.info("  set_attr data: %s", decoded)
 
         for attr, value in indata.items():
-            # Workaround: attributes from daos_command have b prefix
-            # need to remove it
-            if value != outdata.get(attr, None):
+            if value != decoded.get(attr.decode(), None):
                 self.fail(
-                    "FAIL: Value does not match after get attr, Expected "
-                    "val={} and received val={}".format(value,
-                                                        outdata[attr]))
+                    "FAIL: Value does not match after get({}), Expected "
+                    "val={} and received val={}".format(attr, value,
+                                        decoded.get(attr.decode(), None)))
 
     def test_container_large_attributes(self):
         """
@@ -140,13 +148,17 @@ class ContainerAttributeTest(TestWithServers):
             # Due to DAOS-7093 skip the usage of pydaos cont list attr
             # size, buf = self.container.container.list_attr()
 
-            out_attr_dict = self.daos_cmd.container_list_attrs(
+            data = self.daos_cmd.container_list_attrs(
                 pool=self.pool.uuid,
-                cont=self.container.uuid)
-            self.verify_list_attr(attr_dict, out_attr_dict)
+                cont=self.container.uuid,
+                verbose=False)
+            self.verify_list_attr(attr_dict, data['response'])
 
-            results = self.container.container.get_attr(list(attr_dict.keys()))
-            self.verify_get_attr(attr_dict, results)
+            data = self.daos_cmd.container_list_attrs(
+                pool=self.pool.uuid,
+                cont=self.container.uuid,
+                verbose=True)
+            self.verify_get_attr(attr_dict, data['response'])
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
@@ -187,13 +199,10 @@ class ContainerAttributeTest(TestWithServers):
         try:
             self.container.container.set_attr(data=attr_dict)
 
-            # Workaround
-            # Due to DAOS-7093 skip the usage of pydaos cont list attr
-            # size, buf = self.container.container.list_attr()
-            out_attr_dict = self.daos_cmd.container_list_attrs(
+            data = self.daos_cmd.container_list_attrs(
                 pool=self.pool.uuid,
                 cont=self.container.uuid)
-            self.verify_list_attr(attr_dict, out_attr_dict)
+            self.verify_list_attr(attr_dict, data['response'])
 
             # Request something that doesn't exist
             if name[0] is not None and b"Negative" in name[0]:
@@ -266,7 +275,7 @@ class ContainerAttributeTest(TestWithServers):
             #
             # size, buf = self.container.container.list_attr(cb_func=cb_func)
             #
-            out_attr_dict = self.daos_cmd.container_list_attrs(
+            data = self.daos_cmd.container_list_attrs(
                 pool=self.pool.uuid,
                 cont=self.container.uuid)
 
@@ -277,7 +286,7 @@ class ContainerAttributeTest(TestWithServers):
 
             if expected_result in ['PASS']:
                 # Workaround: async mode is not used for list_attr
-                self.verify_list_attr(attr_dict, out_attr_dict)
+                self.verify_list_attr(attr_dict, data['response'])
 
             # Request something that doesn't exist
             if name[0] is not None and b"Negative" in name[0]:

@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <uuid/uuid.h>
 #include <abt.h>
+#include <spdk/log.h>
 #include <spdk/env.h>
 #include <spdk/init.h>
 #include <spdk/nvme.h>
@@ -80,8 +81,20 @@ bio_spdk_env_init(void)
 
 	D_ASSERT(nvme_glb.bd_nvme_conf != NULL);
 
+	/* Only print error and more severe to stderr. */
+	spdk_log_set_print_level(SPDK_LOG_ERROR);
+
 	spdk_env_opts_init(&opts);
-	opts.name = "daos";
+	opts.name = "daos_engine";
+
+	rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
+	if (rc != 0) {
+		D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
+			DP_RC(rc));
+		if (opts.pci_allowed != NULL)
+			D_FREE(opts.pci_allowed);
+		return rc;
+	}
 
 	/*
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
@@ -93,22 +106,13 @@ bio_spdk_env_init(void)
 	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 		opts.shm_id = nvme_glb.bd_shm_id;
 
-	/*
-	 * TODO: Find a way to set multiple overrides, currently only single
-	 * option can be overridden with opts.env_context.
-	 */
-
-	/*
-	 * Quiet DPDK logging by setting level to ERROR
-	 *  opts.env_context = "--log-level=lib.eal:4";
-	 */
-	opts.env_context = "--no-telemetry";
+	opts.env_context = (char *)dpdk_cli_override_opts;
 
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
 	spdk_unaffinitize_thread();
@@ -118,9 +122,10 @@ bio_spdk_env_init(void)
 		rc = -DER_INVAL;
 		D_ERROR("Failed to init SPDK thread lib, "DF_RC"\n", DP_RC(rc));
 		spdk_env_fini();
-		return rc;
 	}
-
+out:
+	if (opts.pci_allowed != NULL)
+		D_FREE(opts.pci_allowed);
 	return rc;
 }
 
@@ -382,8 +387,7 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		if (timeout != 0) {
 			cur_time = daos_getmtime_coarse();
 
-			D_ASSERT(cur_time >= start_time);
-			if (cur_time - start_time > timeout)
+			if (cur_time > (start_time + timeout))
 				return -DER_TIMEDOUT;
 		}
 	}
@@ -1017,6 +1021,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	bool			 assigned = false;
 	int			 rc;
 
+	D_ASSERT(!ctxt->bxc_ready);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
@@ -1140,6 +1145,7 @@ retry:
 		rc = -DER_NOMEM;
 		goto out;
 	}
+	ctxt->bxc_ready = 1;
 
 out:
 	D_ASSERT(dev_info != NULL);
@@ -1163,6 +1169,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt == NULL)
 		return;
 
+	ctxt->bxc_ready = 0;
 	if (ctxt->bxc_io_channel != NULL) {
 		spdk_bs_free_io_channel(ctxt->bxc_io_channel);
 		ctxt->bxc_io_channel = NULL;

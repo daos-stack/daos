@@ -4,13 +4,13 @@ hosts:
   test_servers:
     - server-A
     - server-B
-timeout: 8000
+timeout: 3600
 server_config:
   name: daos_server
 pool:
   mode: 511
   name: daos_server
-  scm_size: 2000000000
+  scm_size: 8000000000
   control_method: dmg
 dkeys:
   number_of_dkeys: 1000000

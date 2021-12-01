@@ -737,7 +737,7 @@ punch_model_test(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_RECX | DAOS_GET_MAX,
-			       11, &dkey, &akey, &rex, NULL);
+			       11, &dkey, &akey, &rex, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(rex.rx_idx, 0);
 	assert_int_equal(rex.rx_nr, strlen(latest));
@@ -1358,13 +1358,13 @@ cond_test(void **state)
 	start_epoch = epoch + 1;
 }
 
-/** Making the oid generation deterministic, I get to 304 before I hit a false
+/** Making the oid generation deterministic, I get to 102 before I hit a false
  *  collision on the oid.   This may indicate the hashing needs to be improved
  *  but for now, it's good enough.  In general, the chance of a single
  *  collision is very high well before we get close to saturation due
  *  to the birthday paradox.
  */
-#define NUM_OIDS 304
+#define NUM_OIDS 102
 static void
 multiple_oid_cond_test(void **state)
 {

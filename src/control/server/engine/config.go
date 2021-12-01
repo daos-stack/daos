@@ -157,8 +157,8 @@ type Config struct {
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
 	ServiceThreadCore int            `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
-	SystemName        string         `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
-	SocketDir         string         `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
+	SystemName        string         `yaml:"-" cmdLongFlag:"--group" cmdShortFlag:"-g"`
+	SocketDir         string         `yaml:"-" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
 	LogMask           string         `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string         `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
 	LegacyStorage     LegacyStorage  `yaml:",inline,omitempty"`
@@ -301,6 +301,12 @@ func (c *Config) WithStorageConfigOutputPath(cfgPath string) *Config {
 // WithStorageVosEnv sets the VOS_BDEV_CLASS env variable.
 func (c *Config) WithStorageVosEnv(ve string) *Config {
 	c.Storage.VosEnv = ve
+	return c
+}
+
+// WithStorageEnableHotplug sets EnableHotplug in engine storage.
+func (c *Config) WithStorageEnableHotplug(enable bool) *Config {
+	c.Storage.EnableHotplug = enable
 	return c
 }
 

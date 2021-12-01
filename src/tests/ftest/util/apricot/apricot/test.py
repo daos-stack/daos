@@ -17,7 +17,7 @@ from avocado.utils.distro import detect
 from avocado.core import exceptions
 from ast import literal_eval
 
-import fault_config_utils
+from fault_config_utils import FaultInjection
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
@@ -27,7 +27,7 @@ from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing, run_command
+    get_default_config_file, pcmd, get_file_listing
 from logger_utils import TestLogger
 from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
@@ -76,6 +76,8 @@ class Test(avocadoTest):
 
         # Define a test ID using the test_* method name
         self.test_id = self.get_test_name()
+
+        self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
 
         # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
         # Any unit combination may be used, but they must be specified in
@@ -218,7 +220,7 @@ class Test(avocadoTest):
                     except Exception as excpt: # pylint: disable=broad-except
                         skip_process_error("Unable to read commit list: "
                                            "{}".format(excpt))
-                        commits = None
+                        return
                     if commits and vals[1] in commits:
                         # fix is in this code base
                         self.log.info("This test variant is included in the "
@@ -394,10 +396,9 @@ class TestWithoutServers(Test):
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
-        self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
-        self.fault_file = None
         self.context = None
         self.d_log = None
+        self.fault_injection = None
 
         # Create a default TestLogger w/o a DaosLog object to prevent errors in
         # tearDown() if setUp() is not completed.  The DaosLog is added upon the
@@ -436,14 +437,8 @@ class TestWithoutServers(Test):
         self.log.debug("Common test directory: %s", self.test_dir)
 
         # setup fault injection, this MUST be before API setup
-        fault_list = self.params.get("fault_list", '/run/faults/*')
-        if fault_list:
-            # not using workdir because the huge path was messing up
-            # orterun or something, could re-evaluate this later
-            self.fault_file = fault_config_utils.write_fault_file(self.tmp,
-                                                                  fault_list,
-                                                                  None)
-            os.environ["D_FI_CONFIG"] = self.fault_file
+        self.fault_injection = FaultInjection()
+        self.fault_injection.start(self.params.get("fault_list", '/run/faults/*'), self.test_dir)
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
@@ -452,14 +447,7 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-
-        if self.fault_file:
-            try:
-                os.remove(self.fault_file)
-            except OSError as error:
-                self._teardown_errors.append(
-                    "Error running inherited teardown(): {}".format(error))
-
+        self._teardown_errors.extend(self.fault_injection.stop())
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
@@ -652,6 +640,8 @@ class TestWithServers(TestWithoutServers):
         hosts = list(self.hostlist_servers)
         if self.hostlist_clients:
             hosts.extend(self.hostlist_clients)
+        # Copy the fault injection files to the hosts.
+        self.fault_injection.copy_fault_files(hosts)
         lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
         for line in lines:
             self.log.debug("  %s", line)
@@ -664,7 +654,7 @@ class TestWithServers(TestWithoutServers):
             if self.hostlist_clients:
                 hosts.extend(self.hostlist_clients)
             self.log.info("-" * 100)
-            self.stop_leftover_processes(["orterun"], hosts)
+            self.stop_leftover_processes(["orterun", "mpirun"], hosts)
 
             # Ensure write permissions for the daos command log files when
             # using systemctl
@@ -688,11 +678,23 @@ class TestWithServers(TestWithoutServers):
 
         # If there's no server started, then there's no server log to write to.
         if self.setup_start_servers:
-
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
             self.write_string_to_logfile(id_str)
+
+        if self.start_servers_once and not force_agent_start:
+            # Check for any existing pools that may still exist in each
+            # continually running server group.  Pools may still exists if a
+            # previous test method/varaint's tearDown was unable to complete.
+            # This will hopefully ensure these errors do not affect the next
+            # test.  Since the storage is reformatted and the pool metadata is
+            # erased when the servers are restarted this check is only needed
+            # when the servers are left continually running.
+            if self.search_and_destroy_pools():
+                self.fail(
+                    "Errors detected attempting to ensure all pools had been "
+                    "removed from continually running servers.")
 
         # Setup a job manager command for running the test command
         manager_class_name = self.params.get(
@@ -724,17 +726,13 @@ class TestWithServers(TestWithoutServers):
             cart_ctl = CartCtl()
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
-            cart_ctl.cfg_path.value = "."
             cart_ctl.m.value = message
             cart_ctl.n.value = None
+            cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
-                # Fetch attachinfo data from server via the agent
-                attachinfo_file = manager.get_attachinfo_file()
-                cp_command = "sudo cp {} {}".format(attachinfo_file, ".")
-                run_command(cp_command, verbose=True, raise_exception=False)
                 cart_ctl.group_name.value = manager.get_config_value("name")
-                cart_ctl.run()
+                # cart_ctl.run()
         else:
             self.log.info(
                 "Unable to write message to the server log: %d servers groups "
@@ -1145,6 +1143,9 @@ class TestWithServers(TestWithoutServers):
             if prepare_dmg and hasattr(manager, "prepare_dmg"):
                 manager.prepare_dmg()
 
+                # Ensure exceptions are raised for any failed command
+                manager.dmg.exit_status_exception = True
+
             # Verify the current states match the expected states
             manager_status = manager.verify_expected_states(set_expected)
             status["expected"] &= manager_status["expected"]
@@ -1234,6 +1235,10 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
+                # Ensure exceptions are raised for any failed command
+                if hasattr(container, "daos") and container.daos is not None:
+                    container.daos.exit_status_exception = True
+
                 # Only close a container that has been opened by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
@@ -1270,6 +1275,10 @@ class TestWithServers(TestWithoutServers):
                 pools = [pools]
             self.test_log.info("Destroying pools")
             for pool in pools:
+                # Ensure exceptions are raised for any failed command
+                if pool.dmg is not None:
+                    pool.dmg.exit_status_exception = True
+
                 # Only disconnect a pool that has been connected by the test
                 if not hasattr(pool, "connected") or pool.connected:
                     try:
@@ -1287,6 +1296,37 @@ class TestWithServers(TestWithoutServers):
                         self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error destroying pool: {}".format(error))
+        return error_list
+
+    def search_and_destroy_pools(self):
+        """Search for any pools in each server and destroy each one found.
+
+        Returns:
+            list: a list of errors detected when searching for and destroying
+                the pools
+
+        """
+        error_list = []
+        self.test_log.info("Searching for any existing pools")
+        for manager in self.server_managers:
+            # Ensure exceptions are raised for any failed command
+            manager.dmg.exit_status_exception = True
+
+            # Get a list of remaining pool labels for this server group
+            try:
+                labels = manager.dmg.get_pool_list_labels()
+            except CommandFailure as error:
+                error_list.append("Error listing pools: {}".format(error))
+                labels = []
+
+            # Destroy each pool found
+            for label in labels:
+                try:
+                    manager.dmg.pool_destroy(pool=label, force=True)
+
+                except CommandFailure as error:
+                    error_list.append("Error destroying pool: {}".format(error))
+
         return error_list
 
     def stop_agents(self):
@@ -1321,15 +1361,32 @@ class TestWithServers(TestWithoutServers):
             list: a list of exceptions raised stopping the servers
 
         """
+        force_stop = False
         self.log.info("-" * 100)
         self.log.info("--- STOPPING SERVERS ---")
         errors = []
         status = self.check_running("servers", self.server_managers)
         if self.start_servers_once and not status["restart"]:
-            self.log.info(
-                "Servers are configured to run across multiple test variants, "
-                "not stopping")
-        else:
+            # Destroy any remaining pools on the continuously running servers.
+            pool_destroy_errors = self.search_and_destroy_pools()
+            if pool_destroy_errors:
+                # Force a server stop if there were errors destroying or listing
+                # the pools. This will cause the next test variant/method to
+                # format and restart the servers.
+                errors.extend(pool_destroy_errors)
+                force_stop = True
+                self.log.info(
+                    "* FORCING SERVER STOP DUE TO POOL DESTROY ERRORS *")
+            else:
+                self.log.info(
+                    "Servers are configured to run across multiple test "
+                    "variants, not stopping")
+
+        if not self.start_servers_once or status["restart"] or force_stop:
+            # Stop the servers under the following conditions:
+            #   - servers are not being run continuously across variants/methods
+            #   - engines were found stopped or in an unexpected state
+            #   - errors destroying pools require a forced server stop
             if not status["expected"]:
                 errors.append(
                     "ERROR: At least one multi-variant server was not found in "

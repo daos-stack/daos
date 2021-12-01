@@ -55,8 +55,6 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
 	hs_reply.fsr_pool_size = iov.iov_buf_len;
-	if (hs_reply.fsr_pool_size > MAX_IOCTL_SIZE)
-		D_GOTO(err, rc = EOVERFLOW);
 
 	rc = daos_cont_local2global(oh->doh_ie->ie_dfs->dfs_coh, &iov);
 	if (rc)
@@ -92,8 +90,7 @@ handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
 	if (rc)
 		D_GOTO(free, rc = daos_der2errno(rc));
 
@@ -107,6 +104,56 @@ free:
 	D_FREE(iov.iov_buf);
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+}
+
+#define POH_FILE_TEMPLATE "/tmp/dfuse_ilh_XXXXXX"
+
+static void
+handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
+{
+	d_iov_t	iov = {};
+	ssize_t	fsize;
+	int	rc;
+	int	fd;
+	char	*fname = NULL;
+
+	D_STRNDUP(fname, POH_FILE_TEMPLATE, sizeof(POH_FILE_TEMPLATE));
+	if (fname == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	/* Firstly sample the size */
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+	D_ALLOC(iov.iov_buf, iov.iov_buf_len);
+	if (iov.iov_buf == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
+	if (rc)
+		D_GOTO(free, rc = daos_der2errno(rc));
+
+	errno = 0;
+	fd = mkstemp(fname);
+	if (fd == -1)
+		D_GOTO(free, rc = errno);
+
+	fsize = write(fd, iov.iov_buf, iov.iov_len);
+	close(fd);
+	if (fsize != iov.iov_len)
+		D_GOTO(free, rc = EIO);
+
+	DFUSE_REPLY_IOCTL_SIZE(oh, req, fname, sizeof(POH_FILE_TEMPLATE));
+	D_FREE(iov.iov_buf);
+	D_FREE(fname);
+
+	return;
+free:
+	D_FREE(iov.iov_buf);
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	D_FREE(fname);
 }
 
 static void
@@ -148,10 +195,9 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
-				  &iov);
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	hsd_reply.fsr_dobj_size = iov.iov_buf_len;
 	if (hsd_reply.fsr_dobj_size > MAX_IOCTL_SIZE)
@@ -177,7 +223,7 @@ handle_doh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 
 	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
@@ -203,10 +249,9 @@ handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
-				  &iov);
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
@@ -261,6 +306,9 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	 * need the correct container handle to be able to use them.
 	 */
 	if (cmd == DFUSE_IOCTL_IL_DSIZE) {
+		if (S_ISDIR(oh->doh_ie->ie_stat.st_mode))
+			D_GOTO(out_err, rc = EISDIR);
+
 		if (out_bufsz < sizeof(struct dfuse_hsd_reply))
 			D_GOTO(out_err, rc = EIO);
 		handle_dsize_ioctl(oh, req);
@@ -301,7 +349,10 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		size_t size = _IOC_SIZE(cmd);
 
 		handle_coh_ioctl(oh, size, req);
+	} else if (_IOC_NR(cmd) == DFUSE_IOCTL_REPLY_PFILE) {
+		size_t size = _IOC_SIZE(cmd);
 
+		handle_pfile_ioctl(oh, size, req);
 	} else {
 		DFUSE_TRA_WARNING(oh, "Unknown IOCTL type %#x", cmd);
 		D_GOTO(out_err, rc = EIO);

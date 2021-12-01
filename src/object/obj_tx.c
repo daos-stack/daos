@@ -1060,7 +1060,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		 * dc_tx_cleanup().
 		 */
 		dcsr->dcsr_reasb = reasb_req;
-		rc = obj_reasb_req_init(dcsr->dcsr_reasb,
+		rc = obj_reasb_req_init(dcsr->dcsr_reasb, obj,
 					dcu->dcu_iod_array.oia_iods,
 					dcsr->dcsr_nr, oca);
 		if (rc != 0)
@@ -1165,7 +1165,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (dcsr->dcsr_opc == DCSO_UPDATE) {
 		dcu = &dcsr->dcsr_update;
 		reasb_req = dcsr->dcsr_reasb;
-		if (dcu->dcu_flags & ORF_EC && reasb_req->tgt_bitmap != NULL) {
+		if (dcu->dcu_flags & ORF_EC && reasb_req->tgt_bitmap != NIL_BITMAP) {
 			D_ALLOC_ARRAY(dcu->dcu_ec_tgts, obj->cob_grp_size);
 			if (dcu->dcu_ec_tgts == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1176,12 +1176,13 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 	/* Descending order to guarantee that EC parity is handled firstly. */
 	for (idx = start + obj->cob_grp_size - 1; idx >= start; idx--) {
-		if (reasb_req != NULL && reasb_req->tgt_bitmap != NULL &&
-		    !isset(reasb_req->tgt_bitmap, idx - start))
+		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
+		    isclr(reasb_req->tgt_bitmap, idx - start))
 			continue;
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
+			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
@@ -1401,7 +1402,12 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 	d_list_for_each_entry_safe(dtr, next, dtr_list, dtr_link) {
 		if (dc_tx_same_rdg(&leader->dtr_group, &dtr->dtr_group)) {
 			d_list_del(&dtr->dtr_link);
-			D_FREE(dtr);
+			if (leader->dtr_group.drg_flags & DGF_RDONLY) {
+				D_FREE(leader);
+				leader = dtr;
+			} else {
+				D_FREE(dtr);
+			}
 		}
 	}
 
@@ -1532,7 +1538,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			if (rc < 0)
 				goto out;
 
-			if (rc > (OBJ_BULK_LIMIT >> 2)) {
+			if (rc > (DAOS_BULK_LIMIT >> 2)) {
 				rc = tx_bulk_prepare(dcsr, task);
 				if (rc != 0)
 					goto out;
@@ -1595,12 +1601,14 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	mbs = dcsh->dcsh_mbs;
-	mbs->dm_flags = DMF_CONTAIN_LEADER;
+	mbs->dm_flags = DMF_CONTAIN_LEADER | DMF_SORTED_TGT_ID;
 
 	/* For the case of modification(s) within single RDG,
 	 * elect leader as standalone modification case does.
 	 */
 	if (mod_grp_cnt == 1) {
+		uint8_t	*bit_map;
+
 		i = dc_tx_leftmost_req(tx, true);
 		dcsr = &tx->tx_req_cache[i];
 		obj = dcsr->dcsr_obj;
@@ -1610,16 +1618,20 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		if (grp_idx < 0)
 			D_GOTO(out, rc = grp_idx);
 
-		i = pl_select_leader(obj->cob_md.omd_id, grp_idx,
-				     obj->cob_grp_size, NULL,
-				     obj_get_shard, obj);
+		if (obj_is_ec(obj))
+			bit_map = ((struct obj_reasb_req *)(dcsr->dcsr_reasb))->tgt_bitmap;
+		else
+			bit_map = NIL_BITMAP;
+
+		i = pl_select_leader(obj->cob_md.omd_id, grp_idx, obj->cob_grp_size, bit_map, NULL,
+				     NULL, obj_get_shard, obj);
 		if (i < 0)
 			D_GOTO(out, rc = i);
 
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		if (!obj_is_ec(obj))
+		if (!obj_is_ec(obj) && act_grp_cnt == 1)
 			mbs->dm_flags |= DMF_SRDG_REP;
 
 		/* If there is only one redundancy group to be modified,
@@ -1768,6 +1780,10 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	struct tx_commit_cb_args	 tcca;
 	crt_endpoint_t			 tgt_ep;
 	int				 rc;
+
+	if (tx->tx_pm_ver != 0 && tx->tx_pm_ver != dc_pool_get_version(tx->tx_pool) &&
+	    (tx->tx_retry || tx->tx_read_cnt > 0))
+		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	if (!tx->tx_retry) {
 		rc = dc_tx_commit_prepare(tx, task);
