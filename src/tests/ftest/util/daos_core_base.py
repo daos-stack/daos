@@ -121,8 +121,6 @@ class DaosCoreBase(TestWithServers):
                 get_log_file("daosCA/certs"), self.hostlist_clients)
             dmg.copy_configuration(self.hostlist_clients)
         self.client_mca += " --mca btl_tcp_if_include eth0"
-        # use a resilient PS if ranks will be stopped
-        svcn = "3" if len(stopped_ranks) > 0 else "1"
 
         cmd = " ".join(
             [
@@ -135,7 +133,6 @@ class DaosCoreBase(TestWithServers):
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
                 "-x", "COVFILE=/tmp/test.cov",
                 self.daos_test,
-                "-s", svcn,
                 "-n", dmg_config_file,
                 "".join(["-", subtest]),
                 str(args)
