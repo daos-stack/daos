@@ -48,6 +48,7 @@ retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            BUILD_URL=\"${BUILD_URL}\"
            STAGE_NAME=\"${STAGE_NAME}\"
            OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL}\"
+           COMMIT_MESSAGE=\"${COMMIT_MESSAGE}\"
            $(cat ci/stacktrace.sh)
            $(cat ci/provisioning/post_provision_config_common.sh)
            $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
