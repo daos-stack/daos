@@ -666,7 +666,7 @@ def convert_list(value, separator=","):
     return separator.join([str(item) for item in value])
 
 
-def dump_engine_stacks(hosts, verbose=True, timeout=60, added_filter=None):
+def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     """Signal the engines on each hosts tog their ULT stacks dump.
 
     Args:
@@ -755,7 +755,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
 
     if hosts is not None:
         if dump_ult_stacks is True and "daos_engine" in pattern:
-            result = dump_engine_stacks(hosts, verbose, timeout, added_filter)
+            result = dump_engines_stacks(hosts, verbose, timeout, added_filter)
 
         # in case dump of ULT stacks is still running it may be interrupted
         commands = [
