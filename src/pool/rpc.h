@@ -157,7 +157,6 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 
 #define DAOS_ISEQ_POOL_CREATE	/* input fields */		 \
 	((struct pool_op_in)	(pri_op)		CRT_VAR) \
-	((uuid_t)		(pri_tgt_uuids)		CRT_ARRAY) \
 	((d_rank_list_t)	(pri_tgt_ranks)		CRT_PTR) \
 	((daos_prop_t)		(pri_prop)		CRT_PTR) \
 	((uint32_t)		(pri_ndomains)		CRT_VAR) \
@@ -273,19 +272,6 @@ CRT_RPC_DECLARE(pool_replicas_add, DAOS_ISEQ_POOL_MEMBERSHIP,
 CRT_RPC_DECLARE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,
 		DAOS_OSEQ_POOL_MEMBERSHIP)
 
-/** Target address for each pool target */
-struct pool_target_addr {
-	/** rank of the node where the target resides */
-	d_rank_t	pta_rank;
-	/** target index in each node */
-	uint32_t	pta_target;
-};
-
-struct pool_target_addr_list {
-	int			 pta_number;
-	struct pool_target_addr	*pta_addrs;
-};
-
 #define DAOS_ISEQ_POOL_TGT_UPDATE /* input fields */		 \
 	((struct pool_op_in)	(pti_op)		CRT_VAR) \
 	((struct pool_target_addr) (pti_addr_list)	CRT_ARRAY)
@@ -296,7 +282,6 @@ struct pool_target_addr_list {
 
 #define DAOS_ISEQ_POOL_EXTEND /* input fields */		 \
 	((struct pool_op_in)	(pei_op)		CRT_VAR) \
-	((uuid_t)		(pei_tgt_uuids)		CRT_ARRAY) \
 	((d_rank_list_t)	(pei_tgt_ranks)		CRT_PTR) \
 	((uint32_t)		(pei_ntgts)		CRT_VAR) \
 	((uint32_t)		(pei_ndomains)		CRT_VAR) \
@@ -324,10 +309,12 @@ CRT_RPC_DECLARE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
 	((struct pool_op_in)	(pvi_op)			CRT_VAR) \
 	((uint32_t)		(pvi_pool_destroy)		CRT_VAR) \
 	((uint32_t)		(pvi_pool_destroy_force)	CRT_VAR) \
-	((uuid_t)		(pvi_hdls)			CRT_ARRAY)
+	((uuid_t)		(pvi_hdls)			CRT_ARRAY) \
+	((d_string_t)		(pvi_machine)			CRT_VAR)
 
 #define DAOS_OSEQ_POOL_EVICT	/* output fields */		 \
-	((struct pool_op_out)	(pvo_op)		CRT_VAR)
+	((struct pool_op_out)	(pvo_op)		CRT_VAR) \
+	((uint32_t)		(pvo_n_hdls_evicted)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_evict, DAOS_ISEQ_POOL_EVICT, DAOS_OSEQ_POOL_EVICT)
 
@@ -458,15 +445,6 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
 }
-
-int
-pool_target_addr_list_alloc(unsigned int num,
-			    struct pool_target_addr_list *list);
-int
-pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
-			     struct pool_target_addr *src);
-void
-pool_target_addr_list_free(struct pool_target_addr_list *list);
 
 uint64_t
 pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop);

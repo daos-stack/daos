@@ -126,7 +126,7 @@ class DaosSnapshotTest(TestWithServers):
 
         Use Cases:
             See class description.
-        
+
         :avocado: tags=all,small,container,full_regression,daos_snapshot_range
         """
         self.prepare_pool_container()

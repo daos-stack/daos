@@ -8,6 +8,9 @@
 #define __CMD_DAOS_UTIL_H__
 
 #define D_LOGFAC	DD_FAC(client)
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +33,7 @@
 #include "daos_hdlr.h"
 
 int resolve_duns_path(struct cmd_args_s *ap);
+int resolve_duns_pool(struct cmd_args_s *ap);
 
 /* cgo is unable to work directly with preprocessor macros
  * so we have to provide these glue helpers.
@@ -77,19 +81,6 @@ set_dpe_str(struct daos_prop_entry *dpe, d_string_t str)
 		return;
 
 	dpe->dpe_str = str;
-}
-
-static inline void
-set_dpe_dupe_str(struct daos_prop_entry *dpe, d_string_t str, size_t len)
-{
-	if (dpe == NULL || str == NULL || len == 0)
-		return;
-
-	/* Use this to keep NLT happy; otherwise it will complain
-	 * about "free of unknown memory" if a string allocated
-	 * by cgo's CString() is used.
-	 */
-	D_STRNDUP(dpe->dpe_str, str, len);
 }
 
 static inline void

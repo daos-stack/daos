@@ -12,6 +12,7 @@ hosts:
 timeouts:
   test_metadata_fillup: 300
   test_metadata_addremove: 900
+  test_metadata_server_restart: 900
   test_container_removal_after_der_nospace: 180
 server_config:
   name: daos_server
@@ -28,7 +29,7 @@ server_config:
       scm_list: ["/dev/pmem0"]
       # common items below (same in server 0 and server 1)
       scm_class: dcpm
-      nr_xs_helpers: 16
+      nr_xs_helpers: 4
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
@@ -44,31 +45,28 @@ server_config:
       scm_list: ["/dev/pmem1"]
       # common items below (same in server 0 and server 1)
       scm_class: dcpm
-      nr_xs_helpers: 16
+      nr_xs_helpers: 4
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
         - DD_MASK=mgmt,md,dsms,any
-
 pool:
-  createmode:
-    mode: 511
-  createset:
-    group: daos_server
-  createsvc:
-    svcn: 3
-  createsize:
-    scm_size: 1073741824
-    nvme_size: 8589934592
+  name: daos_server
+  svcn: 3
+  scm_size: 1G
+  nvme_size: 8G
   control_method: dmg
+container:
+  control_method: API
+  silent: True
 ior:
-    clientslots:
-      slots: 1
-    repetitions: 1
-    dfs_destroy: False
-    iorwriteflags:
-      F: "-w -W -k -G 1"
-    iorreadflags:
-      F: "-r -R -G 1"
-    objectclass:
-      dfs_oclass: "SX"
+  clientslots:
+    slots: 1
+  repetitions: 1
+  dfs_destroy: False
+  iorwriteflags:
+    F: "-w -W -k -G 1"
+  iorreadflags:
+    F: "-r -R -G 1"
+  objectclass:
+    dfs_oclass: "SX"

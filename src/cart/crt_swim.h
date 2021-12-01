@@ -14,9 +14,10 @@
 #include "cart/swim.h"
 #include "swim/swim_internal.h"
 
+#define CRT_SWIM_NGLITCHES_TRESHOLD	10
+#define CRT_SWIM_NMESSAGES_TRESHOLD	1000
 #define CRT_SWIM_FLUSH_ATTEMPTS		100
-#define CRT_SWIM_PROGRESS_TIMEOUT	0	/* minimal progressing time */
-#define CRT_DEFAULT_PROGRESS_CTX_IDX	0
+#define CRT_DEFAULT_PROGRESS_CTX_IDX	1
 
 struct crt_swim_target {
 	d_circleq_entry(crt_swim_target) cst_link;
@@ -29,8 +30,12 @@ struct crt_swim_membs {
 	D_CIRCLEQ_HEAD(, crt_swim_target) csm_head;
 	struct crt_swim_target		*csm_target;
 	struct swim_context		*csm_ctx;
-	int				 csm_crt_ctx_idx;
 	uint64_t			 csm_incarnation;
+	uint64_t			 csm_last_unpack_hlc;
+	uint64_t			 csm_alive_count;
+	int				 csm_crt_ctx_idx;
+	int				 csm_nglitches;
+	int				 csm_nmessages;
 };
 
 static inline void
@@ -59,9 +64,11 @@ crt_swim_rpc_timeout(void)
 	uint32_t timeout_sec;
 
 	/*
-	 * Convert SWIM ping timeout from ms to seconds with rounding up
+	 * Convert SWIM ping timeout from ms to seconds with rounding up.
+	 * Increase it by 2 seconds to avoid early expiration by timeout
+	 * in case of network glitches.
 	 */
-	timeout_sec = 1 + swim_ping_timeout_get() / 1000 /* ms per sec */;
+	timeout_sec = 3 + swim_ping_timeout_get() / 1000 /* ms per sec */;
 
 	return timeout_sec;
 }

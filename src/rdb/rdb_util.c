@@ -162,7 +162,7 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, d_iov_t *iov)
 void
 rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 {
-	daos_ofeat_t feat = 0;
+	enum daos_otype_t type = DAOS_OT_MULTI_HASHED;
 
 	uoid->id_pub.lo = oid & ~RDB_OID_CLASS_MASK;
 	uoid->id_pub.hi = 0;
@@ -170,9 +170,9 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 	uoid->id_pad_32 = 0;
 	/* Since we don't really use d-keys, use HASHED for both classes. */
 	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
-		feat = DAOS_OF_AKEY_UINT64;
+		type = DAOS_OT_AKEY_UINT64;
 
-	daos_obj_set_oid(&uoid->id_pub, feat, 0 /* cid */, 0);
+	daos_obj_set_oid(&uoid->id_pub, type, OR_RP_1, 1, 0);
 }
 
 void
@@ -364,6 +364,24 @@ out:
 }
 
 int
+rdb_vos_query_key_max(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, daos_key_t *akey)
+{
+	daos_unit_oid_t	uoid;
+	int		rc;
+
+	rdb_oid_to_uoid(oid, &uoid);
+	rc = vos_obj_query_key(cont, uoid, DAOS_GET_AKEY|DAOS_GET_MAX, epoch, &rdb_dkey, akey,
+			       NULL /* recx */, 0 /* cell sz */, 0 /* stripe sz */, NULL /* dth */);
+	if (rc != 0) {
+		D_ERROR("vos_obj_query_key((rdb,vos) oids=("DF_U64",lo="DF_U64", hi="DF_U64"), "
+			"epoch="DF_U64" ...) failed, "DF_RC"\n", oid, uoid.id_pub.lo,
+			uoid.id_pub.hi, epoch, DP_RC(rc));
+	}
+
+	return rc;
+}
+
+int
 rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		   enum rdb_probe_opc opc, daos_key_t *akey_in,
 		   daos_key_t *akey_out, d_iov_t *value)
@@ -529,7 +547,7 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 	range.epr_lo = low;
 	range.epr_hi = high;
 
-	return vos_discard(cont, &range, NULL, NULL);
+	return vos_discard(cont, NULL /* objp */, &range, NULL, NULL);
 }
 
 int

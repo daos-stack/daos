@@ -33,21 +33,27 @@ blkcnt_to_lru(struct vea_free_class *vfc, uint32_t blkcnt)
 }
 
 void
-free_class_remove(struct vea_free_class *vfc, struct vea_entry *entry)
+free_class_remove(struct vea_space_info *vsi, struct vea_entry *entry)
 {
+	struct vea_free_class *vfc = &vsi->vsi_class;
+
 	if (entry->ve_in_heap) {
 		D_ASSERTF(entry->ve_ext.vfe_blk_cnt > vfc->vfc_large_thresh,
 			  "%u <= %u", entry->ve_ext.vfe_blk_cnt,
 			  vfc->vfc_large_thresh);
 		d_binheap_remove(&vfc->vfc_heap, &entry->ve_node);
 		entry->ve_in_heap = 0;
+		dec_stats(vsi, STAT_FRAGS_LARGE, 1);
+	} else {
+		dec_stats(vsi, STAT_FRAGS_SMALL, 1);
 	}
 	d_list_del_init(&entry->ve_link);
 }
 
 int
-free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
+free_class_add(struct vea_space_info *vsi, struct vea_entry *entry)
 {
+	struct vea_free_class *vfc = &vsi->vsi_class;
 	int rc;
 
 	D_ASSERT(entry->ve_in_heap == 0);
@@ -62,6 +68,7 @@ free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
 		}
 
 		entry->ve_in_heap = 1;
+		inc_stats(vsi, STAT_FRAGS_LARGE, 1);
 	} else { /* Otherwise add to one of size categarized LRU */
 		struct vea_entry *cur;
 		d_list_t *lru_head, *tmp;
@@ -79,6 +86,7 @@ free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
 		}
 		if (d_list_empty(&entry->ve_link))
 			d_list_add(&entry->ve_link, lru_head);
+		inc_stats(vsi, STAT_FRAGS_SMALL, 1);
 	}
 
 	return 0;
@@ -92,10 +100,12 @@ undock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
 		return;
 
 	D_ASSERT(entry != NULL);
-	if (type == VEA_TYPE_COMPOUND)
-		free_class_remove(&vsi->vsi_class, entry);
-	else
+	if (type == VEA_TYPE_COMPOUND) {
+		free_class_remove(vsi, entry);
+	} else {
 		d_list_del_init(&entry->ve_link);
+		dec_stats(vsi, STAT_FRAGS_AGING, 1);
+	}
 }
 
 static int
@@ -104,16 +114,14 @@ dock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
 {
 	int rc = 0;
 
-	if (type == VEA_TYPE_PERSIST)
-		return rc;
-
 	D_ASSERT(entry != NULL);
 	if (type == VEA_TYPE_COMPOUND) {
-		rc = free_class_add(&vsi->vsi_class, entry);
+		rc = free_class_add(vsi, entry);
 	} else {
 		D_ASSERT(type == VEA_TYPE_AGGREGATE);
 		D_ASSERT(d_list_empty(&entry->ve_link));
 		d_list_add_tail(&entry->ve_link, &vsi->vsi_agg_lru);
+		inc_stats(vsi, STAT_FRAGS_AGING, 1);
 	}
 
 	return rc;
@@ -245,13 +253,13 @@ done:
 	/* Adjust in-tree offset & length */
 	neighbor->vfe_blk_off = merged.vfe_blk_off;
 	neighbor->vfe_blk_cnt = merged.vfe_blk_cnt;
-	/* Only bump age for aging tree */
-	if (type == VEA_TYPE_AGGREGATE)
-		neighbor->vfe_age = merged.vfe_age;
 
-	rc = dock_entry(vsi, neighbor_entry, type);
-	if (rc < 0)
-		return rc;
+	if (type == VEA_TYPE_AGGREGATE || type == VEA_TYPE_COMPOUND) {
+		neighbor->vfe_age = merged.vfe_age;
+		rc = dock_entry(vsi, neighbor_entry, type);
+		if (rc < 0)
+			return rc;
+	}
 
 	return 1;
 }
@@ -301,11 +309,11 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	entry = (struct vea_entry *)val.iov_buf;
 	D_INIT_LIST_HEAD(&entry->ve_link);
 
-	rc = free_class_add(&vsi->vsi_class, entry);
+	rc = free_class_add(vsi, entry);
 
 accounting:
 	if (!rc && !(flags & VEA_FL_NO_ACCOUNTING))
-		vsi->vsi_stat[STAT_FREE_BLKS] += vfe->vfe_blk_cnt;
+		inc_stats(vsi, STAT_FREE_BLKS, vfe->vfe_blk_cnt);
 	return rc;
 }
 
@@ -346,10 +354,7 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	daos_handle_t		 btr_hdl = vsi->vsi_agg_btr;
 	int			 rc;
 
-	rc = daos_gettime_coarse(&vfe->vfe_age);
-	if (rc)
-		return rc;
-
+	vfe->vfe_age = get_current_age();
 	rc = merge_free_ext(vsi, vfe, VEA_TYPE_AGGREGATE, 0);
 	if (rc < 0)
 		return rc;
@@ -386,6 +391,7 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 	/* Add to the tail of aggregate LRU list */
 	d_list_add_tail(&entry->ve_link, &vsi->vsi_agg_lru);
+	inc_stats(vsi, STAT_FRAGS_AGING, 1);
 
 	return 0;
 }
@@ -395,6 +401,8 @@ struct vea_unmap_extent {
 	d_list_t		vue_link;
 };
 
+#define MAX_FLUSH_FRAGS	2000
+
 void
 migrate_end_cb(void *data, bool noop)
 {
@@ -403,18 +411,14 @@ migrate_end_cb(void *data, bool noop)
 	struct vea_free_extent	 vfe;
 	struct vea_unmap_extent	*vue, *tmp_vue;
 	d_list_t		 unmap_list;
-	uint64_t		 cur_time = 0;
-	int			 rc;
+	uint32_t		 cur_time;
+	int			 rc, frags = 0;
 
 	if (noop)
 		return;
 
-	rc = daos_gettime_coarse(&cur_time);
-	if (rc)
-		return;
-
-	if (vsi->vsi_agg_time == UINT64_MAX ||
-	    cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+	cur_time = get_current_age();
+	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
 		return;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
@@ -432,6 +436,9 @@ migrate_end_cb(void *data, bool noop)
 
 		/* Remove entry from aggregate LRU list */
 		d_list_del_init(&entry->ve_link);
+		dec_stats(vsi, STAT_FRAGS_AGING, 1);
+		frags++;
+
 		/*
 		 * Remove entry from aggregate tree, entry will be freed on
 		 * deletion.
@@ -469,6 +476,8 @@ migrate_end_cb(void *data, bool noop)
 				break;
 			}
 		}
+		if (frags >= MAX_FLUSH_FRAGS)
+			break;
 	}
 
 	/* Update aggregation time before yield */
@@ -510,7 +519,7 @@ migrate_end_cb(void *data, bool noop)
 void
 migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb)
 {
-	uint64_t	cur_time;
+	uint32_t	cur_time;
 	int		rc;
 
 	/* Perform the migration instantly if not in a transaction */
@@ -530,12 +539,9 @@ migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb)
 	 * Check aggregation time in advance to avoid unnecessary
 	 * umem_tx_add_callback() calls.
 	 */
-	rc = daos_gettime_coarse(&cur_time);
-	if (rc)
-		return;
+	cur_time = get_current_age();
 
-	if (vsi->vsi_agg_time == UINT64_MAX ||
-	    cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
 		return;
 
 	/* Schedule one migrate_end_cb() is enough */

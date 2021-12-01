@@ -43,15 +43,12 @@ def build_dts_library(env):
             print("Install and load mpich or openmpi\n")
             return
 
-    libraries = ['cmocka', 'daos_tests', 'vos', 'bio', 'abt']
+    libraries = ['cmocka', 'daos', 'daos_tests']
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(LINKFLAGS=[r'-Wl,-rpath=\$$ORIGIN/daos_srv'])
-
-    denv.AppendUnique(LIBPATH=["../vos"])
-    denv.AppendUnique(LIBPATH=["../bio"])
-
+    denv.AppendUnique(LIBPATH=["../client/api"])
     denv.AppendUnique(CPPPATH=["../tests/suite"])
+    denv.AppendUnique(CPPPATH=["../mgmt"])
 
     denv.Replace(SHOBJPREFIX='mpi_')
     mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])

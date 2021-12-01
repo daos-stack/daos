@@ -10,9 +10,8 @@
 #include "daos_api.h"
 
 /* Lookup a container within a pool */
-static void
-dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
-		  const char *name, bool create)
+void
+dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
@@ -40,30 +39,7 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 		return;
 	}
 
-	DFUSE_TRA_DEBUG(parent, "Lookup of "DF_UUID" create %d",
-			DP_UUID(cont), create);
-
-	if (create) {
-		D_ALLOC_PTR(dfc);
-		if (!dfc)
-			D_GOTO(err, rc = ENOMEM);
-
-		DFUSE_TRA_UP(dfc, dfp, "dfc");
-
-		rc = dfs_cont_create(dfp->dfp_poh, cont, NULL,
-				     &dfc->dfs_coh, &dfc->dfs_ns);
-		if (rc) {
-			DFUSE_TRA_ERROR(dfc,
-					"dfs_cont_create() failed: (%d)",
-					rc);
-			D_FREE(dfc);
-			D_GOTO(err, rc);
-		}
-
-		uuid_copy(dfc->dfs_cont, cont);
-		if (fs_handle->dpi_info->di_caching)
-			dfuse_set_default_cont_cache_values(dfc);
-	}
+	DFUSE_TRA_DEBUG(parent, "Lookup of "DF_UUID, DP_UUID(cont));
 
 	rc = dfuse_cont_open(fs_handle, dfp, &cont, &dfc);
 	if (rc)
@@ -117,7 +93,6 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_name[NAME_MAX] = '\0';
 
 	atomic_store_relaxed(&ie->ie_ref, 1);
 	ie->ie_dfs = dfc;
@@ -141,22 +116,4 @@ err:
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}
-}
-
-void
-dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		  const char *name)
-{
-	dfuse_cont_helper(req, parent, name, false);
-}
-
-void
-dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
-		 const char *name, mode_t mode)
-{
-	if (!S_ISDIR(mode)) {
-		DFUSE_REPLY_ERR_RAW(parent, req, ENOTSUP);
-		return;
-	}
-	dfuse_cont_helper(req, parent, name, true);
 }

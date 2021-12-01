@@ -34,7 +34,7 @@ oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL);
+	oca = daos_oclass_attr_find(oid, NULL, NULL);
 	if (attr != NULL)
 		*attr = oca;
 	if (oca == NULL)
@@ -119,14 +119,14 @@ ec_setup_from_test_args(struct ec_agg_test_ctx *ctx, test_arg_t *state)
 static void
 ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 {
-	int		 rc;
+	char	str[37];
+	int	rc;
 
-	uuid_generate(ctx->uuid);
-
-	rc = daos_cont_create(ctx->poh, ctx->uuid, NULL, NULL);
+	rc = daos_cont_create(ctx->poh, &ctx->uuid, NULL, NULL);
 	assert_success(rc);
 
-	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_open(ctx->poh, str, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
 	assert_success(rc);
 
@@ -271,11 +271,13 @@ incremental_fill(void **statep)
 static void
 ec_cleanup_cont(struct ec_agg_test_ctx *ctx)
 {
-	int rc;
+	char	str[37];
+	int	rc;
 
 	/* Close & Destroy Container */
 	rc = daos_cont_close(ctx->coh, NULL);
 	assert_rc_equal(rc, 0);
+	uuid_unparse(ctx->uuid, str);
 	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
 	assert_rc_equal(rc, 0);
 }
@@ -368,7 +370,8 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
 			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
-						  i * (k * len), k * len, j,
+						  i * ((daos_size_t)k * len),
+						  k * (daos_size_t)len, j,
 						  false, false, 0);
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
@@ -648,7 +651,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
 			ec_setup_punch_recx_data(ctx, EC_SPECIFIED,
-						 i * len * k, len, j, 0);
+						 i * len * (daos_size_t)k, len, j, 0);
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
@@ -659,8 +662,8 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
 			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
-						  i * len * k + 2 * len, len,
-						  j, false, true, 0);
+						  i * len * (daos_size_t)k + 2 * len,
+						  len, j, false, true, 0);
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
@@ -690,7 +693,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
 			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
-						  i * len * k + len,
+						  i * len * (daos_size_t)k + len,
 						  len,
 						  j, true, false, 0);
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
@@ -915,7 +918,7 @@ re_test:
 	assert_rc_equal(rc, 0);
 
 	fail_val = daos_shard_fail_value(&fail_shard, 1);
-	daos_fail_loc_set(DAOS_FAIL_SHARD_FETCH | DAOS_FAIL_ONCE);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ONCE);
 	daos_fail_value_set(fail_val);
 	d_iov_set(&sg_iov, rbuf, ss);
 	rc = daos_obj_fetch(ctx.oh, th, 0, &dkey, 1, &iod, &sgl,

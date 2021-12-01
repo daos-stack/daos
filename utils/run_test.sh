@@ -134,6 +134,7 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"
+    run_test "${SL_PREFIX}/bin/vea_stress -d 60"
 
     COMP="UTEST_bio"
     run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
@@ -165,11 +166,11 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_mgmt"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
-    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
+    run_test "${SL_PREFIX}/bin/vos_perf" -R '"U;p F;p V"' -o 5 -d 5 \
              -a 5 -n 10
-    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
+    run_test "${SL_PREFIX}/bin/vos_perf" -R '"U;p F;p V"' -o 5 -d 5 \
              -a 5 -n 10 -A
-    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U Q;p V"' -o 5 -d 5 \
+    run_test "${SL_PREFIX}/bin/vos_perf" -R '"U Q;p V"' -o 5 -d 5 \
              -n 10 -A -i -I
     run_test "${SL_PREFIX}/bin/jump_pl_map"
 

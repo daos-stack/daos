@@ -153,10 +153,13 @@ public class DaosFileIT {
       bytes[i] = (byte) i;
     }
     buffer.writeBytes(bytes);
-
-    long wl = daosFile.write(buffer, 0, 0, length);
-    Assert.assertEquals(length, daosFile.length());
-    Assert.assertEquals(length, wl);
+    try {
+      long wl = daosFile.write(buffer, 0, 0, length);
+      Assert.assertEquals(length, daosFile.length());
+      Assert.assertEquals(length, wl);
+    } finally {
+      buffer.release();
+    }
   }
 
   @Test
@@ -202,7 +205,7 @@ public class DaosFileIT {
     desc.setEvent(eq.acquireEvent());
     daosFile.writeAsync(desc, 0, length);
     List<DaosEventQueue.Attachment> completed = new ArrayList<>();
-    eq.pollCompleted(completed, 1, 100);
+    eq.pollCompleted(completed, IODfsDesc.class, null, 1, 100);
     Assert.assertTrue(desc.isSucceeded());
     Assert.assertEquals(desc, completed.get(0));
     Assert.assertEquals(length, daosFile.length());
@@ -234,7 +237,7 @@ public class DaosFileIT {
     desc.setEvent(eq.acquireEvent());
     daosFile.readAsync(desc, 0, length + 30);
     List<DaosEventQueue.Attachment> completed = new ArrayList<>();
-    eq.pollCompleted(completed, 1, 100);
+    eq.pollCompleted(completed, IODfsDesc.class, null, 1, 100);
     Assert.assertEquals(desc, completed.get(0));
     Assert.assertTrue(desc.isSucceeded());
     Assert.assertEquals(length, desc.getActualLength());

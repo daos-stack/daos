@@ -56,7 +56,8 @@ else
     cd "$DAOS_BASE"
 fi
 
-export CRT_PHY_ADDR_STR=ofi+sockets
+# Disable CRT_PHY_ADDR_STR to allow launch.py to set it
+unset CRT_PHY_ADDR_STR
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE
@@ -237,6 +238,7 @@ fi
 
 # now run it!
 # shellcheck disable=SC2086
+export WITH_VALGRIND
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}

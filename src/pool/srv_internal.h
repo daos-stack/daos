@@ -51,7 +51,7 @@ struct pool_iv_map {
 
 /* The structure to serialize the prop for IV */
 struct pool_iv_prop {
-	char		pip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char		pip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	uint64_t	pip_space_rb;
@@ -191,6 +191,7 @@ void ds_stop_scrubbing_ult(struct ds_pool_child *child);
  */
 void *ds_pool_metrics_alloc(const char *path, int tgt_id);
 void ds_pool_metrics_free(void *data);
+int ds_pool_metrics_count(void);
 int ds_pool_metrics_start(struct ds_pool *pool);
 void ds_pool_metrics_stop(struct ds_pool *pool);
 

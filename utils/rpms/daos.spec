@@ -2,19 +2,19 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.1-1%{?dist}
-%global libfabric_version 1.12.0
+%global mercury_version 2.1.0~rc2-1%{?dist}
+%global libfabric_version 1.14.0~rc3-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
 # https://bugzilla.redhat.com/show_bug.cgi?id=1955184
 %define _use_internal_dependency_generator 0
-%define __find_requires %{_sourcedir}/bz-1955184_find-requires
+%define __find_requires %{SOURCE1}
 %endif
 
 Name:          daos
-Version:       1.3.104
-Release:       4%{?relval}%{?dist}
+Version:       2.1.100
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -84,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.8.0
+BuildRequires: daos-raft-devel = 0.8.1
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -158,12 +158,13 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-Requires: libpmemobj1 >= 1.11
+# When 1.11.2 is released, we can change this to >= 1.11.2
+Requires: libpmemobj1 = 1.11.0-3.suse1500
 %else
 Requires: ipmctl > 02.00.00.3816
-Requires: libpmemobj >= 1.11
+# When 1.11.2 is released, we can change this to >= 1.11.2
+Requires: libpmemobj = 1.11.0-3%{?dist}
 %endif
-Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
@@ -202,19 +203,24 @@ Requires: fuse < 3, fuse3-libs >= 3.4.2
 This is the package needed to run a DAOS client
 
 %package tests
+Summary: The entire DAOS test suite
+Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+
+%description tests
+This is the package is a metapackage to install all of the test packages
+
+%package client-tests
 Summary: The DAOS test suite
-#This is a bit messy and needs some cleanup.  In theory,
-#we should have client tests and server tests in separate
-#packages but some binaries need libraries from both at
-#present.
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
-Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
 Requires: python36-distro
 Requires: python36-tabulate
+Requires: python36-defusedxml
 %else
 Requires: python3-distro
 Requires: python3-tabulate
+Requires: python3-defusedxml
 %endif
 Requires: fio
 Requires: dbench
@@ -224,8 +230,29 @@ Requires: attr
 Requires: libpsm_infinipath1
 %endif
 
-%description tests
-This is the package needed to run the DAOS test suite
+%description client-tests
+This is the package needed to run the DAOS test suite (client tests)
+
+%package client-tests-openmpi
+Summary: The DAOS client test suite - tools which need openmpi
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+
+%description client-tests-openmpi
+This is the package needed to run the DAOS client test suite openmpi tools
+
+%package server-tests
+Summary: The DAOS server test suite (server tests)
+Requires: %{name}-server%{?_isa} = %{version}-%{release}
+
+%description server-tests
+This is the package needed to run the DAOS server test suite (server tests)
+
+%package server-tests-openmpi
+Summary: The DAOS server test suite - tools which need openmpi
+Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
+
+%description server-tests-openmpi
+This is the package needed to run the DAOS server test suite openmpi tools
 
 %package devel
 Summary: The DAOS development libraries and headers
@@ -297,7 +324,7 @@ mv test.cov{,-build}
       %{?compiler_args}
 
 %if ("%{?compiler_args}" == "COMPILER=covc")
-mv test.cov-build %{buildroot}/usr/lib/daos/TESTING/ftest/test.cov
+mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
@@ -305,7 +332,7 @@ mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
 install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
-%else if (0%{?rhel} == 8 or  %{?suse_version} == 1500)
+%else
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
@@ -399,7 +426,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
-%{_bindir}/daos_old
 %{_libdir}/libdaos_cmd_hdlrs.so
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
@@ -425,37 +451,52 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
 
-%files tests
-%dir %{_prefix}/lib/daos
-%{_prefix}/lib/daos/TESTING
-%{_prefix}/lib/daos/TESTING/ftest/list_tests.py
+%files client-tests
+%dir %{daoshome}
+%{daoshome}/TESTING
 %{_bindir}/hello_drpc
-%{_bindir}/*_test*
-%{_bindir}/jobtest
-%{_bindir}/self_test
 %{_libdir}/libdaos_tests.so
-%{_bindir}/jump_pl_map
-%{_bindir}/ring_pl_map
-%{_bindir}/pl_bench
-%{_bindir}/smd_ut
-%{_bindir}/vea_ut
-%{_bindir}/daos_perf
-%{_bindir}/daos_racer
-%{_bindir}/evt_ctl
 %{_bindir}/io_conf
-%{_bindir}/rdbt
-%{_bindir}/obj_ctl
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
-%{_bindir}/crt_launch
-%{_bindir}/daos_test
-%{_bindir}/dfs_test
+%{_bindir}/common_test
+%{_bindir}/acl_dump_test
+%{_bindir}/agent_tests
+%{_bindir}/drpc_engine_test
+%{_bindir}/drpc_test
+%{_bindir}/eq_tests
+%{_bindir}/job_tests
+%{_bindir}/security_test
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
-%{_prefix}/lib/daos/.build_vars.json
-%{_prefix}/lib/daos/.build_vars.sh
+%{daoshome}/.build_vars.json
+%{daoshome}/.build_vars.sh
+
+%files client-tests-openmpi
+%{_bindir}/crt_launch
+%{_bindir}/daos_perf
+%{_bindir}/daos_racer
+%{_bindir}/daos_test
+%{_bindir}/dfs_test
+%{_bindir}/jobtest
 %{_libdir}/libdts.so
+
+%files server-tests
+%{_bindir}/evt_ctl
+%{_bindir}/jump_pl_map
+%{_bindir}/pl_bench
+%{_bindir}/rdbt
+%{_bindir}/ring_pl_map
+%{_bindir}/smd_ut
+%{_bindir}/srv_checksum_tests
+%{_bindir}/vea_ut
+%{_bindir}/vos_tests
+%{_bindir}/vea_stress
+
+%files server-tests-openmpi
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_run_io_conf
+%{_bindir}/obj_ctl
+%{_bindir}/vos_perf
 
 %files devel
 %{_includedir}/*
@@ -471,7 +512,58 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files daos_serialize
 %{_libdir}/libdaos_serialize.so
 
+%files tests
+# No files in a meta-package
+
 %changelog
+* Wed Nov 24 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-8
+- Remove invalid "%%else if" syntax
+- Fix a few other rpmlint warnings
+
+* Tue Nov 16 2021 Wang Shilong <shilong.wang@intel.com> 2.1.100-7
+- Update for libdaos major version bump
+- Fix version of libpemobj1 for SUSE
+
+* Sat Nov 13 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-6
+- Update OFI to v1.14.0rc3
+
+* Tue Oct 26 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-5
+- Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
+- Rename daos-tests daos-client-tests and make daos-tests require all
+  other test suites to maintain existing behavior
+
+* Mon Oct 25 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-4
+- Update mercury to v2.1.0rc2
+
+* Wed Oct 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-3
+- Explicitly require 1.11.0-3 of PMDK
+
+* Wed Oct 13 2021 David Quigley <david.quigley@intel.com> 2.1.100-2
+- Add defusedxml as a required dependency for the test package.
+
+* Wed Oct 13 2021 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-1
+- Switch version to 2.1.100 for 2.2 test builds
+
+* Tue Oct 12 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.106-1
+- Version bump to 1.3.106 for 2.0 test build 6
+
+* Fri Oct 8 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.13.105-4
+- Update OFI to v1.13.2rc1
+
+* Wed Sep 15 2021 Li Wei <wei.g.li@intel.com> 1.3.105-3
+- Update raft to fix InstallSnapshot performance as well as to avoid some
+  incorrect 0.8.0 RPMs
+
+* Fri Sep 03 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.105-2
+- Remove R: hwloc; RPM's auto-requires/provides will take care of this
+
+* Tue Aug 24 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.105-1
+- Version bump to 1.3.105 for 2.0 test build 5
+
+* Mon Aug 09 2021 Yawei <yawei.niu@intel.com> 1.3.104-5
+- Fix duplicates
+- Add vos_perf
+
 * Thu Aug 05 2021 Christopher Hoffman <christopherx.hoffman@intel.com> 1.3.104-4
 - Update conditional statement to include checking for distributions to
   determine which unit files to use for daos-server and daos-agent
@@ -610,7 +702,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - Update to mercury v2.0.1rc1
 
 * Fri Jan 22 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-5
-- Install daos_metrics utility to %{_bindir}
+- Install daos_metrics utility to %%{_bindir}
 
 * Wed Jan 20 2021 Kenneth Cain <kenneth.c.cain@intel.com> 1.1.2.1-4
 - Version update for API major version 1, libdaos.so.1 (1.0.0)
@@ -816,7 +908,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - Update BR: libisal-devel for Leap
 
 * Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-8
-- Use BR: cart-devel-%{cart_sha1} if available
+- Use BR: cart-devel-%%{cart_sha1} if available
 - Remove cart's BRs as it's -devel Requires them now
 
 * Tue Oct 01 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-7

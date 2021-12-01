@@ -20,12 +20,13 @@ import (
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
-	LeaderQuery leaderQueryCmd `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
-	Query       systemQueryCmd `command:"query" alias:"q" description:"Query DAOS system status"`
-	Stop        systemStopCmd  `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
-	Start       systemStartCmd `command:"start" alias:"r" description:"Perform start of stopped DAOS system"`
-	Erase       systemEraseCmd `command:"erase" alias:"e" description:"Erase system metadata prior to reformat"`
-	ListPools   PoolListCmd    `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
+	LeaderQuery leaderQueryCmd   `command:"leader-query" description:"Query for current Management Service leader"`
+	Query       systemQueryCmd   `command:"query" description:"Query DAOS system status"`
+	Stop        systemStopCmd    `command:"stop" description:"Perform controlled shutdown of DAOS system"`
+	Start       systemStartCmd   `command:"start" description:"Perform start of stopped DAOS system"`
+	Erase       systemEraseCmd   `command:"erase" description:"Erase system metadata prior to reformat"`
+	ListPools   PoolListCmd      `command:"list-pools" description:"List all pools in the DAOS system"`
+	Cleanup     systemCleanupCmd `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
 }
 
 type leaderQueryCmd struct {
@@ -236,6 +237,53 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 	if outErr.String() != "" {
 		cmd.log.Error(outErr.String())
 	}
+
+	return resp.Errors()
+}
+
+type systemCleanupCmd struct {
+	logCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+
+	Args struct {
+		Machine string `positional-arg-name:"<Machine to cleanup>"`
+	} `positional-args:"yes"`
+
+	Verbose bool `long:"verbose" short:"v" description:"Output additional cleanup information"`
+}
+
+func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
+	defer func() {
+		errOut = errors.Wrap(errOut, "system cleanup failed")
+	}()
+
+	ctx := context.Background()
+	req := new(control.SystemCleanupReq)
+	req.SetSystem(cmd.config.SystemName)
+	req.Machine = cmd.Args.Machine
+
+	resp, err := control.SystemCleanup(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err // control api returned an error, disregard response
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
+	}
+
+	var out, outErr strings.Builder
+	if err := pretty.PrintSystemCleanupResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
+		return err
+	}
+	if outErr.String() != "" {
+		cmd.log.Error(outErr.String())
+	}
+
+	// Infof prints raw string and doesn't try to expand "%"
+	// preserving column formatting in txtfmt table
+	cmd.log.Infof("%s", out.String())
 
 	return resp.Errors()
 }
