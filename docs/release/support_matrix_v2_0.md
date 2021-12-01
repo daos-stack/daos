@@ -22,7 +22,9 @@ Please refer to the
 [intel.com landing page for DAOS](https://www.intel.com/content/www/us/en/high-performance-computing/daos.html)
 for information on the DAOS partner ecosystem.
 
-This document describes the supported environments for Intel Level-3 support.
+This document describes the supported environments for Intel Level-3 support
+at the DAOS 2.0 release level.
+Information for future releases is indicative only and may change.
 Partner support offerings may impose further constraints, for example if they
 include DAOS support as part of a more general cluster support offering
 with its own release cycle.
@@ -47,22 +49,19 @@ DAOS Version 2.0 has been validated with
 on 2nd gen Intel Xeon Scalable processors, and with
 [Intel Optane Persistent Memory 200 Series](https://ark.intel.com/content/www/us/en/ark/products/series/203877/intel-optane-persistent-memory-200-series.html)
 on 3rd gen Intel Xeon Scalable processors.
-It is strongly recommended that all memory channels of a DAOS server
-are populated with one DRAM module and one Optane PMem module.
+For maximum performance, it is strongly recommended that all memory channels
+of a DAOS server are populated with one DRAM module and one Optane PMem module.
 All Optane PMem modules in a DAOS server must have the same capacity.
 
 While not strictly required, DAOS servers typically include NVMe disks
 for bulk storage, which must be supported by [SPDK](https://spdk.io/).
 (NVMe storage can be emulated by files on non-NVMe storage for development
 and testing purposes, but this is not supported in a production environment.)
-All NVMe disks managed by a single DAOS engine should have identical capacity,
+All NVMe disks managed by a single DAOS engine must have identical capacity,
 and it is strongly recommended to use identical drive models.
-
-Note: It is possible and supported that different DAOS engines in a DAOS system
-have different PMem and NVMe configurations, as long as the storage configuration
-_within_ each DAOS engine is homogeneous. The different capabilities of the
-DAOS engines in such an inhomogeneous DAOS system need to be carefully considered
-when creating DAOS pools.
+It is also strongly recommended that all DAOS engines in a DAOS system
+have identical NVMe storage configurations.
+The number of targets per DAOS engine must be identical for all DAOS engines.
 
 Each DAOS engine needs one high-speed network port for communication in the
 DAOS data plane. DAOS Version 2.0 does not support more than one
@@ -72,7 +71,7 @@ single high-speed network port for development and testing purposes,
 but this is not supported in a production environment.)
 It is strongly recommended that all DAOS engines in a DAOS system use the same
 model of high-speed fabric adapter.
-Heterogeneous adapter population across DAOS engines has *not* been tested,
+Heterogeneous adapter population across DAOS engines has **not** been tested,
 and running with such configurations may cause unexpected behaviour.
 Please refer to "Fabric Support" below for more details.
 
@@ -81,9 +80,7 @@ Please refer to "Fabric Support" below for more details.
 
 DAOS Version 2.0 supports the x86\_64 architecture.
 
-DAOS clients have no specific hardware dependencies. In particular,
-because DAOS clients do not require local PMem they can run on hardware
-platforms other than 2nd and 3rd gen Intel Xeon Scalable processors.
+DAOS clients have no specific hardware dependencies.
 
 Each DAOS client needs a network port on the same high-speed interconnect
 that the DAOS servers are connected to.
@@ -110,7 +107,7 @@ cluster can run the same or different Linux distributions.
 With DAOS Version 2.0, CentOS 7.9 and RHEL 7.9 are supported on DAOS servers
 with 2nd gen Intel Xeon Scalable processors (Cascade Lake).
 
-CentOS 7.9 or RHEL 7.9 are *not* supported on DAOS servers
+CentOS 7.9 or RHEL 7.9 are **not** supported on DAOS servers
 with 3rd gen Intel Xeon Scalable processors (Ice Lake)
 or newer Intel Xeon processor generations.
 
@@ -236,7 +233,7 @@ updated to the firmware levels that are included in that MLNX\_OFED
 distribution.
 It is also strongly recommended that the same model of
 InfiniBand fabric adapter is used in all DAOS servers.
-DAOS Version 2.0 has *not* been tested with heterogeneous InfiniBand
+DAOS Version 2.0 has **not** been tested with heterogeneous InfiniBand
 adapter configurations.
 The only exception to this recommendation is the mix of single-port
 and dual-port adapters of the same generation, where only one of the ports
