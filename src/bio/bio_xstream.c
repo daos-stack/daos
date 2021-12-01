@@ -46,6 +46,8 @@ unsigned int bio_chk_cnt_max;
 static unsigned int bio_chk_cnt_init;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
+/* wheather SPDK inited */
+bool bio_spdk_inited;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -196,7 +198,6 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 		D_ERROR("Per-xstream DMA buffer upper bound limit < 1GB!\n");
 		D_DEBUG(DB_MGMT, "mem_size:%dMB, DMA upper bound:%dMB\n",
 			mem_size, (mem_size / tgt_nr));
-		bio_chk_cnt_max = 0;
 		return -DER_INVAL;
 	}
 
@@ -242,9 +243,9 @@ init_spdk:
 	rc = bio_spdk_env_init();
 	if (rc) {
 		nvme_glb.bd_nvme_conf = NULL;
-		bio_chk_cnt_max = 0;
 		goto fini_smd;
 	}
+	bio_spdk_inited = true;
 
 	return 0;
 
@@ -261,7 +262,7 @@ free_mutex:
 static void
 bio_spdk_env_fini(void)
 {
-	if (bio_chk_cnt_max > 0) {
+	if (bio_spdk_inited) {
 		spdk_thread_lib_fini();
 		spdk_env_fini();
 	}

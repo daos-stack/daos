@@ -487,6 +487,7 @@ struct media_error_msg {
 
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
+extern bool		bio_spdk_inited;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,

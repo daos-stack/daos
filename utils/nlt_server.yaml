@@ -1,7 +1,7 @@
 name: daos_server
 port: 10001
 provider: ofi+sockets
-nr_hugepages: 4096
+nr_hugepages: 0
 control_log_mask: DEBUG
 access_points: ['localhost:10001']
 engines:
