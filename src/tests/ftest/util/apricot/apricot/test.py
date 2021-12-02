@@ -1180,6 +1180,8 @@ class TestWithServers(TestWithoutServers):
         # dump engines ULT stacks upon test failure
         if self.dumped_engines_stacks is False and self.status != 'PASS' and self.status != 'SKIP':
             self.dumped_engines_stacks = True
+            self.log.info("Test status is %s, dumping ULT stacks in teardown",
+                self.status)
             dump_engines_stacks(self.hostlist_servers)
 
         # Report whether or not the timeout has expired
