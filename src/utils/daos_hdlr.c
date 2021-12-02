@@ -2230,17 +2230,15 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 	char			*path_dirname = NULL;
 	char			*tmp_path2 = NULL;
 	char			*path_basename = NULL;
-	char			*tmp = NULL;
 
 	rc = duns_resolve_path(path, &dattr);
 	if (rc == 0) {
 		snprintf(*pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
 		snprintf(*cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
-		if (dattr.da_rel_path == NULL) {
+		if (dattr.da_rel_path == NULL)
 			strncpy(path, "/", path_len);
-		} else {
+		else
 			strncpy(path, dattr.da_rel_path, path_len);
-		}
 	} else {
 		/* If basename does not exist yet then duns_resolve_path will fail even if
 		 * dirname is a UNS path
@@ -2267,18 +2265,11 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 			 * then da_rel_path might be NULL
 			 */
 			if (dattr.da_rel_path == NULL)
-				D_ALLOC(tmp, path_len);
+				snprintf(path, path_len, "/%s", path_basename);
 			else
-				D_REALLOC(tmp, dattr.da_rel_path, path_len, path_len);
-			if (tmp == NULL)
-				D_GOTO(out, rc = ENOMEM);
-			dattr.da_rel_path = tmp;
-			strcat(dattr.da_rel_path, "/");
-			strcat(dattr.da_rel_path, path_basename);
-
+				snprintf(path, path_len, "%s/%s", dattr.da_rel_path, path_basename);
 			snprintf(*pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
 			snprintf(*cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
-			strncpy(path, dattr.da_rel_path, path_len);
 		} else if (rc == ENOMEM) {
 			/* TODO: Take this path of rc != ENOENT? */
 			D_GOTO(out, rc);
