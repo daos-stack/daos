@@ -581,13 +581,16 @@ class DaosServer():
                              '--undef-value-errors=no']
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
-            mock_engine = os.path.join(self._io_server_dir.name, 'daos_engine')
+            fd = open(os.path.join(self._io_server_dir.name,
+                                   'daos_engine'), 'w')
+            fd.write('#!/bin/sh\n')
+            fd.write('export PATH=$REAL_PATH\n')
+            fd.write('exec valgrind {} daos_engine "$@"\n'.format(
+                ' '.join(valgrind_args)))
+            fd.close()
 
-            with open(mock_engine, 'w') as fd:
-                fd.write('#!/bin/sh\n')
-                fd.write('export PATH=$REAL_PATH\n')
-                fd.write('exec valgrind {} daos_engine "$@"\n'.format(' '.join(valgrind_args)))
-            os.chmod(mock_engine, stat.S_IXUSR | stat.S_IRUSR)
+            os.chmod(os.path.join(self._io_server_dir.name, 'daos_engine'),
+                     stat.S_IXUSR | stat.S_IRUSR)
 
             server_env['REAL_PATH'] = '{}:{}'.format(
                 os.path.join(self.conf['PREFIX'], 'bin'), server_env['PATH'])
