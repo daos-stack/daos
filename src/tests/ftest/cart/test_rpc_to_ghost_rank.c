@@ -178,12 +178,15 @@ completion_cb_common(const struct crt_cb_info *cb_info)
 				"expecting rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc, -DER_UNREACH);
 			D_FREE(rpc_req_input->name);
+			D_ASSERT(0);
 			break;
 		}
-		printf("%s checkin result - ret: %d, room_no: %d, "
+
+		DBG_PRINT("%s checkin result - ret: %d, room_no: %d, "
 		       "bool_val %d.\n",
 		       rpc_req_input->name, rpc_req_output->ret,
 		       rpc_req_output->room_no, rpc_req_output->bool_val);
+
 		D_FREE(rpc_req_input->name);
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(rpc_req_output->bool_val == false);
@@ -196,50 +199,17 @@ completion_cb_common(const struct crt_cb_info *cb_info)
 	}
 }
 
-static void *progress_thread(void *arg)
-{
-	crt_context_t	ctx;
-	pthread_t	current_thread = pthread_self();
-	int		num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-	cpu_set_t	cpuset;
-	int		t_idx;
-	int		rc;
-
-	t_idx = *(int *)arg;
-	CPU_ZERO(&cpuset);
-	CPU_SET(t_idx % num_cores, &cpuset);
-	pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
-
-	fprintf(stderr, "progress thread %d running on core %d...\n",
-		t_idx, sched_getcpu());
-
-	ctx = (crt_context_t)test_g.t_crt_ctx[t_idx];
-	/* progress loop */
-	do {
-		rc = crt_progress(ctx, 0);
-		if (rc != 0 && rc != -DER_TIMEDOUT)
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
-		if (test_g.t_shutdown == 1)
-			break;
-	} while (1);
-
-	printf("progress_thread: rc: %d, test_srv.do_shutdown: %d.\n",
-	       rc, test_g.t_shutdown);
-	printf("progress_thread: progress thread exit ...\n");
-
-	pthread_exit(NULL);
-}
-
 void test_shutdown_handler(crt_rpc_t *rpc_req)
 {
-	printf("test_group server received shutdown request, opc: %#x.\n",
+	DBG_PRINT("test_group server received shutdown request, opc: %#x.\n",
 	       rpc_req->cr_opc);
 
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	test_g.t_shutdown = 1;
-	printf("test_group server set shutdown flag.\n");
+	crt_reply_send(rpc_req);
+	crtu_progress_stop();
+	DBG_PRINT("test_group server set shutdown flag.\n");
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
@@ -249,7 +219,7 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 		.prf_hdlr	= test_checkin_handler,
 		.prf_co_ops	= NULL,
 	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_flags	= 0,
 		.prf_req_fmt	= NULL,
 		.prf_hdlr	= test_shutdown_handler,
 		.prf_co_ops	= NULL,
@@ -276,7 +246,7 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
 		.prf_hdlr	= test_checkin_handler,
 		.prf_co_ops	= NULL,
 	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_flags	= 0,
 		.prf_req_fmt	= NULL,
 		.prf_hdlr	= test_shutdown_handler,
 		.prf_co_ops	= NULL,
@@ -309,9 +279,6 @@ test_init(void)
 	/* Setup and add self rank, before calling rank/membership APIs. */
 	rc = crt_group_rank(NULL, &test_g.t_my_rank);
 	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
-	rc = crt_group_config_save(NULL, true);
-	D_ASSERTF(rc == 0, "crt_group_config_save() failed. rc: %d\n",
-		  rc);
 
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		test_g.t_local_group_name, test_g.t_remote_group_name);
@@ -335,12 +302,15 @@ test_init(void)
 			rc);
 	}
 
-	for (i = 0; i < test_g.t_ctx_num; i++) {
+	/* Start at 1 instead of 0, because we've already created one context 
+	   in crtu_srv_start_basic */
+
+	for (i = 1; i < test_g.t_ctx_num; i++) {
 		test_g.t_thread_id[i] = i;
 		rc = crt_context_create(&test_g.t_crt_ctx[i]);
 		D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
-		rc = pthread_create(&test_g.t_tid[i], NULL, progress_thread,
-				    &test_g.t_thread_id[i]);
+		rc = pthread_create(&test_g.t_tid[i], NULL, crtu_progress_fn,
+				    &test_g.t_crt_ctx[i]);
 		D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
 	}
 }
@@ -415,7 +385,6 @@ test_run(void)
 		D_ASSERTF(rc == 0 && rpc_req != NULL,
 				"crt_req_create() failed. "
 				"rc: %d, rpc_req: %p\n", rc, rpc_req);
-		sleep(10);
 		rc = crt_req_send(rpc_req, completion_cb_common, NULL);
 		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
 				rc);
@@ -424,9 +393,11 @@ test_run(void)
 		 * queue right away
 		 */
 		test_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
-
 		sleep(5);
+
 		check_in(test_g.t_local_group, 0);
+		test_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+		crtu_progress_stop();
 	}
 }
 
@@ -434,61 +405,24 @@ void
 test_fini()
 {
 	int	ii;
-	int	jj;
 	int	rc = 0;
 
 	for (ii = 0; ii < test_g.t_ctx_num; ii++) {
-
-		if (ii == 0) {
-			sleep(5);
-			test_g.t_shutdown = 1;
-		}
 		rc = pthread_join(test_g.t_tid[ii], NULL);
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
 		D_DEBUG(DB_TEST, "joined progress thread %d.\n", ii);
-
-		for (jj = 0; jj < 10; jj++) {
-			/* try to flush indefinitely */
-			rc = crt_context_flush(test_g.t_crt_ctx[ii], 65);
-			D_ASSERTF(rc == 0 || rc == -DER_TIMEDOUT,
-				  "crt_context_flush() failed. rc: %d\n", rc);
-			D_DEBUG(DB_TEST, "flush returned rc %d\n", rc);
-			if (rc == 0) {
-				D_DEBUG(DB_TEST, "flush finished.\n");
-				break;
-			}
-
-		}
-		D_DEBUG(DB_TEST, "flush finished.\n");
-		rc = crt_context_destroy(test_g.t_crt_ctx[ii], 0);
-		if (rc != -DER_SUCCESS) {
-			D_DEBUG(DB_TEST, "crt_context_destroy() not successful,"
-				" rc: %d.\n", rc);
-		}
-		D_ASSERTF(rc == 0, "crt_context_destroy(ctx %d) failed. "
-			  "rc: %d\n", ii, rc);
-		D_DEBUG(DB_TEST, "destroyed crt_ctx.\n");
 	}
 
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 	/* corresponding to the crt_init() in run_test_group() */
-	if (test_g.t_is_service) {
-		rc = crt_finalize();
-		D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
-	}
-	if (test_g.t_is_service && test_g.t_my_rank == 0) {
-		rc = crt_group_config_remove(NULL);
-		assert(rc == 0);
-	}
-
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	d_log_fini();
 
-	D_DEBUG(DB_TEST, "exiting.\n");
+	DBG_PRINT("exiting.\n");
 	fprintf(stderr, "exiting.\n");
 }
 
