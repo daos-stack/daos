@@ -179,7 +179,7 @@ DAOS does not support
 openSUSE Tumbleweed,
 Fedora,
 CentOS Stream,
-Alma Linux, 
+Alma Linux,
 Ubuntu, or
 Oracle Linux.
 
