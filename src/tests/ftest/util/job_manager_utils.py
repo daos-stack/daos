@@ -808,6 +808,28 @@ class Systemctl(JobManager):
             self._systemctl.service.value, ", ".join(data))
         return status
 
+    def get_journalctl_command(self, since, until=None):
+        """Get the journalctl command to capture all unit activity from since to until.
+
+        Args:
+            since (str): show log entries from this date.
+            until (str, optional): show log entries up to this date. Defaults
+                to None, in which case it is not utilized.
+
+        Returns:
+            str: journalctl command to capture all unit activity
+
+        """
+        command = [
+            "sudo",
+            "journalctl",
+            "--unit={}".format(self._systemctl.service.value),
+            "--since=\"{}\"".format(since),
+        ]
+        if until:
+            command.append("--until=\"{}\"".format(until))
+        return " ".join(command)
+
     def get_log_data(self, hosts, since, until=None, timeout=60):
         """Gather log output for the command running on each host.
 
@@ -840,19 +862,11 @@ class Systemctl(JobManager):
         # Setup the journalctl command to capture all unit activity from the
         # specified start date to now or a specified end date
         #   --output=json?
-        command = [
-            "sudo",
-            "journalctl",
-            "--unit={}".format(self._systemctl.service.value),
-            "--since=\"{}\"".format(since),
-        ]
-        if until:
-            command.append("--until=\"{}\"".format(until))
-        self.log.info(
-            "Gathering log data on %s: %s", str(hosts), " ".join(command))
+        command = self.get_journalctl_command(since, until)
+        self.log.info("Gathering log data on %s: %s", str(hosts), command)
 
         # Gather the log information per host
-        results = run_pcmd(hosts, " ".join(command), False, timeout, None)
+        results = run_pcmd(hosts, command, False, timeout, None)
 
         # Determine if the command completed successfully without a timeout
         status = True
@@ -950,7 +964,7 @@ class Systemctl(JobManager):
         """
         self.log.info(
             "Searching for '%s' in '%s' output on %s",
-            pattern, self._systemctl, self._hosts)
+            pattern, self.get_journalctl_command(since, until), self._hosts)
 
         log_data = None
         detected = 0
