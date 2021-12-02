@@ -36,7 +36,7 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
-		ino = dfuse_compute_inode(parent->ie_dfs, oid, false);
+		ino = dfuse_compute_inode(parent->ie_dfs, oid, true);
 
 		DFUSE_TRA_DEBUG(fs_handle, "Unlinked entry if dir %#lx", ino);
 

@@ -565,17 +565,6 @@ dfuse_compute_inode(struct dfuse_cont *dfs, daos_obj_id_t *oid, bool dir)
 
 #define DFUSE_INO_IS_DIR(INO) ((INO & 0x1) == 0x1)
 
-#if 0
-static inline void
-dfuse_htable_decref(struct dfuse_projection_info *fs_handle, d_list_t *rlink, ino_t ino)
-{
-	if (DFUSE_INO_IS_DIR(ino))
-		d_hash_rec_decref(&fs_handle->dpi_idt, rlink);
-	else
-		d_hash_rec_decref(&fs_handle->dpi_indt, rlink);
-}
-#endif
-
 extern char *duns_xattr_name;
 
 int
