@@ -45,6 +45,16 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         # Ignore errors cleaning up mdtest
         return []
 
+    def tearDown(self):
+        try:
+            super().tearDown()
+        except (CommandFailure, DaosTestError) as excep:
+            self.log.info("{}: tearDown threw an exception "
+                          "because a rank was (intentionally) "
+                          "stopped midway through a run of mdtest."
+                          .format(repr(excep)))
+            pass
+
     def test_net_telemetry(self):
         """Jira ID: DAOS-9020.
 
