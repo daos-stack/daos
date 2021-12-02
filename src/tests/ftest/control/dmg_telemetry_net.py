@@ -34,7 +34,16 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
 
         """
         # kill any hanging mdtest processes
-        pcmd(self.hostlist_servers, "pkill -9 mdtest", True)
+        ret = []
+        cmd = "pkill -9 mdtest"
+        for retry in range(0, 5):
+            ret_codes = pcmd(self.hostlist_servers, cmd)
+            if len(ret_codes) > 1 or 0 not in ret_codes:
+                self.log.info("Retry #{}: Not all '{}' commands in pcmd "
+                              "returned 0.".format(retry, cmd))
+
+        # Ignore errors cleaning up mdtest
+        return []
 
     def test_net_telemetry(self):
         """Jira ID: DAOS-9020.
