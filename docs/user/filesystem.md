@@ -376,6 +376,32 @@ These are two command line options to control the DFuse process itself.
 These will affect all containers accessed via DFuse, regardless of any
 container attributes.
 
+### Permissions
+
+DFuse can serve data from any user's container, but needs appropriate permissions in order to do
+this.
+
+File ownership within containers is set by the container being served, with the owner of the
+container owning all files within that container, so if looking at the container of another user
+then all entries within that container will be owned by that user, and file-based permissions
+checks by the kernel will be made on that basis.
+
+Should write permission be granted to another user then any newly created files will also be
+owned by the container owner, regardless of the user used to create them.  Permissions are only
+checked on connect, so if permissions are revoked users need to
+restart DFuse for these to be picked up.
+
+#### Pool permissions.
+
+DFuse needs 'r' permission for pools only.
+
+#### Container permissions.
+
+DFuse needs 'r', 't', and 'a' permissions to run: read for accessing the data, 't' to read container
+properties to know the container type and 'a' to read the ACLs to know the container owner.
+
+Write permission for the container is optional; however, without it the container will be read-only.
+
 ### Stopping DFuse
 
 When done, the file system can be unmounted via fusermount:
