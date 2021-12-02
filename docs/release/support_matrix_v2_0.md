@@ -211,13 +211,21 @@ DAOS Version 2.0 has been validated mainly with the `verbs` provider
 for InfiniBand fabrics, and the `sockets` provider for other fabrics.
 Future DAOS releases may add support for additional libfabric providers.
 
-Note: The libfabrics team is deprecating the `sockets` provider in
-favor of the `tcp` provider. DAOS Version 2.0 has been validated with
-and supports the `sockets` provider. Validation of the `tcp` provider
-with DAOS is ongoing, so the `tcp` provider is not yet supported in
-DAOS Version 2.0.0.
+Note:
+DAOS Version 2.0 has been validated with and supports the `sockets` provider.
+The `sockets` provider is supported and maintained by the libfabrics team,
+but has been feature frozen since the libfabric-1.9 release.
+For details on the `sockets` provider please refer to the
+[Provider Feature Matrix v1.8](https://github.com/ofiwg/libfabric/wiki/Provider-Feature-Matrix-v1.8.x).
+Going forward, the preferred provider for TCP/IP networks will be the `tcp` provider.
+Please refer to the
+[Provider Feature Matrix v1.14](https://github.com/ofiwg/libfabric/wiki/Provider-Feature-Matrix-v1.14.x)
+for information on the `tcp` provider in libfabric-1.14.
+Validation of the `tcp` provider with DAOS is ongoing,
+so the `tcp` provider is not yet supported in DAOS Version 2.0.
 
-Note: The `psm2` provider for Omni-Path fabrics has known issues
+Note:
+The `psm2` provider for Omni-Path fabrics has known issues
 when used in a DAOS context, and is not supported for production
 environments. Please refer to the
 [Cornelis Networks presentation](https://daosio.atlassian.net/wiki/download/attachments/11015454821/12_Update_on_Omni-Path_Support_for_DAOS_DUG21_19Nov2021.pdf)
