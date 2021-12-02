@@ -6,6 +6,12 @@
 
 package storage
 
+/*
+#include "stdlib.h"
+#include "daos_srv/control.h"
+*/
+import "C"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -24,44 +30,28 @@ import (
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
 const BdevPciAddrSep = " "
 
-// SmdState represents the health state of SMD structure on an NVMe device (namespace).
-type SmdState int
+// BioState represents the health state of BIO device on an NVMe device (a blobstore on a NVMe
+// namespace).
+type BioState uint32
 
 const (
-	// SmdstateUnknown is the default invalid state.
-	SmdStateUnknown SmdState = 0x0000
-	// SmdStateNew indicates the SMD entry has been created but not initialized.
-	SmdStateNew SmdState = 0x0001
-	// SmdStateNormal indicates the SMD entry has been created and initialized.
-	SmdStateNormal SmdState = 0x0002
-	// SmdStateFaulty indicates the SMD entry has been identified as faulty.
-	SmdStateFaulty SmdState = 0x0004
+	// BioStateNormal indicates device is fully functional and in-use.
+	BioStateNormal BioState = C.BIO_DEV_NORMAL
+	// BioStateFaulty indicates the device has been evicted.
+	BioStateFaulty BioState = C.BIO_DEV_FAULTY
+	// BioStateOut indicates device is unplugged.
+	BioStateOut BioState = C.BIO_DEV_OUT
+	// BioStateNew indicates device is new not currently in-use.
+	BioStateNew BioState = C.BIO_DEV_NEW
 )
 
-func (ss SmdState) String() string {
-	switch ss {
-	case SmdStateNew:
-		return "NEW"
-	case SmdStateNormal:
-		return "NORMAL"
-	case SmdStateFaulty:
-		return "FAULTY"
-	default:
-		return "UNKNOWN"
-	}
+func (bs BioState) String() string {
+	return C.GoString(C.bio_dev_state_enum_to_str(C.bio_dev_state(bs)))
 }
 
-func smdStateFromString(in string) SmdState {
-	switch strings.ToUpper(in) {
-	case "NEW":
-		return SmdStateNew
-	case "NORMAL":
-		return SmdStateNormal
-	case "FAULTY":
-		return SmdStateFaulty
-	default:
-		return SmdStateUnknown
-	}
+// Uint32 returns uint32 representation of BIO device state.
+func (bs BioState) Uint32() uint32 {
+	return uint32(bs)
 }
 
 type (
@@ -120,7 +110,7 @@ type (
 	SmdDevice struct {
 		UUID       string      `json:"uuid"`
 		TargetIDs  []int32     `hash:"set" json:"tgt_ids"`
-		State      SmdState    `json:"-"`
+		State      BioState    `json:"-"`
 		Rank       system.Rank `json:"rank"`
 		TotalBytes uint64      `json:"total_bytes"`
 		AvailBytes uint64      `json:"avail_bytes"`
@@ -171,10 +161,10 @@ func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
 	// most fields
 	type toJSON SmdDevice
 	return json.Marshal(&struct {
-		State string `json:"state"`
+		State uint32 `json:"state"`
 		*toJSON
 	}{
-		State:  sd.State.String(),
+		State:  sd.State.Uint32(),
 		toJSON: (*toJSON)(sd),
 	})
 }
@@ -189,7 +179,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON SmdDevice
 	from := &struct {
-		State string `json:"state"`
+		State uint32 `json:"state"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sd),
@@ -199,7 +189,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	sd.State = smdStateFromString(from.State)
+	sd.State = BioState(from.State)
 
 	return nil
 }

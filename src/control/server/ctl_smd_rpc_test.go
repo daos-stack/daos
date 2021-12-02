@@ -70,7 +70,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{
 						Message: &ctlpb.DevStateResp{
 							DevUuid:  common.MockUUID(),
-							DevState: storage.SmdStateFaulty.String(),
+							DevState: storage.BioStateFaulty.String(),
 						},
 					},
 				},
@@ -81,7 +81,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
 								Uuid:  common.MockUUID(),
-								State: storage.SmdStateFaulty.String(),
+								State: storage.BioStateFaulty.String(),
 							},
 						},
 					},
@@ -402,7 +402,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
 									Uuid:  common.MockUUID(1),
-									State: storage.SmdStateFaulty.String(),
+									State: storage.BioStateFaulty.String(),
 								},
 							},
 						},
@@ -423,7 +423,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
 								Uuid:  common.MockUUID(1),
-								State: storage.SmdStateFaulty.String(),
+								State: storage.BioStateFaulty.String(),
 								Health: &ctlpb.BioHealthResp{
 									Temperature: 1000000,
 									TempWarn:    true,
@@ -459,7 +459,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
 									Uuid:  common.MockUUID(1),
-									State: storage.SmdStateFaulty.String(),
+									State: storage.BioStateFaulty.String(),
 								},
 							},
 						},
@@ -499,7 +499,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 								{
 									Uuid:   common.MockUUID(1),
 									TgtIds: []int32{0},
-									State:  storage.SmdStateFaulty.String(),
+									State:  storage.BioStateFaulty.String(),
 								},
 							},
 						},
@@ -520,7 +520,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 							{
 								Uuid:   common.MockUUID(1),
 								TgtIds: []int32{0},
-								State:  storage.SmdStateFaulty.String(),
+								State:  storage.BioStateFaulty.String(),
 								Health: &ctlpb.BioHealthResp{
 									Temperature: 1000000,
 									TempWarn:    true,

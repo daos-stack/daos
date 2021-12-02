@@ -423,12 +423,12 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	}
 
 	smdDevRespStateNew := newSmdDevResp(1)
-	smdDevRespStateNew.Devices[0].State = storage.SmdStateNew.String()
+	smdDevRespStateNew.Devices[0].State = storage.BioStateNew.String()
 
 	ctrlrPBwMetaNew := newCtrlrPBwMeta(1)
 	ctrlrPBwMetaNew.SmdDevices[0].AvailBytes = 0
 	ctrlrPBwMetaNew.SmdDevices[0].TotalBytes = 0
-	ctrlrPBwMetaNew.SmdDevices[0].State = storage.SmdStateNew.String()
+	ctrlrPBwMetaNew.SmdDevices[0].State = storage.BioStateNew.String()
 
 	mockPbScmMount0 := proto.MockScmMountPoint(0)
 	mockPbScmNamespace0 := proto.MockScmNamespace(0)

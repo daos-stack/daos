@@ -242,7 +242,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 {
 	struct bio_dev_info	   *dev_info = NULL, *tmp;
 	struct bio_list_devs_info   list_devs_info = { 0 };
-	enum bio_dev_state	    state;
+	bio_dev_state		    state;
 	int			    buflen = 10;
 	int			    i = 0, j;
 	int			    rc = 0;

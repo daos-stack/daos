@@ -228,7 +228,7 @@ func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdD
 		}
 
 		// if not non-existent error or smd is in normal state then fail
-		if !ok || smdDev.State == storage.SmdStateNormal {
+		if !ok || smdDev.State == storage.BioStateNormal {
 			return false, errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(),
 				ctrlr.PciAddr)
 		}
