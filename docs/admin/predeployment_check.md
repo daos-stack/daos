@@ -139,6 +139,13 @@ For the daos_agent, either uncomment and set the runtime_dir configuration value
 /etc/daos/daos_agent.yml or a location can be passed on the command line using
 the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
 
+NOTE: Do not change these when running under `systemd` control.
+      If these directories need to be changed, then make sure that they match the
+      RuntimeDirectory setting in the /usr/lib/systemd/system/daos_agent.service
+      and /usr/lib/systemd/system/daos_server.service configuration files.
+      The socket directories will be created and removed by `systemd` when the
+      services are started and stopped.
+
 ### Default Directory (non-persistent)
 
 Files and directories created in /run and /var/run only survive until
