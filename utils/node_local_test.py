@@ -1219,9 +1219,8 @@ class daos_cmd_return():
             for line in self.rc.stdout.splitlines():
                 output += '\nstdout: {}'.format(line)
 
-        if self.rc.stderr != b'':
-            for line in self.rc.stderr.splitlines():
-                output += '\nstderr: {}'.format(line)
+        for line in self.rc.stderr.splitlines():
+            output += '\nstderr: {}'.format(line)
         return output
 
 def run_daos_cmd(conf,
@@ -2553,6 +2552,9 @@ def run_posix_tests(server, conf, test=None):
                 break
             ptl.call_index = ptl.call_index + 1
 
+        if ptl.fatal_errors:
+            pto.fatal_errors = True
+
     server.get_test_pool()
     pool = server.test_pool
 
@@ -2571,15 +2573,11 @@ def run_posix_tests(server, conf, test=None):
 
         slow_tests = ['test_readdir_25', 'test_uns_basic', 'test_daos_fs_tool']
 
-        tests = sorted(dir(pto))
-        for stest in slow_tests:
-            tests.remove(stest)
+        tests = dir(pto)
+        tests.sort(key=lambda x: x not in slow_tests)
 
-        all_tests = list(slow_tests)
-        all_tests.extend(tests)
-
-        for fn in all_tests:
-            if not fn.startswith('test'):
+        for fn in tests:
+            if not fn.startswith('test_'):
                 continue
 
             ptl = posix_tests(server, conf, pool=pool)
@@ -2593,7 +2591,7 @@ def run_posix_tests(server, conf, test=None):
                                       kwargs={'ptl': ptl, 'test_cb': obj, 'function': fn},
                                       daemon=True)
             thread.start()
-            threads.append({'thread': thread, 'ptl': ptl})
+            threads.append(thread)
 
             # Limit the number of concurrent tests, but poll all active threads so there's no
             # expectation for them to complete in order.  At the minute we only have a handlful of
@@ -2602,17 +2600,13 @@ def run_posix_tests(server, conf, test=None):
             # tests are started first.
             while len(threads) > 5:
                 for td in threads:
-                    td['thread'].join(timeout=0)
-                    if td['thread'].is_alive():
+                    td.join(timeout=0)
+                    if td.is_alive():
                         continue
                     threads.remove(td)
-                    if td['ptl'].fatal_errors:
-                        pto.fatal_errors = True
 
         for td in threads:
-            td['thread'].join()
-            if td['ptl'].fatal_errors:
-                pto.fatal_errors = True
+            td.join()
 
     out_wrapper = None
     err_wrapper = None
