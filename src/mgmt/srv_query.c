@@ -279,7 +279,6 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		 * NULL.
 		 */
 		resp->devices[i]->uuid = NULL;
-		resp->devices[i]->state = NULL;
 		resp->devices[i]->tr_addr = NULL;
 
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
@@ -290,12 +289,6 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		uuid_unparse_lower(dev_info->bdi_dev_id,
 				   resp->devices[i]->uuid);
 
-		D_ALLOC(resp->devices[i]->state, buflen);
-		if (resp->devices[i]->state == NULL) {
-			D_ERROR("Failed to allocate device state");
-			rc = -DER_NOMEM;
-			break;
-		}
 		/* BIO device state is determined by device flags */
 		if (dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) {
 			if (dev_info->bdi_flags & NVME_DEV_FL_FAULTY)
@@ -307,8 +300,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		} else
 			state = BIO_DEV_OUT;
 
-		strncpy(resp->devices[i]->state,
-			bio_dev_state_enum_to_str(state), buflen);
+		resp->devices[i]->state = state;
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
@@ -355,8 +347,6 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 					D_FREE(resp->devices[i]->uuid);
 				if (resp->devices[i]->tgt_ids != NULL)
 					D_FREE(resp->devices[i]->tgt_ids);
-				if (resp->devices[i]->state != NULL)
-					D_FREE(resp->devices[i]->state);
 				if (resp->devices[i]->tr_addr != NULL)
 					D_FREE(resp->devices[i]->tr_addr);
 				D_FREE(resp->devices[i]);

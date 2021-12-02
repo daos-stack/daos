@@ -1331,18 +1331,18 @@ static const ProtobufCFieldDescriptor ctl__smd_dev_resp__device__field_descripto
     offsetof(Ctl__SmdDevResp__Device, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "state",
+    "bio_state",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
+    PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
-    offsetof(Ctl__SmdDevResp__Device, state),
+    offsetof(Ctl__SmdDevResp__Device, bio_state),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -1360,7 +1360,7 @@ static const ProtobufCFieldDescriptor ctl__smd_dev_resp__device__field_descripto
   },
 };
 static const unsigned ctl__smd_dev_resp__device__field_indices_by_name[] = {
-  2,   /* field[2] = state */
+  2,   /* field[2] = bio_state */
   1,   /* field[1] = tgt_ids */
   3,   /* field[3] = tr_addr */
   0,   /* field[0] = uuid */
@@ -1477,7 +1477,7 @@ static const ProtobufCFieldDescriptor ctl__smd_pool_resp__pool__field_descriptor
     offsetof(Ctl__SmdPoolResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -1489,7 +1489,7 @@ static const ProtobufCFieldDescriptor ctl__smd_pool_resp__pool__field_descriptor
     offsetof(Ctl__SmdPoolResp__Pool, blobs),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
@@ -2079,18 +2079,18 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__device__field_descrip
     offsetof(Ctl__SmdQueryResp__Device, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "state",
+    "bio_state",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
+    PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryResp__Device, state),
+    offsetof(Ctl__SmdQueryResp__Device, bio_state),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -2120,8 +2120,8 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__device__field_descrip
   },
 };
 static const unsigned ctl__smd_query_resp__device__field_indices_by_name[] = {
+  2,   /* field[2] = bio_state */
   4,   /* field[4] = health */
-  2,   /* field[2] = state */
   1,   /* field[1] = tgt_ids */
   3,   /* field[3] = tr_addr */
   0,   /* field[0] = uuid */
@@ -2169,7 +2169,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__pool__field_descripto
     offsetof(Ctl__SmdQueryResp__Pool, tgt_ids),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
@@ -2181,7 +2181,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__pool__field_descripto
     offsetof(Ctl__SmdQueryResp__Pool, blobs),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
