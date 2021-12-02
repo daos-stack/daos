@@ -103,8 +103,8 @@ $ sysctl -w net.ipv4.conf.<ifaces>.rp_filter=2
 ```
 
 All those parameters can be made persistent in /etc/sysctl.conf by adding a new
-sysctl file under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf) with all
-the relevant settings.
+sysctl file under /usr/lib/sysctl.d (e.g. /usr/lib/sysctl.d/95-daos-net.conf)
+with all the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
@@ -256,3 +256,28 @@ commandline (including source builds), limits should be adjusted in
 `/etc/security/limits.conf` as per
 [this article](https://access.redhat.com/solutions/61334) (which is a RHEL
 specific document but the instructions apply to most Linux distributions).
+
+## Socket receive buffer size
+
+Low socket receive buffer size can cause SPDK to fail and emit the following
+error (receive buffer size is required to be above 1MB):
+
+```bash
+daos_engine:1 pci_event.c:  68:spdk_pci_event_listen: *ERROR*: Failed to set socket
+ option
+```
+
+The socket receive buffer size does not need to be manually adjusted if
+`daos_server` has been installed using an RPM package (as the settings
+will be applied automatically on install).
+
+For non-RPM installations where `daos_server` has been built from source,
+`rmem_default` and `rmem_max` settings should be set to >= 1MB.
+Optionally, the `utils/rpms/10-daos_server.conf` can be copied to `/usr/lib/sysctl.d/`
+to apply the settings automatically on boot.
+Running `/usr/lib/systemd/systemd-sysctl /usr/lib/sysctl.d/10-daos_server.conf`
+will apply these settings immediately (avoiding the need for an immediate reboot).
+For further information see
+[this article on network kernel settings](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/5/html/tuning_and_optimizing_red_hat_enterprise_linux_for_oracle_9i_and_10g_databases/sect-oracle_9i_and_10g_tuning_guide-adjusting_network_settings-changing_network_kernel_settings)
+using any of the methods described in
+[this article on adjusting kernel tunables](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/kernel_administration_guide/working_with_sysctl_and_kernel_tunables).
