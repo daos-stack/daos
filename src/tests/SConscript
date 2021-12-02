@@ -14,12 +14,17 @@ def scons():
 
     denv = base_env.Clone()
 
+    have_mpi = False
+
     if not GetOption('help') and not GetOption('clean'):
         mpi = daos_build.configure_mpi(denv, libs_client)
         if mpi is None:
+            SConscript('suite/SConscript', exports=['denv', 'have_mpi'])
             print("\nSkipping compilation for tests that need MPI")
             print("Install and load mpich or openmpi\n")
             return
+
+    have_mpi = True
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -63,7 +68,7 @@ def scons():
     denv.Install('$PREFIX/bin/', jobtest)
 
     # tests
-    SConscript('suite/SConscript', exports=['denv'])
+    SConscript('suite/SConscript', exports=['denv', 'have_mpi'])
 
     # Build drpc_test
     SConscript('drpc/SConscript')

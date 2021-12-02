@@ -77,12 +77,18 @@ def configure_cmocka(nenv):
 #
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'base_env', 'have_mpi')
 
     libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'cmocka', 'pthread', 'isal']
 
-    dfuse_env = denv.Clone()
+    dfuse_env = base_env.Clone()
+    dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"))
+    denv.Install('$PREFIX/bin/', dfusetest)
+
+    if not have_mpi:
+        return
+
     denv.AppendUnique(CPPPATH=["#/src/client/dfs"])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
@@ -118,11 +124,8 @@ def scons():
     dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
                                  LIBS=['daos_common'] + libraries)
 
-    dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"))
-
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)
-    denv.Install('$PREFIX/bin/', dfusetest)
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_1'))
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_2'))
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_3'))
