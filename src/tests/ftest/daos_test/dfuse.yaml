@@ -35,5 +35,9 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
+  test_name:
+    test_daos_dfuse_openat: DAOS_DFUSE_Openat
   daos_test:
-    test_daos_dfuse_unit: o
+    test_daos_dfuse_openat: o
+  num_client:
+    test_data_dfuse_openat: 1
