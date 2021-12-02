@@ -37,8 +37,8 @@ class BuildDaos(DfuseTestBase):
         self.add_pool(connect=False)
         self.add_container(self.pool)
 
-        self.container.container.set_attr(data={'dfuse-direct-io-disable':'off',
-                                                'dfuse-data-cache': 'off'})
+        self.container.container.set_attr(data={b'dfuse-direct-io-disable': b'off',
+                                                b'dfuse-data-cache': b'off'})
 
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
