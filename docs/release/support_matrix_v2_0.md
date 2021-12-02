@@ -72,7 +72,7 @@ but this is not supported in a production environment.)
 It is strongly recommended that all DAOS engines in a DAOS system use the same
 model of high-speed fabric adapter.
 Heterogeneous adapter population across DAOS engines has **not** been tested,
-and running with such configurations may cause unexpected behaviour.
+and running with such configurations may cause unexpected behavior.
 Please refer to "Fabric Support" below for more details.
 
 
@@ -173,17 +173,14 @@ DAOS Version 2.0 is supported on SLES 15 SP3.
 Links to SLES 15 Release Notes:
 * [SLES 15 SP3](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP3/)
 
-### Ubuntu 20
-
-DAOS Version 2.0 does not support Ubuntu.
-
 ### Unsupported Linux Distributions
 
 DAOS does not support
 openSUSE Tumbleweed,
 Fedora,
 CentOS Stream,
-Alma Linux, or
+Alma Linux, 
+Ubuntu, or
 Oracle Linux.
 
 
@@ -213,6 +210,12 @@ Not all libfabric providers are supported.
 DAOS Version 2.0 has been validated mainly with the `verbs` provider
 for InfiniBand fabrics, and the `sockets` provider for other fabrics.
 Future DAOS releases may add support for additional libfabric providers.
+
+Note: The libfabrics team is deprecating the `sockets` provider in
+favor of the `tcp` provider. DAOS Version 2.0 has been validated with
+and supports the `sockets` provider. Validation of the `tcp` provider
+with DAOS is ongoing, so the `tcp` provider is not yet supported in
+DAOS Version 2.0.0.
 
 Note: The `psm2` provider for Omni-Path fabrics has known issues
 when used in a DAOS context, and is not supported for production
