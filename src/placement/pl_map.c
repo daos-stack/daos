@@ -153,7 +153,7 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	D_ASSERT(map->pl_ops != NULL);
 
-	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL, NULL);
 	if (daos_oclass_grp_size(oc_attr) == 1)
 		return 0;
 
@@ -189,7 +189,7 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 
 	D_ASSERT(map->pl_ops != NULL);
 
-	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL, NULL);
 	if (daos_oclass_grp_size(oc_attr) == 1)
 		return 0;
 
@@ -282,12 +282,14 @@ obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
 		DP_OID(oid), layout->ol_ver);
 
 	for (i = 0; i < layout->ol_nr; i++)
-		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s\n",
+		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s %s\n",
 			i, layout->ol_shards[i].po_shard,
 			layout->ol_shards[i].po_target,
 			layout->ol_shards[i].po_fseq,
 			layout->ol_shards[i].po_rebuilding ?
-			"rebuilding" : "healthy");
+			"rebuilding" : "healthy",
+			layout->ol_shards[i].po_reintegrating ?
+			"reintegrating" : "healthy");
 }
 
 /**
@@ -699,7 +701,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	int                              i;
 
 	start = grp_idx * grp_size;
-	oc_attr = daos_oclass_attr_find(oid, NULL);
+	oc_attr = daos_oclass_attr_find(oid, NULL, NULL);
 	if (oc_attr->ca_resil == DAOS_RES_EC) {
 		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
 

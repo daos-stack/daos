@@ -468,7 +468,10 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 		return rc;
 
 	/* Shuffle the target ranks to avoid overloading any particular ranks. */
-	daos_rank_list_shuffle(rnd_tgts);
+	/*
+	 * DAOS-9177: Temporarily disable shuffle to give us more time to stabilize tests.
+	 */
+	/*daos_rank_list_shuffle(rnd_tgts);*/
 
 	/* Determine the number of selectable targets. */
 	selectable = rnd_tgts->rl_nr;
@@ -5592,7 +5595,7 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc != 0)
 		goto out;
 
-	oca = daos_oclass_attr_find(oid->id_pub, NULL);
+	oca = daos_oclass_attr_find(oid->id_pub, NULL, NULL);
 	leader_idx = pl_select_leader(oid->id_pub, oid->id_shard / daos_oclass_grp_size(oca),
 				      layout->ol_grp_size, NIL_BITMAP, mbs, tgt_id,
 				      pl_obj_get_shard, layout);

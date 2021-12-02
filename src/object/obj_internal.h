@@ -110,6 +110,20 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
+/* to record EC singv fetch stat from different shards */
+struct shard_fetch_stat {
+	/* iod_size for array; or iod_size for EC singv on shard 0 or parity shards, those shards
+	 * always be updated when EC singv being overwritten.
+	 */
+	daos_size_t		sfs_size;
+	/* iod_size on other shards, possibly be missed when EC singv overwritten. */
+	daos_size_t		sfs_size_other;
+	/* rc on shard 0 or parity shards */
+	int32_t			sfs_rc;
+	/* rc on other data shards */
+	int32_t			sfs_rc_other;
+};
+
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending
@@ -147,12 +161,10 @@ struct obj_reasb_req {
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
-	/* target bitmap, one bit for each target (from first data cell to last
-	 * parity cell.
-	 */
+	/* target bitmap, one bit for each target (from first data cell to last parity cell. */
 	uint8_t				*tgt_bitmap;
-	/* iod_size is set by IO reply, one per iod */
-	daos_size_t			*orr_size_set;
+	/* fetch stat, one per iod */
+	struct shard_fetch_stat		*orr_fetch_stat;
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
@@ -462,10 +474,10 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
-int
-dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
-	      daos_oclass_id_t *oc_id_);
+int dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
+		  enum daos_otype_t otype, daos_oclass_hints_t hints,
+		  enum daos_obj_redun *ord, uint32_t *nr);
+
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
@@ -761,7 +773,7 @@ obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 	if (dkey == NULL)
 		return 0;
 
-	if (daos_obj_id2feat(oid) & DAOS_OF_DKEY_UINT64)
+	if (daos_is_dkey_uint64(oid))
 		return *(uint64_t *)dkey->iov_buf;
 
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,

@@ -948,13 +948,13 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 		/* Step-1: find the btree attributes and create btree */
 		if (tclass == VOS_BTR_DKEY) {
-			uint64_t	obj_feats;
+			enum daos_otype_t type;
 
 			/* Check and setup the akey key compare bits */
-			obj_feats = daos_obj_id2feat(obj->obj_df->vo_id.id_pub);
-			if (obj_feats & DAOS_OF_AKEY_UINT64)
+			type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
+			if (daos_is_akey_uint64_type(type))
 				tree_feats |= VOS_KEY_CMP_UINT64_SET;
-			else if (obj_feats & DAOS_OF_AKEY_LEXICAL)
+			else if (daos_is_akey_lexical_type(type))
 				tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 		}
 
@@ -1177,10 +1177,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	if (rc != 0)
 		goto done;
 
-	if (*known_key != umem_ptr2off(vos_obj2umm(obj), krec)) {
-		/** Set the bit to mark the key as punched.   Since this version doesn't support
-		 *  the optimization, this makes it compatible with versions that do.
-		 */
+	if (*known_key == umem_ptr2off(vos_obj2umm(obj), krec)) {
+		/** Set the value to UMOFF_NULL so punch propagation will run full check */
 		rc = umem_tx_add_ptr(vos_obj2umm(obj), known_key, sizeof(*known_key));
 		if (rc)
 			D_GOTO(done, rc);
@@ -1211,15 +1209,15 @@ obj_tree_init(struct vos_object *obj)
 
 	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
-		uint64_t	tree_feats	= 0;
-		daos_ofeat_t	obj_feats;
+		uint64_t tree_feats = 0;
+		enum daos_otype_t type;
 
 		D_DEBUG(DB_DF, "Create btree for object\n");
 
-		obj_feats = daos_obj_id2feat(obj->obj_df->vo_id.id_pub);
-		if (obj_feats & DAOS_OF_DKEY_UINT64)
+		type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
+		if (daos_is_dkey_uint64_type(type))
 			tree_feats |= VOS_KEY_CMP_UINT64_SET;
-		else if (obj_feats & DAOS_OF_DKEY_LEXICAL)
+		else if (daos_is_dkey_lexical_type(type))
 			tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 
 		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
