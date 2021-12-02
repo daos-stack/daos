@@ -1,8 +1,15 @@
-daos (2.1.100-9) unstable; urgency=medium
+daos (2.1.100-10) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Update mercury to v2.1.0rc4
 
  -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Mon, 29 Nov 2021 10:00:01 -0100
+
+daos (2.1.100-8) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Set rmem_{max,default} sysctl values on server package install to enable
+    SPDK pci_event module to operate in unprivileged process (daos_engine).
+
+ -- Tom Nabarro <tom.nabarro@intel.com> Mon, 22 Nov 2021 16:42:54 -0100
 
 daos (2.1.100-7) unstable; urgency=medium
   [ Wang Shilong ]
