@@ -2063,10 +2063,8 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 
 	if (rpc_req->cr_co_bulk_hdl != CRT_BULK_NULL) {
 		D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
-		if (tmp_iovs == NULL) {
-			D_ERROR("Failed to allocate temporary iovs\n");
-			D_GOTO(exit, rc);
-		}
+		if (tmp_iovs == NULL)
+			D_GOTO(exit, rc = -DER_NOMEM);
 
 		tmp_iv.sg_nr = iv_value.sg_nr;
 		tmp_iv.sg_iovs = tmp_iovs;
