@@ -14,7 +14,7 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 @Library(value=["pipeline-lib@bmurrell/distro-version-for-hwdistro",
-                "system-pipeline-lib@bmurrell/try-non-point-release-distro-version") _
+                "system-pipeline-lib@bmurrell/try-non-point-release-distro-version"]) _
 
 // For master, this is just some wildly high number
 next_version = "1000"
