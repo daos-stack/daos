@@ -468,7 +468,10 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 		return rc;
 
 	/* Shuffle the target ranks to avoid overloading any particular ranks. */
-	daos_rank_list_shuffle(rnd_tgts);
+	/*
+	 * DAOS-9177: Temporarily disable shuffle to give us more time to stabilize tests.
+	 */
+	/*daos_rank_list_shuffle(rnd_tgts);*/
 
 	/* Determine the number of selectable targets. */
 	selectable = rnd_tgts->rl_nr;
