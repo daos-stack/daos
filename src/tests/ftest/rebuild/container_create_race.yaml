@@ -1,50 +1,49 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
     - server-B
     - server-C
     - server-D
-    - server-E
   test_clients:
-    - client-F
-timeout: 700
+    - client-A
+timeout: 360
 server_config:
   name: daos_server
+  servers:
+    targets: 2
+testparams:
+  ranks:
+    rank_to_kill: 3
 pool:
-  mode: 511
+  mode: 146
   name: daos_server
-  scm_size: 8589934592
-  svcn: 3
+  scm_size: 7G
+  svcn: 1
   control_method: dmg
-  pool_query_timeout: 30
+  pool_query_timeout: 15
 container:
   type: POSIX
   control_method: daos
-  object_qty: 1
-  record_qty: 1
-  akey_size: 4
-  dkey_size: 4
-  data_size: 64
+io:
+  object_qty: 8
+  record_qty: 8
+  data_size: 100000
+  akey_size: 10
+  dkey_size: 10
+  oclass: "OC_RP_3GX"
+  cont_qty: 10
 ior:
-  api: DFS
-  block_size: 16m
-  segment_count: 16
-  transfer_size: 16m
-  dfs_oclass: RP_3GX
-test:
-  loop_quantity: !mux
-    one_loop:
-      loops: 1
-    three_loops:
-      loops: 3
-  pool_quantity: !mux
-    one_pool:
-      pools: 1
-    two_pools:
-      pools: 2
-  exclude_rank: !mux
-    last_rank:
-      rank: 4
-  containers: 70
-  container_obj_class: "OC_RP_3GX"
-  use_ior: True
+    client_processes:
+        np_8:
+            np: 8
+    ior_test_loop: 2
+    repetitions: 1
+    api: DFS
+    dfs_oclass: "RP_2G1"
+    flags: "-w -W -k -G 1"
+    transfersize_blocksize:
+      1M:
+        transfer_size: '1M'
+        block_size: '128M'

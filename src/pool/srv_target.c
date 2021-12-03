@@ -39,6 +39,22 @@
 
 /* ds_pool_child **************************************************************/
 
+static void
+stop_gc_ult(struct ds_pool_child *child)
+{
+	D_ASSERT(child != NULL);
+	/* GC ULT is not started */
+	if (child->spc_gc_req == NULL)
+		return;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
+		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	sched_req_wait(child->spc_gc_req, true);
+	sched_req_put(child->spc_gc_req);
+	child->spc_gc_req = NULL;
+}
+
 struct ds_pool_child *
 ds_pool_child_lookup(const uuid_t uuid)
 {
@@ -71,6 +87,10 @@ ds_pool_child_put(struct ds_pool_child *child)
 			DP_UUID(child->spc_uuid));
 		D_ASSERT(d_list_empty(&child->spc_list));
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
+
+		/* only stop gc ULT when all ops ULTs are done */
+		stop_gc_ult(child);
+
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
 		ABT_eventual_set(child->spc_ref_eventual,
@@ -104,7 +124,10 @@ gc_ult(void *arg)
 			break;
 
 		/* It'll be woke up by container destroy or aggregation */
-		sched_req_sleep(child->spc_gc_req, 10ULL * 1000);
+		if (rc > 0)
+			sched_req_yield(child->spc_gc_req);
+		else
+			sched_req_sleep(child->spc_gc_req, 10UL * 1000);
 	}
 
 out:
@@ -117,47 +140,21 @@ start_gc_ult(struct ds_pool_child *child)
 {
 	struct dss_module_info	*dmi = dss_get_module_info();
 	struct sched_req_attr	 attr;
-	ABT_thread		 gc = ABT_THREAD_NULL;
-	int			 rc;
 
 	D_ASSERT(child != NULL);
 	D_ASSERT(child->spc_gc_req == NULL);
 
-	rc = dss_ult_create(gc_ult, child, DSS_XS_SELF, 0, 0, &gc);
-	if (rc) {
-		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT. %d\n",
-			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, rc);
-		return rc;
-	}
-
-	D_ASSERT(gc != ABT_THREAD_NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
-	child->spc_gc_req = sched_req_get(&attr, gc);
+
+	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, 0);
 	if (child->spc_gc_req == NULL) {
-		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
-		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_free(&gc);
+		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT.\n",
+			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 		return -DER_NOMEM;
 	}
 
 	return 0;
-}
-
-static void
-stop_gc_ult(struct ds_pool_child *child)
-{
-	D_ASSERT(child != NULL);
-	/* GC ULT is not started */
-	if (child->spc_gc_req == NULL)
-		return;
-
-	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
-		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
-
-	sched_req_wait(child->spc_gc_req, true);
-	sched_req_put(child->spc_gc_req);
-	child->spc_gc_req = NULL;
 }
 
 struct pool_child_lookup_arg {
@@ -291,9 +288,6 @@ pool_child_delete_one(void *uuid)
 		return dss_abterr2der(rc);
 
 	ABT_eventual_free(&child->spc_ref_eventual);
-
-	/* only stop gc ULT when all ops ULTs are done */
-	stop_gc_ult(child);
 
 	/* ds_pool_child must be freed here to keep
 	 * spc_ref_enventual usage safe
@@ -582,31 +576,21 @@ static int
 ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 {
 	struct sched_req_attr	attr;
-	ABT_thread		ec_eph_query_ult = ABT_THREAD_NULL;
-	int			rc;
 
 	if (unlikely(ec_agg_disabled))
 		return 0;
 
-	rc = dss_ult_create(tgt_ec_eph_query_ult, pool, DSS_XS_SYS, 0,
-			    DSS_DEEP_STACK_SZ, &ec_eph_query_ult);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed create ec eph equery ult: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
-		return rc;
-	}
-
-	D_ASSERT(ec_eph_query_ult != ABT_THREAD_NULL);
+	D_ASSERT(pool->sp_ec_ephs_req == NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &pool->sp_uuid);
-	pool->sp_ec_ephs_req = sched_req_get(&attr, ec_eph_query_ult);
+	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_ec_eph_query_ult, pool,
+						DSS_DEEP_STACK_SZ);
 	if (pool->sp_ec_ephs_req == NULL) {
-		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
+		D_ERROR(DF_UUID": failed create ec eph equery ult.\n",
 			DP_UUID(pool->sp_uuid));
-		ABT_thread_free(&ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
 
-	return rc;
+	return 0;
 }
 
 static void

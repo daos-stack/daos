@@ -454,16 +454,28 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 {
 	int			i_rank_zero = -1;
 	int			selectable;
+	d_rank_list_t		*rnd_tgts;
 	d_rank_list_t		*ranks;
 	int			i;
 	int			j;
+	int			rc;
 
 	if (nreplicas <= 0)
 		return -DER_INVAL;
 
+	rc = d_rank_list_dup(&rnd_tgts, target_addrs);
+	if (rc != 0)
+		return rc;
+
+	/* Shuffle the target ranks to avoid overloading any particular ranks. */
+	/*
+	 * DAOS-9177: Temporarily disable shuffle to give us more time to stabilize tests.
+	 */
+	/*daos_rank_list_shuffle(rnd_tgts);*/
+
 	/* Determine the number of selectable targets. */
-	selectable = target_addrs->rl_nr;
-	if (daos_rank_list_find((d_rank_list_t *)target_addrs, 0 /* rank */,
+	selectable = rnd_tgts->rl_nr;
+	if (daos_rank_list_find((d_rank_list_t *)rnd_tgts, 0 /* rank */,
 				&i_rank_zero)) {
 		/*
 		 * Unless it is the only target available, we don't select rank
@@ -477,24 +489,28 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 		nreplicas = selectable;
 	ranks = daos_rank_list_alloc(nreplicas);
 	if (ranks == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* TODO: Choose ranks according to failure domains. */
 	j = 0;
-	for (i = 0; i < target_addrs->rl_nr; i++) {
+	for (i = 0; i < rnd_tgts->rl_nr; i++) {
 		if (j == ranks->rl_nr)
 			break;
 		if (i == i_rank_zero && selectable > 1)
 			/* This is rank 0 and it's not the only rank. */
 			continue;
-		D_DEBUG(DB_MD, "ranks[%d]: %u\n", j, target_addrs->rl_ranks[i]);
-		ranks->rl_ranks[j] = target_addrs->rl_ranks[i];
+		D_DEBUG(DB_MD, "ranks[%d]: %u\n", j, rnd_tgts->rl_ranks[i]);
+		ranks->rl_ranks[j] = rnd_tgts->rl_ranks[i];
 		j++;
 	}
 	D_ASSERTF(j == ranks->rl_nr, "%d == %u\n", j, ranks->rl_nr);
 
 	*ranksp = ranks;
-	return 0;
+	rc = 0;
+
+out:
+	d_rank_list_free(rnd_tgts);
+	return rc;
 }
 
 /* TODO: replace all rsvc_complete_rpc() calls in this file with pool_rsvc_complete_rpc() */
@@ -5557,7 +5573,7 @@ out:
  */
 int
 ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version, int *tgt_id)
+			 struct dtx_memberships *mbs, uint32_t version, int *tgt_id)
 {
 	struct daos_oclass_attr *oca;
 	struct pl_map		*map;
@@ -5568,8 +5584,8 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 
 	map = pl_map_find(pool->sp_uuid, oid->id_pub);
 	if (map == NULL) {
-		D_WARN("Failed to find pool map tp select leader for "
-		       DF_UOID" version = %d\n", DP_UOID(*oid), version);
+		D_ERROR("Failed to find pool map to select leader for "
+			DF_UOID" version = %d\n", DP_UOID(*oid), version);
 		return -DER_INVAL;
 	}
 
@@ -5579,9 +5595,10 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc != 0)
 		goto out;
 
-	oca = daos_oclass_attr_find(oid->id_pub, NULL);
+	oca = daos_oclass_attr_find(oid->id_pub, NULL, NULL);
 	leader_idx = pl_select_leader(oid->id_pub, oid->id_shard / daos_oclass_grp_size(oca),
-				      layout->ol_grp_size, tgt_id, pl_obj_get_shard, layout);
+				      layout->ol_grp_size, NIL_BITMAP, mbs, tgt_id,
+				      pl_obj_get_shard, layout);
 	if (leader_idx < 0) {
 		D_WARN("Failed to select leader for "DF_UOID
 		       "version = %d: rc = %d\n",
@@ -5599,59 +5616,6 @@ out:
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
 	pl_map_decref(map);
-	return rc;
-}
-
-/**
- * Check whether the leader replica of the given object resides
- * on current server or not.
- *
- * \param [IN]	pool		Pointer to the pool
- * \param [IN]	oid		The OID of the object to be checked
- * \param [IN]	version		The pool map version
- *
- * \return			+1 if leader is on current server.
- * \return			Zero if the leader resides on another server,
- *				or the oid->id_shard is not the leader shard.
- * \return			Negative value if error.
- */
-int
-ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 uint32_t version, bool check_shard)
-{
-	struct pool_target	*target;
-	d_rank_t		 myrank;
-	int			 leader_tgt;
-	int			 leader_shard;
-	int			 rc;
-
-	rc = ds_pool_elect_dtx_leader(pool, oid, version, &leader_tgt);
-	if (rc < 0)
-		return rc;
-	leader_shard = rc;
-
-	rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
-	if (rc < 0)
-		D_GOTO(out, rc);
-
-	if (rc != 1)
-		D_GOTO(out, rc = -DER_INVAL);
-
-	rc = crt_group_rank(NULL, &myrank);
-	if (rc < 0)
-		D_GOTO(out, rc);
-
-	if (myrank != target->ta_comp.co_rank) {
-		rc = 0;
-	} else {
-		rc = 1;
-		if (check_shard && oid->id_shard != leader_shard)
-			rc = 0;
-	}
-
-out:
-	D_DEBUG(DB_TRACE, DF_UOID" get new leader shard/tgtid %d/%d: %d\n",
-		DP_UOID(*oid), leader_shard, leader_tgt, rc);
 	return rc;
 }
 
