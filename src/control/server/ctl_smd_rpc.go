@@ -290,8 +290,8 @@ func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryRe
 				Rank: rank.Uint32(),
 				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
-						Uuid:  drr.NewDevUuid,
-						State: drr.DevState,
+						Uuid:     drr.NewDevUuid,
+						BioState: drr.DevState,
 					},
 				},
 			},
@@ -341,8 +341,8 @@ func (svc *ControlService) smdIdentify(ctx context.Context, req *ctlpb.SmdQueryR
 				Rank: rank.Uint32(),
 				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
-						Uuid:  drr.DevUuid,
-						State: drr.LedState,
+						Uuid:     drr.DevUuid,
+						BioState: drr.LedState,
 					},
 				},
 			},

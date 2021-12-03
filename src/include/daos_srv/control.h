@@ -40,6 +40,8 @@ typedef enum {
 	BIO_DEV_OUT,
 	/* new device not currently in-use */
 	BIO_DEV_NEW,
+	/* device is being identified by LED */
+	BIO_DEV_IDENTIFY,
 } bio_dev_state;
 
 /*
@@ -53,10 +55,11 @@ static inline char *
 bio_dev_state_enum_to_str(bio_dev_state state)
 {
 	switch (state) {
-	case BIO_DEV_NORMAL: return "NORMAL";
-	case BIO_DEV_FAULTY: return "EVICTED";
-	case BIO_DEV_OUT:    return "UNPLUGGED";
-	case BIO_DEV_NEW:    return "NEW";
+	case BIO_DEV_NORMAL:	return "NORMAL";
+	case BIO_DEV_FAULTY:	return "EVICTED";
+	case BIO_DEV_OUT:	return "UNPLUGGED";
+	case BIO_DEV_NEW:	return "NEW";
+	case BIO_DEV_IDENTIFY:	return "IDENTIFY";
 	}
 
 	return "Undefined state";

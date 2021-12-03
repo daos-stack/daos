@@ -1338,7 +1338,7 @@ static const ProtobufCFieldDescriptor ctl__smd_dev_resp__device__field_descripto
     "bio_state",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Ctl__SmdDevResp__Device, bio_state),
     NULL,
@@ -1637,7 +1637,7 @@ static const ProtobufCFieldDescriptor ctl__dev_state_resp__field_descriptors[3] 
     "dev_state",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevStateResp, dev_state),
     NULL,
@@ -1765,7 +1765,7 @@ static const ProtobufCFieldDescriptor ctl__dev_replace_resp__field_descriptors[3
     "dev_state",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevReplaceResp, dev_state),
     NULL,
@@ -1867,11 +1867,11 @@ static const ProtobufCFieldDescriptor ctl__dev_identify_resp__field_descriptors[
     "led_state",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevIdentifyResp, led_state),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -2086,7 +2086,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__device__field_descrip
     "bio_state",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
     offsetof(Ctl__SmdQueryResp__Device, bio_state),
     NULL,

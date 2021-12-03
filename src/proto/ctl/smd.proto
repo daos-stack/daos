@@ -77,7 +77,7 @@ message SmdDevResp {
 	message Device {
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
-		int32 bio_state = 3; // BIO device state
+		uint32 bio_state = 3; // BIO device state
 		string tr_addr = 4; // Transport address of blobstore
 	}
 	int32 status = 1;
@@ -104,7 +104,7 @@ message DevStateReq {
 message DevStateResp {
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of blobstore
-	int32 dev_state = 3; // BIO device state
+	uint32 dev_state = 3; // BIO device state
 }
 
 message DevReplaceReq {
@@ -116,7 +116,7 @@ message DevReplaceReq {
 message DevReplaceResp {
 	int32 status = 1; // DAOS error code
 	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	int32 dev_state = 3; // BIO device state
+	uint32 dev_state = 3; // BIO device state
 }
 
 message DevIdentifyReq {
@@ -126,7 +126,7 @@ message DevIdentifyReq {
 message DevIdentifyResp {
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of VMD uuid
-	string led_state = 3; // VMD LED state
+	uint32 led_state = 3; // VMD LED state
 }
 
 message SmdQueryReq {
@@ -146,7 +146,7 @@ message SmdQueryResp {
 	message Device {
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
-		int32 bio_state = 3; // BIO device state
+		uint32 bio_state = 3; // BIO device state
 		string tr_addr = 4; // Transport address of blobstore
 		BioHealthResp health = 5; // optional BIO health
 	}

@@ -43,6 +43,8 @@ const (
 	BioStateOut BioState = C.BIO_DEV_OUT
 	// BioStateNew indicates device is new not currently in-use.
 	BioStateNew BioState = C.BIO_DEV_NEW
+	// BioStateIdentify indicates devices being identified via LED.
+	BioStateIdentify BioState = C.BIO_DEV_IDENTIFY
 )
 
 func (bs BioState) String() string {

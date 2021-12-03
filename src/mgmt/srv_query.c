@@ -300,7 +300,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		} else
 			state = BIO_DEV_OUT;
 
-		resp->devices[i]->state = state;
+		resp->devices[i]->bio_state = state;
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
@@ -466,7 +466,6 @@ int
 ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 {
 	struct smd_dev_info	*dev_info;
-	int			 buflen = 10;
 	int			 rc = 0;
 
 	if (uuid_is_null(dev_uuid))
@@ -485,14 +484,10 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 		return rc;
 	}
 
-	LOC(resp->dev_state, buflen);
-	if (resp->dev_state == NULL) {
-		D_ERROR("Failed to allocate device state");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	strncpy(resp->dev_state,
-		smd_dev_stat2str(dev_info->sdi_state), buflen);
+	if (dev_info->sdi_state == SMD_DEV_NORMAL)
+		resp->dev_state = BIO_DEV_NORMAL;
+	else
+		resp->dev_state = BIO_DEV_FAULTY;
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
@@ -507,8 +502,6 @@ out:
 	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
 	}
@@ -582,7 +575,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	struct smd_dev_info	   *dev_info;
 	ABT_thread		    thread;
 	int			    tgt_id;
-	int			    buflen = 10;
 	int			    rc = 0;
 
 	if (uuid_is_null(dev_uuid))
@@ -607,13 +599,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	}
 	/* Default tgt_id is the first mapped tgt */
 	tgt_id = dev_info->sdi_tgts[0];
-
-	D_ALLOC(resp->dev_state, buflen);
-	if (resp->dev_state == NULL) {
-		D_ERROR("Failed to allocate device state");
-		rc = -DER_NOMEM;
-		goto out;
-	}
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
@@ -646,14 +631,12 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	}
 
 	dev_info->sdi_state = SMD_DEV_FAULTY;
-	strncpy(resp->dev_state, smd_dev_stat2str(dev_info->sdi_state), buflen);
+	resp->dev_state = BIO_DEV_FAULTY;
 
 out:
 	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
 	}
@@ -698,7 +681,6 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 		    Ctl__DevReplaceResp *resp)
 {
 	struct bio_replace_dev_info	 replace_dev_info = { 0 };
-	int				 buflen = 10;
 	int				 rc = 0;
 
 	if (uuid_is_null(old_dev_uuid))
@@ -717,13 +699,6 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	}
 	uuid_unparse_lower(new_dev_uuid, resp->new_dev_uuid);
 
-	D_ALLOC(resp->dev_state, buflen);
-	if (resp->dev_state == NULL) {
-		D_ERROR("Failed to allocate device state");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-
 	uuid_copy(replace_dev_info.old_dev, old_dev_uuid);
 	uuid_copy(replace_dev_info.new_dev, new_dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL,
@@ -734,13 +709,10 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	}
 
 	/* BIO device state after reintegration should be NORMAL */
-	strncpy(resp->dev_state, smd_dev_stat2str(SMD_DEV_NORMAL),
-		buflen);
+	resp->dev_state = BIO_DEV_NORMAL;
 out:
 
 	if (rc != 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
 		if (resp->new_dev_uuid != NULL)
 			D_FREE(resp->new_dev_uuid);
 	}
@@ -785,7 +757,6 @@ int
 ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 {
 	struct bio_identify_dev_info identify_info = { 0 };
-	int			     buflen = 10;
 	int			     rc = 0;
 
 	if (uuid_is_null(dev_uuid))
@@ -801,26 +772,17 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 	}
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
 
-	D_ALLOC(resp->led_state, buflen);
-	if (resp->led_state == NULL) {
-		D_ERROR("Failed to allocate device led state");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-
 	uuid_copy(identify_info.devid, dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_identify, &identify_info, NULL,
 			     NULL, DSS_XS_VOS, 0, 0);
 	if (rc != 0)
 		goto out;
 
-	strcpy(resp->led_state, "IDENTIFY");
+	resp->led_state = BIO_DEV_IDENTIFY;
 
 out:
 
 	if (rc != 0) {
-		if (resp->led_state != NULL)
-			D_FREE(resp->led_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
 	}
