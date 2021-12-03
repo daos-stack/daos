@@ -4,14 +4,15 @@
 
 import os
 import sys
+from os.path import join as join
 import subprocess #nosec
 
 BUILD_FILES = ['site_scons',
                'utils/build.config',
                'SConstruct',
-               '.github/workflows/landing-builds.yml'
+               '.github/workflows/landing-builds.yml',
                '.dockerignore',
-               'ci/gha_helper.y']
+               'ci/gha_helper.py']
 
 COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 
@@ -39,6 +40,8 @@ def main():
 
     single = '--single' in sys.argv
 
+    # The base distro, this is the name of the distro being built, and therefore the name of the
+    # hash key, but it may not be the name of the dockerfile.
     base_distro = os.getenv('BASE_DISTRO', None)
 
     cmd = ['git', 'rev-list', '--abbrev-commit']
@@ -50,8 +53,24 @@ def main():
     cmd.extend(['HEAD', '--'])
     cmd.extend(BUILD_FILES)
 
+    # Check that there are no typos in the BUILD_FILES, and that it's kept up-to-date.
+    for fname in BUILD_FILES:
+        assert os.path.exists(fname)
+
     if base_distro:
-        cmd.append('utils/docker/Dockerfile.{}'.format(base_distro))
+        docker_distro = os.getenv('DOCKER_BASE', base_distro)
+
+        dockerfile = 'utils/docker/Dockerfile.{}'.format(docker_distro)
+        assert os.path.exists(dockerfile)
+        cmd.append(dockerfile)
+
+        install_helper = docker_distro.replace('.', '')
+        if install_helper == 'ubuntu2004':
+            install_helper = install_helper[:-2]
+        install_script = join('utils', 'scripts', 'install-{}.sh'.format(install_helper))
+
+        assert os.path.exists(install_script)
+        cmd.append(dockerfile)
     else:
         cmd.append('utils/docker')
         base_distro = ''
