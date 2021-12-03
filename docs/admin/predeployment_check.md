@@ -33,6 +33,19 @@ $ sudo reboot
     'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
     but note that this will require running daos_server as root.
 
+!!! note
+	If VFIO is not enabled, you will run into the issue described in:
+	https://github.com/spdk/spdk/issues/1153
+
+	When using RHEL 8.1 with official kernel from distribution (4.18.0-147.el8.x86_64)
+	it is not possible to bind nvme devices to uio_pci_generic driver and due to that
+	to use them within SPDK environment:
+
+		[82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
+		[82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
+
+	The issue was previously reported in SPDK bugzilla [here](https://github.com/spdk/spdk/issues/399) for vanilla kernel 4.18. Unfortunately the kernel used in RHEL 8 does not contain the proper [bugfix](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=linux-4.18.y&id=a34e4f42055a7fe8e804fc9e71dfc1e324c657f1) backported.
+
 ## Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
@@ -90,8 +103,8 @@ $ sysctl -w net.ipv4.conf.<ifaces>.rp_filter=2
 ```
 
 All those parameters can be made persistent in /etc/sysctl.conf by adding a new
-sysctl file under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf) with all
-the relevant settings.
+sysctl file under /usr/lib/sysctl.d (e.g. /usr/lib/sysctl.d/95-daos-net.conf)
+with all the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
@@ -125,6 +138,13 @@ uncomment and set the socket_dir configuration value in /etc/daos/daos_server.ym
 For the daos_agent, either uncomment and set the runtime_dir configuration value in
 /etc/daos/daos_agent.yml or a location can be passed on the command line using
 the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
+
+NOTE: Do not change these when running under `systemd` control.
+      If these directories need to be changed, then make sure that they match the
+      RuntimeDirectory setting in the /usr/lib/systemd/system/daos_agent.service
+      and /usr/lib/systemd/system/daos_server.service configuration files.
+      The socket directories will be created and removed by `systemd` when the
+      services are started and stopped.
 
 ### Default Directory (non-persistent)
 
@@ -225,11 +245,39 @@ The memlock limit only needs to be manually adjusted when `daos_server` is not
 running as a systemd service. Default ulimit settings vary between OSes.
 
 For RPM installations, the service will typically be launched by systemd and
-the limit is pre-set to unlimited in the `daos_server.service` unit file:
-https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service#L16.
+the limit is pre-set to unlimited in the `daos_server.service`
+[unit file](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
+
 Note that values set in `/etc/security/limits.conf` are ignored by services
 launched by systemd.
 
 For non-RPM installations where `daos_server` is launched directly from the
-commandline, limits should be adjusted in `/etc/security/limits.conf` as per
-https://software.intel.com/content/www/us/en/develop/blogs/best-known-methods-for-setting-locked-memory-size.html.
+commandline (including source builds), limits should be adjusted in
+`/etc/security/limits.conf` as per
+[this article](https://access.redhat.com/solutions/61334) (which is a RHEL
+specific document but the instructions apply to most Linux distributions).
+
+## Socket receive buffer size
+
+Low socket receive buffer size can cause SPDK to fail and emit the following
+error (receive buffer size is required to be above 1MB):
+
+```bash
+daos_engine:1 pci_event.c:  68:spdk_pci_event_listen: *ERROR*: Failed to set socket
+ option
+```
+
+The socket receive buffer size does not need to be manually adjusted if
+`daos_server` has been installed using an RPM package (as the settings
+will be applied automatically on install).
+
+For non-RPM installations where `daos_server` has been built from source,
+`rmem_default` and `rmem_max` settings should be set to >= 1MB.
+Optionally, the `utils/rpms/10-daos_server.conf` can be copied to `/usr/lib/sysctl.d/`
+to apply the settings automatically on boot.
+Running `/usr/lib/systemd/systemd-sysctl /usr/lib/sysctl.d/10-daos_server.conf`
+will apply these settings immediately (avoiding the need for an immediate reboot).
+For further information see
+[this article on network kernel settings](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/5/html/tuning_and_optimizing_red_hat_enterprise_linux_for_oracle_9i_and_10g_databases/sect-oracle_9i_and_10g_tuning_guide-adjusting_network_settings-changing_network_kernel_settings)
+using any of the methods described in
+[this article on adjusting kernel tunables](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/kernel_administration_guide/working_with_sysctl_and_kernel_tunables).

@@ -220,7 +220,8 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS LMV format: pool UUID cannot be parsed\n");
 		return EINVAL;
 	}
-	snprintf(attr->da_pool, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	strncpy(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	attr->da_pool[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
 	t = strtok_r(NULL, "/", &saveptr);
 	if (t == NULL) {
@@ -234,7 +235,8 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS LMV format: container UUID cannot be parsed\n");
 		return EINVAL;
 	}
-	snprintf(attr->da_cont, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	strncpy(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	attr->da_cont[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
 	/* path is DAOS-foreign and will need to be unlinked using
 	 * unlink_foreign API
@@ -364,7 +366,8 @@ resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix, 
 		if (!daos_label_is_valid(t))
 			D_GOTO(err, rc = EINVAL);
 	}
-	snprintf(attr->da_pool, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	strncpy(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	attr->da_pool[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
 	if (pool_only) {
 		D_FREE(dir);
@@ -385,7 +388,8 @@ resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix, 
 		if (!daos_label_is_valid(t))
 			D_GOTO(err, rc = EINVAL);
 	}
-	snprintf(attr->da_cont, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	strncpy(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	attr->da_cont[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
 	/** if there is a relative path, parse it out */
 	t = strtok_r(NULL, "", &saveptr);
@@ -418,6 +422,9 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	size_t		cur_idx;
 	size_t		rel_len = 0;
 	int		rc;
+#ifdef LUSTRE_INCLUDE
+	char *dir = NULL;
+#endif
 
 	if (path == NULL || strlen(path) == 0)
 		return EINVAL;
@@ -442,16 +449,51 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	/** no match for direct format, do the UNS fs check */
 
 	rc = statfs(path, &fs);
+
+#ifdef LUSTRE_INCLUDE
+	/* since statfs follows symlinks, may need to use directory to
+	 * determine FS type, if on Lustre and path is a foreign symlink
+	 */
+	if (rc == -1 || fs.f_type != LL_SUPER_MAGIC) {
+		int		errno_save = errno;
+		struct statfs	fs2;
+		char		*dirp;
+		int		rc2;
+
+		D_STRNDUP(dir, path, PATH_MAX);
+		if (dir == NULL)
+			return ENOMEM;
+
+		dirp = dirname(dir);
+		/* need to statfs() at the directory level to catch the
+		 * case where leaf of path is a Lustre foreign symlink
+		 * which would have acted as a real symlink for previous
+		 * statfs()
+		 */
+		rc2 = statfs(dirp, &fs2);
+		if (rc2 == 0 && fs2.f_type == LL_SUPER_MAGIC) {
+			rc2 = duns_resolve_lustre_path(path, attr);
+			if (rc2 == 0)
+				D_GOTO(out, rc = rc2);
+
+			/* if Lustre specific method fails, fallback to try the
+			 * normal way...
+			 */
+		}
+		errno = errno_save;
+	}
+#endif
+
 	if (rc == -1) {
 		int err = errno;
 
 		D_INFO("Failed to statfs %s: %s\n", path, strerror(errno));
-		return err;
+		D_GOTO(out, rc = err);
 	}
 
 	D_REALPATH(realp, path);
 	if (realp == NULL)
-		return errno;
+		D_GOTO(out, rc = errno);
 
 	path_len = strnlen(realp, PATH_MAX);
 	if (path_len > PATH_MAX - 1)
@@ -468,18 +510,6 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	cur_idx = path_len;
 
 	while (1) {
-#ifdef LUSTRE_INCLUDE
-		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_resolve_lustre_path(dir_path, attr);
-			if (rc == 0)
-				D_GOTO(out, rc);
-
-			/* if Lustre specific method fails, fallback to try the
-			 * normal way...
-			 */
-		}
-#endif
-
 		s = lgetxattr(dir_path, DUNS_XATTR_NAME, &str,
 			      DUNS_MAX_XATTR_LEN);
 		if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
@@ -508,7 +538,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** On success, parse the attribute */
 		rc = duns_parse_attr(&str[0], s, attr);
 		if (rc) {
-			D_ERROR("Invalid xattr format\n");
+			D_ERROR("Invalid xattr format: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(out, rc);
 		}
 		/** if the xattr parsing succeeds, break */
@@ -530,6 +560,9 @@ parse:
 	}
 
 out:
+#ifdef LUSTRE_INCLUDE
+	D_FREE(dir);
+#endif
 	D_FREE(rel_path);
 	D_FREE(dir_path);
 	D_FREE(realp);
@@ -576,7 +609,8 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
-	snprintf(attr->da_pool, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	strncpy(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	attr->da_pool[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
 	t = strtok_r(NULL, "/", &saveptr);
 	if (t == NULL) {
@@ -590,7 +624,8 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS xattr format: container UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
-	snprintf(attr->da_cont, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	strncpy(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	attr->da_cont[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
 	rc = 0;
 err:

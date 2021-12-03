@@ -3,6 +3,13 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#include <libgen.h>
+
 #include "util.h"
 
 static int
@@ -13,7 +20,7 @@ call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
 
 	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd < 0)
-		return ENOENT;
+		return errno;
 
 	errno = 0;
 	rc = ioctl(fd, DFUSE_IOCTL_IL, reply);
@@ -96,4 +103,37 @@ out:
 	D_FREE(dir_name);
 	D_FREE(name);
 	return daos_errno2der(rc);
+}
+
+int
+resolve_duns_pool(struct cmd_args_s *ap)
+{
+	int			 rc = 0;
+	char			*path = NULL;
+	char			*dir = NULL;
+	struct dfuse_il_reply	 il_reply = {0};
+
+	if (ap->path == NULL)
+		return -DER_INVAL;
+
+	D_ASPRINTF(path, "%s", ap->path);
+	if (path == NULL)
+		return -DER_NOMEM;
+	dir = dirname(path);
+
+	rc = call_dfuse_ioctl(dir, &il_reply);
+	D_FREE(path);
+
+	switch (rc) {
+	case 0:
+		break;
+	case ENOTTY: /* can happen if the path is not in a dfuse mount */
+		return -DER_INVAL;
+	default:
+		return daos_errno2der(rc);
+	}
+
+	uuid_copy(ap->p_uuid, il_reply.fir_pool);
+
+	return 0;
 }

@@ -1,13 +1,13 @@
 package io.daos;
 
 public class DaosTestBase {
-  public static final String DEFAULT_POOL_ID = "fa659243-b141-4dc8-8487-13d8fbd54010";
-  public static final String DEFAULT_CONT_ID = "b72e068f-ba04-4546-b05c-2de9d936895e";
+  public static final String DEFAULT_POOL_ID = "f61ff38c-cc07-4994-a0ad-221fe7e8a630";
+  public static final String DEFAULT_CONT_ID = "5ceb6e0d-60c6-4e08-9b1e-fcef1b432db8";
 
   public static final String DEFAULT_POOL_LABEL = "pool1";
   public static final String DEFAULT_CONT_LABEL = "cont1";
 
-  public static final String DEFAULT_OBJECT_CONT_ID = "70be2f5e-5117-41e5-84b7-dba0c9f3601a";
+  public static final String DEFAULT_OBJECT_CONT_ID = "f8e0e2b2-a2e4-40da-8ab0-311531e1f81f";
 
   public static String getPoolId() {
     return System.getProperty("pool_id", DaosTestBase.DEFAULT_POOL_ID);

@@ -898,8 +898,7 @@ copy_exp_val_to_array(int flag, int **evtdata,
 		if (flag == EVT_ITER_VISIBLE) {
 			val[epoch] = evtdata[epoch][epoch];
 			 count++;
-		} else if ((flag == EVT_ITER_COVERED) ||
-		(flag == (EVT_ITER_COVERED))) {
+		} else if (flag == EVT_ITER_COVERED) {
 			for (offset = epoch; offset >= 1; offset--) {
 				if (evtdata[offset][epoch+incr] != 0) {
 					val[count] =

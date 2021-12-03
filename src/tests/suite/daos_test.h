@@ -265,8 +265,9 @@ int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
 static inline daos_obj_id_t
-daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
-		  daos_oclass_hints_t hints, unsigned seed)
+daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass,
+		  enum daos_otype_t type, daos_oclass_hints_t hints,
+		  unsigned int seed)
 {
 	daos_obj_id_t	oid;
 
@@ -275,9 +276,10 @@ daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
 
 	oid = dts_oid_gen(seed);
 	if (daos_handle_is_valid(coh))
-		daos_obj_generate_oid(coh, &oid, ofeats, oclass, hints, 0);
+		daos_obj_generate_oid(coh, &oid, type, oclass, hints, 0);
 	else
-		daos_obj_set_oid(&oid, ofeats, oclass, 0);
+		daos_obj_set_oid(&oid, type, oclass >> 24,
+				 oclass - (oclass >> 24), 0);
 
 	return oid;
 }
@@ -424,7 +426,7 @@ get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
-		      char *verify_data, daos_handle_t th);
+		      char *verify_data, daos_handle_t th, bool degraded);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,

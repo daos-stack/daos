@@ -16,71 +16,227 @@ extern "C" {
 
 #define DAOS_OBJ_NIL		((daos_obj_id_t){0})
 
-/** the current OID version */
-#define OID_FMT_VER		1
-
 /** 32 bits for DAOS internal use */
 #define OID_FMT_INTR_BITS	32
-/** Number of reserved by daos in object id for version */
-#define OID_FMT_VER_BITS	4
-/** Number of reserved by daos in object id for features */
-#define OID_FMT_FEAT_BITS	16
-/** Number of reserved by daos in object id for class id */
-#define OID_FMT_CLASS_BITS	(OID_FMT_INTR_BITS - OID_FMT_VER_BITS - \
-				 OID_FMT_FEAT_BITS)
+/** Number of reserved bits in object id for type */
+#define OID_FMT_TYPE_BITS	8
+/** Number of reserved bits in object id for class id */
+#define OID_FMT_CLASS_BITS	8
+/** Number of reserved bits in object id for object metadata */
+#define OID_FMT_META_BITS	16
 
-/** Bit shift for object version in object id */
-#define OID_FMT_VER_SHIFT	(64 - OID_FMT_VER_BITS)
-/** Bit shift for object features in object id */
-#define OID_FMT_FEAT_SHIFT	(OID_FMT_VER_SHIFT - OID_FMT_FEAT_BITS)
+/** Bit shift for object type in object id */
+#define OID_FMT_TYPE_SHIFT	(64 - OID_FMT_TYPE_BITS)
 /** Bit shift for object class id in object id */
-#define OID_FMT_CLASS_SHIFT	(OID_FMT_FEAT_SHIFT - OID_FMT_CLASS_BITS)
+#define OID_FMT_CLASS_SHIFT	(OID_FMT_TYPE_SHIFT - OID_FMT_CLASS_BITS)
+/** Bit shift for object class metadata in object id */
+#define OID_FMT_META_SHIFT	(OID_FMT_CLASS_SHIFT - OID_FMT_META_BITS)
 
-/** Maximum valid object version setting */
-#define OID_FMT_VER_MAX		((1ULL << OID_FMT_VER_BITS) - 1)
-/** Maximum valid object feature setting */
-#define OID_FMT_FEAT_MAX	((1ULL << OID_FMT_FEAT_BITS) - 1)
+/** Maximum valid object type setting */
+#define OID_FMT_TYPE_MAX	((1ULL << OID_FMT_TYPE_BITS) - 1)
 /** Maximum valid object class setting */
 #define OID_FMT_CLASS_MAX	((1ULL << OID_FMT_CLASS_BITS) - 1)
+/** Maximum valid object metadatasetting */
+#define OID_FMT_META_MAX	((1ULL << OID_FMT_META_BITS) - 1)
 
-/** Mask for object version */
-#define OID_FMT_VER_MASK	(OID_FMT_VER_MAX << OID_FMT_VER_SHIFT)
-/** Mask for object features */
-#define OID_FMT_FEAT_MASK	(OID_FMT_FEAT_MAX << OID_FMT_FEAT_SHIFT)
+/** Mask for object type */
+#define OID_FMT_TYPE_MASK	(OID_FMT_TYPE_MAX << OID_FMT_TYPE_SHIFT)
 /** Mask for object class id */
 #define OID_FMT_CLASS_MASK	(OID_FMT_CLASS_MAX << OID_FMT_CLASS_SHIFT)
+/** Mask for object metadata */
+#define OID_FMT_META_MASK	(OID_FMT_META_MAX << OID_FMT_META_SHIFT)
 
-enum {
-	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_DKEY_UINT64	= (1 << 0),
-	/** DKEY keys not hashed and sorted lexically */
-	DAOS_OF_DKEY_LEXICAL	= (1 << 1),
-	/** AKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_AKEY_UINT64	= (1 << 2),
-	/** AKEY keys not hashed and sorted lexically */
-	DAOS_OF_AKEY_LEXICAL	= (1 << 3),
-	/** reserved: 1-level flat KV store */
-	DAOS_OF_KV_FLAT		= (1 << 4),
-	/** reserved: 1D Array with metadata stored in the DAOS object */
-	DAOS_OF_ARRAY		= (1 << 5),
-	/** reserved: Multi Dimensional Array */
-	DAOS_OF_ARRAY_MD	= (1 << 6),
-	/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
-	DAOS_OF_ARRAY_BYTE	= (1 << 7),
+/** DAOS object type */
+enum daos_otype_t {
+	/** default object type, multi-level KV with hashed [ad]keys */
+	DAOS_OT_MULTI_HASHED	= 0,
+
 	/**
-	 * benchmark-only feature bit, I/O is a network echo, no data is going
-	 * to be stored/returned
-	 *
-	 * NB: this is the last feature bits.
+	 * Object ID table created on snapshot
 	 */
-	DAOS_OF_ECHO		= (1 << 15),
-	/** Mask for convenience (16-bit) */
-	DAOS_OF_MASK		= ((1 << OID_FMT_FEAT_BITS) - 1),
+	DAOS_OT_OIT		= 1,
+
+	/** KV with uint64 dkeys */
+	DAOS_OT_DKEY_UINT64	= 2,
+
+	/** KV with uint64 akeys */
+	DAOS_OT_AKEY_UINT64	= 3,
+
+	/** multi-level KV with uint64 [ad]keys */
+	DAOS_OT_MULTI_UINT64	= 4,
+
+	/** KV with lexical dkeys */
+	DAOS_OT_DKEY_LEXICAL	= 5,
+
+	/** KV with lexical akeys */
+	DAOS_OT_AKEY_LEXICAL	= 6,
+
+	/** multi-level KV with lexical [ad]keys */
+	DAOS_OT_MULTI_LEXICAL	= 7,
+
+	/** flat KV (no akey) with hashed dkey */
+	DAOS_OT_KV_HASHED	= 8,
+
+	/** flat KV (no akey) with integer dkey */
+	DAOS_OT_KV_UINT64	= 9,
+
+	/** flat KV (no akey) with lexical dkey */
+	DAOS_OT_KV_LEXICAL	= 10,
+
+	/** Array with attributes stored in the DAOS object */
+	DAOS_OT_ARRAY		= 11,
+
+	/** Array with attributes provided by the user */
+	DAOS_OT_ARRAY_ATTR	= 12,
+
+	/** Byte Array with no metadata (eg DFS/POSIX) */
+	DAOS_OT_ARRAY_BYTE	= 13,
+
+	/**
+	 * reserved: Multi Dimensional Array
+	 * DAOS_OT_ARRAY_MD	= 64,
+	 */
+
+	/**
+	 * reserved: Block device
+	 * DAOS_OT_BDEV	= 96,
+	 */
 };
+
+static inline enum daos_otype_t
+daos_obj_id2type(daos_obj_id_t oid)
+{
+	uint64_t type;
+
+	type = (oid.hi & OID_FMT_TYPE_MASK) >> OID_FMT_TYPE_SHIFT;
+
+	return (enum daos_otype_t)type;
+}
+
+static inline bool
+daos_is_dkey_lexical_type(enum daos_otype_t type)
+{
+	switch (type) {
+	case DAOS_OT_DKEY_LEXICAL:
+	case DAOS_OT_MULTI_LEXICAL:
+	case DAOS_OT_KV_LEXICAL:
+		return true;
+	default:
+		return false;
+
+	}
+}
+
+static inline bool
+daos_is_dkey_lexical(daos_obj_id_t oid)
+{
+	return daos_is_dkey_lexical_type(daos_obj_id2type(oid));
+}
+
+static inline bool
+daos_is_akey_lexical_type(enum daos_otype_t type)
+{
+	switch (type) {
+	case DAOS_OT_AKEY_LEXICAL:
+	case DAOS_OT_MULTI_LEXICAL:
+		return true;
+	default:
+		return false;
+
+	}
+}
+
+static inline bool
+daos_is_akey_lexical(daos_obj_id_t oid)
+{
+	return daos_is_akey_lexical_type(daos_obj_id2type(oid));
+}
+
+static inline bool
+daos_is_dkey_uint64_type(enum daos_otype_t type)
+{
+	switch (type) {
+	case DAOS_OT_MULTI_UINT64:
+	case DAOS_OT_DKEY_UINT64:
+	case DAOS_OT_KV_UINT64:
+	case DAOS_OT_ARRAY:
+	case DAOS_OT_ARRAY_ATTR:
+	case DAOS_OT_ARRAY_BYTE:
+		return true;
+	default:
+		return false;
+
+	}
+}
+
+static inline bool
+daos_is_dkey_uint64(daos_obj_id_t oid)
+{
+	return daos_is_dkey_uint64_type(daos_obj_id2type(oid));
+}
+
+static inline bool
+daos_is_akey_uint64_type(enum daos_otype_t type)
+{
+	switch (type) {
+	case DAOS_OT_MULTI_UINT64:
+	case DAOS_OT_AKEY_UINT64:
+		return true;
+	default:
+		return false;
+
+	}
+}
+
+static inline bool
+daos_is_akey_uint64(daos_obj_id_t oid)
+{
+	return daos_is_akey_uint64_type(daos_obj_id2type(oid));
+}
+
+static inline bool
+daos_is_array_type(enum daos_otype_t type)
+{
+	switch (type) {
+	case DAOS_OT_ARRAY:
+	case DAOS_OT_ARRAY_ATTR:
+	case DAOS_OT_ARRAY_BYTE:
+		return true;
+	default:
+		return false;
+
+	}
+}
+
+static inline bool
+daos_is_array(daos_obj_id_t oid)
+{
+	enum daos_otype_t type = daos_obj_id2type(oid);
+
+	return daos_is_array_type(type);
+}
+
+static inline bool
+daos_is_kv_type(enum daos_otype_t type)
+{
+	switch (type) {
+	case DAOS_OT_KV_HASHED:
+	case DAOS_OT_KV_UINT64:
+	case DAOS_OT_KV_LEXICAL:
+		return true;
+	default:
+		return false;
+
+	}
+}
+
+static inline bool
+daos_is_kv(daos_obj_id_t oid)
+{
+	enum daos_otype_t type = daos_obj_id2type(oid);
+
+	return daos_is_kv_type(type);
+}
 
 /** Number of bits reserved in IO flags bitmap for conditional checks.  */
 #define IO_FLAGS_COND_BITS	8
@@ -311,40 +467,22 @@ typedef struct {
 	uint32_t	kd_val_type;
 } daos_key_desc_t;
 
-/**
- * Deprecated - use daos_obj_generate_oid()
- * Generate a DAOS object ID by encoding the private DAOS bits of the object address space.
- *
- * \param[in,out]
- *		oid	[in]: Object ID with low 96 bits set and unique inside
- *			the container. [out]: Fully populated DAOS object
- *			identifier with the the low 96 bits untouched and the
- *			DAOS private bits (the high 32 bits) encoded.
- * \param[in]	ofeats	Feature bits specific to object
- * \param[in]	cid	Class Identifier
- * \param[in]	args	Reserved.
- */
-static inline void  __attribute__ ((deprecated))
-daos_obj_generate_id(daos_obj_id_t *oid, daos_ofeat_t ofeats,
-		     daos_oclass_id_t cid, uint32_t args)
+static inline daos_oclass_id_t
+daos_obj_id2class(daos_obj_id_t oid)
 {
-	uint64_t hdr;
+	enum daos_obj_redun ord;
+	uint32_t nr_grps;
 
-	/* TODO: add check at here, it should return error if user specified
-	 * bits reserved by DAOS
-	 */
-	oid->hi &= (1ULL << OID_FMT_INTR_BITS) - 1;
-	/**
-	 * | Upper bits contain
-	 * | OID_FMT_VER_BITS (version)		 |
-	 * | OID_FMT_FEAT_BITS (object features) |
-	 * | OID_FMT_CLASS_BITS (object class)	 |
-	 * | 96-bit for upper layer ...		 |
-	 */
-	hdr  = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
-	hdr |= ((uint64_t)ofeats << OID_FMT_FEAT_SHIFT);
-	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
-	oid->hi |= hdr;
+	ord = (enum daos_obj_redun)((oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT);
+	nr_grps = (oid.hi & OID_FMT_META_MASK) >> OID_FMT_META_SHIFT;
+
+	return (ord << OC_REDUN_SHIFT) | nr_grps;
+}
+
+static inline bool
+daos_obj_id_is_nil(daos_obj_id_t oid)
+{
+	return oid.hi == 0 && oid.lo == 0;
 }
 
 #define DAOS_OCH_RDD_BITS	4
@@ -386,7 +524,7 @@ enum {
  *			[out]: Fully populated DAOS object identifier with the
  *			the low 96 bits untouched and the DAOS private bits
  *			(the high 32 bits) encoded.
- * \param[in]	ofeats	Feature bits specific to object
+ * \param[in]	type	Object type (e.g. KV or array)
  * \param[in]	cid	Class Identifier. This setting is for advanced users who
  *			are knowledgeable on the specific oclass being set and
  *			what that means for the object in the current system and
@@ -395,14 +533,14 @@ enum {
  *			hints specified and use an oclass accordingly. If there
  *			are no hints specified we use the container properties
  *			to select the object class.
- * \param[in]   hints	Optional hints to select oclass with redundancy type
- *			and sharding. This will be ignored if cid is not
- *			OC_UNKNOWN (0).
+ * \param[in]   hints	Optional hints (see DAOS_OCH_*) to select oclass with
+ *			redundancy type	and sharding. This will be ignored if
+ *			cid is not OC_UNKNOWN (0).
  * \param[in]	args	Reserved.
  */
 int
 daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
-		      daos_ofeat_t ofeats, daos_oclass_id_t cid,
+		      enum daos_otype_t type, daos_oclass_id_t cid,
 		      daos_oclass_hints_t hints, uint32_t args);
 
 /**
@@ -988,8 +1126,87 @@ int
 daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 	      daos_anchor_t *anchor, daos_event_t *ev);
 
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
+typedef uint16_t daos_ofeat_t;
+int
+daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
+		       daos_ofeat_t type, daos_oclass_id_t cid,
+		       daos_oclass_hints_t hints, uint32_t args);
+int
+daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
+		       enum daos_otype_t type, daos_oclass_id_t cid,
+		       daos_oclass_hints_t hints, uint32_t args);
+enum {
+	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
+	 *  in client's byte order and DAOS is responsible for correct behavior
+	 */
+	DAOS_OF_DKEY_UINT64	= (1 << 0),
+	/** DKEY keys not hashed and sorted lexically */
+	DAOS_OF_DKEY_LEXICAL	= (1 << 1),
+	/** AKEY keys not hashed and sorted numerically.   Keys are accepted
+	 *  in client's byte order and DAOS is responsible for correct behavior
+	 */
+	DAOS_OF_AKEY_UINT64	= (1 << 2),
+	/** AKEY keys not hashed and sorted lexically */
+	DAOS_OF_AKEY_LEXICAL	= (1 << 3),
+	/** reserved: 1-level flat KV store */
+	DAOS_OF_KV_FLAT		= (1 << 4),
+	/** reserved: 1D Array with metadata stored in the DAOS object */
+	DAOS_OF_ARRAY		= (1 << 5),
+	/** reserved: Multi Dimensional Array */
+	DAOS_OF_ARRAY_MD	= (1 << 6),
+	/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
+	DAOS_OF_ARRAY_BYTE	= (1 << 7),
+	/**
+	 * benchmark-only feature bit, I/O is a network echo, no data is going
+	 * to be stored/returned
+	 *
+	 * NB: this is the last feature bits.
+	 */
+	DAOS_OF_ECHO		= (1 << 15),
+	/** Mask for convenience (16-bit) */
+	DAOS_OF_MASK		= ((1 << 16) - 1),
+};
+
 #if defined(__cplusplus)
 }
-#endif
-
+#define daos_obj_generate_oid daos_obj_generate_oid_cpp
+static inline int
+daos_obj_generate_oid_cpp(daos_handle_t coh, daos_obj_id_t *oid,
+			  enum daos_otype_t type, daos_oclass_id_t cid,
+			  daos_oclass_hints_t hints, uint32_t args)
+{
+	return daos_obj_generate_oid2(coh, oid, type, cid, hints, args);
+}
+static inline int
+daos_obj_generate_oid_cpp(daos_handle_t coh, daos_obj_id_t *oid,
+			  daos_ofeat_t feat, daos_oclass_id_t cid,
+			  daos_oclass_hints_t hints, uint32_t args)
+{
+	return daos_obj_generate_oid1(coh, oid, feat, cid, hints, args);
+}
+#else
+/**
+ * for backward compatility, support old api where the type was a set of feature
+ * flags
+ */
+#define daos_obj_generate_oid(coh, oid, type, ...)			\
+	({								\
+		int _ret;						\
+		if (__builtin_types_compatible_p(__typeof__(type),	\
+						 daos_ofeat_t)) {	\
+			_ret = daos_obj_generate_oid((coh), (oid),	\
+						     (type),		\
+						     __VA_ARGS__);	\
+		} else {						\
+			_ret = daos_obj_generate_oid2((coh), (oid),	\
+						      (type),		\
+						      __VA_ARGS__);	\
+		}							\
+		_ret;							\
+	})
+#endif /* __cplusplus */
 #endif /* __DAOS_OBJ_H__ */

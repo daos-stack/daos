@@ -1722,8 +1722,8 @@ crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
 int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
-typedef void
-(*crt_progress_cb) (crt_context_t ctx, void *arg);
+typedef int64_t
+(*crt_progress_cb) (crt_context_t ctx, int64_t timeout, void *arg);
 
 /**
  * Register a callback function which will be called inside crt_progress()
@@ -2248,6 +2248,19 @@ void crt_swim_fini(void);
 #define crt_proc_crt_status_t		crt_proc_int32_t
 #define crt_proc_crt_group_id_t		crt_proc_d_string_t
 #define crt_proc_crt_phy_addr_t		crt_proc_d_string_t
+
+/**
+ * \a err is an error that ought to be logged at a less serious level than ERR.
+ *
+ * \param[in] err                an error
+ *
+ * \return                       true or false
+ */
+static inline bool
+crt_quiet_error(int err)
+{
+	return err == -DER_GRPVER;
+}
 
 /** @}
  */

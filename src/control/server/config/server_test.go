@@ -290,6 +290,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(&numaNode1).
+			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("WARN").
@@ -975,6 +976,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotNetDevCls, gotErr := DefaultServer().
+				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithFabricProvider("test").
 				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithEngines(tc.configA, tc.configB).

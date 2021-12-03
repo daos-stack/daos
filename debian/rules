@@ -53,6 +53,8 @@ override_dh_auto_install:
 	         $(CURDIR)/${buildroot}$(sysconfdir)
 	mkdir -p ${buildroot}$(sysconfdir)/ld.so.conf.d/
 	echo "$(prefix)/lib64/daos_srv" > ${buildroot}$(sysconfdir)/ld.so.conf.d/daos.conf
+	mkdir -p ${buildroot}$(prefix)/lib/sysctl.d
+	install -m 644 utils/rpms/10-daos_server.conf ${buildroot}$(prefix)/lib/sysctl.d
 	mkdir -p ${buildroot}$(prefix)/lib/systemd/system
 	install -m 644 utils/systemd/daos_server.service ${buildroot}$(prefix)/lib/systemd/system
 	install -m 644 utils/systemd/daos_agent.service ${buildroot}$(prefix)/lib/systemd/system

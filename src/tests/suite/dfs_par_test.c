@@ -120,11 +120,11 @@ test_cond_helper(test_arg_t *arg, int rf)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** test atomic rename with DFS DTX mode */
-	bool use_dtx;
+	bool use_dtx = false;
 
 	d_getenv_bool("DFS_USE_DTX", &use_dtx);
 	if (!use_dtx)
-		return;
+		goto out;
 	if (arg->myrank == 0) {
 		print_message("All ranks rename the same file\n");
 		rc = dfs_open(dfs, NULL, filename,
@@ -170,6 +170,7 @@ test_cond_helper(test_arg_t *arg, int rf)
 		dfs_release(file);
 	}
 
+out:
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
@@ -666,8 +667,7 @@ dfs_test_cont_atomic(void **state)
 	if (arg->myrank == 0)
 		print_message("one rank Created POSIX Container dfs_par_test_cont\n");
 
-	rc = daos_cont_open(arg->pool.poh, "dfs_par_test_cont", DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+	rc = daos_cont_open(arg->pool.poh, "dfs_par_test_cont", DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
