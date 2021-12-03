@@ -4348,10 +4348,8 @@ restart:
 				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 
-			if (nr != 0) {
-				D_ERROR("target dir is not empty\n");
+			if (nr != 0)
 				D_GOTO(out, rc = ENOTEMPTY);
-			}
 		}
 
 		rc = remove_entry(dfs, th, new_parent->oh, new_name, new_len,
