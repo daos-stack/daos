@@ -35,6 +35,10 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         """
         # kill any hanging mdtest processes
         ret = []
+
+        # DEBUGGING
+        pcmd(self.hostlist_servers, "ps aux")
+
         cmd = "pkill -9 mdtest"
         for retry in range(0, 5):
             ret_codes = pcmd(self.hostlist_servers, cmd)
