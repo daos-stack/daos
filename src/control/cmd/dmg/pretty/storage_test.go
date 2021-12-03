@@ -1407,7 +1407,7 @@ host1
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
       Targets:[0 1 2] Rank:0 State:NORMAL
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Targets:[0 1 2] Rank:1 State:FAULTY
+      Targets:[0 1 2] Rank:1 State:EVICTED
 `,
 		},
 		"list-devices (none found)": {

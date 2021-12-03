@@ -98,7 +98,7 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	return &SmdDevice{
 		UUID:      common.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		State:     BioStateNormal,
+		State:     BioStateIdentify,
 		TrAddr:    parentTrAddr,
 	}
 }

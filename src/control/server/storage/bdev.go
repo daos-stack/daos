@@ -163,7 +163,7 @@ func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
 	// most fields
 	type toJSON SmdDevice
 	return json.Marshal(&struct {
-		State uint32 `json:"state"`
+		State uint32 `json:"bio_state"`
 		*toJSON
 	}{
 		State:  sd.State.Uint32(),
@@ -181,7 +181,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON SmdDevice
 	from := &struct {
-		State uint32 `json:"state"`
+		State uint32 `json:"bio_state"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sd),
