@@ -8,7 +8,6 @@ import os
 from time import sleep, time
 import ctypes
 import json
-from datetime import datetime
 
 from test_utils_base import TestDaosApiBase
 from avocado import fail_on
