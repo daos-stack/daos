@@ -1,6 +1,7 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
+%define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.1.0~rc2-1%{?dist}
 %global libfabric_version 1.14.0~rc3-1
@@ -14,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -328,6 +329,8 @@ mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{buildroot}/%{_sysctldir}
+install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
 mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
@@ -346,6 +349,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
+%sysctl_apply %{sysctl_script_name}
 %preun server
 %systemd_preun %{server_svc_name}
 %postun server
@@ -416,6 +420,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
+%{_sysctldir}/%{sysctl_script_name}
 
 %files client
 %{_libdir}/libdaos_common.so
@@ -516,6 +521,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Sun Nov 28 2021 Tom Nabarro <tom.nabarro@intel.com> 2.1.100-9
+- Set rmem_{max,default} sysctl values on server package install to enable
+  SPDK pci_event module to operate in unprivileged process (daos_engine).
+
 * Wed Nov 24 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-8
 - Remove invalid "%%else if" syntax
 - Fix a few other rpmlint warnings
