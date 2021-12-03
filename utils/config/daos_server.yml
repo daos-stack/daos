@@ -173,7 +173,7 @@
 ## buffer memory, this is mandatory with NVME SSD configured and optional
 ## without SSDs configured. This indicates the number to be used for each
 ## spawned I/O Engines, so the total will be this number * number of I/O Engines.
-## Default system hugepage size will be used. For the best of performance,
+## Default system hugepage size will be used. For the best performance,
 ## It requires at least 1GiB memory size per target, so for one engine with
 ## 8 targets, 4096 is minimum. When NVMe isn't configured, BIO will just
 ## allocate normal memory as DMA buffer if nr_hugepages is 0.

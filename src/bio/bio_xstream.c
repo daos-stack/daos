@@ -46,7 +46,7 @@ unsigned int bio_chk_cnt_max;
 static unsigned int bio_chk_cnt_init;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
-/* wheather SPDK inited */
+/* Whether SPDK inited */
 bool bio_spdk_inited;
 
 struct bio_nvme_data {
