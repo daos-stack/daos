@@ -8,7 +8,7 @@
 # dnf --assumeyes install dnf-plugins-core
 # dnf config-manager --save --setopt=assumeyes=True
 
-dnf install \
+dnf --nodocs install \
     boost-python3-devel \
     clang \
     clang-tools-extra \
