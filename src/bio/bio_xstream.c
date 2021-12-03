@@ -149,15 +149,16 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	char		*env;
 	int		 rc, fd;
 	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
-	int		 is_nvme_configued = 0;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
 		return -DER_INVAL;
 	}
 
-	if (nvme_conf && strlen(nvme_conf) > 0)
-		is_nvme_configued = 1;
+	if (nvme_conf && strlen(nvme_conf) > 0 && mem_size == 0) {
+		D_ERROR("Hugepages must be configured when NVMe SSD is configured\n");
+		return -DER_INVAL;
+	}
 
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
@@ -180,15 +181,16 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
+	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
+	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
+
 	/* No nvme configured and hugepages disabled */
-	if (!is_nvme_configued && mem_size == 0) {
+	if (mem_size == 0) {
+		D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
+			bio_chk_cnt_max, size_mb);
 		D_INFO("NVMe config or hugepages are not specified, skip NVMe setup.\n");
 		return 0;
 	}
-
-	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
-	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
-	       bio_chk_cnt_max, size_mb);
 
 	/*
 	 * Hugepages are not enough to sustain average I/O workload
@@ -201,18 +203,19 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 		return -DER_INVAL;
 	}
 
-	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
-	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
-
-	if (is_nvme_configued) {
+	if (nvme_conf && strlen(nvme_conf) > 0) {
 		fd = open(nvme_conf, O_RDONLY, 0600);
-		if (fd < 0) {
+		if (fd < 0)
 			D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
 			       nvme_conf, DP_RC(daos_errno2der(errno)));
-			goto init_spdk;
-		}
-		close(fd);
+		else
+			close(fd);
 	}
+
+	D_ASSERT(hugepage_size > 0);
+	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
+	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
+	       bio_chk_cnt_max, size_mb);
 
 	rc = smd_init(db);
 	if (rc != 0) {
@@ -220,7 +223,6 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 		goto free_cond;
 	}
 
-init_spdk:
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;

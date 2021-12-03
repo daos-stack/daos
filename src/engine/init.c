@@ -870,13 +870,13 @@ Options:\n\
 		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
 }
 
-static int arg_strtoul(const char *str, unsigned int *value)
+static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
 {
 	char *ptr_parse_end = NULL;
 
 	*value = strtoul(str, &ptr_parse_end, 0);
 	if (ptr_parse_end && *ptr_parse_end != '\0') {
-		printf("%s is not a valid numeric value.\n", str);
+		printf("invalid numeric value: %s (set by %s)\n", str, opt);
 		return -DER_INVAL;
 	}
 
@@ -926,13 +926,14 @@ parse(int argc, char **argv)
 			printf("\"-c\" option is deprecated, please use \"-t\" "
 			       "instead.\n");
 		case 't':
-			rc = arg_strtoul(optarg, &nr_threads);
+			rc = arg_strtoul(optarg, &nr_threads, "\"-t\"");
 			break;
 		case 'x':
-			rc = arg_strtoul(optarg, &dss_tgt_offload_xs_nr);
+			rc = arg_strtoul(optarg, &dss_tgt_offload_xs_nr,
+					 "\"-x\"");
 			break;
 		case 'f':
-			rc = arg_strtoul(optarg, &dss_core_offset);
+			rc = arg_strtoul(optarg, &dss_core_offset, "\"-f\"");
 			break;
 		case 'g':
 			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
@@ -960,22 +961,23 @@ parse(int argc, char **argv)
 			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'r':
-			rc = arg_strtoul(optarg, &dss_nvme_mem_size);
+			rc = arg_strtoul(optarg, &dss_nvme_mem_size, "\"-r\"");
 			break;
 		case 'H':
-			rc = arg_strtoul(optarg, &dss_nvme_hugepage_size);
+			rc = arg_strtoul(optarg, &dss_nvme_hugepage_size,
+					 "\"-H\"");
 			break;
 		case 'h':
 			usage(argv[0], stdout);
 			break;
 		case 'I':
-			rc = arg_strtoul(optarg, &dss_instance_idx);
+			rc = arg_strtoul(optarg, &dss_instance_idx, "\"-I\"");
 			break;
 		case 'b':
 			dss_nvme_bypass_health_check = true;
 			break;
 		case 'T':
-			rc = arg_strtoul(optarg, &dss_storage_tiers);
+			rc = arg_strtoul(optarg, &dss_storage_tiers, "\"-T\"");
 			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
 				printf("Requires 1 or 2 tiers\n");
 				rc = -DER_INVAL;
