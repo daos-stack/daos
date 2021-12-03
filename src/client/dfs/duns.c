@@ -228,7 +228,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		return EINVAL;
 	}
 
-	t = strtok_r(NULL, "/", &saveptr);
+	t = strtok_r(str, "/", &saveptr);
 	if (t == NULL) {
 		D_ERROR("Invalid DAOS LOV/LMV format (%s).\n", str);
 		return EINVAL;
