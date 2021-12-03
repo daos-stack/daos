@@ -231,7 +231,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		// Warn if hugepages are not enough to sustain average
 		// I/O workload (~1GB), ignore warning if using SCM backend with 0 hugepages
 		if !hasBdevs {
-			if (engineCfg.MemSize == 0) {
+			if engineCfg.MemSize == 0 {
 				continue
 			}
 		}
