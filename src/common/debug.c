@@ -248,7 +248,7 @@ daos_key2str(daos_key_t *key)
 		} else if (is_int) {
 			snprintf(buf, DF_KEY_STR_SIZE, "uint64:"DF_U64, *(uint64_t *)akey);
 		} else {
-			sprintf(buf, "????");
+			strcpy(buf, "????");
 		}
 	}
 	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
