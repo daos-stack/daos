@@ -40,7 +40,7 @@ type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
 const (
 	iommuPath        = "/sys/class/iommu"
-	minHugePageCount = 128
+	minHugePageCount = 0
 )
 
 func cfgHasBdevs(cfg *config.Server) bool {
