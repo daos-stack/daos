@@ -578,7 +578,7 @@ vos_self_nvme_init()
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(VOS_NVME_CONF, O_RDONLY, 0600);
 	if (fd < 0) {
-		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID, 0, 0,
+		rc = bio_nvme_init(NULL, VOS_NVME_SHM_ID, 0, 0,
 				   VOS_NVME_NR_TARGET, vos_db_get(), true);
 	} else {
 		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID,
