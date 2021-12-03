@@ -104,7 +104,7 @@ message DevStateReq {
 message DevStateResp {
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of blobstore
-	string dev_state = 3; // BIO device state
+	int32 dev_state = 3; // BIO device state
 }
 
 message DevReplaceReq {
@@ -116,7 +116,7 @@ message DevReplaceReq {
 message DevReplaceResp {
 	int32 status = 1; // DAOS error code
 	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	string dev_state = 3; // BIO device state
+	int32 dev_state = 3; // BIO device state
 }
 
 message DevIdentifyReq {

@@ -98,7 +98,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 
 		for _, dev := range rResp.Devices {
 			/* Skip health query if the device is in "NEW" state */
-			if dev.State == storage.BioStateNew.String() {
+			if storage.BioState(dev.BioState) == storage.BioStateOut {
 				continue
 			}
 			health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
@@ -237,8 +237,8 @@ func (svc *ControlService) smdSetFaulty(ctx context.Context, req *ctlpb.SmdQuery
 				Rank: rank.Uint32(),
 				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
-						Uuid:  dsr.DevUuid,
-						State: dsr.DevState,
+						Uuid:     dsr.DevUuid,
+						BioState: dsr.DevState,
 					},
 				},
 			},

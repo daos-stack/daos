@@ -263,11 +263,11 @@ struct  _Ctl__DevStateResp
   /*
    * BIO device state
    */
-  char *dev_state;
+  int32_t dev_state;
 };
 #define CTL__DEV_STATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_state_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Ctl__DevReplaceReq
@@ -305,11 +305,11 @@ struct  _Ctl__DevReplaceResp
   /*
    * BIO device state
    */
-  char *dev_state;
+  int32_t dev_state;
 };
 #define CTL__DEV_REPLACE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_replace_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Ctl__DevIdentifyReq

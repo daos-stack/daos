@@ -485,7 +485,7 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 		return rc;
 	}
 
-	D_ALLOC(resp->dev_state, buflen);
+	LOC(resp->dev_state, buflen);
 	if (resp->dev_state == NULL) {
 		D_ERROR("Failed to allocate device state");
 		rc = -DER_NOMEM;
