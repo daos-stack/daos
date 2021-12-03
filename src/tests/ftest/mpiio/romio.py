@@ -20,7 +20,7 @@ class Romio(MpiioTests):
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=small
+        :avocado: tags=hw,small
         :avocado: tags=mpiio,mpich,romio
         """
         # setting romio parameters
