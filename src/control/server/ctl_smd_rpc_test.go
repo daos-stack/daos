@@ -471,6 +471,59 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				},
 			},
 		},
+		"device-health (NEW SMD); skip health collection": {
+			req: &ctlpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(system.NilRank),
+				Uuid:             common.MockUUID(1),
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
+								{
+									Uuid: common.MockUUID(0),
+								},
+							},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevResp_Device{
+								{
+									Uuid:     common.MockUUID(1),
+									BioState: storage.BioStateNew.Uint32(),
+								},
+							},
+						},
+					},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Temperature: 1000000,
+							TempWarn:    true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdQueryResp{
+				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+					{},
+					{
+						Rank: 1,
+						Devices: []*ctlpb.SmdQueryResp_Device{
+							{
+								Uuid:     common.MockUUID(1),
+								BioState: storage.BioStateNew.Uint32(),
+							},
+						},
+					},
+				},
+			},
+		},
 		"device-health (DAOS Failure)": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
