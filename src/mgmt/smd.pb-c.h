@@ -167,17 +167,17 @@ struct  _Ctl__SmdDevResp__Device
   size_t n_tgt_ids;
   int32_t *tgt_ids;
   /*
-   * BIO device state
-   */
-  uint32_t bio_state;
-  /*
    * Transport address of blobstore
    */
   char *tr_addr;
+  /*
+   * BIO device state
+   */
+  uint32_t bio_state;
 };
 #define CTL__SMD_DEV_RESP__DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_dev_resp__device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Ctl__SmdDevResp
@@ -408,10 +408,6 @@ struct  _Ctl__SmdQueryResp__Device
   size_t n_tgt_ids;
   int32_t *tgt_ids;
   /*
-   * BIO device state
-   */
-  uint32_t bio_state;
-  /*
    * Transport address of blobstore
    */
   char *tr_addr;
@@ -419,10 +415,14 @@ struct  _Ctl__SmdQueryResp__Device
    * optional BIO health
    */
   Ctl__BioHealthResp *health;
+  /*
+   * BIO device state
+   */
+  uint32_t bio_state;
 };
 #define CTL__SMD_QUERY_RESP__DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_resp__device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, 0, (char *)protobuf_c_empty_string, NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, NULL, 0 }
 
 
 struct  _Ctl__SmdQueryResp__Pool
