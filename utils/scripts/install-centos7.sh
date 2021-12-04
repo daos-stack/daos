@@ -14,6 +14,7 @@ dnf -y install deltarpm
 dnf -y upgrade
 dnf -y install \
     boost-python36-devel \
+    bzip2 \
     clang-analyzer \
     cmake \
     CUnit-devel \

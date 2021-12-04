@@ -63,6 +63,13 @@ extern "C" {
  */
 #define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
 
+/* rand and srand macros */
+
+#define D_RAND_MAX 0x7fffffff
+
+void d_srand(long int);
+long int d_rand(void);
+
 /* memory allocating macros */
 void  d_free(void *);
 void *d_calloc(size_t, size_t);
