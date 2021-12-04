@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from daos_core_base import DaosCoreBase
+from apricot import skipForTicket
 
 class DaosCoreTestNvme(DaosCoreBase):
     # pylint: disable=too-many-ancestors
@@ -61,6 +62,7 @@ class DaosCoreTestNvme(DaosCoreBase):
         """
         self.run_subtest()
 
+    @skipForTicket("DAOS-9189")
     def test_daos_nvme_recovery_4(self):
         """Jira ID: DAOS-3846.
 
