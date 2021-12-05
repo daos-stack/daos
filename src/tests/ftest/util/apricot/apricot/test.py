@@ -11,6 +11,9 @@ import os
 import json
 import re
 
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
+
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
 from avocado.utils.distro import detect
@@ -365,8 +368,15 @@ class Test(avocadoTest):
 
     def tearDown(self):
         """Tear down after each test case."""
+
+        print('TRACE: line 372, self: ')
+        pp.pprint(vars(self))
+
         self.report_timeout()
         super().tearDown()
+
+        print('TRACE: line 378, self: ')
+        pp.pprint(vars(self))
 
         # Fail the test if any errors occurred during tear down
         if self._teardown_errors:
@@ -448,6 +458,10 @@ class TestWithoutServers(Test):
         """Tear down after each test case."""
         self.report_timeout()
         self._teardown_errors.extend(self.fault_injection.stop())
+
+        print('TRACE: line 455, self: ')
+        pp.pprint(vars(self))
+
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
@@ -1174,23 +1188,39 @@ class TestWithServers(TestWithoutServers):
         # Report whether or not the timeout has expired
         self.report_timeout()
 
+        print('TRACE: line 1177')
+
         # Tear down any test-specific items
         self._teardown_errors = self.pre_tear_down()
+
+        print('TRACE: line 1182')
 
         # Stop any test jobs that may still be running
         self._teardown_errors.extend(self.stop_job_managers())
 
+        print('TRACE: line 1187')
+
         # Destroy any containers first
         self._teardown_errors.extend(self.destroy_containers(self.container))
+
+        print('TRACE: line 1192')
 
         # Destroy any pools next
         self._teardown_errors.extend(self.destroy_pools(self.pool))
 
+        print('TRACE: line 1197')
+        print('TRACE: line 1197, self: ')
+        pp.pprint(vars(self))
+
         # Stop the agents
         self._teardown_errors.extend(self.stop_agents())
 
+        print('TRACE: line 1202')
+
         # Stop the servers
         self._teardown_errors.extend(self.stop_servers())
+
+        print('TRACE: line 1207')
 
         super().tearDown()
 
