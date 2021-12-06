@@ -83,7 +83,7 @@ class EcodFioRebuild(ErasureCodeFio):
         """
         self.execution('on-line')
 
-    @skipForTicket("DAOS-8840")
+    @skipForTicket("DAOS-8640")
     def test_ec_offline_rebuild_fio(self):
         """Jira ID: DAOS-7320.
 
