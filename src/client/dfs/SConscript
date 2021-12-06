@@ -22,7 +22,9 @@ def configure_lustre(denv):
         print("Building with Lustre bindings.")
         denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
     else:
-        print("Not building with Lustre bindings.")
+        #print("Not building with Lustre bindings.")
+        print("Building with Lustre bindings anyway !!...")
+        denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
     return conf.Finish()
 
 def scons():
