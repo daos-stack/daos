@@ -4,7 +4,7 @@
 
 import os
 import sys
-from os.path import join as join
+from os.path import join
 import subprocess #nosec
 
 BUILD_FILES = ['site_scons',
