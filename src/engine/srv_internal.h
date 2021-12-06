@@ -259,7 +259,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		if (rc != ABT_SUCCESS)
 			return dss_abterr2der(rc);
 
-		rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
+		rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ / 2);
 		D_ASSERT(rc == ABT_SUCCESS);
 
 		rc = ABT_thread_create(abt_pool, func, arg, attr, thread);
