@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """
 Script to check for D_FREE usage in the codebase.
 
@@ -18,7 +17,7 @@ $ ./check_d_macro_calls.py | patch -p1
 """
 
 import sys
-import subprocess
+import subprocess # nosec
 
 class CodeLine():
 
@@ -267,10 +266,9 @@ def show_patch(lines):
 
     removed -= added
 
-    print('@@ -{},{} +{},{} @@'.format(start_line,
-                                       len(lines),
-                                       start_line,
-                                       len(lines) - removed))
+    print('@@ -{0},{1} +{0},{2} @@'.format(start_line,
+                                           len(lines),
+                                           len(lines) - removed))
     for line in lines:
         if line.mark_text:
             print('+{}/* TODO: {} */'.format(line.indent, line.mark_text))
@@ -387,7 +385,7 @@ def main():
         cmd.extend(args)
         cmd.append('src')
 
-    rc = subprocess.run(cmd, stdout=subprocess.PIPE)
+    rc = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
 
     stdout = rc.stdout.decode('utf-8')
 
