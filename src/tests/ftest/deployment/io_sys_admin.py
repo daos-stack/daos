@@ -22,14 +22,9 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
 
     def get_free_space(self):
         """Display pool free space."""
-        free_space = []
-        scm_free_space = self.pool.get_pool_free_space("scm")
-        free_space.append(scm_free_space)
-        nvme_free_space = self.pool.get_pool_free_space("nvme")
-        free_space.append(nvme_free_space)
-        self.log.info("Free space [SCM, Nvme]: [%s, %s]", scm_free_space, nvme_free_space)
-
-        return free_space
+        pool_space = self.pool.get_pool_daos_space()
+        self.log.info("Free space [SCM, NVMe]: %s", list(pool_space["s_free"]))
+        return pool_space["s_free"]
 
     def test_io_sys_admin(self):
         """
@@ -40,8 +35,6 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         :avocado: tags=deployment,iosysadmin
         """
         # local param
-#        ec_ior_flags = self.params.get("ec_ior_flags", "/run/ior/*")
-#        hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
         new_test_user = self.params.get("new_user", "/run/container_acl/*")
         new_test_group = self.params.get("new_group", "/run/container_acl/*")
 
@@ -57,10 +50,9 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
             self.add_pool_qty(1, namespace="/run/pool_{}/".format(idx), create=False)
             PoolTestBase.check_pool_creation(self, 60)
             self.pool[-1].connect()
-            self.add_container_qty(1, self.pool[-1],
-                                   namespace="/run/container_{}/".format(idx), create=False)
-            for _, container in enumerate(self.container):
-                container.create()
+            for cont_idx in range(1, 4):
+                self.add_container_qty(1, self.pool[-1],
+                                       namespace="/run/container_{}/".format(cont_idx))
                 daos.container_set_owner(self.pool[-1].uuid, self.container[-1].uuid,
                                          new_test_user, new_test_group)
 
@@ -75,7 +67,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         dmg.system_query()
         dmg.system_leader_query()
 
-        # wirte large data sets
+        # write large data sets
         self.run_file_count()
         # create snapshot
         self.container[-1].create_snap()

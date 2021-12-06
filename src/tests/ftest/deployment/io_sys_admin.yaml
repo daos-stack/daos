@@ -91,7 +91,7 @@ largefilecount:
     - DFS
   object_class:
     - SX
-#    - EC_2P1GX
+    - EC_2P1GX
 ior:
   client_processes:
       ppn: 30
