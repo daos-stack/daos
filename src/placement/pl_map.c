@@ -658,8 +658,6 @@ pl_target_in_mbs(struct pl_obj_shard *shard, struct dtx_memberships *mbs)
 		for (i = 1; i < mbs->dm_tgt_cnt; i++) {
 			if (mbs->dm_tgts[i].ddt_id == shard->po_target)
 				return true;
-
-			break;
 		}
 
 		return false;

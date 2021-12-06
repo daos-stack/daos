@@ -165,9 +165,6 @@ def set_test_environment(args):
         # Get the default provider if CRT_PHY_ADDR_STR is not set
         set_provider_environment(os.environ["DAOS_TEST_FABRIC_IFACE"], args)
 
-        # Update other env definitions
-        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-
         # Set the default location for daos log files written during testing
         # if not already defined.
         if "DAOS_TEST_LOG_DIR" not in os.environ:
@@ -253,9 +250,12 @@ def set_interface_environment():
     # Update env definitions
     os.environ["CRT_CTX_SHARE_ADDR"] = "0"
     os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
-    print("Using {} as the default interface".format(interface))
+    print("Testing with {} as the default interface".format(interface))
     for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
-        print("Using {}={}".format(name, os.environ.get(name)))
+        try:
+            print("Testing with {}={}".format(name, os.environ[name]))
+        except KeyError:
+            print("Testing with {} unset".format(name))
 
 
 def set_provider_environment(interface, args):
@@ -292,8 +292,7 @@ def set_provider_environment(interface, args):
                 for line in output_data[0][0]:
                     provider = line.decode("utf-8").replace(":", "")
                     # Temporary code to only enable verbs on HW Large stages
-                    if "verbs" in provider and "hw" in tags and (
-                            "large" in tags or "small" in tags):
+                    if "verbs" in provider:
                         detected_provider = "ofi+verbs;ofi_rxm"
                         break
                     if "sockets" in provider:
@@ -305,7 +304,7 @@ def set_provider_environment(interface, args):
 
     # Update env definitions
     os.environ[name] = detected_provider
-    print("Using {}={}".format(name, os.environ[name]))
+    print("Testing with {}={}".format(name, os.environ[name]))
 
 
 def set_python_environment():
@@ -332,7 +331,7 @@ def set_python_environment():
             if required_path not in defined_python_paths:
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
-    print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
+    print("Testing with PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
 
 
 def run_command(cmd):

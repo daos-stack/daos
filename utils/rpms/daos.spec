@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.1-1%{?dist}
+%global mercury_version 2.1.0~rc4-1%{?dist}
 %global libfabric_version 1.14.0~rc3-1
 %global __python %{__python3}
 
@@ -516,8 +516,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Thu Dec 2 2021 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-1
+* Mon Dec 6 2021 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-1
 - Version bump to 2.0.0
+
+* Fri Dec 03 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.106-8
+- Update mercury to v2.1.0rc4
 
 * Wed Nov 24 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.106-7
 - Remove invalid "%%else if" syntax
