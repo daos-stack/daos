@@ -584,6 +584,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
+                                         referenceJobName: 'daos-stack/daos/release/2.0',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
@@ -898,7 +899,7 @@ pipeline {
                     }
                     post {
                         always {
-                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/release/2.0',
                                                       scm: 'daos-stack/daos'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
