@@ -11,7 +11,7 @@ services:
   daos_server:
     image: daos-server:centos8
     build:
-      context: daos-server/el8
+      context: "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-server/el8"
       args:
         - "DAOS_AUTH=${DAOS_AUTH}"
         - "DAOS_HUGEPAGES_NBR=${DAOS_HUGEPAGES_NBR}"
@@ -45,7 +45,7 @@ services:
   daos_admin:
     image: daos-admin:centos8
     build:
-      context: "daos-admin/el8"
+      context: "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-admin/el8"
       args:
         - "DAOS_AUTH=${DAOS_AUTH}"
         - "DAOS_ADMIN_USER=${DAOS_ADMIN_USER}"
@@ -75,7 +75,7 @@ services:
   daos_client:
     image: daos-client:centos8
     build:
-      context: "daos-client/el8"
+      context: "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-client/el8"
       args:
         - "DAOS_AUTH=${DAOS_AUTH}"
         - "DAOS_ADMIN_USER=${DAOS_ADMIN_USER}"
