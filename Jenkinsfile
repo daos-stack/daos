@@ -355,7 +355,8 @@ pipeline {
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            buildRpmPost condition: 'success',
+                                         target: 'centos8'
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'
@@ -364,10 +365,12 @@ pipeline {
                             buildRpmPost condition: 'failure'
                         }
                         unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
+                            buildRpmPost condition: 'unsuccessful',
+                                         target: 'centos8'
                         }
                         cleanup {
-                            buildRpmPost condition: 'cleanup'
+                            buildRpmPost condition: 'cleanup',
+                                         target: 'centos8'
                         }
                     }
                 }
