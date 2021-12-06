@@ -163,13 +163,14 @@ type DeviceAffinity struct {
 type FabricScan struct {
 	Provider    string `json:"provider"`
 	DeviceName  string `json:"device"`
+	Domain      string `json:"domain"`
 	NUMANode    uint   `json:"numanode"`
 	Priority    int    `json:"priority"`
 	NetDevClass uint32 `json:"netdevclass"`
 }
 
 func (fs *FabricScan) String() string {
-	return fmt.Sprintf("\tfabric_iface: %v\n\tprovider: %v\n\tpinned_numa_node: %d", fs.DeviceName, fs.Provider, fs.NUMANode)
+	return fmt.Sprintf("prov: %s dev: %s dom: %s numa: %d", fs.Provider, fs.DeviceName, fs.Domain, fs.NUMANode)
 }
 
 // DeviceScan caches initialization data for later hwloc usage
@@ -1184,7 +1185,6 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 	}
 
 	resultsMap[results] = struct{}{}
-	log.Debugf("\n%s", results)
 	return scanResults, nil
 }
 
@@ -1289,6 +1289,7 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 		if err != nil {
 			continue
 		}
+		devScanResults.Domain = C.GoString(fi.domain_attr.name)
 		ScanResults = append(ScanResults, devScanResults)
 		devCount++
 	}
@@ -1297,6 +1298,24 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 		log.Debugf("libfabric found records matching provider \"%s\" but there were no valid system devices that matched.", provider)
 	}
 	return ScanResults, nil
+}
+
+// GetDeviceDomain returns the domain name of the device, based on the connection
+// made between the device info and the fabric scan. Note that the domain name may
+// be identical to the device name if the provider does not support domains.
+func GetDeviceDomain(ctx context.Context, provider, device string) (string, error) {
+	results, err := ScanFabric(ctx, provider)
+	if err != nil {
+		return "", err
+	}
+
+	for _, res := range results {
+		if res.DeviceName == device {
+			return res.Domain, nil
+		}
+	}
+
+	return "", errors.Errorf("device %s not found in fabric", device)
 }
 
 // GetDeviceClass determines the device type according to what's stored in the filesystem
