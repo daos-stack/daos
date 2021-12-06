@@ -548,3 +548,5 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --src=<type>:<pool/cont | path>
                 #   supported types are daos, posix
                 self.dst = FormattedParameter("--dst={}")
+                # filename to write and read container properties
+                self.preserve_props = FormattedParameter("--preserve-props={}")

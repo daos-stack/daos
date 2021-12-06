@@ -140,9 +140,9 @@ func substituteVMDAddresses(log logging.Logger, inPCIAddrs *common.PCIAddressSet
 	return dl, nil
 }
 
-// detectVMD returns whether VMD devices have been found and a slice of VMD
+// DetectVMD returns whether VMD devices have been found and a slice of VMD
 // PCI addresses if found. Implements vmdDetectFn.
-func detectVMD() (*common.PCIAddressSet, error) {
+func DetectVMD() (*common.PCIAddressSet, error) {
 	distro := system.GetDistribution()
 	var lspciCmd *exec.Cmd
 
