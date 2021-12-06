@@ -35,20 +35,32 @@ const BdevPciAddrSep = " "
 type BioState uint32
 
 const (
-	// BioStateNormal indicates device is fully functional and in-use.
-	BioStateNormal BioState = C.BIO_DEV_NORMAL
-	// BioStateFaulty indicates the device has been evicted.
-	BioStateFaulty BioState = C.BIO_DEV_FAULTY
-	// BioStateOut indicates device is unplugged.
-	BioStateOut BioState = C.BIO_DEV_OUT
-	// BioStateNew indicates device is new not currently in-use.
-	BioStateNew BioState = C.BIO_DEV_NEW
-	// BioStateIdentify indicates devices being identified via LED.
-	BioStateIdentify BioState = C.BIO_DEV_IDENTIFY
+	BioStateNew      BioState = C.NVME_DEV_FL_PLUGGED
+	BioStateNormal   BioState = C.NVME_DEV_FL_PLUGGED | C.NVME_DEV_FL_INUSE
+	BioStateFaulty   BioState = C.NVME_DEV_FL_PLUGGED | C.NVME_DEV_FL_INUSE | C.NVME_DEV_FL_FAULTY
+	BioStateIdentify BioState = C.NVME_DEV_FL_PLUGGED | C.NVME_DEV_FL_INUSE | C.NVME_DEV_FL_IDENTIFY
 )
 
 func (bs BioState) String() string {
-	return C.GoString(C.bio_dev_state_enum_to_str(C.bio_dev_state(bs)))
+	switch {
+	case bs&C.NVME_DEV_FL_PLUGGED == 0:
+		return "UNPLUGGED"
+	case bs&C.NVME_DEV_FL_INUSE == 0:
+		return "NEW"
+	case bs&C.NVME_DEV_FL_FAULTY != 0:
+		return "EVICTED"
+	case bs&C.NVME_DEV_FL_IDENTIFY != 0:
+		return "IDENTIFY"
+	default:
+		return "NORMAL"
+	}
+}
+
+// States lists all flag values in bitset
+func (bs BioState) States() string {
+	return fmt.Sprintf("plugged: %v, in-use: %v, faulty: %v, identify: %v",
+		bs&C.NVME_DEV_FL_PLUGGED != 0, bs&C.NVME_DEV_FL_INUSE != 0,
+		bs&C.NVME_DEV_FL_FAULTY != 0, bs&C.NVME_DEV_FL_IDENTIFY != 0)
 }
 
 // Uint32 returns uint32 representation of BIO device state.

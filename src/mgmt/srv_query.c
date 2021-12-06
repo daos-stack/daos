@@ -242,7 +242,6 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 {
 	struct bio_dev_info	   *dev_info = NULL, *tmp;
 	struct bio_list_devs_info   list_devs_info = { 0 };
-	bio_dev_state		    state;
 	int			    buflen = 10;
 	int			    i = 0, j;
 	int			    rc = 0;
@@ -289,18 +288,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		uuid_unparse_lower(dev_info->bdi_dev_id,
 				   resp->devices[i]->uuid);
 
-		/* BIO device state is determined by device flags */
-		if (dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) {
-			if (dev_info->bdi_flags & NVME_DEV_FL_FAULTY)
-				state = BIO_DEV_FAULTY;
-			else if (dev_info->bdi_flags & NVME_DEV_FL_INUSE)
-				state = BIO_DEV_NORMAL;
-			else
-				state = BIO_DEV_NEW;
-		} else
-			state = BIO_DEV_OUT;
-
-		resp->devices[i]->bio_state = state;
+		resp->devices[i]->bio_state = dev_info->bdi_flags;
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
@@ -484,10 +472,10 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 		return rc;
 	}
 
-	if (dev_info->sdi_state == SMD_DEV_NORMAL)
-		resp->dev_state = BIO_DEV_NORMAL;
-	else
-		resp->dev_state = BIO_DEV_FAULTY;
+	/* Device is in-use so set relevant flags */
+	resp->dev_state = NVME_DEV_FL_INUSE | NVME_DEV_FL_PLUGGED;
+	if (dev_info->sdi_state == SMD_DEV_FAULTY)
+		resp->dev_state |= NVME_DEV_FL_FAULTY;
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
@@ -631,7 +619,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	}
 
 	dev_info->sdi_state = SMD_DEV_FAULTY;
-	resp->dev_state = BIO_DEV_FAULTY;
+	resp->dev_state = NVME_DEV_FL_INUSE | NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY;
 
 out:
 	smd_dev_free_info(dev_info);
@@ -709,7 +697,8 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	}
 
 	/* BIO device state after reintegration should be NORMAL */
-	resp->dev_state = BIO_DEV_NORMAL;
+	resp->dev_state = NVME_DEV_FL_INUSE | NVME_DEV_FL_PLUGGED;
+
 out:
 
 	if (rc != 0) {
@@ -778,7 +767,7 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 	if (rc != 0)
 		goto out;
 
-	resp->led_state = BIO_DEV_IDENTIFY;
+	resp->led_state = NVME_DEV_FL_IDENTIFY;
 
 out:
 
