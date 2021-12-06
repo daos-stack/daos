@@ -15,7 +15,7 @@ fi
 : "${CHROOT_NAME:=epel-7-x86_64}"
 : "${TARGET:=centos7}"
 
-artdir="${PWD}/artifacts/${TARGET%%.*}"
+artdir="${PWD}/artifacts/${TARGET}"
 rm -rf "$artdir"
 mkdir -p "$artdir"
 
@@ -30,9 +30,9 @@ if [ -d /var/cache/pbuilder/ ]; then
         gzip -9c > Packages.gz
     popd
 
-    dpkg -f "$artdir"/daos-server_*_amd64.deb Version > "${TARGET%%.*}-rpm-version"
-    ls -l "${TARGET%%.*}-rpm-version" || true
-    cat "${TARGET%%.*}-rpm-version" || true
+    dpkg -f "$artdir"/daos-server_*_amd64.deb Version > "${TARGET}-rpm-version"
+    ls -l "${TARGET}-rpm-version" || true
+    cat "${TARGET}-rpm-version" || true
     exit 0
 fi
 
@@ -48,6 +48,6 @@ fi)
 
 createrepo "$artdir"
 rpm --qf "%{version}-%{release}.%{arch}" \
-    -qp "$artdir"/daos-server-[0-9]*.x86_64.rpm > "${TARGET%%.*}-rpm-version"
+    -qp "$artdir"/daos-server-[0-9]*.x86_64.rpm > "${TARGET}-rpm-version"
 rpm -qRp "$artdir"/daos-server-*.x86_64.rpm |
-  sed -ne '/mercury/s/.* = //p' > "${TARGET%%.*}-required-mercury-rpm-version"
+  sed -ne '/mercury/s/.* = //p' > "${TARGET}-required-mercury-rpm-version"
