@@ -705,7 +705,7 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 	dfc->dfc_dentry_timeout = 1;
 	dfc->dfc_dentry_dir_timeout = 5;
 	dfc->dfc_ndentry_timeout = 1;
-	dfc->dfc_data_caching = false;
+	dfc->dfc_data_caching = true;
 	dfc->dfc_direct_io_disable = false;
 }
 

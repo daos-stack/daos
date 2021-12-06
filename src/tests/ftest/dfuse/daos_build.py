@@ -37,6 +37,10 @@ class BuildDaos(DfuseTestBase):
         self.add_pool(connect=False)
         self.add_container(self.pool)
 
+        self.daos_cmd = self.get_daos_command()
+        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.cont.uuid,
+                                    attr='dfuse-data-cache', val='off')
+
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         mount_dir = self.dfuse.mount_dir.value
