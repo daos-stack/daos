@@ -14,7 +14,7 @@ ARG UID=1000
 # Install basic tools
 RUN dnf -y install mock make \
                    rpm-build curl createrepo rpmlint redhat-lsb-core git \
-                   python-srpm-macros rpmdevtools
+                   python-srpm-macros rpmdevtools wget
 
 # get and install recent master Lustre Client RPMs
 RUN wget https://build.whamcloud.com/job/lustre-master/lastBuild/arch=x86_64,build_type=client,distro=el7.8,ib_stack=inkernel/artifact/artifacts/RPMS/x86_64/kmod-lustre-client-2.14.55_169_g9490fd9-1.el7.x86_64.rpm
