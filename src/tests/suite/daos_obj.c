@@ -2431,12 +2431,14 @@ fetch_size(void **state)
 	for (i = 0; i < NUM_AKEYS; i++)
 		iod[i].iod_size	= DAOS_REC_ANY;
 
+	print_message("fetch with unknown iod_size and NULL sgl\n");
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
 			    NULL, NULL);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
+	print_message("fetch with unknown iod_size and less buffer\n");
 	for (i = 0; i < NUM_AKEYS; i++) {
 		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);
 		iod[i].iod_size	= DAOS_REC_ANY;
@@ -3372,7 +3374,7 @@ io_obj_key_query(void **state)
 	assert_rc_equal(rc, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_SX,
-				DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64,
+				DAOS_OT_MULTI_UINT64,
 				0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -4150,7 +4152,7 @@ compare_oclass(daos_handle_t coh, daos_obj_id_t oid, daos_oclass_id_t ecid)
 
 static int
 check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
-	     daos_ofeat_t feats, enum daos_obj_resil res, unsigned int nr,
+	     enum daos_otype_t type, enum daos_obj_resil res, unsigned int nr,
 	     daos_oclass_id_t ecid)
 {
 	daos_obj_id_t		oid;
@@ -4161,11 +4163,15 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 
 	oid.hi = 1;
 	oid.lo = 1;
-	rc = daos_obj_generate_oid(coh, &oid, feats, 0, hints, 0);
+	rc = daos_obj_generate_oid(coh, &oid, type, 0, hints, 0);
 	assert_rc_equal(rc, 0);
 
 	cid = daos_obj_id2class(oid);
-	attr = daos_oclass_attr_find(oid, NULL);
+	attr = daos_oclass_attr_find(oid, NULL, NULL);
+	if (!attr) {
+		rc = -EINVAL;
+		goto out;
+	}
 
 	daos_oclass_id2name(cid, name);
 	printf("%s\n", name);
@@ -4192,6 +4198,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		rc = -DER_MISMATCH;
 	}
 
+out:
 	return rc;
 }
 
@@ -4207,7 +4214,7 @@ oclass_auto_setting(void **state)
 	struct pl_map_attr	attr;
 	daos_oclass_id_t	ecidx, ecid1;
 	daos_prop_t             *prop = NULL;
-	daos_ofeat_t		feat_kv, feat_array, feat_byte_array;
+	enum daos_otype_t	feat_kv, feat_array, feat_byte_array;
 	int			rc;
 
 	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
@@ -4228,10 +4235,9 @@ oclass_auto_setting(void **state)
 		ecid1 = OC_EC_2P1G1;
 	}
 
-	feat_array = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY;
-	feat_byte_array = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
-		DAOS_OF_ARRAY_BYTE;
-	feat_kv = DAOS_OF_KV_FLAT;
+	feat_array = DAOS_OT_ARRAY;
+	feat_byte_array = DAOS_OT_ARRAY_BYTE;
+	feat_kv = DAOS_OT_KV_HASHED;
 
 	prop = daos_prop_alloc(1);
 	assert_non_null(prop);
@@ -4493,7 +4499,7 @@ int_key_setting(void **state)
 	 * Object with integer dkey / akey should fail IO with -DER_INVAL if
 	 * key size is not correct.
 	 */
-	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OF_DKEY_UINT64, 0,
+	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OT_DKEY_UINT64, 0,
 				arg->myrank);
 
 	dts_buf_render(buf, STACK_BUF_LEN);
@@ -4539,7 +4545,7 @@ int_key_setting(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
-	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OF_AKEY_UINT64, 0,
+	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OT_AKEY_UINT64, 0,
 				arg->myrank);
 
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
