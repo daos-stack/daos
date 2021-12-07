@@ -184,11 +184,11 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
-	/* No nvme configured and hugepages disabled */
+	/* Hugepages disabled */
 	if (mem_size == 0) {
 		D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
 			bio_chk_cnt_max, size_mb);
-		D_INFO("NVMe config or hugepages are not specified, skip NVMe setup.\n");
+		D_INFO("Hugepages are not specified, skip NVMe setup.\n");
 		return 0;
 	}
 
