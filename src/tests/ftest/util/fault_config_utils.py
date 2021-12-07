@@ -11,6 +11,12 @@ import yaml
 from general_utils import distribute_files, run_command, get_clush_command, DaosTestError
 
 # a lookup table of predefined faults
+#
+# In addition the following fault IDs are used elsewhere
+#
+# 0: This is used in D_ALLOC to force memory allocation failures.
+# 100: Used in dfuse to trigger an exit after initialization is complete
+# 101: Used by daos_init() to disable fault id 0 for duration of daos_init
 FAULTS = {
     'DAOS_CSUM_CORRUPT_DISK': {
         'id': '65574',

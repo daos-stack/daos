@@ -33,21 +33,27 @@ blkcnt_to_lru(struct vea_free_class *vfc, uint32_t blkcnt)
 }
 
 void
-free_class_remove(struct vea_free_class *vfc, struct vea_entry *entry)
+free_class_remove(struct vea_space_info *vsi, struct vea_entry *entry)
 {
+	struct vea_free_class *vfc = &vsi->vsi_class;
+
 	if (entry->ve_in_heap) {
 		D_ASSERTF(entry->ve_ext.vfe_blk_cnt > vfc->vfc_large_thresh,
 			  "%u <= %u", entry->ve_ext.vfe_blk_cnt,
 			  vfc->vfc_large_thresh);
 		d_binheap_remove(&vfc->vfc_heap, &entry->ve_node);
 		entry->ve_in_heap = 0;
+		dec_stats(vsi, STAT_FRAGS_LARGE, 1);
+	} else {
+		dec_stats(vsi, STAT_FRAGS_SMALL, 1);
 	}
 	d_list_del_init(&entry->ve_link);
 }
 
 int
-free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
+free_class_add(struct vea_space_info *vsi, struct vea_entry *entry)
 {
+	struct vea_free_class *vfc = &vsi->vsi_class;
 	int rc;
 
 	D_ASSERT(entry->ve_in_heap == 0);
@@ -62,6 +68,7 @@ free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
 		}
 
 		entry->ve_in_heap = 1;
+		inc_stats(vsi, STAT_FRAGS_LARGE, 1);
 	} else { /* Otherwise add to one of size categarized LRU */
 		struct vea_entry *cur;
 		d_list_t *lru_head, *tmp;
@@ -79,6 +86,7 @@ free_class_add(struct vea_free_class *vfc, struct vea_entry *entry)
 		}
 		if (d_list_empty(&entry->ve_link))
 			d_list_add(&entry->ve_link, lru_head);
+		inc_stats(vsi, STAT_FRAGS_SMALL, 1);
 	}
 
 	return 0;
@@ -92,10 +100,12 @@ undock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
 		return;
 
 	D_ASSERT(entry != NULL);
-	if (type == VEA_TYPE_COMPOUND)
-		free_class_remove(&vsi->vsi_class, entry);
-	else
+	if (type == VEA_TYPE_COMPOUND) {
+		free_class_remove(vsi, entry);
+	} else {
 		d_list_del_init(&entry->ve_link);
+		dec_stats(vsi, STAT_FRAGS_AGING, 1);
+	}
 }
 
 static int
@@ -106,11 +116,12 @@ dock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
 
 	D_ASSERT(entry != NULL);
 	if (type == VEA_TYPE_COMPOUND) {
-		rc = free_class_add(&vsi->vsi_class, entry);
+		rc = free_class_add(vsi, entry);
 	} else {
 		D_ASSERT(type == VEA_TYPE_AGGREGATE);
 		D_ASSERT(d_list_empty(&entry->ve_link));
 		d_list_add_tail(&entry->ve_link, &vsi->vsi_agg_lru);
+		inc_stats(vsi, STAT_FRAGS_AGING, 1);
 	}
 
 	return rc;
@@ -135,7 +146,8 @@ merge_free_ext(struct vea_space_info *vsi, struct vea_free_extent *ext_in,
 	daos_handle_t		 btr_hdl;
 	d_iov_t			 key, key_out, val;
 	uint64_t		*off;
-	int			 rc, opc = BTR_PROBE_LE;
+	bool			 fetch_prev = true;
+	int			 rc, del_opc = BTR_PROBE_BYPASS;
 
 	if (type == VEA_TYPE_COMPOUND)
 		btr_hdl = vsi->vsi_free_btr;
@@ -148,21 +160,56 @@ merge_free_ext(struct vea_space_info *vsi, struct vea_free_extent *ext_in,
 
 	D_ASSERT(daos_handle_is_valid(btr_hdl));
 	d_iov_set(&key, &ext_in->vfe_blk_off, sizeof(ext_in->vfe_blk_off));
+	d_iov_set(&key_out, NULL, 0);
+	d_iov_set(&val, NULL, 0);
+
+	/*
+	 * Search the one to be merged, the btree trace will be set to proper position for
+	 * later potential insertion (when merge failed), so don't change btree trace!
+	 */
+	rc = dbtree_fetch(btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key, &key_out, &val);
+	if (rc == 0) {
+		D_ERROR("unexpected extent ["DF_U64", %u]\n",
+			ext_in->vfe_blk_off, ext_in->vfe_blk_cnt);
+		return -DER_INVAL;
+	} else if (rc != -DER_NONEXIST) {
+		D_ERROR("search extent with offset "DF_U64" failed. "DF_RC"\n",
+			ext_in->vfe_blk_off, DP_RC(rc));
+		return rc;
+	}
 repeat:
 	d_iov_set(&key_out, NULL, 0);
 	d_iov_set(&val, NULL, 0);
 
-	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_DEFAULT, &key, &key_out,
-			  &val);
-	if (rc == -DER_NONEXIST && opc == BTR_PROBE_LE) {
-		opc = BTR_PROBE_GE;
-		goto repeat;
-	}
+	if (fetch_prev) {
+		rc = dbtree_fetch_prev(btr_hdl, &key_out, &val, false);
+		if (rc == -DER_NONEXIST) {
+			fetch_prev = false;
+			goto repeat;
+		} else if (rc) {
+			D_ERROR("search prev extent failed. "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	} else {
+		/*
+		 * The btree trace was set to the position for inserting the searched
+		 * one. If there is an extent in current position, let's try to merge
+		 * it with the searched one; otherwise, we'd lookup next to see if any
+		 * extent can be merged.
+		 */
+		rc = dbtree_fetch_cur(btr_hdl, &key_out, &val);
+		if (rc == -DER_NONEXIST) {
+			del_opc = BTR_PROBE_EQ;
+			rc = dbtree_fetch_next(btr_hdl, &key_out, &val, false);
+		}
 
-	if (rc == -DER_NONEXIST)
-		goto done;	/* Merge done */
-	else if (rc)
-		return rc;	/* Error */
+		if (rc == -DER_NONEXIST) {
+			goto done; /* Merge done */
+		} else if (rc) {
+			D_ERROR("search next extent failed. "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	}
 
 	if (type == VEA_TYPE_PERSIST) {
 		entry = NULL;
@@ -178,8 +225,7 @@ repeat:
 		return rc;
 
 	/* This checks overlapping & duplicated extents as well. */
-	rc = (opc == BTR_PROBE_LE) ? ext_adjacent(ext, &merged) :
-				     ext_adjacent(&merged, ext);
+	rc = fetch_prev ? ext_adjacent(ext, &merged) : ext_adjacent(&merged, ext);
 	if (rc < 0)
 		return rc;
 
@@ -192,7 +238,7 @@ repeat:
 			return -DER_INVAL;
 		}
 
-		if (opc == BTR_PROBE_LE) {
+		if (fetch_prev) {
 			merged.vfe_blk_off = ext->vfe_blk_off;
 			merged.vfe_blk_cnt += ext->vfe_blk_cnt;
 
@@ -207,8 +253,7 @@ repeat:
 			 */
 			if (neighbor != NULL) {
 				undock_entry(vsi, entry, type);
-				rc = dbtree_delete(btr_hdl, BTR_PROBE_BYPASS,
-						   &key_out, NULL);
+				rc = dbtree_delete(btr_hdl, del_opc, &key_out, NULL);
 				if (rc) {
 					D_ERROR("Failed to delete: %d\n", rc);
 					return rc;
@@ -220,8 +265,8 @@ repeat:
 		}
 	}
 
-	if (opc == BTR_PROBE_LE) {
-		opc = BTR_PROBE_GE;
+	if (fetch_prev) {
+		fetch_prev = false;
 		goto repeat;
 	}
 done:
@@ -259,7 +304,7 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	      unsigned int flags)
 {
 	struct vea_entry	*entry, dummy;
-	d_iov_t			 key, val;
+	d_iov_t			 key, val, val_out;
 	int			 rc;
 
 	rc = merge_free_ext(vsi, vfe, VEA_TYPE_COMPOUND, flags);
@@ -276,33 +321,26 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 
 	/* Add to in-memory free extent tree */
 	D_ASSERT(daos_handle_is_valid(vsi->vsi_free_btr));
-	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
-		  sizeof(dummy.ve_ext.vfe_blk_off));
+	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off, sizeof(dummy.ve_ext.vfe_blk_off));
 	d_iov_set(&val, &dummy, sizeof(dummy));
+	d_iov_set(&val_out, NULL, 0);
 
-	rc = dbtree_update(vsi->vsi_free_btr, &key, &val);
-	if (rc != 0)
+	rc = dbtree_upsert(vsi->vsi_free_btr, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE, &key,
+			   &val, &val_out);
+	if (rc != 0) {
+		D_ERROR("Insert compound extent failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
-	/* Fetch & operate on the in-tree record from now on */
-	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
-		  sizeof(dummy.ve_ext.vfe_blk_off));
-	d_iov_set(&val, NULL, 0);
-
-	rc = dbtree_fetch(vsi->vsi_free_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
-			  &key, NULL, &val);
-	D_ASSERT(rc != -DER_NONEXIST);
-	if (rc)
-		return rc;
-
-	entry = (struct vea_entry *)val.iov_buf;
+	D_ASSERT(val_out.iov_buf != NULL);
+	entry = (struct vea_entry *)val_out.iov_buf;
 	D_INIT_LIST_HEAD(&entry->ve_link);
 
-	rc = free_class_add(&vsi->vsi_class, entry);
+	rc = free_class_add(vsi, entry);
 
 accounting:
 	if (!rc && !(flags & VEA_FL_NO_ACCOUNTING))
-		vsi->vsi_stat[STAT_FREE_BLKS] += vfe->vfe_blk_cnt;
+		inc_stats(vsi, STAT_FREE_BLKS, vfe->vfe_blk_cnt);
 	return rc;
 }
 
@@ -330,7 +368,9 @@ persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	d_iov_set(&key, &dummy.vfe_blk_off, sizeof(dummy.vfe_blk_off));
 	d_iov_set(&val, &dummy, sizeof(dummy));
 
-	rc = dbtree_update(btr_hdl, &key, &val);
+	rc = dbtree_upsert(btr_hdl, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE, &key, &val, NULL);
+	if (rc)
+		D_ERROR("Insert persistent extent failed. "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -339,14 +379,11 @@ int
 aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 {
 	struct vea_entry	*entry, dummy;
-	d_iov_t			 key, val;
+	d_iov_t			 key, val, val_out;
 	daos_handle_t		 btr_hdl = vsi->vsi_agg_btr;
 	int			 rc;
 
-	rc = daos_gettime_coarse(&vfe->vfe_age);
-	if (rc)
-		return rc;
-
+	vfe->vfe_age = get_current_age();
 	rc = merge_free_ext(vsi, vfe, VEA_TYPE_AGGREGATE, 0);
 	if (rc < 0)
 		return rc;
@@ -359,30 +396,23 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 	/* Add to in-memory aggregate free extent tree */
 	D_ASSERT(daos_handle_is_valid(btr_hdl));
-	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
-		  sizeof(dummy.ve_ext.vfe_blk_off));
+	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off, sizeof(dummy.ve_ext.vfe_blk_off));
 	d_iov_set(&val, &dummy, sizeof(dummy));
+	d_iov_set(&val_out, NULL, 0);
 
-	rc = dbtree_update(btr_hdl, &key, &val);
-	if (rc)
+	rc = dbtree_upsert(btr_hdl, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE, &key, &val, &val_out);
+	if (rc) {
+		D_ERROR("Insert aging extent failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
 
-	/* Fetch & operate on the in-tree record from now on */
-	d_iov_set(&key, &dummy.ve_ext.vfe_blk_off,
-		  sizeof(dummy.ve_ext.vfe_blk_off));
-	d_iov_set(&val, NULL, 0);
-
-	rc = dbtree_fetch(btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key,
-			  NULL, &val);
-	D_ASSERT(rc != -DER_NONEXIST);
-	if (rc)
-		return rc;
-
-	entry = (struct vea_entry *)val.iov_buf;
+	D_ASSERT(val_out.iov_buf != NULL);
+	entry = (struct vea_entry *)val_out.iov_buf;
 	D_INIT_LIST_HEAD(&entry->ve_link);
 
 	/* Add to the tail of aggregate LRU list */
 	d_list_add_tail(&entry->ve_link, &vsi->vsi_agg_lru);
+	inc_stats(vsi, STAT_FRAGS_AGING, 1);
 
 	return 0;
 }
@@ -392,6 +422,8 @@ struct vea_unmap_extent {
 	d_list_t		vue_link;
 };
 
+#define MAX_FLUSH_FRAGS	2000
+
 void
 migrate_end_cb(void *data, bool noop)
 {
@@ -400,18 +432,14 @@ migrate_end_cb(void *data, bool noop)
 	struct vea_free_extent	 vfe;
 	struct vea_unmap_extent	*vue, *tmp_vue;
 	d_list_t		 unmap_list;
-	uint64_t		 cur_time = 0;
-	int			 rc;
+	uint32_t		 cur_time;
+	int			 rc, frags = 0;
 
 	if (noop)
 		return;
 
-	rc = daos_gettime_coarse(&cur_time);
-	if (rc)
-		return;
-
-	if (vsi->vsi_agg_time == UINT64_MAX ||
-	    cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+	cur_time = get_current_age();
+	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
 		return;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
@@ -429,6 +457,9 @@ migrate_end_cb(void *data, bool noop)
 
 		/* Remove entry from aggregate LRU list */
 		d_list_del_init(&entry->ve_link);
+		dec_stats(vsi, STAT_FRAGS_AGING, 1);
+		frags++;
+
 		/*
 		 * Remove entry from aggregate tree, entry will be freed on
 		 * deletion.
@@ -466,6 +497,8 @@ migrate_end_cb(void *data, bool noop)
 				break;
 			}
 		}
+		if (frags >= MAX_FLUSH_FRAGS)
+			break;
 	}
 
 	/* Update aggregation time before yield */
@@ -507,7 +540,7 @@ migrate_end_cb(void *data, bool noop)
 void
 migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb)
 {
-	uint64_t	cur_time;
+	uint32_t	cur_time;
 	int		rc;
 
 	/* Perform the migration instantly if not in a transaction */
@@ -527,12 +560,9 @@ migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb)
 	 * Check aggregation time in advance to avoid unnecessary
 	 * umem_tx_add_callback() calls.
 	 */
-	rc = daos_gettime_coarse(&cur_time);
-	if (rc)
-		return;
+	cur_time = get_current_age();
 
-	if (vsi->vsi_agg_time == UINT64_MAX ||
-	    cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
+	if (cur_time < (vsi->vsi_agg_time + VEA_MIGRATE_INTVL))
 		return;
 
 	/* Schedule one migrate_end_cb() is enough */

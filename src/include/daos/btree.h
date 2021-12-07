@@ -293,10 +293,11 @@ typedef struct {
 	 *			by the tree class.
 	 * \param rec	[OUT]	Returned record body pointer,
 	 *			See \a btr_record for the details.
+	 * \param val_out [OUT]	Returned value address.
 	 */
 	int		(*to_rec_alloc)(struct btr_instance *tins,
 					d_iov_t *key, d_iov_t *val,
-					struct btr_record *rec);
+					struct btr_record *rec, d_iov_t *val_out);
 	/**
 	 * Free the record body stored in \a rec::rec_off
 	 *
@@ -333,6 +334,7 @@ typedef struct {
 	 *			offset and memory class etc.
 	 * \param rec	[IN]	Record to be updated.
 	 * \param val	[IN]	New value to be stored for the record.
+	 * \param val_out [OUT]	Returned value address.
 	 * \a return	0	success.
 	 *		-DER_NO_PERM
 	 *			cannot make inplace change, should call
@@ -342,7 +344,7 @@ typedef struct {
 	 */
 	int		(*to_rec_update)(struct btr_instance *tins,
 					 struct btr_record *rec,
-					 d_iov_t *key, d_iov_t *val);
+					 d_iov_t *key, d_iov_t *val, d_iov_t *val_out);
 	/**
 	 * Optional:
 	 * Return key and value size of the record.
@@ -533,8 +535,11 @@ int  dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out);
 int  dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		  d_iov_t *key, d_iov_t *key_out, d_iov_t *val_out);
+int  dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out);
+int  dbtree_fetch_prev(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move);
+int  dbtree_fetch_next(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move);
 int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-		   d_iov_t *key, d_iov_t *val);
+		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out);
 int  dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc,
 		   d_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
@@ -553,6 +558,7 @@ enum {
 	BTR_ITER_EMBEDDED	= (1 << 0),
 };
 
+int dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor);
 int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);

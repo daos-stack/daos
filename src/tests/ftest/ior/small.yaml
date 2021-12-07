@@ -40,7 +40,7 @@ ior:
     client_processes:
         np_16:
             np: 16
-    test_file: daos:testFile
+    test_file: daos:/testFile
     repetitions: 2
     dfs_destroy: False
     iorflags:

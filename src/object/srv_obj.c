@@ -51,15 +51,22 @@ obj_ioc2ec_ss(struct obj_io_context *ioc)
  * NOT contains the original leader information.
  */
 static int
-obj_gen_dtx_mbs(struct daos_shard_tgt *tgts, bool is_ec, uint32_t *tgt_cnt,
+obj_gen_dtx_mbs(uint32_t flags, uint32_t *tgt_cnt, struct daos_shard_tgt **p_tgts,
 		struct dtx_memberships **p_mbs)
 {
-	struct dtx_memberships	*mbs;
+	struct daos_shard_tgt	*tgts = *p_tgts;
+	struct dtx_memberships	*mbs = NULL;
 	size_t			 size;
 	int			 i;
 	int			 j;
 
 	D_ASSERT(tgts != NULL);
+
+	if (*tgt_cnt == 1 && flags & ORF_CONTAIN_LEADER) {
+		*tgt_cnt = 0;
+		*p_tgts = NULL;
+		goto out;
+	}
 
 	size = sizeof(struct dtx_daos_target) * *tgt_cnt;
 	D_ALLOC(mbs, sizeof(*mbs) + size);
@@ -70,20 +77,32 @@ obj_gen_dtx_mbs(struct daos_shard_tgt *tgts, bool is_ec, uint32_t *tgt_cnt,
 		if (tgts[i].st_rank == DAOS_TGT_IGNORE)
 			continue;
 
+		mbs->dm_tgts[j].ddt_shard = tgts[i].st_shard;
 		mbs->dm_tgts[j++].ddt_id = tgts[i].st_tgt_id;
 	}
 
-	if (j == 0) {
+	if (j == 0 || (j == 1 && flags & ORF_CONTAIN_LEADER)) {
 		D_FREE(mbs);
 		*tgt_cnt = 0;
-	} else {
-		mbs->dm_tgt_cnt = j;
-		mbs->dm_grp_cnt = 1;
-		mbs->dm_data_size = size;
-		if (!is_ec)
-			mbs->dm_flags = DMF_SRDG_REP;
+		*p_tgts = NULL;
+		goto out;
 	}
 
+	mbs->dm_tgt_cnt = j;
+	mbs->dm_grp_cnt = 1;
+	mbs->dm_data_size = size;
+	mbs->dm_flags = DMF_SORTED_SAD_IDX;
+
+	if (flags & ORF_CONTAIN_LEADER) {
+		mbs->dm_flags |= DMF_CONTAIN_LEADER;
+		--(*tgt_cnt);
+		*p_tgts = ++tgts;
+	}
+
+	if (!(flags & ORF_EC))
+		mbs->dm_flags |= DMF_SRDG_REP;
+
+out:
 	*p_mbs = mbs;
 
 	return 0;
@@ -319,9 +338,10 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	}
 
 	if (remote_off >= remote_size) {
-		D_ERROR("remote_bulk_off %zu >= remote_bulk_size %zu\n",
-			remote_off, remote_size);
-		return -DER_INVAL;
+		rc = -DER_OVERFLOW;
+		D_ERROR("remote_bulk_off %zu >= remote_bulk_size %zu, "DF_RC"\n",
+			remote_off, remote_size, DP_RC(rc));
+		return rc;
 	}
 
 	if (daos_io_bypass & IOBP_SRV_BULK) {
@@ -351,9 +371,9 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			break;
 
 		if (remote_off >= remote_size) {
-			D_ERROR("Remote bulk is used up. off:%zu, size:%zu\n",
-				remote_off, remote_size);
 			rc = -DER_OVERFLOW;
+			D_ERROR("Remote bulk is used up. off:%zu, size:%zu, "DF_RC"\n",
+				remote_off, remote_size, DP_RC(rc));
 			break;
 		}
 
@@ -407,10 +427,10 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 
 		D_ASSERT(remote_size > remote_off);
 		if (length > (remote_size - remote_off)) {
-			D_ERROR("Remote bulk isn't large enough. "
-				"local_sz:%zu, remote_sz:%zu, remote_off:%zu\n",
-				length, remote_size, remote_off);
 			rc = -DER_OVERFLOW;
+			D_ERROR("Remote bulk isn't large enough. local_sz:%zu, remote_sz:%zu, "
+				"remote_off:%zu, "DF_RC"\n", length, remote_size, remote_off,
+				DP_RC(rc));
 			break;
 		}
 
@@ -1965,12 +1985,14 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 	bool			 priv;
+	uint32_t                 nr_grps;
 
-	oca = daos_oclass_attr_find(oid, &priv);
+	oca = daos_oclass_attr_find(oid, &priv, &nr_grps);
 	if (!oca)
 		return -DER_INVAL;
 
 	ioc->ioc_oca = *oca;
+	ioc->ioc_oca.ca_grp_nr = nr_grps;
 	if (daos_oclass_is_ec(oca) && !priv) {
 		/* don't ovewrite cell size of private class */
 		D_ASSERT(ioc->ioc_coc != NULL);
@@ -2211,7 +2233,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
 	daos_key_t			*dkey = &orw->orw_dkey;
 	struct obj_io_context		 ioc;
-	struct dtx_handle                dth = { 0 };
+	struct dtx_handle               *dth = NULL;
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
 	uint32_t			 tgt_cnt;
@@ -2285,8 +2307,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
 	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(tgts, orw->orw_flags & ORF_EC,
-				     &tgt_cnt, &mbs);
+		rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -2315,15 +2336,16 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	 * Pre-allocate DTX entry for handling resend under such case.
 	 */
 
-	rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth,
+	rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, dth,
 			  (orw->orw_bulks.ca_arrays != NULL ||
 			   orw->orw_bulks.ca_count != 0) ? true : false);
 	if (rc != 0)
-		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid),
-			DP_RC(rc));
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
+			 DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
 
 out:
-	rc = dtx_end(&dth, ioc.ioc_coc, rc);
+	if (dth != NULL)
+		rc = dtx_end(dth, ioc.ioc_coc, rc);
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
@@ -2451,7 +2473,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in		*orw = crt_req_get(rpc);
 	struct obj_rw_out		*orwo = crt_reply_get(rpc);
-	struct dtx_leader_handle	dlh;
+	struct dtx_leader_handle	*dlh = NULL;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc = { 0 };
 	uint32_t			flags = 0;
@@ -2461,6 +2483,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
 	struct dtx_id			*dti_cos = NULL;
+	struct obj_pool_metrics		*opm;
 	int				dti_cos_cnt;
 	uint32_t			tgt_cnt;
 	uint32_t			version = 0;
@@ -2498,7 +2521,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
 
 	if (obj_rpc_is_fetch(rpc)) {
-		struct dtx_handle dth = {0};
+		struct dtx_handle	*dth;
 
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
@@ -2514,17 +2537,13 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		if (orw->orw_flags & ORF_FOR_MIGRATION)
 			dtx_flags = DTX_FOR_MIGRATION;
-		if (orw->orw_flags & ORF_DTX_REFRESH)
-			dtx_flags |= DTX_FORCE_REFRESH;
 
-		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
-			       orw->orw_map_ver, &orw->orw_oid,
-			       NULL, 0, dtx_flags, NULL, &dth);
-		if (rc != 0)
-			goto out;
-
-		rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth, false);
-		rc = dtx_end(&dth, ioc.ioc_coc, rc);
+		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0, orw->orw_map_ver,
+			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
+		if (rc == 0) {
+			rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, dth, false);
+			rc = dtx_end(dth, ioc.ioc_coc, rc);
+		}
 
 		D_GOTO(out, rc);
 	}
@@ -2533,8 +2552,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
 
 	if (!daos_is_zero_dti(&orw->orw_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(tgts, orw->orw_flags & ORF_EC,
-				     &tgt_cnt, &mbs);
+		rc = obj_gen_dtx_mbs(orw->orw_flags, &tgt_cnt, &tgts, &mbs);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -2546,16 +2564,16 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (orw->orw_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
+	opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		daos_epoch_t		 e;
-		struct obj_pool_metrics	*opm;
 
 		dtx_flags |= DTX_RESEND;
+		d_tm_inc_counter(opm->opm_update_resent, 1);
 
 again1:
-		opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
-		d_tm_inc_counter(opm->opm_update_resent, 1);
 		e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2579,14 +2597,11 @@ again1:
 	}
 
 again2:
-	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
+	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL && tgt_cnt != 0) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
-					 NULL, 0, &ioc.ioc_oca,
-					 orw->orw_shard_tgts.ca_count,
-					 orw->orw_shard_tgts.ca_arrays,
-					 &split_req);
+					 NULL, 0, &ioc.ioc_oca, tgt_cnt, tgts, &split_req);
 		if (rc != 0) {
 			D_ERROR(DF_UOID": obj_ec_rw_req_split failed, rc %d.\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -2644,10 +2659,10 @@ again2:
 	exec_arg.start = orw->orw_start_shard;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(&dlh, obj_tgt_update, NULL, NULL, &exec_arg);
+	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, NULL, &exec_arg);
 
 	/* Stop the distributed transaction */
-	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -2678,6 +2693,7 @@ again2:
 	case -DER_AGAIN:
 		orw->orw_flags |= ORF_RESEND;
 		need_abort = true;
+		d_tm_inc_counter(opm->opm_update_retry, 1);
 		goto again1;
 	default:
 		break;
@@ -2772,13 +2788,13 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	vos_iter_param_t	param = { 0 };
 	struct dss_enum_arg	saved_arg;
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
+	struct dtx_handle	*dth = NULL;
 	uint32_t		flags = 0;
 	int			opc = opc_get(rpc->cr_opc);
 	int			type;
 	int			rc;
 	int			rc_tmp;
 	bool			recursive = false;
-	struct dtx_handle	dth = {0};
 	struct dtx_epoch	epoch = {0};
 
 	if (oei->oei_flags & ORF_ENUM_WITHOUT_EPR) {
@@ -2876,8 +2892,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 
 	if (oei->oei_flags & ORF_FOR_MIGRATION)
 		flags = DTX_FOR_MIGRATION;
-	if (oei->oei_flags & ORF_DTX_REFRESH)
-		flags |= DTX_FORCE_REFRESH;
 
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,
@@ -2886,10 +2900,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 
 re_pack:
-	rc = dss_enum_pack(&param, type, recursive, &anchors[0], enum_arg,
-			   vos_iterate, &dth);
-	if (obj_dtx_need_refresh(&dth, rc)) {
-		rc = dtx_refresh(&dth, ioc->ioc_coc);
+	rc = dss_enum_pack(&param, type, recursive, &anchors[0], enum_arg, vos_iterate, dth);
+	if (obj_dtx_need_refresh(dth, rc)) {
+		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN) {
 			anchors[0] = anchors[1];
 			obj_restore_enum_args(rpc, enum_arg, &saved_arg);
@@ -2915,7 +2928,7 @@ re_pack:
 	}
 
 	/* dss_enum_pack may return 1. */
-	rc_tmp = dtx_end(&dth, ioc->ioc_coc, rc > 0 ? 0 : rc);
+	rc_tmp = dtx_end(dth, ioc->ioc_coc, rc > 0 ? 0 : rc);
 	if (rc_tmp != 0)
 		rc = rc_tmp;
 
@@ -3200,7 +3213,7 @@ out:
 void
 ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 {
-	struct dtx_handle		 dth = { 0 };
+	struct dtx_handle		*dth = NULL;
 	struct obj_io_context		 ioc;
 	struct obj_punch_in		*opi;
 	struct dtx_memberships		*mbs = NULL;
@@ -3247,8 +3260,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	tgt_cnt = opi->opi_shard_tgts.ca_count;
 
 	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(tgts, opi->opi_flags & ORF_EC,
-				     &tgt_cnt, &mbs);
+		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -3275,7 +3287,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_IO);
 
 	/* non-leader local RPC handler, do not need pin the DTX entry.  */
-	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, &dth, false);
+	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, dth, false);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
 			 DB_IO, DLOG_ERR,
@@ -3284,7 +3296,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 
 out:
 	/* Stop the local transaction */
-	rc = dtx_end(&dth, ioc.ioc_coc, rc);
+	if (dth != NULL)
+		rc = dtx_end(dth, ioc.ioc_coc, rc);
 	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
@@ -3375,7 +3388,7 @@ comp:
 void
 ds_obj_punch_handler(crt_rpc_t *rpc)
 {
-	struct dtx_leader_handle	dlh;
+	struct dtx_leader_handle	*dlh = NULL;
 	struct obj_punch_in		*opi;
 	struct ds_obj_exec_arg		exec_arg = { 0 };
 	struct obj_io_context		ioc = { 0 };
@@ -3431,8 +3444,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	tgt_cnt = opi->opi_shard_tgts.ca_count;
 
 	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(tgts, opi->opi_flags & ORF_EC,
-				     &tgt_cnt, &mbs);
+		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -3520,11 +3532,11 @@ again2:
 	exec_arg.flags = flags;
 
 	/* Execute the operation on all shards */
-	rc = dtx_leader_exec_ops(&dlh, obj_tgt_punch, obj_punch_agg_cb,
+	rc = dtx_leader_exec_ops(dlh, obj_tgt_punch, obj_punch_agg_cb,
 				 &opi->opi_api_flags, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(&dlh, ioc.ioc_coc, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -3577,8 +3589,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct obj_query_key_out	*okqo;
 	daos_key_t			*dkey;
 	daos_key_t			*akey;
+	struct dtx_handle		*dth = NULL;
 	struct obj_io_context		 ioc;
-	struct dtx_handle		 dth = {0};
 	struct dtx_epoch		 epoch = {0};
 	uint32_t			 query_flags;
 	unsigned int			 cell_size = 0;
@@ -3639,18 +3651,18 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
 			       okqi->okqi_epoch, dkey, akey, query_recx,
-			       cell_size, stripe_size, &dth);
+			       cell_size, stripe_size, dth);
 	if (rc == 0 && (query_flags & VOS_GET_RECX_EC)) {
 		okqo->okqo_recx = ec_recx[0];
 		okqo->okqo_recx_parity = ec_recx[1];
 		okqo->okqo_recx_punched = ec_recx[2];
-	} else if (obj_dtx_need_refresh(&dth, rc)) {
-		rc = dtx_refresh(&dth, ioc.ioc_coc);
+	} else if (obj_dtx_need_refresh(dth, rc)) {
+		rc = dtx_refresh(dth, ioc.ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto re_query;
 	}
 
-	rc = dtx_end(&dth, ioc.ioc_coc, rc);
+	rc = dtx_end(dth, ioc.ioc_coc, rc);
 
 failed:
 	obj_reply_set_status(rpc, rc);
@@ -4220,7 +4232,7 @@ again:
 static int
 ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 {
-	struct dtx_handle		 dth = { 0 };
+	struct dtx_handle		*dth = NULL;
 	struct obj_cpd_in		*oci = crt_req_get(rpc);
 	struct daos_cpd_sub_head	*dcsh = ds_obj_cpd_get_dcsh(rpc, 0);
 	struct daos_cpd_disp_ent	*dcde = ds_obj_cpd_get_dcde(rpc, 0, 0);
@@ -4288,17 +4300,16 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, &dth,
-				    dth.dth_modification_cnt > 0 ?
-				    true : false);
+	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, dth,
+				    dth->dth_modification_cnt > 0 ? true : false);
 
 	/* For the case of only containing read sub operations, we will
 	 * generate DTX entry for DTX recovery. Similarly for noop case.
 	 */
-	if (rc == 0 && (dth.dth_modification_cnt == 0 || !dth.dth_active))
-		rc = vos_dtx_pin(&dth, true);
+	if (rc == 0 && (dth->dth_modification_cnt == 0 || !dth->dth_active))
+		rc = vos_dtx_pin(dth, true);
 
-	rc = dtx_end(&dth, ioc->ioc_coc, rc);
+	rc = dtx_end(dth, ioc->ioc_coc, rc);
 
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
@@ -4334,7 +4345,8 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 			if (dcde->dcde_write_cnt != 0) {
 				rc = obj_capa_check(ioc->ioc_coh, true, false);
 				if (rc != 0) {
-					comp_cb(dlh, idx, rc);
+					if (comp_cb != NULL)
+						comp_cb(dlh, idx, rc);
 
 					return rc;
 				}
@@ -4410,7 +4422,7 @@ static void
 ds_obj_dtx_leader_ult(void *arg)
 {
 	struct daos_cpd_args		*dca = arg;
-	struct dtx_leader_handle	 dlh;
+	struct dtx_leader_handle	*dlh = NULL;
 	struct ds_obj_exec_arg		 exec_arg;
 	struct obj_cpd_in		*oci = crt_req_get(dca->dca_rpc);
 	struct obj_cpd_out		*oco = crt_reply_get(dca->dca_rpc);
@@ -4554,10 +4566,10 @@ again:
 	exec_arg.flags = flags;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(&dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
+	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(&dlh, dca->dca_ioc->ioc_coc, rc);
+	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coc, rc);
 
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART &&

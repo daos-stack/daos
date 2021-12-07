@@ -55,7 +55,9 @@ struct sched_request {
 	uint64_t		 sr_wakeup_time;
 	/* When the request is enqueued, in msecs */
 	uint64_t		 sr_enqueue_ts;
-	unsigned int		 sr_abort:1;
+	unsigned int		 sr_abort:1,
+				 /* sr_ult is sched_request-owned */
+				 sr_owned:1;
 };
 
 bool		sched_prio_disabled;
@@ -503,7 +505,7 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 
 static struct sched_request *
 req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
-	void (*func)(void *), void *arg, ABT_thread ult)
+	void (*func)(void *), void *arg, ABT_thread ult, bool owned)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi;
@@ -536,6 +538,7 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	req->sr_arg	= arg;
 	req->sr_ult	= ult;
 	req->sr_abort	= 0;
+	req->sr_owned	= (owned ? 1 : 0);
 	req->sr_pool_info = spi;
 
 	return req;
@@ -968,7 +971,7 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		return req_kickoff_internal(dx, attr, func, arg);
 
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
-	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL);
+	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL, false);
 	if (req == NULL) {
 		D_ERROR("XS(%d): get req failed.\n", dx->dx_xs_id);
 		return -DER_NOMEM;
@@ -1081,13 +1084,16 @@ sched_req_wakeup(struct sched_request *req)
 void
 sched_req_wait(struct sched_request *req, bool abort)
 {
+	int	rc;
+
 	D_ASSERT(req != NULL);
 	if (abort) {
 		req->sr_abort = 1;
 		sched_req_wakeup(req);
 	}
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
-	ABT_thread_join(req->sr_ult);
+	rc = ABT_thread_join(req->sr_ult);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_thread_join: %d\n", rc);
 }
 
 inline bool
@@ -1144,6 +1150,7 @@ struct sched_request *
 sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
+	bool			 owned;
 	struct sched_request	*req;
 	int			 rc;
 
@@ -1153,15 +1160,32 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 		ABT_thread	self;
 
 		rc = ABT_thread_self(&self);
-		if (rc) {
-			D_ERROR("Failed to get self thread. "DF_RC"\n",
-				DP_RC(dss_abterr2der(rc)));
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("Failed to get self thread: %d\n", rc);
 			return NULL;
 		}
 		ult = self;
+		owned = false;
+	} else {
+		ABT_bool unnamed;
+
+		/*
+		 * Since Argobots prohibits freeing unnamed ULTs, don't own
+		 * them.
+		 */
+		rc = ABT_thread_is_unnamed(ult, &unnamed);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("Failed to get thread type: %d\n", rc);
+			return NULL;
+		}
+		if (unnamed == ABT_TRUE) {
+			D_ERROR("Unnamed threads are not supported\n");
+			return NULL;
+		}
+		owned = true;
 	}
 
-	req = req_get(dx, attr, NULL, NULL, ult);
+	req = req_get(dx, attr, NULL, NULL, ult, owned);
 	if (req != NULL && attr->sra_type == SCHED_REQ_GC)
 		req->sr_pool_info->spi_gc_ults++;
 
@@ -1173,9 +1197,17 @@ sched_req_put(struct sched_request *req)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	struct sched_info	*info = &dx->dx_sched_info;
+	int			 rc;
 
 	D_ASSERT(req != NULL && req->sr_ult != ABT_THREAD_NULL);
 	D_ASSERT(d_list_empty(&req->sr_link));
+	if (req->sr_owned) {
+		/* We are responsible for freeing a req-owned ULT. */
+		rc = ABT_thread_free(&req->sr_ult);
+		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	} else {
+		req->sr_ult = ABT_THREAD_NULL;
+	}
 	d_list_add_tail(&req->sr_link, &info->si_idle_list);
 
 	if (req->sr_attr.sra_type == SCHED_REQ_GC) {
@@ -1222,6 +1254,34 @@ sched_cur_seq(void)
 	struct sched_info	*info = &dx->dx_sched_info;
 
 	return info->si_cur_seq;
+}
+
+struct sched_request *
+sched_create_ult(struct sched_req_attr *attr, void (*func)(void *), void *arg, size_t stack_size)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_request	*req;
+	ABT_thread		 ult = ABT_THREAD_NULL;
+	int			 rc;
+
+	req = req_get(dx, attr, NULL, NULL, ult, true);
+	if (req == NULL)
+		return NULL;
+
+	/* The ULT must be created on the caller xstream */
+	rc = dss_ult_create(func, arg, DSS_XS_SELF, 0, stack_size, &ult);
+	if (rc) {
+		D_ERROR("Failed to create ULT: "DF_RC"\n", DP_RC(rc));
+		req_put(dx, req);
+		return NULL;
+	}
+	D_ASSERT(ult != ABT_THREAD_NULL);
+
+	req->sr_ult = ult;
+	if (attr->sra_type == SCHED_REQ_GC)
+		req->sr_pool_info->spi_gc_ults++;
+
+	return req;
 }
 
 /*

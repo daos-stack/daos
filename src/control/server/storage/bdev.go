@@ -9,6 +9,7 @@ package storage
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -252,10 +253,9 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList    []string
-		EngineStorage map[uint32]*Config // to validate against
-		VMDEnabled    bool
-		BypassCache   bool
+		DeviceList  []string
+		VMDEnabled  bool
+		BypassCache bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.
@@ -374,6 +374,7 @@ func NewBdevForwarder(log logging.Logger) *BdevForwarder {
 
 type BdevAdminForwarder struct {
 	pbin.Forwarder
+	reqMutex sync.Mutex
 }
 
 func NewBdevAdminForwarder(log logging.Logger) *BdevAdminForwarder {
@@ -382,6 +383,13 @@ func NewBdevAdminForwarder(log logging.Logger) *BdevAdminForwarder {
 	return &BdevAdminForwarder{
 		Forwarder: *pf,
 	}
+}
+
+func (f *BdevAdminForwarder) SendReq(method string, fwdReq interface{}, fwdRes interface{}) error {
+	f.reqMutex.Lock()
+	defer f.reqMutex.Unlock()
+
+	return f.Forwarder.SendReq(method, fwdReq, fwdRes)
 }
 
 func (f *BdevAdminForwarder) Scan(req BdevScanRequest) (*BdevScanResponse, error) {

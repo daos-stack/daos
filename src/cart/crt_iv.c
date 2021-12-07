@@ -146,7 +146,15 @@ ivns_destroy(struct crt_ivns_internal *ivns_internal)
 	void				*cb_arg;
 
 	D_MUTEX_LOCK(&ns_list_lock);
-	d_list_del(&ivns_internal->cii_link);
+	D_SPIN_LOCK(&ivns_internal->cii_ref_lock);
+	if (ivns_internal->cii_ref_count == 0) {
+		d_list_del(&ivns_internal->cii_link);
+	} else { /* It was found in ns_list and ref incremented again */
+		D_SPIN_UNLOCK(&ivns_internal->cii_ref_lock);
+		D_MUTEX_UNLOCK(&ns_list_lock);
+		return;
+	}
+	D_SPIN_UNLOCK(&ivns_internal->cii_ref_lock);
 	D_MUTEX_UNLOCK(&ns_list_lock);
 
 	ivns = ivns_internal;
@@ -163,6 +171,7 @@ ivns_destroy(struct crt_ivns_internal *ivns_internal)
 	D_SPIN_DESTROY(&ivns_internal->cii_ref_lock);
 
 	D_FREE(ivns_internal->cii_iv_classes);
+	ivns_internal->cii_gns.gn_ivns_id.ii_nsid = 0;
 	D_FREE(ivns_internal->cii_gns.gn_ivns_id.ii_group_name);
 	D_FREE(ivns_internal);
 }
@@ -2054,10 +2063,8 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 
 	if (rpc_req->cr_co_bulk_hdl != CRT_BULK_NULL) {
 		D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
-		if (tmp_iovs == NULL) {
-			D_ERROR("Failed to allocate temporary iovs\n");
-			D_GOTO(exit, rc);
-		}
+		if (tmp_iovs == NULL)
+			D_GOTO(exit, rc = -DER_NOMEM);
 
 		tmp_iv.sg_nr = iv_value.sg_nr;
 		tmp_iv.sg_iovs = tmp_iovs;
@@ -2183,11 +2190,6 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 		D_DEBUG(DB_TRACE, "Call Back not supplied\n");
 		D_ASSERT(iv_sync->isc_ivns_internal == NULL);
 	}
-
-	if (iv_sync->isc_sync_type.ivs_comp_cb)
-		iv_sync->isc_sync_type.ivs_comp_cb(
-			iv_sync->isc_sync_type.ivs_comp_cb_arg,
-			cb_info->cci_rc);
 
 	if (iv_sync->isc_ivns_internal) {
 		iv_ops = crt_iv_ops_get(iv_sync->isc_ivns_internal,
@@ -2584,11 +2586,6 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 			rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
 						tmp_iv_value,
 						iv_info->uci_user_priv);
-			if (iv_info->uci_sync_type.ivs_comp_cb)
-				iv_info->uci_sync_type.ivs_comp_cb(iv_info->
-								   uci_sync_type.
-								   ivs_comp_cb_arg,
-								   rc);
 		}
 	}
 
@@ -3313,7 +3310,6 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		if (sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
 			rc = update_comp_cb(ivns_internal, class_id, iv_key,
 					    NULL, iv_value, rc, cb_arg);
-			D_ASSERT(sync_type.ivs_comp_cb == NULL);
 		} else {
 			/* issue sync. will call completion callback */
 			rc = crt_ivsync_rpc_issue(ivns_internal, class_id,
@@ -3355,7 +3351,6 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		}
 
 		/* comp_cb is only for sync update for now */
-		D_ASSERT(sync_type.ivs_comp_cb == NULL);
 		D_ALLOC_PTR(cb_info);
 		if (cb_info == NULL)
 			D_GOTO(put, rc = -DER_NOMEM);
@@ -3397,9 +3392,6 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 put:
 	iv_ops->ivo_on_put(ivns, NULL, priv);
 exit:
-	if (rc != 0 && sync_type.ivs_comp_cb)
-		sync_type.ivs_comp_cb(sync_type.ivs_comp_cb_arg, rc);
-
 	if (ivns_internal)
 		IVNS_DECREF(ivns_internal);
 	return rc;
@@ -3427,8 +3419,6 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 		update_comp_cb(ivns, class_id, iv_key, NULL, iv_value,
 			       rc, cb_arg);
 
-		if (sync_type.ivs_comp_cb)
-			sync_type.ivs_comp_cb(sync_type.ivs_comp_cb_arg, rc);
 		D_GOTO(exit, rc);
 	}
 
