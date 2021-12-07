@@ -1053,7 +1053,8 @@ bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 		return -DER_INVAL;
 
 	biod->bd_chk_type = type;
-	biod->bd_rdma = (bulk_ctxt != NULL);
+	/* For rebuild pull, the DMA buffer will be used as RDMA client */
+	biod->bd_rdma = (bulk_ctxt != NULL) || (type == BIO_CHK_TYPE_REBUILD);
 
 	if (bulk_ctxt != NULL && !(daos_io_bypass & IOBP_SRV_BULK_CACHE)) {
 		bulk_arg.ba_bulk_ctxt = bulk_ctxt;

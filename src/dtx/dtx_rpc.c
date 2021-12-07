@@ -399,7 +399,7 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 
 static int
 dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		 d_iov_t *val_iov, struct btr_record *rec)
+		 d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -454,7 +454,7 @@ dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_cf_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  d_iov_t *key, d_iov_t *val)
+		  d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -541,7 +541,8 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 
 			d_iov_set(&riov, &dcrb, sizeof(dcrb));
 			d_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
-			rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &kiov, &riov);
+			rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &kiov,
+					   &riov, NULL);
 		} else {
 			struct dtx_req_rec	*drr;
 
