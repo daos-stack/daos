@@ -225,7 +225,7 @@ func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdD
 
 		// if error indicates non-existent health and smd has abnormal state then return
 		if ok && status == drpc.DaosNonexistant && !smdDev.State.IsNormal() {
-			ei.log.Debugf("%s: health stats not found, device states: %q)", msg,
+			ei.log.Debugf("%s: health stats not found, device states: %q", msg,
 				smdDev.State.States())
 
 			return false, nil
