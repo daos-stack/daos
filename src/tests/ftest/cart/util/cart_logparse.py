@@ -610,7 +610,6 @@ class LogIter():
                                'first_index': index}
             pids[l_pid]['last_index'] = index
             position += len(line)
-
         self._pids = pids
 
     def new_iter(self,
