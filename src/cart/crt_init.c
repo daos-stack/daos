@@ -797,7 +797,7 @@ int crt_na_ofi_config_init(int provider)
 			interface);
 		if (provider == CRT_NA_OFI_VERBS_RXM ||
 		    provider == CRT_NA_OFI_CXI)
-			D_WARN("Domain and interface name expect to be different "
+			D_WARN("Domain and interface name expected to be different "
 			       "for verbs/cxi, it might fail without specifying OFI_DOMAIN\n");
 		domain = interface;
 	}
