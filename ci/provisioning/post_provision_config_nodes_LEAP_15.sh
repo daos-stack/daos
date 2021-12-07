@@ -49,13 +49,48 @@ post_provision_config_nodes() {
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
-    time dnf repolist
+    time dnf -y repolist
     # the group repo is always on the test image
     #add_group_repo
     # in fact is's on the Leap image twice so remove one
     rm -f $REPOS_DIR/daos-stack-ext-opensuse-15-stable-group.repo
-    add_local_repo
-    time dnf repolist
+    #add_local_repo
+
+    # CORCI-1096
+    # workaround until new snapshot images are produced
+    # Assume if APPSTREAM is locally proxied so is epel-modular
+    # so disable the upstream epel-modular repo
+    if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}" ]; then
+        dnf -y config-manager --disable epel-modular appstream powertools
+    fi
+
+    # Use remote repo config instead of image-installed repos
+    # shellcheck disable=SC2207
+    if ! old_repo_files=($(ls "${REPOS_DIR}"/*.repo)); then
+        echo "Failed to determine old repo files"
+        exit 1
+    fi
+    local repo_server
+    repo_server=$(echo "$COMMIT_MESSAGE" | sed -ne '/^Repo-server: */s/.*: *//p')
+    if [ "$repo_server" = "nexus" ]; then
+        repo_server=""
+    elif [ "$repo_server" = "" ]; then
+        repo_server="artifactory"
+    fi
+    if ! fetch_repo_config "$repo_server"; then
+        # leave the existing on-image repo config alone if the repo fetch fails
+        send_mail "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
+    else
+        if ! rm -f "${old_repo_files[@]}"; then
+            echo "Failed to remove old repo files"
+            exit 1
+        fi
+        if [ "$DISTRO_NAME" = "centos8" ]; then
+            # shellcheck disable=SC2034
+            POWERTOOLSREPO="daos_ci-centos8-powertools"
+        fi
+    fi
+    time dnf -y repolist
 
     if [ -n "$INST_REPOS" ]; then
         local repo
@@ -71,7 +106,7 @@ post_provision_config_nodes() {
                 fi
             fi
             local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
-            dnf config-manager --add-repo="${repo_url}"
+            dnf -y config-manager --add-repo="${repo_url}"
             disable_gpg_check "$repo_url"
         done
     fi
@@ -81,21 +116,37 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
+    if [ -n "${LSB_RELEASE:-}" ]; then
+        RETRY_COUNT=4 retry_dnf 360 "${repo_server}" install $LSB_RELEASE
+    fi
+
+    if [ "$DISTRO_NAME" = "centos7" ] && lspci | grep "ConnectX-6"; then
+        # No openmpi3 or MACSio-openmpi3 can be installed currently
+        # when the ConnnectX-6 driver is installed
+        INST_RPMS="${INST_RPMS// openmpi3/}"
+        INST_RPMS="${INST_RPMS// MACSio-openmpi3}"
+    fi
 
     # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ] && ! retry_cmd 360 dnf -y install $INST_RPMS; then
-        rc=${PIPESTATUS[0]}
-        dump_repos
-        exit "$rc"
+    if [ -n "$INST_RPMS" ]; then
+        if ! RETRY_COUNT=4 retry_dnf 360 "${repo_server}" install $INST_RPMS; then
+            rc=${PIPESTATUS[0]}
+            dump_repos
+            exit "$rc"
+        fi
     fi
 
     distro_custom
 
+    lsb_release -a
+
     # now make sure everything is fully up-to-date
-    if ! retry_cmd 600 dnf -y upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    if ! RETRY_COUNT=4 retry_dnf 600 "${repo_server}" upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
     fi
+
+    lsb_release -a
 
     if [ -f /etc/do-release ]; then
         cat /etc/do-release
