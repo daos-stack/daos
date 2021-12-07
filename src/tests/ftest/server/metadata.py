@@ -34,7 +34,10 @@ def run_ior_loop(manager, uuids):
         try:
             results.append(manager.run())
         except CommandFailure as error:
-            errors.append("IOR Loop {}/{} failed: {}".format(index, len(uuids), error))
+            ior_mode = "read" if "-r" in manager.job.flags.value else "write"
+            errors.append(
+                "IOR {} Loop {}/{} failed for container {}: {}".format(
+                    ior_mode, index, len(uuids), cont_uuid, error))
     if errors:
         raise CommandFailure(
             "IOR failed in {}/{} loops: {}".format(len(errors), len(uuids), "\n".join(errors)))
@@ -366,7 +369,7 @@ class ObjectMetadata(TestWithServers):
         for operation in ("write", "read"):
             # Create the IOR threads
             for index in range(total_ior_threads):
-                # Define the arguments for the ior_runner_thread method
+                # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
                 ior_cmd.set_daos_params(self.server_group, self.pool)
@@ -390,12 +393,17 @@ class ObjectMetadata(TestWithServers):
 
             # Launch the IOR threads
             self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)
-            if thread_manager.check_run():
-                self.d_log.error("IOR {} Thread FAIL".format(operation))
-                self.fail("IOR {} Thread FAIL".format(operation))
+            failed_thread_count = thread_manager.check_run()
+            if failed_thread_count > 0:
+                msg = "{} FAILED IOR {} Thread(s)".format(failed_thread_count, operation)
+                self.d_log.error(msg)
+                self.fail(msg)
 
             # Restart the agents and servers after the write / before the read
             if operation == "write":
+                # Disconnect from the pool
+                self.pool.disconnect()
+
                 # Stop the agents
                 errors = self.stop_agents()
                 self.assertEqual(
