@@ -664,10 +664,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct rebuild_scan_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
+	struct dtx_handle		*dth = NULL;
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
-	struct dtx_handle		dth = { 0 };
 	struct dtx_id			dti = { 0 };
 	struct dtx_epoch		epoch = { 0 };
 	daos_unit_oid_t			oid = { 0 };
@@ -713,8 +713,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		param.ip_flags |= VOS_IT_PUNCHED;
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, NULL, arg, &dth);
-	dtx_end(&dth, NULL, rc);
+			 rebuild_obj_scan_cb, NULL, arg, dth);
+	dtx_end(dth, NULL, rc);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
@@ -863,6 +863,21 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d\n",
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_rebuild_ver);
+
+	/* If PS leader has been changed, and rebuild version is also increased
+	 * due to adding new failure targets for rebuild, let's abort previous
+	 * rebuild.
+	 */
+	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
+		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
+		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) {
+			D_INFO(DF_UUID" rebuild %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
+			       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
+			       rpt->rt_leader_term, rsi->rsi_rebuild_ver,
+			       rsi->rsi_leader_term);
+			rpt->rt_abort = 1;
+		}
+	}
 
 	/* check if the rebuild is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);

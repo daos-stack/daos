@@ -519,8 +519,8 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15"
-                            args '-v /opt/intel:/opt/intel'
+                                                " -t ${sanitized_JOB_NAME}-leap15" +
+                                                " --build-arg COMPILER=icc"
                         }
                     }
                     steps {
@@ -900,7 +900,7 @@ pipeline {
                         always {
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: false,
+                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
                                                         [threshold: 1, type: 'TOTAL_HIGH'],
