@@ -41,6 +41,22 @@ const (
 	BioStateIdentify BioState = C.NVME_DEV_FL_PLUGGED | C.NVME_DEV_FL_INUSE | C.NVME_DEV_FL_IDENTIFY
 )
 
+// IsNew returns true if SSD is not in use by DAOS.
+func (bs BioState) IsNew() bool {
+	return bs&C.NVME_DEV_FL_INUSE == 0
+}
+
+// IsNormal returns true if SSD is in a normal, non-faulty state.
+func (bs BioState) IsNormal() bool {
+	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_INUSE != 0 &&
+		bs&C.NVME_DEV_FL_FAULTY == 0)
+}
+
+// IsFaulty returns true if SSD is in a faulty state.
+func (bs BioState) IsFaulty() bool {
+	return bs&C.NVME_DEV_FL_FAULTY != 0
+}
+
 func (bs BioState) String() string {
 	switch {
 	case bs&C.NVME_DEV_FL_PLUGGED == 0:

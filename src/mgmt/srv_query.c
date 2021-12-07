@@ -474,7 +474,7 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 
 	/* Device is in-use so set relevant flags */
 	resp->dev_state = NVME_DEV_FL_INUSE | NVME_DEV_FL_PLUGGED;
-	if (dev_info->sdi_state == SMD_DEV_FAULTY)
+	if ((dev_info->sdi_state & SMD_DEV_FAULTY) != 0)
 		resp->dev_state |= NVME_DEV_FL_FAULTY;
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);

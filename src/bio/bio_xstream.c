@@ -518,6 +518,7 @@ lookup_dev_by_id(uuid_t dev_id)
 	struct bio_bdev	*d_bdev;
 
 	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
+		D_INFO("lookup_dev found: %s", d_bdev->bb_uuid);
 		if (uuid_compare(d_bdev->bb_uuid, dev_id) == 0)
 			return d_bdev;
 	}

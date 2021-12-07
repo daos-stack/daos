@@ -228,14 +228,14 @@ func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdD
 		}
 
 		// if not non-existent error or smd is in normal state then fail
-		if !ok || smdDev.State == storage.BioStateNormal {
+		if !ok || smdDev.State.IsNormal() {
 			return false, errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(),
 				ctrlr.PciAddr)
 		}
 
 		// otherwise ignore error as health stats may not exist if smd device is
 		// not in a normal state
-		ei.log.Debugf("%s: stats not found (state=%s)", msg, smdDev.State)
+		ei.log.Debugf("%s: stats not found (state: %s)", msg, smdDev.State)
 		return false, nil
 	}
 
