@@ -20,7 +20,6 @@ import uuid
 import json
 import copy
 import signal
-import errno
 import stat
 import errno
 import argparse
