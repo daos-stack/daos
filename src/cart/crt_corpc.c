@@ -25,7 +25,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(grp_priv != NULL);
 
-	D_ALLOC_PTR(co_info);
+	DM_ALLOC_PTR(M_CRT_RPC, co_info);
 	if (co_info == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -215,7 +215,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_ERROR("bad zero seg_num.\n");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
-	D_ALLOC_ARRAY(iovs, seg_num);
+	DM_ALLOC_ARRAY(M_CRT, iovs, seg_num);
 	if (iovs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -273,7 +273,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(out, rc);
 		}
 
-		D_ALLOC(bulk_iov.iov_buf, bulk_len);
+		DM_ALLOC(M_CRT_RPC, bulk_iov.iov_buf, bulk_len);
 		if (bulk_iov.iov_buf == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		bulk_iov.iov_buf_len = bulk_len;

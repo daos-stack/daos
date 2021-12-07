@@ -232,7 +232,7 @@ rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
 
 	D_ASSERT(cbs->dc_stop != NULL);
 
-	D_ALLOC_PTR(db);
+	DM_ALLOC_PTR(M_RDB, db);
 	if (db == NULL) {
 		D_ERROR(DF_UUID": failed to allocate db object\n",
 			DP_UUID(uuid));

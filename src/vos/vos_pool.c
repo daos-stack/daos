@@ -172,7 +172,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 {
 	struct vos_pool		*pool;
 
-	D_ALLOC_PTR(pool);
+	DM_ALLOC_PTR(M_VOS, pool);
 	if (pool == NULL)
 		return -DER_NOMEM;
 

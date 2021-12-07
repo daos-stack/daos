@@ -183,7 +183,7 @@ log_event(Shared__RASEvent *evt)
 out:
 	fclose(stream);
 	D_INFO("&&& RAS EVENT%s\n", buf);
-	D_FREE(buf);
+	free(buf);
 }
 
 static int

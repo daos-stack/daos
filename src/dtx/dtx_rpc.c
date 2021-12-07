@@ -406,12 +406,12 @@ dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
-	D_ALLOC_PTR(drr);
+	DM_ALLOC_PTR(M_DTX, drr);
 	if (drr == NULL)
 		return -DER_NOMEM;
 
 	dcrb = val_iov->iov_buf;
-	D_ALLOC_ARRAY(drr->drr_dti, dcrb->dcrb_count);
+	DM_ALLOC_ARRAY(M_DTX, drr->drr_dti, dcrb->dcrb_count);
 	if (drr->drr_dti == NULL) {
 		D_FREE(drr);
 		return -DER_NOMEM;
@@ -1000,17 +1000,17 @@ again:
 			}
 		}
 
-		D_ALLOC_PTR(drr);
+		DM_ALLOC_PTR(M_DTX, drr);
 		if (drr == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(drr->drr_dti, *check_count);
+		DM_ALLOC_ARRAY(M_DTX, drr->drr_dti, *check_count);
 		if (drr->drr_dti == NULL) {
 			D_FREE(drr);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 
-		D_ALLOC_ARRAY(drr->drr_cb_args, *check_count);
+		DM_ALLOC_ARRAY(M_DTX, drr->drr_cb_args, *check_count);
 		if (drr->drr_cb_args == NULL) {
 			D_FREE(drr->drr_dti);
 			D_FREE(drr);

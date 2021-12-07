@@ -356,7 +356,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		D_GOTO(exit, rc);
 	}
 
-	D_ALLOC_PTR(cont);
+	DM_ALLOC_PTR(M_VOS, cont);
 	if (!cont) {
 		D_ERROR("Error in allocating container handle\n");
 		D_GOTO(exit, rc = -DER_NOMEM);
@@ -689,7 +689,7 @@ cont_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (vpool == NULL)
 		return -DER_INVAL;
 
-	D_ALLOC_PTR(co_iter);
+	DM_ALLOC_PTR(M_VOS, co_iter);
 	if (co_iter == NULL)
 		return -DER_NOMEM;
 

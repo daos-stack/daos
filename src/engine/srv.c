@@ -320,6 +320,7 @@ dss_srv_handler(void *arg)
 	struct dss_xstream		*dx = (struct dss_xstream *)arg;
 	struct dss_thread_local_storage	*dtc;
 	struct dss_module_info		*dmi;
+	//uint64_t			 then = 0;
 	int				 rc;
 	bool				 signal_caller = true;
 

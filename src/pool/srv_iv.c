@@ -54,7 +54,7 @@ pool_iv_value_alloc_internal(struct ds_iv_key *key, d_sg_list_t *sgl)
 	if (rc)
 		return rc;
 
-	D_ALLOC(sgl->sg_iovs[0].iov_buf, buf_size);
+	DM_ALLOC(M_IV, sgl->sg_iovs[0].iov_buf, buf_size);
 	if (sgl->sg_iovs[0].iov_buf == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
@@ -422,7 +422,7 @@ pool_iv_conns_resize(d_sg_list_t *sgl, unsigned int old_size,
 	struct pool_iv_entry *new_ent;
 	struct pool_iv_conns *new_conns;
 
-	D_REALLOC(new_ent, old_ent, old_size, new_size);
+	DM_REALLOC(M_IV, new_ent, old_ent, old_size, new_size);
 	if (new_ent == NULL)
 		return -DER_NOMEM;
 
@@ -590,7 +590,7 @@ pool_iv_map_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 		uint32_t new_size;
 
 		new_size = pool_iv_map_ent_size(pb_nr);
-		D_REALLOC_NZ(new_buf, dst_sgl->sg_iovs[0].iov_buf, new_size);
+		DM_REALLOC_NZ(M_IV, new_buf, dst_sgl->sg_iovs[0].iov_buf, new_size);
 		if (new_buf == NULL)
 			return -DER_NOMEM;
 
@@ -1036,7 +1036,7 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 
 	nr = buf != NULL ? buf->pb_nr : 0;
 	iv_entry_size = pool_iv_map_ent_size(nr);
-	D_ALLOC(iv_entry, iv_entry_size);
+	DM_ALLOC(M_IV, iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		return -DER_NOMEM;
 
@@ -1076,7 +1076,7 @@ ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 	int			rc;
 
 	iv_entry_size = pool_iv_conn_ent_size(cred->iov_len);
-	D_ALLOC(iv_entry, iv_entry_size);
+	DM_ALLOC(M_IV, iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		return -DER_NOMEM;
 
@@ -1389,7 +1389,7 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 
 	iv_entry_size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN,
 					      svc_list->rl_nr);
-	D_ALLOC(iv_entry, iv_entry_size);
+	DM_ALLOC(M_IV, iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1480,7 +1480,7 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 
 	iv_entry_size = pool_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN,
 					      PROP_SVC_LIST_MAX_TMP);
-	D_ALLOC(iv_entry, iv_entry_size);
+	DM_ALLOC(M_IV, iv_entry, iv_entry_size);
 	if (iv_entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

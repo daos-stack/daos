@@ -366,7 +366,7 @@ vos_tls_init(int xs_id, int tgt_id)
 	struct vos_tls *tls;
 	int		rc;
 
-	D_ALLOC_PTR(tls);
+	DM_ALLOC_PTR(M_VOS, tls);
 	if (tls == NULL)
 		return NULL;
 

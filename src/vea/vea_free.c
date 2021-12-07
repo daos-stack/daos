@@ -445,7 +445,7 @@ migrate_end_cb(void *data, bool noop)
 		 * this tight loop.
 		 */
 		if (vsi->vsi_unmap_ctxt.vnc_unmap != NULL) {
-			D_ALLOC_PTR(vue);
+			DM_ALLOC_PTR(M_VEA, vue);
 			if (vue == NULL) {
 				rc = -DER_NOMEM;
 				break;

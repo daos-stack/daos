@@ -281,7 +281,7 @@ crt_ivf_key_in_progress_set(struct crt_ivns_internal *ivns,
 	struct ivf_key_in_progress	*entry;
 	int				rc;
 
-	D_ALLOC(entry, offsetof(struct ivf_key_in_progress,
+	DM_ALLOC(M_CRT_IV, entry, offsetof(struct ivf_key_in_progress,
 				payload[0]) + key->iov_buf_len);
 	if (entry == NULL)
 		return NULL;
@@ -345,7 +345,7 @@ crt_ivf_pending_request_add(struct crt_ivns_internal *ivns_internal,
 {
 	struct pending_fetch	*pending_fetch;
 
-	D_ALLOC_PTR(pending_fetch);
+	DM_ALLOC_PTR(M_CRT_IV, pending_fetch);
 	if (pending_fetch == NULL)
 		return -DER_NOMEM;
 
@@ -656,7 +656,7 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 	struct crt_ivns_id		*internal_ivns_id;
 	int				rc;
 
-	D_ALLOC_PTR(ivns_internal);
+	DM_ALLOC_PTR(M_CRT_IV, ivns_internal);
 	if (ivns_internal == NULL)
 		D_GOTO(exit, 0);
 
@@ -675,7 +675,7 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 
 	ivns_internal->cii_ref_count = 1;
 
-	D_ALLOC_ARRAY(ivns_internal->cii_iv_classes, num_class);
+	DM_ALLOC_ARRAY(M_CRT_IV, ivns_internal->cii_iv_classes, num_class);
 	if (ivns_internal->cii_iv_classes == NULL) {
 		D_MUTEX_DESTROY(&ivns_internal->cii_lock);
 		D_SPIN_DESTROY(&ivns_internal->cii_ref_lock);
@@ -1006,7 +1006,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	bulk_desc.bd_local_off = 0;
 	bulk_desc.bd_len = size;
 
-	D_ALLOC_PTR(cb_info);
+	DM_ALLOC_PTR(M_CRT_IV, cb_info);
 	if (cb_info == NULL)
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 
@@ -1434,7 +1434,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 			D_GOTO(send_error, rc = -DER_GRPVER);
 		}
 
-		D_ALLOC_PTR(cb_info);
+		DM_ALLOC_PTR(M_CRT_IV, cb_info);
 		if (cb_info == NULL)
 			D_GOTO(send_error, rc = -DER_NOMEM);
 
@@ -1666,7 +1666,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 
 	/* Allocate memory pointer for scatter/gather list */
-	D_ALLOC_PTR(iv_value);
+	DM_ALLOC_PTR(M_CRT_IV, iv_value);
 	if (iv_value == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
 
@@ -1740,7 +1740,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	IV_DBG(iv_key, "root=%d next_parent=%d\n", root_rank, next_node);
 
-	D_ALLOC_PTR(cb_info);
+	DM_ALLOC_PTR(M_CRT_IV, cb_info);
 	if (cb_info == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
 
@@ -1874,7 +1874,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 
 		need_put = true;
 
-		D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
+		DM_ALLOC_ARRAY(M_CRT_IV, tmp_iovs, iv_value.sg_nr);
 		if (tmp_iovs == NULL) {
 			D_ERROR("Failed to allocate temporary iovs\n");
 			D_GOTO(exit, rc = -DER_NOMEM);
@@ -2062,7 +2062,7 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 	need_put = true;
 
 	if (rpc_req->cr_co_bulk_hdl != CRT_BULK_NULL) {
-		D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
+		DM_ALLOC_ARRAY(M_CRT_IV, tmp_iovs, iv_value.sg_nr);
 		if (tmp_iovs == NULL) {
 			D_ERROR("Failed to allocate temporary iovs\n");
 			D_GOTO(exit, rc);
@@ -2299,7 +2299,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	input = crt_req_get(corpc_req);
 	D_ASSERT(input != NULL);
 
-	D_ALLOC_PTR(iv_sync_cb);
+	DM_ALLOC_PTR(M_CRT_IV, iv_sync_cb);
 	if (iv_sync_cb == NULL) {
 		/* Avoid checkpatch warning */
 		D_GOTO(exit, rc = -DER_NOMEM);
@@ -2333,7 +2333,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		iv_sync_cb->isc_class_id = class_id;
 
 		/* Copy iv_key over as it will get destroyed after this call */
-		D_ALLOC(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf_len);
+		DM_ALLOC(M_CRT_IV, iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf_len);
 		if (iv_sync_cb->isc_iv_key.iov_buf == NULL) {
 			/* Avoid checkpatch warning */
 			D_GOTO(exit, rc = -DER_NOMEM);
@@ -2759,7 +2759,7 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 		int rc;
 		struct crt_cb_info *info;
 
-		D_ALLOC_PTR(info);
+		DM_ALLOC_PTR(M_CRT_IV, info);
 		if (info == NULL) {
 			D_WARN("allocate fails, do cb directly\n");
 			goto callback;
@@ -2835,7 +2835,7 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 
 	sync_type = input->ivu_sync_type.iov_buf;
 
-	D_ALLOC_PTR(update_cb_info);
+	DM_ALLOC_PTR(M_CRT_IV, update_cb_info);
 	if (update_cb_info == NULL)
 		D_GOTO(send_error, rc = -DER_NOMEM);
 
@@ -2978,11 +2978,11 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 	}
 
 	if (iv_ops->ivo_pre_update != NULL) {
-		D_ALLOC_PTR(info_dup);
+		DM_ALLOC_PTR(M_CRT_IV, info_dup);
 		if (info_dup == NULL)
 			D_GOTO(send_error, rc = -DER_NOMEM);
 
-		D_ALLOC_PTR(info_dup->bci_bulk_desc);
+		DM_ALLOC_PTR(M_CRT_IV, info_dup->bci_bulk_desc);
 		if (info_dup->bci_bulk_desc == NULL) {
 			D_FREE(info_dup);
 			D_GOTO(send_error, rc = -DER_NOMEM);
@@ -3119,7 +3119,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 				D_GOTO(send_error, rc = -DER_GRPVER);
 			}
 
-			D_ALLOC_PTR(update_cb_info);
+			DM_ALLOC_PTR(M_CRT_IV, update_cb_info);
 			if (update_cb_info == NULL)
 				D_GOTO(send_error, rc = -DER_NOMEM);
 
@@ -3187,7 +3187,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	bulk_desc.bd_local_off = 0;
 	bulk_desc.bd_len = size;
 
-	D_ALLOC_PTR(cb_info);
+	DM_ALLOC_PTR(M_CRT_IV, cb_info);
 	if (cb_info == NULL) {
 		RPC_PUB_DECREF(bulk_desc.bd_rpc);
 		crt_bulk_free(local_bulk_handle);
@@ -3365,7 +3365,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		/* comp_cb is only for sync update for now */
 		D_ASSERT(sync_type.ivs_comp_cb == NULL);
-		D_ALLOC_PTR(cb_info);
+		DM_ALLOC_PTR(M_CRT_IV, cb_info);
 		if (cb_info == NULL)
 			D_GOTO(put, rc = -DER_NOMEM);
 

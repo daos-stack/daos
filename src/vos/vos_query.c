@@ -485,7 +485,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		return -DER_INVAL;
 	}
 
-	D_ALLOC_PTR(query);
+	DM_ALLOC_PTR(M_VOS, query);
 	if (query == NULL)
 		return -DER_NOMEM;
 

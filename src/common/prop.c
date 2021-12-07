@@ -28,12 +28,12 @@ daos_prop_alloc(uint32_t entries_nr)
 		return NULL;
 	}
 
-	D_ALLOC_PTR(prop);
+	DM_ALLOC_PTR(M_PROP, prop);
 	if (prop == NULL)
 		return NULL;
 
 	if (entries_nr > 0) {
-		D_ALLOC_ARRAY(prop->dpp_entries, entries_nr);
+		DM_ALLOC_ARRAY(M_PROP, prop->dpp_entries, entries_nr);
 		if (prop->dpp_entries == NULL) {
 			D_FREE(prop);
 			return NULL;
@@ -635,7 +635,7 @@ daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_siz
 	if (ptr == NULL || size == 0)
 		return 0;
 
-	D_ALLOC(entry->dpe_val_ptr, size);
+	DM_ALLOC(M_PROP, entry->dpe_val_ptr, size);
 	if (entry->dpe_val_ptr == NULL)
 		return -DER_NOMEM;
 	memcpy(entry->dpe_val_ptr, ptr, size);
@@ -699,7 +699,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	}
 	if (prop_req->dpp_nr == 0) {
 		prop_req->dpp_nr = prop_reply->dpp_nr;
-		D_ALLOC_ARRAY(prop_req->dpp_entries, prop_req->dpp_nr);
+		DM_ALLOC_ARRAY(M_PROP, prop_req->dpp_entries, prop_req->dpp_nr);
 		if (prop_req->dpp_entries == NULL)
 			return -DER_NOMEM;
 		entries_alloc = true;
@@ -804,7 +804,7 @@ daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
 			     struct daos_prop_entry *src)
 {
 	if (dst->dpe_val_ptr == NULL) {
-		D_ALLOC(dst->dpe_val_ptr, sizeof(struct daos_prop_co_roots));
+		DM_ALLOC(M_PROP, dst->dpe_val_ptr, sizeof(struct daos_prop_co_roots));
 
 		if (dst->dpe_val_ptr == NULL)
 			return -DER_NOMEM;
@@ -823,7 +823,7 @@ daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
 	D_ASSERT(entry_src != NULL);
 	D_ASSERT(entry_dst != NULL);
 
-	D_ALLOC(entry_dst->dpe_val_ptr, len);
+	DM_ALLOC(M_PROP, entry_dst->dpe_val_ptr, len);
 	if (entry_dst->dpe_val_ptr == NULL)
 		return -DER_NOMEM;
 

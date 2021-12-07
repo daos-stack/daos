@@ -98,7 +98,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		singv_ci_size = roundup(sizeof(struct dcs_csum_info) * iod_nr,
 					8);
 	}
-	D_ALLOC(buf, req_size + iods_size + csums_size + singv_ci_size);
+	DM_ALLOC(M_EC, buf, req_size + iods_size + csums_size + singv_ci_size);
 	if (buf == NULL)
 		return -DER_NOMEM;
 

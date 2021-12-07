@@ -21,7 +21,7 @@ cmd_free_args(char **args, int argcount)
 	int i;
 
 	for (i = 0; i < argcount; i++)
-		D_FREE(args[i]);
+		free(args[i]);
 
 	D_FREE(args);
 }

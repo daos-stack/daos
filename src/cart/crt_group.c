@@ -294,7 +294,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	rlink = d_hash_rec_find(&grp_priv->gp_uri_lookup_cache,
 				(void *)&rank, sizeof(rank));
 	if (rlink == NULL) {
-		D_ALLOC_PTR(ui);
+		DM_ALLOC_PTR(M_CRT, ui);
 		if (!ui)
 			D_GOTO(exit, rc = -DER_NOMEM);
 
@@ -434,7 +434,7 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
-	D_ALLOC_ARRAY(htables, CRT_SRV_CONTEXT_NUM);
+	DM_ALLOC_ARRAY(M_CRT, htables, CRT_SRV_CONTEXT_NUM);
 	if (htables == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -562,7 +562,7 @@ grp_lc_uri_insert_internal_locked(struct crt_grp_priv *grp_priv,
 				(void *)&rank, sizeof(rank));
 	if (rlink == NULL) {
 		/* target rank not in cache */
-		D_ALLOC_PTR(li);
+		DM_ALLOC_PTR(M_CRT, li);
 		if (li == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
@@ -993,7 +993,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	D_ASSERT(grp_id != NULL && strlen(grp_id) > 0 &&
 		 strlen(grp_id) < CRT_GROUP_ID_MAX_LEN);
 
-	D_ALLOC_PTR(grp_priv);
+	DM_ALLOC_PTR(M_CRT, grp_priv);
 	if (grp_priv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1652,7 +1652,7 @@ crt_grp_init(crt_group_id_t grpid)
 	D_ASSERT(crt_gdata.cg_grp_inited == 0);
 	D_ASSERT(crt_gdata.cg_grp == NULL);
 
-	D_ALLOC_PTR(grp_gdata);
+	DM_ALLOC_PTR(M_CRT, grp_gdata);
 	if (grp_gdata == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2015,7 +2015,7 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
-	D_ALLOC(grpname, CRT_GROUP_ID_MAX_LEN + 1);
+	DM_ALLOC(M_CRT, grpname, CRT_GROUP_ID_MAX_LEN + 1);
 	if (grpname == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2048,7 +2048,7 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
-	D_ALLOC(addr_str, CRT_ADDR_STR_MAX_LEN + 1);
+	DM_ALLOC(M_CRT, addr_str, CRT_ADDR_STR_MAX_LEN + 1);
 	if (addr_str == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2148,7 +2148,7 @@ crt_register_event_cb(crt_event_cb func, void *args)
 	crt_plugin_gdata.cpg_event_cbs_old = cbs_event;
 	cbs_size += CRT_CALLBACKS_NUM;
 
-	D_ALLOC_ARRAY(cbs_event, cbs_size);
+	DM_ALLOC_ARRAY(M_CRT, cbs_event, cbs_size);
 	if (cbs_event == NULL) {
 		crt_plugin_gdata.cpg_event_cbs_old = NULL;
 		D_GOTO(out_unlock, rc = -DER_NOMEM);
@@ -2262,7 +2262,7 @@ grp_add_free_index(d_list_t *list, int index, bool tail)
 {
 	struct free_index *free_index;
 
-	D_ALLOC_PTR(free_index);
+	DM_ALLOC_PTR(M_CRT, free_index);
 	if (free_index == NULL)
 		return -DER_NOMEM;
 
@@ -2862,7 +2862,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 	}
 
 	/* Record secondary group in the primary group */
-	D_ALLOC_PTR(entry);
+	DM_ALLOC_PTR(M_CRT, entry);
 	if (entry == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -2956,7 +2956,7 @@ crt_rank_mapping_init(d_rank_t key, d_rank_t value)
 {
 	struct crt_rank_mapping *rm;
 
-	D_ALLOC_PTR(rm);
+	DM_ALLOC_PTR(M_CRT, rm);
 	if (rm == NULL)
 		goto out;
 
@@ -3129,7 +3129,7 @@ crt_group_mod_get(d_rank_list_t *grp_membs, d_rank_list_t *mod_membs,
 	}
 
 	/* Array will have at most 'mod_membs' elements */
-	D_ALLOC_ARRAY(idx_to_add, mod_membs->rl_nr);
+	DM_ALLOC_ARRAY(M_CRT, idx_to_add, mod_membs->rl_nr);
 	if (!idx_to_add) {
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 	}

@@ -217,7 +217,7 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	if (DECODING(proc_op)) {
 		if (existing_flags & IOD_REC_EXIST) {
-			D_ALLOC_ARRAY(iod->iod_recxs, nr);
+			DM_ALLOC_ARRAY(M_IO_ARG, iod->iod_recxs, nr);
 			if (iod->iod_recxs == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
@@ -296,7 +296,7 @@ static int crt_proc_daos_iom_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (DECODING(proc_op)) {
 		map->iom_nr = iom_nr;
 		map->iom_nr_out = iom_nr;
-		D_ALLOC_ARRAY(map->iom_recxs, iom_nr);
+		DM_ALLOC_ARRAY(M_IO_ARG, map->iom_recxs, iom_nr);
 		if (map->iom_recxs == NULL)
 			return -DER_NOMEM;
 	}
@@ -338,7 +338,7 @@ crt_proc_struct_daos_recx_ep_list(crt_proc_t proc, crt_proc_op_t proc_op,
 		return 0;
 
 	if (DECODING(proc_op)) {
-		D_ALLOC_ARRAY(list->re_items, list->re_nr);
+		DM_ALLOC_ARRAY(M_IO_ARG, list->re_items, list->re_nr);
 		if (list->re_items == NULL)
 			return -DER_NOMEM;
 		list->re_total = list->re_nr;
@@ -432,7 +432,7 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (iod_array->oia_oiod_nr != 0)
 			buf_size += sizeof(struct obj_io_desc) *
 				    iod_array->oia_oiod_nr;
-		D_ALLOC(buf, buf_size);
+		DM_ALLOC(M_IO_ARG, buf, buf_size);
 		if (buf == NULL)
 			return -DER_NOMEM;
 		iod_array->oia_iods = buf;
@@ -516,7 +516,7 @@ crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
 
 	switch (proc_op) {
 	case CRT_PROC_DECODE:
-		D_ALLOC_ARRAY(p->sg_iovs, p->sg_nr);
+		DM_ALLOC_ARRAY(M_IO_ARG, p->sg_iovs, p->sg_nr);
 		if (p->sg_iovs == NULL)
 			return -DER_NOMEM;
 		/* fall through to fill sg_iovs */
@@ -584,7 +584,7 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc, crt_proc_op_t proc_op,
 	D_ASSERT(size != 0);
 
 	if (DECODING(proc_op)) {
-		D_ALLOC(dcsh->dcsh_mbs, size);
+		DM_ALLOC(M_IO_ARG, dcsh->dcsh_mbs, size);
 		if (dcsh->dcsh_mbs == NULL)
 			return -DER_NOMEM;
 	}
@@ -635,7 +635,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *iod)
 		return 0;
 
 	if (DECODING(proc_op)) {
-		D_ALLOC_ARRAY(iod->iod_recxs, iod->iod_nr);
+		DM_ALLOC_ARRAY(M_IO_ARG, iod->iod_recxs, iod->iod_nr);
 		if (iod->iod_recxs == NULL)
 			return -DER_NOMEM;
 	}
@@ -706,7 +706,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 
 		if (DECODING(proc_op)) {
 			if (dcsr->dcsr_ec_tgt_nr != 0) {
-				D_ALLOC_ARRAY(dcu->dcu_ec_tgts,
+				DM_ALLOC_ARRAY(M_IO_ARG, dcu->dcu_ec_tgts,
 					      dcsr->dcsr_ec_tgt_nr);
 				if (dcu->dcu_ec_tgts == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
@@ -746,7 +746,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 
 		if (dcu->dcu_flags & ORF_CPD_BULK) {
 			if (DECODING(proc_op)) {
-				D_ALLOC_ARRAY(dcu->dcu_bulks, dcsr->dcsr_nr);
+				DM_ALLOC_ARRAY(M_IO_ARG, dcu->dcu_bulks, dcsr->dcsr_nr);
 				if (dcu->dcu_bulks == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 			}
@@ -759,7 +759,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 			}
 		} else {
 			if (DECODING(proc_op)) {
-				D_ALLOC_ARRAY(dcu->dcu_sgls, dcsr->dcsr_nr);
+				DM_ALLOC_ARRAY(M_IO_ARG, dcu->dcu_sgls, dcsr->dcsr_nr);
 				if (dcu->dcu_sgls == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 			}
@@ -783,7 +783,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 			D_GOTO(out, rc = 0);
 
 		if (DECODING(proc_op)) {
-			D_ALLOC_ARRAY(dcp->dcp_akeys, dcsr->dcsr_nr);
+			DM_ALLOC_ARRAY(M_IO_ARG, dcp->dcp_akeys, dcsr->dcsr_nr);
 			if (dcp->dcp_akeys == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
@@ -804,7 +804,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 			D_GOTO(out, rc = 0);
 
 		if (DECODING(proc_op)) {
-			D_ALLOC_ARRAY(dcr->dcr_iods, dcsr->dcsr_nr);
+			DM_ALLOC_ARRAY(M_IO_ARG, dcr->dcr_iods, dcsr->dcsr_nr);
 			if (dcr->dcr_iods == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
@@ -869,7 +869,7 @@ crt_proc_struct_daos_cpd_disp_ent(crt_proc_t proc, crt_proc_op_t proc_op,
 		return 0;
 
 	if (DECODING(proc_op)) {
-		D_ALLOC_ARRAY(dcde->dcde_reqs, count);
+		DM_ALLOC_ARRAY(M_IO_ARG, dcde->dcde_reqs, count);
 		if (dcde->dcde_reqs == NULL)
 			return -DER_NOMEM;
 	}
@@ -904,7 +904,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		struct daos_cpd_sub_head *dcsh;
 
 		if (DECODING(proc_op)) {
-			D_ALLOC_ARRAY(dcsh, dcs->dcs_nr);
+			DM_ALLOC_ARRAY(M_IO_ARG, dcsh, dcs->dcs_nr);
 			if (dcsh == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
@@ -928,7 +928,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		bool			 with_oid;
 
 		if (DECODING(proc_op)) {
-			D_ALLOC_ARRAY(dcsr, dcs->dcs_nr);
+			DM_ALLOC_ARRAY(M_IO_ARG, dcsr, dcs->dcs_nr);
 			if (dcsr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
@@ -956,7 +956,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		struct daos_cpd_disp_ent	*dcde;
 
 		if (DECODING(proc_op)) {
-			D_ALLOC_ARRAY(dcde, dcs->dcs_nr);
+			DM_ALLOC_ARRAY(M_IO_ARG, dcde, dcs->dcs_nr);
 			if (dcde == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
@@ -978,7 +978,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		struct daos_shard_tgt		*dst;
 
 		if (DECODING(proc_op)) {
-			D_ALLOC_ARRAY(dst, dcs->dcs_nr);
+			DM_ALLOC_ARRAY(M_IO_ARG, dst, dcs->dcs_nr);
 			if (dst == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 

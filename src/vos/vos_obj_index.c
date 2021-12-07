@@ -449,7 +449,7 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (cont == NULL)
 		return -DER_INVAL;
 
-	D_ALLOC_PTR(oiter);
+	DM_ALLOC_PTR(M_VOS, oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
 

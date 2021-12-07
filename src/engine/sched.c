@@ -367,7 +367,7 @@ add_purge_list(struct dss_xstream *dx, struct sched_pool_info *spi)
 			return;
 	}
 
-	D_ALLOC_PTR(pi);
+	DM_ALLOC_PTR(M_SCHED, pi);
 	if (pi == NULL) {
 		D_ERROR("XS(%d): Alloc purge item failed.\n", dx->dx_xs_id);
 		return;
@@ -408,7 +408,7 @@ prealloc_requests(struct sched_info *info, int cnt)
 	int			 i;
 
 	for (i = 0; i < cnt; i++) {
-		D_ALLOC_PTR(req);
+		DM_ALLOC_PTR(M_SCHED, req);
 		if (req == NULL) {
 			D_ERROR("Alloc req failed.\n");
 			return -DER_NOMEM;
@@ -480,7 +480,7 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 		return spi;
 	}
 
-	D_ALLOC_PTR(spi);
+	DM_ALLOC_PTR(M_SCHED, spi);
 	if (spi == NULL) {
 		D_ERROR("Failed to allocate spi\n");
 		return NULL;
@@ -1306,7 +1306,7 @@ sched_init(ABT_sched sched, ABT_sched_config config)
 	struct sched_data	*data;
 	int			 ret;
 
-	D_ALLOC_PTR(data);
+	DM_ALLOC_PTR(M_SCHED, data);
 	if (data == NULL)
 		return ABT_ERR_MEM;
 

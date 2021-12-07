@@ -40,7 +40,7 @@ obj_ec_recxs_init(struct obj_ec_recx_array *recxs, uint32_t recx_nr)
 	if (recx_nr == 0)
 		return 0;
 
-	D_ALLOC_ARRAY(recxs->oer_recxs, recx_nr);
+	DM_ALLOC_ARRAY(M_EC, recxs->oer_recxs, recx_nr);
 	if (recxs->oer_recxs == NULL)
 		return -DER_NOMEM;
 
@@ -83,7 +83,7 @@ obj_ec_pbufs_init(struct obj_ec_recx_array *recxs, uint64_t cell_bytes)
 		return 0;
 
 	parity_len = roundup(recxs->oer_stripe_total * cell_bytes, 8);
-	D_ALLOC(pbuf, parity_len * recxs->oer_p);
+	DM_ALLOC(M_EC, pbuf, parity_len * recxs->oer_p);
 	if (pbuf == NULL)
 		return -DER_NOMEM;
 
@@ -99,7 +99,7 @@ static int
 obj_ec_riod_init(daos_iod_t *riod, uint32_t recx_nr)
 {
 	riod->iod_nr = recx_nr;
-	D_ALLOC_ARRAY(riod->iod_recxs, recx_nr);
+	DM_ALLOC_ARRAY(M_EC, riod->iod_recxs, recx_nr);
 	if (riod->iod_recxs == NULL)
 		return -DER_NOMEM;
 	return 0;
@@ -114,7 +114,7 @@ obj_ec_seg_sorter_init(struct obj_ec_seg_sorter *sorter, uint32_t tgt_nr,
 	int		 i;
 
 	buf_size = sizeof(struct obj_ec_seg_head) * tgt_nr;
-	D_ALLOC(buf, buf_size + sizeof(struct obj_ec_seg) * seg_nr);
+	DM_ALLOC(M_EC, buf, buf_size + sizeof(struct obj_ec_seg) * seg_nr);
 	if (buf == NULL)
 		return -DER_NOMEM;
 
@@ -500,7 +500,7 @@ obj_ec_stripe_encode(daos_iod_t *iod, d_sg_list_t *sgl, uint32_t iov_idx,
 		} else {
 			uint64_t copied = 0;
 
-			D_ALLOC(c_data[c_idx], cell_bytes);
+			DM_ALLOC(M_EC, c_data[c_idx], cell_bytes);
 			if (c_data[c_idx] == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			while (copied < len) {
@@ -1127,7 +1127,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		if (iov_nr <= EC_INLINE_IOVS) {
 			iovs = iov_inline;
 		} else {
-			D_ALLOC_ARRAY(iovs, iov_nr);
+			DM_ALLOC_ARRAY(M_EC, iovs, iov_nr);
 			if (iovs == NULL)
 				return -DER_NOMEM;
 		}
@@ -1836,7 +1836,7 @@ obj_ec_recov_codec_alloc(struct daos_oclass_attr *oca)
 	list_size = roundup(sizeof(uint32_t) * p, 8);
 	err_size = roundup(sizeof(bool) * (k + p), 8);
 
-	D_ALLOC(buf, struct_size + tbl_size + 3 * matrix_size + idx_size +
+	DM_ALLOC(M_EC_RECOV, buf, struct_size + tbl_size + 3 * matrix_size + idx_size +
 		     list_size + err_size);
 	if (buf == NULL)
 		return NULL;
@@ -1877,7 +1877,7 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 	D_MUTEX_LOCK(&reasb_req->orr_mutex);
 	recov_lists = reasb_req->orr_fail->efi_recx_lists;
 	if (recov_lists == NULL) {
-		D_ALLOC_ARRAY(recov_lists, nr);
+		DM_ALLOC_ARRAY(M_EC_RECOV, recov_lists, nr);
 		if (recov_lists == NULL)
 			return -DER_NOMEM;
 		reasb_req->orr_fail->efi_recx_lists = recov_lists;
@@ -1968,13 +1968,13 @@ obj_ec_fail_info_get(struct obj_reasb_req *reasb_req, bool create, uint16_t nr)
 		return fail_info;
 
 	D_ASSERT(nr <= OBJ_EC_MAX_M);
-	D_ALLOC_PTR(fail_info);
+	DM_ALLOC_PTR(M_EC_RECOV, fail_info);
 	if (fail_info == NULL)
 		return NULL;
 	reasb_req->orr_fail = fail_info;
 	reasb_req->orr_fail_alloc = 1;
 
-	D_ALLOC_ARRAY(fail_info->efi_tgt_list, nr);
+	DM_ALLOC_ARRAY(M_EC_RECOV, fail_info->efi_tgt_list, nr);
 	if (fail_info->efi_tgt_list == NULL)
 		return NULL;
 
@@ -2185,7 +2185,7 @@ obj_ec_stripe_list_init(struct obj_reasb_req *reasb_req)
 		return 0;
 
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
-	D_ALLOC_ARRAY(stripe_lists, iod_nr);
+	DM_ALLOC_ARRAY(M_EC, stripe_lists, iod_nr);
 	if (stripe_lists == NULL)
 		return -DER_NOMEM;
 
@@ -2274,7 +2274,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	uint32_t			 i, j, tidx = 0;
 	int				 rc = 0;
 
-	D_ALLOC_ARRAY(fail_info->efi_stripe_sgls, iod_nr);
+	DM_ALLOC_ARRAY(M_EC_RECOV, fail_info->efi_stripe_sgls, iod_nr);
 	if (fail_info->efi_stripe_sgls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	fail_info->efi_stripe_sgls_nr = iod_nr;
@@ -2320,13 +2320,13 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		rc = d_sgl_init(sgl, 1);
 		if (rc)
 			goto out;
-		D_ALLOC(buf, buf_sz);
+		DM_ALLOC(M_EC_RECOV, buf, buf_sz);
 		if (buf == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		d_iov_set(&sgl->sg_iovs[0], buf, buf_sz);
 	}
 
-	D_ALLOC_ARRAY(fail_info->efi_recov_tasks, recx_ep_nr);
+	DM_ALLOC_ARRAY(M_EC_RECOV, fail_info->efi_recov_tasks, recx_ep_nr);
 	if (fail_info->efi_recov_tasks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	fail_info->efi_recov_ntasks = recx_ep_nr;
@@ -2723,7 +2723,7 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 
 	D_ASSERT(tgt_nr > 0 && iod_nr > 0);
 
-	D_ALLOC_ARRAY(tgt_oiods, tgt_nr);
+	DM_ALLOC_ARRAY(M_EC, tgt_oiods, tgt_nr);
 	if (tgt_oiods == NULL)
 		return NULL;
 
@@ -2731,7 +2731,7 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 	oiod_size = roundup(sizeof(struct obj_io_desc), 8);
 	siod_size = roundup(sizeof(struct obj_shard_iod), 8);
 	item_size = (off_size + oiod_size + siod_size) * iod_nr;
-	D_ALLOC(buf, item_size * tgt_nr);
+	DM_ALLOC(M_EC, buf, item_size * tgt_nr);
 	if (buf == NULL) {
 		D_FREE(tgt_oiods);
 		return NULL;
@@ -2841,11 +2841,11 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p
 			 cell_nr;
 	}
 
-	D_ALLOC_ARRAY(tgt_recxs, total);
+	DM_ALLOC_ARRAY(M_EC, tgt_recxs, total);
 	if (tgt_recxs == NULL)
 		return -DER_NOMEM;
 	if (recx_ephs_p != NULL) {
-		D_ALLOC_ARRAY(recx_ephs, total);
+		DM_ALLOC_ARRAY(M_EC, recx_ephs, total);
 		if (recx_ephs == NULL) {
 			D_FREE(tgt_recxs);
 			return -DER_NOMEM;
@@ -2930,12 +2930,12 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **re
 		return 0;
 	}
 
-	D_ALLOC_ARRAY(tgt_recxs, total);
+	DM_ALLOC_ARRAY(M_EC, tgt_recxs, total);
 	if (tgt_recxs == NULL)
 		return -DER_NOMEM;
 
 	if (recx_ephs_p != NULL) {
-		D_ALLOC_ARRAY(new_ephs, total);
+		DM_ALLOC_ARRAY(M_EC, new_ephs, total);
 		if (new_ephs == NULL) {
 			D_FREE(tgt_recxs);
 			return -DER_NOMEM;

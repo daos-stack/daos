@@ -265,7 +265,7 @@ cc_verify_resize_if_needed(struct csum_context *ctx)
 		return 0;
 
 	new_size = ctx->cc_to_verify_size * 2;
-	D_ALLOC_ARRAY(to_verify, new_size);
+	DM_ALLOC_ARRAY(M_CSUM, to_verify, new_size);
 	if (to_verify == NULL)
 		return -DER_NOMEM;
 

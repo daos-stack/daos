@@ -63,7 +63,7 @@ crt_proc_msg_entry_t(crt_proc_t proc, crt_proc_op_t proc_op, msg_entry_t *p)
 		return 0;
 
 	if (DECODING(proc_op)) {
-		D_ALLOC(p->data.buf, p->data.len);
+		DM_ALLOC(M_RDB, p->data.buf, p->data.len);
 		if (p->data.buf == NULL)
 			return -DER_NOMEM;
 	}
@@ -104,7 +104,7 @@ crt_proc_msg_appendentries_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		return 0;
 
 	if (DECODING(proc_op)) {
-		D_ALLOC_ARRAY(p->entries, p->n_entries);
+		DM_ALLOC_ARRAY(M_RDB, p->entries, p->n_entries);
 		if (p->entries == NULL)
 			return -DER_NOMEM;
 	}
@@ -242,7 +242,7 @@ rdb_alloc_raft_rpc(struct rdb *db, crt_rpc_t *rpc)
 {
 	struct rdb_raft_rpc *rrpc;
 
-	D_ALLOC_PTR(rrpc);
+	DM_ALLOC_PTR(M_RDB, rrpc);
 	if (rrpc == NULL)
 		return NULL;
 	D_INIT_LIST_HEAD(&rrpc->drc_entry);

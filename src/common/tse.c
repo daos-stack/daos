@@ -343,7 +343,7 @@ tse_sched_register_comp_cb(tse_sched_t *sched,
 	struct tse_sched_private	*dsp = tse_sched2priv(sched);
 	struct tse_sched_comp		*dsc;
 
-	D_ALLOC_PTR(dsc);
+	DM_ALLOC_PTR(M_TSE, dsc);
 	if (dsc == NULL)
 		return -DER_NOMEM;
 
@@ -411,7 +411,7 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 		return -DER_NO_PERM;
 	}
 
-	D_ALLOC(dtc, sizeof(*dtc) + arg_size);
+	DM_ALLOC(M_TSE, dtc, sizeof(*dtc) + arg_size);
 	if (dtc == NULL)
 		return -DER_NOMEM;
 
@@ -905,7 +905,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	if (dep_dtp->dtp_completed)
 		return 0;
 
-	D_ALLOC_PTR(tlink);
+	DM_ALLOC_PTR(M_TSE, tlink);
 	if (tlink == NULL)
 		return -DER_NOMEM;
 
@@ -947,7 +947,7 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	struct tse_task_private	 *dtp;
 	tse_task_t		 *task;
 
-	D_ALLOC_PTR(task);
+	DM_ALLOC_PTR(M_TSE, task);
 	if (task == NULL)
 		return -DER_NOMEM;
 

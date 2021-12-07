@@ -203,19 +203,19 @@ rebuild_objects_send_ult(void *data)
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 
-	D_ALLOC_ARRAY(oids, REBUILD_SEND_LIMIT);
+	DM_ALLOC_ARRAY(M_RECOV, oids, REBUILD_SEND_LIMIT);
 	if (oids == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(shards, REBUILD_SEND_LIMIT);
+	DM_ALLOC_ARRAY(M_RECOV, shards, REBUILD_SEND_LIMIT);
 	if (shards == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(ephs, REBUILD_SEND_LIMIT);
+	DM_ALLOC_ARRAY(M_RECOV, ephs, REBUILD_SEND_LIMIT);
 	if (ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(punched_ephs, REBUILD_SEND_LIMIT);
+	DM_ALLOC_ARRAY(M_RECOV, punched_ephs, REBUILD_SEND_LIMIT);
 	if (ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -417,8 +417,8 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 			D_DEBUG(DB_REBUILD, "Insufficient stack buffer to find "
 					    "rebuild shards, allocating %u\n",
 				max_shards);
-			D_ALLOC_ARRAY(*tgts, max_shards);
-			D_ALLOC_ARRAY(*shards, max_shards);
+			DM_ALLOC_ARRAY(M_RECOV, *tgts, max_shards);
+			DM_ALLOC_ARRAY(M_RECOV, *shards, max_shards);
 			if (*tgts == NULL || *shards == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}

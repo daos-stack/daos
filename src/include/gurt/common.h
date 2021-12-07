@@ -65,13 +65,76 @@ extern "C" {
 
 /* memory allocating macros */
 void  d_free(void *);
-void *d_calloc(size_t, size_t);
-void *d_malloc(size_t);
-void *d_realloc(void *, size_t);
+void *d_calloc(int tag, size_t, size_t);
+void *d_malloc(int tag, size_t);
+void *d_realloc(int tag, void *, size_t);
 char *d_strndup(const char *s, size_t n);
 int d_asprintf(char **strp, const char *fmt, ...);
-void *d_aligned_alloc(size_t alignment, size_t size);
+void *d_aligned_alloc(int tag, size_t alignment, size_t size);
 char *d_realpath(const char *path, char *resolved_path);
+
+#define DAOS_DM_MODE	1	/* enable debug-memory mode */
+
+#define DAOS_DM_INTV	600	/* dump memory log every 600 seconds */
+
+/** Allocation tag, please make sure dm_counters are declared in the same order. */
+enum dm_tag {
+	M_OTHER,		/* all the untagged */
+	M_STR,			/* strdup, asprintf... */
+	M_RANK,			/* rank list allocation */
+	M_CRT,			/* default cart tag */
+	M_CRT_RPC,		/* CaRT RPC */
+	M_CRT_IV,		/* IV framework in cart */
+	M_SWIM,			/* SWIM */
+	M_CSUM,			/* checksum */
+	M_PROP,			/* properties */
+	M_TSE,			/* task engine */
+	M_PL,			/* placement */
+	M_IV,			/* DAOS level IV */
+	M_SCHED,		/* ABT scheduler */
+	M_IO,			/* common I/O code */
+	M_IO_ARG,		/* SGL, IOV... */
+	M_BIO,			/* BIO */
+	M_VEA,			/* VEA */
+	M_AGG,			/* common aggregation */
+	M_RECOV,		/* common rebuild */
+	M_EC,			/* common EC */
+	M_EC_AGG,		/* EC aggregation */
+	M_EC_RECOV,		/* EC recovery */
+	M_POOL,			/* Pool, cache or data structures */
+	M_CONT,			/* contaier, cache or data structures */
+	M_OBJ,			/* object, shard, cache... */
+	M_DTX,			/* distributed transaction */
+	M_VOS,			/* common VOS */
+	M_VOS_TS,		/* VOS timestamp cache */
+	M_VOS_LRU,		/* VOS LRU */
+	M_VOS_DTX,		/* DTX in VOS */
+	M_RDB,			/* Raft DB */
+	M_TAG_MAX,		/* the last */
+};
+
+struct dm_tls_counter;
+
+#define DM_ALLOC_MAGIC	0xdeadbeefdeadbeef
+struct dm_tailer {
+	uint64_t		mt_magic;
+};
+
+/* 64 bytes header in memory-debugging mode */
+struct dm_header {
+	struct dm_tls_counter	*mh_counter;
+	/** real address of the buffer */
+	void			*mh_addr;
+	void			*mh_tail;
+	int64_t			 mh_size;
+	int32_t			 mh_alignment;
+	int32_t			 mh_tag;
+	uint64_t		 mh_magic;
+	uint64_t		 mh_payload[0];
+};
+
+char *dm_mem_tag_query(int tag, int64_t *size_p, int64_t *count_p);
+void  dm_mem_dump_log(void);
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
@@ -104,16 +167,16 @@ char *d_realpath(const char *path, char *resolved_path);
 				(int)(size));				\
 	} while (0)
 
-#define D_ALLOC_CORE(ptr, size, count)					\
+#define DM_ALLOC_CORE(tag, ptr, size, count)				\
 	do {								\
-		(ptr) = (__typeof__(ptr))d_calloc((count), (size));	\
+		(ptr) = (__typeof__(ptr))d_calloc(tag, (count), (size)); \
 		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size,		\
 			      count, #count, 0);			\
 	} while (0)
 
-#define D_ALLOC_CORE_NZ(ptr, size, count)				\
+#define DM_ALLOC_CORE_NZ(tag, ptr, size, count)				\
 	do {								\
-		(ptr) = (__typeof__(ptr))d_malloc((count) * (size));	\
+		(ptr) = (__typeof__(ptr))d_malloc(tag, (count) * (size)); \
 		D_CHECK_ALLOC(malloc, true, ptr, #ptr, size,		\
 			      count, #count, 0);			\
 	} while (0)
@@ -176,19 +239,22 @@ char *d_realpath(const char *path, char *resolved_path);
 		}							\
 	} while (0)
 
-#define D_ALIGNED_ALLOC(ptr, alignment, size)				\
+#define DM_ALIGNED_ALLOC(tag, ptr, alignment, size)			\
 	do {								\
-		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment,	\
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(tag, alignment,\
 							 size);		\
 		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr,		\
 			      size, 0, #ptr, 0);			\
 	} while (0)
 
+#define D_ALIGNED_ALLOC(ptr, alignment, size)				\
+	DM_ALIGNED_ALLOC(M_OTHER, ptr, alignemnt, size)
+
 /* Requires newptr and oldptr to be different variables.  Otherwise
  * there is no way to tell the difference between successful and
  * failed realloc.
  */
-#define D_REALLOC_COMMON(newptr, oldptr, oldsize, size, cnt)		\
+#define DM_REALLOC_COMMON(tag, newptr, oldptr, oldsize, size, cnt)	\
 	do {								\
 		size_t _esz = (size_t)(size);				\
 		size_t _sz = (size_t)(size) * (cnt);			\
@@ -210,7 +276,7 @@ char *d_realpath(const char *path, char *resolved_path);
 		if (D_SHOULD_FAIL(d_fault_attr_mem))			\
 			(newptr) = NULL;				\
 		else							\
-			(newptr) = d_realloc(optr, _sz);		\
+			(newptr) = d_realloc(tag, optr, _sz);		\
 		if ((newptr) != NULL) {					\
 			if (_cnt <= 1)					\
 				D_DEBUG(DB_MEM,				\
@@ -243,37 +309,53 @@ char *d_realpath(const char *path, char *resolved_path);
 				_esz, _cnt);				\
 	} while (0)
 
+#define DM_REALLOC(tag, newptr, oldptr, oldsize, size)			\
+	DM_REALLOC_COMMON(tag, newptr, oldptr, oldsize, size, 1)
 #define D_REALLOC(newptr, oldptr, oldsize, size)			\
-	D_REALLOC_COMMON(newptr, oldptr, oldsize, size, 1)
+	DM_REALLOC(M_OTHER, newptr, oldptr, oldsize, size)
 
-#define D_REALLOC_ARRAY(newptr, oldptr, oldcount, count)		\
-	D_REALLOC_COMMON(newptr, oldptr,				\
+#define DM_REALLOC_ARRAY(tag, newptr, oldptr, oldcount, count)		\
+	DM_REALLOC_COMMON(tag, newptr, oldptr,				\
 			 (oldcount) * sizeof(*(oldptr)),		\
 					     sizeof(*(oldptr)), count)
+#define D_REALLOC_ARRAY(newptr, oldptr, oldcount, count)		\
+	DM_REALLOC_ARRAY(M_OTHER, newptr, oldptr, oldcount, count)
 
+#define DM_REALLOC_NZ(tag, newptr, oldptr, size)			\
+	DM_REALLOC_COMMON(tag, newptr, oldptr, size, size, 1)
 #define D_REALLOC_NZ(newptr, oldptr, size)				\
-	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
+	DM_REALLOC_NZ(M_OTHER, newptr, oldptr, size)
 
-#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
-	D_REALLOC_COMMON(newptr, oldptr,				\
+#define DM_REALLOC_ARRAY_NZ(tag, newptr, oldptr, count)			\
+	DM_REALLOC_COMMON(tag, newptr, oldptr,				\
 			 (count) * sizeof(*(oldptr)),			\
 			 sizeof(*(oldptr)), count)
+#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
+	DM_REALLOC_ARRAY_NZ(M_OTHER, newptr, oldptr, count)
 
 /** realloc macros that do not clear the new memory */
+#define DM_REALLOC_NZ(tag, newptr, oldptr, size)			\
+	DM_REALLOC_COMMON(tag, newptr, oldptr, size, size, 1)
 #define D_REALLOC_NZ(newptr, oldptr, size)				\
-	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
+	DM_REALLOC_NZ(M_OTHER, newptr, oldptr, size)
 
-#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
-	D_REALLOC_COMMON(newptr, oldptr,				\
+#define DM_REALLOC_ARRAY_NZ(tag, newptr, oldptr, count)			\
+	DM_REALLOC_COMMON(tag, newptr, oldptr,				\
 			 (count) * sizeof(*(oldptr)),			\
 			 sizeof(*(oldptr)), count)
+#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
+	DM_REALLOC_ARRAY_NZ(M_OTHER, newptr, oldptr, count)
 
 /** realloc macros that clear the whole allocation */
+#define DM_REALLOC_Z(tag, newptr, oldptr, size)				\
+	DM_REALLOC_COMMON(tag, newptr, oldptr, 0, size, 1)
 #define D_REALLOC_Z(newptr, oldptr, size)				\
-	D_REALLOC_COMMON(newptr, oldptr, 0, size, 1)
+	DM_REALLOC_Z(M_OTHER, newptr, oldptr, size)
 
+#define DM_REALLOC_ARRAY_Z(tag, newptr, oldptr, count)			\
+	DM_REALLOC_COMMON(tag, newptr, oldptr, 0, sizeof(*(oldptr)), count)
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
-	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
+	DM_REALLOC_ARRAY_Z(M_OTHER, newptr, oldptr, count)
 
 #define D_FREE(ptr)							\
 	do {								\
@@ -282,12 +364,24 @@ char *d_realpath(const char *path, char *resolved_path);
 		(ptr) = NULL;						\
 	} while (0)
 
-#define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
-#define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))
-#define D_ALLOC_ARRAY(ptr, count) D_ALLOC_CORE(ptr, sizeof(*ptr), count)
-#define D_ALLOC_NZ(ptr, size)	D_ALLOC_CORE_NZ(ptr, size, 1)
-#define D_ALLOC_PTR_NZ(ptr)	D_ALLOC_NZ(ptr, sizeof(*ptr))
-#define D_ALLOC_ARRAY_NZ(ptr, count) D_ALLOC_CORE_NZ(ptr, sizeof(*ptr), count)
+#define DM_ALLOC(tag, ptr, size)	DM_ALLOC_CORE(tag, ptr, size, 1)
+#define D_ALLOC(ptr, size)		DM_ALLOC(M_OTHER, ptr, size)
+
+#define DM_ALLOC_PTR(tag, ptr)		DM_ALLOC(tag, ptr, sizeof(*ptr))
+#define D_ALLOC_PTR(ptr)		DM_ALLOC_PTR(M_OTHER, ptr)
+
+#define DM_ALLOC_ARRAY(tag, ptr, count)	DM_ALLOC_CORE(tag, ptr, sizeof(*ptr), count)
+#define D_ALLOC_ARRAY(ptr, count)	DM_ALLOC_ARRAY(M_OTHER, ptr, count)
+
+#define DM_ALLOC_NZ(tag, ptr, size)	DM_ALLOC_CORE_NZ(tag, ptr, size, 1)
+#define D_ALLOC_NZ(ptr, size)		DM_ALLOC_NZ(M_OTHER, ptr, size)
+
+#define DM_ALLOC_PTR_NZ(tag, ptr)	DM_ALLOC_NZ(tag, ptr, sizeof(*ptr))
+#define D_ALLOC_PTR_NZ(ptr)		DM_ALLOC_PTR_NZ(M_OTHER, ptr)
+
+#define DM_ALLOC_ARRAY_NZ(tag, ptr, count)	DM_ALLOC_CORE_NZ(tag, ptr, sizeof(*ptr), count)
+#define D_ALLOC_ARRAY_NZ(ptr, count)		DM_ALLOC_ARRAY_NZ(M_OTHER, ptr, count)
+
 #define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)			\
@@ -419,7 +513,7 @@ d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 		return 0;
 	}
 
-	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
+	DM_ALLOC_ARRAY(M_IO_ARG, sgl->sg_iovs, nr);
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
 }

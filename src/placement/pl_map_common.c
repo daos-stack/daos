@@ -63,7 +63,7 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 {
 	struct failed_shard *f_new;
 
-	D_ALLOC_PTR(f_new);
+	DM_ALLOC_PTR(M_PL, f_new);
 	if (f_new == NULL)
 		return -DER_NOMEM;
 
@@ -361,10 +361,10 @@ grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
 	int	 i;
 
 	if (*grp_map_size > STACK_TGTS_SIZE)
-		D_REALLOC_ARRAY(new_grp_map, grp_map, *grp_map_size,
-				new_grp_size);
+		DM_REALLOC_ARRAY(M_PL, new_grp_map, grp_map, *grp_map_size,
+				 new_grp_size);
 	else
-		D_ALLOC_ARRAY(new_grp_map, new_grp_size);
+		DM_ALLOC_ARRAY(M_PL, new_grp_map, new_grp_size);
 
 	for (i = *grp_map_size; i < new_grp_size; i++)
 		grp_map[i] = -1;
@@ -403,7 +403,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	if (layout->ol_grp_nr <= STACK_TGTS_SIZE) {
 		grp_count = grp_cnt_array;
 	} else {
-		D_ALLOC_ARRAY(grp_count, layout->ol_grp_nr);
+		DM_ALLOC_ARRAY(M_PL, grp_count, layout->ol_grp_nr);
 		if (grp_count == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -436,7 +436,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 
 	new_group_size = layout->ol_grp_size + max_fail_grp;
 	new_shards_nr = new_group_size * layout->ol_grp_nr;
-	D_ALLOC_ARRAY(new_shards, new_shards_nr);
+	DM_ALLOC_ARRAY(M_PL, new_shards, new_shards_nr);
 	if (new_shards == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

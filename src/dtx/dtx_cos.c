@@ -110,7 +110,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	key = (struct dtx_cos_key *)key_iov->iov_buf;
 	rbund = (struct dtx_cos_rec_bundle *)val_iov->iov_buf;
 
-	D_ALLOC_PTR(dcr);
+	DM_ALLOC_PTR(M_DTX, dcr);
 	if (dcr == NULL)
 		return -DER_NOMEM;
 
@@ -120,7 +120,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	D_INIT_LIST_HEAD(&dcr->dcr_prio_list);
 	D_INIT_LIST_HEAD(&dcr->dcr_expcmt_list);
 
-	D_ALLOC_PTR(dcrc);
+	DM_ALLOC_PTR(M_DTX, dcrc);
 	if (dcrc == NULL) {
 		D_FREE_PTR(dcr);
 		return -DER_NOMEM;
@@ -227,7 +227,7 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	dcr = (struct dtx_cos_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	rbund = (struct dtx_cos_rec_bundle *)val->iov_buf;
 
-	D_ALLOC_PTR(dcrc);
+	DM_ALLOC_PTR(M_DTX, dcrc);
 	if (dcrc == NULL)
 		return -DER_NOMEM;
 
@@ -281,11 +281,11 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		return 0;
 	}
 
-	D_ALLOC_ARRAY(dte_buf, count);
+	DM_ALLOC_ARRAY(M_DTX, dte_buf, count);
 	if (dte_buf == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ARRAY(dck_buf, count);
+	DM_ALLOC_ARRAY(M_DTX, dck_buf, count);
 	if (dck_buf == NULL) {
 		D_FREE(dte_buf);
 		return -DER_NOMEM;
@@ -356,7 +356,7 @@ dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	else
 		count = dcr->dcr_prio_count;
 
-	D_ALLOC_ARRAY(dti, count);
+	DM_ALLOC_ARRAY(M_DTX, dti, count);
 	if (dti == NULL)
 		return -DER_NOMEM;
 
