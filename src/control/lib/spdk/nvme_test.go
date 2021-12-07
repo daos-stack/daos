@@ -7,6 +7,7 @@
 package spdk
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -73,6 +74,9 @@ func TestSpdk_CleanLockfiles(t *testing.T) {
 			if tc.expErr != nil {
 				return
 			}
+
+			sort.Strings(tc.expCalls)
+			sort.Strings(mockExt.removeCalls)
 
 			if diff := cmp.Diff(tc.expCalls, mockExt.removeCalls); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
