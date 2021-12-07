@@ -221,22 +221,18 @@ func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdD
 
 	pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
 	if err != nil {
-		// is cause an expected non-existent error?
 		status, ok := errors.Cause(err).(drpc.DaosStatus)
-		if ok && status != drpc.DaosNonexistant {
-			ok = false
+
+		// if error indicates non-existent health and smd has abnormal state then return
+		if ok && status == drpc.DaosNonexistant && !smdDev.State.IsNormal() {
+			ei.log.Debugf("%s: health stats not found, device states: %q)", msg,
+				smdDev.State.States())
+
+			return false, nil
 		}
 
-		// if not non-existent error or smd is in normal state then fail
-		if !ok || smdDev.State.IsNormal() {
-			return false, errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(),
-				ctrlr.PciAddr)
-		}
-
-		// otherwise ignore error as health stats may not exist if smd device is
-		// not in a normal state
-		ei.log.Debugf("%s: stats not found (state: %s)", msg, smdDev.State)
-		return false, nil
+		return false, errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(),
+			ctrlr.PciAddr)
 	}
 
 	// populate space usage for each smd device from health stats
