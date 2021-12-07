@@ -105,7 +105,8 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 				DevUuid: dev.Uuid,
 			})
 			if err != nil {
-				return errors.Wrapf(err, "device %s", dev)
+				return errors.Wrapf(err, "device %s, states %q", dev,
+					storage.BioState(dev.BioState).States())
 			}
 			dev.Health = health
 		}
@@ -185,7 +186,10 @@ func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQue
 		case 0:
 			continue
 		case 1:
+			svc.log.Debugf("smdQueryDevice(): uuid %q, rank %d, states %q", req.Uuid,
+				rr.Rank, storage.BioState(rr.Devices[0].BioState).States())
 			rank = system.Rank(rr.Rank)
+
 			return rank, rr.Devices[0], nil
 		default:
 			return rank, nil, errors.Errorf("device query on %s matched multiple devices", req.Uuid)
