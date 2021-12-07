@@ -443,7 +443,6 @@ type (
 		Ranks      *system.RankSet
 		Force      bool
 		FullSystem bool
-		Resp       *fanoutResponse
 	}
 
 	fanoutResponse struct {
@@ -504,13 +503,16 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 // Pass true as last parameter to update member states on request failure.
 //
 // Fan-out is invoked by control API *Ranks functions.
-func (svc *mgmtSvc) rpcFanout(parent context.Context, req *fanoutRequest, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
+func (svc *mgmtSvc) rpcFanout(parent context.Context, req *fanoutRequest, resp *fanoutResponse, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
 	if req == nil || req.Method == nil {
 		return nil, nil, errors.New("nil fanout request or method")
 	}
+	if resp == nil {
+		resp = new(fanoutResponse)
+	}
 
 	if req.Ranks.Count() == 0 {
-		return req.Resp, req.Ranks, nil
+		return resp, req.Ranks, nil
 	}
 
 	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
@@ -525,10 +527,6 @@ func (svc *mgmtSvc) rpcFanout(parent context.Context, req *fanoutRequest, update
 		return nil, nil, err
 	}
 
-	resp := req.Resp
-	if resp == nil {
-		resp = new(fanoutResponse)
-	}
 	resp.Results = ranksResp.RankResults
 
 	// synthesise "Stopped" rank results for any harness host errors
@@ -639,19 +637,19 @@ type systemReq interface {
 	GetRanks() string
 }
 
-func (svc *mgmtSvc) getFanoutReq(req systemReq) (*fanoutRequest, error) {
+func (svc *mgmtSvc) getFanoutReq(req systemReq) (*fanoutRequest, *fanoutResponse, error) {
 	if common.InterfaceIsNil(req) {
-		return nil, errors.New("nil system request")
+		return nil, nil, errors.New("nil system request")
 	}
 
 	// populate missing hosts/ranks in outer response and resolve active ranks
 	hitRanks, missRanks, missHosts, err := svc.resolveRanks(req.GetHosts(), req.GetRanks())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	allRanks, err := svc.membership.RankList()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	force := false
@@ -659,14 +657,13 @@ func (svc *mgmtSvc) getFanoutReq(req systemReq) (*fanoutRequest, error) {
 		force = forceReq.GetForce()
 	}
 	return &fanoutRequest{
-		Ranks:      hitRanks,
-		Force:      force,
-		FullSystem: len(system.CheckRankMembership(hitRanks.Ranks(), allRanks)) == 0,
-		Resp: &fanoutResponse{
-			AbsentHosts: missHosts,
+			Ranks:      hitRanks,
+			Force:      force,
+			FullSystem: len(system.CheckRankMembership(hitRanks.Ranks(), allRanks)) == 0,
+		}, &fanoutResponse{
 			AbsentRanks: missRanks,
-		},
-	}, nil
+			AbsentHosts: missHosts,
+		}, nil
 }
 
 // SystemStop implements the method defined for the Management Service.
@@ -684,7 +681,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
-	fReq, err := svc.getFanoutReq(req)
+	fReq, fResp, err := svc.getFanoutReq(req)
 	if err != nil {
 		return nil, err
 	}
@@ -693,7 +690,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	// is for an unforced full system stop.
 	if fReq.FullSystem && !fReq.Force {
 		fReq.Method = control.PrepShutdownRanks
-		fResp, _, err := svc.rpcFanout(ctx, fReq, true)
+		fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 		if err != nil {
 			return nil, err
 		}
@@ -706,7 +703,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	// Second phase: Stop the ranks. If the request is forced, we will
 	// kill the ranks immediately without a graceful shutdown.
 	fReq.Method = control.StopRanks
-	fResp, _, err := svc.rpcFanout(ctx, fReq, true)
+	fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 	if err != nil {
 		return nil, err
 	}
@@ -761,13 +758,13 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 	}
 	svc.log.Debug("Received SystemStart RPC")
 
-	fReq, err := svc.getFanoutReq(req)
+	fReq, fResp, err := svc.getFanoutReq(req)
 	if err != nil {
 		return nil, err
 	}
 
 	fReq.Method = control.StartRanks
-	fResp, _, err := svc.rpcFanout(ctx, fReq, true)
+	fResp, _, err = svc.rpcFanout(ctx, fReq, fResp, true)
 	if err != nil {
 		return nil, err
 	}
@@ -857,12 +854,12 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 	// On the leader, we should first tell all servers to prepare for
 	// reformat by wiping out their engine superblocks, etc.
-	fanReq, err := svc.getFanoutReq(&mgmtpb.SystemQueryReq{})
+	fanReq, fanResp, err := svc.getFanoutReq(&mgmtpb.SystemQueryReq{})
 	if err != nil {
 		return nil, err
 	}
 	fanReq.Method = control.ResetFormatRanks
-	fanResp, _, err := svc.rpcFanout(ctx, fanReq, false)
+	fanResp, _, err = svc.rpcFanout(ctx, fanReq, fanResp, false)
 	if err != nil {
 		return nil, err
 	}

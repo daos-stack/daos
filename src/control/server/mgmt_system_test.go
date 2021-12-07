@@ -27,7 +27,6 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -542,7 +541,6 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expFanReq: &fanoutRequest{
 				Method:     control.StartRanks,
 				FullSystem: true,
-				Resp:       new(fanoutResponse),
 			},
 		},
 		"bad hosts in request": {
@@ -606,7 +604,6 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				Method:     control.StartRanks,
 				Ranks:      system.MustCreateRankSet("0-7"),
 				FullSystem: true,
-				Resp:       new(fanoutResponse),
 			},
 			// results from ranks on failing hosts generated
 			// results from host responses amalgamated
@@ -706,9 +703,6 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expFanReq: &fanoutRequest{
 				Method: control.StartRanks,
 				Ranks:  system.MustCreateRankSet("0-3,6-7"),
-				Resp: &fanoutResponse{
-					AbsentRanks: system.MustCreateRankSet("8-10"),
-				},
 			},
 			// results from ranks on failing hosts generated
 			// results from host responses amalgamated
@@ -800,9 +794,6 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expFanReq: &fanoutRequest{
 				Method: control.StartRanks,
 				Ranks:  system.MustCreateRankSet("0-5"),
-				Resp: &fanoutResponse{
-					AbsentHosts: hostlist.MustCreateSet("10.0.0.5"),
-				},
 			},
 			// results from ranks on failing hosts generated
 			// results from host responses amalgamated
@@ -861,7 +852,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				expErr = errors.New(tc.expErrMsg)
 			}
 
-			gotFanReq, gotErr := svc.getFanoutReq(tc.sysReq)
+			gotFanReq, baseResp, gotErr := svc.getFanoutReq(tc.sysReq)
 			common.CmpErr(t, expErr, gotErr)
 			if gotErr != nil && tc.expErrMsg != "" {
 				return
@@ -895,7 +886,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				t.Fatalf("unexpected fanout request (-want, +got)\n%s\n", diff)
 			}
 
-			gotResp, gotRankSet, gotErr := svc.rpcFanout(context.TODO(), gotFanReq, true)
+			gotResp, gotRankSet, gotErr := svc.rpcFanout(context.TODO(), gotFanReq, baseResp, true)
 			common.CmpErr(t, expErr, gotErr)
 			if tc.expErrMsg != "" {
 				return
