@@ -77,8 +77,8 @@ class ThreadManager():
         """Initialize a ThreadManager object with the the method to run as a thread.
 
         Args:
-            method (callable): [description]
-            timeout (int, optional): [description]. Defaults to None.
+            method (callable): python method to execute in each thread
+            timeout (int, optional): timeout for all thread execution. Defaults to None.
         """
         self.log = getLogger()
         self.method = method
@@ -104,12 +104,13 @@ class ThreadManager():
         """Asynchronously run the method as a thread for each set of method arguments.
 
         Returns:
-            list: a list of ThreadResults for the execution of each method.
+            list: a list of ThreadResult objects containing the results of each method.
 
         """
         results = []
         with ThreadPoolExecutor() as thread_executor:
             self.log.info("Submitting %d threads ...", len(self.job_kwargs))
+            # Keep track of thread ids by assigning an index to each Future object
             futures = {
                 thread_executor.submit(self.method, **kwargs): index
                 for index, kwargs in enumerate(self.job_kwargs)}
