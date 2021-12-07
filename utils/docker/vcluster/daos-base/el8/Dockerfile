@@ -4,16 +4,17 @@
 # 'recipe' for building a base RHEL variant docker image of a DAOS node
 #
 # This Dockerfile accept the following input build arguments:
-# - RHEL_BASE_IMAGE:     Base docker image to use (default centos)
-# - RHEL_BASE_VERSION:   Version of the base docker image to use (default 8)
-# - BUST_CACHE:         Manage docker building cache (default undefined).  To invalidate the cache,
+# - RHEL_BASE_IMAGE     Base docker image to use (default centos)
+# - RHEL_BASE_VERSION   Version of the base docker image to use (default 8)
+# - BUST_CACHE          Manage docker building cache (default undefined).  To invalidate the cache,
 #                       a random value such as the date of day shall be given.
-# - DAOS_AUTH:          Enable DAOS authentification when set to "yes" (default "no")
-# - DAOS_REPOS:         List of repos needed to install DAOS (default
+# - DAOS_AUTH           Enable DAOS authentification when set to "yes" (default "no")
+# - DAOS_REPOS          Space separated list of repos needed to install DAOS (default
 #                       "https://packages.daos.io/v2.0")
-# - DAOS_GPG_KEYS:      List of GPG keys associated with DAOS repos (default
+# - DAOS_GPG_KEYS       Space separated list of GPG keys associated with DAOS repos (default
 #                       "https://packages.daos.io/RPM-GPG-KEY")
-# - DAOS_REPOS_NOAUTH:  List of repos to use without GPG authentification (default "")
+# - DAOS_REPOS_NOAUTH   Space separated list of repos to use without GPG authentification
+#                       (default "")
 
 # Pull base image
 ARG	RHEL_BASE_IMAGE=centos
@@ -28,8 +29,8 @@ VOLUME	[ "/sys/fs/cgroup" ]
 RUN	systemctl mask systemd-remount-fs.service graphical.target kdump.service &&                \
 	systemctl unmask dev-hugepages.mount &&                                                    \
 	pushd /lib/systemd/system/sysinit.target.wants &&                                          \
-	for i in * ; do                                                                            \
-		[[ $i == systemd-tmpfiles-setup.service ]] || rm -f $i ;                           \
+	for item in * ; do                                                                         \
+		[ "$item" == systemd-tmpfiles-setup.service ] || rm -f "$item" ;                   \
 	done &&                                                                                    \
 	popd &&                                                                                    \
 	rm -f /lib/systemd/system/multi-user.target.wants/* &&                                     \
@@ -42,51 +43,55 @@ RUN	systemctl mask systemd-remount-fs.service graphical.target kdump.service && 
 STOPSIGNAL SIGRTMIN+3
 ENTRYPOINT [ "/sbin/init" ]
 
-# Base configuration of dnf
+# Base configuration of dnf and system update
 RUN	dnf clean all &&                                                                           \
 	dnf makecache &&                                                                           \
 	dnf --assumeyes install dnf-plugins-core &&                                                \
 	dnf config-manager --save --setopt=assumeyes=True &&                                       \
 	dnf config-manager --save --setopt=fastestmirror=True &&                                   \
 	dnf config-manager --set-enabled powertools &&                                             \
-	dnf install epel-release
+	dnf install epel-release &&                                                                \
+	dnf update &&                                                                              \
+	dnf clean all
 
-# Update system
-RUN	dnf update
-
-# XXX NOTE XXX Variale allowing to build the image wihout using glolbal --no-cache option and thus
+# Install DAOS package
+# XXX NOTE XXX Variable allowing to build the image without using global --no-cache option and thus
 # XXX NOTE XXX to not update all rpms.  To work properly a random value such as the date of the day
 # XXX NOTE XXX should be given.
 ARG	BUST_CACHE
 ARG	DAOS_REPOS="https://packages.daos.io/v2.0"
 ARG	DAOS_GPG_KEYS="https://packages.daos.io/RPM-GPG-KEY"
 ARG	DAOS_REPOS_NOAUTH=""
-RUN	[[ $BUST_CACHE ]] && dnf update ;                                                          \
+RUN	if [ -n "$BUST_CACHE" ] ; then                                                             \
+		echo "[INFO] Busting cache" &&                                                     \
+		dnf update ;                                                                       \
+	fi &&                                                                                      \
 	for repo in ${DAOS_REPOS} ; do                                                             \
 		echo "[INFO] Adding rpm repository: $repo" &&                                      \
-		dnf config-manager --add-repo $repo ;                                              \
+		dnf config-manager --add-repo "$repo" ;                                            \
 	done &&                                                                                    \
 	for gpg_key in ${DAOS_GPG_KEYS} ; do                                                       \
 		echo "[INFO] Adding repositories gpg key: $gpg_key" &&                             \
-		rpmkeys --import $gpg_key ;                                                        \
+		rpmkeys --import "$gpg_key" ;                                                      \
 	done &&                                                                                    \
 	for repo in ${DAOS_REPOS_NOAUTH} ; do                                                      \
 		echo "[INFO] Disabling authentification for repository: $repo" &&                  \
-		dnf config-manager --save --setopt=${repo}.gpgcheck=0 ;                            \
-	done
-
-# Install daos package
-RUN	dnf install daos
+		dnf config-manager --save --setopt="${repo}.gpgcheck=0" ;                          \
+	done &&                                                                                    \
+	echo "[INFO] Installing DAOS" &&                                                           \
+	dnf install daos &&                                                                        \
+	dnf clean all
 
 # Generate GPG authentification certificates for using DAOS authentification
 ARG	DAOS_AUTH=no
-RUN	if [[ "$DAOS_AUTH" == yes ]] ; then                                                        \
-		if [[ ! -d /etc/daos/certs ]] ; then                                               \
+RUN	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
+		echo "[INFO] Generating authentication certificates" &&                            \
+		if [ ! -d /etc/daos/certs ] ; then                                                 \
 			mkdir -d /etc/daos/certs &&                                                \
 			chown root:root /etc/daos/certs &&                                         \
 			chmod 755 /etc/daos/certs ;                                                \
 		fi &&                                                                              \
-# XXX WARNING XXX With a production platorm, these certificates should be provided with a volume
+# XXX WARNING XXX With a production platform, these certificates should be provided with a volume
 # XXX WARNING XXX (or Secrets with K8S).
 		cd /root && /usr/lib64/daos/certgen/gen_certificates.sh ;                          \
 	fi

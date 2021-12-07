@@ -48,13 +48,13 @@ from GitHub with the following command:
 
 ```bash
 $ docker build --tag daos-base:centos8 \
-	"https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8"
+	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
 ```
 
 or from a local tree with the following command:
 
 ```bash
-$ docker build --tag daos-base:centos8 "utils/docker/vcluster/daos-base/el8"
+$ docker build --tag daos-base:centos8 utils/docker/vcluster/daos-base/el8
 ```
 
 This Docker file accept the following arguments:
@@ -64,17 +64,19 @@ This Docker file accept the following arguments:
 - `BUST_CACHE`: Manage docker building cache (default undefined).  To invalidate the cache, a random
 	value such as the date of the day shall be given.
 - `DAOS_AUTH`: Enable DAOS authentification when set to "yes" (default "no")
-- `DAOS_REPOS`: List of repos needed to install DAOS (default "https://packages.daos.io/v2.0")
-- `DAOS_GPG_KEYS`: List of GPG keys associated with DAOS repos (default
+- `DAOS_REPOS`: Space separated list of repos needed to install DAOS (default
+	"https://packages.daos.io/v2.0")
+- `DAOS_GPG_KEYS`: Space separated list of GPG keys associated with DAOS repos (default
 	"https://packages.daos.io/RPM-GPG-KEY")
-- `DAOS_REPOS_NOAUTH`: List of repos to use without GPG authentification (default "")
+- `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentification
+	(default "")
 
 For example, building a DAOS base image with authentification enabled could be done with the
 following command:
 
 ```bash
 $ docker build --tag daos-base:centos8 --build-arg DAOS_AUTH=yes \
-	"https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8"
+	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
 ```
 
 ### Building DAOS Nodes Images
@@ -112,7 +114,7 @@ From a local tree, a more straightforward way to build these images could be don
 `docker-compose` and the following commands:
 
 ```bash
-$ cd "utils/docker/vcluster"
+$ cd utils/docker/vcluster
 $ docker-compose build
 ```
 
@@ -168,7 +170,7 @@ From a local tree, a more straightforward way to start the containers could be d
 `docker-compose` and the following commands:
 
 ```bash
-$ cd "utils/docker/vcluster"
+$ cd utils/docker/vcluster
 $ docker-compose up --detach
 ```
 

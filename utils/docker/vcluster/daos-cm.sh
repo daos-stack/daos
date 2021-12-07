@@ -90,18 +90,18 @@ function usage
 
 		Manage DAOS Virtual Cluster containers
 
-		options:
-		   -z, --pool-size       Total size of DAOS pool (default "10G")
-		   -h, --help            show this help message and exit
-		   -V, --version         show version number
-		   -q, --quiet           quiet mode
-		   -v, --verbose         verbose mode
-		   -D, --debug           debug mode
+		Options:
+		   -z, --pool-size <size>   total size of DAOS pool (default "10G")
+		   -h, --help               show this help message and exit
+		   -V, --version            show version number
+		   -q, --quiet              quiet mode
+		   -v, --verbose            verbose mode
+		   -D, --debug              debug mode
 
-		commands:
-		  start <ip address>:    Start DAOS virtual cluster
-		  stop:                  Stop DAOS virtual cluster
-		  state:                 Display the state of the DAOS virtual cluster containers
+		Commands:
+		   start <ip address>       start DAOS virtual cluster
+		   stop                     stop DAOS virtual cluster
+		   state                    display the state of the DAOS virtual cluster containers
 	EOF
 }
 
