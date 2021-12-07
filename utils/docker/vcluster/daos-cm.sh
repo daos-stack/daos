@@ -143,7 +143,7 @@ function start
 
 	info "Formatting DAOS storage"
 	if ! run docker exec daos-admin dmg storage format --host-list=daos-server ; then
-		fatal "DAOS storage could not be formated"
+		fatal "DAOS storage could not be formatted"
 	fi
 
 	info "Checking system"

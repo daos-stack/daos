@@ -8,12 +8,12 @@
 # - RHEL_BASE_VERSION   Version of the base docker image to use (default 8)
 # - BUST_CACHE          Manage docker building cache (default undefined).  To invalidate the cache,
 #                       a random value such as the date of day shall be given.
-# - DAOS_AUTH           Enable DAOS authentification when set to "yes" (default "no")
+# - DAOS_AUTH           Enable DAOS authentication when set to "yes" (default "no")
 # - DAOS_REPOS          Space separated list of repos needed to install DAOS (default
 #                       "https://packages.daos.io/v2.0")
 # - DAOS_GPG_KEYS       Space separated list of GPG keys associated with DAOS repos (default
 #                       "https://packages.daos.io/RPM-GPG-KEY")
-# - DAOS_REPOS_NOAUTH   Space separated list of repos to use without GPG authentification
+# - DAOS_REPOS_NOAUTH   Space separated list of repos to use without GPG authentication
 #                       (default "")
 
 # Pull base image
@@ -75,14 +75,14 @@ RUN	if [ -n "$BUST_CACHE" ] ; then                                              
 		rpmkeys --import "$gpg_key" ;                                                      \
 	done &&                                                                                    \
 	for repo in ${DAOS_REPOS_NOAUTH} ; do                                                      \
-		echo "[INFO] Disabling authentification for repository: $repo" &&                  \
+		echo "[INFO] Disabling authentication for repository: $repo" &&                    \
 		dnf config-manager --save --setopt="${repo}.gpgcheck=0" ;                          \
 	done &&                                                                                    \
 	echo "[INFO] Installing DAOS" &&                                                           \
 	dnf install daos &&                                                                        \
 	dnf clean all
 
-# Generate GPG authentification certificates for using DAOS authentification
+# Generate GPG authentication certificates for using DAOS authentication
 ARG	DAOS_AUTH=no
 RUN	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
 		echo "[INFO] Generating authentication certificates" &&                            \

@@ -179,7 +179,7 @@ $ docker-compose up --detach
     which was provided when the images have been built, shall be defined in the Docker
     Compose environment file `utils/docker/vcluster/.env`.
 
-As with the docker command, the system shall be formated, pools created, etc..
+As with the docker command, the system shall be formatted, pools created, etc..
 
 
 ### Managing Virtual Docker cluster with daos-cm.sh

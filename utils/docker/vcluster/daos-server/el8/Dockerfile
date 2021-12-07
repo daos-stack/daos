@@ -6,7 +6,7 @@
 # This Dockerfile accept the following input build arguments:
 # - DAOS_BASE_IMAGE      Base docker image to use (default daos-base)
 # - DAOS_BASE_VERSION    Version of the base docker image to use (default centos8)
-# - DAOS_AUTH            Enable DAOS authentification when set to "yes" (default "no")
+# - DAOS_AUTH            Enable DAOS authentication when set to "yes" (default "no")
 # - DAOS_HUGEPAGES_NBR   Number of huge pages to allocate for SPDK (default 4096)
 # - DAOS_IFACE_NAME      Fabric network interface used by the DAOS engine (default "eth0")
 # - DAOS_SCM_SIZE        Size in GB of the RAM emulating SCM devices (default 4)

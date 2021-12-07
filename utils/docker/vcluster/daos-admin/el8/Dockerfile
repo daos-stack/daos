@@ -5,7 +5,7 @@
 #
 # - DAOS_BASE_IMAGE      Base docker image to use (default daos-base)
 # - DAOS_BASE_VERSION    Version of the base docker image to use (default centos8)
-# - DAOS_AUTH            Enable DAOS authentification when set to "yes" (default "no")
+# - DAOS_AUTH            Enable DAOS authentication when set to "yes" (default "no")
 # - DAOS_ADMIN_USER      Name or uid of the daos administrattor user (default "root")
 # - DAOS_ADMIN_GROUP     Name or gid of the daos administrattor group (default "root")
 
