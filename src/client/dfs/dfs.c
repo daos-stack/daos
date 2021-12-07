@@ -7,6 +7,7 @@
 #define D_LOGFAC	DD_FAC(dfs)
 
 #include <fcntl.h>
+#include <math.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <linux/xattr.h>
@@ -133,9 +134,9 @@ struct dfs {
 	gid_t			gid;
 	/** Access mode (RDONLY, RDWR) */
 	int			amode;
-	/** Open pool handle of the DFS */
+	/** Open pool handle of the DFS mount */
 	daos_handle_t		poh;
-	/** Open container handle of the DFS */
+	/** Open container handle of the DFS mount */
 	daos_handle_t		coh;
 	/** Object ID reserved for this DFS (see oid_gen below) */
 	daos_obj_id_t		oid;
@@ -150,6 +151,10 @@ struct dfs {
 	/** Optional prefix to account for when resolving an absolute path */
 	char			*prefix;
 	daos_size_t		prefix_len;
+	/** hash entry for pool open handle - valid on dfs_connect() */
+	struct dfs_mnt_hdls	*pool_hdl;
+	/** hash entry for cont open handle - valid on dfs_connect() */
+	struct dfs_mnt_hdls	*cont_hdl;
 };
 
 struct dfs_entry {
@@ -1514,99 +1519,140 @@ out_prop:
 }
 
 int
-dfs_connect(const char *pool, const char *cont, int flags, dfs_attr_t *attr, dfs_t **_dfs)
+dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
+	    dfs_t **_dfs)
 {
-	daos_handle_t	poh = {0};
-	daos_handle_t	coh = {0};
-	dfs_t		*dfs = NULL;
-	int		amode, cmode;
-	int		rc;
+	daos_handle_t		poh = {0};
+	daos_handle_t		coh = {0};
+	bool			pool_h_bump = false;
+	bool			cont_h_bump = false;
+	struct dfs_mnt_hdls	*pool_hdl = NULL;
+	struct dfs_mnt_hdls	*cont_hdl = NULL;
+	dfs_t			*dfs = NULL;
+	int			amode, cmode;
+	int			rc, rc2;
 
 	if (_dfs == NULL)
 		return EINVAL;
 
+	if (!dfs_is_init()) {
+		D_ERROR("dfs_init() must be called before dfs_connect() can be used\n");
+		return EACCES;
+	}
+
 	amode = (flags & O_ACCMODE);
 
-	/** Connect to pool */
-	rc = daos_pool_connect(pool, NULL, (amode == O_RDWR) ? DAOS_PC_RW : DAOS_PC_RO, &poh,
-			       NULL, NULL);
-	if (rc) {
-		D_ERROR("Failed to connect to pool %s "DF_RC"\n", pool, DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
+	pool_hdl = dfs_hdl_lookup(pool, DFS_H_POOL);
+	if (pool_hdl == NULL) {
+		/** Connect to pool */
+		rc = daos_pool_connect(pool, sys, (amode == O_RDWR) ? DAOS_PC_RW : DAOS_PC_RO, &poh,
+				       NULL, NULL);
+		if (rc) {
+			D_ERROR("Failed to connect to pool %s "DF_RC"\n", pool, DP_RC(rc));
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_hdl_insert(pool, DFS_H_POOL, &poh, &pool_hdl);
+		if (rc)
+			D_GOTO(err, rc);
+	} else {
+		poh.cookie = pool_hdl->handle.cookie;
 	}
+	pool_h_bump = true;
 
 	cmode = (amode == O_RDWR) ? DAOS_COO_RW : DAOS_COO_RO;
+	cont_hdl = dfs_hdl_lookup(cont, DFS_H_CONT);
+	if (cont_hdl == NULL) {
+		rc = daos_cont_open(poh, cont, cmode, &coh, NULL, NULL);
+		if (rc == -DER_NONEXIST && (flags & O_CREAT)) {
+			uuid_t	cuuid;
 
-	rc = daos_cont_open(poh, cont, cmode, &coh, NULL, NULL);
-	if (rc == -DER_NONEXIST && (flags & O_CREAT)) {
-		uuid_t	cuuid;
-
-		rc = dfs_cont_create_with_label(poh, cont, attr, &cuuid, &coh, &dfs);
-		/** if someone got there first, re-open */
-		if (rc == EEXIST) {
-			rc = daos_cont_open(poh, cont, cmode, &coh, NULL, NULL);
-			if (rc) {
-				D_ERROR("Failed to open container %s "DF_RC"\n", cont, DP_RC(rc));
-				D_GOTO(out, rc = daos_der2errno(rc));
+			rc = dfs_cont_create_with_label(poh, cont, attr, &cuuid, &coh, &dfs);
+			/** if someone got there first, re-open */
+			if (rc == EEXIST) {
+				rc = daos_cont_open(poh, cont, cmode, &coh, NULL, NULL);
+				if (rc) {
+					D_ERROR("Failed to open container %s "DF_RC"\n",
+						cont, DP_RC(rc));
+					D_GOTO(err, rc = daos_der2errno(rc));
+				}
+				goto mount;
+			} else if (rc) {
+				D_ERROR("Failed to create DFS container: %d\n", rc);
 			}
-
+		} else if (rc == 0) {
+			int b;
+mount:
 			/*
 			 * It could be that someone has created the container but has not created
-			 * the SB yet, so keep trying to mount.
+			 * the SB yet (cont create and sb create are not transactional), so try a
+			 * few times to mount with some backoff.
 			 */
-			do {
+			for (b = 0; b < 7; b++) {
 				rc = dfs_mount(poh, coh, amode, &dfs);
-			} while (rc == ENOENT);
+				if (rc == ENOENT) {
+					usleep(pow(10, b));
+				} else {
+					break;
+				}
+			}
 			if (rc) {
 				D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
-		} else if (rc) {
-			D_ERROR("Failed to create DFS container: %d\n", rc);
+		} else {
+			D_ERROR("Failed to open container %s "DF_RC"\n", cont, DP_RC(rc));
+			D_GOTO(err, rc = daos_der2errno(rc));
 		}
-	} else if (rc == 0) {
-		do {
-			rc = dfs_mount(poh, coh, amode, &dfs);
-		} while (rc == ENOENT);
+
+		rc = dfs_hdl_insert(cont, DFS_H_CONT, &coh, &cont_hdl);
+		if (rc)
+			D_GOTO(err, rc);
+	} else {
+		rc = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
 		if (rc) {
 			D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
-			D_GOTO(out, rc);
+			D_GOTO(err, rc);
 		}
-	} else {
-		D_ERROR("Failed to open container %s "DF_RC"\n", cont, DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
 	}
+	cont_h_bump = true;
 
+	dfs->pool_hdl = pool_hdl;
+	dfs->cont_hdl = cont_hdl;
 	dfs->mounted = DFS_MOUNT_ALL;
 	*_dfs = dfs;
-out:
-	if (rc) {
-		int	rc2;
 
-		if (dfs) {
-			rc2 = dfs_umount(dfs);
-			if (rc2)
-				D_ERROR("dfs_umount() Failed %d\n", rc2);
-		}
-		if (daos_handle_is_valid(coh)) {
-			rc2 = daos_cont_close(coh, NULL);
-			if (rc2)
-				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
-		}
-		if (daos_handle_is_valid(poh)) {
-			rc2 = daos_pool_disconnect(poh, NULL);
-			if (rc2)
-				D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
-		}
+	return rc;
+
+err:
+	if (dfs) {
+		rc2 = dfs_umount(dfs);
+		if (rc2)
+			D_ERROR("dfs_umount() Failed %d\n", rc2);
 	}
+
+	if (cont_h_bump) {
+		dfs_hdl_release(cont_hdl);
+	} else if (daos_handle_is_valid(coh)) {
+		rc2 = daos_cont_close(coh, NULL);
+		if (rc2)
+			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+	}
+
+	if (pool_h_bump) {
+		dfs_hdl_release(pool_hdl);
+	} else if (daos_handle_is_valid(poh)) {
+		rc2 = daos_pool_disconnect(poh, NULL);
+		if (rc2)
+			D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+	}
+
 	return rc;
 }
 
 int
 dfs_disconnect(dfs_t *dfs)
 {
-	daos_handle_t	poh;
-	daos_handle_t	coh;
 	int		rc;
 
 	if (dfs->mounted != DFS_MOUNT_ALL) {
@@ -1614,9 +1660,8 @@ dfs_disconnect(dfs_t *dfs)
 		return EINVAL;
 	}
 
-	/** store pool and container handles before umounted dfs */
-	poh.cookie = dfs->poh.cookie;
-	coh.cookie = dfs->coh.cookie;
+	dfs_hdl_release(dfs->cont_hdl);
+	dfs_hdl_release(dfs->pool_hdl);
 
 	/** set mounted flag MOUNT to be able to just umount */
 	dfs->mounted = DFS_MOUNT;
@@ -1625,19 +1670,6 @@ dfs_disconnect(dfs_t *dfs)
 		D_ERROR("dfs_umount() Failed %d\n", rc);
 		D_GOTO(out, rc);
 	}
-
-	rc = daos_cont_close(coh, NULL);
-	if (rc) {
-		D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
-	}
-
-	rc = daos_pool_disconnect(poh, NULL);
-	if (rc) {
-		D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
-	}
-
 out:
 	return rc;
 }
@@ -2056,21 +2088,19 @@ err_dfs:
 int
 dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 {
-	d_iov_t		pool_hdl = { NULL, 0, 0 };
-	d_iov_t		cont_hdl = { NULL, 0, 0 };
-	d_iov_t		dfs_hdl = { NULL, 0, 0 };
-	daos_size_t	total_size;
+	d_iov_t		pool_iov = { NULL, 0, 0 };
+	d_iov_t		cont_iov = { NULL, 0, 0 };
+	d_iov_t		dfs_iov = { NULL, 0, 0 };
+	daos_size_t	pool_len, cont_len, total_size;
 	char		*ptr;
 	int		rc = 0;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
-
 	if (glob == NULL) {
 		D_ERROR("Invalid parameter, NULL glob pointer.\n");
 		return EINVAL;
 	}
-
 	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0)) {
 		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len"
 			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
@@ -2078,20 +2108,22 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 		return EINVAL;
 	}
 
-	rc = daos_pool_local2global(dfs->poh, &pool_hdl);
+	rc = daos_pool_local2global(dfs->poh, &pool_iov);
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc = daos_cont_local2global(dfs->coh, &cont_hdl);
+	rc = daos_cont_local2global(dfs->coh, &cont_iov);
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc = dfs_local2global(dfs, &dfs_hdl);
+	rc = dfs_local2global(dfs, &dfs_iov);
 	if (rc)
 		return rc;
 
-	total_size = pool_hdl.iov_buf_len + cont_hdl.iov_buf_len + dfs_hdl.iov_buf_len +
-		sizeof(daos_size_t) * 3;
+	pool_len = strlen(dfs->pool_hdl->value) + 1;
+	cont_len = strlen(dfs->cont_hdl->value) + 1;
+	total_size = pool_iov.iov_buf_len + cont_iov.iov_buf_len + dfs_iov.iov_buf_len + pool_len +
+		cont_len + sizeof(daos_size_t) * 5;
 
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = total_size;
@@ -2100,29 +2132,35 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 
 	ptr = glob->iov_buf;
 
-	*((daos_size_t *) ptr) = pool_hdl.iov_buf_len;
+	/** format: pool label - pool hdl size - pool hdl */
+	strcpy(ptr, dfs->pool_hdl->value);
+	ptr += pool_len;
+	*((daos_size_t *) ptr) = pool_iov.iov_buf_len;
 	ptr += sizeof(daos_size_t);
-	pool_hdl.iov_buf = ptr;
-	pool_hdl.iov_len = pool_hdl.iov_buf_len;
-	rc = daos_pool_local2global(dfs->poh, &pool_hdl);
+	pool_iov.iov_buf = ptr;
+	pool_iov.iov_len = pool_iov.iov_buf_len;
+	rc = daos_pool_local2global(dfs->poh, &pool_iov);
 	if (rc)
 		return daos_der2errno(rc);
-	ptr += pool_hdl.iov_buf_len;
+	ptr += pool_iov.iov_buf_len;
 
-	*((daos_size_t *) ptr) = cont_hdl.iov_buf_len;
+	/** format: cont label - cont hdl size - cont hdl */
+	strcpy(ptr, dfs->cont_hdl->value);
+	ptr += cont_len;
+	*((daos_size_t *) ptr) = cont_iov.iov_buf_len;
 	ptr += sizeof(daos_size_t);
-	cont_hdl.iov_buf = ptr;
-	cont_hdl.iov_len = cont_hdl.iov_buf_len;
-	rc = daos_cont_local2global(dfs->coh, &cont_hdl);
+	cont_iov.iov_buf = ptr;
+	cont_iov.iov_len = cont_iov.iov_buf_len;
+	rc = daos_cont_local2global(dfs->coh, &cont_iov);
 	if (rc)
 		return daos_der2errno(rc);
-	ptr += cont_hdl.iov_buf_len;
+	ptr += cont_iov.iov_buf_len;
 
-	*((daos_size_t *) ptr) = dfs_hdl.iov_buf_len;
+	*((daos_size_t *) ptr) = dfs_iov.iov_buf_len;
 	ptr += sizeof(daos_size_t);
-	dfs_hdl.iov_buf = ptr;
-	dfs_hdl.iov_len = dfs_hdl.iov_buf_len;
-	rc = dfs_local2global(dfs, &dfs_hdl);
+	dfs_iov.iov_buf = ptr;
+	dfs_iov.iov_len = dfs_iov.iov_buf_len;
+	rc = dfs_local2global(dfs, &dfs_iov);
 	if (rc)
 		return rc;
 
@@ -2132,17 +2170,27 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 int
 dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 {
-	char		*ptr;
-	d_iov_t		pool_hdl = { NULL, 0, 0 };
-	d_iov_t		cont_hdl = { NULL, 0, 0 };
-	d_iov_t		dfs_hdl = { NULL, 0, 0 };
-	daos_handle_t	poh, coh;
-	dfs_t		*dfs;
-	int		rc = 0;
+	char			*ptr;
+	d_iov_t			pool_iov = { NULL, 0, 0 };
+	d_iov_t			cont_iov = { NULL, 0, 0 };
+	d_iov_t			dfs_iov = { NULL, 0, 0 };
+	daos_size_t		pool_len, cont_len;
+	char			pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char			cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	bool			pool_h_bump = false;
+	bool			cont_h_bump = false;
+	struct dfs_mnt_hdls	*pool_hdl = NULL;
+	struct dfs_mnt_hdls	*cont_hdl = NULL;
+	daos_handle_t		poh, coh;
+	dfs_t			*dfs = NULL;
+	int			rc, rc2;
 
 	if (_dfs == NULL)
 		return EINVAL;
-
+	if (!dfs_is_init()) {
+		D_ERROR("dfs_init() must be called before dfs_global2local_all() can be used\n");
+		return EACCES;
+	}
 	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len) {
 		D_ERROR("Invalid parameter of glob, iov_buf %p, "
 			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
@@ -2152,50 +2200,79 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 
 	ptr = (char *)glob.iov_buf;
 
-	pool_hdl.iov_buf_len = *((daos_size_t *) ptr);
+	strncpy(pool, ptr, DAOS_PROP_LABEL_MAX_LEN + 1);
+	pool[DAOS_PROP_LABEL_MAX_LEN] = 0;
+	pool_len = strlen(pool) + 1;
+	ptr += pool_len;
+	pool_iov.iov_buf_len = *((daos_size_t *) ptr);
 	ptr += sizeof(daos_size_t);
-	pool_hdl.iov_buf = ptr;
-	pool_hdl.iov_len = pool_hdl.iov_buf_len;
-	rc = daos_pool_global2local(pool_hdl, &poh);
+	pool_iov.iov_buf = ptr;
+	pool_iov.iov_len = pool_iov.iov_buf_len;
+	rc = daos_pool_global2local(pool_iov, &poh);
 	if (rc)
-		D_GOTO(out, rc = daos_der2errno(rc));
-	ptr += pool_hdl.iov_buf_len;
+		D_GOTO(err, rc = daos_der2errno(rc));
+	ptr += pool_iov.iov_buf_len;
+	rc = dfs_hdl_insert(pool, DFS_H_POOL, &poh, &pool_hdl);
+	if (rc)
+		D_GOTO(err, rc);
+	pool_h_bump = true;
 
-	cont_hdl.iov_buf_len = *((daos_size_t *) ptr);
+	strncpy(cont, ptr, DAOS_PROP_LABEL_MAX_LEN + 1);
+	cont[DAOS_PROP_LABEL_MAX_LEN] = 0;
+	cont_len = strlen(cont) + 1;
+	ptr += cont_len;
+	cont_iov.iov_buf_len = *((daos_size_t *) ptr);
 	ptr += sizeof(daos_size_t);
-	cont_hdl.iov_buf = ptr;
-	cont_hdl.iov_len = cont_hdl.iov_buf_len;
-	rc = daos_cont_global2local(poh, cont_hdl, &coh);
+	cont_iov.iov_buf = ptr;
+	cont_iov.iov_len = cont_iov.iov_buf_len;
+	rc = daos_cont_global2local(poh, cont_iov, &coh);
 	if (rc)
-		D_GOTO(out, rc = daos_der2errno(rc));
-	ptr += cont_hdl.iov_buf_len;
+		D_GOTO(err, rc = daos_der2errno(rc));
+	ptr += cont_iov.iov_buf_len;
+	rc = dfs_hdl_insert(cont, DFS_H_CONT, &coh, &cont_hdl);
+	if (rc)
+		D_GOTO(err, rc);
+	cont_h_bump = true;
 
-	dfs_hdl.iov_buf_len = *((daos_size_t *) ptr);
+	dfs_iov.iov_buf_len = *((daos_size_t *) ptr);
 	ptr += sizeof(daos_size_t);
-	dfs_hdl.iov_buf = ptr;
-	dfs_hdl.iov_len = dfs_hdl.iov_buf_len;
-	rc = dfs_global2local(poh, coh, flags, dfs_hdl, &dfs);
+	dfs_iov.iov_buf = ptr;
+	dfs_iov.iov_len = dfs_iov.iov_buf_len;
+	rc = dfs_global2local(poh, coh, flags, dfs_iov, &dfs);
 	if (rc)
-		D_GOTO(out, rc);
+		D_GOTO(err, rc);
+
+	dfs->pool_hdl = pool_hdl;
+	dfs->cont_hdl = cont_hdl;
 	dfs->mounted = DFS_MOUNT_ALL;
 
 	*_dfs = dfs;
-out:
-	if (rc) {
-		int rc2;
 
-		if (daos_handle_is_valid(coh)) {
-			rc2 = daos_cont_close(coh, NULL);
-			if (rc2)
-				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
-		}
+	return rc;
 
-		if (daos_handle_is_valid(poh)) {
-			rc2 = daos_pool_disconnect(poh, NULL);
-			if (rc2)
-				D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
-		}
+err:
+	if (dfs) {
+		rc2 = dfs_umount(dfs);
+		if (rc2)
+			D_ERROR("dfs_umount() Failed %d\n", rc2);
 	}
+
+	if (cont_h_bump) {
+		dfs_hdl_release(cont_hdl);
+	} else if (daos_handle_is_valid(coh)) {
+		rc2 = daos_cont_close(coh, NULL);
+		if (rc2)
+			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+	}
+
+	if (pool_h_bump) {
+		dfs_hdl_release(pool_hdl);
+	} else if (daos_handle_is_valid(poh)) {
+		rc2 = daos_pool_disconnect(poh, NULL);
+		if (rc2)
+			D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+	}
+
 	return rc;
 }
 

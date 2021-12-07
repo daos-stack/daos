@@ -87,27 +87,59 @@ typedef struct {
 } dfs_obj_info_t;
 
 /**
+ * Initialize the DAOS and DFS library. Typically this is called at the beginning of a user program
+ * or in IO middleware initialization. This is required to be called if using the
+ * dfs_connect/disconnect calls to setup the DFS cache for the pool and container handles. There is
+ * no harm however in calling it whenever using any of the DFS API (mount/umount) and can be
+ * requivalent to calling daos_init() instead.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_init();
+
+/**
+ * Finalize the DAOS and DFS library. Typically this is called at the end of a user program or in IO
+ * middleware finalization. This is required to be called if dfs_init() was called and closes all
+ * cached open pool and container handles that resulted from dfs_connect() calls.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_finalize();
+
+/**
  * Mount a DFS namespace over the specified pool and container. The container can be optionally
- * created if it doesn't exist, and O_CREAT is passed in flags. The handle must be release using
+ * created if it doesn't exist, and O_CREAT is passed in flags. The handle must be released using
  * dfs_disconnect() and not dfs_mount(). Using the latter in this case will leak open handles for
  * the pool and container.
  *
+ * This function works only if dfs_init() is called, otherwise would return EACCES. In addition to
+ * setting up the pool and container handles for the user, this also utilizes an internal cache for
+ * keeping the pool and container handles open internally with a ref count and close those handles
+ * on dfs_finalize().
+ *
  * \param[in]	pool	Pool label.
+ * \param[in]	sys	DAOS system name to use for the pool connect.
+ *			Pass NULL to use the default system.
  * \param[in]	cont	Container label.
- * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR, O_CREAT)
- * \param[in]	attr	Optional set of properties and attributes to set on the container.
- *			Pass NULL to use default.
- * \param[out]	dfs	Pointer to the DFS mount.
+ * \param[in]	flags	Mount flags (O_RDONLY or O_RDWR, O_CREAT). O_CREAT attempts to create the
+ *			DFS container if it doesn't exists.
+ * \param[in]	attr	Optional set of properties and attributes to set on the container (if being
+ *			created). Pass NULL to use default.
+ * \param[out]	dfs	Pointer to the created DFS mount point.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_connect(const char *pool, const char *cont, int flags, dfs_attr_t *attr, dfs_t **dfs);
+dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_attr_t *attr,
+	    dfs_t **dfs);
 
 /**
- * Unmount the DFS namespace, close the container and disconnect from the pool.
+ * Umount the DFS namespace, and release the ref count on the container and pool handles. This
+ * should be called on a dfs mount created with dfs_connect() and not dfs_mount().
  *
- * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	dfs	Pointer to the mounted file system from dfs_connect().
  *
  * \return		0 on success, errno code on failure.
  */

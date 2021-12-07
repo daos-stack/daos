@@ -28,6 +28,13 @@ dfs_test_mount(void **state)
 	if (arg->myrank != 0)
 		return;
 
+	/** connect to DFS without calling dfs_init(), should fail. */
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, EACCES);
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
 	/** create & open a non-posix container */
 	rc = daos_cont_create_with_label(arg->pool.poh, "non-posix-cont", NULL, &cuuid, NULL);
 	assert_rc_equal(rc, 0);
@@ -39,7 +46,7 @@ dfs_test_mount(void **state)
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, EINVAL);
 	/** try to connect DFS, should fail. */
-	rc = dfs_connect(arg->pool.pool_str, "non-posix-cont", O_RDWR, NULL, &dfs);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "non-posix-cont", O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, EINVAL);
 	/** close and destroy non posix container */
 	rc = daos_cont_close(coh, NULL);
@@ -49,7 +56,7 @@ dfs_test_mount(void **state)
 	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 
 	/** Connect to non existing container - should succeed as container will be created  */
-	rc = dfs_connect(arg->pool.pool_str, "cont0", O_CREAT | O_RDWR, NULL, &dfs);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, 0);
 	rc = dfs_disconnect(dfs);
 	assert_int_equal(rc, 0);
@@ -62,19 +69,16 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	/** destroy the container */
-	rc = daos_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
-	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with an invalid label */
 	rc = dfs_cont_create_with_label(arg->pool.poh, "invalid:-/label", NULL, &cuuid, NULL, NULL);
 	assert_int_equal(rc, EINVAL);
 
-	/** create a DFS container with a valid label */
-	rc = dfs_cont_create_with_label(arg->pool.poh, "label1", NULL, &cuuid, NULL, NULL);
+	/** create a DFS container with a valid label and set uuid */
+	rc = dfs_cont_create_with_label(arg->pool.poh, "cont1", NULL, &cuuid, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** open with label */
-	rc = daos_cont_open(arg->pool.poh, "label1", DAOS_COO_RW, &coh, NULL, NULL);
+	rc = daos_cont_open(arg->pool.poh, "cont1", DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	/** mount */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
@@ -88,7 +92,7 @@ dfs_test_mount(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** Connect and disconnect to DFS container */
-	rc = dfs_connect(arg->pool.pool_str, "label1", O_RDWR, NULL, &dfs);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont1", O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, 0);
 	/** try to umount instead of disconnect - should fail */
 	rc = dfs_umount(dfs);
@@ -96,8 +100,13 @@ dfs_test_mount(void **state)
 	rc = dfs_disconnect(dfs);
 	assert_int_equal(rc, 0);
 
-	/** destroy with uuid */
+	rc = dfs_finalize();
+	assert_int_equal(rc, 0);
+
+	/** destroy the containers */
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 0, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with a valid label, no uuid out */
@@ -114,14 +123,13 @@ dfs_test_mount(void **state)
 	uuid_unparse(cuuid, str);
 	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_rc_equal(rc, 0);
-
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 }
@@ -1083,8 +1091,11 @@ dfs_test_handles(void **state)
 	if (arg->myrank != 0)
 		return;
 
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
 	/** create and connect to DFS container */
-	rc = dfs_connect(arg->pool.pool_str, "cont0", O_CREAT | O_RDWR, NULL, &dfs_l);
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs_l);
 	assert_int_equal(rc, 0);
 
 	/** create a file with "local" handle */
@@ -1115,6 +1126,8 @@ dfs_test_handles(void **state)
 	assert_int_equal(rc, 0);
 	rc = dfs_disconnect(dfs_g);
 	assert_int_equal(rc, 0);
+	rc = dfs_finalize();
+	assert_int_equal(rc, 0);
 	D_FREE(ghdl.iov_buf);
 }
 
@@ -1128,7 +1141,8 @@ dfs_test_connect_thread(void *arg)
 	pthread_barrier_wait(targ->barrier);
 	printf("Thread %d connecting to pool %s cont %s\n", targ->thread_idx, targ->pool,
 	       targ->name);
-	rc = dfs_connect(targ->pool, targ->name, O_CREAT | O_RDWR, NULL, &dfs);
+	dfs_init();
+	rc = dfs_connect(targ->pool, NULL, targ->name, O_CREAT | O_RDWR, NULL, &dfs);
 	dfs_test_rc[targ->thread_idx] = rc;
 	if (rc) {
 		printf("Thread %d failed to connect %d\n", targ->thread_idx, rc);
@@ -1141,6 +1155,7 @@ dfs_test_connect_thread(void *arg)
 		printf("Thread %d failed to disconnect %d\n", targ->thread_idx, rc);
 		pthread_exit(NULL);
 	}
+	dfs_finalize();
 	pthread_exit(NULL);
 }
 

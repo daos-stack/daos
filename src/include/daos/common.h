@@ -650,6 +650,11 @@ daos_fail_init(void);
 void
 daos_fail_fini(void);
 
+int
+daos_init_locked(void);
+int
+daos_fini_locked(void);
+
 /**
  * DAOS FAIL Mask
  *
