@@ -141,7 +141,7 @@ function start
 		fatal "DAOS virtual cluster containers could no be started"
 	fi
 
-	info "Formating DAOS storage"
+	info "Formatting DAOS storage"
 	if ! run docker exec daos-admin dmg storage format --host-list=daos-server ; then
 		fatal "DAOS storage could not be formated"
 	fi
@@ -226,5 +226,5 @@ case "$CMD" in
 	start) start "$DAOS_IFACE_IP" "$DAOS_POOL_SIZE" ;;
 	stop) stop ;;
 	state) state ;;
-	*) fatal "Unsuported command $CMD: try with start, stop or state" ;;
+	*) fatal "Unsupported command $CMD: try with start, stop or state" ;;
 esac

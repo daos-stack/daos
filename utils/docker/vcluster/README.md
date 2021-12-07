@@ -15,7 +15,7 @@ At this time only emulated hardware storage are supported by this Docker platfor
 
 !!! warning
     Virtual Docker network such as [bridge](https://docs.docker.com/network/bridge/) are not yet
-    well supported by DAOS.  Thus, one physical network interface of the host should be choosen for
+    well supported by DAOS.  Thus, one physical network interface of the host should be chosen for
     being used by the containers through the Docker
     [host](https://docs.docker.com/network/host/) network.
 
@@ -24,7 +24,7 @@ At this time only emulated hardware storage are supported by this Docker platfor
 
 To build and deploy the Docker images, `docker` and optionally `docker-compose` shall be available.
 The docker host should have access to the [Docker Hub](https://hub.docker.com/) and
-[CentOS](https://www.centos.org/) offical repositories.  Finally,
+[CentOS](https://www.centos.org/) official repositories.  Finally,
 [hugepages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt) linux kernel feature shall
 be enabled on the docker host.
 
@@ -63,15 +63,15 @@ This Docker file accept the following arguments:
 - `RHEL_BASE_VERSION`: Version of the base docker image to use (default 8)
 - `BUST_CACHE`: Manage docker building cache (default undefined).  To invalidate the cache, a random
 	value such as the date of the day shall be given.
-- `DAOS_AUTH`: Enable DAOS authentification when set to "yes" (default "no")
+- `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "no")
 - `DAOS_REPOS`: Space separated list of repos needed to install DAOS (default
 	"https://packages.daos.io/v2.0")
 - `DAOS_GPG_KEYS`: Space separated list of GPG keys associated with DAOS repos (default
 	"https://packages.daos.io/RPM-GPG-KEY")
-- `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentification
+- `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentication
 	(default "")
 
-For example, building a DAOS base image with authentification enabled could be done with the
+For example, building a DAOS base image with authentication enabled could be done with the
 following command:
 
 ```bash
@@ -96,7 +96,7 @@ The Docker file of the `daos-server` image accept the following arguments:
 
 - `DAOS_BASE_IMAGE`: Base docker image to use (default daos-base)
 - `DAOS_BASE_VERSION`: Version of the base docker image to use (default centos8)
-- `DAOS_AUTH`: Enable DAOS authentification when set to "yes" (default "no")
+- `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "no")
 - `DAOS_HUGEPAGES_NBR`: Number of huge pages to allocate for SPDK (default 4096)
 - `DAOS_IFACE_NAME`: Fabric network interface used by the DAOS engine (default "eth0")
 - `DAOS_SCM_SIZE`: Size in GB of the RAM emulating SCM devices (default 4)
@@ -106,7 +106,7 @@ The Dockerfile of the `daos-client` and `daos-admin` images accept the following
 
 - `DAOS_BASE_IMAGE`: Base docker image to use (default daos-base)
 - `DAOS_BASE_VERSION`: Version of the base docker image to use (default centos8)
-- `DAOS_AUTH`: Enable DAOS authentification when set to "yes" (default "no")
+- `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "no")
 - `DAOS_ADMIN_USER`: Name or uid of the daos administrattor user (default "root")
 - `DAOS_ADMIN_GROUP`: Name or gid of the daos administrattor group (default "root")
 
@@ -122,7 +122,7 @@ The same arguments are accepted but they have to be defined in the Docker Compos
 `utils/docker/vcluster/.env`.
 
 !!! warning
-    For working properly, the DAOS authentification have to be enabled in all the images (i.e. nodes
+    For working properly, the DAOS authentication have to be enabled in all the images (i.e. nodes
     images and base image).
 
 ## Running DAOS Nodes Container
