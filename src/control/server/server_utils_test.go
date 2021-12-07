@@ -103,6 +103,8 @@ func TestServer_checkFabricInterface(t *testing.T) {
 }
 
 func TestServer_getSrxSetting(t *testing.T) {
+	defCfg := config.DefaultServer()
+
 	for name, tc := range map[string]struct {
 		cfg        *config.Server
 		expSetting int32
@@ -112,12 +114,12 @@ func TestServer_getSrxSetting(t *testing.T) {
 			cfg:        config.DefaultServer(),
 			expSetting: -1,
 		},
-		"not set": {
+		"not set defaults to cfg value": {
 			cfg: config.DefaultServer().WithEngines(
 				engine.NewConfig(),
 				engine.NewConfig(),
 			),
-			expSetting: -1,
+			expSetting: int32(common.BoolAsInt(!defCfg.Fabric.DisableSRX)),
 		},
 		"set to 0 in both (single)": {
 			cfg: config.DefaultServer().WithEngines(
@@ -193,7 +195,7 @@ func TestServer_getSrxSetting(t *testing.T) {
 			cfg: config.DefaultServer().WithEngines(
 				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=on"),
 			),
-			expSetting: -1,
+			expErr: errors.New("on"),
 		},
 		"set in env_pass_through": {
 			cfg: config.DefaultServer().WithEngines(
