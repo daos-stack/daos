@@ -2,6 +2,8 @@
 
 REPOS_DIR=/etc/dnf/repos.d
 DISTRO_NAME=leap15
+# shellcheck disable=SC2034
+DISTRO_GENERIC=sl
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 
 bootstrap_dnf() {
@@ -10,10 +12,8 @@ bootstrap_dnf() {
 }
 
 group_repo_post() {
-    if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
-        rpm --import \
-            "${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"
-    fi
+    # Nothing to do for SL
+    :
 }
 
 distro_custom() {
@@ -49,12 +49,15 @@ post_provision_config_nodes() {
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
-    time dnf repolist
-    # the group repo is always on the test image
-    #add_group_repo
-    # in fact is's on the Leap image twice so remove one
-    rm -f $REPOS_DIR/daos-stack-ext-opensuse-15-stable-group.repo
-    add_local_repo
+    # shellcheck disable=SC2154
+    if ! update_repos "$DISTRO_NAME"; then
+        # need to use the image supplied repos
+        # shellcheck disable=SC2034
+        repo_servers=()
+    fi
+
+    time dnf -y repolist
+
     time dnf repolist
 
     if [ -n "$INST_REPOS" ]; then
@@ -71,7 +74,7 @@ post_provision_config_nodes() {
                 fi
             fi
             local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
-            dnf config-manager --add-repo="${repo_url}"
+            dnf -y config-manager --add-repo="${repo_url}"
             disable_gpg_check "$repo_url"
         done
     fi
@@ -81,21 +84,39 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
+    if [ -n "${LSB_RELEASE:-}" ]; then
+        if ! rpm -q "$LSB_RELEASE"; then
+            RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+        fi
+    fi
 
-    # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ] && ! retry_cmd 360 dnf -y install $INST_RPMS; then
-        rc=${PIPESTATUS[0]}
-        dump_repos
-        exit "$rc"
+    # shellcheck disable=SC2001
+    if ! rpm -q "$(echo "$INST_RPMS" |
+                   sed -e 's/--exclude [^ ]*//'                 \
+                       -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then
+        # shellcheck disable=SC2086
+        if [ -n "$INST_RPMS" ]; then
+            # shellcheck disable=SC2154
+            if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
+                rc=${PIPESTATUS[0]}
+                dump_repos
+                exit "$rc"
+            fi
+        fi
     fi
 
     distro_custom
 
+    lsb_release -a
+
     # now make sure everything is fully up-to-date
-    if ! retry_cmd 600 dnf -y upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    # shellcheck disable=SC2154
+    if ! RETRY_COUNT=4 retry_dnf 600 upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
     fi
+
+    lsb_release -a
 
     if [ -f /etc/do-release ]; then
         cat /etc/do-release
