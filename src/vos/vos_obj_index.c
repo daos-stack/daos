@@ -68,7 +68,7 @@ oi_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	     d_iov_t *val_iov, struct btr_record *rec)
+	     d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_obj_df	*obj;
@@ -155,7 +155,7 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  d_iov_t *key, d_iov_t *val)
+		  d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	D_ASSERTF(0, "Should never been called\n");
 	return 0;
@@ -246,7 +246,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
-			   &key_iov, &val_iov);
+			   &key_iov, &val_iov, NULL);
 	if (rc) {
 		D_ERROR("Failed to update Key for Object index\n");
 		return rc;
