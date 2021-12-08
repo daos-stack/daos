@@ -54,7 +54,8 @@ class BuildDaos(DfuseTestBase):
                 'scons-3 -C {} --jobs 50 build --build-deps=yes'.format(build_dir)]
         for cmd in cmds:
             try:
-                ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=3600)
+                # Set a timeout of 90 minutes, the whole test will timeout after 120.
+                ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=5400)
                 if 0 in ret_code:
                     continue
                 print(ret_code)

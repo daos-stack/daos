@@ -3,7 +3,8 @@ hosts:
     - server-A
   test_clients:
     - client-C
-timeout: 3600
+# Test typically takes around an hour, set a timeout for two.
+timeout: 7200
 server_config:
   name: daos_server
 pool:
