@@ -3677,9 +3677,6 @@ def run(wf, args):
 
                 wf_client = WarningsFactory('nlt-client-leaks.json')
 
-                # dfuse startup, uses custom fault to force exit if no other faults injected.
-                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
-
                 # list-container test.
                 fatal_errors.add_result(test_alloc_fail(server, conf))
 
