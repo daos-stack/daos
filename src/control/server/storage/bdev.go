@@ -63,14 +63,14 @@ func (bs BioState) String() string {
 	switch {
 	case bs&C.NVME_DEV_FL_PLUGGED == 0:
 		return "UNPLUGGED"
-	case bs&C.NVME_DEV_FL_INUSE == 0:
-		return "NEW"
-	case bs&C.NVME_DEV_FL_FAULTY != 0:
-		return "EVICTED"
 	case bs&C.NVME_DEV_FL_IDENTIFY != 0:
 		return "IDENTIFY"
-	default:
+	case bs&C.NVME_DEV_FL_FAULTY != 0:
+		return "EVICTED"
+	case bs&C.NVME_DEV_FL_INUSE != 0:
 		return "NORMAL"
+	default:
+		return "NEW"
 	}
 }
 
