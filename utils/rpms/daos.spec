@@ -15,9 +15,6 @@
 
 Name:          daos
 Version:       2.1.100
-
-Release:       9%{?relval}%{?dist}
-
 Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -285,14 +282,14 @@ Requires: hdf5
 This is the package needed to use the DAOS serialization and deserialization
 tools, as well as the preserve option for the filesystem copy tool.
 
-%package mofed_shim
+%package mofed-shim
 Summary: A shim to bridge MOFED's openmpi to distribution dependency tags
 Provides: libmpi.so.40()(64bit)(openmpi-x86_64)
 Requires: libmpi.so.40()(64bit)
 Provides: libmpi_cxx.so.40()(64bit)(openmpi-x86_64)
 Provides: libmpi_cxx.so.40()(64bit)
 
-%description mofed_shim
+%description mofed-shim
 This is the package that bridges the difference between the MOFED openmpi
 "Provides" and distribution-openmpi consumers "Requires".
 
@@ -537,11 +534,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 # No files in a meta-package
 
-%files mofed_shim
+%files mofed-shim
 # No files in a shim package
 
 %changelog
-* Thu Dec 08 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-13
+* Wed Dec 08 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-13
 - Create a shim package to allow daos openmpi packages built with the
   distribution openmpi to install on MOFED systems
 

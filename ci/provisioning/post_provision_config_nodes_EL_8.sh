@@ -110,11 +110,9 @@ post_provision_config_nodes() {
 
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ]; then
-        if ! RETRY_COUNT=1 retry_cmd 360 dnf -y install $INST_RPMS; then
+        if ! retry_cmd 360 dnf -y install $INST_RPMS; then
             rc=${PIPESTATUS[0]}
             dump_repos
-            OPERATIONS_EMAIL=brian.murrell@intel.com send_mail "Cluster is ready" "Cluster node $HOSTNAME is waiting for you"
-            sleep 3600
             exit "$rc"
         fi
     fi
