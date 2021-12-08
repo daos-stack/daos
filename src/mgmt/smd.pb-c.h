@@ -171,9 +171,9 @@ struct  _Ctl__SmdDevResp__Device
    */
   char *tr_addr;
   /*
-   * BIO device state
+   * NVMe device state
    */
-  uint32_t bio_state;
+  uint32_t dev_state;
 };
 #define CTL__SMD_DEV_RESP__DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_dev_resp__device__descriptor) \
@@ -261,7 +261,7 @@ struct  _Ctl__DevStateResp
    */
   char *dev_uuid;
   /*
-   * BIO device state
+   * NVMe device state
    */
   uint32_t dev_state;
 };
@@ -303,7 +303,7 @@ struct  _Ctl__DevReplaceResp
    */
   char *new_dev_uuid;
   /*
-   * BIO device state
+   * NVMe device state
    */
   uint32_t dev_state;
 };
@@ -416,9 +416,9 @@ struct  _Ctl__SmdQueryResp__Device
    */
   Ctl__BioHealthResp *health;
   /*
-   * BIO device state
+   * NVMe device state
    */
-  uint32_t bio_state;
+  uint32_t dev_state;
 };
 #define CTL__SMD_QUERY_RESP__DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_resp__device__descriptor) \

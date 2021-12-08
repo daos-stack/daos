@@ -13,7 +13,6 @@ package storage
 import "C"
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -31,35 +30,36 @@ import (
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
 const BdevPciAddrSep = " "
 
-// BioState represents the health state of BIO device on an NVMe device (a blobstore on a NVMe
-// namespace).
-type BioState uint32
+// NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
+type NvmeDevState uint32
 
-// BioState constant definitions to represent expected bitset flag combinations.
+// NvmeDevState constant definitions to represent expected bitset flag combinations.
 const (
-	BioStateNew      BioState = C.NVME_DEV_FL_PLUGGED
-	BioStateNormal   BioState = C.NVME_DEV_FL_PLUGGED | C.NVME_DEV_FL_INUSE
-	BioStateFaulty   BioState = C.NVME_DEV_FL_PLUGGED | C.NVME_DEV_FL_INUSE | C.NVME_DEV_FL_FAULTY
-	BioStateIdentify BioState = C.NVME_DEV_FL_PLUGGED | C.NVME_DEV_FL_INUSE | C.NVME_DEV_FL_IDENTIFY
+	NvmeDevStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
+	NvmeDevStateNormal   NvmeDevState = NvmeDevStateNew | C.NVME_DEV_FL_INUSE
+	NvmeDevStateFaulty   NvmeDevState = NvmeDevStateNormal | C.NVME_DEV_FL_FAULTY
+	NvmeDevStateIdentify NvmeDevState = NvmeDevStateNormal | C.NVME_DEV_FL_IDENTIFY
 )
 
 // IsNew returns true if SSD is not in use by DAOS.
-func (bs BioState) IsNew() bool {
-	return bs&C.NVME_DEV_FL_INUSE == 0
+func (bs NvmeDevState) IsNew() bool {
+	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY == 0 &&
+		bs&C.NVME_DEV_FL_INUSE == 0)
 }
 
 // IsNormal returns true if SSD is in a normal, non-faulty state.
-func (bs BioState) IsNormal() bool {
-	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_INUSE != 0 &&
-		bs&C.NVME_DEV_FL_FAULTY == 0)
+func (bs NvmeDevState) IsNormal() bool {
+	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY == 0 &&
+		bs&C.NVME_DEV_FL_INUSE != 0)
 }
 
 // IsFaulty returns true if SSD is in a faulty state.
-func (bs BioState) IsFaulty() bool {
-	return bs&C.NVME_DEV_FL_FAULTY != 0
+func (bs NvmeDevState) IsFaulty() bool {
+	return bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY != 0
 }
 
-func (bs BioState) String() string {
+// StatusString summarizes the device status.
+func (bs NvmeDevState) StatusString() string {
 	switch {
 	case bs&C.NVME_DEV_FL_PLUGGED == 0:
 		return "UNPLUGGED"
@@ -74,15 +74,14 @@ func (bs BioState) String() string {
 	}
 }
 
-// States lists all flag values in bitset
-func (bs BioState) States() string {
+func (bs NvmeDevState) String() string {
 	return fmt.Sprintf("plugged: %v, in-use: %v, faulty: %v, identify: %v",
 		bs&C.NVME_DEV_FL_PLUGGED != 0, bs&C.NVME_DEV_FL_INUSE != 0,
 		bs&C.NVME_DEV_FL_FAULTY != 0, bs&C.NVME_DEV_FL_IDENTIFY != 0)
 }
 
 // Uint32 returns uint32 representation of BIO device state.
-func (bs BioState) Uint32() uint32 {
+func (bs NvmeDevState) Uint32() uint32 {
 	return uint32(bs)
 }
 
@@ -154,57 +153,14 @@ type NvmeNamespace struct {
 // SmdDevice contains DAOS storage device information, including
 // health details if requested.
 type SmdDevice struct {
-	UUID       string      `json:"uuid"`
-	TargetIDs  []int32     `hash:"set" json:"tgt_ids"`
-	State      BioState    `json:"-"`
-	Rank       system.Rank `json:"rank"`
-	TotalBytes uint64      `json:"total_bytes"`
-	AvailBytes uint64      `json:"avail_bytes"`
-	Health     *NvmeHealth `json:"health"`
-	TrAddr     string      `json:"tr_addr"`
-}
-
-// MarshalJSON marshals SmdDevice to JSON.
-func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
-	if sd == nil {
-		return nil, errors.New("tried to marshal nil SmdDevice")
-	}
-
-	// use a type alias to leverage the default marshal for
-	// most fields
-	type toJSON SmdDevice
-	return json.Marshal(&struct {
-		State uint32 `json:"bio_state"`
-		*toJSON
-	}{
-		State:  sd.State.Uint32(),
-		toJSON: (*toJSON)(sd),
-	})
-}
-
-// UnmarshalJSON unmarshals SmdDevice from JSON.
-func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		return nil
-	}
-
-	// use a type alias to leverage the default unmarshal for
-	// most fields
-	type fromJSON SmdDevice
-	from := &struct {
-		State uint32 `json:"bio_state"`
-		*fromJSON
-	}{
-		fromJSON: (*fromJSON)(sd),
-	}
-
-	if err := json.Unmarshal(data, from); err != nil {
-		return err
-	}
-
-	sd.State = BioState(from.State)
-
-	return nil
+	UUID       string       `json:"uuid"`
+	TargetIDs  []int32      `hash:"set" json:"tgt_ids"`
+	NvmeState  NvmeDevState `json:"dev_state"`
+	Rank       system.Rank  `json:"rank"`
+	TotalBytes uint64       `json:"total_bytes"`
+	AvailBytes uint64       `json:"avail_bytes"`
+	Health     *NvmeHealth  `json:"health"`
+	TrAddr     string       `json:"tr_addr"`
 }
 
 // NvmeController represents a NVMe device controller which includes health

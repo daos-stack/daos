@@ -98,7 +98,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 
 		for _, dev := range rResp.Devices {
 			/* Skip health query if the device is in "NEW" state */
-			if storage.BioState(dev.BioState).IsNew() {
+			if storage.NvmeDevState(dev.DevState).IsNew() {
 				continue
 			}
 			health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
@@ -106,7 +106,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 			})
 			if err != nil {
 				return errors.Wrapf(err, "device %s, states %q", dev,
-					storage.BioState(dev.BioState).States())
+					storage.NvmeDevState(dev.DevState).String())
 			}
 			dev.Health = health
 		}
@@ -187,7 +187,7 @@ func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQue
 			continue
 		case 1:
 			svc.log.Debugf("smdQueryDevice(): uuid %q, rank %d, states %q", req.Uuid,
-				rr.Rank, storage.BioState(rr.Devices[0].BioState).States())
+				rr.Rank, storage.NvmeDevState(rr.Devices[0].DevState).String())
 			rank = system.Rank(rr.Rank)
 
 			return rank, rr.Devices[0], nil
@@ -242,7 +242,7 @@ func (svc *ControlService) smdSetFaulty(ctx context.Context, req *ctlpb.SmdQuery
 				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
 						Uuid:     dsr.DevUuid,
-						BioState: dsr.DevState,
+						DevState: dsr.DevState,
 					},
 				},
 			},
@@ -295,7 +295,7 @@ func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryRe
 				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
 						Uuid:     drr.NewDevUuid,
-						BioState: drr.DevState,
+						DevState: drr.DevState,
 					},
 				},
 			},
@@ -346,7 +346,7 @@ func (svc *ControlService) smdIdentify(ctx context.Context, req *ctlpb.SmdQueryR
 				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
 						Uuid:     drr.DevUuid,
-						BioState: drr.LedState,
+						DevState: drr.LedState | storage.NvmeDevStateNew.Uint32(),
 					},
 				},
 			},
