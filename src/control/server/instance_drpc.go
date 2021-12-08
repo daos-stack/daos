@@ -72,7 +72,7 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 	}
 
 	rankMsg := ""
-	if sb := ei.getSuperblock(); sb != nil {
+	if sb := ei.getSuperblock(); sb != nil && sb.Rank != nil {
 		rankMsg = fmt.Sprintf(" (rank %s)", sb.Rank)
 	}
 
