@@ -2589,10 +2589,6 @@ def run_posix_tests(server, conf, test=None):
                                             label=function)
                 ptl.container_label = function
                 test_cb()
-                for fuse in server.fuse_procs:
-                    conf.wf.add_test_case('{} fuse leak'.format(ptl.test_name),
-                                          'Test leaked dfuse instance at {}'.format(fuse),
-                                          test_class='test',)
                 destroy_container(conf, pool.id(),
                                   ptl.container_label,
                                   valgrind=False,
@@ -2676,6 +2672,15 @@ def run_posix_tests(server, conf, test=None):
 
         for td in threads:
             td.join()
+
+    # Now check for running dfuse instances, there should be none at this point as all tests have
+    # completed.  It's not possible to do this check as each test finishes due to the fact that
+    # the tests are running in parallel.  We could revise this so there's a dfuse method on
+    # posix_tests class itself if required.
+    for fuse in server.fuse_procs:
+        conf.wf.add_test_case('fuse leak in tests',
+                              'Test leaked dfuse instance at {}'.format(fuse),
+                              test_class='test',)
 
     out_wrapper = None
     err_wrapper = None
