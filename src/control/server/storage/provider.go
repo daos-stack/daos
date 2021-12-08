@@ -7,6 +7,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
@@ -309,7 +309,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 
 // BdevWriteConfigRequestFromConfig returns a config write request from
 // a storage config.
-func BdevWriteConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWriteConfigRequest, error) {
+func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, eIdx int, cfg *Config) (BdevWriteConfigRequest, error) {
 	req := BdevWriteConfigRequest{
 		ConfigOutputPath: cfg.ConfigOutputPath,
 		OwnerUID:         os.Geteuid(),
@@ -329,15 +329,14 @@ func BdevWriteConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWrit
 	for idx, tier := range bdevTiers {
 		req.TierProps = append(req.TierProps, BdevTierPropertiesFromConfig(tier))
 
+		if !req.HotplugEnabled || idx != 0 {
+			continue
+		}
+
 		// Populate hotplug bus-ID range limits from the first bdev tier
 		// to limit hotplug activity of a specific engine to a ssd device set.
-		if req.HotplugEnabled && idx == 0 {
-			begin, end, err := common.GetRangeLimits(tier.Bdev.BusidRange)
-			if err != nil {
-				return req, errors.Wrap(err, "parse busid range limits")
-			}
-			req.HotplugBusidBegin = begin
-			req.HotplugBusidEnd = end
+		if err := req.setHotplugBusidRange(ctx, log, tier.Bdev.BusidRange, eIdx); err != nil {
+			return req, err
 		}
 	}
 
@@ -346,8 +345,8 @@ func BdevWriteConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWrit
 
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
-func (p *Provider) WriteNvmeConfig() error {
-	req, err := BdevWriteConfigRequestFromConfig(p.log, p.engineStorage)
+func (p *Provider) WriteNvmeConfig(ctx context.Context) error {
+	req, err := BdevWriteConfigRequestFromConfig(ctx, p.log, p.engineIndex, p.engineStorage)
 	if err != nil {
 		return err
 	}

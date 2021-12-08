@@ -231,7 +231,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		if cResults.HasErrors() {
 			instanceErrored[ei.Index()] = true
 		} else {
-			err = ei.StorageWriteNvmeConfig()
+			err = ei.StorageWriteNvmeConfig(ctx)
 		}
 		resp.Crets = append(resp.Crets, cResults...)
 	}

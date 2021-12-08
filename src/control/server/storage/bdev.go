@@ -13,6 +13,7 @@ package storage
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/system"
@@ -412,6 +414,36 @@ type (
 		Results []NVMeDeviceFirmwareUpdateResult
 	}
 )
+
+// setHotplugBusidRange sets range parameters in the input request either to user configured
+// values if provided in the server config file, or automatically derive them by querying
+// hardware configuration.
+func (req *BdevWriteConfigRequest) setHotplugBusidRange(ctx context.Context, log logging.Logger, inRange string, engineIdx int) error {
+	if inRange != "" {
+		log.Debugf("setting user-specified hotplug bus-id range %q", inRange)
+
+		begin, end, err := common.GetRangeLimits(inRange)
+		if err != nil {
+			return errors.Wrap(err, "parse busid range limits")
+		}
+		req.HotplugBusidBegin = begin
+		req.HotplugBusidEnd = end
+
+		return nil
+	}
+
+	provider := hwloc.NewProvider(log)
+
+	topo, err := provider.GetTopology(ctx)
+	if err != nil {
+		return err
+	}
+
+	//calcPCIBusidRange(engineIdxif err != nil {}
+	log.Debugf("Discover topology: %+v", topo)
+
+	return nil
+}
 
 type BdevForwarder struct {
 	BdevAdminForwarder

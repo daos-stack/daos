@@ -318,6 +318,6 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 	return nil
 }
 
-func (mi *MockInstance) StorageWriteNvmeConfig() error {
+func (mi *MockInstance) StorageWriteNvmeConfig(context.Context) error {
 	return nil
 }

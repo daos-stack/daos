@@ -85,8 +85,8 @@ func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
 	return
 }
 
-func (ei *EngineInstance) bdevWriteNvmeConfig() error {
-	return ei.storage.WriteNvmeConfig()
+func (ei *EngineInstance) bdevWriteNvmeConfig(ctx context.Context) error {
+	return ei.storage.WriteNvmeConfig(ctx)
 }
 
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
@@ -155,7 +155,7 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 
 // StorageWriteNvmeConfig writes output NVMe config file used to allocate devices to be used by an
 // engine process.
-func (ei *EngineInstance) StorageWriteNvmeConfig() error {
+func (ei *EngineInstance) StorageWriteNvmeConfig(ctx context.Context) error {
 	ei.log.Infof("Writing nvme config file for %s instance %d", build.DataPlaneName, ei.Index())
-	return ei.bdevWriteNvmeConfig()
+	return ei.bdevWriteNvmeConfig(ctx)
 }
