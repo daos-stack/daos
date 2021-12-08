@@ -187,8 +187,8 @@ As with the docker command, the system shall be formatted, pools created, etc..
 
 ### Managing Virtual Docker cluster with daos-cm.sh
 
-From a local tree, the bash script `utils/docker/daos-cm.sh` could be used to start the containers
-and setup a simple DAOS system composed of the following elements:
+From a local tree, the bash script `utils/docker/vcluster/daos-cm.sh` could be used to start the
+containers and setup a simple DAOS system composed of the following elements:
 
 - 1 DAOS pool of 10GB (i.e. size of the pool is configurable)
 - 1 DAOS POSIX container mounted on /mnt/daos-posix-fs
@@ -198,5 +198,5 @@ This script could also be used to respectively stop and monitor the containers.
 More details on the usage of `daos-cm.sh` command could be found with running the following command:
 
 ```bash
-$ bash utils/docker/daos-cm.sh --help
+$ bash utils/docker/vcluster/daos-cm.sh --help
 ```
