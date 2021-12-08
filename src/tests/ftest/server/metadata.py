@@ -401,9 +401,6 @@ class ObjectMetadata(TestWithServers):
 
             # Restart the agents and servers after the write / before the read
             if operation == "write":
-                # Disconnect from the pool
-                self.pool.disconnect()
-
                 # Stop the agents
                 errors = self.stop_agents()
                 self.assertEqual(
