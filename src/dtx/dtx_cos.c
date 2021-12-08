@@ -96,7 +96,7 @@ dtx_cos_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 static int
 dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		  d_iov_t *val_iov, struct btr_record *rec)
+		  d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct ds_cont_child		*cont = tins->ti_priv;
 	struct dtx_cos_key		*key;
@@ -214,7 +214,7 @@ dtx_cos_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		   d_iov_t *key, d_iov_t *val)
+		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct ds_cont_child		*cont = tins->ti_priv;
 	struct dtx_cos_rec_bundle	*rbund;
@@ -396,7 +396,7 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	d_iov_set(&riov, &rbund, sizeof(rbund));
 
 	rc = dbtree_upsert(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov);
+			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Insert DTX "DF_DTI" to CoS "
 		 "cache, "DF_UOID", key %lu, flags %x: rc = "DF_RC"\n",

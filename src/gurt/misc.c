@@ -13,6 +13,24 @@
 #include <math.h>
 #include <gurt/common.h>
 
+/* state buffer for DAOS rand and srand calls, NOT thread safe */
+static struct drand48_data randBuffer = {0};
+
+void
+d_srand(long int seedval)
+{
+	srand48_r(seedval, &randBuffer);
+}
+
+long int
+d_rand()
+{
+	long int result;
+
+	lrand48_r(&randBuffer, &result);
+	return result;
+}
+
 void
 d_free(void *ptr)
 {
@@ -836,7 +854,7 @@ d_backoff_seq_next(struct d_backoff_seq *seq)
 	}
 
 	/* Return a random backoff in [0, next]. */
-	return (next * ((double)rand() / RAND_MAX));
+	return (next * ((double)d_rand() / D_RAND_MAX));
 }
 
 double

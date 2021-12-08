@@ -1725,6 +1725,10 @@ dtx_leader_exec_ops_ult(void *arg)
 			sub->dss_result = rc;
 			break;
 		}
+
+		/* Yield to avoid holding CPU for too long time. */
+		if (i >= DTX_RPC_YIELD_THD)
+			ABT_thread_yield();
 	}
 
 	if (rc != 0) {
