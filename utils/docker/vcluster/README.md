@@ -99,7 +99,7 @@ The Docker file of the `daos-server` image accept the following arguments:
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "no")
 - `DAOS_HUGEPAGES_NBR`: Number of huge pages to allocate for SPDK (default 4096)
 - `DAOS_SCM_SIZE`: Size in GB of the RAM emulating SCM devices (default 4)
-- `DAOS_BDEV_SIZE`: Size in GB of the file created to emulate NVMe devices (derault 16)
+- `DAOS_BDEV_SIZE`: Size in GB of the file created to emulate NVMe devices (default 16)
 - `DAOS_IFACE_NAME`: Fabric network interface used by the DAOS engine (default "eth0")
 
 !!!note
