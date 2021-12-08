@@ -51,12 +51,6 @@ $ docker build --tag daos-base:centos8 \
 	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
 ```
 
-or from a local tree with the following command:
-
-```bash
-$ docker build --tag daos-base:centos8 utils/docker/vcluster/daos-base/el8
-```
-
 This Docker file accept the following arguments:
 
 - `RHEL_BASE_IMAGE`: Base docker image to use (default centos)
@@ -79,6 +73,12 @@ $ docker build --tag daos-base:centos8 --build-arg DAOS_AUTH=yes \
 	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
 ```
 
+It is also possible to build the `daos-base` image from a local tree with the following command:
+
+```bash
+$ docker build --tag daos-base:centos8 utils/docker/vcluster/daos-base/el8
+```
+
 ### Building DAOS Nodes Images
 
 The three images `daos-server`, `daos-admin` and `daos-client` could be built directly from GitHub
@@ -98,9 +98,13 @@ The Docker file of the `daos-server` image accept the following arguments:
 - `DAOS_BASE_VERSION`: Version of the base docker image to use (default centos8)
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "no")
 - `DAOS_HUGEPAGES_NBR`: Number of huge pages to allocate for SPDK (default 4096)
-- `DAOS_IFACE_NAME`: Fabric network interface used by the DAOS engine (default "eth0")
 - `DAOS_SCM_SIZE`: Size in GB of the RAM emulating SCM devices (default 4)
 - `DAOS_BDEV_SIZE`: Size in GB of the file created to emulate NVMe devices (derault 16)
+- `DAOS_IFACE_NAME`: Fabric network interface used by the DAOS engine (default "eth0")
+
+!!!note
+   The IP address of the networkf interface referenced by the `DAOS_IFACE_NAME` argument will be
+   required when starting DAOS.
 
 The Dockerfile of the `daos-client` and `daos-admin` images accept the following arguments:
 
