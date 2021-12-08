@@ -198,5 +198,5 @@ This script could also be used to respectively stop and monitor the containers.
 More details on the usage of `daos-cm.sh` command could be found with running the following command:
 
 ```bash
-$ bash utils/docker/vcluster/daos-cm.sh --help
+$ utils/docker/vcluster/daos-cm.sh --help
 ```
