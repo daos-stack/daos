@@ -138,7 +138,7 @@ class ThreadManager():
             results (list): a list of ThreadResults from self.run()
 
         Returns:
-            bool: True if all threads passed; false otherwise.
+            int: number of threads that failed
 
         """
         failed = []
@@ -152,13 +152,13 @@ class ThreadManager():
             self.log.info("Results from threads that failed:")
             for result in failed:
                 self.log.info(str(result))
-        return len(failed) > 0
+        return len(failed)
 
     def check_run(self):
         """Run the threads and check thr result.
 
         Returns:
-            bool: True if all threads passed; false otherwise.
+            int: number of threads that failed
 
         """
         return self.check(self.run())
