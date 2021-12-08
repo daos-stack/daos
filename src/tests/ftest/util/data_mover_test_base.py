@@ -88,6 +88,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
 
+        self.preserve_props_path = None
+
         # List of local test paths to create and remove
         self.posix_local_test_paths = []
 
@@ -175,7 +177,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # cleanup shared paths (only runs on one node in job)
         if self.posix_shared_test_paths:
-            command = "rm -rf {}".format(self._get_posix_test_path_string(path=self.posix_shared_test_paths))
+            shared_path_strs = self._get_posix_test_path_string(path=self.posix_shared_test_paths)
+            command = "rm -rf {}".format(shared_path_strs)
             try:
 	        # only call rm on one client since this is cleaning up shared dir
                 self._execute_command(command, hosts=self.hostlist_clients[0:1])
@@ -216,7 +219,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of quoted posix test path strings
 
         """
-        if path_list == None:
+        if path_list is None:
             path_list = self.posix_local_test_paths
 
         return ["'{}'".format(item) for item in path_list]
@@ -836,6 +839,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # First, initialize a new fs copy command
         self.fs_copy_cmd = FsCopy(self.daos_cmd, self.log)
+
+        # set preserve-props path if it was used in test case
+        if self.preserve_props_path:
+            self.fs_copy_cmd.set_fs_copy_params(preserve_props=self.preserve_props_path)
 
         # Set the source params
         if src_type == "POSIX":
