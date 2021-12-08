@@ -139,18 +139,14 @@ sc_add_pool_metrics(struct scrub_ctx *ctx)
 }
 
 static int
-get_crt_group_rank(d_rank_t *rank)
-{
-	return crt_group_rank(NULL, rank);
-}
-
-static int
 drain_pool_target(uuid_t pool_uuid, d_rank_t rank, uint32_t target)
 {
 	d_rank_list_t			 out_ranks = {0};
 	struct pool_target_addr_list	 target_list = {0};
 	struct pool_target_addr		 addr = {0};
 	int rc;
+
+	D_ERROR("Draining target. rank: %d, target: %d", rank, target);
 
 	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_UP, &out_ranks);
 	if (rc != DER_SUCCESS) {
@@ -194,15 +190,21 @@ drain_pool_tgt_ult(void *arg)
 }
 
 static int
-drain_pool_tgt_cb(struct ds_pool *pool, d_rank_t rank, uint32_t target_id)
+drain_pool_tgt_cb(struct ds_pool *pool)
 {
-	int			rc;
-	ABT_thread		thread = ABT_THREAD_NULL;
-	struct drain_args	drain_args = {
+	int			 rc;
+	ABT_thread		 thread = ABT_THREAD_NULL;
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct drain_args	 drain_args = {
 		.ptd_pool = pool,
-		.ptd_rank = rank,
-		.ptd_target_id = target_id
+		.ptd_target_id = dmi->dmi_tgt_id
 	};
+
+	rc = crt_group_rank(NULL, &drain_args.ptd_rank);
+	if (rc != 0) {
+		D_ERROR("Unable to get rank: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 
 	/* Create a ULT to update in xstream 0. */
 	rc = dss_ult_create(drain_pool_tgt_ult, &drain_args, DSS_XS_SYS, 0, 0,
@@ -252,7 +254,6 @@ scrubbing_ult(void *arg)
 	ctx.sc_cont_is_stopping_fn = cont_is_stopping_cb;
 	ctx.sc_dmi =  dss_get_module_info();
 	ctx.sc_drain_pool_tgt_fn = drain_pool_tgt_cb;
-	ctx.sc_get_rank_fn = get_crt_group_rank;
 
 	sc_add_pool_metrics(&ctx);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {

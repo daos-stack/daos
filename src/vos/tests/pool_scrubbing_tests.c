@@ -360,17 +360,9 @@ sts_ctx_update(struct sts_context *ctx, int oid_lo, int iod_type,
 
 int fake_target_drain_call_count;
 static int
-fake_target_drain(struct ds_pool *pool, d_rank_t rank, uint32_t target_id)
+fake_target_drain(struct ds_pool *pool)
 {
 	fake_target_drain_call_count++;
-	return 0;
-}
-
-static int
-fake_get_rank(d_rank_t *rank)
-{
-	D_ASSERT(rank != NULL);
-	*rank = 1;
 	return 0;
 }
 
@@ -402,7 +394,6 @@ sts_ctx_do_scrub(struct sts_context *ctx)
 	ctx->tsc_scrub_ctx.sc_sched_arg = ctx->tsc_sched_arg;
 	ctx->tsc_scrub_ctx.sc_cont_lookup_fn = ctx->tsc_get_cont_fn;
 	ctx->tsc_scrub_ctx.sc_drain_pool_tgt_fn = fake_target_drain;
-	ctx->tsc_scrub_ctx.sc_get_rank_fn = fake_get_rank;
 	ctx->tsc_scrub_ctx.sc_pool = &ctx->tsc_pool;
 	ctx->tsc_scrub_ctx.sc_dmi = &ctx->tsc_dmi;
 

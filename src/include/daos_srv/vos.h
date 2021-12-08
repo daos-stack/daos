@@ -1191,9 +1191,7 @@ typedef bool(*sc_cont_is_stopping_fn_t)(void *cont);
 
 typedef int (*sc_sleep_fn_t)(void *, uint32_t msec);
 typedef int (*sc_yield_fn_t)(void *);
-typedef int (*ds_pool_tgt_drain)(struct ds_pool *pool, d_rank_t rank,
-				 uint32_t target_id);
-typedef int (*ds_get_rank)(d_rank_t *rank);
+typedef int (*ds_pool_tgt_drain)(struct ds_pool *pool);
 
 
 enum scrub_status {
@@ -1245,7 +1243,6 @@ struct scrub_ctx {
 	struct scrub_ctx_metrics sc_metrics;
 
 	struct dss_module_info	*sc_dmi;
-	ds_get_rank		 sc_get_rank_fn;
 
 	/**
 	 * Pool

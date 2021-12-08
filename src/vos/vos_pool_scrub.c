@@ -366,22 +366,9 @@ sc_mark_corrupt(struct scrub_ctx *ctx)
 static int
 sc_pool_drain(struct scrub_ctx *ctx)
 {
-	d_rank_t			rank;
-	int				rc;
-
-	D_ASSERT(ctx->sc_get_rank_fn);
 	D_ASSERT(ctx->sc_drain_pool_tgt_fn);
 
-	rc = ctx->sc_get_rank_fn(&rank);
-	if (rc != 0) {
-		D_ERROR("Unable to get rank: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-	D_ERROR("Draining target. rank: %d, target: %d", rank,
-	       ctx->sc_dmi->dmi_tgt_id);
-
-	return ctx->sc_drain_pool_tgt_fn(ctx->sc_pool, rank,
-					 ctx->sc_dmi->dmi_tgt_id);
+	return ctx->sc_drain_pool_tgt_fn(ctx->sc_pool);
 }
 
 static bool
