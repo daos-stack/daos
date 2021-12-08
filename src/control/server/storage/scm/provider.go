@@ -32,9 +32,10 @@ const (
 
 	parseFsUnformatted = "data"
 
-	fsTypeNone  = "none"
-	fsTypeExt4  = "ext4"
-	fsTypeTmpfs = "tmpfs"
+	fsTypeNone    = "none"
+	fsTypeExt4    = "ext4"
+	fsTypeTmpfs   = "tmpfs"
+	fsTypeUnknown = "unknown"
 
 	dcpmFsType    = fsTypeExt4
 	dcpmMountOpts = "dax,nodelalloc"
@@ -252,7 +253,7 @@ func parseFsType(input string) (string, error) {
 		return fields[4], nil
 	}
 
-	return fsTypeNone, errors.Errorf("unable to determine fs type from %q", input)
+	return fsTypeUnknown, nil
 }
 
 // DefaultProvider returns an initialized *Provider suitable for use with production code.
@@ -472,6 +473,8 @@ func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormat
 		res.Mountable = true
 	case fsTypeNone:
 		res.Formatted = false
+	case fsTypeUnknown:
+		res.Mountable = false
 	}
 
 	return res, nil
