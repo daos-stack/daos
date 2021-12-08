@@ -288,7 +288,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		uuid_unparse_lower(dev_info->bdi_dev_id,
 				   resp->devices[i]->uuid);
 
-		resp->devices[i]->bio_state = dev_info->bdi_flags;
+		resp->devices[i]->dev_state = dev_info->bdi_flags;
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
