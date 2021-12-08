@@ -15,9 +15,10 @@ from mdtest_utils import MdtestCommand
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import FsCopy
 from dfuse_utils import Dfuse
-from job_manager_utils import Srun
+from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
-    run_command, DaosTestError, pcmd, get_random_bytes, run_pcmd
+    run_command, DaosTestError, pcmd, get_random_bytes, \
+    run_pcmd, get_clush_command
 import slurm_utils
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
@@ -275,15 +276,17 @@ def run_metrics_check(self, logging=True, prefix=None):
             if prefix:
                 name = prefix + "_metrics_{}.csv".format(engine)
             destination = self.outputsoakdir
+            daos_metrics = "sudo daos_metrics -S {} --csv".format(engine)
+            self.log.info("Running %s", daos_metrics)
             results = run_pcmd(hosts=self.hostlist_servers,
-                               command="sudo daos_metrics -S {} --csv".format(
-                                   engine),
+                               command=daos_metrics,
                                verbose=(not logging),
                                timeout=60)
             if logging:
                 for result in results:
                     hosts = result["hosts"]
                     log_name = name + "-" + str(hosts)
+                    self.log.info("Logging %s output to %s", daos_metrics, log_name)
                     write_logfile(result["stdout"], log_name, destination)
 
 
@@ -439,7 +442,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers) #nosec
+        rank = random.randint(0, exclude_servers)
 
         if targets >= 8:
             tgt_idx = None
@@ -517,7 +520,7 @@ def launch_server_stop_start(self, pools, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers) #nosec
+        rank = random.randint(0, exclude_servers)
         # init the status dictionary
         params = {"name": name,
                   "status": status,
@@ -655,8 +658,7 @@ def get_srun_cmd(cmd, nodesperjob=1, ppn=1, srun_params=None, env=None):
     return str(srun_cmd)
 
 
-def start_dfuse(self, pool, container, nodesperjob, resource_mgr=None,
-                name=None, job_spec=None):
+def start_dfuse(self, pool, container, name=None, job_spec=None):
     """Create dfuse start command line for slurm.
 
     Args:
@@ -683,40 +685,34 @@ def start_dfuse(self, pool, container, nodesperjob, resource_mgr=None,
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
     dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
     dfuse_start_cmds = [
-        "mkdir -p {}".format(dfuse.mount_dir.value),
+        "clush -S -w $SLURM_JOB_NODELIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
         "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{}\"".format(
             dfuse.mount_dir.value, dfuse_env, dfuse.__str__()),
         "sleep 10",
-        "df -h {}".format(dfuse.mount_dir.value),
+        "clush -S -w $SLURM_JOB_NODELIST \"df -h {}\"".format(dfuse.mount_dir.value),
     ]
-    if resource_mgr == "SLURM":
-        cmds = []
-        for cmd in dfuse_start_cmds:
-            if cmd.startswith("clush") or cmd.startswith("sleep"):
-                cmds.append(cmd)
-            else:
-                cmds.append(get_srun_cmd(cmd, nodesperjob))
-        dfuse_start_cmds = cmds
     return dfuse, dfuse_start_cmds
 
 
-def stop_dfuse(dfuse, nodesperjob, resource_mgr=None):
+def stop_dfuse(dfuse, vol=False):
     """Create dfuse stop command line for slurm.
 
     Args:
         dfuse (obj): Dfuse obj
+        vol:(bool): cmd is ior hdf5 with vol connector
 
     Returns cmd(list):    list of cmds to pass to slurm script
     """
-    dfuse_stop_cmds = [
-        "fusermount3 -uz {0}".format(dfuse.mount_dir.value),
-        "rm -rf {0}".format(dfuse.mount_dir.value)
-    ]
-    if resource_mgr == "SLURM":
-        cmds = []
-        for dfuse_stop_cmd in dfuse_stop_cmds:
-            cmds.append(get_srun_cmd(dfuse_stop_cmd, nodesperjob))
-        dfuse_stop_cmds = cmds
+    dfuse_stop_cmds = []
+    if vol:
+        dfuse_stop_cmds.extend([
+            "for file in $(ls {0}) ; "
+            "do daos container destroy --path={0}/\"$file\" ; done".format(
+                dfuse.mount_dir.value)])
+
+    dfuse_stop_cmds.extend([
+        "clush -S -w $SLURM_JOB_NODELIST \"fusermount3 -uz {0}\"".format(dfuse.mount_dir.value),
+        "clush -S -w $SLURM_JOB_NODELIST \"rm -rf {0}\"".format(dfuse.mount_dir.value)])
     return dfuse_stop_cmds
 
 
@@ -768,6 +764,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
     """
     commands = []
+    vol = False
     ior_params = os.path.join(os.sep, "run", job_spec, "*")
     ior_timeout = self.params.get("job_timeout", ior_params, 10)
     mpi_module = self.params.get(
@@ -822,34 +819,33 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     add_containers(self, pool, o_type)
                     ior_cmd.set_daos_params(
                         self.server_group, pool, self.container[-1].uuid)
-                    env = ior_cmd.get_default_env("srun")
-                    sbatch_cmds = ["module load -q {}".format(mpi_module)]
+                    env = ior_cmd.get_default_env("mpirun")
+                    sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
                     # include dfuse cmdlines
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                         job_spec, api, b_size, t_size, o_type,
                         nodesperjob * ppn, nodesperjob, ppn)
                     if api in ["HDF5-VOL", "POSIX"]:
                         dfuse, dfuse_start_cmdlist = start_dfuse(
-                            self, pool, self.container[-1], nodesperjob,
-                            "SLURM", name=log_name, job_spec=job_spec)
+                            self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                         sbatch_cmds.extend(dfuse_start_cmdlist)
                         ior_cmd.test_file.update(
                             os.path.join(dfuse.mount_dir.value, "testfile"))
                     # add envs if api is HDF5-VOL
                     if api == "HDF5-VOL":
+                        vol = True
                         env["HDF5_VOL_CONNECTOR"] = "daos"
                         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
                         # env["H5_DAOS_BYPASS_DUNS"] = 1
-                    srun_cmd = Srun(ior_cmd)
-                    srun_cmd.assign_processes(nodesperjob * ppn)
-                    srun_cmd.assign_environment(env, True)
-                    srun_cmd.ntasks_per_node.update(ppn)
-                    srun_cmd.nodes.update(nodesperjob)
-                    sbatch_cmds.append(str(srun_cmd))
+                    mpirun_cmd = Mpirun(ior_cmd, mpitype="mpich")
+                    mpirun_cmd.assign_processes(nodesperjob * ppn)
+                    mpirun_cmd.assign_environment(env, True)
+                    mpirun_cmd.genv.update(env)
+                    mpirun_cmd.ppn.update(ppn)
+                    sbatch_cmds.append(str(mpirun_cmd))
                     sbatch_cmds.append("status=$?")
                     if api in ["HDF5-VOL", "POSIX"]:
-                        sbatch_cmds.extend(
-                            stop_dfuse(dfuse, nodesperjob, "SLURM"))
+                        sbatch_cmds.extend(stop_dfuse(dfuse, vol))
                     commands.append([sbatch_cmds, log_name])
                     self.log.info(
                         "<<IOR {} cmdlines>>:".format(api))
@@ -924,9 +920,9 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.set_daos_params(
                             self.server_group, pool,
                             self.container[-1].uuid)
-                        env = mdtest_cmd.get_default_env("srun")
+                        env = mdtest_cmd.get_default_env("mpirun")
                         sbatch_cmds = [
-                            "module load -q {}".format(mpi_module)]
+                            "module purge", "module load {}".format(mpi_module)]
                         # include dfuse cmdlines
                         log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
                             job_spec, api, write_bytes, read_bytes, depth,
@@ -934,21 +930,19 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             ppn)
                         if api in ["POSIX"]:
                             dfuse, dfuse_start_cmdlist = start_dfuse(
-                                self, pool, self.container[-1], nodesperjob,
-                                "SLURM", name=log_name, job_spec=job_spec)
+                                self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                             sbatch_cmds.extend(dfuse_start_cmdlist)
                             mdtest_cmd.test_dir.update(
                                 dfuse.mount_dir.value)
-                        srun_cmd = Srun(mdtest_cmd)
-                        srun_cmd.assign_processes(nodesperjob * ppn)
-                        srun_cmd.assign_environment(env, True)
-                        srun_cmd.ntasks_per_node.update(ppn)
-                        srun_cmd.nodes.update(nodesperjob)
-                        sbatch_cmds.append(str(srun_cmd))
+                        mpirun_cmd = Mpirun(mdtest_cmd, mpitype="mpich")
+                        mpirun_cmd.assign_processes(nodesperjob * ppn)
+                        mpirun_cmd.assign_environment(env, True)
+                        mpirun_cmd.genv.update(env)
+                        mpirun_cmd.ppn.update(ppn)
+                        sbatch_cmds.append(str(mpirun_cmd))
                         sbatch_cmds.append("status=$?")
                         if api in ["POSIX"]:
-                            sbatch_cmds.extend(
-                                stop_dfuse(dfuse, nodesperjob, "SLURM"))
+                            sbatch_cmds.extend(stop_dfuse(dfuse))
                         commands.append([sbatch_cmds, log_name])
                         self.log.info(
                             "<<MDTEST {} cmdlines>>:".format(api))
@@ -980,13 +974,13 @@ def create_racer_cmdline(self, job_spec):
     env = daos_racer.get_environment(self.server_managers[0], racer_log)
     daos_racer.set_environment(env)
     log_name = job_spec
-    srun_cmds = []
-    srun_cmds.append(str(daos_racer.__str__()))
-    srun_cmds.append("status=$?")
+    cmds = []
+    cmds.append(str(daos_racer.__str__()))
+    cmds.append("status=$?")
     # add exit code
-    commands.append([srun_cmds, log_name])
+    commands.append([cmds, log_name])
     self.log.info("<<DAOS racer cmdlines>>:")
-    for cmd in srun_cmds:
+    for cmd in cmds:
         self.log.info("%s", cmd)
     return commands
 
@@ -1032,7 +1026,7 @@ def create_fio_cmdline(self, job_spec, pool):
                     fio_cmd.update(
                         "global", "rw", rw,
                         "fio --name=global --rw")
-                    srun_cmds = []
+                    cmds = []
                     # add srun start dfuse cmds if api is POSIX
                     if fio_cmd.api.value == "POSIX":
                         # Connect to the pool, create container
@@ -1045,23 +1039,22 @@ def create_fio_cmdline(self, job_spec, pool):
                                                     'on')
                         log_name = "{}_{}_{}_{}_{}".format(
                             job_spec, blocksize, size, rw, o_type)
-                        dfuse, srun_cmds = start_dfuse(
-                            self, pool, self.container[-1], nodesperjob=1,
-                            name=log_name, job_spec=job_spec)
+                        dfuse, cmds = start_dfuse(
+                            self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                     # Update the FIO cmdline
                     fio_cmd.update(
                         "global", "directory",
                         dfuse.mount_dir.value,
                         "fio --name=global --directory")
                     # add fio cmline
-                    srun_cmds.append(str(fio_cmd.__str__()))
-                    srun_cmds.append("status=$?")
+                    cmds.append(str(fio_cmd.__str__()))
+                    cmds.append("status=$?")
                     # If posix, add the srun dfuse stop cmds
                     if fio_cmd.api.value == "POSIX":
-                        srun_cmds.extend(stop_dfuse(dfuse, nodesperjob=1))
-                    commands.append([srun_cmds, log_name])
+                        cmds.extend(stop_dfuse(dfuse))
+                    commands.append([cmds, log_name])
                     self.log.info("<<Fio cmdlines>>:")
-                    for cmd in srun_cmds:
+                    for cmd in cmds:
                         self.log.info("%s", cmd)
     return commands
 
@@ -1103,7 +1096,8 @@ def build_job_script(self, commands, job, nodesperjob):
             "time": str(job_timeout) + ":00",
             "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
             "error": str(error),
-            "export": "ALL"
+            "export": "ALL",
+            "exclusive": None
         }
         # include the cluster specific params
         sbatch.update(self.srun_params)

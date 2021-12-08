@@ -151,9 +151,12 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
             script_file.write("#SBATCH --output={}\n".format(output))
         if sbatch:
             for key, value in list(sbatch.items()):
-                if key == "error":
-                    value = value + str(uniq)
-                script_file.write("#SBATCH --{}={}\n".format(key, value))
+                if value is not None:
+                    if key == "error":
+                        value = value + str(uniq)
+                    script_file.write("#SBATCH --{}={}\n".format(key, value))
+                else:
+                    script_file.write("#SBATCH --{}\n".format(key))
         script_file.write("\n")
 
         # debug

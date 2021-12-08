@@ -388,8 +388,6 @@ class SoakTestBase(TestWithServers):
                                 offline_harasser, self.pool)
                             # wait 2 minutes to issue next harasser
                             time.sleep(120)
-            # Gather metrics data after jobs complete
-            run_metrics_check(self)
             # check journalctl for events;
             until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             event_check_messages = run_event_check(self, since, until)
@@ -586,6 +584,8 @@ class SoakTestBase(TestWithServers):
             self.log.info(
                 "Current pools: %s",
                 " ".join([pool.uuid for pool in self.pool]))
+            # Gather metrics data after jobs complete
+            run_metrics_check(self)
             # Fail if the pool/containers did not clean up correctly
             if not ignore_soak_errors:
                 self.assertEqual(
