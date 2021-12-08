@@ -221,7 +221,7 @@ done
 CMD="$1"
 DAOS_IFACE_IP="$2"
 
-cd $CWD
+cd "$CWD"
 case "$CMD" in
 	start) start "$DAOS_IFACE_IP" "$DAOS_POOL_SIZE" ;;
 	stop) stop ;;

@@ -114,8 +114,8 @@ From a local tree, a more straightforward way to build these images could be don
 `docker-compose` and the following commands:
 
 ```bash
-$ cd utils/docker/vcluster
-$ docker-compose build
+$ docker-compose --file utils/docker/vcluster/docker-compose.yml -- build
+
 ```
 
 The same arguments are accepted but they have to be defined in the Docker Compose environment file
@@ -170,8 +170,7 @@ From a local tree, a more straightforward way to start the containers could be d
 `docker-compose` and the following commands:
 
 ```bash
-$ cd utils/docker/vcluster
-$ docker-compose up --detach
+$ docker-compose --file utils/docker/vcluster/docker-compose.yml -- up --detach
 ```
 
 !!! note
