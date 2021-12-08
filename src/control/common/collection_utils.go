@@ -9,11 +9,48 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/pkg/errors"
 )
+
+// StringSet is a non-duplicated set of strings.
+type StringSet map[string]interface{}
+
+// ToSlice returns the strings in the set as a sorted slice.
+func (s StringSet) ToSlice() []string {
+	slice := make([]string, 0, len(s))
+	for str := range s {
+		slice = append(slice, str)
+	}
+	sort.Strings(slice)
+	return slice
+}
+
+// Add adds zero or more strings to the StringSet.
+func (s StringSet) Add(values ...string) {
+	if s == nil {
+		return
+	}
+
+	for _, str := range values {
+		s[str] = nil
+	}
+}
+
+func (s StringSet) String() string {
+	return strings.Join(s.ToSlice(), ", ")
+}
+
+// NewStringSet creates a StringSet and initializes it with zero or more strings.
+func NewStringSet(values ...string) StringSet {
+	set := make(StringSet)
+	set.Add(values...)
+
+	return set
+}
 
 // Includes returns true if string target in slice.
 func Includes(ss []string, target string) bool {
