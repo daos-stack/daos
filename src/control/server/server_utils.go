@@ -22,7 +22,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -106,16 +107,17 @@ func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.
-func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Config) error {
+func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Config, fis *hardware.FabricInterfaceSet) error {
 	// In the case of some providers, mercury uses the interface name
 	// such as ib0, while OFI uses the device name such as hfi1_0 CaRT and
 	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
 	if !cfg.HasEnvVar("OFI_DOMAIN") {
-		domain, err := netdetect.GetDeviceDomain(ctx, cfg.Fabric.Provider, cfg.Fabric.Interface)
+		fi, err := fis.GetInterfaceOnOSDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
 		if err != nil {
 			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
 		}
+		domain := fi.Name
 		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
 		envVar := "OFI_DOMAIN=" + domain
 		cfg.WithEnvVars(envVar)
@@ -124,37 +126,27 @@ func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Con
 	return nil
 }
 
-// netInit performs all network detection tasks in one place starting with
-// netdetect library init and cleaning up on exit. Warn if configured number
-// of engines is less than NUMA node count and update-in-place engine configs.
-func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (uint32, error) {
+// netInit performs all network detection tasks.
+func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (hardware.NetDevClass, error) {
 	engineCount := len(cfg.Engines)
 	if engineCount == 0 {
 		log.Debug("no engines configured, skipping network init")
 		return 0, nil
 	}
 
-	ctx, err := netdetect.Init(ctx)
+	scanner := hwprov.DefaultFabricScanner(log)
+	fiSet, err := scanner.Scan(ctx)
 	if err != nil {
-		return 0, err
-	}
-	defer netdetect.CleanUp(ctx)
-
-	// On a NUMA-aware system, emit a message when the configuration may be
-	// sub-optimal.
-	numaCount := netdetect.NumNumaNodes(ctx)
-	if numaCount > 0 && engineCount > numaCount {
-		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected",
-			numaCount, engineCount)
+		return 0, errors.Wrap(err, "scan fabric")
 	}
 
-	netDevClass, err := cfg.CheckFabric(ctx)
+	netDevClass, err := cfg.CheckFabric(ctx, log, fiSet)
 	if err != nil {
 		return 0, errors.Wrap(err, "validate fabric config")
 	}
 
 	for _, engine := range cfg.Engines {
-		if err := updateFabricEnvars(ctx, log, engine); err != nil {
+		if err := updateFabricEnvars(ctx, log, engine, fiSet); err != nil {
 			return 0, errors.Wrap(err, "update engine fabric envars")
 		}
 	}

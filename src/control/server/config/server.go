@@ -21,7 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -34,10 +34,6 @@ const (
 	configOut           = ".daos_server.active.yml"
 	relConfExamplesPath = "../utils/config/examples/"
 )
-
-type networkProviderValidation func(context.Context, string, string) error
-type networkNUMAValidation func(context.Context, string, uint) error
-type networkDeviceClass func(string) (uint32, error)
 
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
@@ -76,39 +72,12 @@ type Server struct {
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
 	Path string `yaml:"-"` // path to config file
-
-	// pointer to a function that validates the chosen provider
-	validateProviderFn networkProviderValidation
-
-	// pointer to a function that validates the chosen numa node
-	validateNUMAFn networkNUMAValidation
-
-	// pointer to a function that retrieves the I/O Engine network device class
-	GetDeviceClassFn networkDeviceClass `yaml:"-"`
 }
 
 // WithRecreateSuperblocks indicates that a missing superblock should not be treated as
 // an error. The server will create new superblocks as necessary.
 func (cfg *Server) WithRecreateSuperblocks() *Server {
 	cfg.RecreateSuperblocks = true
-	return cfg
-}
-
-// WithProviderValidator sets the function that validates the provider
-func (cfg *Server) WithProviderValidator(fn networkProviderValidation) *Server {
-	cfg.validateProviderFn = fn
-	return cfg
-}
-
-// WithNUMAValidator sets the function that validates the NUMA configuration
-func (cfg *Server) WithNUMAValidator(fn networkNUMAValidation) *Server {
-	cfg.validateNUMAFn = fn
-	return cfg
-}
-
-// WithGetNetworkDeviceClass sets the function that determines the network device class
-func (cfg *Server) WithGetNetworkDeviceClass(fn networkDeviceClass) *Server {
-	cfg.GetDeviceClassFn = fn
 	return cfg
 }
 
@@ -312,19 +281,16 @@ func (cfg *Server) WithTelemetryPort(port int) *Server {
 // populated with defaults.
 func DefaultServer() *Server {
 	return &Server{
-		SystemName:         build.DefaultSystemName,
-		SocketDir:          defaultRuntimeDir,
-		AccessPoints:       []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
-		ControlPort:        build.DefaultControlPort,
-		TransportConfig:    security.DefaultServerTransportConfig(),
-		Hyperthreads:       false,
-		Path:               defaultConfigPath,
-		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
-		validateProviderFn: netdetect.ValidateProviderConfig,
-		validateNUMAFn:     netdetect.ValidateNUMAConfig,
-		GetDeviceClassFn:   netdetect.GetDeviceClass,
-		EnableVMD:          false, // disabled by default
-		EnableHotplug:      false, // disabled by default
+		SystemName:      build.DefaultSystemName,
+		SocketDir:       defaultRuntimeDir,
+		AccessPoints:    []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
+		ControlPort:     build.DefaultControlPort,
+		TransportConfig: security.DefaultServerTransportConfig(),
+		Hyperthreads:    false,
+		Path:            defaultConfigPath,
+		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
+		EnableVMD:       false, // disabled by default
+		EnableHotplug:   false, // disabled by default
 	}
 }
 
@@ -608,8 +574,9 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 }
 
 // validateEngineFabric ensures engine configuration parameters are valid.
-func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.Config) error {
-	if err := cfg.validateProviderFn(ctx, cfgEngine.Fabric.Interface, cfgEngine.Fabric.Provider); err != nil {
+func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.Config, fis *hardware.FabricInterfaceSet) error {
+	fi, err := fis.GetInterfaceOnOSDevice(cfgEngine.Fabric.Interface, cfgEngine.Fabric.Provider)
+	if err != nil {
 		return errors.Wrapf(err, "Network device %s does not support provider %s. "+
 			"The configuration is invalid.", cfgEngine.Fabric.Interface,
 			cfgEngine.Fabric.Provider)
@@ -625,8 +592,9 @@ func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.C
 		}
 		return err
 	}
+
 	// validate that numa node is correct for the given device
-	if err := cfg.validateNUMAFn(ctx, cfgEngine.Fabric.Interface, numaNode); err != nil {
+	if fi.NUMANode != numaNode {
 		return errors.Wrapf(err, "Network device %s on NUMA node %d is an "+
 			"invalid configuration.", cfgEngine.Fabric.Interface, numaNode)
 	}
@@ -636,16 +604,18 @@ func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.C
 
 // CheckFabric ensures engines in configuration have compatible parameter
 // values and returns fabric network device class for the configuration.
-func (cfg *Server) CheckFabric(ctx context.Context) (uint32, error) {
-	var netDevClass uint32
+func (cfg *Server) CheckFabric(ctx context.Context, log logging.Logger, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
+	var netDevClass hardware.NetDevClass
 	for index, engine := range cfg.Engines {
-		ndc, err := cfg.GetDeviceClassFn(engine.Fabric.Interface)
+		fi, err := fis.GetInterface(engine.Fabric.Interface)
 		if err != nil {
-			return 0, errors.Wrapf(err, "unable to detect device class for %q", engine.Fabric.Interface)
+			return 0, err
 		}
+
+		ndc := fi.DeviceClass
 		if index == 0 {
 			netDevClass = ndc
-			if err := cfg.validateEngineFabric(ctx, engine); err != nil {
+			if err := cfg.validateEngineFabric(ctx, engine, fis); err != nil {
 				return 0, err
 			}
 			continue

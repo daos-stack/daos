@@ -9,12 +9,11 @@ package server
 import (
 	"strings"
 
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
 const (
@@ -37,25 +36,43 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		provider = req.GetProvider()
 	}
 
-	netCtx, err := netdetect.Init(context.Background())
+	result, err := c.fabric.Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer netdetect.CleanUp(netCtx)
-
-	results, err := netdetect.ScanFabric(netCtx, provider, excludes)
-	if err != nil {
-		return nil, errors.WithMessage(err, "failed to execute the fabric and device scan")
-	}
 
 	resp := new(ctlpb.NetworkScanResp)
-	resp.Interfaces = make([]*ctlpb.FabricInterface, len(results))
-	if err := convert.Types(results, &resp.Interfaces); err != nil {
-		return nil, errors.Wrap(err, "converting fabric interfaces to protobuf format")
+	resp.Interfaces = make([]*ctlpb.FabricInterface, 0, result.NumOSDevices())
+	for _, name := range result.Names() {
+		fi, err := result.GetInterface(name)
+		if err != nil {
+			c.log.Errorf("unexpected error getting IF %q: %s", name, err.Error())
+			continue
+		}
+
+		if fi.DeviceClass == hardware.Loopback {
+			continue
+		}
+
+		for prov := range fi.Providers {
+			if provider == "" || provider == prov {
+				resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
+					Provider:    prov,
+					Device:      fi.OSDevice,
+					Numanode:    uint32(fi.NUMANode),
+					Netdevclass: uint32(fi.DeviceClass),
+				})
+			}
+		}
 	}
 
-	resp.Numacount = int32(netdetect.NumNumaNodes(netCtx))
-	resp.Corespernuma = int32(netdetect.CoresPerNuma(netCtx))
+	topo, err := hwprov.DefaultTopologyProvider(c.log).GetTopology(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	resp.Numacount = int32(topo.NumNUMANodes())
+	resp.Corespernuma = int32(topo.NumCoresPerNUMA())
 
 	c.log.Debugf("NetworkScanResp: %d NUMA nodes with %d cores each",
 		resp.GetNumacount(), resp.GetCorespernuma())

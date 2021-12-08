@@ -25,7 +25,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -76,7 +77,7 @@ type server struct {
 	runningUser string
 	faultDomain *system.FaultDomain
 	ctlAddr     *net.TCPAddr
-	netDevClass uint32
+	netDevClass hardware.NetDevClass
 	listener    net.Listener
 
 	harness      *EngineHarness
@@ -158,7 +159,8 @@ func (srv *server) createServices(ctx context.Context) error {
 	srv.evtForwarder = control.NewEventForwarder(rpcClient, srv.cfg.AccessPoints)
 	srv.evtLogger = control.NewEventLogger(srv.log)
 
-	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub)
+	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
+		hwprov.DefaultFabricScanner(srv.log))
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, sysdb, rpcClient, srv.pubSub)
 
 	return nil
@@ -205,7 +207,7 @@ func (srv *server) initNetwork(ctx context.Context) error {
 		return err
 	}
 	srv.netDevClass = ndc
-	srv.log.Infof("Network device class set to %q", netdetect.DevClassName(ndc))
+	srv.log.Infof("Network device class set to %q", ndc)
 
 	return nil
 }
@@ -313,7 +315,7 @@ func (srv *server) setupGrpc() error {
 		Provider:        srv.cfg.Fabric.Provider,
 		CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
 		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
-		NetDevClass:     srv.netDevClass,
+		NetDevClass:     uint32(srv.netDevClass),
 		SrvSrxSet:       srxSetting,
 	}
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)

@@ -20,7 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -150,12 +149,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			jsonCmd.enableJsonOutput(opts.JSON)
 		}
 
-		switch opts.Debug {
-		case "net":
-			log.WithLogLevel(logging.LogLevelDebug)
-			log.Debug("net debug output enabled")
-			netdetect.SetLogger(log)
-		case "basic":
+		if opts.Debug != "" {
 			log.WithLogLevel(logging.LogLevelDebug)
 			log.Debug("basic debug output enabled")
 		}

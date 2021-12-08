@@ -18,7 +18,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -180,7 +181,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		engineCount     int
-		netDevClass     uint32
+		netDevClass     hardware.NetDevClass
 		uErr            error
 		hostResponses   []*HostResponse
 		expHostErrs     []*MockHostError
@@ -246,7 +247,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 		},
 		"single engine set and single interface select ethernet": {
 			engineCount:     1,
-			netDevClass:     nd.Ether,
+			netDevClass:     hardware.Ether,
 			hostResponses:   dualHostRespSame(fabIfs3),
 			expIfs:          []*HostFabricInterface{eth0},
 			expCoresPerNuma: 24,
@@ -263,9 +264,9 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			expCoresPerNuma: 24,
 		},
 		"engine count unset and dual numa with dual ib interfaces but ethernet selected": {
-			netDevClass:   nd.Ether,
+			netDevClass:   hardware.Ether,
 			hostResponses: dualHostRespSame(fabIfs4),
-			expErr: errors.Errorf(errInsufNrIfaces, nd.DevClassName(nd.Ether), 2, 0,
+			expErr: errors.Errorf(errInsufNrIfaces, hardware.Ether, 2, 0,
 				make(numaNetIfaceMap)),
 		},
 		"engine count unset and dual numa with dual eth interfaces": {
@@ -274,9 +275,9 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			expCoresPerNuma: 24,
 		},
 		"engine count unset and dual numa with dual eth interfaces but infiniband selected": {
-			netDevClass:   nd.Infiniband,
+			netDevClass:   hardware.Infiniband,
 			hostResponses: dualHostRespSame(fabIfs5),
-			expErr: errors.Errorf(errInsufNrIfaces, nd.DevClassName(nd.Infiniband), 2, 0,
+			expErr: errors.Errorf(errInsufNrIfaces, hardware.Infiniband, 2, 0,
 				make(numaNetIfaceMap)),
 		},
 		"multiple engines set with dual ib interfaces": {
@@ -933,7 +934,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(security.CertificateConfig{},
 					config.Server{}),
-				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
+				cmpopts.IgnoreUnexported(sysfs.Provider{}),
 			}
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 

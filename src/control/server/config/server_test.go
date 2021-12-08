@@ -23,7 +23,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -44,7 +44,7 @@ var (
 			Server{},
 			security.CertificateConfig{},
 		),
-		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn", "Path"),
+		cmpopts.IgnoreFields(Server{}, "Path"),
 	}
 )
 
@@ -101,28 +101,10 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 // file at the given path.
 func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	t.Helper()
-	c := DefaultServer().
-		WithProviderValidator(netdetect.ValidateProviderStub).
-		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub)
+	c := DefaultServer()
 	c.Path = path
 
 	return c, c.Load()
-}
-
-func getDeviceClassStub(netdev string) (uint32, error) {
-	switch netdev {
-	case "eth0":
-		return netdetect.Ether, nil
-	case "eth1":
-		return netdetect.Ether, nil
-	case "ib0":
-		return netdetect.Infiniband, nil
-	case "ib1":
-		return netdetect.Infiniband, nil
-	default:
-		return 0, nil
-	}
 }
 
 func TestServerConfig_MarshalUnmarshal(t *testing.T) {
@@ -152,10 +134,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
+			configA := DefaultServer()
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
@@ -171,10 +150,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
+			configB := DefaultServer()
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}
@@ -233,10 +209,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
-		WithHyperthreads(true). // hyper-threads disabled by default
-		WithProviderValidator(netdetect.ValidateProviderStub).
-		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub)
+		WithHyperthreads(true) // hyper-threads disabled by default
 
 	// add engines explicitly to test functionality applied in WithEngines()
 	constructed.Engines = []*engine.Config{
@@ -734,10 +707,7 @@ func TestServerConfig_RelativeWorkingPath(t *testing.T) {
 			relPath := filepath.Join(pathToRoot, testFile)
 			t.Logf("abs: %s, cwd: %s, rel: %s", testFile, cwd, relPath)
 
-			config := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
+			config := DefaultServer()
 
 			err = config.SetPath(relPath)
 			if err != nil {
@@ -892,7 +862,6 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 
 			conf := DefaultServer().
 				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithEngines(tc.configA, tc.configB)
 
 			gotErr := conf.Validate(log)
@@ -928,7 +897,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	for name, tc := range map[string]struct {
 		configA      *engine.Config
 		configB      *engine.Config
-		expNetDevCls uint32
+		expNetDevCls hardware.NetDevClass
 		expErr       error
 	}{
 		"successful validation with matching Infiniband": {
@@ -936,51 +905,67 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 				WithFabricInterface("ib1"),
 			configB: configB().
 				WithFabricInterface("ib0"),
-			expNetDevCls: netdetect.Infiniband,
+			expNetDevCls: hardware.Infiniband,
 		},
 		"successful validation with matching Ethernet": {
 			configA: configA().
 				WithFabricInterface("eth0"),
 			configB: configB().
 				WithFabricInterface("eth1"),
-			expNetDevCls: netdetect.Ether,
+			expNetDevCls: hardware.Ether,
 		},
 		"mismatching net dev class with primary server as ib0 / Infiniband": {
 			configA: configA().
 				WithFabricInterface("ib0"),
 			configB: configB().
 				WithFabricInterface("eth0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth0"),
+			expErr: FaultConfigInvalidNetDevClass(1, hardware.Infiniband, hardware.Ether, "eth0"),
 		},
 		"mismatching net dev class with primary server as eth0 / Ethernet": {
 			configA: configA().
 				WithFabricInterface("eth0"),
 			configB: configB().
 				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
-		},
-		"mismatching net dev class with primary server as ib1 / Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib1"),
-			configB: configB().
-				WithFabricInterface("eth1"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth1"),
-		},
-		"mismatching net dev class with primary server as eth1 / Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth1"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
+			expErr: FaultConfigInvalidNetDevClass(1, hardware.Ether, hardware.Infiniband, "ib0"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			fis := hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Name:        "eth0",
+					OSDevice:    "eth0",
+					DeviceClass: hardware.Ether,
+					Providers:   common.NewStringSet("test"),
+				},
+				&hardware.FabricInterface{
+					Name:        "eth1",
+					OSDevice:    "eth1",
+					DeviceClass: hardware.Ether,
+					NUMANode:    1,
+					Providers:   common.NewStringSet("test"),
+				},
+				&hardware.FabricInterface{
+					Name:        "ib0",
+					OSDevice:    "ib0",
+					DeviceClass: hardware.Infiniband,
+					Providers:   common.NewStringSet("test"),
+				},
+				&hardware.FabricInterface{
+					Name:        "ib1",
+					OSDevice:    "ib1",
+					DeviceClass: hardware.Infiniband,
+					NUMANode:    1,
+					Providers:   common.NewStringSet("test"),
+				},
+			)
+
 			gotNetDevCls, gotErr := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithEngines(tc.configA, tc.configB).
-				CheckFabric(context.Background())
+				CheckFabric(context.Background(), log, fis)
 
 			CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
