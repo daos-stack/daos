@@ -15,9 +15,9 @@ At this time only emulated hardware storage are supported by this Docker platfor
 
 !!! warning
     Virtual Docker network such as [bridge](https://docs.docker.com/network/bridge/) are not yet
-    well supported by DAOS.  Thus, one physical network interface of the host should be chosen for
-    being used by the containers through the Docker
-    [host](https://docs.docker.com/network/host/) network.
+    well supported by DAOS.  Thus, one physical network interface (i.e. loopback interface is also
+    not well supported) of the host should be chosen for being used by the containers through the
+    Docker [host](https://docs.docker.com/network/host/) network.
 
 
 ## Prerequisites
