@@ -1227,7 +1227,10 @@ class TestWithServers(TestWithoutServers):
 
         """
         errors = []
-        all_hosts = include_local_host(self.hostlist_clients + self.hostlist_servers)
+        hosts = list(self.hostlist_servers)
+        if self.hostlist_clients:
+            hosts.extend(self.hostlist_clients)
+        all_hosts = include_local_host(hosts)
         self.log.info(
             "Removing temporary test files in %s from %s",
             self.test_dir, str(NodeSet.fromlist(all_hosts)))
