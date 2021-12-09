@@ -70,8 +70,8 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	fs_handle = fuse_req_userdata(req);
 
-#ifdef RENAME_NOREPLACE
 	if (flags != 0) {
+#ifdef RENAME_NOREPLACE
 		if (flags != RENAME_NOREPLACE) {
 			if (flags & RENAME_EXCHANGE)
 				DFUSE_TRA_DEBUG(parent, "Unsupported flag RENAME_EXCHANGE");
