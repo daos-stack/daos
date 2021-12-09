@@ -1071,6 +1071,9 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		for (i = 0; i < tgt_cnt; i++)
 			dlh->dlh_subs[i].dss_tgt = tgts[i];
 		dlh->dlh_sub_cnt = tgt_cnt;
+		dlh->dlh_helper_done = 0;
+	} else {
+		dlh->dlh_helper_done = 1;
 	}
 
 	rc = dtx_handle_init(dti, coh, epoch, sub_modification_cnt, pm_ver,
@@ -1104,6 +1107,7 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 			  "ABT_future_wait failed %d.\n", rc);
 
 		ABT_future_free(&dlh->dlh_future);
+		D_ASSERT(dlh->dlh_helper_done);
 	}
 
 	D_DEBUG(DB_IO, "dth "DF_DTI" rc "DF_RC"\n",
@@ -1691,6 +1695,7 @@ dtx_comp_cb(void **arg)
 	uint32_t			i;
 
 	dlh = arg[0];
+	dlh->dlh_helper_done = 1;
 
 	if (dlh->dlh_agg_cb) {
 		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_agg_cb_arg);
@@ -1715,6 +1720,10 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 	struct dtx_sub_status	*sub = &dlh->dlh_subs[idx];
 	ABT_future		future = dlh->dlh_future;
 
+	D_ASSERTF(sub->dss_comp == 0, "Repeat sub completion for "DF_DTI" idx %d, rc %d\n",
+		  DP_DTI(&dlh->dlh_handle.dth_xid), idx, rc);
+	sub->dss_comp = 1;
+
 	sub->dss_result = rc;
 	rc = ABT_future_set(future, dlh);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
@@ -1735,41 +1744,49 @@ dtx_leader_exec_ops_ult(void *arg)
 {
 	struct dtx_ult_arg	  *ult_arg = arg;
 	struct dtx_leader_handle  *dlh = ult_arg->dlh;
+	struct dtx_sub_status	  *sub;
 	ABT_future		  future = dlh->dlh_future;
+	struct dtx_id		  dtx = dlh->dlh_handle.dth_xid;
+	uint32_t		  saved = dlh->dlh_sub_cnt;
 	uint32_t		  i;
 	int			  rc = 0;
 
 	D_ASSERT(future != ABT_FUTURE_NULL);
 	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
-		struct dtx_sub_status *sub = &dlh->dlh_subs[i];
-
+		sub = &dlh->dlh_subs[i];
 		sub->dss_result = 0;
+		sub->dss_comp = 0;
 
 		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
-		    (i == daos_fail_value_get() &&
-		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
-			int ret;
-
-			ret = ABT_future_set(future, dlh);
-			D_ASSERTF(ret == ABT_SUCCESS,
-				  "ABT_future_set failed %d.\n", ret);
+		    (i == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
+			sub->dss_comp = 1;
+			rc = ABT_future_set(future, dlh);
+			D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
 			continue;
 		}
 
 		rc = ult_arg->func(dlh, ult_arg->func_arg, i, dtx_sub_comp_cb);
-		if (rc) {
-			sub->dss_result = rc;
+		if (rc != 0) {
+			if (sub->dss_comp == 0)
+				dtx_sub_comp_cb(dlh, i, rc);
 			break;
+		}
+
+		/* Yield to avoid holding CPU for too long time. */
+		if (i >= DTX_RPC_YIELD_THD) {
+			ABT_thread_yield();
+			D_ASSERTF(saved == dlh->dlh_sub_cnt, DF_DTI
+				  " corrupted after yield: %u, %u\n",
+				  DP_DTI(&dtx), saved, dlh->dlh_sub_cnt);
 		}
 	}
 
 	if (rc != 0) {
 		for (i++; i < dlh->dlh_sub_cnt; i++) {
-			int ret;
-
-			ret = ABT_future_set(future, dlh);
-			D_ASSERTF(ret == ABT_SUCCESS,
-				  "ABT_future_set failed %d.\n", ret);
+			sub = &dlh->dlh_subs[i];
+			sub->dss_comp = 1;
+			rc = ABT_future_set(future, dlh);
+			D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
 		}
 	}
 
