@@ -90,7 +90,7 @@ $ daos cont create tank --label mycont1 --type POSIX --properties rf:1
 Successfully created container b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
 ```
 
-Please refer to the section on the [redundancy factor property](#Redundancy_Factor)
+Please refer to the [redundancy factor property](#Redundancy_Factor)
 for more information.
 
 ### Listing Containers
@@ -257,13 +257,13 @@ The table below summarizes the available container properties.
 | layout\_type            | Yes             | Container type (e.g., POSIX, HDF5, ...)|
 | layout\_ver             | Yes             | Layout version to be used at the discretion of I/O middleware for interoperability|
 | rf                      | Yes             | Redundancy Factor which is the maximum number of simultaneous engine failures that objects can support without data loss|
-| rf\_lvl                 | Yes             | Redudancy Factor Level which is the level in the fault domain hierachy to use for object placement|
+| rf\_lvl                 | Yes             | Redundancy Level which is the level in the fault domain hierachy to use for object placement|
 | health                  | No              | Current state of the container|
 | alloc\_oid              | No              | Maximum allocated object ID by container allocator|
 | ec\_cell                | Yes             | Erasure code cell size for erasure-coded objects|
 | cksum                   | Yes             | Checksum off, or algorithm to use (adler32, crc[16,32,64] or sha[1,256,512])|
 | cksum\_size             | Yes             | Checksum Size determining the maximum extent size that a checksum can cover|
-| srv\_cksum              | Yes             | Whether to verify checksum on the server before writting data (default: off)|
+| srv\_cksum              | Yes             | Whether to verify checksum on the server before writing data (default: off)|
 
 
 Moreover, the following properties have been added as placeholders, but are not
@@ -281,9 +281,9 @@ Please refer to the next sections for more details on each property.
 
 ### Redundancy Factor
 
-Different objects in a DAOS container may belong to different object classes and
+Objects in a DAOS container may belong to different object classes and
 have different levels of data protection. While this model gives a lot of control
-to the users, it also requires to carefully select a suitable class for each
+to the users, it also requires carefully selecting a suitable class for each
 object. If objects with different data protection level are also stored in the
 same container, the user should also be prepared for the case where some objects
 might suffer from data loss after several cascading failures, while some others
@@ -301,7 +301,7 @@ have been introduced:
   lost due to cascading engine failures. The value of this property can be
   either `HEALTHY` (no data loss) or `UNCLEAN` (data might have been lost).
 
-The redudancy factor can be set at container creation time and cannot be
+The redundancy factor can be set at container creation time and cannot be
 modified after creation.
 
 ```bash
@@ -328,11 +328,11 @@ Health                HEALTHY
 
 Only objects with data protection enabled can be stored in such a container.
 This includes replicated or erasure-coded objects. Attempts to open an
-object with an object class that does not support data redundancy (e.g., SX)
+object with an class that does not support data redundancy (e.g., SX)
 will fail.
 
-For rf2, only objects at least 3-way replicated or erasure coded with 2 parities
-or more can be stored in the container.
+For rf2, only objects with at least 3-way replication or erasure code with two
+parities or more can be stored in the container.
 
 As long as the number of simulatenous engine failures is below the redundancy
 factor, the container is reported as healthy. if not, then the container is
@@ -351,7 +351,7 @@ Health                UNCLEAN
 ```
 
 For instance, an attempt to mount with dfuse this POSIX container fails as
-fllows:
+follows:
 
 ```bash
 $ dfuse --pool tank --container mycont1 -m /tmp/dfuse

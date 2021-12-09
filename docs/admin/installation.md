@@ -6,7 +6,7 @@ to select the appropriate software combination.
 ## Distribution Packages
 
 DAOS packages will be available when DAOS 2.2 is released (planned for first
-half of 2021).
+half of 2022).
 
 ## DAOS from Scratch
 

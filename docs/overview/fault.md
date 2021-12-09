@@ -42,7 +42,7 @@ rejected and re-routed.
 <a id="4.3.3"></a>
 ## Fault Isolation
 
-Once detected, the faulty target or engine (effectivelly a set of targets)
+Once detected, the faulty target or engine (effectively a set of targets)
 must be excluded from the pool map. This process is triggered either manually
 by the administrator or automatically. Upon exclusion, the new version of
 the pool map is eagerly pushed to all storage targets. At this point, the pool

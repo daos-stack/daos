@@ -599,7 +599,7 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
 To add a new server to an existing DAOS system, one should install:
 
 - the relevant certificates
-- the server yaml file pointing at the access points of the running
+- the server yaml file pointing to the access points of the running
   DAOS system
 
 Then starts the daos_server via systemd and format the new server via
@@ -610,10 +610,10 @@ $ dmg storage format -l ${new_storage_node}
 ```
 
 new_storage_node should be replaced with the hostname or the IP address of the
-new storage node (comma seperated list or range of hosts for multiple nodes) 
+new storage node (comma separated list or range of hosts for multiple nodes)
 to be added.
 
-Upong completion of the format operation, the new storage nodes will join
+Upon completion of the format operation, the new storage nodes will join
 the system (this can be checked with `dmg system query -v`).
 
 !!! note

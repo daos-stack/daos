@@ -73,8 +73,8 @@ multiple engine instances.
 ### Subnet
 
 Since all engines need to be able to communicate, the different network
-interfaces need to be on the same subnet or routing capabilities across the
-different subnet must be configured.
+interfaces must be on the same subnet or you must configuring routing
+across the different subnets.
 
 ### Infiniband Settings
 
@@ -151,7 +151,7 @@ the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
 
 !!! warning
     Do not change these when running under `systemd` control.
-    If these directories need to be changed, then make sure that they match the
+    If these directories need to be changed, insure they match the
     RuntimeDirectory setting in the /usr/lib/systemd/system/daos_agent.service
     and /usr/lib/systemd/system/daos_server.service configuration files.
     The socket directories will be created and removed by `systemd` when the
