@@ -46,6 +46,7 @@ plugins:
 markdown_extensions:
     - admonition
     - footnotes
+    - tables
     - toc:
         permalink: true
         toc_depth: 4
