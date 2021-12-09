@@ -2787,11 +2787,11 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	rc = 0; /* Assume there is no data */
 	evt_ent_array_for_each(ent, tcx->tc_iter.it_entries) {
 		if (ent->en_minor_epc != EVT_MINOR_EPC_MAX) {
-			D_DEBUG(DB_IO, "Found "DF_ENT", stopping search\n", DP_ENT(ent));
+			D_ERROR(DB_IO, "Found "DF_ENT"\n", DP_ENT(ent));
 			rc = 1;
-			break;
+			continue;
 		}
-		D_DEBUG(DB_IO, "Ignoring "DF_ENT"\n", DP_ENT(ent));
+		D_ERROR("Ignoring "DF_ENT"\n", DP_ENT(ent));
 	}
 out:
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
