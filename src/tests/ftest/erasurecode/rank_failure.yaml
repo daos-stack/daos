@@ -1,0 +1,53 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
+  test_clients:
+    - client-A
+timeout: 1500
+setup:
+  start_agents_once: False
+  start_servers_once: False
+server_config:
+  engines_per_host: 2
+  name: daos_server
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      log_mask: ERR
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+      log_mask: ERR
+pool:
+  scm_size: 8G
+  control_method: dmg
+gen_io_conf:
+  ranks: "11"
+  targets: "7"
+  dkeys: "3"
+  akeys: "3"
+  record_size: "1000"
+  obj_num: "3"
+  obj_class: "EC_8P2GX"

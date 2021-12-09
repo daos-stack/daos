@@ -431,8 +431,6 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	return resp, nil
 }
 
-const systemReqTimeout = 30 * time.Second
-
 type (
 	// systemRanksFunc is an alias for control client API *Ranks() fanout
 	// function that executes across ranks on different hosts.
@@ -503,9 +501,15 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 // Pass true as last parameter to update member states on request failure.
 //
 // Fan-out is invoked by control API *Ranks functions.
+<<<<<<< HEAD
 func (svc *mgmtSvc) rpcFanout(parent context.Context, req *fanoutRequest, resp *fanoutResponse, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
 	if req == nil || req.Method == nil {
 		return nil, nil, errors.New("nil fanout request or method")
+=======
+func (svc *mgmtSvc) rpcFanout(ctx context.Context, fanReq fanoutRequest, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
+	if fanReq.Method == nil {
+		return nil, nil, errors.New("fanout request with nil method")
+>>>>>>> master
 	}
 	if resp == nil {
 		resp = new(fanoutResponse)
@@ -515,14 +519,23 @@ func (svc *mgmtSvc) rpcFanout(parent context.Context, req *fanoutRequest, resp *
 		return resp, req.Ranks, nil
 	}
 
-	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
-	defer cancel()
-
 	ranksReq := &control.RanksReq{
 		Ranks: req.Ranks.String(), Force: req.Force,
 	}
+<<<<<<< HEAD
 	ranksReq.SetHostList(svc.membership.HostList(req.Ranks))
 	ranksResp, err := req.Method(ctx, svc.rpcClient, ranksReq)
+=======
+
+	// Not strictly necessary but helps with debugging.
+	dl, ok := ctx.Deadline()
+	if ok {
+		ranksReq.SetTimeout(dl.Sub(time.Now()))
+	}
+
+	ranksReq.SetHostList(svc.membership.HostList(hitRanks))
+	ranksResp, err := fanReq.Method(ctx, svc.rpcClient, ranksReq)
+>>>>>>> master
 	if err != nil {
 		return nil, nil, err
 	}
