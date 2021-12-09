@@ -767,7 +767,8 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 	if (rc != 0)
 		goto out;
 
-	resp->led_state = NVME_DEV_FL_IDENTIFY;
+	/* Device must be plugged in order to be identified */
+	resp->dev_state = NVME_DEV_FL_PLUGGED | NVME_DEV_FL_IDENTIFY;
 
 out:
 

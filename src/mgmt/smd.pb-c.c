@@ -1867,12 +1867,12 @@ static const ProtobufCFieldDescriptor ctl__dev_identify_resp__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "led_state",
+    "dev_state",
     4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Ctl__DevIdentifyResp, led_state),
+    offsetof(Ctl__DevIdentifyResp, dev_state),
     NULL,
     NULL,
     0,             /* flags */
@@ -1880,8 +1880,8 @@ static const ProtobufCFieldDescriptor ctl__dev_identify_resp__field_descriptors[
   },
 };
 static const unsigned ctl__dev_identify_resp__field_indices_by_name[] = {
+  2,   /* field[2] = dev_state */
   1,   /* field[1] = dev_uuid */
-  2,   /* field[2] = led_state */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange ctl__dev_identify_resp__number_ranges[2 + 1] =

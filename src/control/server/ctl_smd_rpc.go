@@ -346,7 +346,7 @@ func (svc *ControlService) smdIdentify(ctx context.Context, req *ctlpb.SmdQueryR
 				Devices: []*ctlpb.SmdQueryResp_Device{
 					{
 						Uuid:     drr.DevUuid,
-						DevState: drr.LedState | storage.NvmeDevStateNew.Uint32(),
+						DevState: drr.DevState,
 					},
 				},
 			},

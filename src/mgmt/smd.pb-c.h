@@ -337,9 +337,9 @@ struct  _Ctl__DevIdentifyResp
    */
   char *dev_uuid;
   /*
-   * VMD LED state
+   * NVMe device state
    */
-  uint32_t led_state;
+  uint32_t dev_state;
 };
 #define CTL__DEV_IDENTIFY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_identify_resp__descriptor) \

@@ -129,9 +129,10 @@ message DevIdentifyReq {
 
 message DevIdentifyResp {
 	reserved 3;
+	reserved "led_state";
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of VMD uuid
-	uint32 led_state = 4; // VMD LED state
+	uint32 dev_state = 4; // NVMe device state
 }
 
 message SmdQueryReq {
