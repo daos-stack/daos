@@ -501,15 +501,9 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 // Pass true as last parameter to update member states on request failure.
 //
 // Fan-out is invoked by control API *Ranks functions.
-<<<<<<< HEAD
-func (svc *mgmtSvc) rpcFanout(parent context.Context, req *fanoutRequest, resp *fanoutResponse, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
+func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fanoutResponse, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
 	if req == nil || req.Method == nil {
 		return nil, nil, errors.New("nil fanout request or method")
-=======
-func (svc *mgmtSvc) rpcFanout(ctx context.Context, fanReq fanoutRequest, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
-	if fanReq.Method == nil {
-		return nil, nil, errors.New("fanout request with nil method")
->>>>>>> master
 	}
 	if resp == nil {
 		resp = new(fanoutResponse)
@@ -522,10 +516,6 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, fanReq fanoutRequest, updateO
 	ranksReq := &control.RanksReq{
 		Ranks: req.Ranks.String(), Force: req.Force,
 	}
-<<<<<<< HEAD
-	ranksReq.SetHostList(svc.membership.HostList(req.Ranks))
-	ranksResp, err := req.Method(ctx, svc.rpcClient, ranksReq)
-=======
 
 	// Not strictly necessary but helps with debugging.
 	dl, ok := ctx.Deadline()
@@ -533,9 +523,8 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, fanReq fanoutRequest, updateO
 		ranksReq.SetTimeout(dl.Sub(time.Now()))
 	}
 
-	ranksReq.SetHostList(svc.membership.HostList(hitRanks))
-	ranksResp, err := fanReq.Method(ctx, svc.rpcClient, ranksReq)
->>>>>>> master
+	ranksReq.SetHostList(svc.membership.HostList(req.Ranks))
+	ranksResp, err := req.Method(ctx, svc.rpcClient, ranksReq)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -650,7 +639,7 @@ type systemReq interface {
 	GetRanks() string
 }
 
-func (svc *mgmtSvc) getFanoutReq(req systemReq) (*fanoutRequest, *fanoutResponse, error) {
+func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, error) {
 	if common.InterfaceIsNil(req) {
 		return nil, nil, errors.New("nil system request")
 	}
@@ -694,7 +683,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	}
 	svc.log.Debug("Received SystemStop RPC")
 
-	fReq, fResp, err := svc.getFanoutReq(req)
+	fReq, fResp, err := svc.getFanout(req)
 	if err != nil {
 		return nil, err
 	}
@@ -771,7 +760,7 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 	}
 	svc.log.Debug("Received SystemStart RPC")
 
-	fReq, fResp, err := svc.getFanoutReq(req)
+	fReq, fResp, err := svc.getFanout(req)
 	if err != nil {
 		return nil, err
 	}
@@ -867,7 +856,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 
 	// On the leader, we should first tell all servers to prepare for
 	// reformat by wiping out their engine superblocks, etc.
-	fanReq, fanResp, err := svc.getFanoutReq(&mgmtpb.SystemQueryReq{})
+	fanReq, fanResp, err := svc.getFanout(&mgmtpb.SystemQueryReq{})
 	if err != nil {
 		return nil, err
 	}

@@ -852,7 +852,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				expErr = errors.New(tc.expErrMsg)
 			}
 
-			gotFanReq, baseResp, gotErr := svc.getFanoutReq(tc.sysReq)
+			gotFanReq, baseResp, gotErr := svc.getFanout(tc.sysReq)
 			common.CmpErr(t, expErr, gotErr)
 			if gotErr != nil && tc.expErrMsg != "" {
 				return
