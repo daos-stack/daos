@@ -13,7 +13,7 @@ class DaosAggregationFull(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description:
 
-       Run IOR with same file to fullfill the pool and verify the
+       Run IOR with same file to fulfill the pool and verify the
        aggregation happens in the background. Check for the
        space usage before and after the aggregation to verify
        the overwritten space is reclaimed, and run IOR when aggregation
