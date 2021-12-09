@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeSingle
+from apricot import skipForTicket
 
 class EcodOnlineRebuildSingle(ErasureCodeSingle):
     # pylint: disable=too-many-ancestors
@@ -20,6 +21,7 @@ class EcodOnlineRebuildSingle(ErasureCodeSingle):
         super().__init__(*args, **kwargs)
         self.set_online_rebuild = True
 
+    @skipForTicket("DAOS-9191")
     def test_ec_online_rebuild_single(self):
         """Jira ID: DAOS-5894.
 
