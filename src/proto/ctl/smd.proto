@@ -136,6 +136,8 @@ message DevIdentifyResp {
 }
 
 message SmdQueryReq {
+	reserved 8;
+	reserved "replaceUUID";
 	bool omit_devices = 1; // query should omit devices
 	bool omit_pools = 2; // query should omit pools
 	bool include_bio_health = 3; // query should include BIO health for devices
@@ -143,10 +145,10 @@ message SmdQueryReq {
 	string uuid = 5; // constrain query to this UUID (pool or device)
 	uint32 rank = 6; // response should only include information about this rank
 	string target = 7; // response should only include information about this VOS target
-	string replaceUUID = 8; // UUID of new device to replace storage with
 	bool no_reint = 9; // specify if device reint is needed (used for replace cmd)
 	bool identify = 10; // set the VMD LED state to quickly blink
 	bool show_only_faulty = 11; // show only evicted faulty devices
+	string replace_uuid = 12; // UUID of new device to replace storage with
 }
 
 message SmdQueryResp {

@@ -100,6 +100,26 @@ func TestStorageQueryCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"per-server metadata query devices (show only evicted)",
+			"storage query list-devices --show-evicted",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:           system.NilRank,
+				OmitPools:      true,
+				ShowOnlyFaulty: true,
+			}),
+			nil,
+		},
+		{
+			"per-server metadata query devices (show only evicted short)",
+			"storage query list-devices -e",
+			printRequest(t, &control.SmdQueryReq{
+				Rank:           system.NilRank,
+				OmitPools:      true,
+				ShowOnlyFaulty: true,
+			}),
+			nil,
+		},
+		{
 			"per-server metadata query devices (by rank)",
 			"storage query list-devices --rank 42",
 			printRequest(t, &control.SmdQueryReq{

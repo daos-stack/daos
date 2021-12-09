@@ -378,10 +378,6 @@ struct  _Ctl__SmdQueryReq
    */
   char *target;
   /*
-   * UUID of new device to replace storage with
-   */
-  char *replaceuuid;
-  /*
    * specify if device reint is needed (used for replace cmd)
    */
   protobuf_c_boolean no_reint;
@@ -393,10 +389,14 @@ struct  _Ctl__SmdQueryReq
    * show only evicted faulty devices
    */
   protobuf_c_boolean show_only_faulty;
+  /*
+   * UUID of new device to replace storage with
+   */
+  char *replace_uuid;
 };
 #define CTL__SMD_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_req__descriptor) \
-    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0 }
+    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, (char *)protobuf_c_empty_string }
 
 
 struct  _Ctl__SmdQueryResp__Device
