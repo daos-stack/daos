@@ -497,9 +497,9 @@ The output table will provide system rank mappings to host address and instance
 UUID, in addition to the rank state.
 
 DAOS engines run a gossip-based protocol called SWIM that provides efficient
-and scalable fault detection. When a engine is reported as unresponsive, a
+and scalable fault detection. When an engine is reported as unresponsive, a
 RAS event is raised and the associated engine is marked as excluded in the
-the output of `dmg system query`. The engine can be stopped (see next section)
+output of `dmg system query`. The engine can be stopped (see next section)
 and then restarted to rejoin the system. An failed engine might also be excluded
 from the pools it hosted, please check the pool operation section on how to
 reintegrate an excluded engine.
@@ -601,6 +601,8 @@ To add a new server to an existing DAOS system, one should install:
 - the relevant certificates
 - the server yaml file pointing to the access points of the running
   DAOS system
+
+The daos_control.yml file should also be updated to include the new DAOS server.
 
 Then starts the daos_server via systemd and format the new server via
 dmg as follows:

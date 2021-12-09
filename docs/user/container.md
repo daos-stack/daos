@@ -290,8 +290,8 @@ might suffer from data loss after several cascading failures, while some others
 with higher level of data protection may not. This incurs extra complexity that
 not all I/O middleware necessarily wants to deal with.
 
-To lower the bar of adoption while still keeping the flexibility, two properties
-have been introduced:
+To lower the bar of adoption while still keeping the flexibility, two container
+properties have been introduced:
 
 - the redundancy factor (rf) that describes the number of concurrent engine
   exclusions that objects in the container are protected against. The rf value
@@ -328,7 +328,7 @@ Health                HEALTHY
 
 Only objects with data protection enabled can be stored in such a container.
 This includes replicated or erasure-coded objects. Attempts to open an
-object with an class that does not support data redundancy (e.g., SX)
+object with a class that does not support data redundancy (e.g., SX)
 will fail.
 
 For rf2, only objects with at least 3-way replication or erasure code with two
@@ -426,7 +426,7 @@ parity fragments (also called sometimes chunks). The cell size can be set at
 container creation time via the property:
 
 ```bash
-$ daos cont create tank --label mycont5 --type POSIX --properties rf:1,cell_size:65600
+$ daos cont create tank --label mycont5 --type POSIX --properties rf:1,cell_size:65536
   Container UUID : 90185799-0e22-4a0b-be9d-1a20900a35ee
   Container Label: mycont5
   Container Type : unknown

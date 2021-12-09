@@ -34,22 +34,18 @@ $ sudo reboot
     but note that this will require running daos_server as root.
 
 !!! warning
-    If VFIO is not enabled, you will run into the issue described in:
+    If VFIO is not enabled on RHEL 8.x and derivatives, you will run into the issue described in:
     https://github.com/spdk/spdk/issues/1153
 
-    When using RHEL 8.1 with official kernel from distribution (4.18.0-147.el8.x86_64)
-    it is not possible to bind nvme devices to uio_pci_generic driver and due to that
-    to use them within SPDK environment:
+    The problem manifests with the following signature in the kernel logs:
 
     ```
     [82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
     [82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
     ```
 
-    The issue was previously reported in SPDK bugzilla [here](https://github.com/spdk/spdk/issues/399)
-    for vanilla kernel 4.18. Unfortunately the kernel used in RHEL 8 does not contain the proper
-    [bugfix](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=linux-4.18.y&id=a34e4f42055a7fe8e804fc9e71dfc1e324c657f1)
-    backported.
+    As a consequence, the use of VFIO on these distributions is a requirement
+    since UIO is not supported.
 
 ## Time Synchronization
 
