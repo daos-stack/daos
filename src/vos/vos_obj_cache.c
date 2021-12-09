@@ -218,6 +218,39 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 	daos_lru_ref_release(occ, &obj->obj_llink);
 }
 
+int
+vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
+		     struct vos_object **objp)
+{
+	struct vos_object	*obj = NULL;
+	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
+	int			 rc;
+
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_DISCARD,
+			  DAOS_INTENT_DEFAULT, &obj, NULL);
+	if (rc != 0)
+		return rc;
+
+	if (obj->obj_discard) {
+		vos_obj_release(occ, obj, false);
+		D_DEBUG(DB_IO, "Object discard already in progress on "DF_UOID"\n", DP_UOID(oid));
+		return -DER_BUSY;
+	}
+
+	obj->obj_discard = true;
+	*objp = obj;
+
+	return 0;
+}
+
+void
+vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj)
+{
+	obj->obj_discard = false;
+
+	vos_obj_release(occ, obj, false);
+}
+
 /** Move local object to the lru cache */
 static inline int
 cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
@@ -372,7 +405,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
-	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
+	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
 	if (!create) {
