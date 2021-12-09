@@ -168,6 +168,17 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 		}
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_REDUN_FAC);
+	if (entry == NULL) {
+		fprintf(ap->errstream, "Pool redundancy factor not found\n");
+		rc = -DER_INVAL;
+	} else {
+		if (!daos_rf_is_valid(entry->dpe_val))
+			D_PRINT("Invalid rf: %u\n", (uint32_t)entry->dpe_val);
+		else
+			D_PRINT("rf = %u\n", (uint32_t)entry->dpe_val);
+	}
+
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_OWNER);
 	if (entry == NULL || entry->dpe_str == NULL) {
 		fprintf(ap->errstream, "owner property not found\n");

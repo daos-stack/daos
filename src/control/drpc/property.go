@@ -36,6 +36,8 @@ const (
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
 	// PoolPropertyECCellSize is the EC Cell size.
 	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
+	// PoolPropertyRedunFac
+	PoolPropertyRedunFac = C.DAOS_PROP_PO_REDUN_FAC
 )
 
 const (

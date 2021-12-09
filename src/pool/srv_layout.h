@@ -55,6 +55,7 @@ extern d_iov_t ds_pool_prop_connectable;	/* uint32_t */
 extern d_iov_t ds_pool_prop_nhandles;		/* uint32_t */
 extern d_iov_t ds_pool_prop_handles;		/* pool handle KVS */
 extern d_iov_t ds_pool_prop_ec_cell_sz;		/* pool EC cell size */
+extern d_iov_t ds_pool_prop_redun_fac;		/* pool redundancy factor */
 extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
 
 /*

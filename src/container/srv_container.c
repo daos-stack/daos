@@ -510,6 +510,12 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_ec_cell_sz;
 	}
 
+	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_REDUN_FAC);
+	D_ASSERT(entry_def != NULL);
+	if (entry_def->dpe_val == 0)
+		/* No specified redun fac from container, inherit from pool */
+		entry_def->dpe_val = pool_hdl->sph_pool->sp_redun_fac;
+
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
 	D_ASSERT(entry_def != NULL);

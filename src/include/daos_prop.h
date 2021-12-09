@@ -67,12 +67,28 @@ enum daos_pool_props {
 	 * The pool svc rank list.
 	 */
 	DAOS_PROP_PO_SVC_LIST,
+	/**
+	 * Pool cell size.
+	 */
 	DAOS_PROP_PO_EC_CELL_SZ,
+	/**
+	 * Pool redundancy factor.
+	 */
+	DAOS_PROP_PO_REDUN_FAC,
 	DAOS_PROP_PO_MAX,
 };
 
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
+
+#define DAOS_PROP_PO_REDUN_FAC_MAX	4
+#define DAOS_RPOP_PO_REDUN_FAC_DEFAULT	0
+
+static inline bool
+daos_rf_is_valid(unsigned long long rf)
+{
+	return rf <= DAOS_PROP_PO_REDUN_FAC_MAX;
+}
 
 /**
  * Number of pool property types

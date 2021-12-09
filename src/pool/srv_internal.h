@@ -58,6 +58,7 @@ struct pool_iv_prop {
 	uint64_t	pip_self_heal;
 	uint64_t	pip_reclaim;
 	uint64_t	pip_ec_cell_sz;
+	uint32_t	pip_redun_fac;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
