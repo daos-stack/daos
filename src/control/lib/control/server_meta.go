@@ -41,17 +41,17 @@ type (
 	// operation.
 	SmdQueryReq struct {
 		unaryRequest
-		OmitDevices      bool        `json:"omit_devices"`
-		OmitPools        bool        `json:"omit_pools"`
-		IncludeBioHealth bool        `json:"include_bio_health"`
-		ShowOnlyFaulty   bool        `json:"show_only_faulty"`
-		SetFaulty        bool        `json:"set_faulty"`
-		UUID             string      `json:"uuid"` // UUID of pool or device for single result
-		Rank             system.Rank `json:"rank"`
-		Target           string      `json:"target"`
-		ReplaceUUID      string      `json:"replace_uuid"` // UUID of new device to replace storage
-		NoReint          bool        `json:"no_reint"`     // for device replacement
-		Identify         bool        `json:"identify"`     // for VMD LED device identification
+		OmitDevices      bool                 `json:"omit_devices"`
+		OmitPools        bool                 `json:"omit_pools"`
+		IncludeBioHealth bool                 `json:"include_bio_health"`
+		SetFaulty        bool                 `json:"set_faulty"`
+		UUID             string               `json:"uuid"` // UUID of pool or device for single result
+		Rank             system.Rank          `json:"rank"`
+		Target           string               `json:"target"`
+		ReplaceUUID      string               `json:"replace_uuid"` // UUID of new device to replace storage
+		NoReint          bool                 `json:"no_reint"`     // for device replacement
+		Identify         bool                 `json:"identify"`     // for VMD LED device identification
+		StateMask        storage.NvmeDevState `json:"state_mask"`   // show devices with state matching mask
 	}
 
 	// SmdQueryResp represents the results of performing

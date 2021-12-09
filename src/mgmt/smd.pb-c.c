@@ -2016,12 +2016,12 @@ static const ProtobufCFieldDescriptor ctl__smd_query_req__field_descriptors[11] 
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "show_only_faulty",
+    "state_mask",
     11,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
+    PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryReq, show_only_faulty),
+    offsetof(Ctl__SmdQueryReq, state_mask),
     NULL,
     NULL,
     0,             /* flags */
@@ -2049,7 +2049,7 @@ static const unsigned ctl__smd_query_req__field_indices_by_name[] = {
   5,   /* field[5] = rank */
   10,   /* field[10] = replace_uuid */
   3,   /* field[3] = set_faulty */
-  9,   /* field[9] = show_only_faulty */
+  9,   /* field[9] = state_mask */
   6,   /* field[6] = target */
   4,   /* field[4] = uuid */
 };

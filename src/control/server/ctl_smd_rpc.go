@@ -96,11 +96,11 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 		for _, dev := range rResp.Devices {
 			state := storage.NvmeDevState(dev.DevState)
 
-			if req.ShowOnlyFaulty && !state.IsFaulty() {
-				continue // Skip device completely
+			if req.StateMask > 0 && req.StateMask&dev.DevState == 0 {
+				continue // skip device completely if mask doesn't match
 			}
 
-			// Skip health query if the device is in "NEW" state
+			// skip health query if the device is in "NEW" state
 			if req.IncludeBioHealth && !state.IsNew() {
 				health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
 					DevUuid: dev.Uuid,
@@ -111,14 +111,14 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 				dev.Health = health
 			}
 
-			if req.ShowOnlyFaulty {
-				// Rewrite slice in place
+			if req.StateMask > 0 {
+				// as mask is set and matches state, rewrite slice in place
 				rResp.Devices[i] = dev
 				i++
 			}
 		}
-		if req.ShowOnlyFaulty {
-			// Prevent memory leak by erasing truncated values
+		if req.StateMask > 0 {
+			// prevent memory leak by erasing truncated values
 			for j := i; j < len(rResp.Devices); j++ {
 				rResp.Devices[j] = nil
 			}

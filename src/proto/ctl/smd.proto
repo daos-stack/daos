@@ -147,7 +147,7 @@ message SmdQueryReq {
 	string target = 7; // response should only include information about this VOS target
 	bool no_reint = 9; // specify if device reint is needed (used for replace cmd)
 	bool identify = 10; // set the VMD LED state to quickly blink
-	bool show_only_faulty = 11; // show only evicted faulty devices
+	uint32 state_mask = 11; // show only devices with state matching bit-mask
 	string replace_uuid = 12; // UUID of new device to replace storage with
 }
 

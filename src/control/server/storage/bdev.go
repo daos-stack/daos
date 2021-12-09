@@ -33,21 +33,27 @@ const BdevPciAddrSep = " "
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
 type NvmeDevState uint32
 
+// NvmeDevState values representing individual bit-flags.
+const (
+	NvmeStatePlugged  NvmeDevState = C.NVME_DEV_FL_PLUGGED
+	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
+	NvmeStateInUse    NvmeDevState = C.NVME_DEV_FL_INUSE
+	NvmeStateIdentify NvmeDevState = C.NVME_DEV_FL_IDENTIFY
+)
+
 // IsNew returns true if SSD is not in use by DAOS.
 func (bs NvmeDevState) IsNew() bool {
-	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY == 0 &&
-		bs&C.NVME_DEV_FL_INUSE == 0)
+	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty == 0 && bs&NvmeStateInUse == 0
 }
 
 // IsNormal returns true if SSD is in a normal, non-faulty state.
 func (bs NvmeDevState) IsNormal() bool {
-	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY == 0 &&
-		bs&C.NVME_DEV_FL_INUSE != 0)
+	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty == 0 && bs&NvmeStateInUse != 0
 }
 
 // IsFaulty returns true if SSD is in a faulty state.
 func (bs NvmeDevState) IsFaulty() bool {
-	return bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY != 0
+	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty != 0
 }
 
 // StatusString summarizes the device status.

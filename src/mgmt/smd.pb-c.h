@@ -386,9 +386,9 @@ struct  _Ctl__SmdQueryReq
    */
   protobuf_c_boolean identify;
   /*
-   * show only evicted faulty devices
+   * show only devices with state matching bit-mask
    */
-  protobuf_c_boolean show_only_faulty;
+  uint32_t state_mask;
   /*
    * UUID of new device to replace storage with
    */

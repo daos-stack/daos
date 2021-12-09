@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -103,9 +104,9 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices (show only evicted)",
 			"storage query list-devices --show-evicted",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:           system.NilRank,
-				OmitPools:      true,
-				ShowOnlyFaulty: true,
+				Rank:      system.NilRank,
+				OmitPools: true,
+				StateMask: storage.NvmeStateFaulty,
 			}),
 			nil,
 		},
@@ -113,9 +114,9 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices (show only evicted short)",
 			"storage query list-devices -e",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:           system.NilRank,
-				OmitPools:      true,
-				ShowOnlyFaulty: true,
+				Rank:      system.NilRank,
+				OmitPools: true,
+				StateMask: storage.NvmeStateFaulty,
 			}),
 			nil,
 		},
