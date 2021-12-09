@@ -33,14 +33,6 @@ const BdevPciAddrSep = " "
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
 type NvmeDevState uint32
 
-// NvmeDevState constant definitions to represent expected bitset flag combinations.
-const (
-	NvmeDevStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	NvmeDevStateNormal   NvmeDevState = NvmeDevStateNew | C.NVME_DEV_FL_INUSE
-	NvmeDevStateFaulty   NvmeDevState = NvmeDevStateNormal | C.NVME_DEV_FL_FAULTY
-	NvmeDevStateIdentify NvmeDevState = NvmeDevStateNormal | C.NVME_DEV_FL_IDENTIFY
-)
-
 // IsNew returns true if SSD is not in use by DAOS.
 func (bs NvmeDevState) IsNew() bool {
 	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY == 0 &&
