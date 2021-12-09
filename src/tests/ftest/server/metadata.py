@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import shutil
+from tempfile import mkdtemp
 import traceback
 import uuid
 
@@ -31,6 +33,11 @@ def run_ior_loop(manager, uuids):
     errors = []
     for index, cont_uuid in enumerate(uuids):
         manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
+
+        # Create a unique temporary directory for the the manager command
+        tmp_dir = mkdtemp(dir=manager.tmpdir_base.value)
+        manager.tmpdir_base.update(tmp_dir, "tmpdir_base")
+
         try:
             results.append(manager.run())
         except CommandFailure as error:
@@ -38,6 +45,10 @@ def run_ior_loop(manager, uuids):
             errors.append(
                 "IOR {} Loop {}/{} failed for container {}: {}".format(
                     ior_mode, index, len(uuids), cont_uuid, error))
+        finally:
+            # Remove the unique temporary directory and its contents to avoid conflicts
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
     if errors:
         raise CommandFailure(
             "IOR failed in {}/{} loops: {}".format(len(errors), len(uuids), "\n".join(errors)))
