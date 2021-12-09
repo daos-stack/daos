@@ -7,7 +7,7 @@
 
 from time import sleep, time
 from ior_test_base import IorTestBase
-from general_utils import DaosTestError
+from avocado.core.exceptions import TestFail
 
 class DaosAggregationFull(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -34,25 +34,6 @@ class DaosAggregationFull(IorTestBase):
         self.pool.get_info()
         return self.pool.info.pi_space.ps_space.s_free[storage_index]
 
-    def convert_str_to_number(self, string):
-        """Convert the input string of K, M and B into number
-
-        Arg:
-            string (str): string of K, M, B to be converted
-        Return:
-            number (int): converted number
-        """
-
-        number = 0
-        num_dic = {'K':1000, 'M':1000000, 'B':1000000000}
-        if string.isdigit():
-            number = int(string)
-        else:
-            if len(string) > 1:
-                number = float(string[:-1]) * num_dic.get(
-                    string[-1].upper(), 1)
-        return int(number)
-
     def test_aggregation_poolfull(self):
         """Jira ID: DAOS-4870
 
@@ -61,6 +42,7 @@ class DaosAggregationFull(IorTestBase):
             a DAOS pool until out-of-space and enable the aggregation and
             verify the aggregation reclaims the overwritten space, then rerun
             ior on aggregation mode, to check space usage.
+            Note: This is a boundary test, result expects Pass with Warning.
 
         Steps:
             (0)Create pool and container.
@@ -83,7 +65,15 @@ class DaosAggregationFull(IorTestBase):
         ior_test_timeout = self.params.get("ior_test_timeout", "/run/ior/*")
         block_size = self.params.get("block_size", "/run/ior/*")
         ior_np = self.params.get("np", "/run/ior/client_processes/*")
-        expect_ior_usage = self.convert_str_to_number(block_size) * ior_np
+        number = 0
+        num_dic = {'K':1000, 'M':1000000, 'B':1000000000}
+        if block_size.isdigit():
+            number = int(block_size)
+        else:
+            if len(block_size) > 1:
+                number = float(block_size[:-1]) * num_dic.get(
+                    block_size[-1].upper(), 1)
+        expect_ior_usage = number * ior_np
 
         #(0)Create pool and container
         self.update_ior_cmd_with_pool()
@@ -101,14 +91,14 @@ class DaosAggregationFull(IorTestBase):
         start = time()
         while time() - start < ior_test_timeout:
             try:
-                output=self.run_ior_with_pool(create_pool=False,
-                                              fail_on_warning=False)
+                self.run_ior_with_pool(create_pool=False,
+                                       fail_on_warning=False)
                 free_space.append(self.get_free_space())
                 used_by_ior.append(free_space[ind-1] - free_space[ind])
                 self.assertTrue(free_space[ind] <= free_space[ind-1],
                                 "IOR run was not successful.")
                 ind += 1
-            except Exception as excep:
+            except TestFail as excep:
                 out_of_space = True
                 self.log.info("=Error on run_ior_with_pool, out of space.. %s",
                               repr(excep))
