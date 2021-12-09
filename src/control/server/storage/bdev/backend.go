@@ -45,13 +45,14 @@ type (
 	vmdDetectFn  func() (*common.PCIAddressSet, error)
 	hpCleanFn    func(string, string, string) error
 	writeConfFn  func(logging.Logger, *storage.BdevWriteConfigRequest) error
+	restoreFn    func()
 )
 
 // suppressOutput is a horrible, horrible hack necessitated by the fact that
 // SPDK blathers to stdout, causing console spam and messing with our secure
 // communications channel between the server and privileged helper.
 
-func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
+func (w *spdkWrapper) suppressOutput() (restore restoreFn, err error) {
 	realStdout, dErr := syscall.Dup(syscall.Stdout)
 	if dErr != nil {
 		err = dErr
@@ -83,20 +84,20 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 	return
 }
 
-func (w *spdkWrapper) init(log logging.Logger, spdkOpts *spdk.EnvOptions) (func(), error) {
+func (w *spdkWrapper) init(log logging.Logger, spdkOpts *spdk.EnvOptions) (restoreFn, error) {
 	log.Debug("spdk backend init (bindings call)")
 
-	restore, err := w.suppressOutput()
+	restoreOutput, err := w.suppressOutput()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to suppress spdk output")
 	}
 
 	if err := w.InitSPDKEnv(log, spdkOpts); err != nil {
-		restore()
+		restoreOutput()
 		return nil, errors.Wrap(err, "failed to init spdk env")
 	}
 
-	return restore, nil
+	return restoreOutput, nil
 }
 
 func newBackend(log logging.Logger, sr *spdkSetupScript) *spdkBackend {
@@ -216,7 +217,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 // bdev_include and bdev_exclude list filters provided in the server config file.
 func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 	sb.log.Debugf("spdk backend reset (script call): %+v", req)
-	return sb.reset(req, detectVMD)
+	return sb.reset(req, DetectVMD)
 }
 
 // Prepare will perform a lookup on the requested target user to validate existence
@@ -228,7 +229,7 @@ func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 // bdev_include and bdev_exclude list filters provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("spdk backend prepare (script call): %+v", req)
-	return sb.prepare(req, user.Lookup, detectVMD, cleanHugePages)
+	return sb.prepare(req, user.Lookup, DetectVMD, cleanHugePages)
 }
 
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
@@ -289,36 +290,38 @@ func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.Nvme
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
-	requestedBdevs, err := common.NewPCIAddressSet(req.DeviceList...)
+	needDevs, err := common.NewPCIAddressSet(req.DeviceList...)
 	if err != nil {
 		return nil, err
 	}
 
-	restoreOutput, err := sb.binding.init(sb.log, &spdk.EnvOptions{
-		PCIAllowList: requestedBdevs,
+	spdkOpts := &spdk.EnvOptions{
+		PCIAllowList: needDevs,
 		EnableVMD:    req.VMDEnabled,
-	})
+	}
+
+	restoreAfterInit, err := sb.binding.init(sb.log, spdkOpts)
 	if err != nil {
 		return nil, err
 	}
-	defer restoreOutput()
+	defer restoreAfterInit()
 
-	discoveredBdevs, err := sb.binding.Discover(sb.log)
+	foundDevs, err := sb.binding.Discover(sb.log)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover nvme")
 	}
 
-	outBdevs, err := groomDiscoveredBdevs(requestedBdevs, discoveredBdevs, req.VMDEnabled)
+	outDevs, err := groomDiscoveredBdevs(needDevs, foundDevs, req.VMDEnabled)
 	if err != nil {
 		return nil, err
 	}
-	if len(outBdevs) != len(discoveredBdevs) {
-		sb.log.Debugf("scan bdevs filtered, in: %v, out: %v (devlist %s)", discoveredBdevs,
-			outBdevs, requestedBdevs)
+	if len(outDevs) != len(foundDevs) {
+		sb.log.Debugf("scan bdevs filtered, in: %v, out: %v (requested %s)", foundDevs,
+			outDevs, needDevs)
 	}
 
 	return &storage.BdevScanResponse{
-		Controllers: outBdevs,
+		Controllers: outDevs,
 		VMDEnabled:  req.VMDEnabled,
 	}, nil
 }
@@ -419,45 +422,39 @@ func (sb *spdkBackend) formatKdev(req *storage.BdevFormatRequest) (*storage.Bdev
 }
 
 func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	deviceList, err := common.NewPCIAddressSet(req.Properties.DeviceList...)
+	needDevs, err := common.NewPCIAddressSet(req.Properties.DeviceList...)
 	if err != nil {
 		return nil, err
 	}
 
-	if deviceList.IsEmpty() {
+	if needDevs.IsEmpty() {
 		sb.log.Debug("skip nvme format as bdev device list is empty")
 		return &storage.BdevFormatResponse{}, nil
 	}
 
 	if req.VMDEnabled {
 		sb.log.Debug("vmd support enabled during nvme format")
-		dl, err := substituteVMDAddresses(sb.log, deviceList, req.BdevCache)
+		dl, err := substituteVMDAddresses(sb.log, needDevs, req.BdevCache)
 		if err != nil {
 			return nil, err
 		}
-		deviceList = dl
+		needDevs = dl
 	}
 
 	spdkOpts := &spdk.EnvOptions{
-		PCIAllowList: deviceList,
+		PCIAllowList: needDevs,
 		EnableVMD:    req.VMDEnabled,
 	}
 
-	restoreOutput, err := sb.binding.init(sb.log, spdkOpts)
+	restoreAfterInit, err := sb.binding.init(sb.log, spdkOpts)
 	if err != nil {
 		return nil, err
 	}
-	defer restoreOutput()
-	defer sb.binding.FiniSPDKEnv(sb.log, spdkOpts)
-	defer func() {
-		if err := sb.binding.CleanLockfiles(sb.log, deviceList.Strings()...); err != nil {
-			sb.log.Errorf("cleanup failed after format: %s", err)
-		}
-	}()
+	defer restoreAfterInit()
 
 	results, err := sb.binding.Format(sb.log)
 	if err != nil {
-		return nil, errors.Wrapf(err, "spdk format %s", deviceList)
+		return nil, errors.Wrapf(err, "spdk format %s", needDevs)
 	}
 
 	if len(results) == 0 {
