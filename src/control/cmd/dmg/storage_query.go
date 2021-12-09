@@ -103,8 +103,9 @@ func (cmd *tgtHealthQueryCmd) Execute(_ []string) error {
 type listDevicesQueryCmd struct {
 	smdQueryCmd
 	rankCmd
-	Health bool   `short:"b" long:"health" description:"Include device health in results"`
-	UUID   string `short:"u" long:"uuid" description:"Device UUID (all devices if blank)"`
+	Health  bool   `short:"b" long:"health" description:"Include device health in results"`
+	UUID    string `short:"u" long:"uuid" description:"Device UUID (all devices if blank)"`
+	Evicted bool   `short:"e" long:"show-evicted" description:"Show only evicted faulty devices"`
 }
 
 func (cmd *listDevicesQueryCmd) Execute(_ []string) error {
@@ -114,6 +115,7 @@ func (cmd *listDevicesQueryCmd) Execute(_ []string) error {
 		IncludeBioHealth: cmd.Health,
 		Rank:             cmd.GetRank(),
 		UUID:             cmd.UUID,
+		ShowOnlyFaulty:   cmd.Evicted,
 	}
 	return cmd.makeRequest(ctx, req)
 }

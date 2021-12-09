@@ -44,6 +44,7 @@ type (
 		OmitDevices      bool
 		OmitPools        bool
 		IncludeBioHealth bool
+		ShowOnlyFaulty   bool
 		SetFaulty        bool
 		UUID             string // UUID of pool or device for single result
 		Rank             system.Rank

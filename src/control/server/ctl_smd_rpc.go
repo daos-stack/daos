@@ -92,23 +92,37 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 			}
 		}
 
-		if !req.IncludeBioHealth {
-			continue
-		}
-
+		i := 0 // output index
 		for _, dev := range rResp.Devices {
-			/* Skip health query if the device is in "NEW" state */
-			if storage.NvmeDevState(dev.DevState).IsNew() {
-				continue
+			state := storage.NvmeDevState(dev.DevState)
+
+			if req.ShowOnlyFaulty && !state.IsFaulty() {
+				continue // Skip device completely
 			}
-			health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-				DevUuid: dev.Uuid,
-			})
-			if err != nil {
-				return errors.Wrapf(err, "device %s, states %q", dev,
-					storage.NvmeDevState(dev.DevState).String())
+
+			// Skip health query if the device is in "NEW" state
+			if req.IncludeBioHealth && !state.IsNew() {
+				health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
+					DevUuid: dev.Uuid,
+				})
+				if err != nil {
+					return errors.Wrapf(err, "device %s, states %q", dev, state.String())
+				}
+				dev.Health = health
 			}
-			dev.Health = health
+
+			if req.ShowOnlyFaulty {
+				// Rewrite slice in place
+				rResp.Devices[i] = dev
+				i++
+			}
+		}
+		if req.ShowOnlyFaulty {
+			// Prevent memory leak by erasing truncated values
+			for j := i; j < len(rResp.Devices); j++ {
+				rResp.Devices[j] = nil
+			}
+			rResp.Devices = rResp.Devices[:i]
 		}
 	}
 	return nil
