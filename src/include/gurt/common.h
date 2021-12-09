@@ -170,7 +170,7 @@ char *d_realpath(const char *path, char *resolved_path);
 		int _errno = errno;					\
 		errno = 0;						\
 		(ptr) = d_realpath((path), NULL);			\
-		if (errno == 0 || errno == ENOMEM) {			\
+		if ((ptr) != NULL) {					\
 			int _size = 0;					\
 			void *_ptr = (ptr);				\
 			if (_ptr)					\

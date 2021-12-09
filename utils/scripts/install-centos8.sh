@@ -13,6 +13,7 @@ set -e
 dnf upgrade
 dnf install \
     boost-python3-devel \
+    bzip2 \
     clang \
     clang-tools-extra \
     cmake \

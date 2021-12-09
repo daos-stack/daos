@@ -15,6 +15,10 @@ BUILD_FILES = ['site_scons',
                'ci/gha_helper.py']
 
 COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
+# Due to the way GHA checks out the code when building it tends to add merge commits to the tip so
+# strip these out.  git rev-parse does not seem to have a --no-merges option so use git-log here
+# instead.
+# COMMIT_CMD = ['git', 'log', '--number=1', '--no-merges', '--format=%h']
 
 def set_output(key, value):
     """ Set a key-value pair in github actions metadata"""
@@ -76,6 +80,7 @@ def main():
         base_distro = ''
 
     rc = subprocess.run(cmd, check=True, capture_output=True)
+    print(rc)
     commits = rc.stdout.decode('utf-8').strip()
 
     if single:
@@ -89,6 +94,7 @@ def main():
         # Landings builds, embed the current commit in the hash name, load either the exact commit
         # or the most recent build with the same build scripts.
         rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
+        print(rc)
         commit_hash = rc.stdout.decode('utf-8').strip()
 
         key = 'bc-{}-{}-{}-{}-{}'.format(target_branch,

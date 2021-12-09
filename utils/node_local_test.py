@@ -491,7 +491,9 @@ class DaosServer():
             self.dfuse_cores = None
 
     def __del__(self):
+        print('Agent is {}'.format(self._agent))
         if self._agent:
+            print('Stopping agent')
             self._stop_agent()
         try:
             if self.running:
