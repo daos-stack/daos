@@ -135,4 +135,11 @@ jobs:
                           --build-arg COMPILER
     - name: Run NLT
       run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-               build-image ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy
+               build-image --name build-post
+               ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy
+    - name: Fetch results
+      if: always()
+      run: docker cp build-post:/tmp/ ./
+    - name: Cat
+      if: always()
+      run: bzcat *.bz2
