@@ -356,8 +356,10 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 type containerSerializeCmd struct {
 	daosCmd
 
-	Source string `long:"src" short:"s" description:"container to be serialized" required:"1"`
 	Output string `long:"output-path" short:"o" description:"path to output serialized HDF5 files" required:"0"`
+	Args   struct {
+		Source string `positional-arg-name:"<Source container>"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerSerializeCmd) Execute(_ []string) error {
@@ -365,9 +367,12 @@ func (cmd *containerSerializeCmd) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
+	if cmd.Args.Source == "" {
+		return errors.New("Source container is required")
+	}
 	defer deallocCmdArgs()
 
-	ap.src = C.CString(cmd.Source)
+	ap.src = C.CString(cmd.Args.Source)
 	defer freeString(ap.src)
 	if cmd.Output != "" {
 		ap.output_path = C.CString(cmd.Output)
@@ -378,7 +383,7 @@ func (cmd *containerSerializeCmd) Execute(_ []string) error {
 	rc := C.cont_serialize_hdlr(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
-			"failed to serialize %s -> %s", cmd.Source)
+			"failed to serialize %s", cmd.Args.Source)
 	}
 
 	return nil
@@ -387,9 +392,11 @@ func (cmd *containerSerializeCmd) Execute(_ []string) error {
 type containerDeserializeCmd struct {
 	daosCmd
 
-	File  string `long:"file" short:"f" description:"Path to serialized HDF5 file" required:"1"`
-	Pool  string `long:"pool" short:"p" description:"Pool where container will be deserialized" required:"1"`
-	Label string `long:"cont-label" short:"l" description:"Create container with specified container label" required:"0"`
+	Label string `long:"label" short:"l" description:"Create container with specified container label" required:"0"`
+	Args  struct {
+		Pool string `positional-arg-name:"<Pool UUID or Label>"`
+		File string `positional-arg-name:"<File to deserialize>"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerDeserializeCmd) Execute(_ []string) error {
@@ -397,13 +404,19 @@ func (cmd *containerDeserializeCmd) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
+	if cmd.Args.Pool == "" {
+		return errors.New("Pool is required")
+	}
+	if cmd.Args.File == "" {
+		return errors.New("File to deserialize is required")
+	}
 	defer deallocCmdArgs()
 
-	ap.path = C.CString(cmd.File)
-	defer freeString(ap.path)
-	cPool := C.CString(cmd.Pool)
+	cPool := C.CString(cmd.Args.Pool)
 	defer freeString(cPool)
 	C.strncpy(&ap.pool_str[0], cPool, C.DAOS_PROP_LABEL_MAX_LEN)
+	ap.path = C.CString(cmd.Args.File)
+	defer freeString(ap.path)
 	if cmd.Label != "" {
 		cLabel := C.CString(cmd.Label)
 		defer freeString(cLabel)
@@ -414,7 +427,7 @@ func (cmd *containerDeserializeCmd) Execute(_ []string) error {
 	rc := C.cont_deserialize_hdlr(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
-			"failed to deserialize %s -> %s", cmd.File)
+			"failed to deserialize %s -> %s", cmd.Args.File, cmd.Args.Pool)
 	}
 
 	return nil

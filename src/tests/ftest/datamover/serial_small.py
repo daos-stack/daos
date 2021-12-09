@@ -99,7 +99,7 @@ class DmvrSerialSmall(DataMoverTestBase):
         """
         Test Description:
             DAOS-6875: Verify serializing a small container.
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=datamover,dserialize
         :avocado: tags=dm_serial_small,dm_serial_small_dserialize
         """

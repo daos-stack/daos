@@ -26,7 +26,6 @@ struct dm_args {
 	uint32_t	cont_prop_layout;
 	uint64_t	cont_layout;
 	uint64_t	cont_oid;
-
 };
 
 struct file_dfs {
