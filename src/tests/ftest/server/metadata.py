@@ -31,11 +31,12 @@ def run_ior_loop(manager, uuids):
     """
     results = []
     errors = []
+    tmpdir_base = manager.tmpdir_base.value
     for index, cont_uuid in enumerate(uuids):
         manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
 
         # Create a unique temporary directory for the the manager command
-        tmp_dir = mkdtemp(dir=manager.tmpdir_base.value)
+        tmp_dir = mkdtemp(dir=tmpdir_base)
         manager.tmpdir_base.update(tmp_dir, "tmpdir_base")
 
         try:
