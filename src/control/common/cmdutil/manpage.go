@@ -4,14 +4,11 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package common
+package cmdutil
 
 import (
 	"io"
 	"os"
-	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // ManPageWriter defines an interface to be implemented
@@ -43,24 +40,4 @@ func (cmd *ManCmd) Execute(_ []string) error {
 
 	cmd.writeFn(output)
 	return nil
-}
-
-type ArgsHandler interface {
-	CheckArgs([]string) error
-	HandleArgs([]string) error
-}
-
-// NoArgsCmd defines an embeddable struct that can be used to
-// implement a command that does not take any arguments.
-type NoArgsCmd struct{}
-
-func (cmd *NoArgsCmd) CheckArgs(args []string) error {
-	if len(args) != 0 {
-		return errors.Errorf("unexpected arguments: %s", strings.Join(args, " "))
-	}
-	return nil
-}
-
-func (cmd *NoArgsCmd) HandleArgs(args []string) error {
-	return errors.New("this command does not accept additional arguments")
 }
