@@ -62,7 +62,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         "DSERIAL",       # mpifileutils daos-serialize + daos-deserialize
         "FS_COPY",       # daos filesystem copy
         "CONT_CLONE",    # daos container clone
-        "CONT_SERIALIZE" # daos container serialize
+        "CONT_SERIALIZE" # daos container serialize + deserialize
     )
 
     def __init__(self, *args, **kwargs):
@@ -835,7 +835,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 	                                                      src_cont), output_path=tmp_path)
         if dst_pool:
             self.cont_deserialize_cmd.set_cont_deserialize_params(file_path=self.serial_file_path,
-                                                                  pool=uuid_from_obj(dst_pool))
+                                                                  deser_pool=uuid_from_obj(dst_pool))
 
     def _set_dserial_params(self,
                             src_pool=None, src_cont=None,

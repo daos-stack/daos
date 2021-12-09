@@ -243,7 +243,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container serialize command object."""
                 super().__init__("/run/daos/container/serialize/*", "serialize")
-                self.src = FormattedParameter("--src={}")
+                self.src = PositionalParameter(3)
                 self.output_path = FormattedParameter("--output-path={}")
 
         class DeserializeSubCommand(CommandWithParameters):
@@ -252,9 +252,9 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container deserialize command object."""
                 super().__init__("/run/daos/container/deserialize/*", "deserialize")
-                self.pool = FormattedParameter("--pool={}")
-                self.file_path = FormattedParameter("--file={}")
-                self.cont_label = FormattedParameter("--cont-label={}")
+                self.deser_pool = PositionalParameter(1)
+                self.file_path = PositionalParameter(2)
+                self.cont_label = FormattedParameter("--label={}")
 
         class CreateSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create command."""

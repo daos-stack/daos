@@ -376,7 +376,7 @@ class ContDeserialize():
         self.daos_cmd = daos_cmd
         self.log = log
 
-    def set_cont_deserialize_params(self, pool=None, file_path=None, cont_label=None):
+    def set_cont_deserialize_params(self, deser_pool=None, file_path=None, cont_label=None):
         """Set the daos cont deserialize params.
 
         Args:
@@ -385,8 +385,8 @@ class ContDeserialize():
             cont_label (str, optional): The label for the created container
 
         """
-        if pool:
-            self.pool = pool
+        if deser_pool:
+            self.deser_pool = deser_pool
         if file_path:
             self.file_path = file_path
         if cont_label:
@@ -406,7 +406,7 @@ class ContDeserialize():
         """
         self.log.info("Starting daos cont deserialize")
 
-        return self.daos_cmd.container_deserialize(pool=self.pool, file_path=self.file_path,
+        return self.daos_cmd.container_deserialize(deser_pool=self.deser_pool, file_path=self.file_path,
                                                    cont_label=self.cont_label)
 
 class ContClone():

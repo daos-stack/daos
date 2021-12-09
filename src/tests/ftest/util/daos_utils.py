@@ -117,7 +117,7 @@ class DaosCommand(DaosCommandBase):
 
         Args:
             src (str): the source container, formatted as daos://<pool>/<cont>
-            output_path (str): the output directory to write HDF5 file
+            output_path (str, optional): the output directory to write HDF5 file
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -130,13 +130,15 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("container", "serialize"), src=src, output_path=output_path)
 
-    def container_deserialize(self, pool, file_path=None, cont_label=None):
+    def container_deserialize(self, deser_pool, file_path=None, cont_label=None):
         """Deserialize an HDF5 file to a DAOS container.
 
         Args:
-            pool (str): the pool to deserialize to, formatted as daos://<pool>/<cont>
+            deser_pool (str): the pool to deserialize to, formatted as daos://<pool>/<cont>
             file_path (str): the HDF5 file to deserialize
+                Defaults to None.
             cont_label (str): create the container with a specified label (optional)
+                Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -147,7 +149,7 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "deserialize"), pool=pool, file_path=file_path, cont_label=cont_label)
+            ("container", "deserialize"), deser_pool=deser_pool, file_path=file_path, cont_label=cont_label)
 
     def container_destroy(self, pool, cont, force=None, sys_name=None):
         """Destroy a container.
