@@ -9,168 +9,137 @@ package hardware
 import (
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 func TestHardware_Topology_AllDevices(t *testing.T) {
 	for name, tc := range map[string]struct {
 		topo      *Topology
-		expResult map[string]*Device
+		expResult map[string]*PCIDevice
 	}{
 		"nil": {
-			expResult: make(map[string]*Device),
+			expResult: make(map[string]*PCIDevice),
 		},
 		"no NUMA nodes": {
 			topo:      &Topology{},
-			expResult: make(map[string]*Device),
+			expResult: make(map[string]*PCIDevice),
 		},
 		"no PCI addrs": {
 			topo: &Topology{
 				NUMANodes: map[uint]*NUMANode{
-					0: {
-						ID:       0,
-						NumCores: 8,
-					},
+					0: MockNUMANode(0, 8),
 				},
 			},
-			expResult: make(map[string]*Device),
-		},
-		"no devices": {
-			topo: &Topology{
-				NUMANodes: map[uint]*NUMANode{
-					0: {
-						ID:       0,
-						NumCores: 8,
-						Devices: PCIDevices{
-							"0000:01:01.1": []*Device{},
-						},
-					},
-				},
-			},
-			expResult: make(map[string]*Device),
+			expResult: make(map[string]*PCIDevice),
 		},
 		"single device": {
 			topo: &Topology{
 				NUMANodes: map[uint]*NUMANode{
-					0: {
-						ID:       0,
-						NumCores: 8,
-						Devices: PCIDevices{
-							"0000:01:01.1": []*Device{
-								{
-									Name:    "test0",
-									Type:    DeviceTypeNetInterface,
-									PCIAddr: "0000:01:01.1",
-								},
+					0: MockNUMANode(0, 8).WithDevices(
+						[]*PCIDevice{
+							{
+								Name:    "test0",
+								Type:    DeviceTypeNetInterface,
+								PCIAddr: *common.MustNewPCIAddress("0000:01:01.1"),
 							},
 						},
-					},
+					),
 				},
 			},
-			expResult: map[string]*Device{
+			expResult: map[string]*PCIDevice{
 				"test0": {
 					Name:    "test0",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: "0000:01:01.1",
+					PCIAddr: *common.MustNewPCIAddress("0000:01:01.1"),
 				},
 			},
 		},
 		"multi device": {
 			topo: &Topology{
 				NUMANodes: map[uint]*NUMANode{
-					0: {
-						ID:       0,
-						NumCores: 8,
-						Devices: PCIDevices{
-							"0000:01:01.1": []*Device{
-								{
-									Name:    "test0",
-									Type:    DeviceTypeNetInterface,
-									PCIAddr: "0000:01:01.1",
-								},
-								{
-									Name:    "test1",
-									Type:    DeviceTypeOFIDomain,
-									PCIAddr: "0000:01:01.1",
-								},
+					0: MockNUMANode(0, 8).WithDevices(
+						[]*PCIDevice{
+							{
+								Name:    "test0",
+								Type:    DeviceTypeNetInterface,
+								PCIAddr: *common.MustNewPCIAddress("0000:01:01.1"),
 							},
-							"0000:01:02.1": []*Device{
-								{
-									Name:    "test2",
-									Type:    DeviceTypeNetInterface,
-									PCIAddr: "0000:01:02.1",
-								},
-								{
-									Name:    "test3",
-									Type:    DeviceTypeUnknown,
-									PCIAddr: "0000:01:02.1",
-								},
+							{
+								Name:    "test1",
+								Type:    DeviceTypeOFIDomain,
+								PCIAddr: *common.MustNewPCIAddress("0000:01:01.1"),
+							},
+							{
+								Name:    "test2",
+								Type:    DeviceTypeNetInterface,
+								PCIAddr: *common.MustNewPCIAddress("0000:01:02.1"),
+							},
+							{
+								Name:    "test3",
+								Type:    DeviceTypeUnknown,
+								PCIAddr: *common.MustNewPCIAddress("0000:01:02.1"),
 							},
 						},
-					},
-					1: {
-						ID:       1,
-						NumCores: 8,
-						Devices: PCIDevices{
-							"0000:02:01.1": []*Device{
-								{
-									Name:    "test4",
-									Type:    DeviceTypeNetInterface,
-									PCIAddr: "0000:02:01.1",
-								},
-								{
-									Name:    "test5",
-									Type:    DeviceTypeOFIDomain,
-									PCIAddr: "0000:02:01.1",
-								},
+					),
+					1: MockNUMANode(1, 8).WithDevices(
+						[]*PCIDevice{
+							{
+								Name:    "test4",
+								Type:    DeviceTypeNetInterface,
+								PCIAddr: *common.MustNewPCIAddress("0000:02:01.1"),
 							},
-							"0000:02:02.1": []*Device{
-								{
-									Name:    "test6",
-									Type:    DeviceTypeUnknown,
-									PCIAddr: "0000:02:02.1",
-								},
+							{
+								Name:    "test5",
+								Type:    DeviceTypeOFIDomain,
+								PCIAddr: *common.MustNewPCIAddress("0000:02:01.1"),
+							},
+							{
+								Name:    "test6",
+								Type:    DeviceTypeUnknown,
+								PCIAddr: *common.MustNewPCIAddress("0000:02:02.1"),
 							},
 						},
-					},
+					),
 				},
 			},
-			expResult: map[string]*Device{
+			expResult: map[string]*PCIDevice{
 				"test0": {
 					Name:    "test0",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: "0000:01:01.1",
+					PCIAddr: *common.MustNewPCIAddress("0000:01:01.1"),
 				},
 				"test1": {
 					Name:    "test1",
 					Type:    DeviceTypeOFIDomain,
-					PCIAddr: "0000:01:01.1",
+					PCIAddr: *common.MustNewPCIAddress("0000:01:01.1"),
 				},
 				"test2": {
 					Name:    "test2",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: "0000:01:02.1",
+					PCIAddr: *common.MustNewPCIAddress("0000:01:02.1"),
 				},
 				"test3": {
 					Name:    "test3",
 					Type:    DeviceTypeUnknown,
-					PCIAddr: "0000:01:02.1",
+					PCIAddr: *common.MustNewPCIAddress("0000:01:02.1"),
 				},
 				"test4": {
 					Name:    "test4",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: "0000:02:01.1",
+					PCIAddr: *common.MustNewPCIAddress("0000:02:01.1"),
 				},
 				"test5": {
 					Name:    "test5",
 					Type:    DeviceTypeOFIDomain,
-					PCIAddr: "0000:02:01.1",
+					PCIAddr: *common.MustNewPCIAddress("0000:02:01.1"),
 				},
 				"test6": {
 					Name:    "test6",
 					Type:    DeviceTypeUnknown,
-					PCIAddr: "0000:02:02.1",
+					PCIAddr: *common.MustNewPCIAddress("0000:02:02.1"),
 				},
 			},
 		},
@@ -178,7 +147,10 @@ func TestHardware_Topology_AllDevices(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := tc.topo.AllDevices()
 
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreFields(PCIDevice{}, "NUMANode"),
+			}
+			if diff := cmp.Diff(tc.expResult, result, cmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -199,39 +171,44 @@ func TestHardware_PCIDevices_Keys(t *testing.T) {
 		},
 		"keys": {
 			devices: PCIDevices{
-				"0000:01:01.1": []*Device{
+				*common.MustNewPCIAddress("0000:01:01.1"): []*PCIDevice{
 					{
 						Name:    "test0",
 						Type:    DeviceTypeNetInterface,
-						PCIAddr: "0000:01:01.1",
+						PCIAddr: *common.MustNewPCIAddress("0000:01:01.1"),
 					},
 					{
 						Name:    "test1",
 						Type:    DeviceTypeOFIDomain,
-						PCIAddr: "0000:01:01.1",
+						PCIAddr: *common.MustNewPCIAddress("0000:01:01.1"),
 					},
 				},
-				"0000:01:02.1": []*Device{
+				*common.MustNewPCIAddress("0000:01:02.1"): []*PCIDevice{
 					{
 						Name:    "test2",
 						Type:    DeviceTypeNetInterface,
-						PCIAddr: "0000:01:02.1",
+						PCIAddr: *common.MustNewPCIAddress("0000:01:02.1"),
 					},
 					{
 						Name:    "test3",
 						Type:    DeviceTypeUnknown,
-						PCIAddr: "0000:01:02.1",
+						PCIAddr: *common.MustNewPCIAddress("0000:01:02.1"),
 					},
 				},
-				"0000:01:03.1": []*Device{},
+				*common.MustNewPCIAddress("0000:01:03.1"): []*PCIDevice{},
 			},
 			expResult: []string{"0000:01:01.1", "0000:01:02.1", "0000:01:03.1"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result := tc.devices.Keys()
+			t.Logf("result: %v", result)
+			resultStr := make([]string, len(result))
+			for i, key := range result {
+				resultStr[i] = key.String()
+			}
 
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+			if diff := cmp.Diff(tc.expResult, resultStr); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -241,7 +218,7 @@ func TestHardware_PCIDevices_Keys(t *testing.T) {
 func TestHardware_PCIDevices_Add(t *testing.T) {
 	for name, tc := range map[string]struct {
 		devices   PCIDevices
-		newDev    *Device
+		newDev    *PCIDevice
 		expResult PCIDevices
 	}{
 		"nil": {},
@@ -251,69 +228,61 @@ func TestHardware_PCIDevices_Add(t *testing.T) {
 		},
 		"add to empty": {
 			devices: PCIDevices{},
-			newDev: &Device{
-				Name:         "test1",
-				Type:         DeviceTypeNetInterface,
-				NUMAAffinity: 1,
-				PCIAddr:      "0000:01:01.01",
+			newDev: &PCIDevice{
+				Name:    "test1",
+				Type:    DeviceTypeNetInterface,
+				PCIAddr: *common.MustNewPCIAddress("0000:01:01.01"),
 			},
 			expResult: PCIDevices{
-				"0000:01:01.01": {
+				*common.MustNewPCIAddress("0000:01:01.01"): {
 					{
-						Name:         "test1",
-						Type:         DeviceTypeNetInterface,
-						NUMAAffinity: 1,
-						PCIAddr:      "0000:01:01.01",
+						Name:    "test1",
+						Type:    DeviceTypeNetInterface,
+						PCIAddr: *common.MustNewPCIAddress("0000:01:01.01"),
 					},
 				},
 			},
 		},
 		"add to existing": {
 			devices: PCIDevices{
-				"0000:01:01.01": {
+				*common.MustNewPCIAddress("0000:01:01.01"): {
 					{
-						Name:         "test1",
-						Type:         DeviceTypeNetInterface,
-						NUMAAffinity: 1,
-						PCIAddr:      "0000:01:01.01",
+						Name:    "test1",
+						Type:    DeviceTypeNetInterface,
+						PCIAddr: *common.MustNewPCIAddress("0000:01:01.01"),
 					},
 				},
-				"0000:01:02.01": {
+				*common.MustNewPCIAddress("0000:01:02.01"): {
 					{
-						Name:         "test2",
-						Type:         DeviceTypeUnknown,
-						NUMAAffinity: 1,
-						PCIAddr:      "0000:01:02.01",
+						Name:    "test2",
+						Type:    DeviceTypeUnknown,
+						PCIAddr: *common.MustNewPCIAddress("0000:01:02.01"),
 					},
 				},
 			},
-			newDev: &Device{
-				Name:         "test3",
-				Type:         DeviceTypeOFIDomain,
-				NUMAAffinity: 1,
-				PCIAddr:      "0000:01:01.01",
+			newDev: &PCIDevice{
+				Name:    "test3",
+				Type:    DeviceTypeOFIDomain,
+				PCIAddr: *common.MustNewPCIAddress("0000:01:01.01"),
 			},
 			expResult: PCIDevices{
-				"0000:01:01.01": {
+				*common.MustNewPCIAddress("0000:01:01.01"): {
 					{
-						Name:         "test1",
-						Type:         DeviceTypeNetInterface,
-						NUMAAffinity: 1,
-						PCIAddr:      "0000:01:01.01",
+						Name:    "test1",
+						Type:    DeviceTypeNetInterface,
+						PCIAddr: *common.MustNewPCIAddress("0000:01:01.01"),
 					},
 					{
-						Name:         "test3",
-						Type:         DeviceTypeOFIDomain,
-						NUMAAffinity: 1,
-						PCIAddr:      "0000:01:01.01",
+						Name:    "test3",
+						Type:    DeviceTypeOFIDomain,
+						PCIAddr: *common.MustNewPCIAddress("0000:01:01.01"),
 					},
 				},
-				"0000:01:02.01": {
+				*common.MustNewPCIAddress("0000:01:02.01"): {
 					{
-						Name:         "test2",
-						Type:         DeviceTypeUnknown,
-						NUMAAffinity: 1,
-						PCIAddr:      "0000:01:02.01",
+						Name:    "test2",
+						Type:    DeviceTypeUnknown,
+						PCIAddr: *common.MustNewPCIAddress("0000:01:02.01"),
 					},
 				},
 			},

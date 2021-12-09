@@ -57,6 +57,14 @@ type PCIAddress struct {
 	Function string
 }
 
+// IsZero returns true if address was uninitialized.
+func (pa *PCIAddress) IsZero() bool {
+	if pa == nil {
+		return false
+	}
+	return pa.Equals(&PCIAddress{})
+}
+
 func (pa *PCIAddress) String() string {
 	if pa == nil {
 		return ""
@@ -145,6 +153,17 @@ func NewPCIAddress(addr string) (*PCIAddress, error) {
 	}
 
 	return pa, nil
+}
+
+// MustNewPCIAddressSet creates a new PCIAddressSet from input string,
+// which must be valid, otherwise a panic will occur.
+func MustNewPCIAddress(addr string) *PCIAddress {
+	pa, err := NewPCIAddress(addr)
+	if err != nil {
+		panic(err)
+	}
+
+	return pa
 }
 
 // PCIAddressSet represents a unique set of PCI addresses.
