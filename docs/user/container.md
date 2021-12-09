@@ -257,7 +257,7 @@ The table below summarizes the available container properties.
 | layout\_type            | Yes             | Container type (e.g., POSIX, HDF5, ...)|
 | layout\_ver             | Yes             | Layout version to be used at the discretion of I/O middleware for interoperability|
 | rf                      | Yes             | Redundancy Factor which is the maximum number of simultaneous engine failures that objects can support without data loss|
-| rf\_lvl                 | Yes             | Redundancy Level which is the level in the fault domain hierachy to use for object placement|
+| rf\_lvl                 | Yes             | Redundancy Level which is the level in the fault domain hierarchy to use for object placement|
 | health                  | No              | Current state of the container|
 | alloc\_oid              | No              | Maximum allocated object ID by container allocator|
 | ec\_cell                | Yes             | Erasure code cell size for erasure-coded objects|
