@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeSingle
+from apricot import skipForTicket
 
 class EcodOfflineRebuildSingle(ErasureCodeSingle):
     # pylint: disable=too-many-ancestors
@@ -14,6 +15,7 @@ class EcodOfflineRebuildSingle(ErasureCodeSingle):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-9191")
     def test_ec_offline_rebuild_single(self):
         """Jira ID: DAOS-7314.
 

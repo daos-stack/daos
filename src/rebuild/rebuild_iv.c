@@ -266,7 +266,8 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv, unsigned int shortcut,
 	key.class_id = IV_REBUILD;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(daos_quiet_error(rc), DB_REBUILD, DLOG_ERR, "iv update failed "DF_RC"\n",
+			 DP_RC(rc));
 
 	return rc;
 }
