@@ -296,11 +296,9 @@ shard_cpd_req_cb(const struct crt_cb_info *cb_info)
 }
 
 static int
-ds_obj_cpd_clone_reqs(struct dtx_leader_handle *dlh, struct daos_shard_tgt *tgt,
-		      struct daos_cpd_disp_ent *dcde_parent,
+ds_obj_cpd_clone_reqs(struct daos_shard_tgt *tgt, struct daos_cpd_disp_ent *dcde_parent,
 		      struct daos_cpd_sub_req *dcsr_parent, int total,
-		      struct daos_cpd_disp_ent **p_dcde,
-		      struct daos_cpd_sub_req **p_dcsr)
+		      struct daos_cpd_disp_ent **p_dcde, struct daos_cpd_sub_req **p_dcsr)
 {
 	struct daos_cpd_disp_ent	*dcde = NULL;
 	struct daos_cpd_sub_req		*dcsr = NULL;
@@ -480,7 +478,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 	count = dcde_parent->dcde_read_cnt + dcde_parent->dcde_write_cnt;
 	if (count < total || (exec_arg->flags & ORF_HAS_EC_SPLIT)) {
-		rc = ds_obj_cpd_clone_reqs(dlh, shard_tgt, dcde_parent,
+		rc = ds_obj_cpd_clone_reqs(shard_tgt, dcde_parent,
 					   dcsr_parent, total, &dcde, &dcsr);
 		if (rc != 0)
 			D_GOTO(out, rc);
