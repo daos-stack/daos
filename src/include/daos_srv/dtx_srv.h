@@ -130,6 +130,7 @@ struct dtx_handle {
 struct dtx_sub_status {
 	struct daos_shard_tgt		dss_tgt;
 	int				dss_result;
+	uint32_t			dss_comp:1;
 };
 
 struct dtx_leader_handle;
@@ -150,6 +151,7 @@ struct dtx_leader_handle {
 
 	/* How many sub leader transaction */
 	uint32_t			dlh_sub_cnt;
+	uint32_t			dlh_helper_done:1;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
 	dtx_agg_cb_t			dlh_agg_cb;

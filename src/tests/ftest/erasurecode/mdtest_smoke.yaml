@@ -9,7 +9,7 @@ hosts:
     - server-F
     - server-G
     - server-H
-timeout: 600
+timeout: 900
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -25,7 +25,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
-      log_mask: ERR
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=io
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -37,7 +39,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
-      log_mask: ERR
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=io
 pool:
     name: daos_server
     control_method: dmg

@@ -79,6 +79,7 @@ struct dtx_req_rec {
 	uint32_t			 drr_tag; /* The VOS ID */
 	int				 drr_count; /* DTX count */
 	int				 drr_result; /* The RPC result */
+	uint32_t			 drr_comp:1;
 	struct dtx_id			*drr_dti; /* The DTX array */
 	struct dtx_share_peer		**drr_cb_args; /* Used by dtx_req_cb. */
 };
@@ -118,6 +119,8 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	struct dtx_out		*dout;
 	int			 rc = cb_info->cci_rc;
 	int			 i;
+
+	D_ASSERT(drr->drr_comp == 0);
 
 	if (rc != 0)
 		goto out;
@@ -206,6 +209,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	}
 
 out:
+	drr->drr_comp = 1;
 	drr->drr_result = rc;
 	rc = ABT_future_set(dra->dra_future, drr);
 	D_ASSERTF(rc == ABT_SUCCESS,
@@ -251,7 +255,8 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		drr->drr_tag, req, dra->dra_future,
 		din != NULL ? din->di_epoch : 0, rc);
 
-	if (rc != 0) {
+	if (rc != 0 && drr->drr_comp == 0) {
+		drr->drr_comp = 1;
 		drr->drr_result = rc;
 		ABT_future_set(dra->dra_future, drr);
 	}
@@ -389,7 +394,9 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 			}
 		}
 
-		i++;
+		/* Yield to avoid holding CPU for too long time. */
+		if (++i >= DTX_RPC_YIELD_THD)
+			ABT_thread_yield();
 	}
 
 	return 0;
@@ -418,6 +425,7 @@ dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	drr->drr_rank = dcrb->dcrb_rank;
 	drr->drr_tag = dcrb->dcrb_tag;
 	drr->drr_count = 1;
+	drr->drr_comp = 0;
 	drr->drr_dti[0] = *dcrb->dcrb_dti;
 	d_list_add_tail(&drr->drr_link, dcrb->dcrb_head);
 	++(*dcrb->dcrb_length);
@@ -504,13 +512,12 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 		i = 1;
 	else
 		i = 0;
+
 	for (; i < mbs->dm_tgt_cnt && rc >= 0; i++) {
 		struct pool_target	*target;
 
-		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
-		ABT_rwlock_unlock(pool->sp_lock);
 		if (rc != 1) {
 			D_WARN("Cannot find target %u at %d/%d, flags %x\n",
 			       mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
@@ -569,6 +576,7 @@ dtx_dti_classify(struct ds_pool *pool, daos_handle_t tree,
 	int	rc = 0;
 	int	i;
 
+	ABT_rwlock_rdlock(pool->sp_lock);
 	for (i = 0; i < count; i++) {
 		rc = dtx_classify_one(pool, tree, head, &length, dtes[i], count, my_rank, my_tgtid);
 		if (rc < 0)
@@ -577,6 +585,7 @@ dtx_dti_classify(struct ds_pool *pool, daos_handle_t tree,
 		if (dtis != NULL)
 			dtis[i] = dtes[i]->dte_xid;
 	}
+	ABT_rwlock_unlock(pool->sp_lock);
 
 	return rc < 0 ? rc : length;
 }
@@ -797,8 +806,10 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 
 	D_INIT_LIST_HEAD(&head);
 	crt_group_rank(NULL, &my_rank);
+	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = dtx_classify_one(pool, DAOS_HDL_INVAL, &head, &length, dte, 1, my_rank,
 			      dss_get_module_info()->dmi_tgt_id);
+	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc < 0)
 		goto out;
 
@@ -859,8 +870,10 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 
 	D_INIT_LIST_HEAD(&head);
 	crt_group_rank(NULL, &my_rank);
+	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = dtx_classify_one(pool, DAOS_HDL_INVAL, &head, &length, dte, 1, my_rank,
 			      dss_get_module_info()->dmi_tgt_id);
+	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc < 0)
 		goto out;
 
