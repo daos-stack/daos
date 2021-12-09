@@ -26,8 +26,6 @@ static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
 /**
  * Find the object class attributes for the provided @oid.
- * NB: Because ec.e_len can be overwritten by pool/container property,
- * please don't directly use ec.e_len.
  */
 struct daos_oclass_attr *
 daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv, uint32_t *nr_grps)
@@ -594,11 +592,6 @@ oc_scale_cmp(struct daos_oclass_attr *ca1, struct daos_oclass_attr *ca2)
 		return -1;
 
 	if (ca1->ca_resil == DAOS_RES_EC) {
-		if (ca1->ca_ec_cell > ca2->ca_ec_cell)
-			return 1;
-		if (ca1->ca_ec_cell < ca2->ca_ec_cell)
-			return -1;
-
 		if (ca1->ca_ec_k + ca1->ca_ec_p > ca2->ca_ec_k + ca2->ca_ec_p)
 			return 1;
 		if (ca1->ca_ec_k + ca1->ca_ec_p < ca2->ca_ec_k + ca2->ca_ec_p)

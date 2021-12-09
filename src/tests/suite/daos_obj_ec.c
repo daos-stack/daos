@@ -669,8 +669,15 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 	int		i;
 	daos_obj_id_t	oid;
 	int		rc;
+	dfs_attr_t	attr = {};
 
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -679,7 +686,7 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 
 	sprintf(filename, "ec_file");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 
@@ -1085,8 +1092,14 @@ ec_punch_check_size(void **state)
 	int		i;
 	daos_obj_id_t	oid;
 	int		rc;
+	dfs_attr_t	attr = {};
 
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -1095,7 +1108,7 @@ ec_punch_check_size(void **state)
 
 	sprintf(filename, "ec_file");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 
@@ -1125,7 +1138,7 @@ ec_punch_check_size(void **state)
 
 	sprintf(filename, "ec_file1");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 
