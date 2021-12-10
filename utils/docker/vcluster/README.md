@@ -48,7 +48,7 @@ from GitHub with the following command:
 
 ```bash
 $ docker build --tag daos-base:centos8 \
-	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
+	https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/daos-base/el8
 ```
 
 This Docker file accept the following arguments:
@@ -70,7 +70,7 @@ following command:
 
 ```bash
 $ docker build --tag daos-base:centos8 --build-arg DAOS_AUTH=yes \
-	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
+	https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/daos-base/el8
 ```
 
 It is also possible to build the `daos-base` image from a local tree with the following command:
@@ -88,7 +88,7 @@ to build directly the three images from GitHub:
 ```bash
 $ for image in daos-server daos-admin daos-client ; do \
 	docker build --tag "$image:centos8" \
-		"https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/$image/el8"; \
+		"https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/$image/el8"; \
   done
 ```
 
