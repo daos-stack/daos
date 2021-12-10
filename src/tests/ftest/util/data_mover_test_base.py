@@ -158,7 +158,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 # need to remove contents before umount
                 rm_cmd = "rm -rf {}/*".format(item)
                 try:
-                    self._execute_command(rm_cmd)
+                    self._execute_command(rm_cmd, timeout=600)
                 except CommandFailure as error:
                     error_list.append("Error removing directory contents: {}".format(error))
                 umount_cmd = "sudo umount -f {}".format(item)

@@ -547,7 +547,8 @@ class IorTestBase(DfuseTestBase):
 
         return result
 
-    def _execute_command(self, command, fail_on_err=True, display_output=True, hosts=None):
+    def _execute_command(self, command, fail_on_err=True, display_output=True,
+                         hosts=None, timeout=None):
         """Execute the command on all client hosts.
 
         Optionally verify if the command returns a non zero return code.
@@ -570,7 +571,9 @@ class IorTestBase(DfuseTestBase):
         """
         if hosts is None:
             hosts = self.hostlist_clients
-        result = pcmd(hosts, command, verbose=display_output, timeout=300)
+        if timeout is None:
+            timeout=300
+        result = pcmd(hosts, command, verbose=display_output, timeout=timeout)
         if 0 not in result and fail_on_err:
             hosts = [str(
                 nodes) for code, nodes in list(
