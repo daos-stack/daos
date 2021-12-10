@@ -181,6 +181,16 @@ class Test(avocadoTest):
 
         for item in skip_list:
             vals = item.split('|')
+
+            # Expected format: [['DAOS-NNNN', 'test_method_name', 'name']]
+            quoted_str_re = r"'[^\]]+'"
+            if not re.search(
+                r"\[\[" + quoted_str_re + "\s*,\s*"
+                        + quoted_str_re + "\s*,\s*"
+                        + quoted_str_re + "\]\]",
+                 vals[0]):
+                continue
+
             skip_it, ticket = self._check_variant_skip(literal_eval(vals[0]))
             if skip_it:
                 # test is on the skiplist
