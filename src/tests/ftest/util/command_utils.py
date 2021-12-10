@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -34,8 +33,7 @@ class ExecutableCommand(CommandWithParameters):
     # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
-    def __init__(self, namespace, command, path="", subprocess=False,
-                 check_results=None):
+    def __init__(self, namespace, command, path="", subprocess=False, check_results=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -58,7 +56,7 @@ class ExecutableCommand(CommandWithParameters):
         self.exit_status_exception = True
         self.output_check = "both"
         self.verbose = True
-        self.env = None
+        self.env = EnvironmentVariables()
         self.sudo = False
 
         # A list of environment variable names to set and export prior to
@@ -105,7 +103,7 @@ class ExecutableCommand(CommandWithParameters):
 
     @property
     def process(self):
-        """Getter for process attribute of the ExecutableCommand class."""
+        """Get the process attribute of the ExecutableCommand class."""
         return self._process
 
     @property
@@ -384,6 +382,19 @@ class ExecutableCommand(CommandWithParameters):
                 "No pattern regex defined for '{}()'".format(regex_method))
         return re.findall(self.METHOD_REGEX[regex_method], stdout)
 
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Also gets env_vars from /run/client/* and self.namespace.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+        for namespace in ['/run/client/*', self.namespace]:
+            if namespace is not None:
+                self.env.update_from_list(test.params.get("env_vars", namespace, []))
+
     def update_env_names(self, new_names):
         """Update environment variable names to export for the command.
 
@@ -408,7 +419,8 @@ class ExecutableCommand(CommandWithParameters):
                 values to export.
 
         """
-        env = EnvironmentVariables()
+        env = self.env.copy()
+        # Update with variables from the server manager
         for name in self._env_names:
             if name == "D_LOG_FILE":
                 if not log_file:
