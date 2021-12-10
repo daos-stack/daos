@@ -56,13 +56,6 @@ type MockNvmeImpl struct {
 	Cfg MockNvmeCfg
 }
 
-// CleanLockfiles removes SPDK lockfiles after binding operations.
-func (n *MockNvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
-	log.Debugf("mock clean lockfiles pci addresses: %v", pciAddrs)
-
-	return nil
-}
-
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
 // accessible by SPDK on a given host.
 func (n *MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
