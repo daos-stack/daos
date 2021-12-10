@@ -626,6 +626,59 @@ class CommonConfig(YamlParameters):
 class EnvironmentVariables(dict):
     """Dictionary of environment variable keys and values."""
 
+    @classmethod
+    def from_list(cls, kv_list):
+        """Initialize from a list of key=value strings.
+
+        Compatible with output from EnvironmentVariables.to_list.
+
+        Args:
+            kv_list (list):  list of environment variable assignment (key=value) strings
+
+        Returns:
+            EnvironmentVariables: new object.
+        """
+        env = cls()
+        env.update_from_list(kv_list)
+        return env
+
+    def to_list(self):
+        """Convert to a list of environment variable assignments.
+
+        Returns:
+            list: a list of environment variable assignment (key=value) strings
+        """
+        return [
+            key if value is None else "{}={}".format(key, value)
+            for key, value in list(self.items())
+        ]
+
+    def update_from_list(self, kv_list):
+        """Update from a list of key=value strings.
+
+        Args:
+            kv_list (list):  list of environment variable assignment (key=value) strings
+        """
+        for kv in kv_list:
+            key, *value = kv.split('=')
+            self[key] = value[0] if value else None
+
+    def to_export_str(self, separator=";"):
+        """Convert to a command to export all the environment variables.
+
+        Args:
+            separator (str, optional): export command separator.
+                Defaults to ";".
+
+        Returns:
+            str: a string of export commands for each environment variable
+        """
+        export_list = ["export {}".format(export) for export in self.to_list()]
+        export_str = separator.join(export_list)
+        if export_str:
+            export_str = "".join([export_str, separator])
+        return export_str
+
     def copy(self):
         """Return a copy of this object.
 
@@ -634,35 +687,6 @@ class EnvironmentVariables(dict):
 
         """
         return EnvironmentVariables(self)
-
-    def get_list(self):
-        """Get a list of environment variable assignments.
-
-        Returns:
-            list: a list of environment variable assignment (key=value) strings
-
-        """
-        return [
-            key if value is None else "{}={}".format(key, value)
-            for key, value in list(self.items())
-        ]
-
-    def get_export_str(self, separator=";"):
-        """Get the command to export all of the environment variables.
-
-        Args:
-            separator (str, optional): export command separator.
-                Defaults to ";".
-
-        Returns:
-            str: a string of export commands for each environment variable
-
-        """
-        export_list = ["export {}".format(export) for export in self.get_list()]
-        export_str = separator.join(export_list)
-        if export_str:
-            export_str = "".join([export_str, separator])
-        return export_str
 
 class PositionalParameter(BasicParameter):
     """Parameter that defines position.

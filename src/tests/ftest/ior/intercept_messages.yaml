@@ -21,6 +21,10 @@ container:
     type: POSIX
     control_method: daos
 ior:
+    env_vars:
+        - D_LOG_MASK=INFO
+        - DD_MASK=all
+        - DD_SUBSYS=all
     api: POSIX
     client_processes:
       np_16:

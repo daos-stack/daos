@@ -36,6 +36,8 @@ container:
     type: POSIX
     control_method: daos
 ior:
+    env_vars:
+        - D_LOG_MASK=INFO
     client_processes:
         np_24:
             np: 24

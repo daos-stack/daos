@@ -35,7 +35,7 @@ class ExecutableCommand(CommandWithParameters):
     METHOD_REGEX = {"run": r"(.*)"}
 
     def __init__(self, namespace, command, path="", subprocess=False,
-                 check_results=None):
+                 check_results=None, base_env_namespace="/run/client/*"):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -50,6 +50,8 @@ class ExecutableCommand(CommandWithParameters):
             check_results (list, optional): list of words used to mark the
                 command as failed if any are found in the command output.
                 Defaults to None.
+            base_env_namespace (str, optional): yaml namespace for base/global env_vars.
+                Defaults to /run/client/*.
         """
         super().__init__(namespace, command, path)
         self._process = None
@@ -58,7 +60,8 @@ class ExecutableCommand(CommandWithParameters):
         self.exit_status_exception = True
         self.output_check = "both"
         self.verbose = True
-        self.env = None
+        self.env = EnvironmentVariables()
+        self.base_env_namespace = base_env_namespace
         self.sudo = False
 
         # A list of environment variable names to set and export prior to
@@ -384,6 +387,30 @@ class ExecutableCommand(CommandWithParameters):
                 "No pattern regex defined for '{}()'".format(regex_method))
         return re.findall(self.METHOD_REGEX[regex_method], stdout)
 
+    def get_params_env(self, test):
+        """Get environment variables for the command.
+
+        First updates with env_vars from self.base_env_namespace.
+        Then updates with env_vars from self.namespace.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        for namespace in [self.base_env_namespace, self.namespace]:
+            if namespace is not None:
+                self.env.update_from_list(test.params.get("env_vars", namespace, []))
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Also gets environment variables from the yaml file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+        self.get_params_env(test)
+
     def update_env_names(self, new_names):
         """Update environment variable names to export for the command.
 
@@ -408,7 +435,8 @@ class ExecutableCommand(CommandWithParameters):
                 values to export.
 
         """
-        env = EnvironmentVariables()
+        env = self.env.copy()
+        # Update with variables from the server manager
         for name in self._env_names:
             if name == "D_LOG_FILE":
                 if not log_file:
