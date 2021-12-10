@@ -611,7 +611,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 		snprintf(sbuf, RBLD_SBUF_LEN,
 			 "%s [%s] (pool "DF_UUID" ver=%u, toberb_obj="
 			 DF_U64", rb_obj="DF_U64", rec="DF_U64", size="DF_U64
-                         " done %d status %d/%d epoch "DF_U64" duration=%d secs)\n",
+			 " done %d status %d/%d epoch "DF_U64" duration=%d secs)\n",
 			 RB_OP_STR(op), str, DP_UUID(pool->sp_uuid), map_ver,
 			 rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
 			 rs->rs_size, rs->rs_done, rs->rs_errno,
