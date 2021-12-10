@@ -90,7 +90,7 @@ class DaosRacerCommand(ExecutableCommand):
                 names and values to export prior to running daos_racer
         """
         # Include exports prior to the daos_racer command
-        self._pre_command = env.get_export_str()
+        self._pre_command = env.to_export_str()
 
     def run(self):
         """Run the daos_racer command remotely.

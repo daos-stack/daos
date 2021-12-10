@@ -286,14 +286,12 @@ class Orterun(JobManager):
             # dictionary keys with the specified values or add new key value
             # pairs to the dictionary.  Finally convert the updated dictionary
             # back to a list for the parameter assignment.
-            original = EnvironmentVariables({
-                item.split("=")[0]: item.split("=")[1] if "=" in item else None
-                for item in self.export.value})
+            original = EnvironmentVariables.from_list(self.export.value)
             original.update(env_vars)
-            self.export.value = original.get_list()
+            self.export.value = original.to_list()
         else:
             # Overwrite the environmental variable assignment
-            self.export.value = env_vars.get_list()
+            self.export.value = env_vars.to_list()
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -302,7 +300,7 @@ class Orterun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.export.update_default(env_vars.get_list())
+        self.export.update_default(env_vars.to_list())
 
     def run(self):
         """Run the orterun command.
@@ -402,7 +400,7 @@ class Mpirun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.envlist.update_default(env_vars.get_list())
+        self.envlist.update_default(env_vars.to_list())
 
     def run(self):
         """Run the mpirun command.
@@ -485,14 +483,12 @@ class Srun(JobManager):
             # dictionary keys with the specified values or add new key value
             # pairs to the dictionary.  Finally convert the updated dictionary
             # back to a string for the parameter assignment.
-            original = EnvironmentVariables({
-                item.split("=")[0]: item.split("=")[1] if "=" in item else None
-                for item in self.export.value.split(",")})
+            original = EnvironmentVariables.from_list(self.export.value.split(","))
             original.update(env_vars)
-            self.export.value = ",".join(original.get_list())
+            self.export.value = ",".join(original.to_list())
         else:
             # Overwrite the environmental variable assignment
-            self.export.value = ",".join(env_vars.get_list())
+            self.export.value = ",".join(env_vars.to_list())
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -501,7 +497,7 @@ class Srun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.export.update_default(env_vars.get_list())
+        self.export.update_default(env_vars.to_list())
 
 
 class Systemctl(JobManager):

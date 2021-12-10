@@ -273,7 +273,7 @@ class Dfuse(DfuseCommand):
         self.create_mount_point()
 
         # run dfuse command
-        cmd = self.env.get_export_str()
+        cmd = self.env.to_export_str()
         if bind_cores:
             cmd += 'taskset -c {} '.format(bind_cores)
         cmd += str(self)
