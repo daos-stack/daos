@@ -370,7 +370,7 @@ class ContDeserialize():
             log (TestLogger): logger to log messages
 
         """
-        self.pool = None
+        self.deser_pool = None
         self.file_path = None
         self.cont_label = None
         self.daos_cmd = daos_cmd
@@ -406,7 +406,8 @@ class ContDeserialize():
         """
         self.log.info("Starting daos cont deserialize")
 
-        return self.daos_cmd.container_deserialize(deser_pool=self.deser_pool, file_path=self.file_path,
+        return self.daos_cmd.container_deserialize(deser_pool=self.deser_pool,
+                                                   file_path=self.file_path,
                                                    cont_label=self.cont_label)
 
 class ContClone():

@@ -149,7 +149,8 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("container", "deserialize"), deser_pool=deser_pool, file_path=file_path, cont_label=cont_label)
+            ("container", "deserialize"), deser_pool=deser_pool, file_path=file_path,
+	    cont_label=cont_label)
 
     def container_destroy(self, pool, cont, force=None, sys_name=None):
         """Destroy a container.

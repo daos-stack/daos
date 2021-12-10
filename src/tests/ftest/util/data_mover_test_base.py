@@ -834,8 +834,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.cont_serialize_cmd.set_cont_serialize_params(src=format_daos_path(src_pool,
 	                                                      src_cont), output_path=tmp_path)
         if dst_pool:
+            pool = uuid_from_obj(dst_pool)
             self.cont_deserialize_cmd.set_cont_deserialize_params(file_path=self.serial_file_path,
-                                                                  deser_pool=uuid_from_obj(dst_pool))
+                                                                  deser_pool=pool)
 
     def _set_dserial_params(self,
                             src_pool=None, src_cont=None,
