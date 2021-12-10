@@ -9,7 +9,7 @@ hosts:
    - boro-G
  test_clients:
    - boro-H
-timeout: 4000
+timeout: 5200
 server_config:
  name: daos_server
  servers:
