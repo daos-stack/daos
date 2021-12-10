@@ -6,8 +6,7 @@
 '''
 from cart_utils import CartTest
 
-
-class CartCoRpcOneNodeTest(CartTest):
+class CartGhostRankRpcOneNodeTest(CartTest):
     # pylint: disable=too-few-public-methods
     """Run CaRT ghost rank RPC test.
 
@@ -17,8 +16,8 @@ class CartCoRpcOneNodeTest(CartTest):
     def test_cart_ghost_rank_rpc(self):
         """Test ghost rank RPC.
 
-        #:avocado: tags=all,pr,daily_regression
-        #:avocado: tags=cart,ghost_rank_rpc,one_node,memcheck
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=cart,ghost_rank_rpc,one_node,memcheck
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)
