@@ -71,7 +71,6 @@ if rpm -q daos-client; then
 fi
 
 sudo $YUM -y install daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
-sudo $YUM -y install daos-debuginfo-"${DAOS_PKG_VERSION}"
 
 me=$(whoami)
 for dir in server agent; do

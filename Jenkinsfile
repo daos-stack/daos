@@ -714,7 +714,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version) + " daos-debuginfo",
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
