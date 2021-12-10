@@ -401,8 +401,12 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
-	D_ASSERTF(!obj->obj_discard || (!create && (flags & VOS_OBJ_DISCARD) == 0),
-		  "Simultaneous object hold not supported during object specific discard\n");
+	if (obj->obj_discard && (create || (flags & VOS_OBJ_DISCARD) != 0)) {
+		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
+		vos_obj_release(occ, obj, false);
+		D_ASSERTF(0, "Simultaneous object hold and discard detected\n");
+		goto failed;
+	}
 
 	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
@@ -493,6 +497,7 @@ failed:
 	vos_obj_release(occ, obj, true);
 failed_2:
 	VOS_TX_LOG_FAIL(rc, "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
+
 	return	rc;
 }
 
