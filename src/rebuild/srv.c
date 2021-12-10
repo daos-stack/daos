@@ -1780,7 +1780,6 @@ rebuild_fini_one(void *arg)
 		return 0;
 
 	rebuild_pool_tls_destroy(pool_tls);
-	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
@@ -1848,7 +1847,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
 	/* destroy the migrate_tls of 0-xstream */
-	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.
 	 */
