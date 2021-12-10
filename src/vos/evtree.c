@@ -2795,7 +2795,6 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	}
 out:
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
-	evt_tcx_decref(tcx); /* -1 for open */
 	return rc;
 }
 
