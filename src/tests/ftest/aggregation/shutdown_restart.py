@@ -82,6 +82,8 @@ class IoAggregation(IorTestBase):
             self.fail("One or more servers crashed")
 
         # Now check if the space is returned back.
+        # FIXME? slight delay after system start before pool query for free space?
+        self.log.info("No delay after system start/query and before pool query")
         counter = 1
         returned_space = (self.get_nvme_free_space() -
                           free_space_before_snap_destroy)
