@@ -2787,11 +2787,11 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	rc = 0; /* Assume there is no data */
 	evt_ent_array_for_each(ent, tcx->tc_iter.it_entries) {
 		if (ent->en_minor_epc != EVT_MINOR_EPC_MAX) {
-			D_ERROR("Found "DF_ENT"\n", DP_ENT(ent));
+			D_INFO("Found orphaned extent "DF_ENT"\n", DP_ENT(ent));
 			rc = 1;
-			continue;
+			break;
 		}
-		D_ERROR("Ignoring "DF_ENT"\n", DP_ENT(ent));
+		D_DEBUG(DB_IO, "Ignoring "DF_ENT"\n", DP_ENT(ent));
 	}
 out:
 	evt_tcx_decref(tcx); /* -1 for tcx_create */

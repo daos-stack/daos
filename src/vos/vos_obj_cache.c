@@ -231,11 +231,7 @@ vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, dao
 	if (rc != 0)
 		return rc;
 
-	if (obj->obj_discard) {
-		vos_obj_release(occ, obj, false);
-		D_DEBUG(DB_IO, "Object discard already in progress on "DF_UOID"\n", DP_UOID(oid));
-		return -DER_BUSY;
-	}
+	D_ASSERTF(!obj->obj_discard, "vos_obj_hold should return an error if already in discard\n");
 
 	obj->obj_discard = true;
 	*objp = obj;
@@ -405,6 +401,9 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
+	D_ASSERTF(!obj->obj_discard || (!create && (flags & VOS_OBJ_DISCARD) == 0),
+		  "Simultaneous object hold not supported during object specific discard\n");
+
 	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
