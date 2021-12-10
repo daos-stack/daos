@@ -60,9 +60,9 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize");
 		D_GOTO(out, rc);
 	}
-	rc = (*daos_cont_serialize)(props, num_attrs, names, (char **)buffers, sizes, &stats->total_oids,
-			       &stats->total_dkeys, &stats->total_akeys, &stats->bytes_read,
-			       ca->src_coh, filename);
+	rc = (*daos_cont_serialize)(props, num_attrs, names, (char **)buffers, sizes,
+				    &stats->total_oids, &stats->total_dkeys, &stats->total_akeys,
+				    &stats->bytes_read, ca->src_coh, filename);
 	if (rc != 0)
 		DH_PERROR_DER(ap, rc, "Failed to serialize container");
 out:

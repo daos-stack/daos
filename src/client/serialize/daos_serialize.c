@@ -13,7 +13,7 @@
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 #define ATTR_NAME_LEN		128
-#define SERIALIZE_VERSION	0.0	
+#define SERIALIZE_VERSION	0.0
 
 #if defined(DAOS_API_VERSION_MAJOR) && defined(DAOS_API_VERSION_MINOR)
 #define CHECK_DAOS_API_VERSION(major, minor)                            \
