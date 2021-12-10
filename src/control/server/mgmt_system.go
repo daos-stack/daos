@@ -431,8 +431,6 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	return resp, nil
 }
 
-const systemReqTimeout = 30 * time.Second
-
 type (
 	// systemRanksFunc is an alias for control client API *Ranks() fanout
 	// function that executes across ranks on different hosts.
@@ -502,7 +500,7 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 // Pass true as last parameter to update member states on request failure.
 //
 // Fan-out is invoked by control API *Ranks functions.
-func (svc *mgmtSvc) rpcFanout(parent context.Context, fanReq fanoutRequest, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
+func (svc *mgmtSvc) rpcFanout(ctx context.Context, fanReq fanoutRequest, updateOnFail bool) (*fanoutResponse, *system.RankSet, error) {
 	if fanReq.Method == nil {
 		return nil, nil, errors.New("fanout request with nil method")
 	}
@@ -518,12 +516,16 @@ func (svc *mgmtSvc) rpcFanout(parent context.Context, fanReq fanoutRequest, upda
 		return resp, hitRanks, nil
 	}
 
-	ctx, cancel := context.WithTimeout(parent, systemReqTimeout)
-	defer cancel()
-
 	ranksReq := &control.RanksReq{
 		Ranks: hitRanks.String(), Force: fanReq.Force,
 	}
+
+	// Not strictly necessary but helps with debugging.
+	dl, ok := ctx.Deadline()
+	if ok {
+		ranksReq.SetTimeout(dl.Sub(time.Now()))
+	}
+
 	ranksReq.SetHostList(svc.membership.HostList(hitRanks))
 	ranksResp, err := fanReq.Method(ctx, svc.rpcClient, ranksReq)
 	if err != nil {
@@ -663,18 +665,23 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	}
 	var fResp *fanoutResponse
 
-	fReq.Method = control.PrepShutdownRanks
-	// if not forced, update membership on rank error
-	fResp, _, err = svc.rpcFanout(ctx, fReq, !req.Force)
-	if err != nil {
-		return
-	}
-	if !fReq.Force && fResp.Results.Errors() != nil {
-		// return early if not forced and prep shutdown fails
-		resp, err = processStopResp("prep shutdown", fResp, svc.events)
-		return
+	if !req.Force {
+		// First phase: Prepare the ranks for shutdown, but only if the request
+		// does not specify that the stop should be forced.
+		fReq.Method = control.PrepShutdownRanks
+		fResp, _, err = svc.rpcFanout(ctx, fReq, true)
+		if err != nil {
+			return
+		}
+		if fResp.Results.Errors() != nil {
+			// return early if not forced and prep shutdown fails
+			resp, err = processStopResp("prep shutdown", fResp, svc.events)
+			return
+		}
 	}
 
+	// Second phase: Stop the ranks. If the request is forced, we will
+	// kill the ranks immediately without a graceful shutdown.
 	fReq.Method = control.StopRanks
 	fResp, _, err = svc.rpcFanout(ctx, fReq, true)
 	if err != nil {

@@ -32,9 +32,12 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
           hdf5-vol-daos-mpich-tests    \
           MACSio-mpich                 \
           MACSio-$openmpi              \
-          mpifileutils-mpich"
+          daos-serialize               \
+          mpifileutils-mpich           \
+          daos-server-tests-openmpi    \
+          daos-client-tests-openmpi"
 else
-    echo "I don't know which packages should be installed for distro"
+    echo "I don't know which packages should be installed for distro" \
          "\"$distro\""
     exit 1
 fi

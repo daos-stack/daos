@@ -39,11 +39,30 @@
 set -eux
 # allow core files to be generated
 sudo bash -c "set -ex
+# disable Leap15.3 (at least) from restricting dmesg to root
+cat <<EOF > /etc/sysctl.d/10-dmesg-for-all.conf
+kernel.dmesg_restrict=0
+EOF
+# For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for sockets
+cat <<EOF > /etc/sysctl.d/10-daos-verbs.conf
+net.ipv4.conf.all.accept_local=1
+net.ipv4.conf.all.arp_ignore=2
+net.ipv4.conf.all.rp_filter=2
+EOF
+for x in \$(cd /sys/class/net/ && ls -d ib*); do
+    echo \"net.ipv4.conf.\$x.rp_filter=2\"
+done >> /etc/sysctl.d/10-daos-verbs.conf
+sysctl --system
 if [ \"\$(ulimit -c)\" != \"unlimited\" ]; then
     echo \"*  soft  core  unlimited\" >> /etc/security/limits.conf
 fi
+if [ \"\$(ulimit -l)\" != \"unlimited\" ]; then
+    echo \"*  soft  memlock  unlimited\" >> /etc/security/limits.conf
+    echo \"*  hard  memlock  unlimited\" >> /etc/security/limits.conf
+fi
+ulimit -a
 echo \"/var/tmp/core.%e.%t.%p\" > /proc/sys/kernel/core_pattern"
-rm -f /var/tmp/core.*
+sudo rm -f /var/tmp/core.*
 if [ "${HOSTNAME%%.*}" != "$FIRST_NODE" ]; then
     if grep /mnt/daos\  /proc/mounts; then
         sudo umount /mnt/daos
@@ -96,13 +115,6 @@ wq
 EOF
     mount \"$DAOS_BASE\"
 fi"
-
-# For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for sockets
-sudo sysctl -w net.ipv4.conf.all.accept_local=1
-sudo sysctl -w net.ipv4.conf.all.arp_ignore=2
-sudo sysctl -w net.ipv4.conf.all.rp_filter=2
-find /sys/class/net/ -maxdepth 1 -name 'ib*' -print0 | xargs -t -I {} --null basename {} | \
-    xargs -t -I {} sudo sysctl -w net.ipv4.conf.{}.rp_filter=2
 
 if ! $TEST_RPMS; then
     # set up symlinks to spdk scripts (none of this would be

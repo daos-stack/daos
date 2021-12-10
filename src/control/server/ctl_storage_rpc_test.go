@@ -384,6 +384,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		ctrlr.Namespaces = make([]*ctlpb.NvmeController_Namespace, len(smdIndexes))
 		for i, idx := range smdIndexes {
 			sd := proto.MockSmdDevice(ctrlr.PciAddr, idx+1)
+			sd.DevState = storage.NvmeDevStateNormal.Uint32()
 			sd.Rank = uint32(ctrlrIdx)
 			sd.TrAddr = ctrlr.PciAddr
 			ctrlr.SmdDevices[i] = sd
@@ -402,9 +403,13 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 
 		return ctrlr, &ctlpb.SmdDevResp{Devices: smdDevRespDevices}
 	}
-	newCtrlrPBwBasic := func(idx int32) *ctlpb.NvmeController {
+	newCtrlrPB := func(idx int32) *ctlpb.NvmeController {
 		c, _ := newCtrlrMeta(idx)
 		c.SmdDevices = nil
+		return c
+	}
+	newCtrlrPBwBasic := func(idx int32) *ctlpb.NvmeController {
+		c := newCtrlrPB(idx)
 		c.FwRev = ""
 		c.Model = ""
 		return c
@@ -417,6 +422,14 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		_, s := newCtrlrMeta(idx, smdIndexes...)
 		return s
 	}
+
+	smdDevRespStateNew := newSmdDevResp(1)
+	smdDevRespStateNew.Devices[0].DevState = storage.NvmeDevStateNew.Uint32()
+
+	ctrlrPBwMetaNew := newCtrlrPBwMeta(1)
+	ctrlrPBwMetaNew.SmdDevices[0].AvailBytes = 0
+	ctrlrPBwMetaNew.SmdDevices[0].TotalBytes = 0
+	ctrlrPBwMetaNew.SmdDevices[0].DevState = storage.NvmeDevStateNew.Uint32()
 
 	mockPbScmMount0 := proto.MockScmMountPoint(0)
 	mockPbScmNamespace0 := proto.MockScmNamespace(0)
@@ -928,6 +941,120 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				},
 			},
 		},
+		// Sometimes when more than a few ssds are assigned to engine without many targets,
+		// some of the smd entries for the latter ssds are in state "NEW" rather than
+		// "NORMAL", when in this state, health is unavailable and DER_NONEXIST is returned.
+		"bdev scan; meta; new state; non-existent smd health": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  new(ctlpb.ScanScmReq),
+				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{newCtrlr(1)},
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{Message: smdDevRespStateNew},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Status: int32(drpc.DaosNonexistant),
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{ctrlrPBwMetaNew},
+					State:  new(ctlpb.ResponseState),
+				},
+				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+			},
+		},
+		"bdev scan; meta; new state; nomem smd health": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  new(ctlpb.ScanScmReq),
+				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{newCtrlr(1)},
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{Message: smdDevRespStateNew},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Status: int32(drpc.DaosFreeMemError),
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					State: &ctlpb.ResponseState{
+						Error: fmt.Sprintf("instance 0, ctrlr %s: GetBioHealth response status: %s",
+							newCtrlr(1).PciAddr, drpc.DaosFreeMemError.Error()),
+						Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+					},
+				},
+				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+			},
+		},
+		"bdev scan; meta; normal state; non-existent smd health": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  new(ctlpb.ScanScmReq),
+				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{newCtrlr(1)},
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{Message: newSmdDevResp(1)},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Status: int32(drpc.DaosNonexistant),
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					State: &ctlpb.ResponseState{
+						Error: fmt.Sprintf("instance 0, ctrlr %s: GetBioHealth response status: %s",
+							newCtrlr(1).PciAddr, drpc.DaosNonexistant.Error()),
+						Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+					},
+				},
+				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -969,14 +1096,15 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				// share bdev cache with control service
 				sp.SetBdevCache(*nvmeScanResp)
 				ne := newTestEngine(log, false, sp)
+
 				// mock drpc responses
 				dcc := new(mockDrpcClientConfig)
 				if tc.junkResp {
 					dcc.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
 				} else if len(tc.drpcResps) > i {
-					for _, mock := range tc.drpcResps[i] {
-						dcc.setSendMsgResponseList(t, mock)
-					}
+					dcc.setSendMsgResponseList(t, tc.drpcResps[i]...)
+				} else {
+					t.Fatal("drpc response mocks unpopulated")
 				}
 				ne.setDrpcClient(newMockDrpcClient(dcc))
 				ne._superblock.Rank = system.NewRankPtr(uint32(i + 1))
@@ -1169,7 +1297,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"io instances already running": { // await should exit immediately
+		"io instance already running": { // await should exit immediately
 			instancesStarted: true,
 			scmMounted:       true,
 			sMounts:          []string{"/mnt/daos"},
@@ -1537,17 +1665,22 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			}
 			defer cancel()
 
+			// Trigger await storage ready on each instance and send results to
+			// awaitCh. awaitStorageReady() will set "waitFormat" flag, fire off
+			// "onAwaitFormat" callbacks, select on "storageReady" channel then
+			// finally unset "waitFormat" flag.
 			awaitCh := make(chan error)
-			inflight := 0
 			for _, ei := range instances {
-				inflight++
+				t.Logf("call awaitStorageReady() (%d)", ei.Index())
 				go func(e *EngineInstance) {
 					awaitCh <- e.awaitStorageReady(ctx, tc.recreateSBs)
 				}(ei.(*EngineInstance))
 			}
 
+			// When all instances are in awaiting format state ("waitFormat" set),
+			// close awaitingFormat channel to signal ready state.
 			awaitingFormat := make(chan struct{})
-			t.Log("waiting for awaiting format state")
+			t.Log("polling on 'waitFormat' state(s)")
 			go func(ctxIn context.Context) {
 				for {
 					ready := true
@@ -1570,24 +1703,27 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 			select {
 			case <-awaitingFormat:
-				t.Log("storage is waiting")
+				t.Log("storage is ready and waiting for format")
 			case err := <-awaitCh:
-				inflight--
+				t.Log("rx on awaitCh from unusual awaitStorageReady() returns")
 				common.CmpErr(t, tc.expAwaitErr, err)
 				if !tc.expAwaitExit {
 					t.Fatal("unexpected exit from awaitStorageReady()")
 				}
 			case <-ctx.Done():
+				t.Logf("context done (%s)", ctx.Err())
 				common.CmpErr(t, tc.expAwaitErr, ctx.Err())
 				if tc.expAwaitErr == nil {
 					t.Fatal(ctx.Err())
 				}
-				if !tc.scmMounted || inflight > 0 {
+				if !tc.scmMounted {
 					t.Fatalf("unexpected behavior of awaitStorageReady")
 				}
 			}
 
-			resp, fmtErr := cs.StorageFormat(context.TODO(), &ctlpb.StorageFormatReq{Reformat: tc.reformat})
+			resp, fmtErr := cs.StorageFormat(context.TODO(), &ctlpb.StorageFormatReq{
+				Reformat: tc.reformat,
+			})
 			if fmtErr != nil {
 				t.Fatal(fmtErr)
 			}

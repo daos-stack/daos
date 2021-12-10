@@ -16,6 +16,7 @@ from general_utils import distribute_files, run_command, get_clush_command, Daos
 #
 # 0: This is used in D_ALLOC to force memory allocation failures.
 # 100: Used in dfuse to trigger an exit after initialization is complete
+# 101: Used by daos_init() to disable fault id 0 for duration of daos_init
 FAULTS = {
     'DAOS_CSUM_CORRUPT_DISK': {
         'id': '65574',
@@ -28,6 +29,12 @@ FAULTS = {
         'probability_x': '20',
         'probability_y': '100',
         'interval': '1',
+        'max_faults': '1'},
+    'DAOS_CSUM_CORRUPT_FETCH': {
+        'id': '65569',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '5',
         'max_faults': '1'},
     'DAOS_DTX_LOST_RPC_REQUEST': {
         'id': '65587',
@@ -215,7 +222,12 @@ FAULTS = {
         'probability_y': '20',
         'interval': '1',
         'max_faults': '10'},
-
+    'DAOS_SHARD_OBJ_RW_DROP_REPLY': {
+        'id': '131200',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '1',
+        'max_faults': '1'},
 }
 
 

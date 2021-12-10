@@ -1502,7 +1502,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	dsc_cont_get_props(coh, &props);
 	rc = dsc_obj_id2oc_attr(mrone->mo_oid.id_pub, &props, &mrone->mo_oca);
 	if (rc) {
-		D_ERROR("Unknown object class: %d\n",
+		D_ERROR("Unknown object class: %u\n",
 			daos_obj_id2class(mrone->mo_oid.id_pub));
 		D_GOTO(obj_close, rc);
 	}
@@ -2393,7 +2393,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	dsc_cont_get_props(coh, &props);
 	rc = dsc_obj_id2oc_attr(arg->oid.id_pub, &props, &unpack_arg.oc_attr);
 	if (rc) {
-		D_ERROR("Unknown object class: %d\n",
+		D_ERROR("Unknown object class: %u\n",
 			daos_obj_id2class(arg->oid.id_pub));
 		D_GOTO(out_cont, rc);
 	}
@@ -2471,7 +2471,8 @@ retry:
 			if (rc != -DER_INPROGRESS) {
 				daos_anchor_set_flags(&dkey_anchor,
 						      DIOF_WITH_SPEC_EPOCH |
-						      DIOF_TO_SPEC_GROUP);
+						      DIOF_TO_SPEC_GROUP |
+						      DIOF_FOR_MIGRATION);
 				D_DEBUG(DB_REBUILD, "retry to non leader "
 					DF_UOID": "DF_RC"\n",
 					DP_UOID(arg->oid), DP_RC(rc));
@@ -2566,8 +2567,13 @@ ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver)
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
 	ABT_cond_broadcast(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
+
 	migrate_pool_tls_put(tls); /* lookup */
+	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+
 	migrate_pool_tls_put(tls); /* destroy */
+
+	D_DEBUG(DB_TRACE, "migrate fini one ult "DF_UUID"\n", pool_uuid);
 }
 
 struct migrate_abort_arg {
@@ -2579,23 +2585,9 @@ int
 migrate_fini_one_ult(void *data)
 {
 	struct migrate_abort_arg *arg = data;
-	struct migrate_pool_tls	*tls;
 
-	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
-	if (tls == NULL)
-		return 0;
+	ds_migrate_fini_one(arg->pool_uuid, arg->version);
 
-	D_ASSERT(tls->mpt_refcount > 1);
-	tls->mpt_fini = 1;
-
-	ABT_mutex_lock(tls->mpt_inflight_mutex);
-	ABT_cond_broadcast(tls->mpt_inflight_cond);
-	ABT_mutex_unlock(tls->mpt_inflight_mutex);
-
-	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
-	migrate_pool_tls_put(tls); /* destroy */
-
-	D_DEBUG(DB_TRACE, "abort one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
 	return 0;
 }
 

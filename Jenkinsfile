@@ -62,7 +62,7 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
-        buildDiscarder(logRotator(artifactDaysToKeepStr: '100'))
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '100', daysToKeepStr: '730'))
     }
 
     parameters {
@@ -89,17 +89,17 @@ pipeline {
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_CENTOS7_TARGET',
-               defaultValue: 'el7',
-               description: 'Image to used for Centos 7 CI tests')
+               defaultValue: '',
+               description: 'Image to used for Centos 7 CI tests.  I.e. el7, el7.9, etc.')
         string(name: 'CI_CENTOS8_TARGET',
-               defaultValue: 'el8.3',
-               description: 'Image to used for Centos 8 CI tests')
+               defaultValue: '',
+               description: 'Image to used for Centos 8 CI tests.  I.e. el8, el8.3, etc.')
         string(name: 'CI_LEAP15_TARGET',
-               defaultValue: 'leap15.2',
-               description: 'Image to use for OpenSUSE Leap CI tests')
+               defaultValue: '',
+               description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
         string(name: 'CI_UBUNTU20.04_TARGET',
-               defaultValue: 'ubuntu20.04',
-               description: 'Image to used for Ubuntu 20 CI tests')
+               defaultValue: '',
+               description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
         booleanParam(name: 'CI_RPM_el7_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for CentOS 7')
@@ -509,109 +509,6 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 debug') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild(),
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
-                    }
-                    post {
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc-debug
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-debug',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 release') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild(),
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                            args '--tmpfs /mnt/daos_0'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
-                    }
-                    post {
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc-release
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 with Clang debug') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild(),
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
-                    }
-                    post {
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang-debug
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-clang-debug',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
                 stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
@@ -623,8 +520,8 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15"
-                            args '-v /opt/intel:/opt/intel'
+                                                " -t ${sanitized_JOB_NAME}-leap15" +
+                                                " --build-arg COMPILER=icc"
                         }
                     }
                     steps {
@@ -691,7 +588,7 @@ pipeline {
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: false,
+                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          name: "NLT server leaks",
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
@@ -910,7 +807,7 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
-                stage('Test Leap 15 RPMs') {
+                stage('Test Leap 15.2 RPMs') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -920,6 +817,7 @@ pipeline {
                     }
                     steps {
                         testRpm inst_repos: daosRepos(),
+                                target: 'leap15.2',
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test Leap 15 RPMs')
@@ -941,7 +839,6 @@ pipeline {
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
-                /* method code too large
                 stage('Scan CentOS 8 RPMs') {
                     when {
                         beforeAgent true
@@ -960,7 +857,6 @@ pipeline {
                         }
                     }
                 } // stage('Scan CentOS 8 RPMs')
-                method code too large */
                 stage('Scan Leap 15 RPMs') {
                     when {
                         beforeAgent true
@@ -1003,9 +899,11 @@ pipeline {
                     }
                     post {
                         always {
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                                                      scm: 'daos-stack/daos'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: false,
+                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
                                                         [threshold: 1, type: 'TOTAL_HIGH'],

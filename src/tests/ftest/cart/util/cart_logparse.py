@@ -70,9 +70,8 @@ LOG_LEVELS = {
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
-for name in LOG_LEVELS:
-    LOG_NAMES[LOG_LEVELS[name]] = name
-
+for (name,value) in LOG_LEVELS.items():
+    LOG_NAMES[value] = name
 
 # pylint: disable=too-few-public-methods
 class LogRaw():
@@ -119,6 +118,8 @@ class LogLine():
     re_uiod = re.compile(r"\d{1,20}\.\d{1,20}.(\d{1,10})")
     # Match a RPCID from RPC_TRACE macro.
     re_rpcid = re.compile(r"rpcid=0x[0-9a-f]{1,16}")
+    # Match DF_CONT
+    re_cont = re.compile(r"[0-9a-f]{8}/[0-9a-f]{8}(:?)")
 
     def __init__(self, line):
         fields = line.split()
@@ -246,6 +247,10 @@ class LogLine():
                 r = self.re_rpcid.fullmatch(entry)
                 if r:
                     field = 'rpcid=<rpcid>'
+            if not field:
+                r = self.re_cont.fullmatch(entry)
+                if r:
+                    field = 'pool/cont{}'.format(r.group(1))
             if field:
                 fields.append(field)
             else:
@@ -500,6 +505,8 @@ class LogIter():
         # Try and open the file as utf-8, but if that doesn't work then
         # find and report the error, then continue with the file open as
         # latin-1
+
+        # pylint: disable=consider-using-with
         self._fd = None
 
         self.file_corrupt = False

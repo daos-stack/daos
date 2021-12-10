@@ -14,6 +14,8 @@ struct daos_obj_class {
 	char				*oc_name;
 	/** unique class ID */
 	daos_oclass_id_t		 oc_id;
+	/** redundancy schema */
+	enum daos_obj_redun		 oc_redun;
 	struct daos_oclass_attr		 oc_attr;
 	/** for internal usage, unit/functional test etc. */
 	bool				 oc_private;

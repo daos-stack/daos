@@ -57,14 +57,18 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.
 
 	common.AssertEqual(t, len(gotResults), len(expResults), "number of rank results")
 	for _, exp := range expResults {
+		rank := exp.Rank
 		match := false
 		for _, got := range gotResults {
-			if diff := cmp.Diff(exp, got, defRankCmpOpts...); diff == "" {
+			if got.Rank == exp.Rank {
+				if diff := cmp.Diff(exp, got, defRankCmpOpts...); diff != "" {
+					t.Fatalf("unexpected result: %s", diff)
+				}
 				match = true
 			}
 		}
 		if !match {
-			t.Fatalf("unexpected results: %s", cmp.Diff(expResults, gotResults, defRankCmpOpts...))
+			t.Fatalf("unmatched result for rank %d", rank)
 		}
 	}
 }

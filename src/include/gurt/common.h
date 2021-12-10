@@ -63,6 +63,13 @@ extern "C" {
  */
 #define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
 
+/* rand and srand macros */
+
+#define D_RAND_MAX 0x7fffffff
+
+void d_srand(long int);
+long int d_rand(void);
+
 /* memory allocating macros */
 void  d_free(void *);
 void *d_calloc(size_t, size_t);
@@ -151,16 +158,29 @@ char *d_realpath(const char *path, char *resolved_path);
 			      (ptr) = NULL);				\
 	} while (0)
 
+/* d_realpath() can fail with genuine errors, in which case we want to keep the errno from
+ * realpath, however if it doesn't fail then we want to preserve the previous errno, in
+ * addition the fault injection code could insert an error in the D_CHECK_ALLOC() macro
+ * so if that happens then we want to set ENOMEM there.
+ * Save the original error on the way in, overwrite it and then if realpath does not change
+ * it then re-instate it.
+ */
 #define D_REALPATH(ptr, path)						\
 	do {								\
-		int _size;						\
-		void *_ptr;						\
+		int _errno = errno;					\
+		errno = 0;						\
 		(ptr) = d_realpath((path), NULL);			\
-		_ptr = (ptr);						\
-		_size = strnlen((ptr), PATH_MAX + 1) + 1 ;		\
-		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	0, #ptr, 0); \
-		if (((ptr) == NULL) && _ptr != NULL)			\
-			errno = ENOMEM;					\
+		if (errno == 0 || errno == ENOMEM) {			\
+			int _size = 0;					\
+			void *_ptr = (ptr);				\
+			if (_ptr)					\
+				_size = strnlen(_ptr, PATH_MAX + 1) + 1 ; \
+			D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	0, #ptr, 0); \
+			if (errno == 0 && ((ptr) == NULL) && _ptr != NULL) \
+				errno = ENOMEM;				\
+			else if (errno == 0)				\
+				errno = _errno;				\
+		}							\
 	} while (0)
 
 #define D_ALIGNED_ALLOC(ptr, alignment, size)				\
@@ -383,6 +403,7 @@ d_rank_list_t *d_rank_list_alloc(uint32_t size);
 d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
 int d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src);
+void d_rank_list_shuffle(d_rank_list_t *rank_list);
 void d_rank_list_sort(d_rank_list_t *rank_list);
 bool d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx);
 int d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank);

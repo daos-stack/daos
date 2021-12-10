@@ -644,7 +644,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 
 	rc = cb_info->cci_rc;
 	if (rc != 0) {
-		RPC_ERROR(child_rpc_priv, "error, rc: "DF_RC"\n", DP_RC(rc));
+		RPC_CERROR(crt_quiet_error(rc), DB_NET, child_rpc_priv, "error, rc: "DF_RC"\n",
+			   DP_RC(rc));
 		co_info->co_rc = rc;
 	}
 	/* propagate failure rc to parent */
@@ -821,9 +822,9 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 				   &children_rank_list, &ver_match);
 
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_tree_get_children(group %s) failed: "DF_RC"\n",
-			  co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
+		RPC_CERROR(crt_quiet_error(rc), DB_NET, rpc_priv,
+			   "crt_tree_get_children(group %s) failed: "DF_RC"\n",
+			   co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
 		D_GOTO(forward_done, rc);
 	}
