@@ -9,7 +9,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 1801
+timeout: 1802
 server_config:
   engines_per_host: 2
   name: daos_server
