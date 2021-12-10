@@ -360,17 +360,12 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
      * size of data to fetch
      * @throws IOException
      */
-    private AsyncEntry(String key, long offset, int dataSize)
-        throws IOException {
+    private AsyncEntry(String key, long offset, int dataSize) {
       if (DaosUtils.isBlankStr(key)) {
         throw new IllegalArgumentException("key is blank");
       }
       this.key = key;
-      this.keyBytes = key.getBytes(Constants.KEY_CHARSET);
-      if (keyBytes.length > Short.MAX_VALUE) {
-        throw new IllegalArgumentException("akey length in " + Constants.KEY_CHARSET + " should not exceed "
-            + Short.MAX_VALUE + ", akey: " + key);
-      }
+      this.keyBytes = DaosUtils.keyToBytes(key);
       this.offset = offset;
       this.dataSize = dataSize;
       if (dataSize <= 0) {

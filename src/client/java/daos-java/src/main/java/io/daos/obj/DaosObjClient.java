@@ -188,6 +188,20 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
   native static long allocateSimDescGroup(long memoryAddress, int nbrOfDescs);
 
   /**
+   * allocate native desc for {@link IODescUpdAsync}.
+   *
+   * @param memoryAddress
+   */
+  native static void allocateDescUpdAsync(long memoryAddress);
+
+  /**
+   * release native desc for {@link IODescUpdAsync}.
+   *
+   * @param nativeDescPtr
+   */
+  native static void releaseDescUpdAsync(long nativeDescPtr);
+
+  /**
    * release description group allocated by {@link #allocateSimDescGroup(long, int)}.
    *
    * @param descGrpHdl
@@ -298,6 +312,21 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    */
   native void updateObjectAsync(long objectPtr, long flags, long descBufferAddress)
       throws DaosIOException;
+
+  /**
+   * update object with one entry. Dkey and Akey are described in {@link IODescUpdAsync}.
+   *
+   * @param objectPtr
+   * @param descMemAddress
+   * @param eqWrapHdl
+   * @param eventId
+   * @param offset
+   * @param dataLen
+   * @param dataMemAddress
+   * @throws DaosIOException
+   */
+  native void updateObjNoDecode(long objectPtr, long descMemAddress, long eqWrapHdl, short eventId,
+                             long offset, int dataLen, long dataMemAddress) throws DaosIOException;
 
   /**
    * list dkeys of given object.

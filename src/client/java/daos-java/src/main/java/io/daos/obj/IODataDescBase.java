@@ -6,10 +6,9 @@
 
 package io.daos.obj;
 
-import io.daos.Constants;
+import io.daos.DaosUtils;
 import io.netty.buffer.ByteBuf;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,15 +39,7 @@ public abstract class IODataDescBase implements IODataDesc {
   protected IODataDescBase(String dkey, boolean updateOrFetch) {
     this.dkey = dkey;
     if (dkey != null) {
-      try {
-        this.dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
-      } catch (IOException e) {
-        throw new IllegalArgumentException("failed to get bytes in " + Constants.KEY_CHARSET + " of dkey " + dkey);
-      }
-      if (dkeyBytes.length > Short.MAX_VALUE) {
-        throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should not exceed "
-            + Short.MAX_VALUE);
-      }
+      dkeyBytes = DaosUtils.keyToBytes(dkey);
     }
     this.akeyEntries = new ArrayList<>();
     this.updateOrFetch = updateOrFetch;
