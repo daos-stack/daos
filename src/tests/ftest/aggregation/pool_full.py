@@ -8,6 +8,7 @@
 from time import sleep, time
 from ior_test_base import IorTestBase
 from avocado.core.exceptions import TestFail
+from general_utils import DaosTestError
 
 class DaosAggregationFull(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -98,7 +99,7 @@ class DaosAggregationFull(IorTestBase):
                 self.assertTrue(free_space[ind] <= free_space[ind-1],
                                 "IOR run was not successful.")
                 ind += 1
-            except TestFail as excep:
+            except (TestFail, DaosTestError) as excep:
                 out_of_space = True
                 self.log.info("=Error on run_ior_with_pool, out of space.. %s",
                               repr(excep))
