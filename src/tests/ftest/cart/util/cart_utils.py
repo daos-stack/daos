@@ -16,7 +16,7 @@ import re
 import glob
 
 from apricot import TestWithoutServers
-from general_utils import stop_processes
+from general_utils import stop_processes, pcmd
 from write_host_file import write_host_file
 
 class CartTest(TestWithoutServers):
@@ -364,7 +364,8 @@ class CartTest(TestWithoutServers):
                   "--suppressions=" + self.supp_file + " " + \
                   "--track-origins=yes " + \
                   "--error-exitcode=" + str(memcheck_error_code) + " " \
-                  "--show-reachable=yes --trace-children=yes"
+                  "--show-reachable=yes --trace-children=yes "  + " " \
+                  "--verbose"
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
@@ -384,6 +385,9 @@ class CartTest(TestWithoutServers):
         tst_host = self.params.get("{}".format(host), "/run/hosts/*/")
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
         logparse = self.params.get("logparse", "/run/tests/*/")
+
+        self.print('DEBUG log: tst_host = {}'.format(tst_host))
+        pcmd(tst_host, "ls /usr/lib*/debug/usr/lib*/lib*", True)
 
         if tst_slt is not None:
             hostfile = write_host_file(tst_host,
