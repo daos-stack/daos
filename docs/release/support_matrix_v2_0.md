@@ -262,7 +262,9 @@ interconnect, and the libfaric provider that is used. The DAOS scaling targets
 below assume a non-blocking, RDMA-capable fabric. Most scaling tests so far
 have been performed on InfiniBand fabrics with the libfabric `verbs`provider.
 
-DAOS scaling targets (order of magnitude):
+DAOS scaling targets
+(these are order of magnitude figures that indicate what the DAOS architecture
+should support - see below for the scales at which DAOS 2.0 has been validated):
 * DAOS client nodes in a DAOS system:   10<sup>6</sup> (hundreds of thousands)
 * DAOS servers in a DAOS system:        10<sup>3</sup> (thousands)
 * DAOS engines per DAOS server:         10<sup>0</sup> (less than ten)
@@ -279,8 +281,8 @@ in a DAOS system, because the number of storage targets is encoded in
 16 of the 32 "DAOS internal bits" within the 128-bit DAOS Object ID.
 
 DAOS Version 2.0 has been validated at the following scales:
-* DAOS client nodes in a DAOS system:   512
-* DAOS servers in a DAOS system:        512
+* DAOS client nodes in a DAOS system:   256
+* DAOS servers in a DAOS system:        128
 * DAOS engines per DAOS server:         1, 2 and 4
 * DAOS targets per DAOS engine:         4-16
 * SCM storage devices per DAOS engine:  6 (Optane PMem 100), 8 (Optane PMem 200)
@@ -288,6 +290,6 @@ DAOS Version 2.0 has been validated at the following scales:
 * DAOS pools in a DAOS system:          100
 * DAOS containers in a DAOS pool:       100
 * DAOS objects in a DAOS container:     6 billion (in mdtest benchmarks)
-* Application tasks accessing a DAOS container: 4608
+* Application tasks accessing a DAOS container: 3072 (using verbs)
 This test coverage will be expanded in subsequent DAOS releases.
 
