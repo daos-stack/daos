@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.1.0~rc4-1%{?dist}
-%global libfabric_version 1.14.0~rc3-1
+%global libfabric_version 1.14.0~rc3-2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.106
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -516,6 +516,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Wed Dec 08 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.106-9
+- Apply OFI patch for DAOS-9173
+
 * Fri Dec 03 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.106-8
 - Update mercury to v2.1.0rc4
 
