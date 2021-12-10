@@ -45,7 +45,7 @@ class RbldWithIO(TestWithServers):
         # Create a pool and verify the pool info before rebuild (also connects)
         self.pool.create()
         checks = {
-            "pi_nnodes": server_count,
+            "pi_nengines": server_count,
             "pi_ntargets": server_count * targets,
             "pi_ndisabled": 0,
         }
@@ -92,7 +92,7 @@ class RbldWithIO(TestWithServers):
 
         # Check the pool information after the rebuild
         status = status = self.pool.check_pool_info(
-            pi_nnodes=server_count,
+            pi_nengines=server_count,
             pi_ntargets=(server_count * targets),  # DAOS-2799
             pi_ndisabled=targets,                  # DAOS-2799
         )

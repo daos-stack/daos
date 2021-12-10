@@ -65,7 +65,7 @@ class RbldNoCapacity(TestWithServers):
         # make sure pool looks good before we start
         self.log.info("..(1)Check for pool and rebuild info ")
         pool_checks = {
-            "pi_nnodes": len(self.hostlist_servers) * engines_per_host,
+            "pi_nengines": len(self.hostlist_servers) * engines_per_host,
             "pi_ntargets": len(self.hostlist_servers) * targets * engines_per_host,
             "pi_ndisabled": 0
         }

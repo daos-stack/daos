@@ -49,7 +49,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.hostlist_servers) * engines_per_host,
+            "pi_nengines": len(self.hostlist_servers) * engines_per_host,
             "pi_ntargets": len(
                 self.hostlist_servers) * targets * engines_per_host,
             "pi_ndisabled": 0,

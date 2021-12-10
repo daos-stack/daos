@@ -1558,7 +1558,7 @@ type PoolQueryResp struct {
 	DisabledTargets uint32               `protobuf:"varint,6,opt,name=disabled_targets,json=disabledTargets,proto3" json:"disabled_targets,omitempty"` // number of disabled targets in pool
 	Rebuild         *PoolRebuildStatus   `protobuf:"bytes,7,opt,name=rebuild,proto3" json:"rebuild,omitempty"`                                         // pool rebuild status
 	TierStats       []*StorageUsageStats `protobuf:"bytes,8,rep,name=tier_stats,json=tierStats,proto3" json:"tier_stats,omitempty"`                    // storage tiers usage stats
-	TotalNodes      uint32               `protobuf:"varint,9,opt,name=total_nodes,json=totalNodes,proto3" json:"total_nodes,omitempty"`                // total nodes in pool
+	TotalEngines    uint32               `protobuf:"varint,9,opt,name=total_engines,json=totalEngines,proto3" json:"total_engines,omitempty"`                // total engines in pool
 	Version         uint32               `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"`                                       // latest pool map version
 	Leader          uint32               `protobuf:"varint,11,opt,name=leader,proto3" json:"leader,omitempty"`                                         // current raft leader
 }
@@ -1651,9 +1651,9 @@ func (x *PoolQueryResp) GetTierStats() []*StorageUsageStats {
 	return nil
 }
 
-func (x *PoolQueryResp) GetTotalNodes() uint32 {
+func (x *PoolQueryResp) GetTotalEngines() uint32 {
 	if x != nil {
-		return x.TotalNodes
+		return x.TotalEngines
 	}
 	return 0
 }

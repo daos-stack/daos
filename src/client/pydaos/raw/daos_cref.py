@@ -98,7 +98,7 @@ class PoolInfo(ctypes.Structure):
     Represents struct: daos_pool_info_t"""
     _fields_ = [("pi_uuid", ctypes.c_ubyte * 16),
                 ("pi_ntargets", ctypes.c_uint32),
-                ("pi_nnodes", ctypes.c_uint32),
+                ("pi_nengines", ctypes.c_uint32),
                 ("pi_ndisabled", ctypes.c_uint32),
                 ("pi_map_ver", ctypes.c_uint32),
                 ("pi_leader", ctypes.c_uint32),

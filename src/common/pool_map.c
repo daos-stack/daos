@@ -387,7 +387,7 @@ int
 pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		unsigned int comp_nr)
 {
-	unsigned int	nr = buf->pb_domain_nr + buf->pb_node_nr +
+	unsigned int	nr = buf->pb_domain_nr + buf->pb_engine_nr +
 			     buf->pb_target_nr;
 
 	if (buf->pb_nr < nr + comp_nr)
@@ -408,7 +408,7 @@ pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		if (comps[0].co_type == PO_COMP_TP_TARGET)
 			buf->pb_target_nr++;
 		else if (comps[0].co_type == PO_COMP_TP_RANK)
-			buf->pb_node_nr++;
+			buf->pb_engine_nr++;
 		else
 			buf->pb_domain_nr++;
 
@@ -424,7 +424,7 @@ int
 pool_buf_pack(struct pool_buf *buf)
 {
 	if (buf->pb_nr != buf->pb_target_nr + buf->pb_domain_nr +
-			  buf->pb_node_nr)
+			  buf->pb_engine_nr)
 		return -DER_INVAL;
 
 	/* TODO: checksum, swab... */
@@ -457,31 +457,31 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	int		    i;
 	int		    rc = 0;
 
-	if (buf->pb_target_nr == 0 || buf->pb_node_nr == 0 ||
-	    buf->pb_domain_nr + buf->pb_node_nr + buf->pb_target_nr !=
+	if (buf->pb_target_nr == 0 || buf->pb_engine_nr == 0 ||
+	    buf->pb_domain_nr + buf->pb_engine_nr + buf->pb_target_nr !=
 								buf->pb_nr) {
 		D_DEBUG(DB_MGMT, "Invalid number of components: %d/%d/%d/%d\n",
-			buf->pb_nr, buf->pb_domain_nr, buf->pb_node_nr,
+			buf->pb_nr, buf->pb_domain_nr, buf->pb_engine_nr,
 			buf->pb_target_nr);
 		return -DER_INVAL;
 	}
 
 	size = sizeof(struct pool_domain) * (buf->pb_domain_nr + 1) + /* root */
-	       sizeof(struct pool_domain) * (buf->pb_node_nr) +
+	       sizeof(struct pool_domain) * (buf->pb_engine_nr) +
 	       sizeof(struct pool_target) * (buf->pb_target_nr);
 
 	D_DEBUG(DB_TRACE, "domain %d node %d target %d\n", buf->pb_domain_nr,
-		buf->pb_node_nr, buf->pb_target_nr);
+		buf->pb_engine_nr, buf->pb_target_nr);
 
 	D_ALLOC(tree, size);
 	if (tree == NULL)
 		return -DER_NOMEM;
 
 	targets	= (struct pool_target *)&tree[buf->pb_domain_nr +
-					      buf->pb_node_nr + 1];
+					      buf->pb_engine_nr + 1];
 	for (i = 0; i < buf->pb_target_nr; i++)
 		targets[i].ta_comp = buf->pb_comps[buf->pb_domain_nr +
-						buf->pb_node_nr + i];
+						buf->pb_engine_nr + i];
 
 	/* Initialize the root */
 	parent = &tree[0]; /* root */
@@ -489,8 +489,8 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	parent->do_comp.co_status = PO_COMP_ST_UPIN;
 	if (buf->pb_domain_nr == 0) {
 		/* nodes are directly attached under the root */
-		parent->do_target_nr = buf->pb_node_nr;
-		parent->do_child_nr = buf->pb_node_nr;
+		parent->do_target_nr = buf->pb_engine_nr;
+		parent->do_child_nr = buf->pb_engine_nr;
 	} else {
 		parent->do_child_nr = buf->pb_domain_nr;
 	}
@@ -641,7 +641,7 @@ pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp)
 		pool_buf_attach(buf, &tree->do_targets[i].ta_comp, 1);
 
 	if (buf->pb_nr != buf->pb_target_nr + buf->pb_domain_nr +
-			  buf->pb_node_nr) {
+			  buf->pb_engine_nr) {
 		D_DEBUG(DB_MGMT, "Invalid pool map format.\n");
 		D_GOTO(failed, rc = -DER_INVAL);
 	}

@@ -698,9 +698,9 @@ struct  _Mgmt__PoolQueryResp
   size_t n_tier_stats;
   Mgmt__StorageUsageStats **tier_stats;
   /*
-   * total nodes in pool
+   * total engines in pool
    */
-  uint32_t total_nodes;
+  uint32_t total_engines;
   /*
    * latest pool map version
    */

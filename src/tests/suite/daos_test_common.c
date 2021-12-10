@@ -182,7 +182,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 			if (rc == 0) {
 				arg->srv_ntgts = info.pi_ntargets;
-				arg->srv_nnodes = info.pi_nnodes;
+				arg->srv_nnodes = info.pi_nengines;
 				arg->srv_disabled_ntgts = info.pi_ndisabled;
 			}
 		}

@@ -59,7 +59,7 @@ class RbldWidelyStriped(MdtestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.hostlist_servers),
+            "pi_nengines": len(self.hostlist_servers),
             "pi_ntargets": len(self.hostlist_servers) * targets,
             "pi_ndisabled": 0,
         }

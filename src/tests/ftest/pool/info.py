@@ -45,7 +45,7 @@ class InfoTests(TestWithServers):
         checks = {
             "pi_uuid": self.pool.uuid,
             "pi_ntargets": len(self.hostlist_servers) * targets,
-            "pi_nnodes": len(self.hostlist_servers),
+            "pi_nengines": len(self.hostlist_servers),
             "pi_ndisabled": 0,
             "pi_map_ver": 1,
             "pi_leader": 0,

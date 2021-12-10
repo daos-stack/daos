@@ -448,7 +448,7 @@ racer_valid_oid(daos_obj_id_t oid, daos_pool_info_t *pinfo)
 		return false;
 	}
 
-	if (required_node > pinfo->pi_nnodes ||
+	if (required_node > pinfo->pi_nengines ||
 	    required_tgt > pinfo->pi_ntargets - pinfo->pi_ndisabled)
 		return false;
 

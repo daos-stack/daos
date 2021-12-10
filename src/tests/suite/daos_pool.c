@@ -193,11 +193,11 @@ pool_exclude(void **state)
 	print_message("success\n");
 
 	/** exclude last non-svc rank */
-	if (info.pi_nnodes - 1 /* rank 0 */ <= arg->pool.svc->rl_nr) {
+	if (info.pi_nengines - 1 /* rank 0 */ <= arg->pool.svc->rl_nr) {
 		print_message("not enough non-svc targets; skipping\n");
 		goto disconnect;
 	}
-	rank = info.pi_nnodes - 1;
+	rank = info.pi_nengines - 1;
 	print_message("rank 0 excluding rank %u... ", rank);
 	for (idx = 0; idx < arg->pool.svc->rl_nr; idx++) {
 		daos_exclude_target(arg->pool.pool_uuid, arg->group,

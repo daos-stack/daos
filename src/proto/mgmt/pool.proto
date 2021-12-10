@@ -203,7 +203,7 @@ message PoolQueryResp {
 	uint32 disabled_targets = 6; // number of disabled targets in pool
 	PoolRebuildStatus rebuild = 7; // pool rebuild status
 	repeated StorageUsageStats tier_stats = 8; // storage tiers usage stats
-	uint32 total_nodes = 9; // total nodes in pool
+	uint32 total_engines = 9; // total engines in pool
 	uint32 version = 10; // latest pool map version
 	uint32 leader = 11; // current raft leader
 }

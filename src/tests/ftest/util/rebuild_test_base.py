@@ -60,7 +60,7 @@ class RebuildTestBase(TestWithServers):
         """Set up pool verification initial expected values."""
         self.info_checks = {
             "pi_uuid": self.pool.uuid,
-            "pi_nnodes": self.server_count,
+            "pi_nengines": self.server_count,
             "pi_ntargets": (self.server_count * self.targets),
             "pi_ndisabled": 0,
         }

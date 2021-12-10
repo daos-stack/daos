@@ -99,7 +99,7 @@ class RbldContainerCreate(IorTestBase):
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
         ior_loop = self.params.get("ior_test_loop", "/run/ior/*")
         cont_qty = self.params.get("cont_qty", "/run/io/*")
-        node_qty = len(self.hostlist_servers)
+        engine_qty = len(self.hostlist_servers)
 
         # create pool
         self.create_pool()
@@ -107,8 +107,8 @@ class RbldContainerCreate(IorTestBase):
         # make sure pool looks good before we start
         info_checks = {
             "pi_uuid": self.pool.uuid,
-            "pi_ntargets": node_qty * targets,
-            "pi_nnodes": node_qty,
+            "pi_ntargets": engine_qty * targets,
+            "pi_nengines": engine_qty,
             "pi_ndisabled": 0
         }
         rebuild_checks = {

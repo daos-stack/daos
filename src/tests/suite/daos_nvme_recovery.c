@@ -138,7 +138,7 @@ nvme_fault_reaction(void **state, int mode)
 		print_message("\n");
 	}
 
-	if (arg->pool.pool_info.pi_nnodes < 2)
+	if (arg->pool.pool_info.pi_nengines < 2)
 		obj_class = DAOS_OC_R1S_SPEC_RANK;
 	else
 		obj_class = DAOS_OC_R2S_SPEC_RANK;
@@ -481,7 +481,7 @@ nvme_test_get_blobstore_state(void **state)
 	/**
 	 * Set the object class and generate data on objects.
 	 */
-	if (arg->pool.pool_info.pi_nnodes < 2)
+	if (arg->pool.pool_info.pi_nengines < 2)
 		obj_class = DAOS_OC_R1S_SPEC_RANK;
 	else
 		obj_class = DAOS_OC_R2S_SPEC_RANK;

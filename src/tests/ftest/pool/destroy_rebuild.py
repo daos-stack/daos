@@ -42,7 +42,7 @@ class DestroyRebuild(TestWithServers):
 
         # Verify the pool information before starting rebuild
         checks = {
-            "pi_nnodes": len(self.hostlist_servers),
+            "pi_nengines": len(self.hostlist_servers),
             "pi_ntargets": len(self.hostlist_servers) * targets,
             "pi_ndisabled": 0,
         }

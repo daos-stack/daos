@@ -225,7 +225,7 @@ pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 
 	uuid_copy(info->pi_uuid, pool_uuid);
 	info->pi_ntargets	= map_buf->pb_target_nr;
-	info->pi_nnodes		= map_buf->pb_node_nr;
+	info->pi_nengines	= map_buf->pb_engine_nr;
 	info->pi_map_ver	= map_version;
 	info->pi_leader		= leader_rank;
 	if (info->pi_bits & DPI_SPACE)

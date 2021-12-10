@@ -4674,7 +4674,7 @@ obj_setup_internal(void **state)
 
 	arg = *state;
 
-	if (arg->pool.pool_info.pi_nnodes < 2)
+	if (arg->pool.pool_info.pi_nengines < 2)
 		dts_obj_class = OC_S1;
 	else if (arg->obj_class != OC_UNKNOWN)
 		dts_obj_class = arg->obj_class;

@@ -422,7 +422,7 @@ class TestPool(TestDaosApiBase):
             self._call_method(self.pool.pool_query, {})
             self.info = self.pool.pool_info
 
-    def check_pool_info(self, pi_uuid=None, pi_ntargets=None, pi_nnodes=None,
+    def check_pool_info(self, pi_uuid=None, pi_ntargets=None, pi_nengines=None,
                         pi_ndisabled=None, pi_map_ver=None, pi_leader=None,
                         pi_bits=None):
         # pylint: disable=unused-argument
@@ -436,7 +436,7 @@ class TestPool(TestDaosApiBase):
         Args:
             pi_uuid (str, optional): pool uuid. Defaults to None.
             pi_ntargets (int, optional): number of targets. Defaults to None.
-            pi_nnodes (int, optional): number of nodes. Defaults to None.
+            pi_nengines (int, optional): number of engines. Defaults to None.
             pi_ndisabled (int, optional): number of disabled. Defaults to None.
             pi_map_ver (int, optional): pool map version. Defaults to None.
             pi_leader (int, optional): pool leader. Defaults to None.

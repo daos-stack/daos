@@ -142,7 +142,7 @@ typedef struct {
 	/** Number of targets */
 	uint32_t			pi_ntargets;
 	/** Number of nodes */
-	uint32_t			pi_nnodes;
+	uint32_t			pi_nengines;
 	/** Number of deactivated targets */
 	uint32_t			pi_ndisabled;
 	/** Latest pool map version */
