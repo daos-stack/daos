@@ -786,8 +786,8 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 	if (biod->bd_bulk_hdls == NULL)
 		return NULL;
 
-        D_ASSERTF(biod->bd_bulk_cnt == biod->bd_bulk_max, "Invalid bulk cnt %u vs max %u\n",
-                  biod->bd_bulk_cnt, biod->bd_bulk_max);
+	D_ASSERTF(biod->bd_bulk_cnt == biod->bd_bulk_max, "Invalid bulk cnt %u vs max %u\n",
+		biod->bd_bulk_cnt, biod->bd_bulk_max);
 	D_ASSERT(sgl_idx < biod->bd_sgl_cnt);
 
 	for (i = 0; i < sgl_idx; i++) {
