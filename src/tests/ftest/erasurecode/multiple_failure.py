@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor
-from apricot import skipForTicket
 
 class EcodOnlineMultFail(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -20,7 +19,6 @@ class EcodOnlineMultFail(ErasureCodeIor):
         super().__init__(*args, **kwargs)
         self.set_online_rebuild = True
 
-    @skipForTicket("DAOS-9051")
     def run_ior_cascade_failure(self):
         """Common function to Write and Read IOR"""
         # Write IOR data set with different EC object. kill rank, targets or mix of both while IOR
@@ -35,7 +33,6 @@ class EcodOnlineMultFail(ErasureCodeIor):
         # intact and no data corruption observed.
         self.ior_read_dataset(parity=2)
 
-    @skipForTicket("DAOS-9051")
     def test_ec_multiple_rank_failure(self):
         """Jira ID: DAOS-7344.
 
@@ -88,7 +85,6 @@ class EcodOnlineMultFail(ErasureCodeIor):
         self.pool_exclude[3] = "3"
         self.run_ior_cascade_failure()
 
-    @skipForTicket("DAOS-9051")
     def test_ec_single_target_rank_failure(self):
         """Jira ID: DAOS-7344.
 
