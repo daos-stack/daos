@@ -3,8 +3,8 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-2%{?dist}
-%global libfabric_version 1.14.0~rc3-1
+%global mercury_version 2.1.0~rc4-1%{?dist}
+%global libfabric_version 1.14.0~rc3-2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       13%{?relval}%{?dist}
+Release:       14%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -205,8 +205,8 @@ This is the package needed to run a DAOS client
 
 %package tests
 Summary: The entire DAOS test suite
-Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
-Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
@@ -538,9 +538,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Dec 08 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-13
+* Sat Dec 11 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-14
 - Create a shim package to allow daos openmpi packages built with the
   distribution openmpi to install on MOFED systems
+
+* Wed Dec 08 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-13
+- Remove DAOS-9173 workaround from mercury. Apply DAOS-9173 to ofi
 
 * Tue Dec 07 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-12
 - Apply DAOS-9173 workaround to mercury
