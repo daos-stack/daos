@@ -204,8 +204,8 @@ This is the package needed to run a DAOS client
 
 %package tests
 Summary: The entire DAOS test suite
-Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
-Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
@@ -516,8 +516,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Fri Dec 10 2021 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-1
+* Sat Dec 11 2021 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-1
 - Version bump to 2.0.0
+
+* Fri Dec 10 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.106-10
+- Don't make daos-*-tests-openmi a dependency of anything
+  - If they are wanted, they should be installed explicitly, due to
+    potential conflicts with other MPI stacks
 
 * Wed Dec 08 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.106-9
 - Apply OFI patch for DAOS-9173
