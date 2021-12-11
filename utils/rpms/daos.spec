@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       14%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -205,8 +205,8 @@ This is the package needed to run a DAOS client
 
 %package tests
 Summary: The entire DAOS test suite
-Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
-Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
@@ -538,9 +538,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Sat Dec 11 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-14
+* Sat Dec 11 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-15
 - Create a shim package to allow daos openmpi packages built with the
   distribution openmpi to install on MOFED systems
+
+* Fri Dec 10 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-14
+- Don't make daos-*-tests-openmi a dependency of anything
+  - If they are wanted, they should be installed explicitly, due to
+    potential conflicts with other MPI stacks
 
 * Wed Dec 08 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-13
 - Remove DAOS-9173 workaround from mercury. Apply DAOS-9173 to ofi
