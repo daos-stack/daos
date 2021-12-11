@@ -954,9 +954,6 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	if (rpt->rt_rebuild_op == RB_OP_REINT)
-		rpt->rt_pool->sp_reintegrating++; /* reset in rebuild_tgt_fini */
-
 	rpt_get(rpt);
 	/* step-3: start scan leader */
 	rc = dss_ult_create(rebuild_scan_leader, rpt, DSS_XS_SELF, 0, 0, NULL);
