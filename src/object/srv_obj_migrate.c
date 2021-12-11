@@ -2582,7 +2582,7 @@ migrate_fini_one_ult(void *data)
 
 	migrate_pool_tls_put(tls); /* destroy */
 
-	D_INFO("migrate fini one ult "DF_UUID"\n", arg->pool_uuid);
+	D_INFO("migrate fini one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
 	return 0;
 }
 
