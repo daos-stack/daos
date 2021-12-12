@@ -309,7 +309,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 
 // BdevWriteConfigRequestFromConfig returns a config write request from
 // a storage config.
-func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, eIdx int, cfg *Config) (BdevWriteConfigRequest, error) {
+func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config) (BdevWriteConfigRequest, error) {
 	req := BdevWriteConfigRequest{
 		ConfigOutputPath: cfg.ConfigOutputPath,
 		OwnerUID:         os.Geteuid(),
@@ -335,7 +335,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, e
 
 		// Populate hotplug bus-ID range limits from the first bdev tier
 		// to limit hotplug activity of a specific engine to a ssd device set.
-		if err := req.setHotplugBusidRange(ctx, log, tier.Bdev.BusidRange, eIdx); err != nil {
+		if err := req.setHotplugBusidRange(ctx, log, tier.Bdev.BusidRange, cfg.NumaNodeIndex); err != nil {
 			return req, err
 		}
 	}
@@ -346,7 +346,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, e
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
 func (p *Provider) WriteNvmeConfig(ctx context.Context) error {
-	req, err := BdevWriteConfigRequestFromConfig(ctx, p.log, p.engineIndex, p.engineStorage)
+	req, err := BdevWriteConfigRequestFromConfig(ctx, p.log, p.engineStorage)
 	if err != nil {
 		return err
 	}

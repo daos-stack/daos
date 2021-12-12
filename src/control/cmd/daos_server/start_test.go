@@ -39,9 +39,6 @@ func testExpectedError(t *testing.T, expected, actual error) {
 func genMinimalConfig() *config.Server {
 	cfg := config.DefaultServer().
 		WithFabricProvider("foo").
-		WithProviderValidator(netdetect.ValidateProviderStub).
-		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub).
 		WithEngines(
 			engine.NewConfig().
 				WithStorage(
@@ -51,7 +48,10 @@ func genMinimalConfig() *config.Server {
 						WithScmMountPoint("/mnt/daos"),
 				).
 				WithFabricInterface("foo0").
-				WithFabricInterfacePort(42),
+				WithFabricInterfacePort(42).
+				WithValidateProvider(netdetect.ValidateProviderStub).
+				WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode).
+				WithGetNetDevCls(getDeviceClassStub),
 		)
 	cfg.Path = path.Join(os.Args[0], cfg.Path)
 	return cfg
@@ -68,7 +68,10 @@ func genDefaultExpected() *config.Server {
 						WithScmMountPoint("/mnt/daos"),
 				).
 				WithFabricInterface("foo0").
-				WithFabricInterfacePort(42),
+				WithFabricInterfacePort(42).
+				WithValidateProvider(netdetect.ValidateProviderStub).
+				WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode).
+				WithGetNetDevCls(getDeviceClassStub),
 		)
 }
 
@@ -254,14 +257,8 @@ func TestStartOptions(t *testing.T) {
 				return nil
 			}
 
-			opts.Start.config = genMinimalConfig().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
-			wantConfig := tc.expCfgFn(genDefaultExpected().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub))
+			opts.Start.config = genMinimalConfig()
+			wantConfig := tc.expCfgFn(genDefaultExpected())
 
 			err := parseOpts(append([]string{"start"}, tc.argList...), &opts, log)
 			if err != tc.expErr {
@@ -273,11 +270,11 @@ func TestStartOptions(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(
-					config.Server{},
 					security.CertificateConfig{},
 				),
-				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
 				cmpopts.SortSlices(func(a, b string) bool { return a < b }),
+				cmpopts.IgnoreFields(engine.Config{}, "GetNetDevCls", "ValidateProvider",
+					"GetIfaceNumaNode"),
 			}
 			if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts...); diff != "" {
 				t.Fatalf("(-want +got):\n%s", diff)

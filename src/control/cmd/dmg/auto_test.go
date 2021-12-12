@@ -180,11 +180,6 @@ hyperthreads: false
 `
 	)
 
-	var (
-		numa0 = uint(0)
-		numa1 = uint(1)
-	)
-
 	typicalAutoGenOutCfg := config.DefaultServer().
 		WithControlLogFile(defaultControlLogFile).
 		WithFabricProvider("ofi+verbs").
@@ -197,7 +192,7 @@ hyperthreads: false
 				WithFabricInterface("ib0").
 				WithFabricInterfacePort(defaultFiPort).
 				WithFabricProvider("ofi+verbs").
-				WithPinnedNumaNode(&numa0).
+				WithPinnedNumaNode(0).
 				WithStorage(
 					storage.NewTierConfig().
 						WithScmClass(storage.ClassDcpm.String()).
@@ -218,7 +213,7 @@ hyperthreads: false
 				WithFabricInterfacePort(
 					int(defaultFiPort+defaultFiPortInterval)).
 				WithFabricProvider("ofi+verbs").
-				WithPinnedNumaNode(&numa1).
+				WithPinnedNumaNode(1).
 				WithStorage(
 					storage.NewTierConfig().
 						WithScmClass(storage.ClassDcpm.String()).

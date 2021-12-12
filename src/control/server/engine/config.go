@@ -7,15 +7,22 @@
 package engine
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 const maxHelperStreamCount = 2
+
+type netProviderValidator func(context.Context, string, string) error
+type netIfaceNumaNodeGetter func(context.Context, string) (uint, error)
+type netDevClsGetter func(string) (uint32, error)
 
 // ErrNoPinnedNumaNode error indicates no NUMA node has been pinned in this
 // engine's configuration.
@@ -26,7 +33,7 @@ type FabricConfig struct {
 	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
 	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
-	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
+	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
@@ -50,15 +57,6 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
 	}
-}
-
-// GetNumaNode retrieves the value configured by the YML if it was supplied
-// returns an error if it was not configured.
-func (fc *FabricConfig) GetNumaNode() (uint, error) {
-	if fc.PinnedNumaNode != nil {
-		return *fc.PinnedNumaNode, nil
-	}
-	return 0, ErrNoPinnedNumaNode
 }
 
 // Validate ensures that the configuration meets minimum standards.
@@ -167,16 +165,62 @@ type Config struct {
 	Fabric            FabricConfig   `yaml:",inline"`
 	EnvVars           []string       `yaml:"env_vars,omitempty"`
 	EnvPassThrough    []string       `yaml:"env_pass_through,omitempty"`
+	PinnedNumaNode    *uint          `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
+
+	// ValidateFabricProvider function that validates the chosen provider
+	ValidateProvider netProviderValidator `yaml:"-"`
+
+	// GetIfaceNumaNode is a function that retrieves the numa node id that a network
+	// interfaces is bound to
+	GetIfaceNumaNode netIfaceNumaNodeGetter `yaml:"-"`
+
+	// GetDeviceClass is a function that retrieves the I/O Engine's network device class
+	GetNetDevCls netDevClsGetter `yaml:"-"`
 }
 
 // NewConfig returns an I/O Engine config.
 func NewConfig() *Config {
 	return &Config{
 		HelperStreamCount: maxHelperStreamCount,
+		ValidateProvider:  netdetect.ValidateProviderConfig,
+		GetIfaceNumaNode:  netdetect.GetIfaceNumaNode,
+		GetNetDevCls:      netdetect.GetDeviceClass,
 	}
+}
+
+// ValidateAffinity ensures engine NUMA locality is assigned and valid.
+func (c *Config) ValidateAffinity(ctx context.Context, log logging.Logger) error {
+	if err := c.ValidateProvider(ctx, c.Fabric.Interface, c.Fabric.Provider); err != nil {
+		return errors.Wrapf(err, "Network device %s does not support provider %s. "+
+			"The configuration is invalid.", c.Fabric.Interface, c.Fabric.Provider)
+	}
+
+	ifaceNumaNode, err := c.GetIfaceNumaNode(ctx, c.Fabric.Interface)
+	if err != nil {
+		return errors.Wrapf(err, "fetching numa node of network interface %q",
+			c.Fabric.Interface)
+	}
+
+	if c.PinnedNumaNode != nil {
+		// validate that numa node is correct for the given device
+		if ifaceNumaNode != *c.PinnedNumaNode {
+			log.Errorf("Using network device %s (NUMA node %d) on engine pinned to NUMA node "+
+				"%d is not recommend", c.Fabric.Interface, ifaceNumaNode, c.PinnedNumaNode)
+		}
+		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
+		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
+
+		return nil
+	}
+
+	// set engine numa node index to that of selected fabric interface
+	c.Fabric.NumaNodeIndex = ifaceNumaNode
+	c.Storage.NumaNodeIndex = ifaceNumaNode
+
+	return nil
 }
 
 // Validate ensures that the configuration meets minimum standards.
@@ -257,6 +301,24 @@ func (c *Config) WithEnvVars(newVars ...string) *Config {
 // engine subprocess environment.
 func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
 	c.EnvPassThrough = allowList
+	return c
+}
+
+// WithValidateProvider sets the function that validates the provider
+func (c *Config) WithValidateProvider(fn netProviderValidator) *Config {
+	c.ValidateProvider = fn
+	return c
+}
+
+// WithGetIfaceNumaNode sets the function that validates the NUMA configuration
+func (c *Config) WithGetIfaceNumaNode(fn netIfaceNumaNodeGetter) *Config {
+	c.GetIfaceNumaNode = fn
+	return c
+}
+
+// WithGetNetDevCls sets the function that determines the network device class
+func (c *Config) WithGetNetDevCls(fn netDevClsGetter) *Config {
+	c.GetNetDevCls = fn
 	return c
 }
 
@@ -341,12 +403,6 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	return c
 }
 
-// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
-func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
-	c.Fabric.PinnedNumaNode = numa
-	return c
-}
-
 // WithBypassHealthChk sets the NVME health check bypass for this instance
 func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
 	c.Fabric.BypassHealthChk = bypass
@@ -404,5 +460,11 @@ func (c *Config) WithMemSize(memsize int) *Config {
 // WithHugePageSize sets the configured hugepage size on this instance.
 func (c *Config) WithHugePageSize(hugepagesz int) *Config {
 	c.HugePageSz = hugepagesz
+	return c
+}
+
+// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
+func (c *Config) WithPinnedNumaNode(numa uint) *Config {
+	c.PinnedNumaNode = &numa
 	return c
 }

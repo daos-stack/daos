@@ -148,7 +148,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 			numaCount, engineCount)
 	}
 
-	netDevClass, err := cfg.CheckFabric(ctx)
+	netDevClass, err := cfg.CheckFabric(ctx, log)
 	if err != nil {
 		return 0, errors.Wrap(err, "validate fabric config")
 	}

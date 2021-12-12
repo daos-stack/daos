@@ -597,11 +597,11 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		}
 
 		pnn := uint(nn)
+		engineCfg.PinnedNumaNode = &pnn
 		engineCfg.Fabric = engine.FabricConfig{
-			Provider:       nd.numaIfaces[nn].Provider,
-			Interface:      nd.numaIfaces[nn].Device,
-			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
-			PinnedNumaNode: &pnn,
+			Provider:      nd.numaIfaces[nn].Provider,
+			Interface:     nd.numaIfaces[nn].Device,
+			InterfacePort: int(defaultFiPort + (nn * defaultFiPortInterval)),
 		}
 
 		engines = append(engines, engineCfg)

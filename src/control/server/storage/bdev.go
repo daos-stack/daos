@@ -418,7 +418,7 @@ type (
 // setHotplugBusidRange sets range parameters in the input request either to user configured
 // values if provided in the server config file, or automatically derive them by querying
 // hardware configuration.
-func (req *BdevWriteConfigRequest) setHotplugBusidRange(ctx context.Context, log logging.Logger, inRange string, engineIdx int) error {
+func (req *BdevWriteConfigRequest) setHotplugBusidRange(ctx context.Context, log logging.Logger, inRange string, numaNodeIdx uint) error {
 	if inRange != "" {
 		log.Debugf("setting user-specified hotplug bus-id range %q", inRange)
 
@@ -440,7 +440,7 @@ func (req *BdevWriteConfigRequest) setHotplugBusidRange(ctx context.Context, log
 	}
 
 	//calcPCIBusidRange(engineIdxif err != nil {}
-	log.Debugf("Discover topology: %+v", topo)
+	log.Debugf("numa node %d pci buses: %+v", numaNodeIdx, topo.NUMANodes[numaNodeIdx].PCIBuses)
 
 	return nil
 }

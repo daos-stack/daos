@@ -37,15 +37,14 @@ const (
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
 
-var (
-	defConfigCmpOpts = []cmp.Option{
-		cmpopts.IgnoreUnexported(
-			Server{},
-			security.CertificateConfig{},
-		),
-		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn", "Path"),
-	}
-)
+var defConfigCmpOpts = []cmp.Option{
+	cmpopts.IgnoreUnexported(
+		security.CertificateConfig{},
+	),
+	cmpopts.IgnoreFields(Server{}, "Path"),
+	cmpopts.IgnoreFields(engine.Config{}, "GetNetDevCls", "ValidateProvider",
+		"GetIfaceNumaNode"),
+}
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
 // lines in order to verify parsing of all available params.
@@ -100,10 +99,7 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 // file at the given path.
 func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	t.Helper()
-	c := DefaultServer().
-		WithProviderValidator(netdetect.ValidateProviderStub).
-		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub)
+	c := DefaultServer()
 	c.Path = path
 
 	return c, c.Load()
@@ -151,10 +147,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
+			configA := DefaultServer()
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
@@ -170,10 +163,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
+			configB := DefaultServer()
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}
@@ -206,8 +196,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 		t.Fatalf("failed to load %s: %s", testFile, err)
 	}
 
-	var numaNode0 uint = 0
-	var numaNode1 uint = 1
 	var bypass = true
 
 	// Next, construct a config to compare against the first one. It should be
@@ -232,10 +220,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
-		WithHyperthreads(true). // hyper-threads disabled by default
-		WithProviderValidator(netdetect.ValidateProviderStub).
-		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub)
+		WithHyperthreads(true) // hyper-threads disabled by default
 
 	// add engines explicitly to test functionality applied in WithEngines()
 	constructed.Engines = []*engine.Config{
@@ -261,12 +246,15 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
-			WithPinnedNumaNode(&numaNode0).
+			WithPinnedNumaNode(0).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=30").
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("WARN").
-			WithStorageEnableHotplug(true),
+			WithStorageEnableHotplug(true).
+			WithValidateProvider(netdetect.ValidateProviderStub).
+			WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode).
+			WithGetNetDevCls(getDeviceClassStub),
 		engine.NewConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -285,17 +273,21 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithBdevFileSize(16).
 					WithBdevBusidRange("0xd0-0xdf"),
 			).
+			WithPinnedNumaNode(1).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
-			WithPinnedNumaNode(&numaNode1).
+			WithPinnedNumaNode(1).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("WARN").
-			WithStorageEnableHotplug(true),
+			WithStorageEnableHotplug(true).
+			WithValidateProvider(netdetect.ValidateProviderStub).
+			WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode).
+			WithGetNetDevCls(getDeviceClassStub),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
@@ -787,10 +779,7 @@ func TestServerConfig_RelativeWorkingPath(t *testing.T) {
 			relPath := filepath.Join(pathToRoot, testFile)
 			t.Logf("abs: %s, cwd: %s, rel: %s", testFile, cwd, relPath)
 
-			config := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
+			config := DefaultServer()
 
 			err = config.SetPath(relPath)
 			if err != nil {
@@ -826,9 +815,14 @@ func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 		WithModules(testModules).
 		WithSocketDir(testSocketDir).
 		WithSystemName(testSystemName).
-		WithEngines(engine.NewConfig())
+		WithEngines(
+			engine.NewConfig().
+				WithValidateProvider(netdetect.ValidateProviderStub).
+				WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode).
+				WithGetNetDevCls(getDeviceClassStub),
+		)
 
-	if diff := cmp.Diff(wantCfg, config.Engines[0]); diff != "" {
+	if diff := cmp.Diff(wantCfg, config.Engines[0], defConfigCmpOpts...); diff != "" {
 		t.Fatalf("unexpected server config (-want, +got):\n%s\n", diff)
 	}
 }
@@ -945,8 +939,10 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 
 			conf := DefaultServer().
 				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(getDeviceClassStub).
-				WithEngines(tc.configA, tc.configB)
+				WithEngines(
+					tc.configA.WithGetNetDevCls(getDeviceClassStub),
+					tc.configB.WithGetNetDevCls(getDeviceClassStub),
+				)
 
 			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
@@ -1028,12 +1024,21 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
 			gotNetDevCls, gotErr := DefaultServer().
-				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(getDeviceClassStub).
-				WithEngines(tc.configA, tc.configB).
-				CheckFabric(context.Background())
+				WithEngines(
+					tc.configA.
+						WithValidateProvider(netdetect.ValidateProviderStub).
+						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode).
+						WithGetNetDevCls(getDeviceClassStub),
+					tc.configB.
+						WithValidateProvider(netdetect.ValidateProviderStub).
+						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode).
+						WithGetNetDevCls(getDeviceClassStub),
+				).CheckFabric(context.Background(), log)
 
 			CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {

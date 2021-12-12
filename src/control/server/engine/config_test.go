@@ -24,10 +24,9 @@ import (
 
 var update = flag.Bool("update", false, "update .golden files")
 
-func cmpOpts() []cmp.Option {
-	return []cmp.Option{
-		cmpopts.SortSlices(func(a, b string) bool { return a < b }),
-	}
+var defConfigCmpOpts = []cmp.Option{
+	cmpopts.SortSlices(func(a, b string) bool { return a < b }),
+	cmpopts.IgnoreFields(Config{}, "GetNetDevCls", "ValidateProvider", "GetIfaceNumaNode"),
 }
 
 func TestConfig_MergeEnvVars(t *testing.T) {
@@ -74,7 +73,7 @@ func TestConfig_MergeEnvVars(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotVars := mergeEnvVars(tc.baseVars, tc.mergeVars)
-			if diff := cmp.Diff(tc.wantVars, gotVars, cmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.wantVars, gotVars, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}
 		})
@@ -114,7 +113,7 @@ func TestConfig_HasEnvVar(t *testing.T) {
 				cfg.WithEnvVars(tc.addVar + "=" + tc.addVal)
 			}
 
-			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, cmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("unexpected env vars:\n%s\n", diff)
 			}
 		})
@@ -122,7 +121,6 @@ func TestConfig_HasEnvVar(t *testing.T) {
 }
 
 func TestConstructedConfig(t *testing.T) {
-	var numaNode uint = 8
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity
@@ -150,7 +148,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithServiceThreadCore(8).
 		WithTargetCount(12).
 		WithHelperStreamCount(1).
-		WithPinnedNumaNode(&numaNode).
+		WithPinnedNumaNode(8).
 		WithBypassHealthChk(nil)
 
 	if *update {
@@ -175,7 +173,7 @@ func TestConstructedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(fromDisk, constructed, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(fromDisk, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }
@@ -536,7 +534,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithFabricProvider(provider).
 		WithFabricInterface(interfaceName).
 		WithFabricInterfacePort(interfacePort).
-		WithPinnedNumaNode(&pinnedNumaNode).
+		WithPinnedNumaNode(pinnedNumaNode).
 		WithBypassHealthChk(&bypass).
 		WithModules(modules).
 		WithSocketDir(socketDir).
@@ -581,7 +579,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(wantArgs, gotArgs, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantArgs, gotArgs, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 
@@ -589,7 +587,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(wantEnv, gotEnv, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }

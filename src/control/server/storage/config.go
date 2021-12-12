@@ -323,6 +323,7 @@ type Config struct {
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	EnableHotplug    bool        `yaml:"-"`
+	NumaNodeIndex    uint        `yaml:"-"`
 }
 
 func (c *Config) Validate() error {
