@@ -92,6 +92,7 @@ class DmvrSerialLargePosix(DataMoverTestBase):
         Test Description:
             DAOS-7432: Verify serializing a large POSIX container.
         :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
         :avocado: tags=datamover,cont_serialize,dfuse
         :avocado: tags=dm_serial_large_posix,dm_serial_large_posix_cont_serialize
         """

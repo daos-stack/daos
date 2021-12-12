@@ -4,18 +4,18 @@ hosts:
 timeout: 240
 server_config:
   name: daos_server
-#  servers:
-#    log_mask: ERR
-#    bdev_class: nvme
-#    bdev_list: ["0000:81:00.0"]
-#    scm_class: dcpm
-#    scm_list: ["/dev/pmem0"]
+  servers:
+    log_mask: ERR
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
 pool:
   mode: 146
   name: daos_server
   scm_size: 1G
-#  nvme_size: 10G
-#  svcn: 1
+  nvme_size: 10G
+  svcn: 1
   control_method: dmg
 container:
   type: POSIX
@@ -38,12 +38,10 @@ mdtest:
   bytes: 4096
 dserialize:
   client_processes:
-    np: 3
-#    np: 16
+    np: 16
 ddeserialize:
   client_processes:
-    np: 3
-#    np: 16
+    np: 16
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
   disable_caching: true

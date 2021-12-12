@@ -33,7 +33,7 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 	       struct dm_args *ca, char *filename)
 {
 	int		rc = 0;
-	void		*handle;
+	void		*handle = NULL;
 	int		num_attrs = 0;
 	char		**names = NULL;
 	void		**buffers = NULL;
@@ -47,7 +47,6 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 		DH_PERROR_DER(ap, rc, "Failed to get user attributes");
 		D_GOTO(out, rc);
 	}
-
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
 		rc = -DER_INVAL;
@@ -57,7 +56,7 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 	daos_cont_serialize = dlsym(handle, "daos_cont_serialize");
 	if (daos_cont_serialize == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize");
+		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_serialize");
 		D_GOTO(out, rc);
 	}
 	rc = (*daos_cont_serialize)(props, num_attrs, names, (char **)buffers, sizes,
@@ -68,6 +67,8 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 out:
 	if (num_attrs > 0)
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
+	if (handle != NULL)
+		dlclose(handle);
 	return rc;
 }
 
@@ -176,9 +177,8 @@ static int
 deserialize_cont(struct cmd_args_s *ap, struct dm_stats *stats, struct dm_args *ca, char *filename)
 {
 	int		rc = 0;
-	void		*handle;
+	void		*handle = NULL;
 	int (*daos_cont_deserialize)(int *, int *, int *, uint64_t *, daos_handle_t, char *);
-
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
 		rc = -DER_INVAL;
@@ -188,7 +188,7 @@ deserialize_cont(struct cmd_args_s *ap, struct dm_stats *stats, struct dm_args *
 	daos_cont_deserialize = dlsym(handle, "daos_cont_deserialize");
 	if (daos_cont_deserialize == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize");
+		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_deserialize");
 		D_GOTO(out, rc);
 	}
 	rc = (*daos_cont_deserialize)(&stats->total_oids, &stats->total_dkeys, &stats->total_akeys,
@@ -196,6 +196,8 @@ deserialize_cont(struct cmd_args_s *ap, struct dm_stats *stats, struct dm_args *
 	if (rc != 0)
 		DH_PERROR_DER(ap, rc, "Failed to deserialize container");
 out:
+	if (handle != NULL)
+		dlclose(handle);
 	return rc;
 }
 

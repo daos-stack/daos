@@ -1686,7 +1686,7 @@ dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *pro
 	daos_cont_serialize_md = dlsym(handle, "daos_cont_serialize_md");
 	if (daos_cont_serialize_md == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize_md");
+		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_serialize_md");
 		D_GOTO(out, rc);
 	}
 	(*daos_cont_serialize_md)(preserve_props, props, num_attrs, names, (char **)buffers, sizes);
@@ -1694,6 +1694,8 @@ out:
 	if (num_attrs > 0) {
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	}
+	if (handle != NULL)
+		dlclose(handle);
 	return rc;
 }
 
@@ -1714,11 +1716,13 @@ dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve
 	daos_cont_deserialize_props = dlsym(handle, "daos_cont_deserialize_props");
 	if (daos_cont_deserialize_props == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_props");
+		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_deserialize_props");
 		D_GOTO(out, rc);
 	}
 	(*daos_cont_deserialize_props)(ca->dst_poh, preserve_props, props, &ca->cont_layout);
 out:
+	if (handle != NULL)
+		dlclose(handle);
 	return rc;
 }
 
@@ -1742,7 +1746,7 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 	daos_cont_deserialize_attrs = dlsym(handle, "daos_cont_deserialize_attrs");
 	if (daos_cont_deserialize_attrs == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_attrs");
+		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_deserialize_attrs");
 		D_GOTO(out, rc);
 	}
 	(*daos_cont_deserialize_attrs)(preserve_props, &num_attrs, &names, &buffers, &sizes);
@@ -1756,6 +1760,8 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	}
 out:
+	if (handle != NULL)
+		dlclose(handle);
 	return rc;
 }
 

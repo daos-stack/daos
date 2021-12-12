@@ -23,6 +23,10 @@
 #define CHECK_DAOS_API_VERSION(major, minor) 0
 #endif
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /* for user attr dataset */
 struct usr_attr {
 	char	*attr_name;
@@ -3096,3 +3100,6 @@ out:
 	D_FREE(hdf5.akey_data);
 	return rc;
 }
+#if defined(__cplusplus)
+}
+#endif
