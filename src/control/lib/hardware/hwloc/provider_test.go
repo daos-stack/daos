@@ -14,11 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
@@ -174,6 +173,120 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 				},
 			},
 		},
+		"wolf-167": {
+			hwlocXMLFile: filepath.Join(testdataDir, "wolf-167.xml"),
+			expResult: &hardware.Topology{
+				NUMANodes: map[uint]*hardware.NUMANode{
+					0: hardware.MockNUMANode(0, 14).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								{
+									LowAddress:  *common.MustNewPCIAddress("0000:00:00.0"),
+									HighAddress: *common.MustNewPCIAddress("0000:07:00.0"),
+								},
+							},
+						).
+						WithDevices(
+							[]*hardware.PCIDevice{
+								{
+									Name:      "eth0",
+									Type:      hardware.DeviceTypeNetInterface,
+									PCIAddr:   *common.MustNewPCIAddress("0000:03:00.0"),
+									LinkSpeed: 2.4615390300750732,
+								},
+								{
+									Name:      "eth1",
+									Type:      hardware.DeviceTypeNetInterface,
+									PCIAddr:   *common.MustNewPCIAddress("0000:03:00.3"),
+									LinkSpeed: 2.4615390300750732,
+								},
+							},
+						),
+					1: hardware.MockNUMANode(1, 14, 14).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								{
+									LowAddress:  *common.MustNewPCIAddress("0000:80:00.0"),
+									HighAddress: *common.MustNewPCIAddress("0000:88:00.0"),
+								},
+							},
+						),
+				},
+			},
+		},
+		"wolf-157-vmd": {
+			hwlocXMLFile: filepath.Join(testdataDir, "wolf-157-vmd.xml"),
+			expResult: &hardware.Topology{
+				NUMANodes: map[uint]*hardware.NUMANode{
+					0: hardware.MockNUMANode(0, 24).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								{
+									LowAddress:  *common.MustNewPCIAddress("0000:00:00.0"),
+									HighAddress: *common.MustNewPCIAddress("0000:02:00.0"),
+								},
+								{
+									LowAddress:  *common.MustNewPCIAddress("0000:17:00.0"),
+									HighAddress: *common.MustNewPCIAddress("0000:17:00.0"),
+								},
+								{
+									LowAddress:  *common.MustNewPCIAddress("0000:3a:00.0"),
+									HighAddress: *common.MustNewPCIAddress("0000:3e:00.0"),
+								},
+								{
+									LowAddress:  *common.MustNewPCIAddress("0000:5d:00.0"),
+									HighAddress: *common.MustNewPCIAddress("0000:5d:00.0"),
+								},
+							},
+						).
+						WithDevices(
+							[]*hardware.PCIDevice{
+								{
+									Name:      "eth0",
+									Type:      hardware.DeviceTypeNetInterface,
+									PCIAddr:   *common.MustNewPCIAddress("0000:3d:00.0"),
+									LinkSpeed: 0.25,
+								},
+								{
+									Name:      "i40iw1",
+									Type:      hardware.DeviceTypeOFIDomain,
+									PCIAddr:   *common.MustNewPCIAddress("0000:3d:00.0"),
+									LinkSpeed: 0.25,
+								},
+								{
+									Name:      "eth1",
+									Type:      hardware.DeviceTypeNetInterface,
+									PCIAddr:   *common.MustNewPCIAddress("0000:3d:00.1"),
+									LinkSpeed: 0.25,
+								},
+								{
+									Name:      "i40iw0",
+									Type:      hardware.DeviceTypeOFIDomain,
+									PCIAddr:   *common.MustNewPCIAddress("0000:3d:00.1"),
+									LinkSpeed: 0.25,
+								},
+							},
+						),
+					1: hardware.MockNUMANode(1, 24, 24).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								{
+									LowAddress:  *common.MustNewPCIAddress("0000:85:00.0"),
+									HighAddress: *common.MustNewPCIAddress("0000:85:00.0"),
+								},
+								{
+									LowAddress:  *common.MustNewPCIAddress("0000:ae:00.0"),
+									HighAddress: *common.MustNewPCIAddress("0000:ae:00.0"),
+								},
+								{
+									LowAddress:  *common.MustNewPCIAddress("0000:d7:00.0"),
+									HighAddress: *common.MustNewPCIAddress("0000:d7:00.0"),
+								},
+							},
+						),
+				},
+			},
+		},
 		"no devices": {
 			hwlocXMLFile: filepath.Join(testdataDir, "gcp_topology.xml"),
 			expResult: &hardware.Topology{
@@ -314,7 +427,9 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
+			//			log.Debugf("topo: %s", result)
+			//			t.Fatal()
+			//
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
