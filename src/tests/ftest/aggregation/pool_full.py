@@ -10,6 +10,7 @@ from ior_test_base import IorTestBase
 
 class DaosAggregationFull(IorTestBase):
     # pylint: disable=too-many-ancestors
+    # pylint: disable=broad-except
     """Test class Description:
 
        Run IOR with same file to fulfill the pool and verify the
@@ -89,7 +90,6 @@ class DaosAggregationFull(IorTestBase):
         out_of_space = False
         start = time()
         while time() - start < ior_test_timeout:
-            # noinspection PyBroadExceptio
             try:
                 self.run_ior_with_pool(create_pool=False,
                                        fail_on_warning=False)
