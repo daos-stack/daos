@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 
@@ -54,6 +55,7 @@ type PoolCreateCmd struct {
 	Properties    PoolSetPropsFlag `short:"P" long:"properties" description:"Pool properties to be set"`
 	ACLFile       string           `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	Size          string           `short:"z" long:"size" description:"Total size of DAOS pool (auto)"`
+	All           bool             `short:"A" long:"all" description:"Use all remaining capacity"`
 	TierRatio     string           `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
 	NumRanks      uint32           `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps    uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
@@ -68,11 +70,17 @@ type PoolCreateCmd struct {
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
-	if cmd.Size != "" && (cmd.ScmSize != "" || cmd.NVMeSize != "") {
-		return errIncompatFlags("size", "scm-size", "nvme-size")
+	var errIncompatFlagsNb int
+	for _, value := range [3]bool{cmd.Size != "", cmd.ScmSize != "" || cmd.NVMeSize != "", cmd.All} {
+		if value {
+			errIncompatFlagsNb++
+		}
 	}
-	if cmd.Size == "" && cmd.ScmSize == "" {
-		return errors.New("either --size or --scm-size must be supplied")
+	if errIncompatFlagsNb > 1 {
+		return errIncompatFlags("size", "scm-size", "nvme-size", "all")
+	}
+	if errIncompatFlagsNb < 1 {
+		return errors.New("either --size or --scm-size or --all must be supplied")
 	}
 
 	if cmd.PoolLabelFlag != "" {
@@ -110,7 +118,30 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		return errors.Wrap(err, "parsing rank list")
 	}
 
-	if cmd.Size != "" {
+	if cmd.All {
+		if cmd.NumRanks > 0 {
+			return errIncompatFlags("all", "num-ranks")
+		}
+
+		// DAOS-9196 TODO Update the protocol to allow filtering on ranks to use.  To
+		// implement this feature the procotol should be changed to define if a SCM
+		// namespace is associated with one rank or not. If yes, it should define with which
+		// rank the SCM namespace is associated.
+		if cmd.RankList != "" {
+			return errIncompatFlags("all", "ranks")
+		}
+
+		scmBytes, nvmeBytes, err := cmd.GetMaxPoolSize(context.Background())
+		if err != nil {
+			return err
+		}
+
+		req.TierBytes = []uint64{scmBytes, nvmeBytes}
+		req.TotalBytes = 0
+		req.TierRatio = nil
+
+		cmd.log.Infof("Creating DAOS pool with full automatic storage allocation")
+	} else if cmd.Size != "" {
 		// auto-selection of storage values
 		req.TotalBytes, err = humanize.ParseBytes(cmd.Size)
 		if err != nil {
@@ -202,6 +233,121 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	cmd.log.Info(bld.String())
 
 	return nil
+}
+
+// XXX DAOS-9196 Some extra bytes are needed for the metadata of the pool: at least 135 MB
+// are needed.  The extraByes is a littler bigger than this limite, because the size of the
+// metadata will eventually grow along the life of the pool.
+const PoolMetadataBytes uint64 = uint64(200)*uint64(humanize.MiByte)
+
+// Return the maximal size of a pool which could be created with all the storage nodes
+func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64,
+                                                               nvmeBytes uint64,
+                                                               errOut error) {
+	storageScanReq := &control.StorageScanReq{Usage: true}
+	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, storageScanReq)
+	if err != nil {
+		errOut = err
+		return
+	}
+
+	if len(resp.HostStorage) <= 0 {
+		return 0, 0, errors.New("No DAOS server available")
+	}
+
+	hostStorageMap := resp.HostStorage
+	scmBytes = math.MaxUint64
+	nvmeBytes = math.MaxUint64
+	for _, key := range hostStorageMap.Keys() {
+		hostStorageSet := hostStorageMap[key]
+
+		hostSet := hostStorageSet.HostSet
+		if hostSet.Count() != 1 {
+			// XXX DAOS-9196 After code investigation, the HostSet should always
+			// contains one and only one host
+			msg := fmt.Sprintf("HostSet should always contains one host: HostSet=%s",
+			                   hostSet.RangedString())
+			panic(msg)
+		}
+
+		hostStorage := hostStorageSet.HostStorage
+		if hostStorage.RebootRequired {
+			// XXX DAOS-9196 After code investigation, the attribute RebootRequired
+			// is never updated when a message StorageScanResp is converted to
+			// a HostStorage struct
+			panic("RebootRequired should never be set with storage scan")
+		}
+
+		if hostStorage.ScmNamespaces.Free() == uint64(0) {
+			msg := fmt.Sprintf("Host wihout SCM storage: hostname=%s", hostSet.String())
+			errOut = errors.New(msg)
+			return
+		}
+
+		// FIXME DAOS-9196 At this time the rank associated to one namespace is not defined
+		// in the StorageScanResp.  Thus we rely on the hypothesis that eacch SCM namespace
+		// is associated to one and only one rank. Eventually, the protocol should be
+		// changed to define if a SCM namespace is associated with one rank or not. If yes,
+		// it should define with which rank the SCM namespace is associated.
+		for _, scmNamespace := range hostStorage.ScmNamespaces {
+			if scmNamespace.Mount == nil {
+				continue
+			}
+			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
+
+			if scmNamespaceFreeBytes < PoolMetadataBytes {
+				missingBytes := PoolMetadataBytes-scmNamespaceFreeBytes
+				msg := "Not enough SCM storage available with the SCM namespace " +
+				       "\"%s\" of the the host %s: " +
+				       "at least %s of SCM storage (%s missing) is needed"
+				msg = fmt.Sprintf(msg,
+				                  scmNamespace.Mount.Path,
+				                  hostSet.String(),
+				                  humanize.Bytes(PoolMetadataBytes),
+				                  humanize.Bytes(missingBytes))
+				errOut = errors.New(msg)
+				return
+			}
+
+			if scmBytes > scmNamespaceFreeBytes {
+				scmBytes = scmNamespaceFreeBytes
+			}
+		}
+
+		nvmeRanksBytes := make(map[system.Rank] uint64, 0)
+		for _, nvmeController := range hostStorage.NvmeDevices {
+			for _, smdDevice := range nvmeController.SmdDevices {
+				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
+			}
+		}
+		for _, nvmeRankBytes := range(nvmeRanksBytes) {
+			if nvmeBytes > nvmeRankBytes {
+				nvmeBytes = nvmeRankBytes
+			}
+		}
+	}
+
+	// Extra storage space needed for metada such as the VOS file
+	scmBytes -= PoolMetadataBytes
+
+	if nvmeBytes == math.MaxUint64 {
+		cmd.log.Infof("Creating DAOS pool without NVME storage")
+		nvmeBytes = 0
+	}
+
+	// TODO DAOS-9196 Check if there is no ranks (i.e. rank with SCM available) with some NVMe
+	// storage and other without
+
+	scmRatio := 1.0
+	if nvmeBytes > 0 {
+		scmRatio = float64(scmBytes) / float64(nvmeBytes)
+	}
+	if scmRatio < storage.MinScmToNVMeRatio {
+		msg := "SCM:NVMe ratio is less than %0.2f%%, DAOS performance will suffer"
+		cmd.log.Infof(msg, storage.MinScmToNVMeRatio*100)
+	}
+
+	return
 }
 
 // PoolListCmd represents the command to fetch a list of all DAOS pools in the system.

@@ -9,9 +9,11 @@ package control
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+	"strconv"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -19,10 +21,13 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/runtime/protoimpl"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // MockMessage implements the proto.Message
@@ -539,4 +544,102 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 		},
 		HostStorage: hsm,
 	}
+}
+
+type (
+	MockStorageConfig struct {
+		TotalBytes uint64
+		AvailBytes uint64
+	}
+
+	MockScmConfig struct {
+		MockStorageConfig
+	}
+
+	MockNvmeConfig struct {
+		MockStorageConfig
+		Rank system.Rank
+	}
+)
+
+func MockStorageScanResp(testRunner *testing.T,
+                         mockScmConfigArray []MockScmConfig,
+                         mockNvmeConfigArray []MockNvmeConfig) *ctlpb.StorageScanResp {
+	serverScanResponse := &ctlpb.StorageScanResp{
+		Nvme: &ctlpb.ScanNvmeResp { },
+		Scm:  &ctlpb.ScanScmResp { },
+	}
+
+	scmNamespaces := make(storage.ScmNamespaces, 0, len(mockScmConfigArray))
+	for index, mockScmConfig := range mockScmConfigArray {
+		scmNamespace := &storage.ScmNamespace {
+			UUID:        common.MockUUID(int32(index)),
+			BlockDevice: fmt.Sprintf("pmem%d", index),
+			Name:        fmt.Sprintf("namespace%d.0", index),
+			NumaNode:    uint32(index),
+			Size:        mockScmConfig.TotalBytes,
+		}
+		if mockScmConfig.TotalBytes > uint64(0) {
+			scmNamespace.Mount = &storage.ScmMountPoint {
+				Class:      storage.ClassDcpm,
+				Path:       fmt.Sprintf("/mnt/daos%d", index),
+				DeviceList: []string{fmt.Sprintf("pmem%d", index)},
+				TotalBytes: mockScmConfig.TotalBytes,
+				AvailBytes: mockScmConfig.AvailBytes,
+			}
+		}
+		scmNamespaces = append(scmNamespaces, scmNamespace)
+	}
+	if err := convert.Types(scmNamespaces, &serverScanResponse.Scm.Namespaces); err != nil {
+		testRunner.Fatal(err)
+	}
+
+	nvmeControllers := make(storage.NvmeControllers, 0, len(mockNvmeConfigArray))
+	for index, mockNvmeConfig := range mockNvmeConfigArray {
+		nvmeController := storage.MockNvmeController(int32(index))
+		smdDevice := nvmeController.SmdDevices[0]
+		smdDevice.AvailBytes = mockNvmeConfig.AvailBytes
+		smdDevice.TotalBytes = mockNvmeConfig.TotalBytes
+		smdDevice.Rank = mockNvmeConfig.Rank
+		nvmeControllers = append(nvmeControllers, nvmeController)
+	}
+	if err := convert.Types(nvmeControllers, &serverScanResponse.Nvme.Ctrlrs); err != nil {
+		testRunner.Fatal(err)
+	}
+
+	return serverScanResponse
+}
+
+func mockRanks(rankSet string) (ranks []uint32) {
+	for _, item := range strings.Split(rankSet, ",") {
+		rank, err := strconv.ParseUint(item, 10, 32)
+		if err != nil {
+			panic("Invalid ranks definition: "+err.Error())
+		}
+		ranks = append(ranks, uint32(rank))
+	}
+	return
+}
+
+type MockPoolRespConfig struct {
+	HostName  string
+	Ranks     string
+	ScmBytes  uint64
+	NvmeBytes uint64
+}
+
+func MockPoolCreateResp(testRunner *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCreateResp {
+	poolCreateResp := &PoolCreateResp {
+		UUID:     common.MockUUID(),
+		SvcReps:  mockRanks(config.Ranks),
+		TgtRanks: mockRanks(config.Ranks),
+		TierBytes: []uint64{ config.ScmBytes, config.NvmeBytes},
+	}
+
+	poolCreateRespMsg := new(mgmtpb.PoolCreateResp)
+	if err := convert.Types(poolCreateResp, poolCreateRespMsg); err != nil {
+		testRunner.Fatal(err)
+	}
+
+	return poolCreateRespMsg
 }
