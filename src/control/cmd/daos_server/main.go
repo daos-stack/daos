@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -51,18 +52,6 @@ func (cmd *versionCmd) Execute(_ []string) error {
 	fmt.Printf("%s v%s\n", build.ControlPlaneName, build.DaosVersion)
 	os.Exit(0)
 	return nil
-}
-
-type cmdLogger interface {
-	setLog(*logging.LeveledLogger)
-}
-
-type logCmd struct {
-	log *logging.LeveledLogger
-}
-
-func (c *logCmd) setLog(log *logging.LeveledLogger) {
-	c.log = log
 }
 
 func exitWithError(log *logging.LeveledLogger, err error) {
@@ -98,8 +87,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			log.WithErrorLogger((&logging.DefaultErrorLogger{}).WithSyslogOutput())
 		}
 
-		if logCmd, ok := cmd.(cmdLogger); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
@@ -148,6 +137,9 @@ func main() {
 	if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
 		exitWithError(log, err)
 	}
+
+	// Set the package-level logger for netdetect.
+	netdetect.SetLogger(log)
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {

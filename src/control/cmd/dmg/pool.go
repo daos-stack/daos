@@ -46,7 +46,7 @@ type PoolCmd struct {
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
 type PoolCreateCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
@@ -153,7 +153,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		// Extra storage space needed for metadata such as the VOS file
 		if scmBytes < control.PoolMetadataBytes {
 			missingBytes := control.PoolMetadataBytes - scmBytes
-			msg := "Not enough SMC storage available with ratio %s%%:"
+			msg := "Not enough SCM storage available with ratio %s%%:"
 			msg += " at least %s of SCM storage (%s missing) is needed"
 			return errors.Errorf(msg,
 				cmd.Size,
@@ -164,7 +164,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.log.Infof("Creating DAOS pool with %d%% of all storage", storageRatio)
+		cmd.Infof("Creating DAOS pool with %d%% of all storage", storageRatio)
 	case cmd.Size != "":
 		// auto-selection of storage values
 		req.TotalBytes, err = humanize.ParseBytes(cmd.Size)
@@ -201,7 +201,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		if totalRatios != 100 {
 			return errors.New("Storage tier ratios must add up to 100")
 		}
-		cmd.log.Infof("Creating DAOS pool with automatic storage allocation: "+
+		cmd.Infof("Creating DAOS pool with automatic storage allocation: "+
 			"%s total, %s tier ratio", humanize.Bytes(req.TotalBytes), cmd.TierRatio)
 	default:
 		// manual selection of storage values
@@ -224,7 +224,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.log.Infof("Creating DAOS pool with manual per-server storage allocation: "+
+		cmd.Infof("Creating DAOS pool with manual per-server storage allocation: "+
 			"%s SCM, %s NVMe (%0.2f%% ratio)",
 			humanize.Bytes(scmBytes),
 			humanize.Bytes(nvmeBytes),
@@ -245,7 +245,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	if err := pretty.PrintPoolCreateResponse(resp, &bld); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -254,7 +254,7 @@ func (cmd *PoolCreateCmd) updateRequest(req *control.PoolCreateReq,
 	scmBytes uint64,
 	nvmeBytes uint64) float64 {
 	if nvmeBytes == 0 {
-		cmd.log.Info("Creating DAOS pool without NVME storage")
+		cmd.Info("Creating DAOS pool without NVME storage")
 	}
 
 	scmRatio := 1.0
@@ -263,7 +263,7 @@ func (cmd *PoolCreateCmd) updateRequest(req *control.PoolCreateReq,
 	}
 
 	if scmRatio < storage.MinScmToNVMeRatio {
-		cmd.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
+		cmd.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
 			"performance will suffer!\n", storage.MinScmToNVMeRatio*100)
 	}
 
@@ -276,7 +276,7 @@ func (cmd *PoolCreateCmd) updateRequest(req *control.PoolCreateReq,
 
 // PoolListCmd represents the command to fetch a list of all DAOS pools in the system.
 type PoolListCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
@@ -312,11 +312,11 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 	if outErr.String() != "" {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	}
 	// Infof prints raw string and doesn't try to expand "%"
 	// preserving column formatting in txtfmt table
-	cmd.log.Infof("%s", out.String())
+	cmd.Infof("%s", out.String())
 
 	return resp.Errors()
 }
@@ -327,7 +327,7 @@ type PoolID struct {
 
 // poolCmd is the base struct for all pool commands that work with existing pools.
 type poolCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
@@ -358,7 +358,7 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
-	cmd.log.Infof("Pool-destroy command %s\n", msg)
+	cmd.Infof("Pool-destroy command %s\n", msg)
 
 	return err
 }
@@ -379,7 +379,7 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
-	cmd.log.Infof("Pool-evict command %s\n", msg)
+	cmd.Infof("Pool-evict command %s\n", msg)
 
 	return err
 }
@@ -407,7 +407,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
-	cmd.log.Infof("Exclude command %s\n", msg)
+	cmd.Infof("Exclude command %s\n", msg)
 
 	return err
 }
@@ -436,7 +436,7 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
-	cmd.log.Infof("Drain command %s\n", msg)
+	cmd.Infof("Drain command %s\n", msg)
 
 	return err
 }
@@ -466,7 +466,7 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
-	cmd.log.Infof("Extend command %s\n", msg)
+	cmd.Infof("Extend command %s\n", msg)
 
 	return err
 }
@@ -495,7 +495,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
-	cmd.log.Infof("Reintegration command %s\n", msg)
+	cmd.Infof("Reintegration command %s\n", msg)
 
 	return err
 }
@@ -525,7 +525,7 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 	return nil
 }
 
@@ -575,7 +575,7 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	if err != nil {
 		return errors.Wrap(err, "pool set-prop failed")
 	}
-	cmd.log.Info("pool set-prop succeeded")
+	cmd.Info("pool set-prop succeeded")
 
 	return nil
 }
@@ -606,7 +606,7 @@ func (cmd *PoolGetPropCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	pretty.PrintPoolProperties(cmd.PoolID().String(), &bld, resp...)
-	cmd.log.Infof("%s", bld.String())
+	cmd.Infof("%s", bld.String())
 
 	return nil
 }
@@ -633,7 +633,7 @@ func (cmd *PoolGetACLCmd) Execute(args []string) error {
 		return errors.Wrap(err, "Pool-get-ACL command failed")
 	}
 
-	cmd.log.Debugf("Pool-get-ACL command succeeded, ID: %s\n", cmd.PoolID())
+	cmd.Debugf("Pool-get-ACL command succeeded, ID: %s\n", cmd.PoolID())
 
 	acl := control.FormatACL(resp.ACL, cmd.Verbose)
 
@@ -642,9 +642,9 @@ func (cmd *PoolGetACLCmd) Execute(args []string) error {
 		if err != nil {
 			return err
 		}
-		cmd.log.Infof("Wrote ACL to output file: %s", cmd.File)
+		cmd.Infof("Wrote ACL to output file: %s", cmd.File)
 	} else {
-		cmd.log.Info(acl)
+		cmd.Info(acl)
 	}
 
 	return nil
@@ -661,14 +661,14 @@ func (cmd *PoolGetACLCmd) writeACLToFile(acl string) error {
 
 	f, err := os.Create(cmd.File)
 	if err != nil {
-		cmd.log.Errorf("Unable to create file: %s", cmd.File)
+		cmd.Errorf("Unable to create file: %s", cmd.File)
 		return err
 	}
 	defer f.Close()
 
 	_, err = f.WriteString(acl)
 	if err != nil {
-		cmd.log.Errorf("Failed to write to file: %s", cmd.File)
+		cmd.Errorf("Failed to write to file: %s", cmd.File)
 		return err
 	}
 
@@ -703,9 +703,9 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 		return errors.Wrap(err, "Pool-overwrite-ACL command failed")
 	}
 
-	cmd.log.Infof("Pool-overwrite-ACL command succeeded, ID: %s\n", cmd.PoolID())
+	cmd.Infof("Pool-overwrite-ACL command succeeded, ID: %s\n", cmd.PoolID())
 
-	cmd.log.Info(control.FormatACLDefault(resp.ACL))
+	cmd.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
 }
@@ -751,9 +751,9 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 		return errors.Wrap(err, "Pool-update-ACL command failed")
 	}
 
-	cmd.log.Infof("Pool-update-ACL command succeeded, ID: %s\n", cmd.PoolID())
+	cmd.Infof("Pool-update-ACL command succeeded, ID: %s\n", cmd.PoolID())
 
-	cmd.log.Info(control.FormatACLDefault(resp.ACL))
+	cmd.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
 }
@@ -781,9 +781,9 @@ func (cmd *PoolDeleteACLCmd) Execute(args []string) error {
 		return errors.Wrap(err, "Pool-delete-ACL command failed")
 	}
 
-	cmd.log.Infof("Pool-delete-ACL command succeeded, ID: %s\n", cmd.PoolID())
+	cmd.Infof("Pool-delete-ACL command succeeded, ID: %s\n", cmd.PoolID())
 
-	cmd.log.Info(control.FormatACLDefault(resp.ACL))
+	cmd.Info(control.FormatACLDefault(resp.ACL))
 
 	return nil
 }

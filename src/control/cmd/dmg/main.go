@@ -127,15 +127,9 @@ type cmdLogger interface {
 	setLog(*logging.LeveledLogger)
 }
 
-type logCmd struct {
-	cmdutil.NoArgsCmd // Hack: Since everything embeds this type,
-	// just embed the args handler in here. We should probably
-	// create a new baseCmd type to cut down on boilerplate.
-	log *logging.LeveledLogger
-}
-
-func (c *logCmd) setLog(log *logging.LeveledLogger) {
-	c.log = log
+type baseCmd struct {
+	cmdutil.NoArgsCmd
+	cmdutil.LogCmd
 }
 
 // cmdConfigSetter is an interface for setting the control config on a command
@@ -234,8 +228,8 @@ and access control settings, along with system wide operations.`
 			}
 		}
 
-		if logCmd, ok := cmd.(cmdLogger); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		ctlCfg, err := control.LoadConfig(opts.ConfigPath)

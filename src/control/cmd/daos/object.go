@@ -56,7 +56,7 @@ func (cmd *objQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}

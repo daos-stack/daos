@@ -68,20 +68,6 @@ func (cmd *configCmd) setConfig(cfg *Config) {
 }
 
 type (
-	logSetter interface {
-		setLog(logging.Logger)
-	}
-
-	logCmd struct {
-		log logging.Logger
-	}
-)
-
-func (cmd *logCmd) setLog(log logging.Logger) {
-	cmd.log = log
-}
-
-type (
 	jsonOutputter interface {
 		enableJsonOutput(bool)
 		jsonOutputEnabled() bool
@@ -141,8 +127,8 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			cmd = &startCmd{}
 		}
 
-		if logCmd, ok := cmd.(logSetter); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		if jsonCmd, ok := cmd.(jsonOutputter); ok {

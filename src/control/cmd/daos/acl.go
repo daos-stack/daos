@@ -111,7 +111,7 @@ type containerOverwriteACLCmd struct {
 }
 
 func (cmd *containerOverwriteACLCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (cmd *containerUpdateACLCmd) Execute(args []string) error {
 		return errors.New("only one of entry or acl-file may be supplied")
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ type containerDeleteACLCmd struct {
 }
 
 func (cmd *containerDeleteACLCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -288,7 +288,7 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 		return errors.New("at least one of user or group must be supplied")
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}

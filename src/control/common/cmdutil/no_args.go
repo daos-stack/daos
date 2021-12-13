@@ -17,6 +17,8 @@ type ArgsHandler interface {
 	HandleArgs([]string) error
 }
 
+var _ ArgsHandler = (*NoArgsCmd)(nil)
+
 // NoArgsCmd defines an embeddable struct that can be used to
 // implement a command that does not take any arguments.
 type NoArgsCmd struct{}

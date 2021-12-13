@@ -16,6 +16,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
@@ -31,7 +32,7 @@ type storageCmd struct {
 
 type storagePrepareCmd struct {
 	scs *server.StorageControlService
-	logCmd
+	cmdutil.LogCmd
 	commands.StoragePrepareCmd
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 }
@@ -44,7 +45,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	if cmd.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
+			cmd.Errorf("unable to configure privileged helper logging: %s", err)
 		}
 	}
 
@@ -53,7 +54,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// that we should have made these Execute() methods thin
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
-		cmd.scs = server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
+		cmd.scs = server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 	}
 
 	op := "Preparing"
@@ -64,7 +65,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	scanErrors := make([]error, 0, 2)
 
 	if prepNvme {
-		cmd.log.Info(op + " locally-attached NVMe storage...")
+		cmd.Info(op + " locally-attached NVMe storage...")
 
 		if cmd.TargetUser == "" {
 			runningUser, err := user.Current()
@@ -93,9 +94,9 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	if prepScm && len(scmScan.Modules) > 0 {
-		cmd.log.Info(op + " locally-attached SCM...")
+		cmd.Info(op + " locally-attached SCM...")
 
-		if err := cmd.CheckWarn(cmd.log, scmScan.State); err != nil {
+		if err := cmd.CheckWarn(cmd.Logger, scmScan.State); err != nil {
 			return common.ConcatErrors(scanErrors, err)
 		}
 
@@ -106,18 +107,18 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
-			cmd.log.Info(storage.ScmMsgRebootRequired)
+			cmd.Info(storage.ScmMsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
 			var bld strings.Builder
 			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
 				return err
 			}
-			cmd.log.Infof("SCM namespaces:\n%s\n", bld.String())
+			cmd.Infof("SCM namespaces:\n%s\n", bld.String())
 		} else {
-			cmd.log.Info("no SCM namespaces")
+			cmd.Info("no SCM namespaces")
 		}
 	} else if prepScm {
-		cmd.log.Info("No SCM modules detected; skipping operation")
+		cmd.Info("No SCM modules detected; skipping operation")
 	}
 
 	if len(scanErrors) > 0 {
@@ -128,18 +129,18 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 }
 
 type storageScanCmd struct {
-	logCmd
+	cmdutil.LogCmd
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
 	if cmd.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
+			cmd.Errorf("unable to configure privileged helper logging: %s", err)
 		}
 	}
 
-	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
+	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	msg := "Scanning locally-attached storage..."
 
@@ -149,13 +150,13 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	if err != nil {
 		return errors.Wrap(err, "attempting to detect vmd")
 	}
-	cmd.log.Debugf("volume management devices detected: %v", vmdAddrs)
+	cmd.Debugf("volume management devices detected: %v", vmdAddrs)
 	if !vmdAddrs.IsEmpty() {
 		msg += " (VMD enabled)"
 		svc.WithVMDEnabled()
 	}
 
-	cmd.log.Info(msg)
+	cmd.Info(msg)
 
 	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)
@@ -195,7 +196,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		}
 	}
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	if len(scanErrors) > 0 {
 		errStr := "scan error(s):\n"

@@ -71,7 +71,7 @@ type containerBaseCmd struct {
 
 func (cmd *containerBaseCmd) contUUIDPtr() *C.uchar {
 	if cmd.contUUID == uuid.Nil {
-		cmd.log.Error("contUUIDPtr(): nil UUID")
+		cmd.Error("contUUIDPtr(): nil UUID")
 		return nil
 	}
 	return (*C.uchar)(unsafe.Pointer(&cmd.contUUID[0]))
@@ -87,7 +87,7 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 		cLabel := C.CString(cmd.contLabel)
 		defer freeString(cLabel)
 
-		cmd.log.Debugf("opening container: %s", cmd.contLabel)
+		cmd.Debugf("opening container: %s", cmd.contLabel)
 		rc = C.daos_cont_open2(cmd.cPoolHandle, cLabel, openFlags,
 			&cmd.cContHandle, &contInfo, nil)
 		if rc == 0 {
@@ -99,7 +99,7 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 			}
 		}
 	case cmd.contUUID != uuid.Nil:
-		cmd.log.Debugf("opening container: %s", cmd.contUUID)
+		cmd.Debugf("opening container: %s", cmd.contUUID)
 		cUUIDstr := C.CString(cmd.contUUID.String())
 		defer freeString(cUUIDstr)
 		rc = C.daos_cont_open2(cmd.cPoolHandle, cUUIDstr,
@@ -112,7 +112,7 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 }
 
 func (cmd *containerBaseCmd) closeContainer() error {
-	cmd.log.Debugf("closing container: %s", cmd.contUUID)
+	cmd.Debugf("closing container: %s", cmd.contUUID)
 	return daosError(C.daos_cont_close(cmd.cContHandle, nil))
 }
 
@@ -205,7 +205,7 @@ type containerCreateCmd struct {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -314,7 +314,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		co_id = cmd.contUUID.String()
 	}
 
-	cmd.log.Debugf("created container: %s", co_id)
+	cmd.Debugf("created container: %s", co_id)
 
 	if err := cmd.openContainer(C.DAOS_COO_RO); err != nil {
 		return errors.Wrapf(err, "failed to open new container %s", co_id)
@@ -329,7 +329,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		}
 
 		// Special case for creating a container without permission to query it.
-		cmd.log.Errorf("container %s was created, but query failed", co_id)
+		cmd.Errorf("container %s was created, but query failed", co_id)
 
 		ci = new(containerInfo)
 		ci.PoolUUID = &cmd.poolUUID
@@ -346,7 +346,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err := printContainerInfo(&bld, ci, false); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -408,7 +408,7 @@ func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err 
 		}
 	}
 
-	cmd.log.Debugf("pool ID: %s, container ID: %s", cmd.PoolID(), cmd.ContainerID())
+	cmd.Debugf("pool ID: %s, container ID: %s", cmd.PoolID(), cmd.ContainerID())
 
 	return nil
 }
@@ -539,7 +539,7 @@ func (cmd *containerListCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	printContainers(&bld, contIDs)
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -551,7 +551,7 @@ type containerDestroyCmd struct {
 }
 
 func (cmd *containerDestroyCmd) Execute(_ []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -573,7 +573,7 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	cmd.log.Debugf("destroying container %s (force: %t)",
+	cmd.Debugf("destroying container %s (force: %t)",
 		cmd.ContainerID(), cmd.Force)
 
 	var rc C.int
@@ -603,9 +603,9 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 	}
 
 	if cmd.ContainerID().Empty() {
-		cmd.log.Infof("Successfully destroyed container %s", cmd.Path)
+		cmd.Infof("Successfully destroyed container %s", cmd.Path)
 	} else {
-		cmd.log.Infof("Successfully destroyed container %s", cmd.ContainerID())
+		cmd.Infof("Successfully destroyed container %s", cmd.ContainerID())
 	}
 
 	return nil
@@ -618,7 +618,7 @@ type containerListObjectsCmd struct {
 }
 
 func (cmd *containerListObjectsCmd) Execute(_ []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -721,7 +721,7 @@ type containerQueryCmd struct {
 }
 
 func (cmd *containerQueryCmd) Execute(_ []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -748,7 +748,7 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 	if err := printContainerInfo(&bld, ci, true); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -761,7 +761,7 @@ type containerCloneCmd struct {
 }
 
 func (cmd *containerCloneCmd) Execute(_ []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -797,7 +797,7 @@ type containerCheckCmd struct {
 }
 
 func (cmd *containerCheckCmd) Execute(_ []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -830,7 +830,7 @@ type containerListAttrsCmd struct {
 }
 
 func (cmd *containerListAttrsCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -860,7 +860,7 @@ func (cmd *containerListAttrsCmd) Execute(args []string) error {
 	title := fmt.Sprintf("Attributes for container %s:", cmd.ContainerID())
 	printAttributes(&bld, title, attrs...)
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -882,7 +882,7 @@ func (cmd *containerDelAttrCmd) Execute(args []string) error {
 		return errors.New("attribute name is required")
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -920,7 +920,7 @@ func (cmd *containerGetAttrCmd) Execute(args []string) error {
 		return errors.New("attribute name is required")
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -947,7 +947,7 @@ func (cmd *containerGetAttrCmd) Execute(args []string) error {
 	title := fmt.Sprintf("Attributes for container %s:", cmd.ContainerID())
 	printAttributes(&bld, title, attr)
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -978,7 +978,7 @@ func (cmd *containerSetAttrCmd) Execute(args []string) error {
 		return errors.New("attribute value is required")
 	}
 
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -1009,7 +1009,7 @@ type containerGetPropCmd struct {
 }
 
 func (cmd *containerGetPropCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -1055,7 +1055,7 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 	var bld strings.Builder
 	printProperties(&bld, title, props...)
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -1067,7 +1067,7 @@ type containerSetPropCmd struct {
 }
 
 func (cmd *containerSetPropCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -1133,7 +1133,7 @@ type ContainerID struct {
 // as completion items.
 func (f *ContainerID) Complete(match string) (comps []flags.Completion) {
 	pf := parsePoolFlag()
-	pf.log = &logging.LeveledLogger{}
+	pf.Logger = &logging.LeveledLogger{}
 
 	fini, err := pf.initDAOS()
 	if err != nil {

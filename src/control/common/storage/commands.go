@@ -52,7 +52,7 @@ func (cmd *StoragePrepareCmd) Validate() (bool, bool, error) {
 	return prepNvme, prepScm, nil
 }
 
-func (cmd *StoragePrepareCmd) CheckWarn(log *logging.LeveledLogger, state storage.ScmState) error {
+func (cmd *StoragePrepareCmd) CheckWarn(log logging.Logger, state storage.ScmState) error {
 	switch state {
 	case storage.ScmStateNoRegions:
 		if cmd.Reset {
@@ -71,7 +71,7 @@ func (cmd *StoragePrepareCmd) CheckWarn(log *logging.LeveledLogger, state storag
 	return cmd.Warn(log)
 }
 
-func (cmd *StoragePrepareCmd) Warn(log *logging.LeveledLogger) error {
+func (cmd *StoragePrepareCmd) Warn(log logging.Logger) error {
 	log.Info(MsgStoragePrepareWarn)
 
 	if !cmd.Force && !common.GetConsent(log) {

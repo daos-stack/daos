@@ -22,7 +22,7 @@ type ContCmd struct {
 
 // ContSetOwnerCmd is the struct representing the command to change the owner of a DAOS container.
 type ContSetOwnerCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	jsonOutputCmd
 	GroupName string `short:"g" long:"group" description:"New owner-group for the container, format name@domain"`
@@ -53,7 +53,7 @@ func (c *ContSetOwnerCmd) Execute(args []string) error {
 		msg = errors.WithMessage(err, "FAILED").Error()
 	}
 
-	c.log.Infof("Container-set-owner command %s\n", msg)
+	c.Infof("Container-set-owner command %s\n", msg)
 
 	return err
 }

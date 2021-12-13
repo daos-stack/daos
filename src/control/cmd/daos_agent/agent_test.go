@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -138,8 +139,8 @@ func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 		UnaryResponse: control.MockMSResponse("localhost", nil, srvResp),
 	})
 	testAgentStart := &startCmd{
-		logCmd: logCmd{
-			log: log,
+		LogCmd: cmdutil.LogCmd{
+			Logger: log,
 		},
 		configCmd: configCmd{
 			cfg: agentCfg,

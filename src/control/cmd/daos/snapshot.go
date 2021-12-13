@@ -22,7 +22,7 @@ type containerSnapCreateCmd struct {
 }
 
 func (cmd *containerSnapCreateCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ type containerSnapDestroyCmd struct {
 }
 
 func (cmd *containerSnapDestroyCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ type containerSnapListCmd struct {
 }
 
 func (cmd *containerSnapListCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ type containerSnapshotRollbackCmd struct {
 }
 
 func (cmd *containerSnapshotRollbackCmd) Execute(args []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}
