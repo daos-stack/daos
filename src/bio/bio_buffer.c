@@ -1,8 +1,8 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
- *
- * SPDX-License-Identifier: BSD-2-Clause-Patent
- */
+ *  * (C) Copyright 2018-2021 Intel Corporation.
+ *   *
+ *    * SPDX-License-Identifier: BSD-2-Clause-Patent
+ *     */
 #define D_LOGFAC	DD_FAC(bio)
 #include <spdk/env.h>
 #include <spdk/blob.h>
@@ -220,9 +220,9 @@ dma_chunk_is_huge(struct bio_dma_chunk *chunk)
 }
 
 /*
- * Release all the DMA chunks held by @biod, once the use count of any
- * chunk drops to zero, put it back to free list.
- */
+ *  * Release all the DMA chunks held by @biod, once the use count of any
+ *   * chunk drops to zero, put it back to free list.
+ *    */
 static void
 iod_release_buffer(struct bio_desc *biod)
 {
@@ -311,6 +311,9 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	void			*addr = bio_iov2req_buf(biov);
 	ssize_t			 size = bio_iov2req_len(biov);
 	uint16_t		 media = bio_iov2media(biov);
+
+	if (bio_iov2req_len(biov) == 0)
+		return 0;
 
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	D_ASSERT(arg->ca_sgl_idx < arg->ca_sgl_cnt);
@@ -410,9 +413,6 @@ iterate_biov(struct bio_desc *biod,
 
 		for (j = 0; j < bsgl->bs_nr_out; j++) {
 			struct bio_iov *biov = &bsgl->bs_iovs[j];
-
-			if (bio_iov2req_len(biov) == 0)
-				continue;
 
 			rc = cb_fn(biod, biov, data);
 			if (rc)
@@ -573,12 +573,12 @@ direct_scm_access(struct bio_desc *biod, struct bio_iov *biov)
 	if (bio_iov2media(biov) != DAOS_MEDIA_SCM)
 		return false;
 	/*
-	 * Direct access SCM when:
-	 *
-	 * - It's inline I/O, or;
-	 * - Direct SCM RDMA enabled, or;
-	 * - It's deduped SCM extent;
-	 */
+ * 	 * Direct access SCM when:
+ * 	 	 *
+ * 	 	 	 * - It's inline I/O, or;
+ * 	 	 	 	 * - Direct SCM RDMA enabled, or;
+ * 	 	 	 	 	 * - It's deduped SCM extent;
+ * 	 	 	 	 	 	 */
 	if (!biod->bd_rdma || bio_scm_rdma)
 		return true;
 
@@ -682,10 +682,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	int rc;
 
 	D_ASSERT(arg == NULL);
-	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
+	D_ASSERT(biov);
 	D_ASSERT(biod && biod->bd_chk_type < BIO_CHK_TYPE_MAX);
 
-	if (bio_addr_is_hole(&biov->bi_addr)) {
+	if ((bio_iov2raw_len(biov) == 0) || bio_addr_is_hole(&biov->bi_addr)) {
 		bio_iov_set_raw_buf(biov, NULL);
 		return 0;
 	}
@@ -702,13 +702,13 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	dma_biov2pg(biov, &off, &end, &pg_cnt, &pg_off);
 
 	/*
-	 * For huge IOV, we'll bypass our per-xstream DMA buffer cache and
-	 * allocate chunk from the SPDK reserved huge pages directly, this
-	 * kind of huge chunk will be freed immediately on I/O completion.
-	 *
-	 * We assume the contiguous huge IOV is quite rare, so there won't
-	 * be high contention over the SPDK huge page cache.
-	 */
+ * 	 * For huge IOV, we'll bypass our per-xstream DMA buffer cache and
+ * 	 	 * allocate chunk from the SPDK reserved huge pages directly, this
+ * 	 	 	 * kind of huge chunk will be freed immediately on I/O completion.
+ * 	 	 	 	 *
+ * 	 	 	 	 	 * We assume the contiguous huge IOV is quite rare, so there won't
+ * 	 	 	 	 	 	 * be high contention over the SPDK huge page cache.
+ * 	 	 	 	 	 	 	 */
 	if (pg_cnt > bio_chk_sz) {
 		chk = dma_alloc_chunk(pg_cnt);
 		if (chk == NULL)
@@ -745,9 +745,9 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 			return 0;
 
 		/*
-		 * If prev region is SCM having unused bytes in last chunk page, try to reserve
-		 * from the unused bytes for current SCM region.
-		 */
+ * 		 * If prev region is SCM having unused bytes in last chunk page, try to reserve
+ * 		 		 * from the unused bytes for current SCM region.
+ * 		 		 		 */
 		if (iod_pad_region(biov, last_rg, &chk_off)) {
 			chk_pg_idx = last_rg->brr_pg_idx;
 			goto add_region;
@@ -768,10 +768,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	}
 
 	/*
-	 * Try to reserve the DMA buffer from the 'current chunk' of the
-	 * per-xstream DMA buffer. It could be different with the last chunk
-	 * in io descriptor, because dma_map_one() may yield in the future.
-	 */
+ * 	 * Try to reserve the DMA buffer from the 'current chunk' of the
+ * 	 	 * per-xstream DMA buffer. It could be different with the last chunk
+ * 	 	 	 * in io descriptor, because dma_map_one() may yield in the future.
+ * 	 	 	 	 */
 	cur_chk = bdb->bdb_cur_chk[biod->bd_chk_type];
 	if (cur_chk != NULL && cur_chk != chk) {
 		chk = cur_chk;
@@ -786,9 +786,9 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	}
 
 	/*
-	 * Switch to another idle chunk, if there isn't any idle chunk
-	 * available, grow buffer.
-	 */
+ * 	 * Switch to another idle chunk, if there isn't any idle chunk
+ * 	 	 * available, grow buffer.
+ * 	 	 	 */
 	rc = chunk_get_idle(bdb, &chk);
 	if (rc) {
 		if (rc == -DER_AGAIN) {
@@ -887,15 +887,15 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	if (biod->bd_type == BIO_IOD_TYPE_UPDATE && media == DAOS_MEDIA_SCM) {
 		/*
-		 * We could do no_drain copy and rely on the tx commit to
-		 * drain controller, however, test shows calling a persistent
-		 * copy and drain controller here is faster.
-		 */
+ * 		 * We could do no_drain copy and rely on the tx commit to
+ * 		 		 * drain controller, however, test shows calling a persistent
+ * 		 		 		 * copy and drain controller here is faster.
+ * 		 		 		 		 */
 		if (DAOS_ON_VALGRIND && pmemobj_tx_stage() == TX_STAGE_WORK) {
 			/** Ignore the update to what is reserved block.
-			 *  Ordinarily, this wouldn't be inside a transaction
-			 *  but in MVCC tests, it can happen.
-			 */
+ * 			 *  Ordinarily, this wouldn't be inside a transaction
+ * 			 			 *  but in MVCC tests, it can happen.
+ * 			 			 			 */
 			umem_tx_xadd_ptr(umem, media_addr, n,
 					 POBJ_XADD_NO_SNAPSHOT);
 		}
@@ -1066,9 +1066,9 @@ retry:
 	rc = iterate_biov(biod, arg ? bulk_map_one : dma_map_one, arg);
 	if (rc) {
 		/*
-		 * To avoid deadlock, held buffers need be released
-		 * before waiting for other active IODs.
-		 */
+ * 		 * To avoid deadlock, held buffers need be released
+ * 		 		 * before waiting for other active IODs.
+ * 		 		 		 */
 		iod_release_buffer(biod);
 
 		if (!biod->bd_retry)
@@ -1181,6 +1181,9 @@ flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	D_ASSERT(arg == NULL);
 	D_ASSERT(biov);
 
+	if (bio_iov2req_len(biov) == 0)
+		return 0;
+
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return 0;
 
@@ -1188,7 +1191,6 @@ flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		return 0;
 
 	D_ASSERT(bio_iov2raw_buf(biov) != NULL);
-	D_ASSERT(bio_iov2req_len(biov) != 0);
 	pmemobj_flush(umem->umm_pool, bio_iov2req_buf(biov),
 		      bio_iov2req_len(biov));
 	return 0;
@@ -1217,9 +1219,9 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 		return -DER_NOMEM;
 
 	/*
-	 * copy the passed in @bsgl_in to the bsgl attached on bio_desc,
-	 * since we don't want following bio ops change caller's bsgl.
-	 */
+ * 	 * copy the passed in @bsgl_in to the bsgl attached on bio_desc,
+ * 	 	 * since we don't want following bio ops change caller's bsgl.
+ * 	 	 	 */
 	bsgl = bio_iod_sgl(biod, 0);
 
 	rc = bio_sgl_init(bsgl, bsgl_in->bs_nr);
