@@ -415,34 +415,34 @@ type (
 	}
 )
 
-// setHotplugBusidRange sets range parameters in the input request either to user configured
+// getNumaNodeBusidRange sets range parameters in the input request either to user configured
 // values if provided in the server config file, or automatically derive them by querying
 // hardware configuration.
-func (req *BdevWriteConfigRequest) setHotplugBusidRange(ctx context.Context, log logging.Logger, inRange string, numaNodeIdx uint) error {
-	if inRange != "" {
-		log.Debugf("setting user-specified hotplug bus-id range %q", inRange)
-
-		begin, end, err := common.GetRangeLimits(inRange)
-		if err != nil {
-			return errors.Wrap(err, "parse busid range limits")
-		}
-		req.HotplugBusidBegin = begin
-		req.HotplugBusidEnd = end
-
-		return nil
-	}
-
-	provider := hwloc.NewProvider(log)
-
+func getNumaNodeBusidRange(ctx context.Context, provider *hwloc.Provider, numaNodeIdx uint) (uint64, uint64, error) {
 	topo, err := provider.GetTopology(ctx)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 
-	//calcPCIBusidRange(engineIdxif err != nil {}
-	log.Debugf("numa node %d pci buses: %+v", numaNodeIdx, topo.NUMANodes[numaNodeIdx].PCIBuses)
+	// for the moment take the lowest and highest buses in all of the ranges for an engine
+	// TODO: add each of the ranges to the request for each engine.
 
-	return nil
+	nodes := topo.NUMANodes
+	if len(nodes) <= int(numaNodeIdx) {
+		return 0, 0, errors.Errorf("insufficient numa nodes in topology, want %d got %d",
+			numaNodeIdx+1, len(nodes))
+	}
+
+	buses := nodes[numaNodeIdx].PCIBuses
+	if len(buses) == 0 {
+		return 0, 0, errors.Errorf("no PCI buses found on numa node %d in topology",
+			numaNodeIdx)
+	}
+
+	lowAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[0].LowAddress
+	highAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[len(buses)-1].HighAddress
+
+	return common.GetRangeLimits(fmt.Sprintf("%s-%s", lowAddr.Bus, highAddr.Bus))
 }
 
 type BdevForwarder struct {

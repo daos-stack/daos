@@ -15,6 +15,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
@@ -333,11 +335,27 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 			continue
 		}
 
-		// Populate hotplug bus-ID range limits from the first bdev tier
-		// to limit hotplug activity of a specific engine to a ssd device set.
-		if err := req.setHotplugBusidRange(ctx, log, tier.Bdev.BusidRange, cfg.NumaNodeIndex); err != nil {
-			return req, err
+		// Populate hotplug bus-ID range limits when processing the first bdev tier.
+		// Applying the range limits hotplug activity of engine to a ssd device set.
+
+		var begin, end uint64
+		inRange := tier.Bdev.BusidRange
+
+		if inRange != "" {
+			log.Debugf("received user-specified hotplug bus-id range %q", inRange)
+			begin, end, err = common.GetRangeLimits(inRange)
+		} else {
+			log.Debug("generating hotplug bus-id range based on hardware topology")
+			begin, end, err = getNumaNodeBusidRange(ctx, hwloc.NewProvider(log),
+				cfg.NumaNodeIndex)
 		}
+
+		if err != nil {
+			return req, errors.Wrapf(err, "get busid range limits")
+		}
+
+		req.HotplugBusidBegin = begin
+		req.HotplugBusidEnd = end
 	}
 
 	return req, nil
