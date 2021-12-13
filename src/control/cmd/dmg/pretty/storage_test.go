@@ -1385,14 +1385,28 @@ host1
 									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									State:     "NORMAL",
+									NvmeState: storage.NvmeDevStateNormal,
 								},
 								{
 									UUID:      common.MockUUID(1),
 									TrAddr:    "0000:8b:00.0",
+									TargetIDs: []int32{3, 4, 5},
+									Rank:      0,
+									NvmeState: storage.NvmeDevStateFaulty,
+								},
+								{
+									UUID:      common.MockUUID(2),
+									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
-									State:     "FAULTY",
+									NvmeState: storage.NvmeDevState(0),
+								},
+								{
+									UUID:      common.MockUUID(3),
+									TrAddr:    "0000:db:00.0",
+									TargetIDs: []int32{3, 4, 5},
+									Rank:      1,
+									NvmeState: storage.NvmeDevStateIdentify,
 								},
 							},
 						},
@@ -1407,7 +1421,11 @@ host1
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
       Targets:[0 1 2] Rank:0 State:NORMAL
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Targets:[0 1 2] Rank:1 State:FAULTY
+      Targets:[3 4 5] Rank:0 State:EVICTED
+    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
+      Targets:[0 1 2] Rank:1 State:UNPLUGGED
+    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
+      Targets:[3 4 5] Rank:1 State:IDENTIFY
 `,
 		},
 		"list-devices (none found)": {
@@ -1443,7 +1461,7 @@ host1
 									UUID:      common.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									State:     "NORMAL",
+									NvmeState: storage.NvmeDevStateNormal,
 									Health:    mockController.HealthStats,
 								},
 							},
