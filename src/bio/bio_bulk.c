@@ -542,8 +542,8 @@ static inline bool
 bypass_bulk_cache(struct bio_desc *biod, struct bio_iov *biov,
 		  unsigned int pg_cnt)
 {
-	/* Hole, no RDMA */
-	if (bio_addr_is_hole(&biov->bi_addr))
+	/* Hole or zero length IOV, no RDMA */
+	if ((bio_iov2req_len(biov) == 0) || bio_addr_is_hole(&biov->bi_addr))
 		return true;
 	/* Huge IOV, allocate DMA buffer & create bulk handle on-the-fly */
 	if (pg_cnt > bio_chk_sz)
@@ -628,7 +628,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 
 	D_ASSERT(biod && biod->bd_chk_type == BIO_CHK_TYPE_IO);
 	D_ASSERT(biod->bd_rdma);
-	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
+	D_ASSERT(biov);
 
 	if (biod->bd_bulk_hdls == NULL) {
 		rc = bulk_iod_init(biod);
@@ -641,6 +641,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 		rc = dma_map_one(biod, biov, NULL);
 		goto done;
 	}
+	D_ASSERT(bio_iov2req_len(biov) != 0);
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
 
 	hdl = bulk_get_hdl(biod, biov, roundup_pgs(pg_cnt), pg_off, arg);
@@ -786,7 +787,8 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 	if (biod->bd_bulk_hdls == NULL)
 		return NULL;
 
-	D_ASSERT(biod->bd_bulk_cnt == biod->bd_bulk_max);
+	D_ASSERTF(biod->bd_bulk_cnt == biod->bd_bulk_max, "bulk_cnt:%u, bulk_max:%u\n",
+		  biod->bd_bulk_cnt, biod->bd_bulk_max);
 	D_ASSERT(sgl_idx < biod->bd_sgl_cnt);
 
 	for (i = 0; i < sgl_idx; i++) {
