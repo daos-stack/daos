@@ -1,8 +1,8 @@
 /**
- *  * (C) Copyright 2021 Intel Corporation.
- *   *
- *    * SPDX-License-Identifier: BSD-2-Clause-Patent
- *     */
+ * (C) Copyright 2021 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 #define D_LOGFAC	DD_FAC(bio)
 #include "bio_internal.h"
 
