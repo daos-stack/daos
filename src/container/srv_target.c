@@ -506,7 +506,6 @@ cont_agg_ult(void *arg)
 	param.ap_req = cont->sc_agg_req;
 	param.ap_cont = cont;
 	param.ap_vos_agg = 1;
-	cont->sc_vos_agg_active = 1;
 
 	cont_aggregate_interval(cont, cont_vos_aggregate_cb, &param);
 }
@@ -519,7 +518,6 @@ cont_ec_agg_ult(void *arg)
 	D_DEBUG(DB_EPC, "start EC aggregation "DF_UUID"\n",
 		DP_UUID(cont->sc_uuid));
 
-	cont->sc_ec_agg_active = 1;
 	ds_obj_ec_aggregate(arg);
 }
 
