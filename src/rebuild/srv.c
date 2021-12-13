@@ -611,11 +611,11 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 		snprintf(sbuf, RBLD_SBUF_LEN,
 			 "%s [%s] (pool "DF_UUID" ver=%u, toberb_obj="
 			 DF_U64", rb_obj="DF_U64", rec="DF_U64", size="DF_U64
-			 " done %d status %d/%d duration=%d secs)\n",
+			 " done %d status %d/%d epoch "DF_U64" duration=%d secs)\n",
 			 RB_OP_STR(op), str, DP_UUID(pool->sp_uuid), map_ver,
 			 rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
 			 rs->rs_size, rs->rs_done, rs->rs_errno,
-			 rs->rs_fail_rank, rs->rs_seconds);
+			 rs->rs_fail_rank, rgt->rgt_stable_epoch, rs->rs_seconds);
 
 		D_INFO("%s", sbuf);
 		if (rs->rs_done || rebuild_gst.rg_abort || rgt->rgt_abort) {
@@ -1780,7 +1780,6 @@ rebuild_fini_one(void *arg)
 		return 0;
 
 	rebuild_pool_tls_destroy(pool_tls);
-	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
@@ -1848,7 +1847,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
 	/* destroy the migrate_tls of 0-xstream */
-	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.
 	 */
