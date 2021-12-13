@@ -236,7 +236,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 }
 
 // XXX DAOS-9196 Some extra bytes are needed for the metadata of the pool: at least 135 MB
-// are needed.  The extraByes is a littler bigger than this limite, because the size of the
+// are needed.  The extraByes is a little bigger than this limit, because the size of the
 // metadata will eventually grow along the life of the pool.
 const PoolMetadataBytes uint64 = uint64(200)*uint64(humanize.MiByte)
 
@@ -279,7 +279,8 @@ func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64,
 		}
 
 		if hostStorage.ScmNamespaces.Free() == uint64(0) {
-			msg := fmt.Sprintf("Host wihout SCM storage: hostname=%s", hostSet.String())
+			msg := fmt.Sprintf("Host without SCM storage: hostname=%s",
+			                   hostSet.String())
 			errOut = errors.New(msg)
 			return
 		}

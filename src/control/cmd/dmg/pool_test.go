@@ -1214,7 +1214,7 @@ func TestDmg_GetMaxPoolSize_Errors(testRunner *testing.T) {
 					NvmeConfig: []control.MockNvmeConfig {},
 				},
 			},
-			ExpectedError: errors.New("Host wihout SCM storage"),
+			ExpectedError: errors.New("Host without SCM storage"),
 		},
 		"SCM storage too small": {
 			HostsConfigArray: []HostConfig {
