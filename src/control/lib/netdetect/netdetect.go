@@ -102,8 +102,12 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -144,6 +148,9 @@ const (
 	Loopback   = 772
 )
 
+// alwaysExclude is a regexp to match always-excluded devices
+var alwaysExclude = regexp.MustCompile(`(?:bond\d+)`)
+
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
 type DeviceAffinity struct {
 	DeviceName string
@@ -156,13 +163,14 @@ type DeviceAffinity struct {
 type FabricScan struct {
 	Provider    string `json:"provider"`
 	DeviceName  string `json:"device"`
+	Domain      string `json:"domain"`
 	NUMANode    uint   `json:"numanode"`
 	Priority    int    `json:"priority"`
 	NetDevClass uint32 `json:"netdevclass"`
 }
 
 func (fs *FabricScan) String() string {
-	return fmt.Sprintf("\tfabric_iface: %v\n\tprovider: %v\n\tpinned_numa_node: %d", fs.DeviceName, fs.Provider, fs.NUMANode)
+	return fmt.Sprintf("prov: %s dev: %s dom: %s numa: %d", fs.Provider, fs.DeviceName, fs.Domain, fs.NUMANode)
 }
 
 // DeviceScan caches initialization data for later hwloc usage
@@ -507,6 +515,40 @@ func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	return nil
 }
 
+func getNodeSysFs(deviceScanCfg DeviceScan) C.hwloc_obj_t {
+	log.Debugf("scanning sysfs for %q", deviceScanCfg.targetDevice)
+
+	var hwlocObj C.hwloc_obj_t
+
+	if err := filepath.Walk("/sys/devices", func(path string, fi os.FileInfo, err error) error {
+		if fi == nil {
+			return nil
+		}
+		if fi.Name() != deviceScanCfg.targetDevice {
+			return nil
+		}
+
+		entries, err := ioutil.ReadDir(filepath.Join(path, "device", "net"))
+		if err != nil {
+			return nil
+		}
+
+		if len(entries) == 1 {
+			deviceScanCfg.targetDevice = entries[0].Name()
+			hwlocObj = getNodeDirect(deviceScanCfg)
+			if hwlocObj != nil {
+				return io.EOF
+			}
+		}
+
+		return nil
+	}); err == io.EOF {
+		return hwlocObj
+	}
+
+	return nil
+}
+
 // getNodeBestFit finds a node object that most closely matches the name of the target device being matched.
 // In order to succeed, one or more hwlocDeviceNames must be a subset of the target device name.
 // This allows us to find a decorated virtual device name such as "hfi1_0-dgram" which matches against one of the hwlocDeviceNames
@@ -569,8 +611,6 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 		return 0, nil
 	}
-
-	log.Debugf("There are %d NUMA nodes.", numNuma)
 
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
 	for i := 0; i < numNuma; i++ {
@@ -753,7 +793,12 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	case bestfit:
 		node = getNodeBestFit(deviceScanCfg)
 	default:
-		node = getNodeBestFit(deviceScanCfg)
+		return DeviceAffinity{}, errors.Errorf("unsupported lookup method")
+	}
+	// as a last resort try to figure it out directly from sysfs, but
+	// this can be slow...
+	if node == nil {
+		node = getNodeSysFs(deviceScanCfg)
 	}
 
 	// At this point, we know the topology is NUMA aware.
@@ -824,6 +869,8 @@ func mercuryToLibFabric(provider string) string {
 		return "psm2"
 	case "ofi+gni":
 		return "gni"
+	case "ofi+cxi":
+		return "cxi"
 	default:
 		return provider
 	}
@@ -861,6 +908,8 @@ func libFabricToMercury(provider string) string {
 		return "ofi+psm2"
 	case "gni":
 		return "ofi+gni"
+	case "cxi":
+		return "ofi+cxi"
 	default:
 		return provider
 	}
@@ -1083,6 +1132,13 @@ func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error
 }
 
 func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, excludeMap map[string]struct{}) (*FabricScan, error) {
+	if _, skip := excludeMap[deviceScanCfg.targetDevice]; skip {
+		return nil, errors.New("excluded device entry by map")
+	}
+	if alwaysExclude.MatchString(deviceScanCfg.targetDevice) {
+		return nil, errors.New("excluded device entry by regexp")
+	}
+
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 	if err != nil {
 		return nil, err
@@ -1116,7 +1172,10 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 	}
 
 	if _, skip := excludeMap[scanResults.DeviceName]; skip {
-		return nil, errors.New("excluded device entry")
+		return nil, errors.New("excluded device entry by map")
+	}
+	if alwaysExclude.MatchString(scanResults.DeviceName) {
+		return nil, errors.New("excluded device entry by regexp")
 	}
 
 	results := scanResults.String()
@@ -1126,7 +1185,6 @@ func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount i
 	}
 
 	resultsMap[results] = struct{}{}
-	log.Debugf("\n%s", results)
 	return scanResults, nil
 }
 
@@ -1231,6 +1289,7 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 		if err != nil {
 			continue
 		}
+		devScanResults.Domain = C.GoString(fi.domain_attr.name)
 		ScanResults = append(ScanResults, devScanResults)
 		devCount++
 	}
@@ -1239,6 +1298,24 @@ func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*Fa
 		log.Debugf("libfabric found records matching provider \"%s\" but there were no valid system devices that matched.", provider)
 	}
 	return ScanResults, nil
+}
+
+// GetDeviceDomain returns the domain name of the device, based on the connection
+// made between the device info and the fabric scan. Note that the domain name may
+// be identical to the device name if the provider does not support domains.
+func GetDeviceDomain(ctx context.Context, provider, device string) (string, error) {
+	results, err := ScanFabric(ctx, provider)
+	if err != nil {
+		return "", err
+	}
+
+	for _, res := range results {
+		if res.DeviceName == device {
+			return res.Domain, nil
+		}
+	}
+
+	return "", errors.Errorf("device %s not found in fabric", device)
 }
 
 // GetDeviceClass determines the device type according to what's stored in the filesystem

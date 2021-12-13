@@ -28,9 +28,9 @@ the selected object class.
 <a id="4.3.2"></a>
 ## Fault Detection
 
-DAOS servers are monitored within a DAOS system through a gossip-based protocol
+DAOS engines are monitored within a DAOS system through a gossip-based protocol
 called [SWIM](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914)
-that provides accurate, efficient, and scalable server fault detection.
+that provides accurate, efficient, and scalable fault detection.
 Storage attached to each DAOS target is monitored through periodic local
 health assessment. Whenever a local storage I/O error is returned to the
 DAOS server, an internal health check procedure will be called automatically.
@@ -42,7 +42,7 @@ rejected and re-routed.
 <a id="4.3.3"></a>
 ## Fault Isolation
 
-Once detected, the faulty target or servers (effectivelly a set of targets)
+Once detected, the faulty target or engine (effectively a set of targets)
 must be excluded from the pool map. This process is triggered either manually
 by the administrator or automatically. Upon exclusion, the new version of
 the pool map is eagerly pushed to all storage targets. At this point, the pool
@@ -57,7 +57,7 @@ action).
 
 All storage targets are promptly notified of pool map changes by the pool
 service. This is not the case for client nodes, which are lazily informed
-of pool map invalidation each time they communicate with servers. To do so,
+of pool map invalidation each time they communicate with any engines. To do so,
 clients pack in every RPC their current pool map version. Servers reply not
 only with the current pool map version. Consequently, when a DAOS client
 experiences RPC timeout, it regularly communicates with the other DAOS

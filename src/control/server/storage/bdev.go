@@ -6,6 +6,12 @@
 
 package storage
 
+/*
+#include "stdlib.h"
+#include "daos_srv/control.h"
+*/
+import "C"
+
 import (
 	"fmt"
 	"strings"
@@ -23,6 +29,53 @@ import (
 
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
 const BdevPciAddrSep = " "
+
+// NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
+type NvmeDevState uint32
+
+// IsNew returns true if SSD is not in use by DAOS.
+func (bs NvmeDevState) IsNew() bool {
+	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY == 0 &&
+		bs&C.NVME_DEV_FL_INUSE == 0)
+}
+
+// IsNormal returns true if SSD is in a normal, non-faulty state.
+func (bs NvmeDevState) IsNormal() bool {
+	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY == 0 &&
+		bs&C.NVME_DEV_FL_INUSE != 0)
+}
+
+// IsFaulty returns true if SSD is in a faulty state.
+func (bs NvmeDevState) IsFaulty() bool {
+	return bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY != 0
+}
+
+// StatusString summarizes the device status.
+func (bs NvmeDevState) StatusString() string {
+	switch {
+	case bs&C.NVME_DEV_FL_PLUGGED == 0:
+		return "UNPLUGGED"
+	case bs&C.NVME_DEV_FL_IDENTIFY != 0:
+		return "IDENTIFY"
+	case bs&C.NVME_DEV_FL_FAULTY != 0:
+		return "EVICTED"
+	case bs&C.NVME_DEV_FL_INUSE != 0:
+		return "NORMAL"
+	default:
+		return "NEW"
+	}
+}
+
+func (bs NvmeDevState) String() string {
+	return fmt.Sprintf("plugged: %v, in-use: %v, faulty: %v, identify: %v",
+		bs&C.NVME_DEV_FL_PLUGGED != 0, bs&C.NVME_DEV_FL_INUSE != 0,
+		bs&C.NVME_DEV_FL_FAULTY != 0, bs&C.NVME_DEV_FL_IDENTIFY != 0)
+}
+
+// Uint32 returns uint32 representation of BIO device state.
+func (bs NvmeDevState) Uint32() uint32 {
+	return uint32(bs)
+}
 
 // NvmeHealth represents a set of health statistics for a NVMe device
 // and mirrors C.struct_nvme_stats.
@@ -82,41 +135,39 @@ func (nch *NvmeHealth) TempF() float32 {
 	return (nch.TempC() * (9.0 / 5.0)) + 32.0
 }
 
-type (
-	// NvmeNamespace represents an individual NVMe namespace on a device and
-	// mirrors C.struct_ns_t.
-	NvmeNamespace struct {
-		ID   uint32 `json:"id"`
-		Size uint64 `json:"size"`
-	}
+// NvmeNamespace represents an individual NVMe namespace on a device and
+// mirrors C.struct_ns_t.
+type NvmeNamespace struct {
+	ID   uint32 `json:"id"`
+	Size uint64 `json:"size"`
+}
 
-	// SmdDevice contains DAOS storage device information, including
-	// health details if requested.
-	SmdDevice struct {
-		UUID       string      `json:"uuid"`
-		TargetIDs  []int32     `hash:"set" json:"tgt_ids"`
-		State      string      `json:"state"`
-		Rank       system.Rank `json:"rank"`
-		TotalBytes uint64      `json:"total_bytes"`
-		AvailBytes uint64      `json:"avail_bytes"`
-		Health     *NvmeHealth `json:"health"`
-		TrAddr     string      `json:"tr_addr"`
-	}
+// SmdDevice contains DAOS storage device information, including
+// health details if requested.
+type SmdDevice struct {
+	UUID       string       `json:"uuid"`
+	TargetIDs  []int32      `hash:"set" json:"tgt_ids"`
+	NvmeState  NvmeDevState `json:"dev_state"`
+	Rank       system.Rank  `json:"rank"`
+	TotalBytes uint64       `json:"total_bytes"`
+	AvailBytes uint64       `json:"avail_bytes"`
+	Health     *NvmeHealth  `json:"health"`
+	TrAddr     string       `json:"tr_addr"`
+}
 
-	// NvmeController represents a NVMe device controller which includes health
-	// and namespace information and mirrors C.struct_ns_t.
-	NvmeController struct {
-		Info        string           `json:"info"`
-		Model       string           `json:"model"`
-		Serial      string           `hash:"ignore" json:"serial"`
-		PciAddr     string           `json:"pci_addr"`
-		FwRev       string           `json:"fw_rev"`
-		SocketID    int32            `json:"socket_id"`
-		HealthStats *NvmeHealth      `json:"health_stats"`
-		Namespaces  []*NvmeNamespace `hash:"set" json:"namespaces"`
-		SmdDevices  []*SmdDevice     `hash:"set" json:"smd_devices"`
-	}
-)
+// NvmeController represents a NVMe device controller which includes health
+// and namespace information and mirrors C.struct_ns_t.
+type NvmeController struct {
+	Info        string           `json:"info"`
+	Model       string           `json:"model"`
+	Serial      string           `hash:"ignore" json:"serial"`
+	PciAddr     string           `json:"pci_addr"`
+	FwRev       string           `json:"fw_rev"`
+	SocketID    int32            `json:"socket_id"`
+	HealthStats *NvmeHealth      `json:"health_stats"`
+	Namespaces  []*NvmeNamespace `hash:"set" json:"namespaces"`
+	SmdDevices  []*SmdDevice     `hash:"set" json:"smd_devices"`
+}
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
 func (nc *NvmeController) UpdateSmd(smdDev *SmdDevice) {

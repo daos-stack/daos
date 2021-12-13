@@ -2340,7 +2340,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			  (orw->orw_bulks.ca_arrays != NULL ||
 			   orw->orw_bulks.ca_count != 0) ? true : false);
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_EXIST || rc == -DER_NONEXIST || rc == -DER_INPROGRESS ||
+			 rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
 			 DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
 
 out:
@@ -3289,7 +3290,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* non-leader local RPC handler, do not need pin the DTX entry.  */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, dth, false);
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
+		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
 			 DB_IO, DLOG_ERR,
 			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
 			 DP_RC(rc));
