@@ -33,7 +33,8 @@ repo_gpgcheck=0
 gpgcheck=0" >> /etc/yum.repos.d/local-daos-group.repo
     fi
 
-    dnf -y erase openmpi opensm-libs
+    systemctl enable postfix.service
+    systemctl start postfix.service
 }
 
 group_repo_post() {
