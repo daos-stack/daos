@@ -30,7 +30,7 @@ BuildRequires: python36-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel = %{libfabric_version}
+BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel = %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
@@ -168,7 +168,7 @@ Requires: libpmemobj = 1.11.0-3%{?dist}
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric = %{libfabric_version}
+Requires: libfabric >= %{libfabric_version}
 %{?systemd_requires}
 Obsoletes: cart < 1000
 
@@ -179,7 +179,7 @@ This is the package needed to run a DAOS server
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
-Requires: libfabric = %{libfabric_version}
+Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
 %else
