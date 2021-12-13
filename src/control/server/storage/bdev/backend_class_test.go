@@ -7,6 +7,7 @@
 package bdev
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -468,7 +469,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				WithStorageConfigOutputPath(cfgOutputPath).
 				WithStorageEnableHotplug(tc.enableHotplug)
 
-			req, err := storage.BdevWriteConfigRequestFromConfig(log, &engineConfig.Storage)
+			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
+				&engineConfig.Storage)
 			if err != nil {
 				t.Fatal(err)
 			}

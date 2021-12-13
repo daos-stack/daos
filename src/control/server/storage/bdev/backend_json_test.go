@@ -7,6 +7,7 @@
 package bdev
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -206,7 +207,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				return
 			}
 
-			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(log, &engineConfig.Storage)
+			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
+				&engineConfig.Storage)
 			if tc.enableVmd {
 				writeReq.VMDEnabled = true
 			}
@@ -233,7 +235,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			}
 
 			if engineConfig.Storage.VosEnv != tc.vosEnv {
-				t.Fatalf("expected VosEnv to be %q, but it was %q", tc.vosEnv, engineConfig.Storage.VosEnv)
+				t.Fatalf("expected VosEnv to be %q, but it was %q", tc.vosEnv,
+					engineConfig.Storage.VosEnv)
 			}
 		})
 	}
