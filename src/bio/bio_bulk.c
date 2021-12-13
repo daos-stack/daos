@@ -542,8 +542,8 @@ static inline bool
 bypass_bulk_cache(struct bio_desc *biod, struct bio_iov *biov,
 		  unsigned int pg_cnt)
 {
-	/* Hole or zero length IOV, no RDMA */
-	if ((bio_iov2req_len(biov) == 0) || bio_addr_is_hole(&biov->bi_addr))
+	/* Hole, no RDMA */
+	if (bio_addr_is_hole(&biov->bi_addr))
 		return true;
 	/* Huge IOV, allocate DMA buffer & create bulk handle on-the-fly */
 	if (pg_cnt > bio_chk_sz)
@@ -635,13 +635,20 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 		if (rc)
 			return rc;
 	}
+
+	/* Zero length IOV */
+	if (bio_iov2req_len(biov) == 0) {
+		D_ASSERT(bio_iov2raw_len(biov) == 0);
+		bio_iov_set_raw_buf(biov, NULL);
+		goto done;
+	}
+
 	dma_biov2pg(biov, &off, &end, &pg_cnt, &pg_off);
 
 	if (bypass_bulk_cache(biod, biov, pg_cnt)) {
 		rc = dma_map_one(biod, biov, NULL);
 		goto done;
 	}
-	D_ASSERT(bio_iov2req_len(biov) != 0);
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
 
 	hdl = bulk_get_hdl(biod, biov, roundup_pgs(pg_cnt), pg_off, arg);
