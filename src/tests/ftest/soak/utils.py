@@ -552,6 +552,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                 self.log.error(
                     "<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
+            time.sleep(30)
             if not drain:
                 rebuild_status = True
                 for pool in pools:
