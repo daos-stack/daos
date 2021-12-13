@@ -16,7 +16,7 @@ import re
 import glob
 
 from apricot import TestWithoutServers
-from general_utils import stop_processes, pcmd
+from general_utils import stop_processes
 from write_host_file import write_host_file
 
 class CartTest(TestWithoutServers):
@@ -386,9 +386,6 @@ class CartTest(TestWithoutServers):
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
         logparse = self.params.get("logparse", "/run/tests/*/")
 
-        self.print('DEBUG log: tst_host = {}'.format(tst_host))
-        pcmd(tst_host, "ls /usr/lib*/debug/usr/lib*/lib*", True)
-
         if tst_slt is not None:
             hostfile = write_host_file(tst_host,
                                        daos_test_shared_dir,
@@ -438,12 +435,14 @@ class CartTest(TestWithoutServers):
     def convert_xml(self, xml_file):
         """Modify the xml file"""
 
+        src_dir = r".usr.src.debug.daos-[^\/]+."
+
         with open(xml_file, 'r') as fd:
             with open('{}.xml'.format(xml_file), 'w') as ofd:
                 for line in fd:
-                    if self.src_dir in line:
-                        L = re.sub(r'<dir>\/*' + self.src_dir + r'\/*',
-                                   r'<dir>',
+                    if re.search(src_dir, line):
+                        L = re.sub(r'^\s*<dir>' + src_dir + r'\/*',
+                                   r'\t<dir>',
                                    line)
                         ofd.write(L)
                     else:
