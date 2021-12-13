@@ -3,15 +3,15 @@
 #
 # 'recipe' for building a RHEL variant docker image of a DAOS administrator node
 #
-# - DAOS_BASE_IMAGE      Base docker image to use (default daos-base)
-# - DAOS_BASE_VERSION    Version of the base docker image to use (default centos8)
-# - DAOS_AUTH            Enable DAOS authentication when set to "yes" (default "no")
+# - DAOS_BASE_IMAGE      Base docker image to use (default "daos-base")
+# - DAOS_BASE_VERSION    Version of the base docker image to use (default "rocky8.4")
+# - DAOS_AUTH            Enable DAOS authentication when set to "yes" (default "yes")
 # - DAOS_ADMIN_USER      Name or uid of the daos administrattor user (default "root")
 # - DAOS_ADMIN_GROUP     Name or gid of the daos administrattor group (default "root")
 
 # Pull base image
 ARG	DAOS_BASE_IMAGE=daos-base
-ARG	DAOS_BASE_VERSION=centos8
+ARG	DAOS_BASE_VERSION=rocky8.4
 FROM	$DAOS_BASE_IMAGE:$DAOS_BASE_VERSION
 LABEL	maintainer="daos@daos.groups.io"
 
@@ -20,7 +20,7 @@ RUN	dnf install daos-client &&                                                  
 	dnf clean all
 
 # Install certificates
-ARG	DAOS_AUTH=no
+ARG	DAOS_AUTH=yes
 ARG	DAOS_ADMIN_USER=root
 ARG	DAOS_ADMIN_GROUP=root
 # FIXME Should be provided through volumes (or Secrets for K8S)
