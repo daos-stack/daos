@@ -353,6 +353,8 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 			return req, errors.Wrapf(err, "get busid range limits")
 		}
 
+		log.Debugf("NUMA %d: hotplug bus-ids %lX-%lX", cfg.NumaNodeIndex, begin, end)
+
 		req.HotplugBusidBegin = uint8(begin)
 		req.HotplugBusidEnd = uint8(end)
 	}
@@ -368,15 +370,17 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) erro
 		return err
 	}
 
+	log.Infof("Writing NVMe config file for engine instance %d to %q", p.engineIndex,
+		req.ConfigOutputPath)
+
 	p.RLock()
 	defer p.RUnlock()
 
 	req.BdevCache = &p.bdevCache
 	req.VMDEnabled = p.vmdEnabled
 
-	log.Infof("Writing NVMe config file for engine instance %d to %q", p.engineIndex,
-		req.ConfigOutputPath)
 	_, err = p.bdev.WriteConfig(req)
+
 	return err
 }
 

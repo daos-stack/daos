@@ -442,7 +442,7 @@ func getNumaNodeBusidRange(ctx context.Context, provider *hwloc.Provider, numaNo
 	lowAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[0].LowAddress
 	highAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[len(buses)-1].HighAddress
 
-	return common.GetRangeLimits(fmt.Sprintf("%s-%s", lowAddr.Bus, highAddr.Bus),
+	return common.GetRangeLimits(fmt.Sprintf("0x%s-0x%s", lowAddr.Bus, highAddr.Bus),
 		common.PCIAddrBusBitSize)
 }
 

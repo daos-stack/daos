@@ -270,6 +270,16 @@ func TestCommon_GetRangeLimits(t *testing.T) {
 			rangeStr: "143:0",
 			expErr:   errors.New("invalid busid range \"143:0\""),
 		},
+		"hexadecimal; no prefix": {
+			rangeStr: "00-5d",
+			bitSize:  8,
+			expErr:   errors.New("invalid syntax"),
+		},
+		"hexadecimal; bit-size exceeded": {
+			rangeStr: "0x000-0x5dd",
+			bitSize:  8,
+			expErr:   errors.New("value out of range"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			begin, end, err := GetRangeLimits(tc.rangeStr, tc.bitSize)
