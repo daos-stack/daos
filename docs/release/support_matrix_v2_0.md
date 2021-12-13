@@ -201,7 +201,7 @@ Linux distributions and/or versions.
 DAOS relies on [libfabric](https://ofiwg.github.io/libfabric/)
 for communication in the DAOS data plane.
 
-DAOS Version 2.0 requires libfabric Version 1.14. The RPM distribution
+DAOS Version 2.0 requires at least libfabric Version 1.14. The RPM distribution
 of DAOS includes libfabric RPM packages with the correct version.
 It is strongly recommended to use exactly the provided libfabric version
 on all DAOS servers and all DAOS clients.
@@ -235,8 +235,8 @@ for an outlook on future Omni-Path Express support for DAOS.
 On InfiniBand fabrics with the `verbs` provider, DAOS requires that the
 [Mellanox OFED (MLNX\_OFED)](https://www.mellanox.com/products/infiniband-drivers/linux/mlnx_ofed)
 software stack is installed on the DAOS servers and DAOS clients.
-DAOS Version 2.0 has been validated with MLNX\_OFED Version 5.3-1 and
-Version 5.4-1.
+DAOS Version 2.0 has been validated with MLNX\_OFED Version 5.3 and
+Version 5.4.
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of MLNX\_OFED, and that the InfiniBand adapters are
