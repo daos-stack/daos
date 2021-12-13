@@ -2,8 +2,8 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.1.0~rc4-1%{?dist}
-%global libfabric_version 1.14.0~rc3-2
+%global mercury_version 2.1.0~rc4-2%{?dist}
+%global libfabric_version 1.14.0~rc3-3
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.106
-Release:       10%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -30,7 +30,7 @@ BuildRequires: python36-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel >= %{libfabric_version}
+BuildRequires: libfabric-devel = %{libfabric_version}
 BuildRequires: mercury-devel = %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
@@ -168,7 +168,7 @@ Requires: libpmemobj = 1.11.0-3%{?dist}
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}
+Requires: libfabric = %{libfabric_version}
 %{?systemd_requires}
 Obsoletes: cart < 1000
 
@@ -179,7 +179,7 @@ This is the package needed to run a DAOS server
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
-Requires: libfabric >= %{libfabric_version}
+Requires: libfabric = %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
 %else
@@ -516,6 +516,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Mon Dec 13 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.106-11
+- Revert OFI patch for DAOS-9173
+- Apply DAOS-9173 workaround to mercury
+
 * Fri Dec 10 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.106-10
 - Don't make daos-*-tests-openmi a dependency of anything
   - If they are wanted, they should be installed explicitly, due to
