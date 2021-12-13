@@ -319,7 +319,7 @@ def define_components(reqs):
                           ' --without-crypto --without-pmdk --without-rbd '    \
                           ' --with-rdma --without-iscsi-initiator '            \
                           ' --without-isal --without-vtune --with-shared',
-                          'make $JOBS_OPT', 'make install',
+                          'make CONFIG_ARCH=x86-64 $JOBS_OPT', 'make install',
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/include/dpdk"',
                           'cp -r -P dpdk/build/include/* '                     \

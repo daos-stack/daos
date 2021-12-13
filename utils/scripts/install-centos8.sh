@@ -18,6 +18,7 @@ dnf install \
     clang-tools-extra \
     cmake \
     CUnit-devel \
+    diffutils \
     e2fsprogs \
     file \
     flex \
@@ -68,5 +69,6 @@ dnf install \
     python3-yaml \
     sg3_utils \
     valgrind-devel \
+    which \
     yasm
 dnf clean all

@@ -134,7 +134,7 @@ jobs:
                           --build-arg DAOS_BUILD_TYPE=dev
                           --build-arg COMPILER
 # Doesn't work because of spdk issue.
-#    - name: Run NLT
-#      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-#               --name build-post build-image
-#               ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy
+    - name: Run NLT
+      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
+               --name build-post build-image
+               ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy
