@@ -96,7 +96,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 		for _, dev := range rResp.Devices {
 			state := storage.NvmeDevState(dev.DevState)
 
-			if req.StateMask > 0 && req.StateMask&dev.DevState == 0 {
+			if req.StateMask != 0 && req.StateMask&dev.DevState == 0 {
 				continue // skip device completely if mask doesn't match
 			}
 
@@ -111,13 +111,13 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 				dev.Health = health
 			}
 
-			if req.StateMask > 0 {
+			if req.StateMask != 0 {
 				// as mask is set and matches state, rewrite slice in place
 				rResp.Devices[i] = dev
 				i++
 			}
 		}
-		if req.StateMask > 0 {
+		if req.StateMask != 0 {
 			// prevent memory leak by erasing truncated values
 			for j := i; j < len(rResp.Devices); j++ {
 				rResp.Devices[j] = nil
