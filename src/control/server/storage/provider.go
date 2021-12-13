@@ -309,8 +309,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 	return
 }
 
-// BdevWriteConfigRequestFromConfig returns a config write request from
-// a storage config.
+// BdevWriteConfigRequestFromConfig returns a config write request from a storage config.
 func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config) (BdevWriteConfigRequest, error) {
 	req := BdevWriteConfigRequest{
 		ConfigOutputPath: cfg.ConfigOutputPath,
@@ -363,8 +362,8 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
-func (p *Provider) WriteNvmeConfig(ctx context.Context) error {
-	req, err := BdevWriteConfigRequestFromConfig(ctx, p.log, p.engineStorage)
+func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) error {
+	req, err := BdevWriteConfigRequestFromConfig(ctx, log, p.engineStorage)
 	if err != nil {
 		return err
 	}
@@ -375,6 +374,8 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context) error {
 	req.BdevCache = &p.bdevCache
 	req.VMDEnabled = p.vmdEnabled
 
+	log.Infof("Writing NVMe config file for engine instance %d to %q", p.engineIndex,
+		req.ConfigOutputPath)
 	_, err = p.bdev.WriteConfig(req)
 	return err
 }

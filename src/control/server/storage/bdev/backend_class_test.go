@@ -476,7 +476,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 			}
 			req.VMDEnabled = tc.enableVmd
 
-			gotErr := writeJSONConfig(log, &req)
+			gotErr := writeJsonConfig(log, &req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

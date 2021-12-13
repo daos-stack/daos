@@ -481,7 +481,7 @@ func (sb *spdkBackend) Format(req storage.BdevFormatRequest) (resp *storage.Bdev
 	}
 }
 
-func (sb *spdkBackend) writeNVMEConfig(req storage.BdevWriteConfigRequest, confWriter writeConfFn) error {
+func (sb *spdkBackend) writeNvmeConfig(req storage.BdevWriteConfigRequest, confWriter writeConfFn) error {
 	sb.log.Debugf("spdk backend write config (system calls): %+v", req)
 
 	// Substitute addresses in bdev tier's DeviceLists if VMD is in use.
@@ -513,7 +513,7 @@ func (sb *spdkBackend) writeNVMEConfig(req storage.BdevWriteConfigRequest, confW
 }
 
 func (sb *spdkBackend) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {
-	return &storage.BdevWriteConfigResponse{}, sb.writeNVMEConfig(req, writeJSONConfig)
+	return &storage.BdevWriteConfigResponse{}, sb.writeNvmeConfig(req, writeJsonConfig)
 }
 
 // UpdateFirmware uses the SPDK bindings to update an NVMe controller's firmware.

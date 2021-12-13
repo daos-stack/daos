@@ -87,9 +87,9 @@ func writeConfigFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWri
 		req.OwnerUID, req.OwnerGID)
 }
 
-// writeJSONConfig generates nvme config file for given bdev type to be consumed
+// writeJsonConfig generates nvme config file for given bdev type to be consumed
 // by spdk.
-func writeJSONConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) error {
+func writeJsonConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) error {
 	if len(req.TierProps) == 0 {
 		return nil
 	}

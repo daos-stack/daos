@@ -641,7 +641,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			b := newBackend(log, sr)
 
 			var gotCall *storage.BdevWriteConfigRequest
-			gotErr := b.writeNVMEConfig(
+			gotErr := b.writeNvmeConfig(
 				tc.req,
 				func(l logging.Logger, r *storage.BdevWriteConfigRequest) error {
 					l.Debugf("req: %+v", r)
