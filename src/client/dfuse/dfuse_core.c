@@ -574,79 +574,92 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 static int
 dfuse_cont_get_cache(struct dfuse_cont *dfc)
 {
-	size_t		size;
+	size_t		sizes[ATTR_COUNT];
 	char		*buff;
+	char		*buff_addrs[ATTR_COUNT];
 	int		rc;
 	int		i;
 	unsigned int	value;
 	bool		have_dentry = false;
 	bool		have_dentry_dir = false;
-	bool		have_attr = false;
 	bool		have_dio = false;
 	bool		have_cache_off = false;
 
-	D_ALLOC(buff, ATTR_VALUE_LEN);
+	D_ALLOC(buff, ATTR_VALUE_LEN * ATTR_COUNT);
+
 	if (buff == NULL)
 		return ENOMEM;
 
 	for (i = 0; i < ATTR_COUNT; i++) {
-		size = ATTR_VALUE_LEN - 1;
+		sizes[i] = ATTR_VALUE_LEN - 1;
+		buff_addrs[i] = buff + i * ATTR_VALUE_LEN;
+	}
 
-		rc = daos_cont_get_attr(dfc->dfs_coh, 1, &cont_attr_names[i],
-					(void * const*)&buff,
-					&size, NULL);
-		if (rc == -DER_NONEXIST) {
+	rc = daos_cont_get_attr(dfc->dfs_coh, ATTR_COUNT, cont_attr_names,
+				(void * const*)buff_addrs, sizes, NULL);
+
+	if (rc == -DER_NONEXIST) {
+		/* none of the cache related attrs are present */
+		D_GOTO(out, rc = ENODATA);
+	} else if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_WARNING(dfc, "Failed to load values for all cache "
+				  "related attrs" DF_RC, DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	for (i = 0; i < ATTR_COUNT; i++) {
+		if (sizes[i] == 0) {
+			/* attr is not present */
 			continue;
-		} else if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_WARNING(dfc, "Failed to load value for '%s' "
-					  DF_RC, cont_attr_names[i], DP_RC(rc));
-			D_GOTO(out, rc = daos_der2errno(rc));
 		}
-		have_attr = true;
 
 		/* Ensure the character after the fetched string is zero in case
 		 * of non-null terminated strings.  size always refers to the
 		 * number of non-null characters in this case, regardless of if
 		 * the attribute is null terminated or not.
 		 */
-		if (buff[size - 1] == '\0')
-			size--;
+		if (*(buff_addrs[i] + sizes[i] - 1) == '\0')
+			sizes[i]--;
 		else
-			buff[size] = '\0';
+			*(buff_addrs[i] + sizes[i]) = '\0';
 
 		if (i == ATTR_DATA_CACHE_INDEX) {
-			if (strncmp(buff, "on", size) == 0) {
+			if (strncmp(buff_addrs[i], "on", sizes[i]) == 0) {
 				dfc->dfc_data_caching = true;
-			} else if (strncmp(buff, "off", size) == 0) {
+			} else if (strncmp(buff_addrs[i], "off",
+				   sizes[i]) == 0) {
 				have_cache_off = true;
 				dfc->dfc_data_caching = false;
 			} else {
 				DFUSE_TRA_WARNING(dfc,
 						  "Failed to parse '%s' for '%s'",
-						  buff, cont_attr_names[i]);
+						  buff_addrs[i],
+						  cont_attr_names[i]);
 				dfc->dfc_data_caching = false;
 			}
 			continue;
 		}
 		if (i == ATTR_DIRECT_IO_DISABLE_INDEX) {
-			if (strncmp(buff, "on", size) == 0) {
+			if (strncmp(buff_addrs[i], "on", sizes[i]) == 0) {
 				have_dio = true;
 				dfc->dfc_direct_io_disable = true;
-			} else if (strncmp(buff, "off", size) == 0) {
+			} else if (strncmp(buff_addrs[i], "off",
+				   sizes[i]) == 0) {
 				dfc->dfc_direct_io_disable = false;
 			} else {
 				DFUSE_TRA_WARNING(dfc,
 						  "Failed to parse '%s' for '%s'",
-						  buff, cont_attr_names[i]);
+						  buff_addrs[i],
+						  cont_attr_names[i]);
 				dfc->dfc_data_caching = false;
 			}
 			continue;
 		}
 
-		rc = dfuse_parse_time(buff, size, &value);
+		rc = dfuse_parse_time(buff_addrs[i], sizes[i], &value);
 		if (rc != 0) {
 			DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'",
-					  buff, cont_attr_names[i]);
+					  buff_addrs[i], cont_attr_names[i]);
 			continue;
 		}
 		DFUSE_TRA_INFO(dfc, "setting '%s' is %u",
@@ -663,6 +676,7 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 			dfc->dfc_ndentry_timeout = value;
 		}
 	}
+
 	/* Check if dfuse-direct-io-disable is set to on but
 	 * dfuse-data-cache is set to off.  This combination
 	 * does not make sense, so warn in this case and set
@@ -678,8 +692,6 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 	if (have_dentry && !have_dentry_dir)
 		dfc->dfc_dentry_dir_timeout = dfc->dfc_dentry_timeout;
 	rc = 0;
-	if (!have_attr)
-		rc = ENODATA;
 out:
 	D_FREE(buff);
 	return rc;
