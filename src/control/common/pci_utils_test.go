@@ -234,6 +234,7 @@ func TestPCIUtils_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 func TestCommon_GetRangeLimits(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rangeStr string
+		bitSize  int
 		expBegin uint64
 		expEnd   uint64
 		expErr   error
@@ -271,7 +272,7 @@ func TestCommon_GetRangeLimits(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			begin, end, err := GetRangeLimits(tc.rangeStr)
+			begin, end, err := GetRangeLimits(tc.rangeStr, tc.bitSize)
 			CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return

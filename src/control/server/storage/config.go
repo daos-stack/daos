@@ -370,7 +370,8 @@ func (c *Config) Validate() error {
 	c.VosEnv = "NVME"
 
 	// if the first bdev config is of class nvme, validate bus-id range params
-	if _, _, err := common.GetRangeLimits(fbc.Bdev.BusidRange); err != nil {
+	_, _, err := common.GetRangeLimits(fbc.Bdev.BusidRange, common.PCIAddrBusBitSize)
+	if err != nil {
 		return errors.Wrap(err, "parse busid range limits")
 	}
 

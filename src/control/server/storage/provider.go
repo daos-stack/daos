@@ -343,7 +343,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 
 		if inRange != "" {
 			log.Debugf("received user-specified hotplug bus-id range %q", inRange)
-			begin, end, err = common.GetRangeLimits(inRange)
+			begin, end, err = common.GetRangeLimits(inRange, common.PCIAddrBusBitSize)
 		} else {
 			log.Debug("generating hotplug bus-id range based on hardware topology")
 			begin, end, err = getNumaNodeBusidRange(ctx, hwloc.NewProvider(log),
@@ -354,8 +354,8 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 			return req, errors.Wrapf(err, "get busid range limits")
 		}
 
-		req.HotplugBusidBegin = begin
-		req.HotplugBusidEnd = end
+		req.HotplugBusidBegin = uint8(begin)
+		req.HotplugBusidEnd = uint8(end)
 	}
 
 	return req, nil

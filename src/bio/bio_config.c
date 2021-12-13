@@ -106,16 +106,16 @@ config_entry_decoders[] = {
 };
 
 struct busid_range_info {
-	uint64_t	begin;
-	uint64_t	end;
+	uint8_t	begin;
+	uint8_t	end;
 };
 /* PCI address bus-ID range to be used to filter hotplug events */
 struct busid_range_info hotplug_busid_range = {};
 
 static struct spdk_json_object_decoder
 busid_range_decoders[] = {
-	{"begin", offsetof(struct busid_range_info, begin), spdk_json_decode_uint64},
-	{"end", offsetof(struct busid_range_info, end), spdk_json_decode_uint64},
+	{"begin", offsetof(struct busid_range_info, begin), spdk_json_decode_uint8},
+	{"end", offsetof(struct busid_range_info, end), spdk_json_decode_uint8},
 };
 
 static int
@@ -660,7 +660,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 	}
 
 	rc = 0;
-	D_INFO("Hotplug bus-ID range read from config: %lX-%lX\n",
+	D_INFO("Hotplug bus-ID range read from config: %X-%X\n",
 		hotplug_busid_range.begin, hotplug_busid_range.end);
 out:
 	free(ctx->json_data);
@@ -669,62 +669,20 @@ out:
 	return rc;
 }
 
-static int
-traddr_to_busid(char *src, uint64_t *dst)
-{
-	char		*tok;
-	int		 i;
-
-	for (i = 0; i < 2; i++) {
-		tok = strtok(src, ":");
-		if (tok == NULL) {
-			D_ERROR("pci address field %d empty\n", i);
-			return -DER_INVAL;
-		}
-		D_DEBUG(DB_MGMT, "pci address field %d: %s\n", i, tok);
-	}
-
-	*dst = strtoul(tok, NULL, 16);
-	if (errno == ERANGE) {
-		D_ERROR("%s hex string out of range\n", src);
-		return -DER_INVAL;
-	}
-
-	D_DEBUG(DB_MGMT, "bus ID: %lu\n", *dst);
-
-	return 0;
-}
-
 static bool
 hotplug_filter_fn(const struct spdk_pci_addr *addr)
 {
-	char		traddr[128];
-	uint64_t	busid;
-	uint64_t	begin;
-	uint64_t	end;
-
-	begin = hotplug_busid_range.begin;
-	end = hotplug_busid_range.end;
-
-	if ((end == 0) || (begin > end))
+	if (hotplug_busid_range.end == 0 || hotplug_busid_range.begin > hotplug_busid_range.end) {
+		D_INFO("hotplug filter accept event on bus-id %X, invalid range\n", addr->bus);
 		return true; /* allow if no or invalid range specified */
-
-	if (spdk_pci_addr_fmt(traddr, sizeof(traddr), addr) != 0) {
-		D_ERROR("unable to format pci address\n");
-		return true; /* allow on error */
 	}
 
-	if (traddr_to_busid(traddr, &busid) != 0) {
-		D_ERROR("input transport address %s invalid\n", traddr);
-		return true; /* allow on error */
-	}
-
-	if ((busid >= begin) && (busid <= end)) {
-		D_INFO("hotplug enabled on address %s\n", traddr);
+	if (addr->bus >= hotplug_busid_range.begin && addr->bus <= hotplug_busid_range.end) {
+		D_INFO("hotplug filter accept event on bus-id %X\n", addr->bus);
 		return true;
 	}
-	D_INFO("skip enable hotplug on address %s\n", traddr);
 
+	D_INFO("hotplug filter refuse event on bus-id %X\n", addr->bus);
 	return false;
 }
 

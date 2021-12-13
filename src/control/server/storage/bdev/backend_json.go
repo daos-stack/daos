@@ -96,8 +96,8 @@ func (acp AioCreateParams) isSpdkSubsystemConfigParams() {}
 
 // HotplugBusidRangeParams specifies details for a SpdkHotplugBusidRange method.
 type HotplugBusidRangeParams struct {
-	Begin uint64 `json:"begin"`
-	End   uint64 `json:"end"`
+	Begin uint8 `json:"begin"`
+	End   uint8 `json:"end"`
 }
 
 func (hbrp HotplugBusidRangeParams) isSpdkDaosConfigParams() {}
