@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -550,7 +551,10 @@ func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (
 func defaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
-		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
+		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx)).
+		WithValidateProvider(netdetect.ValidateProviderConfig).
+		WithGetIfaceNumaNode(netdetect.GetIfaceNumaNode).
+		WithGetNetDevCls(netdetect.GetDeviceClass)
 }
 
 // genConfig generates server config file from details of available network,

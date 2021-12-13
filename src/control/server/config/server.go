@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -312,6 +313,10 @@ func (cfg *Server) Load() error {
 	// propagate top-level settings to server configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
+		cfg.Engines[i].
+			WithValidateProvider(netdetect.ValidateProviderConfig).
+			WithGetIfaceNumaNode(netdetect.GetIfaceNumaNode).
+			WithGetNetDevCls(netdetect.GetDeviceClass)
 	}
 
 	return nil

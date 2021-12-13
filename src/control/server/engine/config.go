@@ -12,7 +12,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -185,9 +184,6 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		HelperStreamCount: maxHelperStreamCount,
-		ValidateProvider:  netdetect.ValidateProviderConfig,
-		GetIfaceNumaNode:  netdetect.GetIfaceNumaNode,
-		GetNetDevCls:      netdetect.GetDeviceClass,
 	}
 }
 
