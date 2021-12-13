@@ -122,12 +122,11 @@ description on the Red Hat support website for information on RHEL support phase
 ### CentOS Linux 8
 
 DAOS Version 2.0 supports the latest CentOS Linux 8 release (CentOS 8.5) on the DAOS servers.
-It has also been validated with CentOS 8.3 and 8.4. The DAOS engineering team will accept
-DAOS tickets for DAOS nodes running CentOS 8.3 or 8.4, but may request that the environment
+It has also been validated with CentOS 8.4. The DAOS engineering team will accept
+DAOS tickets for DAOS nodes running CentOS 8.4, but may request that the environment
 is updated to the latest CentOS Linux 8 release if that is deemed necessary to fix the issue.
 
 Links to CentOS Linux 8 Release Notes:
-* [CentOS 8.3.2011](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS8.2011)
 * [CentOS 8.4.2105](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS8.2105)
 * [CentOS 8.5.2111](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS8.2111)
 
@@ -140,10 +139,8 @@ DAOS servers running CentOS 8 can then be migrated to either Rocky Linux or RHEL
 DAOS Version 2.0 supports the latest RHEL 8 release (currently RHEL 8.5).
 Customers with Extended Update Support (EUS) for RHEL 8 will also be supported
 with the latest RHEL 8 EUS release (currently RHEL 8.4) on the DAOS servers.
-RHEL 8.3 was not an EUS release, and is no longer supported by Red Hat or DAOS.
 
 Links to RHEL 8 Release Notes:
-* [RHEL 8.3](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.3_release_notes/index)
 * [RHEL 8.4](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.4_release_notes/index)
 * [RHEL 8.5](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.5_release_notes/index)
 
