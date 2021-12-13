@@ -343,7 +343,7 @@ class DaosCommand(DaosCommandBase):
             dict: JSON output
 
         Raises:
-            dict: the dmg json command output converted to a python dictionary
+            CommandFailure: if the daos container query command fails.
 
         """
         return self._get_json_result(
