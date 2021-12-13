@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dustin/go-humanize"
-
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/system"
@@ -154,7 +152,7 @@ func (b *PCIBus) String() string {
 func (d *PCIDevice) String() string {
 	var speedStr string
 	if d.LinkSpeed > 0 {
-		speedStr = fmt.Sprintf(" @ %s", humanize.SI(d.LinkSpeed, "GB/s"))
+		speedStr = fmt.Sprintf(" @ %.2f GB/s", d.LinkSpeed)
 	}
 	return fmt.Sprintf("%s %s (%s)%s", &d.PCIAddr, d.Name, d.Type, speedStr)
 }
