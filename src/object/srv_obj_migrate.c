@@ -2641,7 +2641,8 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 	}
 
 	/* Wait until container aggregation are stopped */
-	while (cont->sc_agg_active && !tls->mpt_fini && !cont->sc_stopping) {
+	while (cont->sc_ec_agg_active && cont->sc_vos_agg_active &&
+	       !tls->mpt_fini && !cont->sc_stopping) {
 		D_DEBUG(DB_REBUILD, "wait for "DF_UUID"/"DF_UUID"/%u vos aggregation"
 			" to be inactive\n", DP_UUID(tls->mpt_pool_uuid),
 			DP_UUID(cont_uuid), tls->mpt_version);
