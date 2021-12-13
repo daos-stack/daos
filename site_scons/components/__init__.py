@@ -24,6 +24,7 @@
 import sys
 import os
 import platform
+import distro
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 from prereq_tools import ProgramBinary
@@ -311,6 +312,13 @@ def define_components(reqs):
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
 
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
+
+    dist = distro.linux_distribution()
+    version = dist[1]
+    if dist[1] == '7':
+        spdk_arch='native'
+    else:
+        spdk_arch = 'skylake'
     reqs.define('spdk',
                 retriever=retriever,
                 commands=['./configure --prefix="$SPDK_PREFIX"'                \
@@ -319,7 +327,8 @@ def define_components(reqs):
                           ' --without-crypto --without-pmdk --without-rbd '    \
                           ' --with-rdma --without-iscsi-initiator '            \
                           ' --without-isal --without-vtune --with-shared',
-                          'make CONFIG_ARCH=skylake $JOBS_OPT', 'make install',
+                          'make CONFIG_ARCH={} $JOBS_OPT'.format(spdk_arch),
+                          'make install',
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/include/dpdk"',
                           'cp -r -P dpdk/build/include/* '                     \
