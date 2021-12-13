@@ -24,7 +24,7 @@ At this time only emulated hardware storage are supported by this Docker platfor
 
 To build and deploy the Docker images, `docker` and optionally `docker-compose` shall be available.
 The docker host should have access to the [Docker Hub](https://hub.docker.com/) and
-[Rocky Linux](https://rockylinux.org/fr/) official repositories.  Finally,
+[Rocky Linux](https://rockylinux.org/) official repositories.  Finally,
 [hugepages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt) linux kernel feature shall
 be enabled on the docker host.
 
