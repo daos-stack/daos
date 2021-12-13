@@ -89,6 +89,7 @@ class DaosAggregationFull(IorTestBase):
         out_of_space = False
         start = time()
         while time() - start < ior_test_timeout:
+            # noinspection PyBroadExceptio
             try:
                 self.run_ior_with_pool(create_pool=False,
                                        fail_on_warning=False)
