@@ -339,7 +339,7 @@ class CartTest(TestWithoutServers):
         if env_CCSA is None:
             env_CCSA = ""
 
-        f = r"{}/valgrind.%q\{{PMIX_ID\}}_{}-{}.memcheck.xml"
+        f = r"{}/valgrind.%q\{{PMIX_ID\}}_{}-{}.memcheck"
         memcheck_xml = f.format(daos_test_shared_dir,
                                 test_name,
                                 env_CCSA)
@@ -364,8 +364,7 @@ class CartTest(TestWithoutServers):
                   "--suppressions=" + self.supp_file + " " + \
                   "--track-origins=yes " + \
                   "--error-exitcode=" + str(memcheck_error_code) + " " \
-                  "--show-reachable=yes --trace-children=yes "  + " " \
-                  "--verbose"
+                  "--show-reachable=yes --trace-children=yes "
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
@@ -435,13 +434,14 @@ class CartTest(TestWithoutServers):
     def convert_xml(self, xml_file):
         """Modify the xml file"""
 
-        src_dir = r".usr.src.debug.daos-[^\/]+."
+        src_dir_re = r".usr.src.debug.daos-[^\/]+."
 
         with open(xml_file, 'r') as fd:
             with open('{}.xml'.format(xml_file), 'w') as ofd:
                 for line in fd:
-                    if re.search(src_dir, line):
-                        L = re.sub(r'^\s*<dir>' + src_dir + r'\/*',
+                    if re.search(src_dir_re, line):
+
+                        L = re.sub(r'^\s*<dir>' + src_dir_re + r'\/*',
                                    r'\t<dir>',
                                    line)
                         ofd.write(L)
@@ -462,8 +462,8 @@ class CartTest(TestWithoutServers):
             self.log.info("Path does not exist")
             return 1
 
-        xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
-        memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
+        xml_filename_fmt = r"valgrind\.\S+\.memcheck$"
+        memcheck_files = list(filter(lambda x: re.search(xml_filename_fmt, x),
                                 os.listdir(daos_test_shared_dir)))
 
         for filename in memcheck_files:
