@@ -431,9 +431,20 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
-    def convert_xml(self, xml_file):
-        """Modify the xml file"""
+    def _rm_abs_src_path_from_xml(self, xml_file):
+        """Remove the absolute path to the DAOS source tree in the
+           Valgrind output xml file
 
+        Args:
+            xml_file (str): path to memcheck xml file
+
+        Returns:
+            int: 0 on success
+
+        """
+
+        # This is the absolute path to where daos-debuginfo installs the source
+        # tree
         src_dir_re = r".usr.src.debug.daos-[^\/]+."
 
         with open(xml_file, 'r') as fd:
@@ -451,7 +462,7 @@ class CartTest(TestWithoutServers):
 
         return 0
 
-    def convert_xml_files(self):
+    def rm_abs_src_path_from_xml_files(self):
         """Check valgrind memcheck log files for errors."""
 
         daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
@@ -467,7 +478,7 @@ class CartTest(TestWithoutServers):
                                 os.listdir(daos_test_shared_dir)))
 
         for filename in memcheck_files:
-            self.convert_xml(daos_test_shared_dir + "/" + filename)
+            self._rm_abs_src_path_from_xml(daos_test_shared_dir + "/" + filename)
 
         return 0
 
@@ -488,7 +499,7 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
-        self.convert_xml_files()
+        self.rm_abs_src_path_from_xml_files()
 
         return 0
 
@@ -507,7 +518,7 @@ class CartTest(TestWithoutServers):
                 self.stop_process(srv2)
             self.fail("Failed, return codes {}".format(rtn))
 
-        self.convert_xml_files()
+        self.rm_abs_src_path_from_xml_files()
 
         return rtn
 
@@ -522,7 +533,7 @@ class CartTest(TestWithoutServers):
             self.fail("Failed to start command\n")
             return -1
 
-        self.convert_xml_files()
+        self.rm_abs_src_path_from_xml_files()
 
         return rtn
 
