@@ -2573,7 +2573,7 @@ ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver)
 
 	migrate_pool_tls_put(tls); /* destroy */
 
-	D_DEBUG(DB_TRACE, "migrate fini one ult "DF_UUID"\n", pool_uuid);
+	D_DEBUG(DB_TRACE, "migrate fini one ult "DF_UUID"\n", DP_UUID(pool_uuid));
 }
 
 struct migrate_abort_arg {
