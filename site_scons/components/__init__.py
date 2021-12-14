@@ -324,7 +324,7 @@ def define_components(reqs):
     if dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch='native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
-        spdk_arch = 'ivybridge'
+        spdk_arch = 'sandybridge'
     else:
         spdk_arch = 'haswell'
 
