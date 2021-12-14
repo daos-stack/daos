@@ -78,7 +78,7 @@ def update_config_cmdlist(args):
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         sys.exit(1)
-    if distro == "el8" or distro == "suse.lp153":
+    if distro in ["el8", "suse.lp153"]:
         cmd_list = [
             "sed -i -e 's/SlurmctldHost=linux0/SlurmctldHost={}/g' {}".format(
                 args.control, SLURM_CONF),
@@ -248,21 +248,19 @@ def start_slurm(args):
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
         return 1
 
-    # Startup the slurm service
-    status = execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
-    if status > 0 or args.debug:
-        execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
-    if status > 0:
-        return 1
-
     # Startup the slurm control service
     status = execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo)
     if status > 0 or args.debug:
         execute_cluster_cmds(args.control, SLURMCTLD_STARTUP_DEBUG, args.sudo)
     if status > 0:
         return 1
-    # wait until the ctl node updates the slurm state from unknown to idle
-    sleep(20)
+
+    # Startup the slurm service
+    status = execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
+    if status > 0 or args.debug:
+        execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
+    if status > 0:
+        return 1
 
     # ensure that the nodes are in the idle state
     cmd_list = ["scontrol update nodename={} state=idle".format(args.nodes)]
