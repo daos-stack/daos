@@ -509,7 +509,7 @@ Target (rank 5 idx 1) is down.
 These should be the same values used when reintegrating the targets.
 
 ```
-$ dmg pool reintegrate --rank=5 --target-idx=0,1 <pool_label>
+$ dmg pool reintegrate $DAOS_POOL --rank=5 --target-idx=0,1
 ```
 
 !!! warning
