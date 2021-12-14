@@ -291,12 +291,6 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 									},
 								},
 							)
-						node.Set = func() string {
-							if (&api{}).runtimeVersion() < 0x00020000 {
-								return synthNodeSet
-							}
-							return "0x00000001"
-						}()
 						return node
 					}(),
 				},

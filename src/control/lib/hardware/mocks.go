@@ -6,8 +6,6 @@
 
 package hardware
 
-import "fmt"
-
 // MockNUMANode returns a mock NUMA node for testing.
 func MockNUMANode(id uint, numCores uint, optOff ...uint) *NUMANode {
 	offset := uint(0)
@@ -17,7 +15,6 @@ func MockNUMANode(id uint, numCores uint, optOff ...uint) *NUMANode {
 
 	node := &NUMANode{
 		ID:    id,
-		Set:   fmt.Sprintf("0x%08x", id+1),
 		Cores: make([]CPUCore, numCores),
 	}
 	for i := uint(0); i < numCores; i++ {

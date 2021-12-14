@@ -105,7 +105,6 @@ type (
 	// NUMANode represents an individual NUMA node in the system and the devices associated with it.
 	NUMANode struct {
 		ID         uint       `json:"id"`
-		Set        string     `json:"set"`
 		Cores      []CPUCore  `json:"cores"`
 		PCIBuses   []*PCIBus  `json:"pci_buses"`
 		PCIDevices PCIDevices `json:"pci_devices"`

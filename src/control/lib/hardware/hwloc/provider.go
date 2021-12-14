@@ -16,10 +16,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const (
-	synthNodeSet = "0xf...f"
-)
-
 // NewProvider returns a new hwloc Provider.
 func NewProvider(log logging.Logger) *Provider {
 	return &Provider{
@@ -134,8 +130,7 @@ func (p *Provider) getNUMANodes(topo *topology) (hardware.NodeMap, error) {
 
 		id := numaObj.osIndex()
 		newNode := &hardware.NUMANode{
-			ID:  id,
-			Set: numaObj.nodeSet().String(),
+			ID: id,
 		}
 
 		nodes[id] = newNode
@@ -144,8 +139,7 @@ func (p *Provider) getNUMANodes(topo *topology) (hardware.NodeMap, error) {
 	if len(nodes) == 0 {
 		// If hwloc didn't detect any NUMA nodes, create a virtual NUMA node 0
 		nodes[0] = &hardware.NUMANode{
-			ID:  0,
-			Set: synthNodeSet,
+			ID: 0,
 		}
 	}
 
@@ -174,9 +168,9 @@ func (p *Provider) getCoresPerNodeSet(topo *topology, nodes hardware.NodeMap) er
 			break
 		}
 
-		nodeID := coreObj.nodeSet().String()
+		numaID := p.getDeviceNUMANodeID(coreObj, topo)
 		for _, node := range nodes {
-			if node.Set != nodeID {
+			if numaID != node.ID {
 				continue
 			}
 			node.AddCore(hardware.CPUCore{
