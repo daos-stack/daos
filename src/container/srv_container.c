@@ -1446,6 +1446,17 @@ cont_agg_eph_leader_ult(void *arg)
 					 DP_CONT(svc->cs_pool_uuid,
 						 ec_agg->ea_cont_uuid),
 					DP_RC(rc));
+
+				/* If there are network error or pool map inconsistency,
+				 * let's skip the following eph sync, which will fail
+				 * anyway.
+				 */
+				if (daos_crt_network_error(rc) || rc == -DER_GRPVER) {
+					D_INFO(DF_UUID": skip refresh due to: "DF_RC"\n",
+					       DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+					break;
+				}
+
 				continue;
 			}
 			ec_agg->ea_current_eph = min_eph;

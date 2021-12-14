@@ -4,9 +4,9 @@
 # 'recipe' for building a RHEL variant docker image of a DAOS server node
 #
 # This Dockerfile accept the following input build arguments:
-# - DAOS_BASE_IMAGE      Base docker image to use (default daos-base)
-# - DAOS_BASE_VERSION    Version of the base docker image to use (default centos8)
-# - DAOS_AUTH            Enable DAOS authentication when set to "yes" (default "no")
+# - DAOS_BASE_IMAGE      Base docker image to use (default "daos-base")
+# - DAOS_BASE_VERSION    Version of the base docker image to use (default "rocky8.4")
+# - DAOS_AUTH            Enable DAOS authentication when set to "yes" (default "yes")
 # - DAOS_HUGEPAGES_NBR   Number of huge pages to allocate for SPDK (default 4096)
 # - DAOS_IFACE_NAME      Fabric network interface used by the DAOS engine (default "eth0")
 # - DAOS_SCM_SIZE        Size in GB of the RAM emulating SCM devices (default 4)
@@ -14,7 +14,7 @@
 
 # Pull base image
 ARG	DAOS_BASE_IMAGE=daos-base
-ARG	DAOS_BASE_VERSION=centos8
+ARG	DAOS_BASE_VERSION=rocky8.4
 FROM	$DAOS_BASE_IMAGE:$DAOS_BASE_VERSION
 LABEL	maintainer="daos@daos.groups.io"
 
@@ -24,7 +24,7 @@ RUN	dnf install daos-server &&                                                  
 	systemctl enable daos_server
 
 # Configuration of the server
-ARG	DAOS_AUTH=no
+ARG	DAOS_AUTH=yes
 ARG	DAOS_HUGEPAGES_NBR=4096
 ARG	DAOS_IFACE_NAME=eth0
 ARG	DAOS_SCM_SIZE=4
