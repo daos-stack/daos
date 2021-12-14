@@ -49,15 +49,13 @@ jobs:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
-    outputs:
-      key: ${{ steps.commit-hash.outputs.key }}
-      restore: ${{ steps.commit-hash.outputs.restore }}
-      restore_prev: ${{ steps.commit-hash.outputs.restore_prev }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
       with:
         fetch-depth: 500
+    - name: Check CPU
+      run: cat /proc/cpuinfo
     - name: Setup git hash
       run: ./ci/gha_helper.py --single
       id: commit-hash
@@ -171,6 +169,8 @@ jobs:
     - name: Setup git hash
       run: ./ci/gha_helper.py --single
       id: commit-hash
+    - name: Check CPU
+      run: cat /proc/cpuinfo
     - uses: satackey/action-docker-layer-caching@v0.0.11
       continue-on-error: true
       with:

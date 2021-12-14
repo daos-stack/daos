@@ -11,10 +11,15 @@ then
     SCONS=scons-3
 fi
 
-echo ::group::Rebuild spdk
-rm -rf /opt/daos/prereq/release/spdk
-$SCONS --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=yes --deps-only
+#echo ::group::Rebuild spdk
+#rm -rf /opt/daos/prereq/release/spdk
+#$SCONS --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=yes --deps-only
+#echo ::endgroup::
+
+echo ::group::CPU info
+cat /proc/cpuinfo
 echo ::endgroup::
+
 
 echo "::group::Stack analyzer output (post build)"
 $SCONS --jobs "$DEPS_JOBS" --analyze-stack="-x tests -c 128" server

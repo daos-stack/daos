@@ -313,12 +313,21 @@ def define_components(reqs):
 
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
 
+    # Tell SPDK which CPU to optimise for, by default this is native which works well unless you
+    # are relocating binaries across systems, for example in CI under github actions etc.  There
+    # isn't a minimum value needed here, but getting this wrong will cause daos server to exit
+    # prematurely with SIGILL (-4).
+    # https://docs.microsoft.com/en-us/azure/virtual-machines/dv2-dsv2-series#dsv2-series says
+    # that GHA can schedule on any of Skylake, Broadwell or Haswell CPUs.
     dist = distro.linux_distribution()
     version = dist[1]
-    if dist[1] == '7':
+    if dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch='native'
+    #elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
+    #    spdk_arch = 'haswell'
     else:
-        spdk_arch = 'skylake'
+        spdk_arch = 'haswell'
+
     reqs.define('spdk',
                 retriever=retriever,
                 commands=['./configure --prefix="$SPDK_PREFIX"'                \
