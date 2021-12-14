@@ -476,9 +476,6 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
 	D_ASSERT(tls != NULL);
-	if (opc == RB_OP_REINT)
-		pool->sp_reintegrating++;
-
 out:
 	D_DEBUG(DB_TRACE, "create tls "DF_UUID": "DF_RC"\n",
 		DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -2556,20 +2553,14 @@ out:
 	return rc;
 }
 
-struct migrate_stop_arg {
-	uuid_t	pool_uuid;
-	uint32_t version;
-};
-
-static int
-migrate_fini_one_ult(void *data)
+void
+ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver)
 {
-	struct migrate_stop_arg *arg = data;
 	struct migrate_pool_tls *tls;
 
-	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
+	tls = migrate_pool_tls_lookup(pool_uuid, ver);
 	if (tls == NULL)
-		return 0;
+		return;
 
 	tls->mpt_fini = 1;
 
@@ -2582,33 +2573,43 @@ migrate_fini_one_ult(void *data)
 
 	migrate_pool_tls_put(tls); /* destroy */
 
-	D_INFO("migrate fini one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
+	D_DEBUG(DB_TRACE, "migrate fini one ult "DF_UUID"\n", DP_UUID(pool_uuid));
+}
+
+struct migrate_abort_arg {
+	uuid_t	pool_uuid;
+	uint32_t version;
+};
+
+int
+migrate_fini_one_ult(void *data)
+{
+	struct migrate_abort_arg *arg = data;
+
+	ds_migrate_fini_one(arg->pool_uuid, arg->version);
+
 	return 0;
 }
 
-/* stop the migration */
+/* Abort the migration */
 void
-ds_migrate_stop(struct ds_pool *pool, unsigned int version)
+ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
 {
 	struct migrate_pool_tls *tls;
-	struct migrate_stop_arg arg;
+	struct migrate_abort_arg arg;
 	int			 rc;
 
-	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
+	tls = migrate_pool_tls_lookup(pool_uuid, version);
 	if (tls == NULL)
 		return;
 
-	uuid_copy(arg.pool_uuid, pool->sp_uuid);
+	uuid_copy(arg.pool_uuid, pool_uuid);
 	arg.version = version;
 	rc = dss_thread_collective(migrate_fini_one_ult, &arg, 0);
 	if (rc)
-		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
+		D_ERROR("migrate abort: %d\n", rc);
 
-	if (tls->mpt_opc == RB_OP_REINT)
-		pool->sp_reintegrating--;
 	migrate_pool_tls_put(tls);
-	migrate_pool_tls_put(tls);
-	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 }
 
 static int
