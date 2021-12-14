@@ -213,7 +213,7 @@ accessed by the path `<mount point>/<container uuid>`. The container uuid
 will have to be provided from an external source.
 
 ```bash
-$ daos cont create tank --label mycont2 -t POSIX
+$ daos cont create tank --label mycont2 --type POSIX
   Container UUID : 0db21789-5372-4f2a-b7bc-14c0a5e968df
   Container Label: mycont2
   Container Type : POSIX
