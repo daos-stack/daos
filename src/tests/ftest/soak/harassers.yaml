@@ -46,7 +46,6 @@ server_config:
             log_mask: ERR
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
-                - ABT_THREAD_STACKSIZE=32768
         1:
             pinned_numa_node: 1
             nr_xs_helpers: 1
@@ -61,7 +60,6 @@ server_config:
             log_mask: ERR
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
-                - ABT_THREAD_STACKSIZE=32768
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server

@@ -702,22 +702,34 @@ def start_dfuse(self, pool, container, nodesperjob, resource_mgr=None,
     return dfuse, dfuse_start_cmds
 
 
-def stop_dfuse(dfuse, nodesperjob, resource_mgr=None):
+def stop_dfuse(dfuse, nodesperjob, resource_mgr=None, vol=False):
     """Create dfuse stop command line for slurm.
 
     Args:
         dfuse (obj): Dfuse obj
+        nodesperjob(int): number of nodes to pass to slurm
+        resource_mgr(str): only slurm is supported now
+        vol:(bool): cmd is ior hdf5 with vol connector
 
     Returns cmd(list):    list of cmds to pass to slurm script
     """
-    dfuse_stop_cmds = [
+    dfuse_stop_cmds = []
+    if vol:
+        dfuse_stop_cmds.extend([
+            "for file in $(ls {0}) ; "
+            "do daos container destroy --path={0}/\"$file\" ; done".format(
+                dfuse.mount_dir.value)])
+
+    dfuse_stop_cmds.extend([
         "fusermount3 -uz {0}".format(dfuse.mount_dir.value),
-        "rm -rf {0}".format(dfuse.mount_dir.value)
-    ]
+        "rm -rf {0}".format(dfuse.mount_dir.value)])
     if resource_mgr == "SLURM":
         cmds = []
-        for dfuse_stop_cmd in dfuse_stop_cmds:
-            cmds.append(get_srun_cmd(dfuse_stop_cmd, nodesperjob))
+        for cmd in dfuse_stop_cmds:
+            if cmd.startswith("for"):
+                cmds.append(cmd)
+            else:
+                cmds.append(get_srun_cmd(cmd, nodesperjob))
         dfuse_stop_cmds = cmds
     return dfuse_stop_cmds
 
@@ -770,6 +782,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
     """
     commands = []
+    vol = False
     ior_params = os.path.join(os.sep, "run", job_spec, "*")
     ior_timeout = self.params.get("job_timeout", ior_params, 10)
     mpi_module = self.params.get(
@@ -839,6 +852,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             os.path.join(dfuse.mount_dir.value, "testfile"))
                     # add envs if api is HDF5-VOL
                     if api == "HDF5-VOL":
+                        vol = True
                         env["HDF5_VOL_CONNECTOR"] = "daos"
                         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
                         # env["H5_DAOS_BYPASS_DUNS"] = 1
@@ -851,7 +865,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     sbatch_cmds.append("status=$?")
                     if api in ["HDF5-VOL", "POSIX"]:
                         sbatch_cmds.extend(
-                            stop_dfuse(dfuse, nodesperjob, "SLURM"))
+                            stop_dfuse(dfuse, nodesperjob, "SLURM", vol))
                     commands.append([sbatch_cmds, log_name])
                     self.log.info(
                         "<<IOR {} cmdlines>>:".format(api))
