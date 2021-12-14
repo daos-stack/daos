@@ -137,7 +137,7 @@ jobs:
       matrix:
         distro: [ubuntu.20.04, rocky, fedora, leap.15]
         compiler: [clang, gcc]
-	ver: [a, b, c, d, e, f]
+        ver: [a, b, c, d, e, f]
         include:
           - distro: ubuntu.20.04
             base: ubuntu.20.04
