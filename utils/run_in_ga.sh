@@ -20,9 +20,8 @@ echo ::group::CPU info
 cat /proc/cpuinfo
 echo ::endgroup::
 
-
 echo "::group::Stack analyzer output (post build)"
-$SCONS --jobs "$DEPS_JOBS" --analyze-stack="-x tests -c 128" server
+$SCONS --jobs "$DEPS_JOBS" PREFIX=/opt/daos --analyze-stack="-x tests -c 128" server
 echo ::endgroup::
 
 echo "::group::Stack analyzer output (immediate)"
