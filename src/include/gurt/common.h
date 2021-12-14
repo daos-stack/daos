@@ -162,13 +162,9 @@ char *d_realpath(const char *path, char *resolved_path);
  * realpath, however if it doesn't fail then we want to preserve the previous errno, in
  * addition the fault injection code could insert an error in the D_CHECK_ALLOC() macro
  * so if that happens then we want to set ENOMEM there.
- * Save the original error on the way in, overwrite it and then if realpath does not change
- * it then re-instate it.
  */
 #define D_REALPATH(ptr, path)						\
 	do {								\
-		int _errno = errno;					\
-		errno = 0;						\
 		(ptr) = d_realpath((path), NULL);			\
 		if ((ptr) != NULL) {					\
 			int _size = 0;					\
@@ -176,10 +172,8 @@ char *d_realpath(const char *path, char *resolved_path);
 			if (_ptr)					\
 				_size = strnlen(_ptr, PATH_MAX + 1) + 1 ; \
 			D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	0, #ptr, 0); \
-			if (errno == 0 && ((ptr) == NULL) && _ptr != NULL) \
+			if (((ptr) == NULL))				\
 				errno = ENOMEM;				\
-			else if (errno == 0)				\
-				errno = _errno;				\
 		}							\
 	} while (0)
 

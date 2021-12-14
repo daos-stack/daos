@@ -24,7 +24,7 @@ jobs:
   # Distros where we build on PR should be covered here as the cache is populated for PRs to read,
   # for distros where we only want to build on master and not PRs see the Build-branch job below.
   Prepare:
-    name: Build docker images
+    name: Create Docker images
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
@@ -128,7 +128,7 @@ jobs:
         fail_on: nothing
 
   Build:
-    name: Build DAOS in image.
+    name: Build DAOS in image
     needs: Prepare
     runs-on: ubuntu-20.04
     strategy:
