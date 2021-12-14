@@ -158,7 +158,12 @@
 ## with other system components. This setting is the base location to place
 ## the sockets in.
 #
+## NOTE: Do not change this when running under systemd control. If it needs to
+##       be changed, then make sure that it matches the RuntimeDirectory setting
+##       in /usr/lib/systemd/system/daos_server.service
+#
 ## default: /var/run/daos_server
+#
 #socket_dir: ./.daos/daos_server
 #
 #

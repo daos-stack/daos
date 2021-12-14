@@ -588,7 +588,7 @@ pipeline {
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: false,
+                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          name: "NLT server leaks",
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
@@ -899,6 +899,8 @@ pipeline {
                     }
                     post {
                         always {
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                                                      scm: 'daos-stack/daos'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: true,

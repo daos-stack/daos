@@ -1,8 +1,8 @@
 # Pool Operations
 
-A DAOS pool is a storage reservation that can span any storage nodes and
-is managed by the administrator. The amount of space allocated to a pool
-is decided at creation time and can eventually be expanded through the
+A DAOS pool is a storage reservation that can span any storage nodes in a
+DAOS system and is managed by the administrator. The amount of space allocated
+to a pool is decided at creation time and can eventually be expanded through the
 management interface or the `dmg` utility.
 
 ## Pool Basics
@@ -18,7 +18,7 @@ $ dmg pool create --size=<N>TB tank
 
 This command creates a pool labeled `tank` distributed across the DAOS servers
 with a target size on each server that is comprised of N TB of NVMe storage
-and N * 0.06 (i.e. 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
+and N * 0.06 (i.e., 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
 may be adjusted at pool creation time as described below.
 
 The UUID allocated to the newly created pool is printed to stdout
@@ -76,8 +76,8 @@ a single pool service replica should be created.
 The -t option allows to define the ration between SCM and NVMe SSD space.
 The default value is 6% which means that the space provided after --size
 will be distributed as follows:
-- 6% is allocated on SCM (i.e. 3GB in the example above)
-- 94% is allocated on NVMe SSD (i.e. 47GB in the example above)
+- 6% is allocated on SCM (i.e., 3GB in the example above)
+- 94% is allocated on NVMe SSD (i.e., 47GB in the example above)
 
 ### Listing Pools
 
@@ -93,7 +93,7 @@ tank     47 GB  0%   0%        0/32
 This returns a table of pool labels (or UUIDs if no label was specified)
 with the following information for each pool:
 - the total pool size
-- the percentage of used space (i.e. 100 * used space  / total space)
+- the percentage of used space (i.e., 100 * used space  / total space)
 - the imbalance percentage indicating whether data distribution across
   the difference storage nodes is well balanced. 0% means that there is
   no imbalance and 100% means that out-of-space errors might be returned
@@ -415,12 +415,30 @@ will be decided based on the remaining ACL rules.
 
 ## Pool Modifications
 
-### Exclusion & Self-healing
+### Automatic Exclusion
+
+An engine detected as dead by the SWIM monitoring protocol will, by default,
+be automatically excluded from all the pools using this engine. The engine
+will thus not only be marked as excluded by the system (i.e., in `dmg system
+query`), but also reported as disabled in the pool query output (i.e., `dmg
+pool query`) for all the impacted pools.
+
+Upon exclusion, the collective rebuild process (i.e., also called self-healing)
+will be automatically triggered to restore data redundancy on the
+surviving engine.
+
+!!! note
+    The rebuild process may consume many resources on each engine and
+    is thus throttled to reduce the impact on application performance. This
+    current logic relies on CPU cycles on the storage nodes. By default, the
+    rebuild process is configured to consume up to 30% of the CPU cycles,
+    leaving the other 70% for regular I/O operations.
+
+### Manual Exclusion
 
 An operator can exclude one or more engines or targets from a specific DAOS pool
 using the rank the target resides, as well as the target idx on that rank.
 If a target idx list is not provided, all targets on the rank will be excluded.
-Excluding a target will automatically start the rebuild process.
 
 To exclude a target from a pool:
 
@@ -432,6 +450,9 @@ The pool target exclude command accepts 2 parameters:
 
 * The rank of the target(s) to be excluded.
 * The target Indices of the targets to be excluded from that rank (optional).
+
+Upon successful manual exclusion, the self-healing mechanism will be triggered
+to restore redundancy on the remaining engines/targets.
 
 ### Drain
 
