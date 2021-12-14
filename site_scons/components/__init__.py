@@ -323,10 +323,10 @@ def define_components(reqs):
     version = dist[1]
     if dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch='native'
+    elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
+        spdk_arch = 'ivybridge'
     else:
         spdk_arch = 'haswell'
-
-    spdk_arch = 'haswell'
 
     reqs.define('spdk',
                 retriever=retriever,
