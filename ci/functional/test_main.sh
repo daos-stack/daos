@@ -7,6 +7,8 @@ if [ -z "$TEST_TAG" ]; then
     exit 1
 fi
 
+provider="$(echo "$COMMIT_MESSAGE" | sed -ne '/^Provider: */s/.*: *//p')"
+
 test_tag="$TEST_TAG"
 
 tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
@@ -37,11 +39,12 @@ rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 if $TEST_RPMS; then
     # shellcheck disable=SC2029
-    ssh -i ci_key -l jenkins "${first_node}" \
-      "TEST_TAG=\"$test_tag\"                        \
-       TNODES=\"$tnodes\"                            \
-       FTEST_ARG=\"$FTEST_ARG\"                      \
-       WITH_VALGRIND=\"$WITH_VALGRIND\"              \
+    ssh -i ci_key -l jenkins "${first_node}"   \
+      "TEST_TAG=\"$test_tag\"                  \
+       TNODES=\"$tnodes\"                      \
+       FTEST_ARG=\"$FTEST_ARG\"                \
+       WITH_VALGRIND=\"$WITH_VALGRIND\"        \
+       CRT_PHY_ADDR_STR=\"$provider\"          \
        $(cat ci/functional/test_main_node.sh)"
 else
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
