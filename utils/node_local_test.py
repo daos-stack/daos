@@ -494,6 +494,7 @@ class DaosServer():
             self.dfuse_cores = None
 
     def __del__(self):
+        print('Stopping DAOS server object')
         if self._agent:
             self._stop_agent()
         try:
@@ -504,7 +505,9 @@ class DaosServer():
         server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
         if os.path.exists(server_file):
             os.unlink(server_file)
+        print(self.server_logs)
         for log in self.server_logs:
+            print('log is {}'.format(log.name))
             if os.path.exists(log.name):
                 log_test(self.conf, log.name)
         try:
@@ -811,6 +814,7 @@ class DaosServer():
         print(self.server_logs)
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
+            self.server_logs.remove(log)
         self.running = False
         return ret
 
