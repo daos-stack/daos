@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -38,7 +39,7 @@ func defCmpOpts() []cmp.Option {
 	return []cmp.Option{
 		// ignore these fields on most tests, as they are intentionally not stable
 		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
-		cmp.AllowUnexported(common.PCIAddressSet{}),
+		cmp.AllowUnexported(hardware.PCIAddressSet{}),
 	}
 }
 
@@ -138,7 +139,7 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			reqAddrs, err := common.NewPCIAddressSet(tc.reqAddrList...)
+			reqAddrs, err := hardware.NewPCIAddressSet(tc.reqAddrList...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -213,10 +214,10 @@ func TestBackend_Format(t *testing.T) {
 	testDir, clean := common.CreateTestDir(t)
 	defer clean()
 
-	addrList := func(t *testing.T, in ...string) *common.PCIAddressSet {
+	addrList := func(t *testing.T, in ...string) *hardware.PCIAddressSet {
 		t.Helper()
 
-		addrs, err := common.NewPCIAddressSet(in...)
+		addrs, err := hardware.NewPCIAddressSet(in...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -868,8 +869,8 @@ func TestBackend_Prepare(t *testing.T) {
 		username              = "bob"
 	)
 
-	mockAddrList := func(t *testing.T, idxs ...int) *common.PCIAddressSet {
-		var addrs common.PCIAddressSet
+	mockAddrList := func(t *testing.T, idxs ...int) *hardware.PCIAddressSet {
+		var addrs hardware.PCIAddressSet
 
 		for _, idx := range idxs {
 			if err := addrs.AddStrings(common.MockPCIAddr(int32(idx))); err != nil {
@@ -889,7 +890,7 @@ func TestBackend_Prepare(t *testing.T) {
 		mbc            *MockBackendConfig
 		userLookupRet  *user.User
 		userLookupErr  error
-		vmdDetectRet   *common.PCIAddressSet
+		vmdDetectRet   *hardware.PCIAddressSet
 		vmdDetectErr   error
 		hpCleanErr     error
 		expScriptCalls *[]scriptCall
@@ -1247,7 +1248,7 @@ func TestBackend_Prepare(t *testing.T) {
 			mockUserLookup := func(string) (*user.User, error) {
 				return tc.userLookupRet, tc.userLookupErr
 			}
-			mockVmdDetect := func() (*common.PCIAddressSet, error) {
+			mockVmdDetect := func() (*hardware.PCIAddressSet, error) {
 				return tc.vmdDetectRet, tc.vmdDetectErr
 			}
 			mockHpClean := func(string, string, string) error {

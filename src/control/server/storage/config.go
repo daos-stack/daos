@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 const (
@@ -337,7 +338,7 @@ func (bc *BdevConfig) Validate(class Class) error {
 			return err
 		}
 	case ClassNvme:
-		if _, err := common.NewPCIAddressSet(bc.DeviceList...); err != nil {
+		if _, err := hardware.NewPCIAddressSet(bc.DeviceList...); err != nil {
 			return errors.Wrapf(err, "parse pci addresses %v", bc.DeviceList)
 		}
 	default:
