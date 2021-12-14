@@ -40,7 +40,7 @@ $ dmg pool create --help
 [create command options]
       -g, --group=      DAOS pool to be owned by given group, format name@domain
       -u, --user=       DAOS pool to be owned by given user, format name@domain
-      -p, --label=      Unique label for pool
+      -p, --label=      Unique label for pool (deprecated, use positional argument)
       -P, --properties= Pool properties to be set
       -a, --acl-file=   Access Control List file path for DAOS pool
       -z, --size=       Total size of DAOS pool (auto)
@@ -55,7 +55,7 @@ $ dmg pool create --help
 The typical output of this command is as follows:
 
 ```bash
-$ dmg pool create --size 50GB --label tank
+$ dmg pool create --size 50GB tank
 Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 Pool created with 6.00% SCM/NVMe ratio
 -----------------------------------------
@@ -218,7 +218,7 @@ Rebuild space ratio (space_rb)  0%
 All properties can be specified when creating the pool.
 
 ```bash
-$ dmg pool create --size 50GB --label tank2 --properties reclaim:disabled
+$ dmg pool create --size 50GB --properties reclaim:disabled tank2
 Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 Pool created with 100.00% SCM/NVMe ratio
 -----------------------------------------
@@ -469,7 +469,7 @@ data would not be integrated into a rebuild and would be lost.
 To drain a target from a pool:
 
 ```bash
-$ dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+$ dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} $DAOS_POOL
 ```
 
 The pool target drain command accepts 2 parameters:
@@ -486,7 +486,7 @@ The operator can either reintegrate specific targets for an engine rank by
 supplying a target idx list, or reintegrate an entire rank by omitting the list.
 
 ```
-$ dmg pool reintegrate --pool=${puuid} --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
+$ dmg pool reintegrate $DAOS_POOL --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
 ```
 
 The pool reintegrate command accepts 3 parameters:
@@ -509,7 +509,7 @@ Target (rank 5 idx 1) is down.
 These should be the same values used when reintegrating the targets.
 
 ```
-$ dmg pool reintegrate --rank=5 --target-idx=0,1 <pool_label>
+$ dmg pool reintegrate $DAOS_POOL --rank=5 --target-idx=0,1 
 ```
 
 !!! warning
@@ -536,7 +536,7 @@ This will automatically trigger a server rebalance operation where objects
 within the extended pool will be rebalanced across the new storage.
 
 ```
-$ dmg pool extend --ranks=${rank1},${rank2}... <pool_label>
+$ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
 ```
 
 The pool extend command accepts one required parameter which is a comma
