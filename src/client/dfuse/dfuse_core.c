@@ -398,9 +398,8 @@ d_hash_table_ops_t cont_hops = {
  * Return code is a system errno.
  */
 int
-dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
-			const char *label,
-			struct dfuse_pool **_dfp)
+dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char *label,
+			    struct dfuse_pool **_dfp)
 {
 	struct dfuse_pool	*dfp;
 	daos_pool_info_t        p_info = {};
@@ -415,17 +414,13 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
-	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group,
-			       DAOS_PC_RW, &dfp->dfp_poh, &p_info, NULL);
+	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group, DAOS_PC_RO, &dfp->dfp_poh,
+			       &p_info, NULL);
 	if (rc) {
 		if (rc == -DER_NO_PERM)
-			DFUSE_TRA_INFO(dfp,
-				"daos_pool_connect() failed, "
-				DF_RC, DP_RC(rc));
+			DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
 		else
-			DFUSE_TRA_ERROR(dfp,
-					"daos_pool_connect() failed, "
-					DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	}
 
@@ -479,8 +474,7 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 	d_list_t		*rlink;
 	int			rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_pool_table,
-				pool, sizeof(*pool));
+	rlink = d_hash_rec_find(&fs_handle->dpi_pool_table, pool, sizeof(*pool));
 	if (rlink) {
 		*_dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 		return 0;
@@ -494,27 +488,21 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
-	DFUSE_TRA_DEBUG(dfp, "New pool "DF_UUIDF,
-			DP_UUID(pool));
+	DFUSE_TRA_DEBUG(dfp, "New pool "DF_UUIDF, DP_UUID(pool));
 
 	if (uuid_is_null(*pool) == 0) {
 		char uuid_str[37];
 
 		uuid_copy(dfp->dfp_pool, *pool);
 		uuid_unparse(dfp->dfp_pool, uuid_str);
-		rc = daos_pool_connect(uuid_str,
-				       fs_handle->dpi_info->di_group,
-				       DAOS_PC_RW,
+		rc = daos_pool_connect(uuid_str, fs_handle->dpi_info->di_group, DAOS_PC_RO,
 				       &dfp->dfp_poh, NULL, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM)
-				DFUSE_TRA_INFO(dfp,
-					       "daos_pool_connect() failed, "
-					       DF_RC, DP_RC(rc));
+				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, "DF_RC, DP_RC(rc));
 			else
-				DFUSE_TRA_ERROR(dfp,
-						"daos_pool_connect() failed, "
-						DF_RC, DP_RC(rc));
+				DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed, "DF_RC,
+						DP_RC(rc));
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 	}
@@ -586,79 +574,92 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 static int
 dfuse_cont_get_cache(struct dfuse_cont *dfc)
 {
-	size_t		size;
+	size_t		sizes[ATTR_COUNT];
 	char		*buff;
+	char		*buff_addrs[ATTR_COUNT];
 	int		rc;
 	int		i;
 	unsigned int	value;
 	bool		have_dentry = false;
 	bool		have_dentry_dir = false;
-	bool		have_attr = false;
 	bool		have_dio = false;
 	bool		have_cache_off = false;
 
-	D_ALLOC(buff, ATTR_VALUE_LEN);
+	D_ALLOC(buff, ATTR_VALUE_LEN * ATTR_COUNT);
+
 	if (buff == NULL)
 		return ENOMEM;
 
 	for (i = 0; i < ATTR_COUNT; i++) {
-		size = ATTR_VALUE_LEN - 1;
+		sizes[i] = ATTR_VALUE_LEN - 1;
+		buff_addrs[i] = buff + i * ATTR_VALUE_LEN;
+	}
 
-		rc = daos_cont_get_attr(dfc->dfs_coh, 1, &cont_attr_names[i],
-					(void * const*)&buff,
-					&size, NULL);
-		if (rc == -DER_NONEXIST) {
+	rc = daos_cont_get_attr(dfc->dfs_coh, ATTR_COUNT, cont_attr_names,
+				(void * const*)buff_addrs, sizes, NULL);
+
+	if (rc == -DER_NONEXIST) {
+		/* none of the cache related attrs are present */
+		D_GOTO(out, rc = ENODATA);
+	} else if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_WARNING(dfc, "Failed to load values for all cache "
+				  "related attrs" DF_RC, DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	for (i = 0; i < ATTR_COUNT; i++) {
+		if (sizes[i] == 0) {
+			/* attr is not present */
 			continue;
-		} else if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_WARNING(dfc, "Failed to load value for '%s' "
-					  DF_RC, cont_attr_names[i], DP_RC(rc));
-			D_GOTO(out, rc = daos_der2errno(rc));
 		}
-		have_attr = true;
 
 		/* Ensure the character after the fetched string is zero in case
 		 * of non-null terminated strings.  size always refers to the
 		 * number of non-null characters in this case, regardless of if
 		 * the attribute is null terminated or not.
 		 */
-		if (buff[size - 1] == '\0')
-			size--;
+		if (*(buff_addrs[i] + sizes[i] - 1) == '\0')
+			sizes[i]--;
 		else
-			buff[size] = '\0';
+			*(buff_addrs[i] + sizes[i]) = '\0';
 
 		if (i == ATTR_DATA_CACHE_INDEX) {
-			if (strncmp(buff, "on", size) == 0) {
+			if (strncmp(buff_addrs[i], "on", sizes[i]) == 0) {
 				dfc->dfc_data_caching = true;
-			} else if (strncmp(buff, "off", size) == 0) {
+			} else if (strncmp(buff_addrs[i], "off",
+				   sizes[i]) == 0) {
 				have_cache_off = true;
 				dfc->dfc_data_caching = false;
 			} else {
 				DFUSE_TRA_WARNING(dfc,
 						  "Failed to parse '%s' for '%s'",
-						  buff, cont_attr_names[i]);
+						  buff_addrs[i],
+						  cont_attr_names[i]);
 				dfc->dfc_data_caching = false;
 			}
 			continue;
 		}
 		if (i == ATTR_DIRECT_IO_DISABLE_INDEX) {
-			if (strncmp(buff, "on", size) == 0) {
+			if (strncmp(buff_addrs[i], "on", sizes[i]) == 0) {
 				have_dio = true;
 				dfc->dfc_direct_io_disable = true;
-			} else if (strncmp(buff, "off", size) == 0) {
+			} else if (strncmp(buff_addrs[i], "off",
+				   sizes[i]) == 0) {
 				dfc->dfc_direct_io_disable = false;
 			} else {
 				DFUSE_TRA_WARNING(dfc,
 						  "Failed to parse '%s' for '%s'",
-						  buff, cont_attr_names[i]);
+						  buff_addrs[i],
+						  cont_attr_names[i]);
 				dfc->dfc_data_caching = false;
 			}
 			continue;
 		}
 
-		rc = dfuse_parse_time(buff, size, &value);
+		rc = dfuse_parse_time(buff_addrs[i], sizes[i], &value);
 		if (rc != 0) {
 			DFUSE_TRA_WARNING(dfc, "Failed to parse '%s' for '%s'",
-					  buff, cont_attr_names[i]);
+					  buff_addrs[i], cont_attr_names[i]);
 			continue;
 		}
 		DFUSE_TRA_INFO(dfc, "setting '%s' is %u",
@@ -675,6 +676,7 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 			dfc->dfc_ndentry_timeout = value;
 		}
 	}
+
 	/* Check if dfuse-direct-io-disable is set to on but
 	 * dfuse-data-cache is set to off.  This combination
 	 * does not make sense, so warn in this case and set
@@ -690,8 +692,6 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 	if (have_dentry && !have_dentry_dir)
 		dfc->dfc_dentry_dir_timeout = dfc->dfc_dentry_timeout;
 	rc = 0;
-	if (!have_attr)
-		rc = ENODATA;
 out:
 	D_FREE(buff);
 	return rc;
@@ -726,14 +726,13 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
  * Only used for command line labels, not for paths in dfuse.
  */
 int
-dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
-			struct dfuse_pool *dfp,
-			const char *label,
-			struct dfuse_cont **_dfc)
+dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
+			 const char *label, struct dfuse_cont **_dfc)
 {
-	struct dfuse_cont *dfc;
-	daos_cont_info_t c_info = {};
-	int rc;
+	struct dfuse_cont	*dfc;
+	daos_cont_info_t	c_info = {};
+	int			dfs_flags = O_RDWR;
+	int			rc;
 
 	D_ALLOC_PTR(dfc);
 	if (dfc == NULL)
@@ -741,27 +740,24 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
 
 	DFUSE_TRA_UP(dfc, dfp, "dfc");
 
-	rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh,
-			    &c_info, NULL);
+	rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh, &c_info, NULL);
+	if (rc == -DER_NO_PERM) {
+		dfs_flags = O_RDONLY;
+		rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh, &c_info, NULL);
+	}
 	if (rc == -DER_NONEXIST) {
-		DFUSE_TRA_INFO(dfc,
-			"daos_cont_open() failed: "
-			DF_RC, DP_RC(rc));
+		DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: "	DF_RC, DP_RC(rc));
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	} else if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(dfc,
-				"daos_cont_open() failed: "
-				DF_RC, DP_RC(rc));
+		DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	}
 
 	uuid_copy(dfc->dfs_cont, c_info.ci_uuid);
 
-	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR, &dfc->dfs_ns);
+	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfc,
-				"dfs_mount() failed: (%s)",
-				strerror(rc));
+		DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: (%s)", strerror(rc));
 		D_GOTO(err_close, rc);
 	}
 
@@ -866,25 +862,26 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		dfc->dfc_ndentry_timeout = 5;
 
 	} else if (*_dfc == NULL) {
-		char	str[37];
+		char str[37];
+		int  dfs_flags = O_RDWR;
 
 		dfc->dfs_ops = &dfuse_dfs_ops;
 		uuid_copy(dfc->dfs_cont, *cont);
 		uuid_unparse(dfc->dfs_cont, str);
-		rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW,
-				    &dfc->dfs_coh, NULL, NULL);
+		rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW, &dfc->dfs_coh, NULL, NULL);
+		if (rc == -DER_NO_PERM) {
+			dfs_flags = O_RDONLY;
+			rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RO, &dfc->dfs_coh, NULL,
+					    NULL);
+		}
 		if (rc == -DER_NONEXIST) {
-			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: "DF_RC,
-				       DP_RC(rc));
+			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		} else if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: "
-					DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
-
-		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR,
-			       &dfc->dfs_ns);
+		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 		if (rc) {
 			DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: %d (%s)", rc, strerror(rc));
 			D_GOTO(err_close, rc);
@@ -893,19 +890,15 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		if (fs_handle->dpi_info->di_caching) {
 			rc = dfuse_cont_get_cache(dfc);
 			if (rc == ENODATA) {
-				/* If there is no container specific
-				 * attributes then use defaults
-				 */
-				DFUSE_TRA_INFO(dfc,
-					"Using default caching values");
+				/* If there are no container attributes then use defaults */
+				DFUSE_TRA_INFO(dfc, "Using default caching values");
 				dfuse_set_default_cont_cache_values(dfc);
 				rc = 0;
 			} else if (rc != 0) {
 				D_GOTO(err_umount, rc);
 			}
 		} else {
-			DFUSE_TRA_INFO(dfc,
-				"Caching disabled");
+			DFUSE_TRA_INFO(dfc, "Caching disabled");
 		}
 	} else {
 		/* This is either a container where a label is set on the

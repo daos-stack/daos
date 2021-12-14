@@ -34,7 +34,7 @@ oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL);
+	oca = daos_oclass_attr_find(oid, NULL, NULL);
 	if (attr != NULL)
 		*attr = oca;
 	if (oca == NULL)

@@ -165,9 +165,6 @@ def set_test_environment(args):
         # Get the default provider if CRT_PHY_ADDR_STR is not set
         set_provider_environment(os.environ["DAOS_TEST_FABRIC_IFACE"], args)
 
-        # Update other env definitions
-        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-
         # Set the default location for daos log files written during testing
         # if not already defined.
         if "DAOS_TEST_LOG_DIR" not in os.environ:
@@ -253,9 +250,12 @@ def set_interface_environment():
     # Update env definitions
     os.environ["CRT_CTX_SHARE_ADDR"] = "0"
     os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
-    print("Using {} as the default interface".format(interface))
+    print("Testing with {} as the default interface".format(interface))
     for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
-        print("Using {}={}".format(name, os.environ.get(name)))
+        try:
+            print("Testing with {}={}".format(name, os.environ[name]))
+        except KeyError:
+            print("Testing with {} unset".format(name))
 
 
 def set_provider_environment(interface, args):
@@ -267,19 +267,16 @@ def set_provider_environment(interface, args):
     Args:
         interface (str): the current interface being used.
     """
-    # Temporary code to only enable verbs in certain stages
-    tags = [name for tag in args.tags for name in tag.split(",")]
-
     # Use the detected provider if one is not set
-    name = "CRT_PHY_ADDR_STR"
-    detected_provider = "ofi+sockets"
-    if os.environ.get(name) is None:
+    provider = os.environ.get("CRT_PHY_ADDR_STR")
+    if provider is None:
+        provider = "ofi+sockets"
         # Confirm the interface is a Mellanox device - verbs did not work with OPA devices.
         command = "sudo mst status -v"
         task = get_remote_output(list(args.test_servers), command)
         if check_remote_output(task, command):
             # Detect the provider for the specified interface
-            print("Detecting provider for {} - {} not set".format(interface, name))
+            print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
             command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
             task = get_remote_output(list(args.test_servers), command)
             if check_remote_output(task, command):
@@ -290,22 +287,21 @@ def set_provider_environment(interface, args):
                     sys.exit(1)
                 # Select the provider - currently use verbs or sockets
                 for line in output_data[0][0]:
-                    provider = line.decode("utf-8").replace(":", "")
+                    provider_name = line.decode("utf-8").replace(":", "")
                     # Temporary code to only enable verbs on HW Large stages
-                    if "verbs" in provider and "hw" in tags and (
-                            "large" in tags or "small" in tags):
-                        detected_provider = "ofi+verbs;ofi_rxm"
+                    if "verbs" in provider_name:
+                        provider = "ofi+verbs;ofi_rxm"
                         break
-                    if "sockets" in provider:
-                        detected_provider = "ofi+sockets"
+                    if "sockets" in provider_name:
+                        provider = "ofi+sockets"
                         break
         else:
             print("No Infiniband devices found - using sockets")
-        print("  Found {} provider for {}".format(detected_provider, interface))
+        print("  Found {} provider for {}".format(provider, interface))
 
     # Update env definitions
-    os.environ[name] = detected_provider
-    print("Using {}={}".format(name, os.environ[name]))
+    os.environ["CRT_PHY_ADDR_STR"] = provider
+    print("Testing with CRT_PHY_ADDR_STR={}".format(os.environ["CRT_PHY_ADDR_STR"]))
 
 
 def set_python_environment():
@@ -332,7 +328,7 @@ def set_python_environment():
             if required_path not in defined_python_paths:
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
-    print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
+    print("Testing with PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
 
 
 def run_command(cmd):

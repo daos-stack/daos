@@ -27,9 +27,7 @@
 struct vea_free_extent {
 	uint64_t	vfe_blk_off;	/* Block offset of the extent */
 	uint32_t	vfe_blk_cnt;	/* Total blocks of the extent */
-	uint32_t	vfe_flags;	/* Padding */
-	/* Monotonic timestamp for tracking last use activity */
-	uint64_t	vfe_age;
+	uint32_t	vfe_age;	/* Monotonic timestamp */
 };
 
 /* Maximum extents a non-contiguous allocation can have */

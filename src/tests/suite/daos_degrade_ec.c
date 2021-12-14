@@ -619,6 +619,85 @@ degrade_ec_update(void **state)
 	free(data);
 }
 
+static void
+degrade_ec_agg_punch(void **state, int shard)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+	char		*data;
+	char		*verify_data;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	data = (char *)malloc(EC_CELL_SIZE);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(EC_CELL_SIZE);
+	assert_true(verify_data != NULL);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 12; i++) {
+		daos_recx_t recx;
+		char	    dkey[32];
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = EC_CELL_SIZE;
+		recx.rx_idx = i * EC_CELL_SIZE;
+		memset(data, 'a' + i, EC_CELL_SIZE);
+		sprintf(dkey, "dkey_%d", i);
+		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, EC_CELL_SIZE, &req);
+		if (i == 2)
+			punch_dkey(dkey, DAOS_TX_NONE, &req);
+		if (i == 3)
+			punch_akey(dkey, "a_key", DAOS_TX_NONE, &req);
+		if (i == 4) {
+			recx.rx_nr = EC_CELL_SIZE;
+			recx.rx_idx = i * 1048576;
+			punch_recxs(dkey, "a_key", &recx, 1, DAOS_TX_NONE, &req);
+		}
+	}
+
+	/* Trigger aggregation */
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+				       8 * EC_CELL_SIZE, DAOS_FORCE_EC_AGG);
+
+	rank = get_rank_by_oid_shard(arg, oid, shard);
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+
+	for (i = 0; i < 12; i++) {
+		char	    dkey[32];
+		daos_off_t offset = i * EC_CELL_SIZE;
+
+		sprintf(dkey, "dkey_%d", i);
+		memset(data, 0, EC_CELL_SIZE);
+		memset(verify_data, 'a' + i, EC_CELL_SIZE);
+		if (i != 2 && i != 3 && i != 4)
+			ec_verify_parity_data(&req, dkey, "a_key", offset,
+					      (daos_size_t)EC_CELL_SIZE, verify_data,
+					      DAOS_TX_NONE, true);
+	}
+
+	free(data);
+	free(verify_data);
+}
+
+static void
+degrade_ec_agg_punch_fail_parity(void **state)
+{
+	degrade_ec_agg_punch(state, 5);
+}
+
+static void
+degrade_ec_agg_punch_fail_data(void **state)
+{
+	degrade_ec_agg_punch(state, 1);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest degrade_tests[] = {
 	{"DEGRADE0: degrade partial update with data tgt fail",
@@ -694,6 +773,10 @@ static const struct CMUnitTest degrade_tests[] = {
 	 degrade_ec_agg, degrade_sub_setup, test_teardown},
 	{"DEGRADE26: degrade ec update",
 	 degrade_ec_update, degrade_sub_setup, test_teardown},
+	{"DEGRADE27: degrade ec update punch aggregation parity fail",
+	 degrade_ec_agg_punch_fail_parity, degrade_sub_setup, test_teardown},
+	{"DEGRADE28: degrade ec update punch aggregation data fail",
+	 degrade_ec_agg_punch_fail_data, degrade_sub_setup, test_teardown},
 };
 
 int

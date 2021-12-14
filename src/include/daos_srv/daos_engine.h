@@ -344,6 +344,21 @@ uint64_t sched_cur_seq(void);
  */
 int sched_exec_time(uint64_t *msecs, const char *ult_name);
 
+/**
+ * Create an ULT on the caller xstream and return the associated sched_request.
+ * Caller is responsible for freeing the sched_request by sched_req_put().
+ *
+ * \param[in]	attr		sched request attributes
+ * \param[in]	func		ULT function
+ * \param[in]	arg		ULT argument
+ * \param[in]	stack_size	ULT stack size
+ *
+ * \retval			associated shed_request on success, NULL on error.
+ */
+struct sched_request *
+sched_create_ult(struct sched_req_attr *attr, void (*func)(void *), void *arg,
+		 size_t stack_size);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
@@ -836,10 +851,7 @@ ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 		  daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
 		  unsigned int migrate_opc);
 void
-ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
-
-void
-ds_migrate_abort(uuid_t pool_uuid, uint32_t ver);
+ds_migrate_stop(struct ds_pool *pool, uint32_t ver);
 
 /** Server init state (see server_init) */
 enum dss_init_state {

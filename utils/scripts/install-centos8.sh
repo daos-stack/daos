@@ -10,10 +10,11 @@
 
 set -e
 
-dnf -y upgrade
-dnf -y install \
+dnf upgrade
+dnf install \
     boost-python3-devel \
-    clang-analyzer \
+    clang \
+    clang-tools-extra \
     cmake \
     CUnit-devel \
     e2fsprogs \
@@ -27,6 +28,7 @@ dnf -y install \
     glibc-langpack-en \
     golang \
     graphviz \
+    help2man \
     hwloc-devel \
     ipmctl \
     java-1.8.0-openjdk \
@@ -54,7 +56,6 @@ dnf -y install \
     openssl-devel \
     patch \
     patchelf \
-    pciutils \
     python3-defusedxml \
     python3-devel \
     python3-distro \
@@ -65,7 +66,6 @@ dnf -y install \
     python3-scons \
     python3-yaml \
     sg3_utils \
-    sudo \
     valgrind-devel \
     yasm
 dnf clean all

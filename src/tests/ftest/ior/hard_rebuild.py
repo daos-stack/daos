@@ -38,7 +38,7 @@ class EcodIorHardRebuild(ErasureCodeIor):
         self.fail_on_warning = False
 
         # Kill last server rank
-        self.rank_to_kill = self.server_count - 1
+        self.rank_to_kill = [self.server_count - 1]
 
         # Run only object type which matches the server count and remove other objects
         tmp_obj_class = []
@@ -51,6 +51,9 @@ class EcodIorHardRebuild(ErasureCodeIor):
         # is in progress.
         self.ior_write_dataset()
 
+        # Do not change the stoneWallingStatusFile during read
+        self.ior_cmd.sw_wearout.update(None)
+
         # Disabled Online rebuild
         self.set_online_rebuild = False
         # Read IOR data and verify for different EC object kill single server while IOR Read phase
@@ -60,7 +63,7 @@ class EcodIorHardRebuild(ErasureCodeIor):
         # Enabled Online rebuild during Read phase
         self.set_online_rebuild = True
         # Kill another server rank
-        self.rank_to_kill = self.server_count - 2
+        self.rank_to_kill = [self.server_count - 2]
         # Read IOR data and verify for EC object again EC data was written with +2 parity so after
         # killing Two servers data should be intact and no data corruption observed.
         self.ior_read_dataset(parity=2)

@@ -47,8 +47,6 @@ bring-up DAOS servers and clients.
 ### required rpm
 
 	$ sudo yum install -y fio
-	or
-	$ sudo yum install -y daos-tests
 
 ### run fio
 

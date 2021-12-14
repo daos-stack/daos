@@ -21,7 +21,7 @@
 #include <daos/container.h>
 
 static void
-rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
+rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 		    int kill_parity_nr, int write_type)
 {
 	test_arg_t		*arg = *state;

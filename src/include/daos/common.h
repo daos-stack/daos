@@ -608,11 +608,19 @@ daos_crt_network_error(int err)
 	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
+/** See crt_quiet_error. */
+static inline bool
+daos_quiet_error(int err)
+{
+	return crt_quiet_error(err);
+}
+
 #define daos_rank_list_dup		d_rank_list_dup
 #define daos_rank_list_dup_sort_uniq	d_rank_list_dup_sort_uniq
 #define daos_rank_list_filter		d_rank_list_filter
 #define daos_rank_list_alloc		d_rank_list_alloc
 #define daos_rank_list_copy		d_rank_list_copy
+#define daos_rank_list_shuffle		d_rank_list_shuffle
 #define daos_rank_list_sort		d_rank_list_sort
 #define daos_rank_list_find		d_rank_list_find
 #define daos_rank_list_identical	d_rank_list_identical

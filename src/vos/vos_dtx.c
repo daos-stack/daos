@@ -138,10 +138,6 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 		goto out;
 	}
 
-	if (!dth->dth_force_refresh && !dth->dth_dist &&
-	    dth->dth_ver <= DAE_VER(dae) && DAE_MBS_FLAGS(dae) & DMF_SRDG_REP)
-		goto out;
-
 	s_try = true;
 
 	d_list_for_each_entry(dsp, &dth->dth_share_tbd_list, dsp_link) {
@@ -187,11 +183,9 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 out:
 	D_DEBUG(DB_IO,
-		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (force %s, "
-		"dist %s), lid=%d, flags %x/%x, may need %s retry.\n",
-		hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
-		dth, dth != NULL && dth->dth_force_refresh ? "yes" : "no",
-		dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
+		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (dist %s), lid=%d, flags %x/%x, "
+		"may need %s retry.\n", hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos,
+		dth, dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae),
 		DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), s_try ? "server" : "client");
 
 	return -DER_INPROGRESS;
@@ -265,7 +259,7 @@ dtx_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 static int
 dtx_act_ent_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		  d_iov_t *val_iov, struct btr_record *rec)
+		  d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct vos_dtx_act_ent	*dae = val_iov->iov_buf;
 
@@ -315,7 +309,7 @@ dtx_act_ent_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
-		   d_iov_t *key, d_iov_t *val)
+		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct vos_container	*cont = tins->ti_priv;
 	struct vos_dtx_act_ent	*dae_new = val->iov_buf;
@@ -348,7 +342,7 @@ static btr_ops_t dtx_active_btr_ops = {
 
 static int
 dtx_cmt_ent_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		  d_iov_t *val_iov, struct btr_record *rec)
+		  d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct vos_tls		*tls = vos_tls_get();
 	struct vos_container	*cont = tins->ti_priv;
@@ -398,7 +392,7 @@ dtx_cmt_ent_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
-		   d_iov_t *key, d_iov_t *val)
+		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct vos_dtx_cmt_ent	*dce_new = val->iov_buf;
 	struct vos_dtx_cmt_ent	*dce_old;
@@ -847,7 +841,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 	d_iov_set(&riov, dce, sizeof(*dce));
 	rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov);
+			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 	if (rc != 0)
 		goto out;
 
@@ -1018,7 +1012,7 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
 	d_iov_set(&riov, dae, sizeof(*dae));
 	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov);
+			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 	if (rc == 0) {
 		dae->dae_start_time = crt_hlc_get();
 		d_list_add_tail(&dae->dae_link, &cont->vc_dtx_act_list);
@@ -1193,9 +1187,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	    DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 		return ALB_UNAVAILABLE;
 
-	if (dth != NULL && !(DAE_FLAGS(dae) & DTE_LEADER) &&
-	    (!(DAE_MBS_FLAGS(dae) & DMF_SRDG_REP) ||
-	     dth->dth_force_refresh)) {
+	if (dth != NULL && !(DAE_FLAGS(dae) & DTE_LEADER)) {
 		struct dtx_share_peer	*dsp;
 
 		d_list_for_each_entry(dsp, &dth->dth_share_cmt_list, dsp_link) {
@@ -2514,7 +2506,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			d_iov_set(&riov, dae, sizeof(*dae));
 			rc = dbtree_upsert(cont->vc_dtx_active_hdl,
 					   BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
-					   &kiov, &riov);
+					   &kiov, &riov, NULL);
 			if (rc != 0) {
 				D_FREE(dae->dae_records);
 				dtx_evict_lid(cont, dae);
@@ -2583,7 +2575,7 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
 		d_iov_set(&riov, dce, sizeof(*dce));
 		rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-				   DAOS_INTENT_UPDATE, &kiov, &riov);
+				   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 		if (rc != 0) {
 			D_FREE(dce);
 			goto out;

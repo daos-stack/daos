@@ -52,6 +52,18 @@
 			## __VA_ARGS__);				\
 	} while (0)
 
+/**
+ * If \a cond is false, this is equivalent to an RPC_ERROR (i.e., \a mask is
+ * ignored). If \a cond is true, this is equivalent to an RPC_TRACE.
+ */
+#define RPC_CERROR(cond, mask, rpc, fmt, ...)				\
+	do {								\
+		if (cond)						\
+			RPC_TRACE(mask, rpc, fmt, ## __VA_ARGS__);	\
+		else							\
+			RPC_ERROR(rpc, fmt, ## __VA_ARGS__);		\
+	} while (0)
+
 #ifdef CRT_DEBUG_TRACE
 #	define CRT_ENTRY()					\
 		D_DEBUG(DB_TRACE, ">>>> Entered %s: %d\n", __func__, __LINE__)
