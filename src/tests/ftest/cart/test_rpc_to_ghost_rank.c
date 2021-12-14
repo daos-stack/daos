@@ -393,7 +393,7 @@ test_run(void)
 		 * queue right away
 		 */
 		test_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
-		sleep(5);
+		sleep(15);
 
 		check_in(test_g.t_local_group, 0);
 		test_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
