@@ -808,6 +808,7 @@ class DaosServer():
         self.conf.compress_file(self.agent_log.name)
         self.conf.compress_file(self.control_log.name)
 
+        print(self.server_logs)
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
         self.running = False
@@ -4042,12 +4043,14 @@ def run(wf, args):
         finally:
             if server.stop(wf_server) != 0:
                 fatal_errors.fail()
+        server = None
 
     if args.mode == 'all':
         server = DaosServer(conf)
         server.start()
         if server.stop(wf_server) != 0:
             fatal_errors.fail()
+        server = None
 
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do cont list, then
