@@ -10,14 +10,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/txtfmt"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 type (
+	// TopologyProvider is an interface for acquiring a system topology.
+	TopologyProvider interface {
+		GetTopology(context.Context) (*Topology, error)
+	}
+
 	// NodeMap maps a node ID to a node.
 	NodeMap map[uint]*NUMANode
 
@@ -43,38 +45,6 @@ func (t *Topology) AllDevices() map[string]*PCIDevice {
 		}
 	}
 	return devsByName
-}
-
-// PrintTopology prints the topology to the given writer.
-func PrintTopology(t *Topology, output io.Writer) error {
-	ew := txtfmt.NewErrWriter(output)
-
-	if t == nil {
-		fmt.Fprintf(ew, "No topology information available\n")
-	}
-
-	for _, numaNode := range t.NUMANodes {
-		coreSet := &system.RankSet{}
-		for _, core := range numaNode.Cores {
-			coreSet.Add(system.Rank(core.ID))
-		}
-
-		fmt.Fprintf(ew, "NUMA node %d\n", numaNode.ID)
-		fmt.Fprintf(ew, "  CPU cores: %s\n", coreSet)
-		fmt.Fprintf(ew, "  PCI devices: \n")
-		for addr, devs := range numaNode.PCIDevices {
-			fmt.Fprintf(ew, "    %s\n", &addr)
-			for _, dev := range devs {
-				fmt.Fprintf(ew, "      %s\n", dev)
-			}
-		}
-		fmt.Fprintf(ew, "  PCI buses: \n")
-		for _, bus := range numaNode.PCIBuses {
-			fmt.Fprintf(ew, "    %s\n", bus)
-		}
-	}
-
-	return ew.Err
 }
 
 type (
@@ -270,9 +240,4 @@ func (t DeviceType) String() string {
 	}
 
 	return "unknown device type"
-}
-
-// TopologyProvider is an interface for acquiring a system topology.
-type TopologyProvider interface {
-	GetTopology(context.Context) (*Topology, error)
 }
