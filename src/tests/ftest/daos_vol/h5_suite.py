@@ -34,7 +34,6 @@ class DaosVol(VolTestBase):
               h5daos_test_metadata_parallel
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,small
         :avocado: tags=hdf5,vol,volunit,volmpich
         :avocado: tags=DAOS_5610
         """
