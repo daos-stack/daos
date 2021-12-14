@@ -418,14 +418,11 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	daos_event_t	*evp;
 	int		rc, usage_ratio1, usage_ratio2;
 	int		eq_rc;
-	double		timeout;
-	double		step_adj;
-	double		t;
 	clock_t		last_query = start, current;
 
 	deadline_count = 1;
 
-	total_nr = ticks;
+	total_nr = deadline_limit / CLOCKS_PER_SEC;
 	setup_progress();
 
 	usage_ratio1 = pool_space_usage_ratio();
@@ -504,6 +501,7 @@ kv_put(daos_handle_t oh, daos_size_t size)
 			break;
 
 		if (last_query + CLOCKS_PER_SEC < current) {
+			increment_progress((current - start) / CLOCKS_PER_SEC);
 			last_query = current;
 			usage_ratio2 = pool_space_usage_ratio();
 			if (usage_ratio2 < 0) {
@@ -520,10 +518,6 @@ kv_put(daos_handle_t oh, daos_size_t size)
 
 		deadline_count++;
 
-		timeout = deadline_limit / CLOCKS_PER_SEC;
-		step_adj = ticks / timeout;
-		t = ((start + deadline_limit) - clock()) / CLOCKS_PER_SEC;
-		increment_progress((int)((timeout - t) * step_adj));
 	}
 
 	/** Wait for completion of all in-flight requests */

@@ -134,8 +134,8 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_init_prov = CRT_NA_OFI_SOCKETS;
 
-	srand(d_timeus_secdiff(0) + getpid());
-	start_rpcid = ((uint64_t)rand()) << 32;
+	d_srand(d_timeus_secdiff(0) + getpid());
+	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
 
@@ -377,7 +377,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		/* feed a seed for pseudo-random number generator */
 		gettimeofday(&now, NULL);
 		seed = (unsigned int)(now.tv_sec * 1000000 + now.tv_usec);
-		srandom(seed);
+		d_srand(seed);
 
 		crt_gdata.cg_server = server;
 		crt_gdata.cg_auto_swim_disable =
@@ -795,6 +795,10 @@ int crt_na_ofi_config_init(int provider)
 	if (domain == NULL) {
 		D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n",
 			interface);
+		if (provider == CRT_NA_OFI_VERBS_RXM ||
+		    provider == CRT_NA_OFI_CXI)
+			D_WARN("Domain and interface name expected to be different "
+			       "for verbs/cxi, it might fail without specifying OFI_DOMAIN\n");
 		domain = interface;
 	}
 
