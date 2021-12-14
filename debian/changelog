@@ -1,3 +1,9 @@
+daos (2.0.0-2) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Version bump for 2.0.0 RC2
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 14 Dec 2021 15:03:00 -0100
+
 daos (2.0.0-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Version bump to 2.0.0
