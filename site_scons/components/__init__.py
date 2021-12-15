@@ -320,7 +320,6 @@ def define_components(reqs):
     # https://docs.microsoft.com/en-us/azure/virtual-machines/dv2-dsv2-series#dsv2-series says
     # that GHA can schedule on any of Skylake, Broadwell or Haswell CPUs.
     dist = distro.linux_distribution()
-    version = dist[1]
     if dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch='native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
