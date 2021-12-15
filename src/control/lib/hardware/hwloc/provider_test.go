@@ -14,10 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/google/go-cmp/cmp"
 )
 
 func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
@@ -427,9 +428,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			//			log.Debugf("topo: %s", result)
-			//			t.Fatal()
-			//
+
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
