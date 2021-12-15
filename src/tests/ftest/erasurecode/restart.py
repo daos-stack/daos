@@ -6,7 +6,6 @@
 """
 import time
 from ec_utils import ErasureCodeIor, check_aggregation_status
-from apricot import skipForTicket
 
 class EcodServerRestart(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -64,7 +63,6 @@ class EcodServerRestart(ErasureCodeIor):
         self.read_set_from_beginning = False
         self.ior_read_dataset(storage='SCM', operation="Auto_Read", percent=self.percent)
 
-    @skipForTicket("DAOS-9051")
     def test_ec_restart_before_agg(self):
         """Jira ID: DAOS-7337.
 
@@ -81,7 +79,6 @@ class EcodServerRestart(ErasureCodeIor):
         """
         self.execution(agg_check="Before")
 
-    @skipForTicket("DAOS-9051")
     def test_ec_restart_after_agg(self):
         """Jira ID: DAOS-7337.
 
@@ -98,7 +95,6 @@ class EcodServerRestart(ErasureCodeIor):
         """
         self.execution(agg_check="After")
 
-    @skipForTicket("DAOS-9051")
     def test_ec_restart_during_agg(self):
         """Jira ID: DAOS-7337.
 
