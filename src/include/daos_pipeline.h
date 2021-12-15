@@ -55,7 +55,7 @@ typedef struct {
 	 *   -- constant:
 	 *          DAOS_FILTER_CONST:	Filter part object is a constant
 	 */
-	char		*part_type;
+	d_iov_t		part_type;
 	/**
 	 * Type of data. Only relevant for keys and constant filter part type
 	 * objects:
@@ -68,7 +68,7 @@ typedef struct {
 	 *          DAOS_FILTER_TYPE_REAL4
 	 *          DAOS_FILTER_TYPE_REAL8
 	 */
-	char		*data_type;
+	d_iov_t		data_type;
 	/**
 	 * Number of operands for this filter part object. For example, for '=='
 	 * we have 2 operands.
@@ -121,7 +121,7 @@ typedef struct {
 	 *            (condition) -|
 	 *                          -> (aggregation2)
 	 */
-	char			*filter_type;
+	d_iov_t			filter_type;
 	/**
 	 * Number of filter parts inside this pipeline filter
 	 */

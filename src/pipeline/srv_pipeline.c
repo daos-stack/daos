@@ -17,14 +17,28 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	struct pipeline_run_in		*pri;
 	struct pipeline_run_out		*pro;
 	int				rc;
+	daos_pipeline_t			pipeline;
 
 	pri	= crt_req_get(rpc);
 	D_ASSERT(pri != NULL);
 	pro	= crt_reply_get(rpc);
 	D_ASSERT(pro != NULL);
 
-	pro->pro_pong	= pri->pri_ping;
-	//pro->pro_epoch
+	pipeline = pri->pri_pipe;
+
+	fprintf(stdout, "(ds_pipeline_run_handler) pipeline.version = %lu\n", pipeline.version);
+	fflush(stdout);
+	fprintf(stdout, "(ds_pipeline_run_handler) pipeline.num_filters = %u\n", pipeline.num_filters);
+	fflush(stdout);
+	fprintf(stdout, "(ds_pipeline_run_handler) pipeline.filters = %p\n", pipeline.filters);
+	fflush(stdout);
+	fprintf(stdout, "(ds_pipeline_run_handler) pipeline.num_aggr_filters = %u\n", pipeline.num_aggr_filters);
+	fflush(stdout);
+	fprintf(stdout, "(ds_pipeline_run_handler) pipeline.aggr_filters = %p\n", pipeline.aggr_filters);
+	fflush(stdout);
+
+	pro->pro_pong	= 0 + pri->pri_target;
+	pro->pro_ret	= 0;
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)

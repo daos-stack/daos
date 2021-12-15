@@ -30,7 +30,9 @@ daos_filter_init(daos_filter_t *filter)
 int
 daos_pipeline_add(daos_pipeline_t *pipeline, daos_filter_t *filter)
 {
-	if (!strcmp(filter->filter_type, "DAOS_FILTER_CONDITION"))
+	if (!strncmp((char *) filter->filter_type.iov_buf,
+		     "DAOS_FILTER_CONDITION",
+		     filter->filter_type.iov_len))
 	{
 		pipeline->filters = (daos_filter_t **)
 			realloc
@@ -44,7 +46,9 @@ daos_pipeline_add(daos_pipeline_t *pipeline, daos_filter_t *filter)
 		pipeline->filters[pipeline->num_filters] = filter;
 		pipeline->num_filters                   += 1;
 	}
-	else if (!strcmp(filter->filter_type, "DAOS_FILTER_AGGREGATION"))
+	else if (!strncmp((char *) filter->filter_type.iov_buf,
+			  "DAOS_FILTER_AGGREGATION",
+			  filter->filter_type.iov_len))
 	{
 		pipeline->aggr_filters = (daos_filter_t **)
 			realloc

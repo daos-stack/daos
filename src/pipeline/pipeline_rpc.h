@@ -8,6 +8,8 @@
 #define __DAOS_PIPE_RPC_H__
 
 #include <daos/rpc.h>
+#include <daos/pipeline.h>
+#include <daos/object.h>
 #include "pipeline_internal.h"
 
 #define DAOS_PIPELINE_VERSION 1
@@ -41,11 +43,19 @@ obj_opc_to_str(crt_opcode_t opc)
 }
 
 #define DAOS_ISEQ_PIPELINE_RUN	/* input fields */			\
-	((uint64_t)		(pri_ping)		CRT_VAR)	\
+	((daos_pipeline_t)	(pri_pipe)		CRT_VAR)	\
+	((daos_unit_oid_t)	(pri_oid)		CRT_VAR)	\
+	((uuid_t)		(pri_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(pri_co_hdl)		CRT_VAR)	\
+	((uuid_t)		(pri_co_uuid)		CRT_VAR)	\
 	((uint64_t)		(pri_epoch)		CRT_VAR)	\
-	((uint64_t)		(pri_epoch_first)	CRT_VAR)
+	((uint64_t)		(pri_epoch_first)	CRT_VAR)	\
+	((uint32_t)		(pri_target)		CRT_VAR)	\
+	((uint32_t)		(pri_pad32_1)		CRT_VAR)
 
 #define DAOS_OSEQ_PIPELINE_RUN	/*output fields */			\
+	((int32_t)		(pro_ret)		CRT_VAR)	\
+	((uint32_t)		(pro_pad32_1)		CRT_VAR)	\
 	((uint64_t)		(pro_pong)		CRT_VAR)	\
 	((uint64_t)		(pro_epoch)		CRT_VAR)
 
