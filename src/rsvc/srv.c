@@ -1044,7 +1044,7 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size)
 				true /* create */, false /* bootstrap */, size);
 
 	/* TODO: Attempt to only add replicas that were successfully started */
-	if (rc != 0)
+	if (rc != 0 && rc != -DER_ALREADY)
 		goto out_stop;
 	rc = rdb_add_replicas(svc->s_db, ranks);
 out_stop:
