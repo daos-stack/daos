@@ -4,11 +4,11 @@
 # 'recipe' for building a base RHEL variant docker image of a DAOS node
 #
 # This Dockerfile accept the following input build arguments:
-# - RHEL_BASE_IMAGE     Base docker image to use (default centos)
-# - RHEL_BASE_VERSION   Version of the base docker image to use (default 8)
+# - RHEL_BASE_IMAGE     Base docker image to use (default "rockylinux/rockylinux")
+# - RHEL_BASE_VERSION   Version of the base docker image to use (default "8.4")
 # - BUST_CACHE          Manage docker building cache (default undefined).  To invalidate the cache,
 #                       a random value such as the date of day shall be given.
-# - DAOS_AUTH           Enable DAOS authentication when set to "yes" (default "no")
+# - DAOS_AUTH           Enable DAOS authentication when set to "yes" (default "yes")
 # - DAOS_REPOS          Space separated list of repos needed to install DAOS (default
 #                       "https://packages.daos.io/v2.0")
 # - DAOS_GPG_KEYS       Space separated list of GPG keys associated with DAOS repos (default
@@ -17,8 +17,8 @@
 #                       (default "")
 
 # Pull base image
-ARG	RHEL_BASE_IMAGE=centos
-ARG	RHEL_BASE_VERSION=8
+ARG	RHEL_BASE_IMAGE=rockylinux/rockylinux
+ARG	RHEL_BASE_VERSION=8.4
 FROM	$RHEL_BASE_IMAGE:$RHEL_BASE_VERSION
 LABEL	maintainer="daos@daos.groups.io"
 
@@ -83,7 +83,7 @@ RUN	if [ -n "$BUST_CACHE" ] ; then                                              
 	dnf clean all
 
 # Generate GPG authentication certificates for using DAOS authentication
-ARG	DAOS_AUTH=no
+ARG	DAOS_AUTH=yes
 RUN	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
 		echo "[INFO] Generating authentication certificates" &&                            \
 		if [ ! -d /etc/daos/certs ] ; then                                                 \
