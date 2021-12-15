@@ -27,6 +27,8 @@ type testConfig struct {
 	StringEnv        string `cmdEnv:"STRING_ENV"`
 	SetBoolEnv       bool   `cmdEnv:"SET_BOOL_ENV"`
 	UnsetBoolEnv     bool   `cmdEnv:"UNSET_BOOL_ENV"`
+	InvertBoolIntEnv bool   `cmdEnv:"INVERT_BOOL_INT_ENV,invertBool,intBool"`
+	BoolIntEnv       bool   `cmdEnv:"BOOL_INT_ENV,intBool"`
 	IntPtrOpt        *int   `cmdShortFlag:"-p" cmdLongFlag:"--int_ptr"`
 	UnsetIntPtrOpt   *int   `cmdShortFlag:"-r" cmdLongFlag:"--unset_int_ptr"`
 	SliceOpt         []int  `cmdShortFlag:"-S,nonzero" cmdLongFlag:"--slice_length,nonzero"`
@@ -111,6 +113,8 @@ func TestParseEnvVars(t *testing.T) {
 		"INT_ENV=-1",
 		"STRING_ENV=stringEnv",
 		"SET_BOOL_ENV=true",
+		"INVERT_BOOL_INT_ENV=1",
+		"BOOL_INT_ENV=0",
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
