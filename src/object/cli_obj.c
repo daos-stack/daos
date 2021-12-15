@@ -369,6 +369,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 		obj_shard->do_target_id = layout->ol_shards[i].po_target;
 		obj_shard->do_fseq = layout->ol_shards[i].po_fseq;
 		obj_shard->do_rebuilding = layout->ol_shards[i].po_rebuilding;
+		obj_shard->do_reintegrating = layout->ol_shards[i].po_reintegrating;
 	}
 out:
 	if (layout)
@@ -566,7 +567,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 	 */
 	D_ASSERT(grp_size >= obj_get_replicas(obj));
 	grp_start = grp_idx * grp_size;
-	idx = grp_start + random() % grp_size;
+	idx = grp_start + d_rand() % grp_size;
 	for (i = 0; i < grp_size; i++, idx++) {
 		uint32_t tgt_id;
 		int index;
@@ -633,6 +634,22 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver, uint8_t
 	return rc;
 }
 
+static int
+obj_ptr2poh(struct dc_object *obj, daos_handle_t *ph)
+{
+	daos_handle_t   coh;
+
+	coh = obj->cob_coh;
+	if (daos_handle_is_inval(coh))
+		return -DER_NO_HDL;
+
+	*ph = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(*ph))
+		return -DER_NO_HDL;
+
+	return 0;
+}
+
 /* If the client has been asked to fetch (list/query) from leader replica,
  * then means that related data is associated with some prepared DTX that
  * may be committable on the leader replica. According to our current DTX
@@ -653,17 +670,35 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver, uint8_t
 int
 obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 {
+	struct dc_pool	*pool;
+	daos_handle_t	ph;
 	int		grp_size;
+	unsigned int	pool_map_ver;
 	uint64_t	grp_idx;
+	int		rc;
+
+	rc = obj_ptr2poh(obj, &ph);
+	if (rc < 0)
+		return rc;
+
+	pool = dc_hdl2pool(ph);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	pool_map_ver = pool_map_get_version(pool->dp_map);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
-	if (obj->cob_version != map_ver) {
+	if (obj->cob_version != map_ver || map_ver < pool_map_ver) {
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		dc_pool_put(pool);
 		return -DER_STALE;
 	}
+	dc_pool_put(pool);
 
 	D_ASSERT(obj->cob_shards_nr >= grp_size);
 
@@ -749,7 +784,7 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj, daos_
 {
 	daos_size_t			 size_iod, size_sgl, size_oiod;
 	daos_size_t			 size_recx, size_tgt_nr, size_singv;
-	daos_size_t			 size_sorter, size_array, size_size_set, buf_size;
+	daos_size_t			 size_sorter, size_array, size_fetch_stat, buf_size;
 	daos_iod_t			*uiod, *riod;
 	struct obj_ec_recx_array	*ec_recx;
 	void				*buf;
@@ -764,12 +799,12 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj, daos_
 	size_sorter = roundup(sizeof(struct obj_ec_seg_sorter) * iod_nr, 8);
 	size_singv = roundup(sizeof(struct dcs_layout) * iod_nr, 8);
 	size_array = sizeof(daos_size_t) * obj_get_grp_size(obj) * iod_nr;
-	size_size_set = sizeof(daos_size_t) * iod_nr;
+	size_fetch_stat = sizeof(struct shard_fetch_stat) * iod_nr;
 	/* for oer_tgt_recx_nrs/_idxs */
 	size_tgt_nr = roundup(sizeof(uint32_t) * obj_get_grp_size(obj), 8);
 	buf_size = size_iod + size_sgl + size_oiod + size_recx + size_sorter +
 		   size_singv + size_array + size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN +
-		   size_size_set;
+		   size_fetch_stat;
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
 		return -DER_NOMEM;
@@ -791,8 +826,8 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj, daos_
 	tmp_ptr += size_array;
 	reasb_req->tgt_bitmap = (void *)tmp_ptr;
 	tmp_ptr += OBJ_TGT_BITMAP_LEN;
-	reasb_req->orr_size_set = (void *)tmp_ptr;
-	tmp_ptr += size_size_set;
+	reasb_req->orr_fetch_stat = (void *)tmp_ptr;
+	tmp_ptr += size_fetch_stat;
 
 	for (i = 0; i < iod_nr; i++) {
 		uiod = &iods[i];
@@ -851,11 +886,10 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
 	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetched) {
-		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n",
-			DP_OID(oid));
+		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n", DP_OID(oid));
 		D_ASSERTF(reasb_req->orr_iod_nr == args->nr, "%d != %d.\n",
 			  reasb_req->orr_iod_nr, args->nr);
-		memset(reasb_req->orr_size_set, 0, args->nr * sizeof(*reasb_req->orr_size_set));
+		memset(reasb_req->orr_fetch_stat, 0, args->nr * sizeof(*reasb_req->orr_fetch_stat));
 		return 0;
 	}
 	obj_auxi->iod_nr = args->nr;
@@ -995,7 +1029,7 @@ ec_deg_get:
 		D_ASSERT(ec_deg_tgt >=
 			 obj_ec_data_tgt_nr(obj_auxi->reasb_req.orr_oca));
 		if (obj_auxi->ec_in_recov ||
-		    obj_auxi->reasb_req.orr_singv_only) {
+		    (obj_auxi->reasb_req.orr_singv_only && !obj_auxi->reasb_req.orr_size_fetch)) {
 			D_DEBUG(DB_IO, DF_OID" shard %d failed in recovery(%d) "
 				"or singv fetch(%d).\n",
 				DP_OID(obj->cob_md.omd_id), shard,
@@ -1211,22 +1245,6 @@ obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
 	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "
 		  DF_OID": %u/%u\n",
 		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
-}
-
-static int
-obj_ptr2poh(struct dc_object *obj, daos_handle_t *ph)
-{
-	daos_handle_t   coh;
-
-	coh = obj->cob_coh;
-	if (daos_handle_is_inval(coh))
-		return -DER_NO_HDL;
-
-	*ph = dc_cont_hdl2pool_hdl(coh);
-	if (daos_handle_is_inval(*ph))
-		return -DER_NO_HDL;
-
-	return 0;
 }
 
 /* Get pool map version from object handle */
@@ -1607,7 +1625,7 @@ dc_obj_layout_refresh(daos_handle_t oh)
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
-	     unsigned int srv_pmap_ver, bool *io_task_reinited)
+	     bool *io_task_reinited)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
@@ -1616,7 +1634,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	bool		  keep_result = false;
 
 	if (pmap_stale) {
-		rc = obj_pool_query_task(sched, obj, srv_pmap_ver, &pool_task);
+		rc = obj_pool_query_task(sched, obj, 0, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}
@@ -1677,6 +1695,24 @@ recov_task_abort(tse_task_t *task, void *arg)
 	return 0;
 }
 
+static int
+recov_task_cb(tse_task_t *task, void *data)
+{
+	struct obj_auxi_args	*obj_auxi = *((struct obj_auxi_args **)data);
+	daos_obj_fetch_t	*fetch_arg = dc_task_get_args(task);
+	int			 i;
+
+	if (task->dt_result != -DER_FETCH_AGAIN)
+		return 0;
+
+	/* For the case of EC singv overwritten, in degraded fetch data recovery possibly always
+	 * hit conflict case and need fetch again. Should update iod_size to avoid endless retry.
+	 */
+	for (i = 0; i < obj_auxi->reasb_req.orr_iod_nr; i++)
+		obj_auxi->reasb_req.orr_uiods[i].iod_size = fetch_arg->iods[i].iod_size;
+	return 0;
+}
+
 static void
 obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		struct obj_auxi_args *obj_auxi, d_iov_t *csum_iov)
@@ -1734,19 +1770,25 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 					      fail_info, csum_iov,
 					      NULL, sched, &sub_task);
 		if (rc) {
-			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create "
-				"failed "DF_RC"\n", task,
-				DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create failed "DF_RC"\n",
+				task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 			goto out;
 		}
 
 		tse_task_list_add(sub_task, &task_list);
 
+		rc = tse_task_register_comp_cb(sub_task, recov_task_cb, &obj_auxi,
+					       sizeof(obj_auxi));
+		if (rc) {
+			D_ERROR("task %p "DF_OID" tse_task_register_comp_cb failed "DF_RC"\n",
+				task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+			goto out;
+		}
+
 		rc = dc_task_depend(task, 1, &sub_task);
-		if (rc != 0) {
-			D_ERROR("task %p "DF_OID" dc_task_depend failed "DF_RC
-				"\n", task, DP_OID(obj->cob_md.omd_id),
-				DP_RC(rc));
+		if (rc) {
+			D_ERROR("task %p "DF_OID" dc_task_depend failed "DF_RC"\n",
+				task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 			goto out;
 		}
 	}
@@ -3927,8 +3969,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 	if ((!obj_auxi->no_retry || task->dt_result == -DER_FETCH_AGAIN) &&
 	     (pm_stale || obj_auxi->io_retry)) {
-		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, obj_auxi->map_ver_reply,
-				  &io_task_reinited);
+		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, &io_task_reinited);
 		if (rc) {
 			D_ERROR(DF_OID "retry io failed: %d\n", DP_OID(obj->cob_md.omd_id), rc);
 			D_ASSERT(obj_auxi->io_retry == 0);
@@ -4034,8 +4075,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 			if (obj_auxi->ec_wait_recov && task->dt_result == 0) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 
-				obj_ec_recov_data(&obj_auxi->reasb_req,
-					obj->cob_md.omd_id, args->nr);
+				if (!obj_auxi->reasb_req.orr_size_fetch)
+					obj_ec_recov_data(&obj_auxi->reasb_req, obj->cob_md.omd_id,
+							  args->nr);
 
 				obj_reasb_io_fini(obj_auxi, false);
 			} else {
@@ -4872,7 +4914,7 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 
 		/* choose one randomly from the parities */
 		p_size = obj_ec_parity_tgt_nr(oca);
-		idx = random() % p_size;
+		idx = d_rand() % p_size;
 		for (i = 0; i < p_size; i++, idx = (idx + 1) % p_size) {
 			/* let's skip the rebuild shard for non-update op */
 			shard = parities[idx];
@@ -5489,6 +5531,7 @@ dc_obj_query_key(tse_task_t *api_task)
 			D_GOTO(out_task, rc = shard_first);
 	}
 
+	obj_auxi->map_ver_reply = 0;
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = api_task;
 

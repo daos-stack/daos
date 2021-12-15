@@ -338,9 +338,10 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	}
 
 	if (remote_off >= remote_size) {
-		D_ERROR("remote_bulk_off %zu >= remote_bulk_size %zu\n",
-			remote_off, remote_size);
-		return -DER_INVAL;
+		rc = -DER_OVERFLOW;
+		D_ERROR("remote_bulk_off %zu >= remote_bulk_size %zu, "DF_RC"\n",
+			remote_off, remote_size, DP_RC(rc));
+		return rc;
 	}
 
 	if (daos_io_bypass & IOBP_SRV_BULK) {
@@ -370,9 +371,9 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			break;
 
 		if (remote_off >= remote_size) {
-			D_ERROR("Remote bulk is used up. off:%zu, size:%zu\n",
-				remote_off, remote_size);
 			rc = -DER_OVERFLOW;
+			D_ERROR("Remote bulk is used up. off:%zu, size:%zu, "DF_RC"\n",
+				remote_off, remote_size, DP_RC(rc));
 			break;
 		}
 
@@ -426,10 +427,10 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 
 		D_ASSERT(remote_size > remote_off);
 		if (length > (remote_size - remote_off)) {
-			D_ERROR("Remote bulk isn't large enough. "
-				"local_sz:%zu, remote_sz:%zu, remote_off:%zu\n",
-				length, remote_size, remote_off);
 			rc = -DER_OVERFLOW;
+			D_ERROR("Remote bulk isn't large enough. local_sz:%zu, remote_sz:%zu, "
+				"remote_off:%zu, "DF_RC"\n", length, remote_size, remote_off,
+				DP_RC(rc));
 			break;
 		}
 
@@ -2339,8 +2340,13 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			  (orw->orw_bulks.ca_arrays != NULL ||
 			   orw->orw_bulks.ca_count != 0) ? true : false);
 	if (rc != 0)
-		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid),
-			DP_RC(rc));
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+			 (rc == -DER_EXIST &&
+			  (orw->orw_api_flags & (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
+			 (rc == -DER_NONEXIST &&
+			  (orw->orw_api_flags & (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
+			 DB_IO, DLOG_ERR,
+			 DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
 
 out:
 	if (dth != NULL)
@@ -2422,6 +2428,14 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 		rc = obj_local_rw(exec_arg->rpc, exec_arg->ioc, iods, csums,
 				  offs, &dlh->dlh_handle, pin);
+		if (rc != 0)
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+				 (rc == -DER_EXIST && (orw->orw_api_flags &
+				  (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
+				 (rc == -DER_NONEXIST && (orw->orw_api_flags &
+				  (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
+				 DB_IO, DLOG_ERR,
+				 DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
 
 comp:
 		if (comp_cb != NULL)
@@ -3288,10 +3302,10 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* non-leader local RPC handler, do not need pin the DTX entry.  */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, dth, false);
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+			 (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
 			 DB_IO, DLOG_ERR,
-			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
-			 DP_RC(rc));
+			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid), DP_RC(rc));
 
 out:
 	/* Stop the local transaction */
@@ -3371,6 +3385,11 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc,
 				     &dlh->dlh_handle,
 				     !dlh->dlh_handle.dth_solo);
+		if (rc != 0)
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+				 (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
+				 DB_IO, DLOG_ERR,
+				 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid), DP_RC(rc));
 
 comp:
 		if (comp_cb != NULL)

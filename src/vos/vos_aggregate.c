@@ -2343,8 +2343,7 @@ enum {
 };
 
 static int
-aggregate_enter(struct vos_container *cont, int agg_mode,
-		daos_epoch_range_t *epr)
+aggregate_enter(struct vos_container *cont, int agg_mode, daos_epoch_range_t *epr)
 {
 	switch (agg_mode) {
 	default:
@@ -2560,6 +2559,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    bool (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_object	*obj;
 	struct agg_data		*ad;
 	int			 type = VOS_ITER_OBJ;
 	int			 rc;
@@ -2574,9 +2574,21 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	if (ad == NULL)
 		return -DER_NOMEM;
 
+	if (oidp != NULL) {
+		rc = vos_obj_discard_hold(vos_obj_cache_current(), cont, *oidp, &obj);
+		if (rc != 0) {
+			if (rc == -DER_NONEXIST)
+				rc = 0;
+			goto free_agg_data;
+		}
+
+		D_ASSERT(obj != NULL);
+		D_ASSERT(obj->obj_discard);
+	}
+
 	rc = aggregate_enter(cont, mode, epr);
 	if (rc != 0)
-		goto free_agg_data;
+		goto release_obj;
 
 	if (oidp != NULL) {
 		D_DEBUG(DB_EPC, "Discard "DF_UOID" epr "DF_X64"-"DF_X64"\n", DP_UOID(*oidp),
@@ -2617,6 +2629,10 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 			 &ad->ad_agg_param, NULL);
 
 	aggregate_exit(cont, mode);
+
+release_obj:
+	if (oidp != NULL)
+		vos_obj_discard_release(vos_obj_cache_current(), obj);
 
 free_agg_data:
 	D_FREE(ad);

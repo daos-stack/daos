@@ -312,7 +312,7 @@ ktr_key_decode(struct btr_instance *tins, d_iov_t *key,
 /** create a new key-record, or install an externally allocated key-record */
 static int
 ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	      d_iov_t *val_iov, struct btr_record *rec)
+	      d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
@@ -389,7 +389,7 @@ ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	       d_iov_t *key_iov, d_iov_t *val_iov)
+	       d_iov_t *key_iov, d_iov_t *val_iov, d_iov_t *val_out)
 {
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 
@@ -605,7 +605,7 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 /** allocate a new record and fetch data */
 static int
 svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	       d_iov_t *val_iov, struct btr_record *rec)
+	       d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct vos_svt_key	*skey = key_iov->iov_buf;
 	struct vos_rec_bundle	*rbund;
@@ -724,7 +724,7 @@ svt_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		d_iov_t *key_iov, d_iov_t *val_iov)
+		d_iov_t *key_iov, d_iov_t *val_iov, d_iov_t *val_out)
 {
 	struct vos_svt_key	*skey;
 	struct vos_irec_df	*irec;
@@ -1060,7 +1060,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 
 		rbund.rb_iov	= key;
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, key, &riov);
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, key, &riov, NULL);
 		if (rc) {
 			D_ERROR("Failed to upsert: "DF_RC"\n", DP_RC(rc));
 			goto out;
@@ -1153,7 +1153,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
-				   key_iov, val_iov);
+				   key_iov, val_iov, NULL);
 		if (rc)
 			goto done;
 
@@ -1177,10 +1177,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	if (rc != 0)
 		goto done;
 
-	if (*known_key != umem_ptr2off(vos_obj2umm(obj), krec)) {
-		/** Set the bit to mark the key as punched.   Since this version doesn't support
-		 *  the optimization, this makes it compatible with versions that do.
-		 */
+	if (*known_key == umem_ptr2off(vos_obj2umm(obj), krec)) {
+		/** Set the value to UMOFF_NULL so punch propagation will run full check */
 		rc = umem_tx_add_ptr(vos_obj2umm(obj), known_key, sizeof(*known_key));
 		if (rc)
 			D_GOTO(done, rc);

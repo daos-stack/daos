@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v2.1 - dev
+site_name: DAOS v2.2 - dev
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
@@ -12,36 +12,49 @@ copyright: Copyright &copy; 2016 - 2021 Intel Corporation
 theme:
     name: 'material'
     logo: daos_logo_wh.png
+    favicon: daos_logo_wh.png
     font:
         text: Ubuntu
         code: Roboto Mono
     language: en
     palette:
-        scheme:  'slate'
-        primary: 'light blue'
-        accent:  'blue'
+        primary: light blue
+        accent: blue
+        scheme: default
+    include_search_page: false
+    search_index_only: true
     features:
         - navigation.tabs
         - navigation.tabs.sticky
         - navigation.instant
         - navigation.top
-        - toc.integrate
         - navigation.indexes
+        - toc.integrate
+        - search.suggest
+        - search.highlight
 
 extra:
     homepage: http://daos.io
+    version:
+        provider: mike
+
+plugins:
+    - search
+    - mike:
+        version_selector: true
 
 markdown_extensions:
     - admonition
     - footnotes
+    - tables
     - toc:
         permalink: true
-        toc_depth: 3
+        toc_depth: 4
 
 # Page tree
 nav:
     - Intro:
-        - 'Welcome': 'index.md'
+        - 'index.md'
         - 'Community Wiki': 'http://wiki.daos.io'
         - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
         - 'Community Mailing list': 'https://daos.groups.io/g/daos'
@@ -73,13 +86,12 @@ nav:
         - 'Environment Variables': 'admin/env_variables.md'
         - 'Management (DMG) Tool Reference': 'QSG/dmg_tool.md'
     - Test and Benchmarking:
-        - 'Run DAOS Autotest': 'QSG/autotest.md'
-        - 'Run CaRT Self_test': 'QSG/cartselftest.md'
-        - 'Run IOR': 'QSG/runior.md'
-        - 'Run mdtest': 'QSG/mdtest.md'
-        - 'Run dbench': 'QSG/dbench.md'
-        - 'Datamover test': 'QSG/datamover.md'
-        - 'IO500 Setup': 'http://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
+        - 'Run DAOS Autotest': 'testing/autotest.md'
+        - 'Run CaRT Self_test': 'testing/cartselftest.md'
+        - 'Run IOR and mdtest': 'testing/ior.md'
+        - 'Run dbench': 'testing/dbench.md'
+        - 'Run Datamover test': 'testing/datamover.md'
+        - 'Run IO500': 'http://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
     - User Guide:
         - 'Workflow': 'user/workflow.md'
         - 'Container Management': 'user/container.md'
@@ -92,7 +104,7 @@ nav:
         - 'Native Programming Interface': 'user/interface.md'
         - 'DAOS Tool Reference': 'QSG/daos_tool.md'
     - Releases:
-        - 'Release Notes v2.1': 'release/release_notes_v2_1.md'
+        - 'Release Notes v2.2': 'release/release_notes_v2_2.md'
         - 'Support Matrix': 'release/support_matrix.md'
         - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Developer Zone:

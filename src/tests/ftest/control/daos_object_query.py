@@ -67,10 +67,10 @@ class DaosObjectQuery(TestWithServers):
         # This mapping could change, so check daos_obj_class.h when this test
         # fails.
         class_name_to_code = {
-            "S1": 200,
-            "RP_2G1": 240,
-            "RP_2G2": 241,
-            "RP_3G1": 280
+            "S1": 16777217,
+            "RP_2G1": 134217729,
+            "RP_2G2": 134217730,
+            "RP_3G1": 150994945
         }
         class_name_to_group_num = {
             "S1": 1,

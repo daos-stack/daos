@@ -460,9 +460,9 @@ daos_oclass_name2id(const char *name);
  * \param[in]	size	length in bytes of str buffer.
  * \param[out]	str	buffer to get all registered oclass names
  *
- * \return		>= 0 on success and required length of str, -1 if error.
+ * \return		>= 0 on success and required length of str, < 0 if error.
  */
-size_t
+ssize_t
 daos_oclass_names_list(size_t size, char *str);
 
 /**

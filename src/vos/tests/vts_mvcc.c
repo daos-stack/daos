@@ -1094,17 +1094,6 @@ struct conflicting_rw_excluded_case {
 };
 
 static struct conflicting_rw_excluded_case conflicting_rw_excluded_cases[] = {
-	/** Used to disable specific tests as necessary */
-	/** These specific tests can be enabled when DAOS-4698 is fixed
-	 *  and the line in vos_obj.c that references this ticket is
-	 *  uncommented.
-	 */
-	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	0, false},
-	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	1, false},
-	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	0, false},
-	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	1, false},
-	{false, "puncha_ane",   "coda", "puncho_one",   "co",   0, true},
-	{false, "punchd_dne",   "cod",  "puncho_one",   "co",   0, true},
 };
 
 static int64_t

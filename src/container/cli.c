@@ -1810,7 +1810,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	if (tgt_cnt == 0 || tgts == NULL)
 		return -DER_INVAL;
 
-	*rank = tgts[rand() % tgt_cnt].ta_comp.co_rank;
+	*rank = tgts[d_rand() % tgt_cnt].ta_comp.co_rank;
 
 	D_FREE(tgts);
 
