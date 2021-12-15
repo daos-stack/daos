@@ -7,7 +7,7 @@ a container, then reading and writing to the container.
 First of all, a pool must be created with dmg to run autotest:
 
 ```sh
-$ dmg pool create --size=50G --label autotest_pool
+$ dmg pool create --size=50G autotest_pool
 
 # sample output
 Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
