@@ -186,7 +186,7 @@ hyperthreads: false
 		WithAccessPoints("hostX:10002").
 		WithNrHugePages(6144).
 		WithEngines(
-			engine.NewConfig().
+			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
 				WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, 0)).
 				WithFabricInterface("ib0").
@@ -206,7 +206,7 @@ hyperthreads: false
 				WithStorageVosEnv("NVME").
 				WithTargetCount(12).
 				WithHelperStreamCount(2),
-			engine.NewConfig().
+			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
 				WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, 1)).
 				WithFabricInterface("ib1").

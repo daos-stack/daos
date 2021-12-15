@@ -395,7 +395,7 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger) (err error) {
+func (cfg *Server) Validate(ctx context.Context, log logging.Logger) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -497,9 +497,13 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	for i, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
-		if err := engine.Validate(); err != nil {
+
+		if err := engine.Validate(ctx, log); err != nil {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", i)
 		}
+
+		log.Debugf("engine %d fabric numa %d, storage numa %d", i,
+			engine.Fabric.NumaNodeIndex, engine.Storage.NumaNodeIndex)
 	}
 
 	if len(cfg.Engines) > 1 {
@@ -581,8 +585,8 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	return nil
 }
 
-// CheckFabric ensures engines in configuration have compatible parameter values and returns
-// fabric network device class for the configuration. To be called after config has been validated.
+// CheckFabric ensures engines in configuration have compatible network device class and returns
+// fabric network device class for the configuration.
 func (cfg *Server) CheckFabric(ctx context.Context, log logging.Logger) (uint32, error) {
 	var netDevClass uint32
 	for index, engine := range cfg.Engines {
@@ -593,9 +597,6 @@ func (cfg *Server) CheckFabric(ctx context.Context, log logging.Logger) (uint32,
 		}
 		if index == 0 {
 			netDevClass = ndc
-			if err := engine.ValidateAffinity(ctx, log); err != nil {
-				return 0, err
-			}
 			continue
 		}
 		if ndc != netDevClass {

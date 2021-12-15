@@ -188,7 +188,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				tc.vosEnv = "NVME"
 			}
 
-			engineConfig := engine.NewConfig().
+			engineConfig := engine.MockConfig().
 				WithFabricProvider("test"). // valid enough to pass "not-blank" test
 				WithFabricInterface("test").
 				WithFabricInterfacePort(42).
@@ -201,7 +201,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				).
 				WithStorageEnableHotplug(tc.enableHotplug)
 
-			gotValidateErr := engineConfig.Validate() // populate output path
+			gotValidateErr := engineConfig.Validate(context.TODO(), log) // populate output path
 			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
 			if tc.expValidateErr != nil {
 				return

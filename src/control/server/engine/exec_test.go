@@ -96,7 +96,7 @@ func TestRunnerContextExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
+	cfg := MockConfig().
 		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
 	cfg.Index = 9
 
@@ -133,7 +133,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
+	cfg := MockConfig().
 		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",
 			"OFI_INTERFACE", allowedUserEnv).
 		WithTargetCount(42).

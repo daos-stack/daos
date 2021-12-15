@@ -7,6 +7,7 @@
 package engine
 
 import (
+	"context"
 	"flag"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -106,7 +108,7 @@ func TestConfig_HasEnvVar(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			cfg := NewConfig().
+			cfg := MockConfig().
 				WithEnvVars(tc.startVars...)
 
 			if !cfg.HasEnvVar(tc.addVar) {
@@ -124,7 +126,7 @@ func TestConstructedConfig(t *testing.T) {
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity
-	constructed := NewConfig().
+	constructed := MockConfig().
 		WithRank(37).
 		WithFabricProvider("foo+bar").
 		WithFabricInterface("qib42").
@@ -180,7 +182,7 @@ func TestConstructedConfig(t *testing.T) {
 
 func TestConfig_ScmValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
-		return NewConfig().
+		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
 			WithFabricInterface("test").
 			WithFabricInterfacePort(42)
@@ -286,14 +288,17 @@ func TestConfig_ScmValidation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
 		})
 	}
 }
 
 func TestConfig_BdevValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
-		return NewConfig().
+		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
 			WithFabricInterface("test").
 			WithFabricInterfacePort(42).
@@ -411,7 +416,10 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
 			if tc.expErr != nil {
 				return
 			}
@@ -435,14 +443,17 @@ func TestConfig_BdevValidation(t *testing.T) {
 }
 
 func TestConfig_Validation(t *testing.T) {
-	bad := NewConfig()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
 
-	if err := bad.Validate(); err == nil {
+	bad := MockConfig()
+
+	if err := bad.Validate(context.TODO(), log); err == nil {
 		t.Fatal("expected empty config to fail validation")
 	}
 
 	// create a minimally-valid config
-	good := NewConfig().WithFabricProvider("foo").
+	good := MockConfig().WithFabricProvider("foo").
 		WithFabricInterface("qib0").
 		WithFabricInterfacePort(42).
 		WithStorage(
@@ -452,7 +463,7 @@ func TestConfig_Validation(t *testing.T) {
 				WithScmMountPoint("/foo/bar"),
 		)
 
-	if err := good.Validate(); err != nil {
+	if err := good.Validate(context.TODO(), log); err != nil {
 		t.Fatalf("expected %#v to validate; got %s", good, err)
 	}
 }
@@ -522,7 +533,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		memSize         = 8192
 		hugepageSz      = 2
 	)
-	cfg := NewConfig().
+	cfg := MockConfig().
 		WithStorage(
 			storage.NewTierConfig().
 				WithScmMountPoint(mountPoint),

@@ -16,7 +16,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
-	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -116,7 +115,7 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	cfg, err := genConfig(req.Log, req.AccessPoints, nd, sd, ccs)
+	cfg, err := genConfig(ctx, req.Log, defaultEngineCfg, req.AccessPoints, nd, sd, ccs)
 	if err != nil {
 		return nil, err
 	}
@@ -196,8 +195,8 @@ func (cis classInterfaces) add(log logging.Logger, iface *HostFabricInterface) {
 	if _, exists := cis[iface.NetDevClass][nn]; exists {
 		return // already have interface for this NUMA
 	}
-	log.Debugf("%s class iface %s found for NUMA %d", nd.DevClassName(iface.NetDevClass),
-		iface.Device, nn)
+	log.Debugf("%s class iface %s found for NUMA %d",
+		netdetect.DevClassName(iface.NetDevClass), iface.Device, nn)
 	cis[iface.NetDevClass][nn] = iface
 }
 
@@ -217,7 +216,7 @@ func parseInterfaces(log logging.Logger, reqClass uint32, engineCount int, inter
 	buckets := make(map[string]classInterfaces)
 	for _, iface := range interfaces {
 		switch iface.NetDevClass {
-		case nd.Ether, nd.Infiniband:
+		case netdetect.Ether, netdetect.Infiniband:
 			switch reqClass {
 			case NetDevAny, iface.NetDevClass:
 			default:
@@ -247,16 +246,16 @@ func parseInterfaces(log logging.Logger, reqClass uint32, engineCount int, inter
 // provider/class combination.
 func getNetIfaces(log logging.Logger, reqClass uint32, engineCount int, hfs *HostFabricSet) (numaNetIfaceMap, error) {
 	switch reqClass {
-	case NetDevAny, nd.Ether, nd.Infiniband:
+	case NetDevAny, netdetect.Ether, netdetect.Infiniband:
 	default:
-		return nil, errors.Errorf(errUnsupNetDevClass, nd.DevClassName(reqClass))
+		return nil, errors.Errorf(errUnsupNetDevClass, netdetect.DevClassName(reqClass))
 	}
 
 	matchIfaces, complete := parseInterfaces(log, reqClass, engineCount, hfs.HostFabric.Interfaces)
 	if !complete {
 		class := "best-available"
 		if reqClass != NetDevAny {
-			class = nd.DevClassName(reqClass)
+			class = netdetect.DevClassName(reqClass)
 		}
 		return nil, errors.Errorf(errInsufNrIfaces, class, engineCount, len(matchIfaces),
 			matchIfaces)
@@ -548,18 +547,16 @@ func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (
 	return numaCoreCounts, nil
 }
 
+type newEngineCfgFn func(int) *engine.Config
+
 func defaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
-		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx)).
-		WithValidateProvider(netdetect.ValidateProviderConfig).
-		WithGetIfaceNumaNode(netdetect.GetIfaceNumaNode).
-		WithGetNetDevCls(netdetect.GetDeviceClass)
+		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
 }
 
-// genConfig generates server config file from details of available network,
-// storage and CPU hardware.
-func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
+// genConfig generates server config file from details of network, storage and CPU hardware.
+func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
 	// basic sanity checks
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
@@ -581,7 +578,7 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 
 	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
-		engineCfg := defaultEngineCfg(nn).
+		engineCfg := newEngineCfg(nn).
 			WithTargetCount(ccs[nn].nrTgts).
 			WithHelperStreamCount(ccs[nn].nrHlprs)
 		if len(sd.numaPMems) > 0 {
@@ -635,5 +632,5 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		WithControlLogFile(defaultControlLogFile).
 		WithNrHugePages(nr_hugepages)
 
-	return cfg, cfg.Validate(log)
+	return cfg, cfg.Validate(ctx, log)
 }

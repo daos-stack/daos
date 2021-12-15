@@ -275,7 +275,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				WithBdevClass(storage.ClassNvme.String()).
 				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
 
-			engineCfg := engine.NewConfig().WithStorage(tCfg)
+			engineCfg := engine.MockConfig().WithStorage(tCfg)
 			engineCfgs := []*engine.Config{engineCfg}
 			if tc.multiEngine {
 				engineCfgs = append(engineCfgs, engineCfg)
@@ -1066,7 +1066,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 
 			var engineCfgs []*engine.Config
 			for _, sc := range tc.storageCfgs {
-				engineCfgs = append(engineCfgs, engine.NewConfig().WithStorage(sc...))
+				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...))
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 			cs := mockControlService(t, log, sCfg, tc.bmbc, tc.smbc, tc.smsc)
@@ -1600,7 +1600,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					devToMount[tc.sDevs[idx]] = scmMount
 					t.Logf("sDevs[%d]= %v, value= %v", idx, tc.sDevs[idx], scmMount)
 				}
-				engine := engine.NewConfig().
+				engine := engine.MockConfig().
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmMountPoint(scmMount).

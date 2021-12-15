@@ -12,6 +12,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -22,10 +23,6 @@ const maxHelperStreamCount = 2
 type netProviderValidator func(context.Context, string, string) error
 type netIfaceNumaNodeGetter func(context.Context, string) (uint, error)
 type netDevClsGetter func(string) (uint32, error)
-
-// ErrNoPinnedNumaNode error indicates no NUMA node has been pinned in this
-// engine's configuration.
-var ErrNoPinnedNumaNode = errors.New("pinned NUMA node was not configured")
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
@@ -184,16 +181,14 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		HelperStreamCount: maxHelperStreamCount,
+		ValidateProvider:  netdetect.ValidateProviderConfig,
+		GetIfaceNumaNode:  netdetect.GetIfaceNumaNode,
+		GetNetDevCls:      netdetect.GetDeviceClass,
 	}
 }
 
-// ValidateAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) ValidateAffinity(ctx context.Context, log logging.Logger) error {
-	if err := c.ValidateProvider(ctx, c.Fabric.Interface, c.Fabric.Provider); err != nil {
-		return errors.Wrapf(err, "Network device %s does not support provider %s. "+
-			"The configuration is invalid.", c.Fabric.Interface, c.Fabric.Provider)
-	}
-
+// setAffinity ensures engine NUMA locality is assigned and valid.
+func (c *Config) setAffinity(ctx context.Context, log logging.Logger) error {
 	ifaceNumaNode, err := c.GetIfaceNumaNode(ctx, c.Fabric.Interface)
 	if err != nil {
 		return errors.Wrapf(err, "fetching numa node of network interface %q",
@@ -201,6 +196,8 @@ func (c *Config) ValidateAffinity(ctx context.Context, log logging.Logger) error
 	}
 
 	if c.PinnedNumaNode != nil {
+		log.Debugf("setting engine %d to pinned numa %d", c.Index, *c.PinnedNumaNode)
+
 		// validate that numa node is correct for the given device
 		if ifaceNumaNode != *c.PinnedNumaNode {
 			log.Errorf("Using network device %s (NUMA node %d) on engine pinned to NUMA node "+
@@ -213,6 +210,7 @@ func (c *Config) ValidateAffinity(ctx context.Context, log logging.Logger) error
 	}
 
 	// set engine numa node index to that of selected fabric interface
+	log.Debugf("setting engine %d to fabric numa %d", c.Index, ifaceNumaNode)
 	c.Fabric.NumaNodeIndex = ifaceNumaNode
 	c.Storage.NumaNodeIndex = ifaceNumaNode
 
@@ -220,9 +218,16 @@ func (c *Config) ValidateAffinity(ctx context.Context, log logging.Logger) error
 }
 
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate() error {
+func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
+	}
+	if c.ValidateProvider == nil {
+		return errors.New("missing ValidateProvider method on engine config")
+	}
+	if err := c.ValidateProvider(ctx, c.Fabric.Interface, c.Fabric.Provider); err != nil {
+		return errors.Wrapf(err, "network device %s does not support provider %s",
+			c.Fabric.Interface, c.Fabric.Provider)
 	}
 
 	if err := c.Storage.Validate(); err != nil {
@@ -233,7 +238,7 @@ func (c *Config) Validate() error {
 		return ValidateLogMasks(c.LogMask)
 	}
 
-	return nil
+	return errors.Wrap(c.setAffinity(ctx, log), "setting numa affinity for engine")
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
@@ -369,6 +374,12 @@ func (c *Config) WithStorageEnableHotplug(enable bool) *Config {
 	return c
 }
 
+// WithStorageNumaNodeIndex sets the NUMA node index to be used by this instance.
+func (c *Config) WithStorageNumaNodeIndex(nodeIndex uint) *Config {
+	c.Storage.NumaNodeIndex = nodeIndex
+	return c
+}
+
 // WithSocketDir sets the path to the instance's dRPC socket directory.
 func (c *Config) WithSocketDir(dir string) *Config {
 	c.SocketDir = dir
@@ -396,6 +407,12 @@ func (c *Config) WithFabricInterface(iface string) *Config {
 // WithFabricInterfacePort sets the numeric interface port to be used by this instance.
 func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	c.Fabric.InterfacePort = ifacePort
+	return c
+}
+
+// WithFabricNumaNodeIndex sets the NUMA node index to be used by this instance.
+func (c *Config) WithFabricNumaNodeIndex(nodeIndex uint) *Config {
+	c.Fabric.NumaNodeIndex = nodeIndex
 	return c
 }
 

@@ -455,7 +455,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 			defer clean()
 
 			cfgOutputPath := filepath.Join(testDir, "outfile")
-			engineConfig := engine.NewConfig().
+			engineConfig := engine.MockConfig().
 				WithFabricProvider("test"). // valid enough to pass "not-blank" test
 				WithFabricInterface("test").
 				WithFabricInterfacePort(42).

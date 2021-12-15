@@ -19,7 +19,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -40,7 +39,7 @@ func genMinimalConfig() *config.Server {
 	cfg := config.DefaultServer().
 		WithFabricProvider("foo").
 		WithEngines(
-			engine.NewConfig().
+			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
 						WithScmClass("ram").
@@ -48,10 +47,7 @@ func genMinimalConfig() *config.Server {
 						WithScmMountPoint("/mnt/daos"),
 				).
 				WithFabricInterface("foo0").
-				WithFabricInterfacePort(42).
-				WithValidateProvider(netdetect.ValidateProviderStub).
-				WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode).
-				WithGetNetDevCls(getDeviceClassStub),
+				WithFabricInterfacePort(42),
 		)
 	cfg.Path = path.Join(os.Args[0], cfg.Path)
 	return cfg
@@ -60,7 +56,7 @@ func genMinimalConfig() *config.Server {
 func genDefaultExpected() *config.Server {
 	return genMinimalConfig().
 		WithEngines(
-			engine.NewConfig().
+			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
 						WithScmClass("ram").
@@ -68,10 +64,7 @@ func genDefaultExpected() *config.Server {
 						WithScmMountPoint("/mnt/daos"),
 				).
 				WithFabricInterface("foo0").
-				WithFabricInterfacePort(42).
-				WithValidateProvider(netdetect.ValidateProviderStub).
-				WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode).
-				WithGetNetDevCls(getDeviceClassStub),
+				WithFabricInterfacePort(42),
 		)
 }
 
@@ -110,10 +103,6 @@ func cmpEnv(t *testing.T, wantConfig, gotConfig *engine.Config) {
 	if diff := cmp.Diff(wantEnv, gotEnv, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got)\n%s", diff)
 	}
-}
-
-func getDeviceClassStub(netdev string) (uint32, error) {
-	return 0, nil
 }
 
 func TestStartOptions(t *testing.T) {
