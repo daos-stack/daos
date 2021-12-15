@@ -125,7 +125,7 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the functional CentOS 7 CI tests')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
