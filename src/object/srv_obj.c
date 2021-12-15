@@ -552,7 +552,7 @@ done:
 		d_sg_list_t		 fsgl;
 		int			*fbuffer;
 
-		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+		D_ERROR("csum: Corrupting data after RDMA\n");
 		fbsgl = vos_iod_sgl_at(ioh, 0);
 		bio_sgl_convert(fbsgl, &fsgl);
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;

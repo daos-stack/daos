@@ -1042,6 +1042,12 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 
 	rc = mrone_obj_fetch(mrone, oh, sgls, mrone->mo_iods, mrone->mo_iod_num,
 			     mrone->mo_epoch, DIOF_FOR_MIGRATION, &csum_iov_fetch);
+	if (rc == -DER_CSUM) {
+		D_ERROR("migrate dkey "DF_KEY" failed because of checksum "
+			"error ("DF_RC"). Don't fail whole rebuild.\n",
+			DP_KEY(&mrone->mo_dkey), DP_RC(rc));
+		D_GOTO(out, rc = 0);
+	}
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed: "DF_RC"\n",
 			DP_KEY(&mrone->mo_dkey), DP_RC(rc));

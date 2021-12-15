@@ -623,6 +623,12 @@ pool_properties(void **state)
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_THRESH);
+	if (entry == NULL) {
+		print_message("scrubber threshold verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);

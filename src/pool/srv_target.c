@@ -1391,6 +1391,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_scrub_sched = iv_prop->pip_scrub_sched;
 	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
 	pool->sp_scrub_cred = iv_prop->pip_scrub_cred;
+	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
 	return 0;
 }
 

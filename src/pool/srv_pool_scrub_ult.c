@@ -95,6 +95,9 @@ cont_is_stopping_cb(void *cont)
 static void
 sc_add_pool_metrics(struct scrub_ctx *ctx)
 {
+	d_tm_add_metric(&ctx->sc_metrics.scm_scrub_count,
+			D_TM_COUNTER, "Number of full VOS tree scrubs",
+			NULL, DF_POOL_DIR"/scrubs_completed", DP_POOL_DIR(ctx));
 	d_tm_add_metric(&ctx->sc_metrics.scm_start,
 			D_TM_TIMESTAMP,
 			"When the current scrubbing started", NULL,
@@ -135,6 +138,90 @@ sc_add_pool_metrics(struct scrub_ctx *ctx)
 			DP_POOL_DIR(ctx));
 }
 
+static int
+drain_pool_target(uuid_t pool_uuid, d_rank_t rank, uint32_t target)
+{
+	d_rank_list_t			 out_ranks = {0};
+	struct pool_target_addr_list	 target_list = {0};
+	struct pool_target_addr		 addr = {0};
+	int rc;
+
+	D_ERROR("Draining target. rank: %d, target: %d", rank, target);
+
+	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_UP, &out_ranks);
+	if (rc != DER_SUCCESS) {
+		D_ERROR("Couldn't get ranks: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	target_list.pta_number = 1;
+	addr.pta_rank = rank;
+	addr.pta_target = target;
+	target_list.pta_addrs = &addr;
+
+	rc = ds_pool_target_update_state(pool_uuid, &out_ranks,
+					 &target_list, PO_COMP_ST_DRAIN);
+	if (rc != DER_SUCCESS)
+		D_ERROR("pool target update status failed: "DF_RC"\n",
+			DP_RC(rc));
+	map_ranks_fini(&out_ranks);
+
+	return rc;
+}
+
+struct drain_args {
+	struct ds_pool *ptd_pool;
+	d_rank_t ptd_rank;
+	uint32_t ptd_target_id;
+};
+
+void
+drain_pool_tgt_ult(void *arg)
+{
+	struct drain_args	*drain_args = arg;
+	int			 rc;
+
+	rc = drain_pool_target(drain_args->ptd_pool->sp_uuid,
+			       drain_args->ptd_rank,
+			       drain_args->ptd_target_id);
+
+	if (rc)
+		D_ERROR("Pool target drain failed: "DF_RC"\n", DP_RC(rc));
+}
+
+static int
+drain_pool_tgt_cb(struct ds_pool *pool)
+{
+	int			 rc;
+	ABT_thread		 thread = ABT_THREAD_NULL;
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct drain_args	 drain_args = {
+		.ptd_pool = pool,
+		.ptd_target_id = dmi->dmi_tgt_id
+	};
+
+	rc = crt_group_rank(NULL, &drain_args.ptd_rank);
+	if (rc != 0) {
+		D_ERROR("Unable to get rank: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	/* Create a ULT to update in xstream 0. */
+	rc = dss_ult_create(drain_pool_tgt_ult, &drain_args, DSS_XS_SYS, 0, 0,
+			    &thread);
+
+	if (rc != 0) {
+		D_ERROR("Error starting ULT: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+
+	return 0;
+
+}
+
 /** Setup scrubbing context and start scrubbing the pool */
 static void
 scrubbing_ult(void *arg)
@@ -145,6 +232,7 @@ scrubbing_ult(void *arg)
 	uuid_t			 pool_uuid;
 	daos_handle_t		 poh;
 	int			 tgt_id;
+	int			 rc;
 
 	poh = child->spc_hdl;
 	uuid_copy(pool_uuid, child->spc_uuid);
@@ -164,13 +252,14 @@ scrubbing_ult(void *arg)
 	ctx.sc_cont_lookup_fn = cont_lookup_cb;
 	ctx.sc_cont_put_fn = cont_put_cb;
 	ctx.sc_cont_is_stopping_fn = cont_is_stopping_cb;
-	ctx.sc_status = SCRUB_STATUS_NOT_RUNNING;
-	ctx.sc_credits_left = ctx.sc_pool->sp_scrub_cred;
 	ctx.sc_dmi =  dss_get_module_info();
+	ctx.sc_drain_pool_tgt_fn = drain_pool_tgt_cb;
 
 	sc_add_pool_metrics(&ctx);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
-		vos_scrub_pool(&ctx);
+		rc = vos_scrub_pool(&ctx);
+		if (rc != 0)
+			break;
 	}
 }
 
