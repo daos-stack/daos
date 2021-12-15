@@ -16,11 +16,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
 COPY ./utils/scripts/install-ubuntu20.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh
-RUN /tmp/install.sh
+RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
+RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
+RUN apt-get update && apt-get install apt-utils && apt-get upgrade && chmod +x /tmp/install.sh && \
+  /tmp/install.sh && apt-get clean all
 
 # hack the default shell to bash instead of dash
-RUN rm /bin/sh && ln -s bash /bin/sh
+#RUN rm /bin/sh && ln -s bash /bin/sh
 
 RUN locale-gen en_US.UTF-8
 
@@ -64,7 +66,7 @@ ARG DAOS_TARGET_TYPE=release
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { apt-get update && apt-get -y upgrade && apt-get clean all; }
+    { apt-get update && apt-get upgrade && apt-get clean all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
@@ -76,7 +78,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 
 USER root:root
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || { apt-get update && apt-get -y upgrade && apt-get clean all; }
+RUN [ -z "$CACHEBUST" ] || { apt-get update && apt-get upgrade && apt-get clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
