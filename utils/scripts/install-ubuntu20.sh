@@ -54,6 +54,7 @@ apt-get install \
     python3-pyelftools \
     python3-pyxattr \
     python3-tabulate \
+    python3-yaml \
     scons \
     uuid-dev \
     valgrind \
