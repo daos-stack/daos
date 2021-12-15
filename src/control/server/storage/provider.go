@@ -353,7 +353,8 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 			return req, errors.Wrapf(err, "get busid range limits")
 		}
 
-		log.Debugf("NUMA %d: hotplug bus-ids %lX-%lX", cfg.NumaNodeIndex, begin, end)
+		log.Debugf("NUMA %d: hotplug bus-ids %X-%X", cfg.NumaNodeIndex, uint8(begin),
+			uint8(end))
 
 		req.HotplugBusidBegin = uint8(begin)
 		req.HotplugBusidEnd = uint8(end)

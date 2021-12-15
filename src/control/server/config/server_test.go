@@ -137,7 +137,8 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			err := configA.Load()
 			if err == nil {
 				for _, eCfg := range configA.Engines {
-					eCfg.WithValidateProvider(netdetect.ValidateProviderStub)
+					eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
+						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
 				}
 				err = configA.Validate(context.TODO(), log)
 			}
@@ -159,7 +160,8 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			err = configB.Load()
 			if err == nil {
 				for _, eCfg := range configB.Engines {
-					eCfg.WithValidateProvider(netdetect.ValidateProviderStub)
+					eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
+						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
 				}
 				err = configB.Validate(context.TODO(), log)
 			}
@@ -450,7 +452,8 @@ func TestServerConfig_Validation(t *testing.T) {
 			config = tt.extraConfig(config)
 
 			for _, eCfg := range config.Engines {
-				eCfg.WithValidateProvider(netdetect.ValidateProviderStub)
+				eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
+					WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
 			}
 
 			CmpErr(t, tt.expErr, config.Validate(context.TODO(), log))
@@ -727,7 +730,8 @@ func TestServerConfig_Parsing(t *testing.T) {
 			config = tt.extraConfig(config)
 
 			for _, eCfg := range config.Engines {
-				eCfg.WithValidateProvider(netdetect.ValidateProviderStub)
+				eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
+					WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
 			}
 
 			CmpErr(t, tt.expValidateErr, config.Validate(context.TODO(), log))
@@ -819,7 +823,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 	configA := func() *engine.Config {
 		return engine.MockConfig().
 			WithLogFile("a").
-			WithFabricInterface("a").
+			WithFabricInterface("ib0").
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
@@ -831,7 +835,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 	configB := func() *engine.Config {
 		return engine.MockConfig().
 			WithLogFile("b").
-			WithFabricInterface("b").
+			WithFabricInterface("ib1").
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().

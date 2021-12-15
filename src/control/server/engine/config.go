@@ -200,8 +200,9 @@ func (c *Config) setAffinity(ctx context.Context, log logging.Logger) error {
 
 		// validate that numa node is correct for the given device
 		if ifaceNumaNode != *c.PinnedNumaNode {
-			log.Errorf("Using network device %s (NUMA node %d) on engine pinned to NUMA node "+
-				"%d is not recommend", c.Fabric.Interface, ifaceNumaNode, c.PinnedNumaNode)
+			return errors.Errorf("misconfiguration: network interface %s is on NUMA "+
+				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
+				ifaceNumaNode, *c.PinnedNumaNode)
 		}
 		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
 		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
@@ -234,8 +235,8 @@ func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
-	if c.LogMask != "" {
-		return ValidateLogMasks(c.LogMask)
+	if err := ValidateLogMasks(c.LogMask); err != nil {
+		return errors.Wrap(err, "validate engine log masks")
 	}
 
 	return errors.Wrap(c.setAffinity(ctx, log), "setting numa affinity for engine")

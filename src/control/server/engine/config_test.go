@@ -129,7 +129,7 @@ func TestConstructedConfig(t *testing.T) {
 	constructed := MockConfig().
 		WithRank(37).
 		WithFabricProvider("foo+bar").
-		WithFabricInterface("qib42").
+		WithFabricInterface("qib42"). // qib42 recognized by mock validator
 		WithFabricInterfacePort(100).
 		WithModules("foo,bar,baz").
 		WithStorage(
@@ -184,7 +184,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
 		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
-			WithFabricInterface("test").
+			WithFabricInterface("ib0"). // ib0 recognized by mock validator
 			WithFabricInterfacePort(42)
 	}
 
@@ -300,7 +300,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
 		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
-			WithFabricInterface("test").
+			WithFabricInterface("ib0"). // ib0 recognized by mock validator
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
@@ -454,7 +454,7 @@ func TestConfig_Validation(t *testing.T) {
 
 	// create a minimally-valid config
 	good := MockConfig().WithFabricProvider("foo").
-		WithFabricInterface("qib0").
+		WithFabricInterface("ib0"). // ib0 recognized by mock validator
 		WithFabricInterfacePort(42).
 		WithStorage(
 			storage.NewTierConfig().
@@ -514,7 +514,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	var (
 		mountPoint      = "/mnt/test"
 		provider        = "test+foo"
-		interfaceName   = "qib0"
+		interfaceName   = "ib0"
 		modules         = "foo,bar,baz"
 		systemName      = "test-system"
 		socketDir       = "/var/run/foo"
@@ -600,5 +600,52 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
+	}
+}
+
+func TestConfig_setAffinity(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg     *Config
+		expErr  error
+		expNuma uint
+	}{
+		"numa pinned; matching iface": {
+			cfg: MockConfig().
+				WithPinnedNumaNode(1).
+				WithFabricInterface("ib1"),
+			expNuma: 1,
+		},
+		"numa pinned; not matching iface": {
+			cfg: MockConfig().
+				WithPinnedNumaNode(1).
+				WithFabricInterface("ib0"),
+			expErr:  errors.New("misconfiguration"),
+			expNuma: 1,
+		},
+		"numa not pinned": {
+			cfg: MockConfig().
+				WithFabricInterface("ib1"),
+			expNuma: 1,
+		},
+		"missing iface": {
+			cfg: MockConfig().
+				WithFabricInterface("foo"),
+			expErr: errors.New("unknown fabric interface"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			common.CmpErr(t, tc.expErr, tc.cfg.setAffinity(context.TODO(), log))
+			if tc.expErr != nil {
+				return
+			}
+
+			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
+				"unexpected storage numa node id")
+			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
+				"unexpected fabric numa node id")
+		})
 	}
 }

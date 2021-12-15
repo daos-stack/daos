@@ -1088,11 +1088,22 @@ func ValidateProviderConfig(ctx context.Context, device string, provider string)
 // network configuration validation depends upon physical hardware resources and configuration on
 // the target machine that are either not known or static in the test environment.
 func MockGetIfaceNumaNode(ctx context.Context, device string) (uint, error) {
-	numaNode, err := GetIfaceNumaNode(ctx, device)
-	if err != nil {
-		log.Debugf("GetIfaceNumaNode (device: %s, NUMA: %d) returned error: %v", device, numaNode, err)
+	switch device {
+	case "lo":
+		return 0, nil
+	case "eth0":
+		return 0, nil
+	case "eth1":
+		return 1, nil
+	case "ib0":
+		return 0, nil
+	case "ib1":
+		return 1, nil
+	case "qib42":
+		return 0, nil
+	default:
+		return 0, errors.New("unknown fabric interface")
 	}
-	return numaNode, nil
 }
 
 // GetIfaceNumaNode returns NUMA ID of the given network device.
