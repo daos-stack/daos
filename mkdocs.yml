@@ -71,11 +71,11 @@ nav:
     - Installation and Setup:
         - 'CentOS': 'QSG/setup_centos.md'
         - 'openSUSE': 'QSG/setup_suse.md'
+	- 'DAOS in Docker': 'QSG/docker.md'
         - 'Build from Scratch': 'QSG/build_from_scratch.md'
         - 'Admin/Client Tools': 'QSG/tour.md'
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
-        - 'Software Installation': 'admin/installation.md'
         - 'Pre-deployment Checklist': 'admin/predeployment_check.md'
         - 'System Deployment': 'admin/deployment.md'
         - 'System Administration': 'admin/administration.md'
@@ -83,7 +83,6 @@ nav:
         - 'Tiering and Unified Namespace': 'admin/tiering_uns.md'
         - 'Performance Tuning': 'admin/performance_tuning.md'
         - 'Troubleshooting': 'admin/troubleshooting.md'
-        - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
     - Test and Benchmarking:
         - 'Run DAOS Autotest': 'testing/autotest.md'
