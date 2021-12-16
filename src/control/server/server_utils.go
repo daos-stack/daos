@@ -416,26 +416,28 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 	}
 
 	srxVarName := "FI_OFI_RXM_USE_SRX"
-	getSetting := func(ev string) (bool, int32) {
+	getSetting := func(ev string) (bool, int32, error) {
 		kv := strings.Split(ev, "=")
 		if len(kv) != 2 {
-			return false, -1
+			return false, -1, nil
 		}
 		if kv[0] != srxVarName {
-			return false, -1
+			return false, -1, nil
 		}
 		v, err := strconv.ParseInt(kv[1], 10, 32)
 		if err != nil {
-			return true, -1
+			return false, -1, err
 		}
-		return true, int32(v)
+		return true, int32(v), nil
 	}
 
 	engineVals := make([]int32, len(cfg.Engines))
 	for idx, ec := range cfg.Engines {
 		engineVals[idx] = -1 // default to unset
 		for _, ev := range ec.EnvVars {
-			if match, engSrx := getSetting(ev); match {
+			if match, engSrx, err := getSetting(ev); err != nil {
+				return -1, err
+			} else if match {
 				engineVals[idx] = engSrx
 				break
 			}
@@ -453,6 +455,12 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 		if engineVals[i] != cliSrx {
 			return -1, errors.Errorf("%s setting must be the same for all engines", srxVarName)
 		}
+	}
+
+	// If the SRX config was not explicitly set via env vars, use the
+	// global config value.
+	if cliSrx == -1 {
+		cliSrx = int32(common.BoolAsInt(!cfg.Fabric.DisableSRX))
 	}
 
 	return cliSrx, nil

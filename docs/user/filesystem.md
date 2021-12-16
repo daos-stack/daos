@@ -188,7 +188,7 @@ itself. Files can be accessed by simply concatenating the mount point and the
 name of the file, relative to the root of the container.
 
 ```bash
-$ daos cont create tank -l mycont -t POSIX
+$ daos cont create tank --label mycont --type POSIX
   Container UUID : 8a8f08bb-5034-41e8-b7ae-0cdce347c558
   Container Label: mycont
   Container Type : POSIX
@@ -213,7 +213,7 @@ accessed by the path `<mount point>/<container uuid>`. The container uuid
 will have to be provided from an external source.
 
 ```bash
-$ daos cont create tank -l mycont2 -t POSIX
+$ daos cont create tank --label mycont2 --type POSIX
   Container UUID : 0db21789-5372-4f2a-b7bc-14c0a5e968df
   Container Label: mycont2
   Container Type : POSIX
@@ -300,7 +300,7 @@ $ dfuse -m /tmp/dfuse --pool tank --cont mycont
 $ cd /tmp/dfuse/
 $ ls
 foo
-$ daos cont create tank -l mycont3 --type POSIX --path ./link_to_externa_container
+$ daos cont create tank --label mycont3 --type POSIX --path ./link_to_externa_container
   Container UUID : 933944a9-ddf2-491a-bdbf-4442f0437d56
   Container Label: mycont3
   Container Type : POSIX

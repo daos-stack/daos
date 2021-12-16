@@ -91,6 +91,12 @@
 #crt_timeout: 30
 #
 #
+## CART: Disable SRX
+## parameters shared with client.
+#
+#disable_srx: false
+#
+#
 ## NVMe SSD inclusion list
 ## Immutable after running "dmg storage format".
 #
