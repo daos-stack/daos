@@ -24,6 +24,7 @@ class ContainerAutotestTest(TestWithServers):
         """
         self.log.info("Create a pool")
         self.add_pool()
+        self.pool.set_query_data()
         daos_cmd = self.get_daos_command()
         self.log.info("Autotest start")
         try:
@@ -32,3 +33,5 @@ class ContainerAutotestTest(TestWithServers):
         except CommandFailure as error:
             self.log.error("Error: %s", error)
             self.fail("daos pool autotest failed!")
+        finally:
+            self.pool.set_query_data()

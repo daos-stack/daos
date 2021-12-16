@@ -38,8 +38,9 @@ type fsCmd struct {
 type fsCopyCmd struct {
 	daosCmd
 
-	Source string `long:"src" short:"s" description:"copy source" required:"1"`
-	Dest   string `long:"dst" short:"d" description:"copy destination" required:"1"`
+	Source   string `long:"src" short:"s" description:"copy source" required:"1"`
+	Dest     string `long:"dst" short:"d" description:"copy destination" required:"1"`
+	Preserve string `long:"preserve-props" short:"m" description:"preserve container properties, requires HDF5 library" required:"0"`
 }
 
 func (cmd *fsCopyCmd) Execute(_ []string) error {
@@ -53,6 +54,10 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 	defer freeString(ap.src)
 	ap.dst = C.CString(cmd.Dest)
 	defer freeString(ap.dst)
+	if cmd.Preserve != "" {
+		ap.preserve_props = C.CString(cmd.Preserve)
+		defer freeString(ap.preserve_props)
+	}
 
 	ap.fs_op = C.FS_COPY
 	rc := C.fs_copy_hdlr(ap)

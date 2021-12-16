@@ -928,7 +928,7 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 		*ret_idx = -1;
 	} else {
 		/* Pick random rank from the list */
-		*ret_idx = rand() % membs->rl_nr;
+		*ret_idx = d_rand() % membs->rl_nr;
 		contact_rank = membs->rl_ranks[*ret_idx];
 
 		D_DEBUG(DB_ALL, "URI lookup rank chosen: %d\n", contact_rank);

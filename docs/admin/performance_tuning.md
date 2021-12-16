@@ -101,6 +101,7 @@ export OFI_INTERFACE=eth0
 # Specify domain; usually only required when running over ofi+verbs;ofi_rxm
 # For example in such configuration OFI_DOMAIN might be set to mlx5_0
 # run fi_info --provider='verbs;ofi_rxm' in order to find an appropriate domain
+# if only specifying OFI_INTERFACE without OFI_DOMAIN, we assume we do not need one
 export OFI_DOMAIN=eth0
 
 # Export additional CART-level environment variables as described in README.env
