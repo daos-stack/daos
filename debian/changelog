@@ -1,3 +1,9 @@
+daos (2.0.0-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 16 Dec 2021 15:08:11 -0400
+
 daos (2.0.0-2) unstable; urgency=medium
   [ Jeff Olivier ]
   * Version bump for 2.0.0 RC2
