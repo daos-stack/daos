@@ -1044,7 +1044,7 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size)
 				true /* create */, false /* bootstrap */, size);
 
 	/* TODO: Attempt to only add replicas that were successfully started */
-	if (rc != 0 && rc != -DER_ALREADY)
+	if (rc != 0)
 		goto out_stop;
 	rc = rdb_add_replicas(svc->s_db, ranks);
 out_stop:
@@ -1225,6 +1225,8 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid,
 			   create, in->sai_size,
 			   bootstrap ? in->sai_ranks : NULL, NULL /* arg */);
+	if (rc == -DER_ALREADY)
+		rc = 0;
 
 out:
 	out->sao_rc_errval = rc;
@@ -1322,7 +1324,9 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 
 	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
 			  in->soi_flags & RDB_OF_DESTROY);
-	out->soo_rc = (rc == 0 || rc == -DER_ALREADY ? 0 : 1);
+	if (rc == -DER_ALREADY)
+		rc = 0;
+	out->soo_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
 }
 
