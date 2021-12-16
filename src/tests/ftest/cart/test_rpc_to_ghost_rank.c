@@ -302,9 +302,9 @@ test_init(void)
 			rc);
 	}
 
-	/* Start at 1 instead of 0, because we've already created one context 
-	   in crtu_srv_start_basic */
-
+	/* Start at 1 instead of 0, because we've already created one context
+	 * in crtu_srv_start_basic
+	 */
 	for (i = 1; i < test_g.t_ctx_num; i++) {
 		test_g.t_thread_id[i] = i;
 		rc = crt_context_create(&test_g.t_crt_ctx[i]);
