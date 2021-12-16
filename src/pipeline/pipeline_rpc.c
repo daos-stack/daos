@@ -37,7 +37,7 @@ pipeline_t_proc_consts(crt_proc_t proc, crt_proc_op_t proc_op,
 		rc = crt_proc_d_iov_t(proc, proc_op, constant);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 	}
 
@@ -68,43 +68,43 @@ pipeline_t_proc_parts(crt_proc_t proc, crt_proc_op_t proc_op,
 		rc = crt_proc_d_iov_t(proc, proc_op, &part->part_type);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_d_iov_t(proc, proc_op, &part->data_type);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint32_t(proc, proc_op, &part->num_operands);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_d_iov_t(proc, proc_op, &part->akey);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint64_t(proc, proc_op, &part->num_constants);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 		rc = pipeline_t_proc_consts(proc, proc_op, part->num_constants,
 					    &part->constant);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint64_t(proc, proc_op, &part->data_offset);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint64_t(proc, proc_op, &part->data_len);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 	}
 
@@ -135,18 +135,18 @@ pipeline_t_proc_filters(crt_proc_t proc, crt_proc_op_t proc_op,
 		rc = crt_proc_d_iov_t(proc, proc_op, &filter->filter_type);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint32_t(proc, proc_op, &filter->num_parts);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 		rc = pipeline_t_proc_parts(proc, proc_op, filter->num_parts,
 					   &filter->parts);
 		if (unlikely(rc))
 		{
-			goto exit;
+			D_GOTO(exit, rc);
 		}
 	}
 
@@ -163,29 +163,29 @@ crt_proc_daos_pipeline_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	rc = crt_proc_uint64_t(proc, proc_op, &pipe->version);
 	if (unlikely(rc))
 	{
-		goto exit;
+		D_GOTO(exit, rc);
 	}
 	rc = crt_proc_uint32_t(proc, proc_op, &pipe->num_filters);
 	if (unlikely(rc))
 	{
-		goto exit;
+		D_GOTO(exit, rc);
 	}
 	rc = pipeline_t_proc_filters(proc, proc_op, pipe->num_filters,
 				     &pipe->filters);
 	if (unlikely(rc))
 	{
-		goto exit;
+		D_GOTO(exit, rc);
 	}
 	rc = crt_proc_uint32_t(proc, proc_op, &pipe->num_aggr_filters);
 	if (unlikely(rc))
 	{
-		goto exit;
+		D_GOTO(exit, rc);
 	}
 	rc = pipeline_t_proc_filters(proc, proc_op, pipe->num_aggr_filters,
 				     &pipe->aggr_filters);
 	if (unlikely(rc))
 	{
-		goto exit;
+		D_GOTO(exit, rc);
 	}
 
 exit:

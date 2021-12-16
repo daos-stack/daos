@@ -274,9 +274,6 @@ daos_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 		  d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
 		  daos_event_t *ev);
 
-int daos_pipeline_run__dummy(daos_handle_t coh, daos_handle_t oh, daos_handle_t th,
-			     daos_pipeline_t pipeline);
-
 #if defined(__cplusplus)
 }
 #endif

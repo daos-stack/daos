@@ -592,7 +592,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	memset(&anchor, 0, sizeof(daos_anchor_t));
 
 	/** reading 64 records at a time */
-	while (!daos_anchor_is_eof(&anchor)) {
+	/*while (!daos_anchor_is_eof(&anchor))*/ {
 		nr_kds = 64; /** trying to read 64 at a time */
 
 		rc = daos_pipeline_run(coh, oh, *pipeline, DAOS_TX_NONE, 0,
@@ -650,7 +650,7 @@ main(int argc, char **argv)
 	uuid_t			co_uuid;
 	daos_obj_id_t		oid;
 	int			rc;
-	daos_pipeline_t		pipeline1, pipeline2, pipeline3;
+	daos_pipeline_t		pipeline1;/*, pipeline2, pipeline3;*/
 
 	if (argc != 2) {
 		fprintf(stderr, "args: pool_uuid\n");
@@ -700,6 +700,7 @@ main(int argc, char **argv)
 	/** Running pipeline */
 	run_pipeline(&pipeline1);
 
+#if 0
 	/** init pipeline2 object */
 	daos_pipeline_init(&pipeline2);
 	/** FILTER "Owner == Benny AND Species == dog" */
@@ -723,6 +724,7 @@ main(int argc, char **argv)
 	nr_aggr = 1;
 	run_pipeline(&pipeline3);
 	nr_aggr = 0;
+#endif
 
 	/** Freeing used memory */
 	//...

@@ -20,7 +20,7 @@ dc_pipeline_run_task_create(daos_handle_t coh, daos_handle_t oh,
 	int			rc;
 
 	DAOS_API_ARG_ASSERT(*args, PIPELINE_RUN);
-	rc = dc_task_create(dc_pipeline_run__dummy, tse, ev, task);
+	rc = dc_task_create(dc_pipeline_run, tse, ev, task);
 	if (rc)
 	{
 		return rc;

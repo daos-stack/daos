@@ -20,6 +20,7 @@
 #include <math.h>
 #include "pipeline_rpc.h"
 
+#if 0
 static void
 pipeline_filter_get_data(daos_filter_part_t *part, d_iov_t *dkey,
 			 uint32_t nr_iods, daos_iod_t *iods, d_sg_list_t *akeys,
@@ -735,7 +736,7 @@ pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
 		}
 	}
 }
-
+#endif
 static uint32_t
 pipeline_part_nops(const char *part_type, size_t part_type_s)
 {
@@ -843,7 +844,6 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 	}
 	return true;
 }
-
 
 /**************************/
 
@@ -1013,6 +1013,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	pro = (struct pipeline_run_out *) crt_reply_get(rpc);
 	rc  = pro->pro_ret; // get status
+
+	// TODO: Handle transactions
 	/*if (daos_handle_is_valid(cb_args->th)) // ???
 	{
 		int rc_tmp;
@@ -1103,6 +1105,9 @@ shard_pipeline_run_task(tse_task_t *task)
 	{
 		D_GOTO(out, rc);
 	}
+
+	/** -- register call back function for this particular shard task */
+
 	crt_req_addref(req);
 	cb_args.rpc		= req;
 	cb_args.map_ver		= &args->pra_map_ver;
@@ -1116,18 +1121,23 @@ shard_pipeline_run_task(tse_task_t *task)
 		D_GOTO(out_req, rc);
 	}
 
+	/** -- sending the RPC */
+
 	pri = crt_req_get(req);
 	D_ASSERT(pri != NULL);
 	pri->pri_pipe			= args->pra_api_args->pipeline;
 	pri->pri_oid			= args->pra_oid;
-	uuid_copy(pri->pri_pool_uuid, pool->dp_pool);
-	uuid_copy(pri->pri_co_hdl, args->pra_coh_uuid);
-	uuid_copy(pri->pri_co_uuid, args->pra_cont_uuid);
 	pri->pri_epoch			= args->pra_epoch.oe_value;
 	pri->pri_epoch_first		= args->pra_epoch.oe_first;
 	pri->pri_target			= args->pra_target;
+	uuid_copy(pri->pri_pool_uuid, pool->dp_pool);
+	uuid_copy(pri->pri_co_hdl, args->pra_coh_uuid);
+	uuid_copy(pri->pri_co_uuid, args->pra_cont_uuid);
 
 	rc = daos_rpc_send(req, task);
+
+	/** -- exit */
+
 	dc_pool_put(pool);
 	return rc;
 out_req:
@@ -1167,19 +1177,16 @@ queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout
 	struct shard_pipeline_run_args	*args;
 	int				rc;
 
-	/** queue task for leader shard */
 	api_args	= dc_task_get_args(api_task);
 	sched		= tse_task2sched(api_task);
 	rc		= tse_task_create(shard_pipeline_run_task,
 					  sched, NULL, &task);
 	if (rc != 0)
 	{
-		tse_task_complete(task, rc);
 		D_GOTO(out_task, rc);
 	}
 
-	args = tse_task_buf_embedded(task,
-				     sizeof(*args));
+	args = tse_task_buf_embedded(task, sizeof(*args));
 	args->pra_api_args	= api_args;
 	args->pra_epoch		= *epoch;
 	args->pra_map_ver	= map_ver;
@@ -1187,13 +1194,12 @@ queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout
 	args->pra_dti		= *dti;
 	args->pra_oid		= oid;
 	args->pipeline_auxi	= pipeline_auxi;
+	args->pra_target	= layout->ol_shards[shard].po_target;
 	uuid_copy(args->pra_coh_uuid, coh_uuid);
 	uuid_copy(args->pra_cont_uuid, cont_uuid);
-	args->pra_target	= layout->ol_shards[shard].po_target;
 	rc = tse_task_register_deps(api_task, 1, &task);
 	if (rc != 0)
 	{
-		tse_task_complete(task, rc);
 		D_GOTO(out_task, rc);
 	}
 	tse_task_addref(task);
@@ -1230,20 +1236,66 @@ shard_task_sched(tse_task_t *task, void *arg)
 	return rc;
 }
 
+static int
+pipeline_create_layout(daos_handle_t coh, struct dc_pool *pool,
+		      struct daos_obj_md *obj_md, struct pl_obj_layout **layout)
+{
+	int		rc = 0;
+	struct pl_map	*map;
+
+	map = pl_map_find(pool->dp_pool, obj_md->omd_id);
+	if (map == NULL)
+	{
+		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = pl_obj_place(map, obj_md, NULL, layout);
+	pl_map_decref(map);
+	if (rc != 0)
+	{
+		D_DEBUG(DB_PL, "Failed to generate object layout\n");
+		D_GOTO(out, rc);
+	}
+	D_DEBUG(DB_PL, "Place object on %d targets ver %d\n", (*layout)->ol_nr,
+		(*layout)->ol_ver);
+	D_ASSERT((*layout)->ol_nr == (*layout)->ol_grp_size * (*layout)->ol_grp_nr);
+
+out:
+	return rc;
+}
+
+static void
+pipeline_create_auxi(tse_task_t *api_task, uint32_t map_ver,
+		     struct daos_obj_md *obj_md,
+		     struct pipeline_auxi_args **pipeline_auxi)
+{
+	struct pipeline_auxi_args	*p_auxi;
+	d_list_t			*head = NULL;
+
+	p_auxi = tse_task_stack_push(api_task, sizeof(*p_auxi));
+	p_auxi->opc		= DAOS_PIPELINE_RPC_RUN;
+	p_auxi->map_ver_req	= map_ver;
+	p_auxi->omd_id		= obj_md->omd_id;
+	head = &p_auxi->shard_task_head;
+	D_INIT_LIST_HEAD(head);
+
+	*pipeline_auxi = p_auxi;
+}
+
 int
-dc_pipeline_run__dummy(tse_task_t *api_task)
+dc_pipeline_run(tse_task_t *api_task)
 {
 	daos_pipeline_run_t		*api_args = dc_task_get_args(api_task);
 	struct pl_obj_layout		*layout = NULL;
-	struct dc_pool			*pool;
-	struct pl_map			*map;
 	daos_handle_t			coh;
-	daos_handle_t			poh;
 	struct daos_obj_md		obj_md;
+	daos_handle_t			poh;
+	struct dc_pool			*pool;
 	struct daos_oclass_attr		*oca;
 	int				rc;
 	uint32_t			i;
-	d_list_t			*head = NULL;
+	d_list_t			*shard_task_head = NULL;
 	daos_unit_oid_t			oid;
 	struct dtx_id			dti;
 	struct dtx_epoch		epoch;
@@ -1254,7 +1306,6 @@ dc_pipeline_run__dummy(tse_task_t *api_task)
 	bool				priv;
 	struct shard_task_sched_args	sched_arg;
 
-	/** -- Layout create */
 
 	coh	= dc_obj_hdl2cont_hdl(api_args->oh);
 	rc	= dc_obj_hdl2obj_md(api_args->oh, &obj_md);
@@ -1269,31 +1320,20 @@ dc_pipeline_run__dummy(tse_task_t *api_task)
 		D_WARN("Cannot find valid pool\n");
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
-	rc = dc_cont_hdl2uuid(coh, &coh_uuid, &cont_uuid);
+	obj_md.omd_ver = dc_pool_get_version(pool);
+
+	rc = pipeline_create_layout(coh, pool, &obj_md, &layout);
+	dc_pool_put(pool);
 	if (rc != 0)
 	{
 		D_GOTO(out, rc);
 	}
 
-	map = pl_map_find(pool->dp_pool, obj_md.omd_id);
-	if (map == NULL)
-	{
-		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
-		dc_pool_put(pool);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	obj_md.omd_ver = dc_pool_get_version(pool);
-	dc_pool_put(pool);
-	rc = pl_obj_place(map, &obj_md, NULL, &layout);
-	pl_map_decref(map);
+	rc = dc_cont_hdl2uuid(coh, &coh_uuid, &cont_uuid);
 	if (rc != 0)
 	{
-		D_DEBUG(DB_PL, "Failed to generate object layout\n");
 		D_GOTO(out, rc);
 	}
-	D_DEBUG(DB_PL, "Place object on %d targets ver %d\n", layout->ol_nr,
-		layout->ol_ver);
-	D_ASSERT(layout->ol_nr == layout->ol_grp_size * layout->ol_grp_nr);
 
 	if (daos_handle_is_valid(api_args->th))
 	{
@@ -1316,14 +1356,10 @@ dc_pipeline_run__dummy(tse_task_t *api_task)
 		map_ver = layout->ol_ver;
 	}
 
-	/** -- Create auxi object */
+	pipeline_create_auxi(api_task, map_ver, &obj_md, &pipeline_auxi);
 
-	pipeline_auxi = tse_task_stack_push(api_task, sizeof(*pipeline_auxi));
-	pipeline_auxi->opc		= DAOS_PIPELINE_RPC_RUN;
-	pipeline_auxi->map_ver_req	= map_ver;
-	pipeline_auxi->omd_id		= obj_md.omd_id;
-	head				= &pipeline_auxi->shard_task_head;
-	D_INIT_LIST_HEAD(head);
+	/** -- Register completion call back function for full operation */
+
 	rc = tse_task_register_comp_cb(api_task, pipeline_comp_cb, NULL, 0);
 	if (rc != 0)
 	{
@@ -1341,7 +1377,8 @@ dc_pipeline_run__dummy(tse_task_t *api_task)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_ASSERT(d_list_empty(head));
+	shard_task_head = &pipeline_auxi->shard_task_head;
+	D_ASSERT(d_list_empty(shard_task_head));
 
 	for (i = 0; i < layout->ol_grp_nr; i++)
 	{
@@ -1400,10 +1437,12 @@ dc_pipeline_run__dummy(tse_task_t *api_task)
 		}
 	}
 
-	D_ASSERT(!d_list_empty(head));
+	/* -- schedule all the queued shard tasks */
+
+	D_ASSERT(!d_list_empty(shard_task_head));
 	sched_arg.tsa_scheded	= false;
 	sched_arg.tsa_epoch	= epoch;
-	tse_task_list_traverse(head, shard_task_sched, &sched_arg);
+	tse_task_list_traverse(shard_task_head, shard_task_sched, &sched_arg);
 	if (sched_arg.tsa_scheded == false)
 	{
 		tse_task_complete(api_task, 0);
@@ -1411,9 +1450,9 @@ dc_pipeline_run__dummy(tse_task_t *api_task)
 
 	return rc;
 out:
-	if (head != NULL && !d_list_empty(head))
+	if (shard_task_head != NULL && !d_list_empty(shard_task_head))
 	{
-		tse_task_list_traverse(head, shard_pipeline_task_abort, &rc);
+		tse_task_list_traverse(shard_task_head, shard_pipeline_task_abort, &rc);
 	}
 	
 	tse_task_complete(api_task, rc);
@@ -1421,6 +1460,8 @@ out:
 	return rc;
 }
 
+
+#if 0
 int
 dc_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 		daos_handle_t th, uint64_t flags, daos_key_t *dkey,
@@ -1704,3 +1745,5 @@ exit:
 
 	return rc;
 }
+#endif
+

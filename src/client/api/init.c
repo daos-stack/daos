@@ -125,7 +125,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_kv_list, sizeof(daos_kv_list_t)},
 
 	/** Pipeline */
-	{dc_pipeline_run__dummy, sizeof(daos_pipeline_run_t)},
+	{dc_pipeline_run, sizeof(daos_pipeline_run_t)},
 };
 
 /**
