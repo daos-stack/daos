@@ -216,7 +216,8 @@ func setDeadlineIfUnset(parent context.Context, req UnaryRequest) (context.Conte
 
 	rd := req.getDeadline()
 	if rd.IsZero() {
-		rd = time.Now().Add(defaultRequestTimeout)
+		req.SetTimeout(defaultRequestTimeout)
+		rd = req.getDeadline()
 	}
 	return context.WithDeadline(parent, rd)
 }

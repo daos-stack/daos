@@ -85,9 +85,6 @@ fio:
       randrw:
         rw: 'randrw'
         rw_read: 'randrw'
-      randwrite:
-        rw: 'randwrite'
-        rw_read: 'randread'
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
   disable_caching: True
