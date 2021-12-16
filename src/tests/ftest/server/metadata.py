@@ -18,12 +18,13 @@ from job_manager_utils import Orterun
 from thread_manager import ThreadManager
 
 
-def run_ior_loop(manager, uuids):
+def run_ior_loop(manager, uuids, tmpdir_base):
     """IOR run for each UUID provided.
 
     Args:
         manager (str): mpi job manager command
         uuids (list): list of container UUIDs
+        tmpdir_base (str): base directory for the mpi orte_tmpdir_base mca parameter
 
     Returns:
         list: a list of CmdResults from each ior command run
@@ -35,7 +36,7 @@ def run_ior_loop(manager, uuids):
         manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
 
         # Create a unique temporary directory for the the manager command
-        tmp_dir = mkdtemp(dir=manager.tmpdir_base.value)
+        tmp_dir = mkdtemp(dir=tmpdir_base)
         manager.tmpdir_base.update(tmp_dir, "tmpdir_base")
 
         try:
@@ -389,7 +390,6 @@ class ObjectMetadata(TestWithServers):
 
                 # Define the job manager for the IOR command
                 self.ior_managers.append(Orterun(ior_cmd))
-                self.ior_managers[-1].tmpdir_base.update(self.test_dir, "orterun.tmpdir_base")
                 env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
                 self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
                 self.ior_managers[-1].assign_processes(processes)
@@ -397,7 +397,9 @@ class ObjectMetadata(TestWithServers):
                 self.ior_managers[-1].verbose = False
 
                 # Add a thread for these IOR arguments
-                thread_manager.add(manager=self.ior_managers[-1], uuids=list_of_uuid_lists[index])
+                thread_manager.add(
+                    manager=self.ior_managers[-1], uuids=list_of_uuid_lists[index],
+                    tmpdir_base=self.test_dir)
                 self.log.info(
                     "Created %s thread %s with container uuids %s", operation,
                     index, list_of_uuid_lists[index])

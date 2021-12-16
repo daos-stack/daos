@@ -960,8 +960,11 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	int			rc;
 
 	rc = ABT_future_create(1, NULL, &future);
-	if (rc)
+	if (rc) {
+		if (sync != NULL && sync->ivs_comp_cb)
+			sync->ivs_comp_cb(sync->ivs_comp_cb_arg, rc);
 		return rc;
+	}
 
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
@@ -1010,7 +1013,7 @@ out:
 	return rc;
 }
 
-struct iv_op_ult_arg {
+struct sync_comp_cb_arg {
 	d_sg_list_t	iv_value;
 	struct ds_iv_key iv_key;
 	struct ds_iv_ns	*ns;
@@ -1021,15 +1024,88 @@ struct iv_op_ult_arg {
 };
 
 static int
-_iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
-       crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
+iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc);
+
+static int
+sync_comp_cb(void *arg, int rc)
 {
+	struct sync_comp_cb_arg *cb_arg = arg;
+
+	if (cb_arg == NULL)
+		return rc;
+
+	/* Let's retry asynchronous IV only for GRPVER for the moment */
+	if (cb_arg->retry && rc == -DER_GRPVER && !cb_arg->ns->iv_stop) {
+		int rc1;
+
+		/* If the IV ns leader has been changed, then it will retry
+		 * in the mean time, it will rely on others to update the
+		 * ns for it.
+		 */
+		D_WARN("retry for class %d opc %d rc "DF_RC"\n",
+			cb_arg->iv_key.class_id, IV_UPDATE, DP_RC(rc));
+		rc1 = iv_op(cb_arg->ns, &cb_arg->iv_key, &cb_arg->iv_value,
+			    &cb_arg->iv_sync, cb_arg->shortcut, cb_arg->retry,
+			    cb_arg->opc);
+		if (rc1) {
+			D_ERROR("ds iv update retry failed: %d\n", rc1);
+			rc = rc1;
+		}
+	}
+
+	ds_iv_ns_put(cb_arg->ns);
+	d_sgl_fini(&cb_arg->iv_value, true);
+	D_FREE(cb_arg);
+	return rc;
+}
+
+static int
+iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
+{
+	struct ds_iv_key *_key = key;
+	d_sg_list_t	 *_value = value;
 	int rc;
 
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
 retry:
-	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
+	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY) {
+		struct sync_comp_cb_arg *arg = NULL;
+
+		/* Register asynchronous sync(lazy mode) callback */
+		D_ALLOC_PTR(arg);
+		if (arg == NULL)
+			return -DER_NOMEM;
+
+		/* Asynchronous mode, let's realloc the value and key, since
+		 * the input parameters will be invalid after the call.
+		 */
+		if (value) {
+			rc = daos_sgl_alloc_copy_data(&arg->iv_value, value);
+			if (rc) {
+				D_FREE(arg);
+				return -DER_NOMEM;
+			}
+		}
+
+		memcpy(&arg->iv_key, key, sizeof(*key));
+		arg->shortcut = shortcut;
+		arg->iv_sync = *sync;
+		arg->retry = retry;
+		ds_iv_ns_get(ns);
+		arg->ns = ns;
+		arg->opc = opc;
+
+		sync->ivs_comp_cb = sync_comp_cb;
+		sync->ivs_comp_cb_arg = arg;
+		if (value)
+			_value = &arg->iv_value;
+		_key = &arg->iv_key;
+	}
+
+	rc = iv_op_internal(ns, _key, _value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
 		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
@@ -1050,82 +1126,12 @@ retry:
 		 */
 		D_WARN("retry upon %d for class %d opc %d\n", rc,
 		       key->class_id, opc);
-		/* sleep 1sec and retry */
-		dss_sleep(1000);
+		/* Yield to avoid hijack the cycle if IV RPC is not sent */
+		ABT_thread_yield();
 		goto retry;
 	}
 
 	return rc;
-}
-
-static void
-iv_op_ult(void *arg)
-{
-	struct iv_op_ult_arg *ult_arg = arg;
-
-	D_ASSERT(ult_arg->iv_sync.ivs_mode == CRT_IV_SYNC_LAZY);
-	/* Since it will put LAZY sync in a separate and asynchronous ULT, so
-	 * let's use EAGER mode in CRT to make it simipler.
-	 */
-	ult_arg->iv_sync.ivs_mode = CRT_IV_SYNC_EAGER;
-	_iv_op(ult_arg->ns, &ult_arg->iv_key,
-	       ult_arg->iv_value.sg_nr == 0 ? NULL : &ult_arg->iv_value,
-	       &ult_arg->iv_sync, ult_arg->shortcut, ult_arg->retry, ult_arg->opc);
-	ds_iv_ns_put(ult_arg->ns);
-	d_sgl_fini(&ult_arg->iv_value, true);
-	D_FREE(ult_arg);
-}
-
-static int
-iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
-	    crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
-{
-	struct iv_op_ult_arg	*ult_arg;
-	int			rc;
-
-	D_ALLOC_PTR(ult_arg);
-	if (ult_arg == NULL)
-		return -DER_NOMEM;
-
-	/* Asynchronous mode, let's realloc the value and key, since
-	 * the input parameters will be invalid after the call.
-	 */
-	if (value) {
-		rc = daos_sgl_alloc_copy_data(&ult_arg->iv_value, value);
-		if (rc) {
-			D_FREE(ult_arg);
-			return -DER_NOMEM;
-		}
-	}
-
-	memcpy(&ult_arg->iv_key, key, sizeof(*key));
-	ult_arg->shortcut = shortcut;
-	ult_arg->iv_sync = *sync;
-	ult_arg->retry = retry;
-	ds_iv_ns_get(ns);
-	ult_arg->ns = ns;
-	ult_arg->opc = opc;
-	rc = dss_ult_create(iv_op_ult, ult_arg, DSS_XS_SYS, 0, 0, NULL);
-	if (rc != 0) {
-		ds_iv_ns_put(ult_arg->ns);
-		d_sgl_fini(&ult_arg->iv_value, true);
-		D_FREE(ult_arg);
-	}
-
-	return rc;
-}
-
-static int
-iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
-      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
-{
-	if (ns->iv_stop)
-		return -DER_SHUTDOWN;
-
-	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY)
-		return iv_op_async(ns, key, value, sync, shortcut, retry, opc);
-
-	return _iv_op(ns, key, value, sync, shortcut, retry, opc);
 }
 
 /**

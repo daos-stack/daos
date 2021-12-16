@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.106
-Release:       10%{?relval}%{?dist}
+Version:       2.0.0
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -516,6 +516,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Tue Dec 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.0.0-2
+- Version bump to 2.0.0-2
+
+* Sat Dec 11 2021 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-1
+- Version bump to 2.0.0
+
 * Fri Dec 10 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.106-10
 - Don't make daos-*-tests-openmi a dependency of anything
   - If they are wanted, they should be installed explicitly, due to

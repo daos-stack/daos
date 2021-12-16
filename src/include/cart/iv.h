@@ -601,6 +601,12 @@ typedef int (*crt_iv_sync_done_cb_t)(void *cb_arg, int rc);
 typedef struct {
 	crt_iv_sync_mode_t	ivs_mode;
 	crt_iv_sync_event_t	ivs_event;
+	/** This callback will be called once the current IV sync is done
+	 * for the local node.
+	 **/
+	crt_iv_sync_done_cb_t	ivs_comp_cb;
+	/* argument for ivs_comp_cb */
+	void			*ivs_comp_cb_arg;
 	/* OR-ed combination of 0 or more crt_iv_sync_flag_t flags */
 	uint32_t		ivs_flags;
 } crt_iv_sync_t;

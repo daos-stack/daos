@@ -58,7 +58,7 @@ are stored in an extended attribute of the target file or directory that can
 then be used in subsequent command invocations to identify the container.
 
 ```bash
-$ daos cont create tank --path /tmp/mycontainer --type=POSIX --oclass=SX
+$ daos cont create tank --label mycont --path /tmp/mycontainer --type POSIX --oclass=SX
   Container UUID : 30e5d364-62c9-4ddf-9284-1021359455f2
   Container Type : POSIX
 
@@ -589,7 +589,9 @@ permission in the container's ACL.
 To create a container labeled mycont in a pool labeled tank with a custom ACL:
 
 ```bash
-$ daos cont create <pool_label> --label <container_label> --acl-file=<path>
+$ export DAOS_POOL="tank"
+$ export DAOS_CONT="mycont"
+$ daos cont create $DAOS_POOL --label $DAOS_CONT --acl-file=<path>
 ```
 
 The ACL file format is detailed in the
@@ -600,7 +602,7 @@ The ACL file format is detailed in the
 To view a container's ACL:
 
 ```bash
-$ daos cont get-acl <pool_label> <container_label>
+$ daos cont get-acl $DAOS_POOL $DAOS_CONT
 ```
 
 The output is in the same string format used in the ACL file during creation,
@@ -616,7 +618,7 @@ noted above for container creation.
 To replace a container's ACL with a new ACL:
 
 ```bash
-$ daos cont overwrite-acl <pool_label> <container_label> --acl-file=<path>
+$ daos cont overwrite-acl $DAOS_POOL $DAOS_CONT --acl-file=<path>
 ```
 
 #### Adding and Updating ACEs
@@ -624,13 +626,13 @@ $ daos cont overwrite-acl <pool_label> <container_label> --acl-file=<path>
 To add or update multiple entries in an existing container ACL:
 
 ```bash
-$ daos cont update-acl <pool_label> <container_label> --acl-file=<path>
+$ daos cont update-acl $DAOS_POOL $DAOS_CONT --acl-file=<path>
 ```
 
 To add or update a single entry in an existing container ACL:
 
 ```bash
-$ daos cont update-acl <pool_label> <container_label> --entry <ACE>
+$ daos cont update-acl $DAOS_POOL $DAOS_CONT --entry <ACE>
 ```
 
 If there is no existing entry for the principal in the ACL, the new entry is
@@ -642,7 +644,7 @@ is replaced with the new one.
 To delete an entry for a given principal in an existing container ACL:
 
 ```bash
-$ daos cont delete-acl <pool_label> <container_label> --principal=<principal>
+$ daos cont delete-acl $DAOS_POOL $DAOS_CONT --principal=<principal>
 ```
 
 The `principal` argument refers to the
@@ -698,7 +700,7 @@ creating the container. However, a specific user and/or group may be specified
 at container creation time.
 
 ```bash
-$ daos cont create <pool_label> <container_label> --user=<owner-user> --group=<owner-group>
+$ daos cont create $DAOS_POOL --label $DAOS_CONT --user=<owner-user> --group=<owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
@@ -709,13 +711,13 @@ The user and group names are case sensitive and must be formatted as
 To change the owner user:
 
 ```bash
-$ daos cont set-owner <pool_label> <container_label> --user=<owner-user>
+$ daos cont set-owner $DAOS_POOL $DAOS_CONT --user=<owner-user>
 ```
 
 To change the owner group:
 
 ```bash
-$ daos cont set-owner <pool_label> <container_label> --group=<owner-group>
+$ daos cont set-owner $DAOS_POOL $DAOS_CONT --group=<owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
