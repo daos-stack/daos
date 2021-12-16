@@ -721,6 +721,7 @@ pipeline {
                       always {
                             echo functionalTestPostV2()
                             unitTestPost artifacts: ['**/valgrind.*.memcheck.xml'],
+                                         testResults: 'None',
                                          always_script: '/bin/true',
                                          with_valgrind: false,
                                          valgrind_stash: 'centos7-gcc-cart-memcheck',
