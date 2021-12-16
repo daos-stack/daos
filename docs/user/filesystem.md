@@ -188,7 +188,7 @@ itself. Files can be accessed by simply concatenating the mount point and the
 name of the file, relative to the root of the container.
 
 ```bash
-$ daos cont create tank -l mycont -t POSIX
+$ daos cont create tank --label mycont --type POSIX
   Container UUID : 8a8f08bb-5034-41e8-b7ae-0cdce347c558
   Container Label: mycont
   Container Type : POSIX
@@ -213,7 +213,7 @@ accessed by the path `<mount point>/<container uuid>`. The container uuid
 will have to be provided from an external source.
 
 ```bash
-$ daos cont create tank -l mycont2 -t POSIX
+$ daos cont create tank --label mycont2 --type POSIX
   Container UUID : 0db21789-5372-4f2a-b7bc-14c0a5e968df
   Container Label: mycont2
   Container Type : POSIX
@@ -300,7 +300,7 @@ $ dfuse -m /tmp/dfuse --pool tank --cont mycont
 $ cd /tmp/dfuse/
 $ ls
 foo
-$ daos cont create tank -l mycont3 --type POSIX --path ./link_to_externa_container
+$ daos cont create tank --label mycont3 --type POSIX --path ./link_to_externa_container
   Container UUID : 933944a9-ddf2-491a-bdbf-4442f0437d56
   Container Label: mycont3
   Container Type : POSIX
@@ -375,6 +375,32 @@ These are two command line options to control the DFuse process itself.
 
 These will affect all containers accessed via DFuse, regardless of any
 container attributes.
+
+### Permissions
+
+DFuse can serve data from any user's container, but needs appropriate permissions in order to do
+this.
+
+File ownership within containers is set by the container being served, with the owner of the
+container owning all files within that container, so if looking at the container of another user
+then all entries within that container will be owned by that user, and file-based permissions
+checks by the kernel will be made on that basis.
+
+Should write permission be granted to another user then any newly created files will also be
+owned by the container owner, regardless of the user used to create them.  Permissions are only
+checked on connect, so if permissions are revoked users need to
+restart DFuse for these to be picked up.
+
+#### Pool permissions.
+
+DFuse needs 'r' permission for pools only.
+
+#### Container permissions.
+
+DFuse needs 'r', 't', and 'a' permissions to run: read for accessing the data, 't' to read container
+properties to know the container type and 'a' to read the ACLs to know the container owner.
+
+Write permission for the container is optional; however, without it the container will be read-only.
 
 ### Stopping DFuse
 

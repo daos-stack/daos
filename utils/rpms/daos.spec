@@ -1,9 +1,10 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
+%define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc2-1%{?dist}
-%global libfabric_version 1.14.0~rc3-1
+%global mercury_version 2.1.0~rc4-1%{?dist}
+%global libfabric_version 1.14.0~rc3-2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       8%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -228,6 +229,9 @@ Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
+Requires: lua-lmod
+%else
+Requires: Lmod
 %endif
 
 %description client-tests
@@ -269,14 +273,25 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %description firmware
 This is the package needed to manage server storage firmware on DAOS servers.
 
-%package daos_serialize
+%package serialize
 Summary: DAOS serialization library that uses HDF5
 BuildRequires: hdf5-devel
 Requires: hdf5
 
-%description daos_serialize
+%description serialize
 This is the package needed to use the DAOS serialization and deserialization
 tools, as well as the preserve option for the filesystem copy tool.
+
+%package mofed-shim
+Summary: A shim to bridge MOFED's openmpi to distribution dependency tags
+Provides: libmpi.so.40()(64bit)(openmpi-x86_64)
+Requires: libmpi.so.40()(64bit)
+Provides: libmpi_cxx.so.40()(64bit)(openmpi-x86_64)
+Provides: libmpi_cxx.so.40()(64bit)
+
+%description mofed-shim
+This is the package that bridges the difference between the MOFED openmpi
+"Provides" and distribution-openmpi consumers "Requires".
 
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
@@ -328,6 +343,8 @@ mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{buildroot}/%{_sysctldir}
+install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
 mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
@@ -346,6 +363,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
+%sysctl_apply %{sysctl_script_name}
 %preun server
 %systemd_preun %{server_svc_name}
 %postun server
@@ -416,6 +434,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
+%{_sysctldir}/%{sysctl_script_name}
 
 %files client
 %{_libdir}/libdaos_common.so
@@ -509,13 +528,41 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
-%files daos_serialize
+%files serialize
 %{_libdir}/libdaos_serialize.so
 
 %files tests
 # No files in a meta-package
 
+%files mofed-shim
+# No files in a shim package
+
 %changelog
+* Sat Dec 11 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-15
+- Create a shim package to allow daos openmpi packages built with the
+  distribution openmpi to install on MOFED systems
+
+* Fri Dec 10 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-14
+- Don't make daos-*-tests-openmi a dependency of anything
+  - If they are wanted, they should be installed explicitly, due to
+    potential conflicts with other MPI stacks
+
+* Wed Dec 08 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-13
+- Remove DAOS-9173 workaround from mercury. Apply DAOS-9173 to ofi
+
+* Tue Dec 07 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-12
+- Apply DAOS-9173 workaround to mercury
+
+* Fri Dec 03 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-11
+- Update mercury to v2.1.0rc4
+
+* Thu Dec 02 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-10
+- Fix name of daos serialize package
+
+* Sun Nov 28 2021 Tom Nabarro <tom.nabarro@intel.com> 2.1.100-9
+- Set rmem_{max,default} sysctl values on server package install to enable
+  SPDK pci_event module to operate in unprivileged process (daos_engine).
+
 * Wed Nov 24 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-8
 - Remove invalid "%%else if" syntax
 - Fix a few other rpmlint warnings
