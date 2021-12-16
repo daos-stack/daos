@@ -993,9 +993,11 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			}
 
 			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(security.CertificateConfig{},
-					config.Server{}),
-				cmpopts.IgnoreUnexported(sysfs.Provider{}),
+				cmpopts.IgnoreUnexported(
+					security.CertificateConfig{},
+					config.Server{},
+					sysfs.Provider{},
+				),
 			}
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 

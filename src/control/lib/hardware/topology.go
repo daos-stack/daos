@@ -8,6 +8,7 @@ package hardware
 
 import (
 	"context"
+	"sort"
 
 	"github.com/pkg/errors"
 )
@@ -64,6 +65,101 @@ func (t *Topology) NumCoresPerNUMA() int {
 	}
 
 	return 0
+}
+
+// AddDevice adds a device to the topology.
+func (t *Topology) AddDevice(numaID uint, device *PCIDevice) {
+	if t == nil || device == nil {
+		return
+	}
+
+	if t.NUMANodes == nil {
+		t.NUMANodes = make(NodeMap)
+	}
+
+	numa, exists := t.NUMANodes[numaID]
+	if !exists {
+		numa = &NUMANode{
+			ID:         numaID,
+			Cores:      []CPUCore{},
+			PCIDevices: PCIDevices{},
+		}
+		t.NUMANodes[numaID] = numa
+	}
+
+	numa.AddDevice(device)
+}
+
+// Merge updates the contents of the initial topology from the incoming topology.
+func (t *Topology) Merge(newTopo *Topology) {
+	if t == nil || newTopo == nil {
+		return
+	}
+
+	for numaID, node := range newTopo.NUMANodes {
+		if t.NUMANodes == nil {
+			t.NUMANodes = make(NodeMap)
+		}
+
+		current, exists := t.NUMANodes[numaID]
+		if !exists {
+			t.NUMANodes[numaID] = node
+			continue
+		}
+
+		for _, core := range node.Cores {
+			found := false
+			for _, curCore := range current.Cores {
+				if curCore.ID == core.ID {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				current.AddCore(core)
+			}
+		}
+
+		for _, bus := range node.PCIBuses {
+			found := false
+			for _, curBus := range current.PCIBuses {
+				if curBus.HighAddress.Equals(&bus.HighAddress) &&
+					curBus.LowAddress.Equals(&bus.LowAddress) {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				current.AddPCIBus(bus)
+			}
+		}
+
+		for key, newDevs := range node.PCIDevices {
+			oldDevs := current.PCIDevices[key]
+			for _, newDev := range newDevs {
+				devExists := false
+				for _, oldDev := range oldDevs {
+					if newDev.Name == oldDev.Name {
+						devExists = true
+
+						// Only a couple parameters can be overridden
+						if oldDev.Type == DeviceTypeUnknown {
+							oldDev.Type = newDev.Type
+						}
+
+						if oldDev.LinkSpeed == 0 {
+							oldDev.LinkSpeed = newDev.LinkSpeed
+						}
+					}
+				}
+				if !devExists {
+					current.PCIDevices.Add(newDev)
+				}
+			}
+		}
+	}
 }
 
 type (
@@ -148,4 +244,55 @@ func (t DeviceType) String() string {
 	}
 
 	return "unknown device type"
+}
+
+// WeightedTopologyProvider is a provider with associated weight to determine order of operations.
+// Greater weights indicate higher priority.
+type WeightedTopologyProvider struct {
+	Provider TopologyProvider
+	Weight   int
+}
+
+// TopologyFactory is a TopologyProvider that merges results from multiple other
+// TopologyProviders.
+type TopologyFactory struct {
+	providers []TopologyProvider
+}
+
+// GetTopology gets a merged master topology from all the topology providers.
+func (tf *TopologyFactory) GetTopology(ctx context.Context) (*Topology, error) {
+	if tf == nil {
+		return nil, errors.New("nil TopologyFactory")
+	}
+
+	if len(tf.providers) == 0 {
+		return nil, errors.New("no TopologyProviders in TopologyFactory")
+	}
+
+	newTopo := &Topology{}
+	for _, prov := range tf.providers {
+		topo, err := prov.GetTopology(ctx)
+		if err != nil {
+			return nil, err
+		}
+		newTopo.Merge(topo)
+	}
+	return newTopo, nil
+}
+
+// NewTopologyFactory creates a TopologyFactory based on the list of weighted topology providers.
+func NewTopologyFactory(providers ...*WeightedTopologyProvider) *TopologyFactory {
+	sort.Slice(providers, func(i, j int) bool {
+		// Higher weight goes first
+		return providers[i].Weight > providers[j].Weight
+	})
+
+	orderedProviders := make([]TopologyProvider, 0, len(providers))
+	for _, wtp := range providers {
+		orderedProviders = append(orderedProviders, wtp.Provider)
+	}
+
+	return &TopologyFactory{
+		providers: orderedProviders,
+	}
 }
