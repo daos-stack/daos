@@ -7,14 +7,10 @@ in order to obtain the fabric environment from the running
 `daos_agent` process. See `self_test --help` for details.
 
 	# set env
-	SHARED_DIR=<shared dir by all nodes>
 	export FI_UNIVERSE_SIZE=2048
 
-	# generate the attach info file
-	daos_agent -o /etc/daos/daos_agent.yml -l $SHARED_DIR/daos_agent.log dump-attachinfo -o $SHARED_DIR/daos_server.attach_info_tmp
-
 	# for 4 servers --endpoint 0-3:0-1 ranks:tags.
-	self_test --path $SHARED_DIR --group-name daos_server --use-daos-agent-env --endpoint 0-1:0-1
+	self_test --group-name daos_server --use-daos-agent-env --endpoint 0-1:0-1
 
 	Adding endpoints:
 	  ranks: 0-1 (# ranks = 2)
