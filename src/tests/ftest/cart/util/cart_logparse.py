@@ -70,9 +70,8 @@ LOG_LEVELS = {
 
 # Make a reverse lookup from log level to name.
 LOG_NAMES = {}
-for name in LOG_LEVELS:
-    LOG_NAMES[LOG_LEVELS[name]] = name
-
+for (name,value) in LOG_LEVELS.items():
+    LOG_NAMES[value] = name
 
 # pylint: disable=too-few-public-methods
 class LogRaw():
@@ -506,6 +505,8 @@ class LogIter():
         # Try and open the file as utf-8, but if that doesn't work then
         # find and report the error, then continue with the file open as
         # latin-1
+
+        # pylint: disable=consider-using-with
         self._fd = None
 
         self.file_corrupt = False

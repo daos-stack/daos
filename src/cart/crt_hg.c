@@ -1164,8 +1164,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_rc = rc;
 
 	if (crt_cbinfo.cci_rc != 0)
-		RPC_ERROR(rpc_priv, "RPC failed; rc: " DF_RC "\n",
-			  DP_RC(crt_cbinfo.cci_rc));
+		RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
+			   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
 
 	RPC_TRACE(DB_TRACE, rpc_priv,
 		  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
@@ -1283,17 +1283,6 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 	int		rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
-
-	if (D_LOG_ENABLED(DB_NET)) {
-		uint64_t hlc = crt_hlc_get();
-
-		if (hlc > rpc_priv->crp_create_hlc) {
-			uint64_t delay = crt_hlc2msec(hlc - rpc_priv->crp_create_hlc);
-
-			if (delay > 500)
-				RPC_TRACE(DB_NET, rpc_priv, "RPC reply took %lu ms.\n", delay);
-		}
-	}
 
 	RPC_ADDREF(rpc_priv);
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,

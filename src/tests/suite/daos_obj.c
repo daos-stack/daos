@@ -2431,12 +2431,14 @@ fetch_size(void **state)
 	for (i = 0; i < NUM_AKEYS; i++)
 		iod[i].iod_size	= DAOS_REC_ANY;
 
+	print_message("fetch with unknown iod_size and NULL sgl\n");
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
 			    NULL, NULL);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
+	print_message("fetch with unknown iod_size and less buffer\n");
 	for (i = 0; i < NUM_AKEYS; i++) {
 		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);
 		iod[i].iod_size	= DAOS_REC_ANY;

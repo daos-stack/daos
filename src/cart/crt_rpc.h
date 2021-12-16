@@ -131,9 +131,8 @@ struct crt_rpc_priv {
 	struct d_binheap_node	crp_timeout_bp_node;
 	/* the timeout in seconds set by user */
 	uint32_t		crp_timeout_sec;
-	/* HLC time stamp to be timeout, the key of timeout binheap */
-	uint64_t		crp_expire_hlc;
-	uint64_t		crp_create_hlc;
+	/* time stamp to be timeout, the key of timeout binheap */
+	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;
 	void			*crp_arg; /* argument for crp_complete_cb */
 	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
@@ -650,14 +649,12 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 static inline void
 crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 {
-	uint64_t hlc = crt_hlc_get();
-
 	D_ASSERT(rpc_priv != NULL);
 
 	if (rpc_priv->crp_timeout_sec == 0)
 		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
 
-	rpc_priv->crp_expire_hlc = hlc + crt_sec2hlc(rpc_priv->crp_timeout_sec);
+	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 }
 
 /* Convert opcode to string. Only returns string for internal RPCs */

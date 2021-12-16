@@ -4244,8 +4244,8 @@ out:
 
 /* Returns oids for both moved and clobbered files, but does not check either of them */
 int
-dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent, char *new_name,
-		  daos_obj_id_t *moid, daos_obj_id_t *oid)
+dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, char *name,
+		  dfs_obj_t *new_parent, char *new_name, daos_obj_id_t *moid, daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -4267,6 +4267,15 @@ dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_pare
 		new_parent = &dfs->root;
 	else if (!S_ISDIR(new_parent->mode))
 		return ENOTDIR;
+
+	if (flags != 0) {
+#ifdef RENAME_NOREPLACE
+		if (flags != RENAME_NOREPLACE)
+			return ENOTSUP;
+#else
+		return ENOTSUP;
+#endif
+	}
 
 	rc = check_name(name, &len);
 	if (rc)
@@ -4309,6 +4318,11 @@ restart:
 	}
 
 	if (exists) {
+#ifdef RENAME_NOREPLACE
+		if (flags & RENAME_NOREPLACE)
+			D_GOTO(out, rc = EEXIST);
+#endif
+
 		if (S_ISDIR(new_entry.mode)) {
 			uint32_t	nr = 0;
 			daos_handle_t	oh;
@@ -4341,10 +4355,8 @@ restart:
 				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 
-			if (nr != 0) {
-				D_ERROR("target dir is not empty\n");
+			if (nr != 0)
 				D_GOTO(out, rc = ENOTEMPTY);
-			}
 		}
 
 		rc = remove_entry(dfs, th, new_parent->oh, new_name, new_len,
@@ -4433,7 +4445,7 @@ int
 dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	 char *new_name, daos_obj_id_t *oid)
 {
-	return dfs_move_internal(dfs, parent, name, new_parent, new_name, NULL, oid);
+	return dfs_move_internal(dfs, 0, parent, name, new_parent, new_name, NULL, oid);
 }
 
 int
