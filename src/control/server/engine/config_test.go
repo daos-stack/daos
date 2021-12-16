@@ -615,13 +615,15 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricInterface("ib1"),
 			expNuma: 1,
 		},
-		"numa pinned; not matching iface": {
-			cfg: MockConfig().
-				WithPinnedNumaNode(1).
-				WithFabricInterface("ib0"),
-			expErr:  errors.New("misconfiguration"),
-			expNuma: 1,
-		},
+		// NOTE: this currently logs an error but could instead return one
+		//       but there might be legitimate use cases e.g. sharing interface
+		//"numa pinned; not matching iface": {
+		//	cfg: MockConfig().
+		//		WithPinnedNumaNode(1).
+		//		WithFabricInterface("ib0"),
+		//	expErr:  errors.New("misconfiguration"),
+		//	expNuma: 1,
+		//},
 		"numa not pinned": {
 			cfg: MockConfig().
 				WithFabricInterface("ib1"),

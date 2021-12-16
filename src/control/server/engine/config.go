@@ -200,7 +200,7 @@ func (c *Config) setAffinity(ctx context.Context, log logging.Logger) error {
 
 		// validate that numa node is correct for the given device
 		if ifaceNumaNode != *c.PinnedNumaNode {
-			return errors.Errorf("misconfiguration: network interface %s is on NUMA "+
+			log.Errorf("misconfiguration: network interface %s is on NUMA "+
 				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
 				ifaceNumaNode, *c.PinnedNumaNode)
 		}
