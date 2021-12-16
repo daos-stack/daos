@@ -319,11 +319,14 @@ def define_components(reqs):
     # prematurely with SIGILL (-4).
     # https://docs.microsoft.com/en-us/azure/virtual-machines/dv2-dsv2-series#dsv2-series says
     # that GHA can schedule on any of Skylake, Broadwell or Haswell CPUs.
+    # Ubuntu systems seem to fail more often, there may be something different going on here,
+    # it has also failed with sandybridge.
+    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
     if dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch='native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
-        spdk_arch = 'sandybridge'
+        spdk_arch = 'westmere'
     else:
         spdk_arch = 'haswell'
 

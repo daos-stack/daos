@@ -167,10 +167,7 @@ char *d_realpath(const char *path, char *resolved_path);
 	do {								\
 		(ptr) = d_realpath((path), NULL);			\
 		if ((ptr) != NULL) {					\
-			int _size = 0;					\
-			void *_ptr = (ptr);				\
-			if (_ptr)					\
-				_size = strnlen(_ptr, PATH_MAX + 1) + 1 ; \
+			int _size = strnlen(ptr, PATH_MAX + 1) + 1 ;	\
 			D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	0, #ptr, 0); \
 			if (((ptr) == NULL))				\
 				errno = ENOMEM;				\
