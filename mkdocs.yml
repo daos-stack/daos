@@ -46,6 +46,7 @@ plugins:
 markdown_extensions:
     - admonition
     - footnotes
+    - tables
     - toc:
         permalink: true
         toc_depth: 4
@@ -104,6 +105,7 @@ nav:
     - Releases:
         - 'Release Notes v2.0': 'release/release_notes_v2_0.md'
         - 'Support Matrix v2.0': 'release/support_matrix_v2_0.md'
+        - 'Upgrading to v2.0': 'release/upgrading_to_v2_0.md'
         - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
