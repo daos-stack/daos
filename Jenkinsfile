@@ -63,7 +63,19 @@ pipeline {
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: "full_regression",
-               description: 'Test-tag to use for this run (i.e pr, daily_regression, full_regression, etc.')
+               description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'CI_FUNCTIONAL_VM9_LABEL',
+               defaultValue: 'ci_vm9',
+               description: 'Label to use for 9 VM functional tests')
+        string(name: 'CI_NVME_3_LABEL',
+               defaultValue: 'ci_nvme3',
+               description: 'Label to use for 3 node NVMe tests')
+        string(name: 'CI_NVME_5_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node NVMe tests')
+        string(name: 'CI_NVME_9_LABEL',
+               defaultValue: 'ci_nvme9',
+               description: 'Label to use for 9 node NVMe tests')
     }
 
     stages {
