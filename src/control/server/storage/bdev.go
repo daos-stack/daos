@@ -23,7 +23,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/system"
@@ -418,14 +417,18 @@ type (
 // getNumaNodeBusidRange sets range parameters in the input request either to user configured
 // values if provided in the server config file, or automatically derive them by querying
 // hardware configuration.
-func getNumaNodeBusidRange(ctx context.Context, provider *hwloc.Provider, numaNodeIdx uint) (uint64, uint64, error) {
-	topo, err := provider.GetTopology(ctx)
+func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numaNodeIdx uint) (uint64, uint64, error) {
+	topo, err := getTopology(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
+	if topo == nil {
+		return 0, 0, errors.New("nil topology")
+	}
 
-	// for the moment take the lowest and highest buses in all of the ranges for an engine
-	// TODO: add each of the ranges to the request for each engine.
+	// Take the lowest and highest buses in all of the ranges for an engine following the
+	// assumption that bus-IDs assigned to each NUMA node will always be contiguous.
+	// TODO: add each range individually if unsure about assumption
 
 	nodes := topo.NUMANodes
 	if len(nodes) <= int(numaNodeIdx) {

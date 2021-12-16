@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
@@ -309,12 +310,20 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 	return
 }
 
+type topologyGetter func(ctx context.Context) (*hardware.Topology, error)
+
 // BdevWriteConfigRequestFromConfig returns a config write request from a storage config.
-func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config) (BdevWriteConfigRequest, error) {
+func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, getTopo topologyGetter) (BdevWriteConfigRequest, error) {
 	req := BdevWriteConfigRequest{
-		ConfigOutputPath: cfg.ConfigOutputPath,
-		OwnerUID:         os.Geteuid(),
-		OwnerGID:         os.Getegid(),
+		OwnerUID: os.Geteuid(),
+		OwnerGID: os.Getegid(),
+	}
+	if cfg == nil {
+		return req, errors.New("received nil config")
+	}
+	req.ConfigOutputPath = cfg.ConfigOutputPath
+	if getTopo == nil {
+		return req, errors.New("received nil GetTopology function")
 	}
 
 	hn, err := os.Hostname()
@@ -345,8 +354,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 			begin, end, err = common.GetRangeLimits(inRange, common.PCIAddrBusBitSize)
 		} else {
 			log.Debug("generating hotplug bus-id range based on hardware topology")
-			begin, end, err = getNumaNodeBusidRange(ctx, hwloc.NewProvider(log),
-				cfg.NumaNodeIndex)
+			begin, end, err = getNumaNodeBusidRange(ctx, getTopo, cfg.NumaNodeIndex)
 		}
 
 		if err != nil {
@@ -366,9 +374,10 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
 func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) error {
-	req, err := BdevWriteConfigRequestFromConfig(ctx, log, p.engineStorage)
+	req, err := BdevWriteConfigRequestFromConfig(ctx, log, p.engineStorage,
+		hwloc.NewProvider(log).GetTopology)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "creating write config request")
 	}
 
 	log.Infof("Writing NVMe config file for engine instance %d to %q", p.engineIndex,

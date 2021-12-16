@@ -349,6 +349,7 @@
 #    # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
 #    #bdev_list: ["0000:5d:05.5"]
 #
+#    # Optional override, will be automatically generated based on NUMA affinity.
 #    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
@@ -492,6 +493,7 @@
 #    class: nvme
 #    bdev_list: ["0000:82:00.0","0000:5d:05.5"]
 #
+#    # Optional override, will be automatically generated based on NUMA affinity.
 #    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
 #    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
 #    # will not be processed by this engine. Empty or unset range signifies allow all.

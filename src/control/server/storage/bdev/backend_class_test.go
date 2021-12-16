@@ -379,7 +379,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
       {
         "params": {
           "begin": 0,
-          "end": 0
+          "end": 7
         },
         "method": "hotplug_busid_range"
       }
@@ -470,7 +470,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				WithStorageEnableHotplug(tc.enableHotplug)
 
 			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
-				&engineConfig.Storage)
+				&engineConfig.Storage, storage.MockGetTopology)
 			if err != nil {
 				t.Fatal(err)
 			}

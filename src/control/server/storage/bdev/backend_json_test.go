@@ -208,7 +208,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			}
 
 			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
-				&engineConfig.Storage)
+				&engineConfig.Storage, storage.MockGetTopology)
 			if tc.enableVmd {
 				writeReq.VMDEnabled = true
 			}

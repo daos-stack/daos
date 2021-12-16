@@ -196,8 +196,6 @@ func (c *Config) setAffinity(ctx context.Context, log logging.Logger) error {
 	}
 
 	if c.PinnedNumaNode != nil {
-		log.Debugf("setting engine %d to pinned numa %d", c.Index, *c.PinnedNumaNode)
-
 		// validate that numa node is correct for the given device
 		if ifaceNumaNode != *c.PinnedNumaNode {
 			log.Errorf("misconfiguration: network interface %s is on NUMA "+
@@ -211,7 +209,6 @@ func (c *Config) setAffinity(ctx context.Context, log logging.Logger) error {
 	}
 
 	// set engine numa node index to that of selected fabric interface
-	log.Debugf("setting engine %d to fabric numa %d", c.Index, ifaceNumaNode)
 	c.Fabric.NumaNodeIndex = ifaceNumaNode
 	c.Storage.NumaNodeIndex = ifaceNumaNode
 
