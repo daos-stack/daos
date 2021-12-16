@@ -326,7 +326,7 @@ def define_components(reqs):
     if dist[0] == 'CentOS Linux' and dist[1] == '7':
         spdk_arch='native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
-        spdk_arch = 'westmere'
+        spdk_arch = 'x86-64'
     else:
         spdk_arch = 'haswell'
 
