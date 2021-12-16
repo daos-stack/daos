@@ -11,9 +11,6 @@ import os
 import json
 import re
 
-import pprint
-pp = pprint.PrettyPrinter(indent=4)
-
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
 from avocado.utils.distro import detect
@@ -375,7 +372,6 @@ class Test(avocadoTest):
 
     def tearDown(self):
         """Tear down after each test case."""
-
         self.report_timeout()
         super().tearDown()
 
@@ -462,7 +458,6 @@ class TestWithoutServers(Test):
         """Tear down after each test case."""
         self.report_timeout()
         self._teardown_errors.extend(self.fault_injection.stop())
-
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
