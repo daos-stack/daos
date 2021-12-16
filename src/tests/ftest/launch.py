@@ -1925,21 +1925,17 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "df -h /var/tmp",
         "for file in /var/tmp/core.*",
         "do if [ -e $file ]",
-        "then if [ ! -s $file ]",
+        "then ls -al $file",
+        "if [ ! -s $file ]",
         "then ((rc++))",
-        "ls -al $file",
-        "else ls -al $file",
-        "if sudo chmod 644 $file && "
         "else if sudo chmod 644 $file && "
         "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_cores_dir),
         "then copied+=($file)",
         "if ! sudo rm -fr $file",
         "then ((rc++))",
-        "ls -al $file",
         "fi",
         "else ((rc++))",
-        "ls -al $file",
         "fi",
         "fi",
         "fi",
