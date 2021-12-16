@@ -345,15 +345,16 @@ def run_command(cmd):
 
     """
     print("Running {}".format(" ".join(cmd)))
-    process = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        universal_newlines=True)
-    stdout, _ = process.communicate()
-    retcode = process.poll()
+    try:
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            universal_newlines=True)
+        stdout, _ = process.communicate()
+        retcode = process.poll()
+    except Exception as error:
+        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
     if retcode:
-        raise RuntimeError(
-            "Error executing '{}':\n\tOutput:\n{}".format(
-                " ".join(cmd), stdout))
+        raise RuntimeError("Error executing '{}':\n\tOutput:\n{}".format(" ".join(cmd), stdout))
     return stdout
 
 
@@ -769,6 +770,7 @@ def get_vmd_replacement(args):
         on all of the specified test servers
         bool: VMD PCI address included in the pci address string (True)
               VMD PCI address not included in the pci address string (False)
+
     """
     # A list of server host is required to able to auto-detect NVMe devices
     if not args.test_servers:
@@ -1750,150 +1752,49 @@ def resolve_debuginfo(pkg):
         dict: dictionary of debug package information
 
     """
-    # pylint: disable=import-error,import-outside-toplevel,unused-import
-    try:
-        import dnf
-        return resolve_debuginfo_dnf(pkg)
-    except ImportError:
-        try:
-            import yum
-            return resolve_debuginfo_yum(pkg)
-
-        except ImportError:
-            return resolve_debuginfo_rpm(pkg)
-
-
-def resolve_debuginfo_rpm(pkg):
-    """Return the debuginfo package for a given package name.
-
-    Args:
-        pkg (str): a package name
-
-    Returns:
-        dict: dictionary of debug package information
-
-    """
     package_info = None
-    rpm_query = get_output(["rpm", "-qa"])
-    regex = r"({})-([0-9a-z~\.]+)-([0-9a-z~\.]+)\.x".format(pkg)
-    matches = re.findall(regex, rpm_query)
-    if matches:
+    try:
+        # Eventually use python libraries for this rather than exec()ing out
+        name, version, release, epoch = get_output(
+            ["rpm", "-q", "--qf", "%{name} %{version} %{release} %{epoch}", pkg],
+            check=False).split()
+
         debuginfo_map = {"glibc": "glibc-debuginfo-common"}
         try:
-            debug_pkg = debuginfo_map[matches[0][0]]
+            debug_pkg = debuginfo_map[name]
         except KeyError:
-            debug_pkg = matches[0][0] + "-debuginfo"
+            debug_pkg = "{}-debuginfo".format(name)
         package_info = {
             "name": debug_pkg,
-            "version": matches[0][1],
-            "release": matches[0][2],
+            "version": version,
+            "release": release,
+            "epoch": epoch
         }
-    else:
+    except ValueError:
         print("Package {} not installed, skipping debuginfo".format(pkg))
 
     return package_info
 
 
-def resolve_debuginfo_yum(pkg):
-    """Return the debuginfo package for a given package name.
-
-    Args:
-        pkg (str): a package name
-
-    Returns:
-        dict: dictionary of debug package information
-
-    """
-    import yum      # pylint: disable=import-error,import-outside-toplevel
-    yum_base = yum.YumBase()
-    yum_base.conf.assumeyes = True
-    yum_base.setCacheDir(force=True, reuse=True)
-    yum_base.repos.enableRepo('*debug*')
-
-    debuginfo_map = {'glibc':   'glibc-debuginfo-common'}
-    try:
-        debug_pkg = debuginfo_map[pkg]
-    except KeyError:
-        debug_pkg = pkg + "-debuginfo"
-
-    try:
-        pkg_data = yum_base.rpmdb.returnNewestByName(name=pkg)[0]
-    except yum.Errors.PackageSackError as expn:
-        if expn.__str__().rstrip() == "No Package Matching " + pkg:
-            print("Package {} not installed, "
-                  "skipping debuginfo".format(pkg))
-            return None
-        raise
-
-    return {'name': debug_pkg,
-            'version': pkg_data['version'],
-            'release': pkg_data['release'],
-            'epoch': pkg_data['epoch']}
-
-
-def resolve_debuginfo_dnf(pkg):
-    """Return the debuginfo package for a given package name.
-
-    Args:
-        pkg (str): a package name
-
-    Returns:
-        dict: dictionary of debug package information
-
-    """
-    import dnf      # pylint: disable=import-error,import-outside-toplevel
-    dnf_base = dnf.Base()
-    dnf_base.conf.assumeyes = True
-    dnf_base.read_all_repos()
-    try:
-        dnf_base.fill_sack()
-    except OSError as error:
-        print("Got an OSError trying to fill_sack(): ", error)
-        raise RuntimeError("resolve_debuginfo_dnf() "
-                           "failed: ", error)
-
-    query = dnf_base.sack.query()
-    latest = query.latest()
-    latest_info = latest.filter(name=pkg)
-
-    debuginfo = None
-    try:
-        package = list(latest_info)[0]
-    except IndexError as error:
-        raise RuntimeError("Could not find package info for "
-                           "{}".format(pkg))
-
-    if package:
-        debuginfo_map = {"glibc": "glibc-debuginfo-common"}
-        try:
-            debug_pkg = debuginfo_map[pkg]
-        except KeyError:
-            debug_pkg = "{}-debuginfo".format(package.name)
-
-        debuginfo = {
-            "name": debug_pkg,
-            "version": package.version,
-            "release": package.release,
-            "epoch": package.epoch
-        }
-    else:
-        print("Package {} not installed, skipping debuginfo".format(pkg))
-
-    return debuginfo
-
-
 def install_debuginfos():
-    """Install debuginfo packages."""
+    """Install debuginfo packages.
+
+    NOTE: This does assume that the same daos packages that are installed
+        on the nodes that could have caused the core dump are installed
+        on this node also.
+
+    """
     distro_info = detect()
+    install_pkgs = [{'name': 'gdb'}]
     if "centos" in distro_info.name.lower():
-        install_pkgs = [{'name': 'gdb'}, {'name': 'python3-debuginfo'}]
-    else:
-        install_pkgs = []
+        install_pkgs.append({'name': 'python3-debuginfo'})
 
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5']:
+    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric',
+                'hdf5-vol-daos', 'hdf5-vol-daos-mpich', 'hdf5-vol-daos-mpich-tests',
+                'hdf5-vol-daos-openmpi', 'hdf5-vol-daos-openmpi-tests', 'ior']:
         try:
             debug_pkg = resolve_debuginfo(pkg)
         except RuntimeError as error:
@@ -1928,9 +1829,12 @@ def install_debuginfos():
                     "install_debuginfos(): Unsupported distro: {}".format(
                         distro_info))
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
+        rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"])
         cmds.append(
-            ["sudo", "dnf", "debuginfo-install",
-             "-y"] + dnf_args + ["daos-server"])
+            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args +
+            ["daos-client-" + rpm_version,
+             "daos-server-" + rpm_version,
+             "daos-tests-" + rpm_version])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -2018,11 +1922,14 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         "set -eu",
         "rc=0",
         "copied=()",
+        "df -h /var/tmp",
         "for file in /var/tmp/core.*",
         "do if [ -e $file ]",
         "then if [ ! -s $file ]",
         "then ((rc++))",
         "ls -al $file",
+        "else ls -al $file",
+        "if sudo chmod 644 $file && "
         "else if sudo chmod 644 $file && "
         "scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, daos_cores_dir),
@@ -2063,6 +1970,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
         if not fnmatch.fnmatch(corefile, 'core.*[0-9]'):
             continue
         corefile_fqpn = os.path.join(daos_cores_dir, corefile)
+        print(run_command(['ls', '-l', corefile_fqpn]))
         # can't use the file python magic binding here due to:
         # https://bugs.astron.com/view.php?id=225, fixed in:
         # https://github.com/file/file/commit/6faf2eba2b8c65fbac7acd36602500d757614d2f
