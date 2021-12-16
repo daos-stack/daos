@@ -719,14 +719,8 @@ pipeline {
                     }
                     post {
                       always {
-                            echo functionalTestPostV2()
-                            unitTestPost artifacts: ['**/valgrind.*.memcheck.xml'],
-                                         testResults: 'None',
-                                         always_script: '/bin/true',
-                                         with_valgrind: false,
-                                         valgrind_stash: 'centos7-gcc-cart-memcheck',
-                                         valgrind_pattern: '**/valgrind.*.memcheck.xml',
-                                         ignore_failure: true
+                            stash name: 'centos7-gcc-cart-memcheck',
+                                  includes: '**/valgrind.*.memcheck.xml'
                         }
                     }
                 } // stage('Functional on CentOS 8 with Valgrind')
