@@ -2569,8 +2569,10 @@ again:
 
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
-		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph)
+		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {
+			D_DEBUG(DB_EPC, "Writing to %p\n", cont->sc_ec_query_agg_eph);
 			*cont->sc_ec_query_agg_eph = cont->sc_ec_agg_eph;
+		}
 	}
 
 	return rc;

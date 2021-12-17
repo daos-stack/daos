@@ -331,6 +331,20 @@ class LogLine():
         """Return True if line is record of fault injection for memory allocation"""
         return self._is_type(['fault_id', '0,'], trace=False)
 
+    def check_addr(self):
+        """Return if this line represents a memory address to be verified
+
+        Returns either None, or a hex string of a memory address.
+        """
+        try:
+            if self.function != 'cont_ec_aggregate_cb':
+                return None
+        except AttributeError:
+            return None
+        if not self._is_type(['Writing', 'to'], trace=False):
+            return None
+        return self._fields[4]
+
     def is_fi_alloc_fail(self):
         """Return True if line is showing failed memory allocation"""
         return self._is_type(['out', 'of', 'memory'], trace=False)

@@ -313,6 +313,51 @@ class LogTest():
                                  show_memleaks=True):
         """Check a pid from a single log file for consistency"""
 
+        # Known offsets, see the _check_valid() function.
+        offsets = set()
+
+        def _check_valid(addr):
+            """Check if a pointer is inside a valid region, returns True or False.
+
+            Firstly check if the address itself is an allocation point, then check a known offsets
+            to see if we can find the allocation point, and if that fails then walk backwards
+            through all currently valid allocations looking for a region that contains the
+            address and if one is found then save the offset for future use.
+            """
+
+            if addr in regions:
+                return True
+
+            target_ptr = int(addr, 16)
+
+            # Walk any previously discovered offsets and check if any of them are valid.
+            for offset in sorted(offsets):
+                base_ptr = target_ptr - offset
+                base_hex = hex(base_ptr)
+                if base_hex in regions:
+                    addr_line = regions[base_hex]
+                    size = addr_line.calloc_size()
+                    if base_ptr + size < target_ptr:
+                        continue
+                    return True
+
+            # Finally, walk every known memory region and check that.
+            for region in reversed(regions):
+                ptr = int(region, 16)
+                if ptr > target_ptr:
+                    continue
+                addr_line = regions[region]
+                size = addr_line.calloc_size()
+                if ptr + size < target_ptr:
+                    continue
+#                print('Address {} is {} bytes inside {} allocated at {}'.format(addr,
+#                                                                                target_ptr - ptr,
+#                                                                                size,
+#                                                                                addr_line.get_msg()))
+                offsets.add(target_ptr - ptr)
+                return True
+            return False
+
         # Dict of active descriptors.
         active_desc = OrderedDict()
         active_desc['root'] = None
@@ -529,6 +574,17 @@ class LogTest():
                             show_line(line, 'NORMAL',
                                       'realloc of unknown memory')
                             err_count += 1
+                else:
+                    # Check if a memory address is valid, useful when hunting for use-after-free
+                    # style bugs.
+                    addr = line.check_addr()
+                    if addr:
+                        valid = _check_valid(addr)
+                        if not valid:
+                            if addr in old_regions:
+                                show_line(line, 'HIGH', 'Possible use-after-free')
+                            else:
+                                show_line(line, 'HIGH', 'Line is not valid or freed')
 
         del active_desc['root']
         if rpc_r:
