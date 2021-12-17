@@ -686,8 +686,11 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_agents:
             self.start_agents(force=force_agent_start)
 
+        self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
+
         # If there's no server started, then there's no server log to write to.
-        if self.setup_start_servers:
+        if (self.setup_start_servers and self.setup_start_agents and
+            not self.skip_add_log_msg):
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
@@ -743,7 +746,7 @@ class TestWithServers(TestWithoutServers):
 
             for manager in self.agent_managers:
                 cart_ctl.group_name.value = manager.get_config_value("name")
-                # cart_ctl.run()
+                cart_ctl.run()
         else:
             self.log.info(
                 "Unable to write message to the server log: %d servers groups "
@@ -1681,6 +1684,33 @@ class TestWithServers(TestWithoutServers):
                 to True.
         """
         self.container = self.get_container(pool, namespace, create)
+
+    def add_container_qty(self, quantity, pool, namespace=None, create=True):
+        """Add multiple containers to the test case.
+
+        This method requires self.container to be defined as a list.
+        If self.container is undefined it will define it as a list.
+
+        Args:
+            quantity (int): number of containers to create
+            namespace (str, optional): namespace for TestContainer parameters in the
+                test yaml file. Defaults to None.
+            pool (TestPool): Pool object
+            create (bool, optional): should the container be created. Defaults to
+                True.
+
+        Raises:
+            TestFail: if self.pool is defined, but not as a list object.
+
+        """
+        if self.container is None:
+            self.container = []
+        if not isinstance(self.container, list):
+            self.fail(
+                "add_container_qty(): self.container must be a list: {}".format(
+                    type(self.container)))
+        for _ in range(quantity):
+            self.container.append(self.get_container(pool, namespace, create))
 
     def start_additional_servers(self, additional_servers, index=0,
                                  access_points=None):

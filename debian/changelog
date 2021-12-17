@@ -1,3 +1,29 @@
+daos (2.1.100-16) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 16 Dec 2021 15:08:11 -0400
+
+daos (2.1.100-15) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Sat, 11 Dec 2021 15:18:54 -0400
+
+daos (2.1.100-14) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Don't make daos-*-tests-openmi a dependency of anything
+    - If they are wanted, they should be installed explicitly, due to
+      potential conflicts with other MPI stacks
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 10 Dec 2021 09:44:14 -0400
+
+daos (2.1.100-13) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Remove DAOS-9173 workaround from mercury. Apply patch to OFI instead.
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 08 Dec 2021 10:00:01 -0100
+
 daos (2.1.100-12) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Apply DAOS-9173 workaround patch
