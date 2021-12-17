@@ -20,6 +20,9 @@ admin and client node. All nodes must have:
 
 -   pdsh installed (or some other means of running multiple remote
     commands in parallel)
+	
+In addition the server nodes should also have IOMMU enabled:
+<https://daos-stack.github.io/admin/predeployment_check/#enable-iommu-optional>
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:

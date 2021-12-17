@@ -218,13 +218,13 @@ DAOS servers and clients.
 	A::EVERYONE@:
 
 	# Update pool access entry for the existing test_group1 to no-permission
-	dmg pool update-acl -e A:G:test_group1@: --pool=Pool3
+	dmg pool update-acl -e A:G:test_group1@: Pool3
 
 	# Update pool access entry for a new user test_user3 with rw permission
-	dmg pool update-acl -e A::test_user3@:rw --pool=Pool3
+	dmg pool update-acl -e A::test_user3@:rw Pool3
 
 	# Get pool security acl after update-acl
-	$ dmg pool get-acl --pool=Pool3
+	$ dmg pool get-acl Pool3
 
 	# Entries:
 	A::OWNER@:rw
@@ -314,36 +314,40 @@ DAOS servers and clients.
 	use 'daos help RESOURCE' for resource specifics
 
 	$ daos cont --help
-	daos command (v1.2), libdaos 1.2.0
-
-	container (cont) commands:
-	create			create a container
-	clone			clone a container
-	destroy			destroy a container
-	list-objects	list all objects in container
-	list-obj
-	query			query a container
-	get-prop		get all container\'s properties
-	set-prop		set container\'s properties
-	get-acl			get a container\'s ACL
-	overwrite-acl	replace a container\'s ACL
-	update-acl		add/modify entries in a container\'s ACL
-	delete-acl		delete an entry from a container\'s ACL
-	set-owner		change the user and/or group that own a container
-	stat			get container statistics
-	check			check objects consistency in container
-	list-attrs		list container user-defined attributes
-	del-attr		delete container user-defined attribute
-	get-attr		get container user-defined attribute
-	set-attr		set container user-defined attribute
-	create-snap		create container snapshot (optional name)
-					at most recent committed epoch
-	list-snaps		list container snapshots taken
-	destroy-snap	destroy container snapshots
-					by name, epoch or range
-	rollback		roll back container to specified snapshot
-
-	use 'daos help cont|container COMMAND' for command specific options
+	Usage:
+	daos [OPTIONS] container
+	
+	Application Options:
+	--debug enable debug output
+	--verbose enable verbose output (when applicable)
+	-j, --json enable JSON output
+	
+	Help Options:
+	-h, --help Show this help message
+	
+	Available commands:
+	check check objects' consistency in a container
+	clone clone a container
+	create create a container
+	create-snap create container snapshot (aliases: snap)
+	del-attr delete container user-defined attribute (aliases: delattr)
+	delete-acl delete a container's ACL
+	destroy destroy a container
+	destroy-snap destroy container snapshot
+	get-acl get a container's ACL
+	get-attr get container user-defined attribute (aliases: getattr)
+	get-prop get container user-defined attribute (aliases: getprop)
+	list list all containers in pool (aliases: ls)
+	list-attr list container user-defined attributes (aliases: list-attrs, lsattr)
+	list-objects list all objects in container (aliases: list-obj)
+	list-snap list container snapshots (aliases: list-snaps)
+	overwrite-acl replace a container's ACL (aliases: replace)
+	query query a container
+	set-attr set container user-defined attribute (aliases: setattr)
+	set-owner change ownership for a container (aliases: chown)
+	set-prop set container user-defined attribute (aliases: setprop)
+	stat get container statistics
+	update-acl update a container's ACL
 
 ### daos container create
 
@@ -540,7 +544,7 @@ DAOS servers and clients.
 	# dmg pool destroy Timeout or failed due to pool has active container(s)
 	# Workaround pool destroy --force option
 
-		$ dmg pool destroy --pool=Pool1 --force
+		$ dmg pool destroy Pool1 --force
 		Pool-destroy command succeeded
 
 ## Run with dfuse fio
