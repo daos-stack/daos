@@ -206,12 +206,12 @@ for more information.
 	!!!note
 		These files should be protected from unauthorized access and preserved for future use.
 
-3.  Copy the certificates to a common location on each node in order to
+2.  Copy the certificates to a common location on each node in order to
     move them to the final location:
 
 		pdsh -S -w $ALL_NODES -x $(hostname -s) scp -r $(hostname -s):/tmp/daosCA /tmp
 
-4.  Copy the certificates to their default location (/etc/daos) on each
+3.  Copy the certificates to their default location (/etc/daos) on each
     admin node:
 
 		pdsh -S -w $ADMIN_NODE sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
@@ -223,7 +223,7 @@ for more information.
 
 				pdsh -S -w $ADMIN_NODES sudo mkdir /etc/daos/certs
 
-7.  Copy the certificates to their default location (/etc/daos) on each
+4.  Copy the certificates to their default location (/etc/daos) on each
     client node:
 
 		pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
@@ -235,7 +235,7 @@ for more information.
 
 			pdsh -S -w $CLIENT_NODES sudo mkdir /etc/daos/certs
 
-10. Copy the certificates to their default location (/etc/daos) on each
+5. Copy the certificates to their default location (/etc/daos) on each
     server node:
 
 		pdsh -S -w $SERVER_NODES sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
@@ -243,17 +243,20 @@ for more information.
 		pdsh -S -w $SERVER_NODES sudo cp /tmp/daosCA/certs/server.key /etc/daos/certs/.
 		pdsh -S -w $SERVER_NODES sudo cp /tmp/daosCA/certs/agent.crt /etc/daos/certs/clients/agent.crt
 
-14. Set the ownership of the admin certificates on each admin node:
+6. Cleanup the temp directory
+		pdsh -S -w $ALL_NODES sudo rm -rf /tmp/daosCA
+
+7. Set the ownership of the admin certificates on each admin node:
 
 		pdsh -S -w $ADMIN_NODE sudo chown $USER:$USER /etc/daos/certs/daosCA.crt
 		pdsh -S -w $ADMIN_NODE sudo chown $USER:$USER /etc/daos/certs/admin.\*
 
-16. Set the ownership of the client certificates on each client node:
+8. Set the ownership of the client certificates on each client node:
 
 		pdsh -S -w $CLIENT_NODES sudo chown $USER:$USER /etc/daos/certs/daosCA.crt
 		pdsh -S -w $CLIENT_NODES sudo chown daos_agent:daos_agent /etc/daos/certs/agent.*
 
-18. Set the ownership of the server certificates on each server node:
+9. Set the ownership of the server certificates on each server node:
 
 		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/daosCA.crt
 		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/server.*
