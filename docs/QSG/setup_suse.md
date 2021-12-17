@@ -309,8 +309,6 @@ configuration files will be defined. Examples are available at
 
 	An example of the daos_server.yml is presented below.  Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml.
 
-	More details on configuring the daos_server.yml file are available at [Server configuration file details](https://wiki.hpdd.intel.com/display/DAOS/Server+configuration+file+details).
-
 		name: daos_server
 
 		access_points: ['node-4']
@@ -359,7 +357,7 @@ configuration files will be defined. Examples are available at
 
 1. Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
-1. Create an agent configuration file by modifying the default `/etc/daos/daos_agent.yml` file on the client nodes.  The following is an example daos_agent.yml. Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`. More details on configuring the daos_agent.yml file are available at [Agent configuration file details](https://wiki.hpdd.intel.com/display/DAOS/Agent+configuration+file+details)
+1. Create an agent configuration file by modifying the default `/etc/daos/daos_agent.yml` file on the client nodes.  The following is an example daos_agent.yml. Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`. 
 
 		name: daos_server
 		access_points: ['node-4']
@@ -373,7 +371,7 @@ configuration files will be defined. Examples are available at
 		  key: /etc/daos/certs/agent.key
 		log_file: /tmp/daos_agent.log
 
-1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node. The following is an example of the `daos_control.yml`. More details on configuring the `daos_control.yml` file are available in the [DMG configuration file details](https://wiki.hpdd.intel.com/display/DAOS/DMG+configuration+file+details).
+1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node. The following is an example of the `daos_control.yml`. 
 
 		name: daos_server
 		port: 10001
