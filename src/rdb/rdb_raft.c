@@ -1076,8 +1076,6 @@ rdb_raft_remove_node(struct rdb *db, uint64_t index, d_rank_t rank)
 	uint8_t			 nreplicas;
 	int			 pos;
 	int			 last;
-	raft_node_t		*node;
-	struct rdb_raft_node	*rdb_node;
 	void			*result;
 	int			 rc = 0;
 
@@ -1105,14 +1103,6 @@ rdb_raft_remove_node(struct rdb *db, uint64_t index, d_rank_t rank)
 		}
 		goto out;
 	}
-
-	node = raft_get_node(db->d_raft, rank);
-	D_ASSERT(node != NULL);
-	rdb_node = raft_node_get_udata(node);
-	D_ASSERT(rdb_node != NULL);
-	raft_remove_node(db->d_raft, node);
-	D_FREE(rdb_node);
-
 out:
 	result = rdb_raft_lookup_result(db, index);
 	if (result != NULL)
@@ -1127,8 +1117,6 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 	d_rank_t rank = *(d_rank_t *)entry->data.buf;
 	int	 rc = 0;
 
-	D_DEBUG(DB_MD, DF_DB": entry "DF_U64": term=%ld type=%d rank=%u\n", DP_DB(db), index,
-		entry->term, entry->type, rank);
 	switch (entry->type) {
 	case RAFT_LOGTYPE_ADD_NODE:
 		rc = rdb_raft_append_node(db, index, rank);
