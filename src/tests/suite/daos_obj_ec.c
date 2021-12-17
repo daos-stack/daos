@@ -44,6 +44,8 @@ get_dkey_cnt(struct ioreq *req)
 	return total;
 }
 
+#define EC_CELL_SIZE	DAOS_EC_CELL_DEF
+
 static void
 ec_dkey_list_punch(void **state)
 {
@@ -67,7 +69,7 @@ ec_dkey_list_punch(void **state)
 		req.iod_type = DAOS_IOD_ARRAY;
 		sprintf(dkey, "dkey_%d", i);
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a', 16);
 		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, 16, &req);
@@ -156,7 +158,7 @@ ec_akey_list_punch(void **state)
 		req.iod_type = DAOS_IOD_ARRAY;
 		sprintf(akey, "akey_%d", i);
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a', 16);
 		insert_recxs("d_key", akey, 1, DAOS_TX_NONE, &recx, 1,
 			     data, 16, &req);
@@ -214,7 +216,8 @@ get_rec_cnt(struct ioreq *req, char *dkey, char *akey, int start)
 			      &number, recxs, eprs, &anchor, true, req);
 		total += number;
 		for (i = 0; i < number; i++, idx++) {
-			assert_int_equal((int)recxs[i].rx_idx, idx * 1048576);
+			assert_int_equal((int)recxs[i].rx_idx,
+					 idx * EC_CELL_SIZE);
 			assert_int_equal((int)recxs[i].rx_nr, 5);
 		}
 
@@ -244,7 +247,7 @@ ec_rec_list_punch(void **state)
 		/* Make dkey on different shards */
 		req.iod_type = DAOS_IOD_ARRAY;
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a', 16);
 		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, 16, &req);
@@ -262,7 +265,7 @@ ec_rec_list_punch(void **state)
 		daos_recx_t recx;
 
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 
 		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
 		if (i % 10 == 0) {
@@ -424,7 +427,6 @@ ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 	free(data);
 }
 
-#define EC_CELL_SIZE	1048576
 static void
 ec_partial_update_agg(void **state)
 {
