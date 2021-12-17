@@ -269,7 +269,7 @@ def set_provider_environment(interface, args):
     """
     # Use the detected provider if one is not set
     provider = os.environ.get("CRT_PHY_ADDR_STR")
-    if provider is None or provider == "":
+    if not provider:
         provider = "ofi+sockets"
         # Confirm the interface is a Mellanox device - verbs did not work with OPA devices.
         command = "sudo mst status -v"
