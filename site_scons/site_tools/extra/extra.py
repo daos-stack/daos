@@ -28,8 +28,8 @@ import os
 from SCons.Builder import Builder
 from SCons.Script import WhereIs
 
-# Minimum version of clang-format that we use the configuration file for.  With clang-format versions
-# older than this it's still used, but without loading our config.
+# Minimum version of clang-format that we use the configuration file for.  With clang-format
+# versions older than this it's still used, but without loading our config.
 MIN_FORMAT_VERSION = 12
 
 def _supports_custom_format(clang_exe):
@@ -95,7 +95,7 @@ def generate(env):
 
     indent = _find_indent()
 
-    generator = lambda source, target, env, _: _pp_gen(source, target, env, indent)
+    generator = lambda source, target, env, for_signature: _pp_gen(source, target, env, indent)
 
     # Only handle C for now
     preprocess = Builder(generator=generator, suffix="_pp.c",
