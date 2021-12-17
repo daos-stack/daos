@@ -431,8 +431,7 @@ DAOS servers and clients.
 	172478166024060928
 	172646116775952384
 
-	$ daos container destroy-snap Pool1 Cont1
-	--epc=172646116775952384
+	$ daos container destroy-snap Pool1 Cont1 --epc=172646116775952384
 
 	$ daos container list-snaps Pool1 Cont1
 	Container\'s snapshots :
