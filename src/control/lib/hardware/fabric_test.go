@@ -657,8 +657,12 @@ func TestHardware_NetDevClass_String(t *testing.T) {
 			expResult: "LOOPBACK",
 		},
 		"unknown": {
+			ndc:       NetDevClass(0xFFFFFFFE),
+			expResult: "UNKNOWN (0xfffffffe)",
+		},
+		"any": {
 			ndc:       NetDevClass(0xFFFFFFFF),
-			expResult: "UNKNOWN (0xffffffff)",
+			expResult: "ANY",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

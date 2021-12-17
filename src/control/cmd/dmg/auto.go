@@ -58,7 +58,7 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 	case "infiniband":
 		req.NetClass = hardware.Infiniband
 	default:
-		req.NetClass = control.NetDevAny
+		req.NetClass = hardware.NetDevAny
 	}
 	if cmd.AccessPoints != "" {
 		req.AccessPoints = strings.Split(cmd.AccessPoints, ",")

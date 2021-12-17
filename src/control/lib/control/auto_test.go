@@ -315,7 +315,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			})
 
 			if tc.netDevClass == 0 {
-				tc.netDevClass = NetDevAny
+				tc.netDevClass = hardware.NetDevAny
 			}
 			req := ConfigGenerateReq{
 				NrEngines: tc.engineCount,

@@ -9,7 +9,6 @@ package control
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 
 	"github.com/pkg/errors"
@@ -30,9 +29,7 @@ const (
 	defaultTargetCount    = 16
 	defaultEngineLogFile  = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
-	// NetDevAny matches any network device class
-	NetDevAny    = math.MaxUint32
-	minDMABuffer = 1024
+	minDMABuffer          = 1024
 
 	errNoNuma            = "zero numa nodes reported on hosts %s"
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
@@ -218,7 +215,7 @@ func parseInterfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCo
 		switch iface.NetDevClass {
 		case hardware.Ether, hardware.Infiniband:
 			switch reqClass {
-			case NetDevAny, iface.NetDevClass:
+			case hardware.NetDevAny, iface.NetDevClass:
 			default:
 				continue // iface class not requested
 			}
@@ -246,7 +243,7 @@ func parseInterfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCo
 // provider/class combination.
 func getNetIfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCount int, hfs *HostFabricSet) (numaNetIfaceMap, error) {
 	switch reqClass {
-	case NetDevAny, hardware.Ether, hardware.Infiniband:
+	case hardware.NetDevAny, hardware.Ether, hardware.Infiniband:
 	default:
 		return nil, errors.Errorf(errUnsupNetDevClass, reqClass.String())
 	}
@@ -254,7 +251,7 @@ func getNetIfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCount
 	matchIfaces, complete := parseInterfaces(log, reqClass, engineCount, hfs.HostFabric.Interfaces)
 	if !complete {
 		class := "best-available"
-		if reqClass != NetDevAny {
+		if reqClass != hardware.NetDevAny {
 			class = reqClass.String()
 		}
 		return nil, errors.Errorf(errInsufNrIfaces, class, engineCount, len(matchIfaces),
