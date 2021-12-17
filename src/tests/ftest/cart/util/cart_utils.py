@@ -431,7 +431,8 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
-    def _rm_abs_src_path_from_xml(self, xml_file):
+    @staticmethoc
+    def _rm_abs_src_path_from_xml(xml_file):
         """Remove the absolute path to the DAOS source tree in the
            Valgrind output xml file
 
