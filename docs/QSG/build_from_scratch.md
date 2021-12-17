@@ -22,6 +22,9 @@ $ git clone --recurse-submodules -b release/2.0 https://github.com/daos-stack/da
 $ cd daos
 ```
 
+This command clones the DAOS git repository (path referred as ${daospath}
+below) and initializes all the submodules automatically.
+
 ## Install Prerequisites
 
 To build DAOS and its dependencies, several software packages must be installed
@@ -38,7 +41,8 @@ distribution.
 
 ### CentOS
 
-On CentOS7, please run the following command from the DAOS tree.
+On CentOS7, please run the following command from the DAOS tree as root or via
+sudo.
 
 ```bash
 $ ./utils/scripts/install-centos7.sh
@@ -52,7 +56,7 @@ $ ./utils/scripts/install-centos8.sh
 
 ### openSUSE
 
-For openSUSE, the following command should be executed:
+For openSUSE, the following command should be executed as root or via sudo:
 
 ```bash
 $ ./utils/scripts/install-leap15.sh
@@ -60,7 +64,7 @@ $ ./utils/scripts/install-leap15.sh
 
 ### Unbuntu
 
-As for Ubuntu, please run the following script:
+As for Ubuntu, please run the following script as the root user or via sudo:
 
 ```bash
 $ ./utils/scripts/install-ubuntu20.sh

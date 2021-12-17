@@ -454,20 +454,31 @@ accessed by the path `<mount point>/<container uuid>`. The container uuid
 will have to be provided from an external source.
 
 ```bash
+$ daos cont create tank --label mycont --type POSIX
+   Container UUID : 8a8f08bb-5034-41e8-b7ae-0cdce347c558
+   Container Label: mycont
+   Container Type : POSIX
+ Successfully created container 8a8f08bb-5034-41e8-b7ae-0cdce347c558
+
 $ daos cont create tank --label mycont2 --type POSIX
   Container UUID : 0db21789-5372-4f2a-b7bc-14c0a5e968df
   Container Label: mycont2
   Container Type : POSIX
 
 Successfully created container 0db21789-5372-4f2a-b7bc-14c0a5e968df
+
 $ dfuse -m /tmp/dfuse --pool tank
+
 $ ls -l /tmp/dfuse/
 ls: cannot open directory '/tmp/dfuse/': Operation not supported
+
 $ ls -l /tmp/dfuse/0db21789-5372-4f2a-b7bc-14c0a5e968df
 total 0
+
 $ ls -l /tmp/dfuse/8a8f08bb-5034-41e8-b7ae-0cdce347c558
 total 0
 -rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+
 $ fusermount3 -u /tmp/dfuse/
 ```
 
