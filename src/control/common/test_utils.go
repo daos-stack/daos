@@ -162,6 +162,14 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 	}
 }
 
+// BoolAsInt converts a bool to an int.
+func BoolAsInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // DefaultCmpOpts gets default go-cmp comparison options for tests.
 func DefaultCmpOpts() []cmp.Option {
 	return []cmp.Option{
