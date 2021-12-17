@@ -54,6 +54,6 @@ ior:
 #   - [scmsize, nvmesize]
     - [500M, 10G]
     - [500M, 50G]
-    - [3G, 500G]
+    - [3G, 300G]
 # Uncomment this once DAOS-3339 is resolved
 #    - [3000000000, 800000000000]     #[3G, 800G]
