@@ -35,6 +35,12 @@ int get_hfi_unit(void *src_addr) {
 		return getHFIUnitError;
 	return psmx2->unit;
 }
+
+// Major and minor versions are hard-coded per libfabric recommendations
+uint lib_fabric_version(void)
+{
+	return FI_VERSION(1, 7);
+}
 */
 import "C"
 
@@ -42,13 +48,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	libFabricMajorVersion = 1
-	libFabricMinorVersion = 7
-)
-
 func libFabricVersion() C.uint {
-	return C.uint(libFabricMajorVersion<<16 | libFabricMinorVersion)
+	return C.lib_fabric_version()
 }
 
 var errHFIUnitsInUse = errors.New("all HFI units in use")
