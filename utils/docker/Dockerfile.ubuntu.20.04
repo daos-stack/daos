@@ -148,13 +148,9 @@ ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
-# MPI modules configuration file
-ARG MODULES_CFG_PATH=/etc/profile.d/modules.sh
-
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { { [ ! -f "$MODULES_CFG_PATH" ] || source "$MODULES_CFG_PATH" ; } && \
-    scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
       BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
     /bin/rm -rf build && go clean -cache && \
     cp -r utils/config/examples /opt/daos; }
