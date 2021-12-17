@@ -722,6 +722,7 @@ pipeline {
                     }
                     post {
                       always {
+                            functionalTestPostV2()
                             stash name: 'centos7-gcc-cart-memcheck',
                                   includes: '**/valgrind.*.memcheck.xml'
                         }
