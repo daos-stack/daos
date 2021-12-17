@@ -308,9 +308,3 @@
    fun:fi_tsend
    ...
 }
-{
-   getpwnam_r on centos 8.
-   Memcheck:Leak
-   ...
-   fun:getpwnam_r@@GLIBC_2.2.5
-}
