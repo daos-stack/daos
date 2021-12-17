@@ -988,7 +988,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
+                        label "ci_ofed5"
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
