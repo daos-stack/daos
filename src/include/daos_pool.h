@@ -9,10 +9,6 @@
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
 
-#include <sys/syscall.h>
-#include <unistd.h>
-#include <stdio.h>
-
 #if defined(__cplusplus)
 extern "C" {
 #endif
