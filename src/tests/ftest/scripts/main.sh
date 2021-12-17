@@ -56,7 +56,11 @@ else
     cd "$DAOS_BASE"
 fi
 
-export CRT_PHY_ADDR_STR
+if [ "$CRT_PHY_ADDR_STR" != "" ]; then
+    export CRT_PHY_ADDR_STR
+else
+    unset CRT_PHY_ADDR_STR
+fi
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE
