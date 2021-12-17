@@ -2,220 +2,107 @@
 
 The following instructions describe how to build DAOS from source code. The following steps are required:
 
-1. Install dependencies
-2. Download source code
-3. Build
-4. Environment setup
-
+1. Download Source Code
+2. Install Prerequisites
+3. Build DAOS
+4. Environment Setup
 
 The approximate time to read and execute the steps on this guide is approximately 25 minutes per OS.
 
+## Download Source Code
 
-## Installation of pre-requisites
+Download DAOS source code using the following command:
 
-The following packages are required
+The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
 
-### CentOS Build Installation Prerequisites
+To checkout the 2.0 version, simply run:
 
-		\# Run as root
-		yum clean all && \
-		yum -y install epel-release && \
-		yum -y upgrade && \
-		yum -y install \
-		boost-python3-devel \
-		clang-analyzer \
-		cmake \
-		CUnit-devel \
-		doxygen \
-		e2fsprogs \
-		file \
-		flex \
-		fuse3-devel \
-		gcc \
-		gcc-c++ \
-		git \
-		golang \
-		graphviz \
-		hwloc-devel \
-		ipmctl \
-		java-1.8.0-openjdk \
-		json-c-devel \
-		libaio-devel \
-		libcmocka-devel \
-		libevent-devel \
-		libipmctl-devel \
-		libiscsi-devel \
-		libtool \
-		libtool-ltdl-devel \
-		libunwind-devel \
-		libuuid-devel \
-		libyaml-devel \
-		Lmod \
-		lz4-devel \
-		make \
-		man \
-		maven \
-		nasm \
-		ndctl \
-		numactl-devel \
-		openssl-devel \
-		pandoc \
-		patch \
-		patchelf \
-		pciutils \
-		python3-pip \
-		python3-Cython \
-		python3-devel \
-		python3-distro \
-		python3-jira \
-		python3-numpy \
-		python3-paramiko \
-		python3-pylint \
-		python3-requests \
-		python3-requests \
-		python3-tabulate \
-		python3-pyxattr \
-		python3-scons \
-		sg3\_utils \
-		valgrind-devel \
-		yasm && \
-		yum clean all
-		yum -y install openmpi3-devel && yum clean all
+```
+$ git clone --recurse-submodules -b release/2.0 https://github.com/daos-stack/daos.git
+$ cd daos
+```
 
-### openSUSE Build Installation Prerequisites
+This command clones the DAOS git repository (path referred as ${daospath}
+below) and initializes all the submodules automatically.
 
-		\# Run as root
+## Install Prerequisites
 
-		zypper \--non-interactive update && \
+To build DAOS and its dependencies, several software packages must be installed
+on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
+packages usually available on all the Linux distributions. Moreover, a Go
+version of at least 1.10 is required.
 
-		zypper \--non-interactive install \
+Some DAOS tests use MPI. The DAOS build process uses the environment modules
+package to detect the presence of MPI. If none is found, the build will skip
+building those tests.
 
-		boost-devel \
-
-		clang \
-
-		cmake \
-
-		cunit-devel \
-
-		curl \
-
-		doxygen \
-
-		flex \
-
-		fuse3-devel \
-
-		gcc \
-
-		gcc-c++ \
-
-		git \
-
-		graphviz \
-
-		gzip \
-
-		hwloc-devel \
-
-		java-1\_8\_0-openjdk-devel \
-
-		libaio-devel \
-
-		libcmocka-devel \
-
-		libevent-devel \
-
-		libiscsi-devel \
-
-		libjson-c-devel \
-
-		libltdl7 \
-
-		liblz4-devel \
-
-		libnuma-devel \
-
-		libopenssl-devel \
-
-		libtool \
-
-		libunwind-devel \
-
-		libuuid-devel \
-
-		libyaml-devel \
-
-		lua-lmod \
-
-		make \
-
-		man \
-
-		maven \
-
-		nasm \
-
-		openmpi3-devel \
-
-		pandoc \
-
-		patch \
-
-		patchelf \
-
-		python3-devel \
-
-		python3-distro \
-
-		python3-pip \
-
-		python3-pyxattr \
-
-		python3-PyYAML \
-
-		python3-tabulate \
-
-		scons \
-
-		sg3\_utils \
-
-		valgrind-devel \
-
-		which \
-
-		yasm && \
-
-		zypper clean \--all
-
-		update-ca-certificates
-
-		zypper \--non-interactive \--no-gpg-checks install \--allow-unsigned-rpm
-		lua-lmod
-
-		zypper \--non-interactive install -y ipmctl-devel go1.14 go1.14-race
-
-## DAOS source code
-
-Download daos source code using the following command:
-
-		git clone \--recurse-submodules -b v1.2-rc1 https://github.com/daos-stack/daos.git
-
-## Building DAOS & Dependencies
-
-!!! note
-	Once the sources are downloaded, the pre-requisites to build the source
-	code can be installed by the following applicable commands.
-
+Scripts to install all the required packages are provided for each supported
+distribution.
 
 ### CentOS
 
-		cd daos
+On CentOS7, please run the following command from the DAOS tree as root or via
+sudo.
 
-		scons-3 \--config=force \--build-deps=yes install
+```bash
+$ ./utils/scripts/install-centos7.sh
+```
 
-### SuSE
+For CenOS8, the following script must be used instead:
 
-		cd daos
+```bash
+$ ./utils/scripts/install-centos8.sh
+```
 
-		scons \--config=force \--build-deps=yes install
+### openSUSE
+
+For openSUSE, the following command should be executed as root or via sudo:
+
+```bash
+$ ./utils/scripts/install-leap15.sh
+```
+
+### Unbuntu
+
+As for Ubuntu, please run the following script as the root user or via sudo:
+
+```bash
+$ ./utils/scripts/install-ubuntu20.sh
+```
+
+## Build DAOS
+
+Once all prerequisites installed and the sources are downloaded,
+DAOS can be built via the following command:
+
+```bash
+$ scons-3 --config=force --build-deps=yes install
+```
+
+By default, DAOS and its dependencies are installed under the `install`
+directory.
+The installation path can be modified by adding the PREFIX= option to the above
+command line (e.g., PREFIX=/usr/local).
+
+!!! note
+    Several parameters can be set (e.g., COMPILER=clang or COMPILER=icc) on the
+    scons command line. Please see `scons-3 --help` for all the possible options.
+    Those options are also saved for future compilations.
+
+## Environment setup
+
+Once built, the environment must be modified to search for binaries and header
+files in the installation path. This step is not required if standard locations
+(e.g. /bin, /sbin, /usr/lib, ...) are used.
+
+```bash
+$ export CPATH=${daospath}/install/include/:$CPATH
+$ export PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
+```
+
+If using bash, PATH can be set up for you after a build by sourcing the script
+utils/sl/setup\_local.sh from the daos root. This script utilizes a file
+generated by the build to determine the location of daos and its dependencies.
+
+If required, ${daospath}/install must be replaced with the alternative path
+specified through PREFIX.
