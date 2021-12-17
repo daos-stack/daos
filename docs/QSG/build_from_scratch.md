@@ -17,243 +17,174 @@ The following packages are required
 
 ### CentOS Build Installation Prerequisites
 
-		**git clone**
-
 		\# Run as root
-
-		yum clean all && \\
-
-		yum -y install epel-release && \\
-
-		yum -y upgrade && \\
-
-		yum -y install \\
-
-		boost-python36-devel \\
-
-		clang-analyzer \\
-
-		cmake \\
-
-		CUnit-devel \\
-
-		doxygen \\
-
-		e2fsprogs \\
-
-		file \\
-
-		flex \\
-
-		fuse3-devel \\
-
-		gcc \\
-
-		gcc-c++ \\
-
-		git \\
-
-		golang \\
-
-		graphviz \\
-
-		hwloc-devel \\
-
-		ipmctl \\
-
-		java-1.8.0-openjdk \\
-
-		json-c-devel \\
-
-		lcov \\
-
-		libaio-devel \\
-
-		libcmocka-devel \\
-
-		libevent-devel \\
-
-		libipmctl-devel \\
-
-		libiscsi-devel \\
-
-		libtool \\
-
-		libtool-ltdl-devel \\
-
-		libunwind-devel \\
-
-		libuuid-devel \\
-
-		libyaml-devel \\
-
-		Lmod \\
-
-		lz4-devel \\
-
-		make \\
-
-		man \\
-
-		maven \\
-
-		nasm \\
-
-		ndctl \\
-
-		numactl-devel \\
-
-		openssl-devel \\
-
-		pandoc \\
-
-		patch \\
-
-		patchelf \\
-
-		pciutils \\
-
-		python3-pip \\
-
-		python36-Cython \\
-
-		python36-devel \\
-
-		python36-distro \\
-
-		python36-jira \\
-
-		python36-numpy \\
-
-		python36-paramiko \\
-
-		python36-pylint \\
-
-		python36-requests \\
-
-		python36-requests \\
-
-		python36-tabulate \\
-
-		python36-pyxattr \\
-
-		python36-scons \\
-
-		sg3\_utils \\
-
-		valgrind-devel \\
-
-		yasm && \\
-
+		yum clean all && \
+		yum -y install epel-release && \
+		yum -y upgrade && \
+		yum -y install \
+		boost-python3-devel \
+		clang-analyzer \
+		cmake \
+		CUnit-devel \
+		doxygen \
+		e2fsprogs \
+		file \
+		flex \
+		fuse3-devel \
+		gcc \
+		gcc-c++ \
+		git \
+		golang \
+		graphviz \
+		hwloc-devel \
+		ipmctl \
+		java-1.8.0-openjdk \
+		json-c-devel \
+		libaio-devel \
+		libcmocka-devel \
+		libevent-devel \
+		libipmctl-devel \
+		libiscsi-devel \
+		libtool \
+		libtool-ltdl-devel \
+		libunwind-devel \
+		libuuid-devel \
+		libyaml-devel \
+		Lmod \
+		lz4-devel \
+		make \
+		man \
+		maven \
+		nasm \
+		ndctl \
+		numactl-devel \
+		openssl-devel \
+		pandoc \
+		patch \
+		patchelf \
+		pciutils \
+		python3-pip \
+		python3-Cython \
+		python3-devel \
+		python3-distro \
+		python3-jira \
+		python3-numpy \
+		python3-paramiko \
+		python3-pylint \
+		python3-requests \
+		python3-requests \
+		python3-tabulate \
+		python3-pyxattr \
+		python3-scons \
+		sg3\_utils \
+		valgrind-devel \
+		yasm && \
 		yum clean all
-
 		yum -y install openmpi3-devel && yum clean all
 
 ### openSUSE Build Installation Prerequisites
 
-		**git clone**
-
 		\# Run as root
 
-		zypper \--non-interactive update && \\
+		zypper \--non-interactive update && \
 
-		zypper \--non-interactive install \\
+		zypper \--non-interactive install \
 
-		boost-devel \\
+		boost-devel \
 
-		clang \\
+		clang \
 
-		cmake \\
+		cmake \
 
-		cunit-devel \\
+		cunit-devel \
 
-		curl \\
+		curl \
 
-		doxygen \\
+		doxygen \
 
-		flex \\
+		flex \
 
-		fuse3-devel \\
+		fuse3-devel \
 
-		gcc \\
+		gcc \
 
-		gcc-c++ \\
+		gcc-c++ \
 
-		git \\
+		git \
 
-		graphviz \\
+		graphviz \
 
-		gzip \\
+		gzip \
 
-		hwloc-devel \\
+		hwloc-devel \
 
-		java-1\_8\_0-openjdk-devel \\
+		java-1\_8\_0-openjdk-devel \
 
-		libaio-devel \\
+		libaio-devel \
 
-		libcmocka-devel \\
+		libcmocka-devel \
 
-		libevent-devel \\
+		libevent-devel \
 
-		libiscsi-devel \\
+		libiscsi-devel \
 
-		libjson-c-devel \\
+		libjson-c-devel \
 
-		libltdl7 \\
+		libltdl7 \
 
-		liblz4-devel \\
+		liblz4-devel \
 
-		libnuma-devel \\
+		libnuma-devel \
 
-		libopenssl-devel \\
+		libopenssl-devel \
 
-		libtool \\
+		libtool \
 
-		libunwind-devel \\
+		libunwind-devel \
 
-		libuuid-devel \\
+		libuuid-devel \
 
-		libyaml-devel \\
+		libyaml-devel \
 
-		lua-lmod \\
+		lua-lmod \
 
-		make \\
+		make \
 
-		man \\
+		man \
 
-		maven \\
+		maven \
 
-		nasm \\
+		nasm \
 
-		openmpi3-devel \\
+		openmpi3-devel \
 
-		pandoc \\
+		pandoc \
 
-		patch \\
+		patch \
 
-		patchelf \\
+		patchelf \
 
-		python3-devel \\
+		python3-devel \
 
-		python3-distro \\
+		python3-distro \
 
-		python3-pip \\
+		python3-pip \
 
-		python3-pyxattr \\
+		python3-pyxattr \
 
-		python3-PyYAML \\
+		python3-PyYAML \
 
-		python3-tabulate \\
+		python3-tabulate \
 
-		scons \\
+		scons \
 
-		sg3\_utils \\
+		sg3\_utils \
 
-		valgrind-devel \\
+		valgrind-devel \
 
-		which \\
+		which \
 
-		yasm && \\
+		yasm && \
 
 		zypper clean \--all
 
@@ -268,10 +199,7 @@ The following packages are required
 
 Download daos source code using the following command:
 
-		**git clone**
-
-		git clone \--recurse-submodules -b v1.2-rc1
-		https://github.com/daos-stack/daos.git
+		git clone \--recurse-submodules -b v1.2-rc1 https://github.com/daos-stack/daos.git
 
 ## Building DAOS & Dependencies
 
@@ -282,15 +210,11 @@ Download daos source code using the following command:
 
 ### CentOS
 
-		**git clone**
-
 		cd daos
 
 		scons-3 \--config=force \--build-deps=yes install
 
 ### SuSE
-
-		**git clone**
 
 		cd daos
 

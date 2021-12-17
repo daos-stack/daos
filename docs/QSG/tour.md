@@ -107,8 +107,8 @@ bring-up DAOS servers and clients.
 	$ dmg storage query usage
 	Hosts	SCM-Total	SCM-Free	SCM-Used	NVMe-Total	NVMe-Free	NVMe-Used
 	-----	---------	--------	--------	----------	---------	---------
-	boro-35	17 GB		17 GB		0 %			0 B			0 B			N/A
-	boro-8	17 GB		17 GB		0 %			0 B			0 B			N/A  
+    wolf-180 69 GB		68 GB		0 %		1.6 TB		1.6 TB		0 %
+    wolf-181 69 GB		68 GB		0 %		1.6 TB		1.6 TB		0 %
 
 ## dmg pool create help
 
@@ -145,51 +145,41 @@ bring-up DAOS servers and clients.
 
 ## dmg pool create
 
-	# Create a 10GB pool
-	$ dmg pool create --size=10G
-	Creating DAOS pool with automatic storage allocation: 10 GB NVMe + 6.00% SCM
-	Pool created with 100.00% SCM/NVMe ratio
-	----------------------------------------
-		UUID			: 0a6003c6-23a7-4cb5-8895-c004ca2b75f5
-		Service Ranks	: 0
-		Storage Ranks	: \[0-1\]
-		Total Size		: 10 GB
-		SCM				: 10 GB (5.0 GB / rank)
-		NVMe			: 0 B (0 B / rank)
+	# Create a 20GB pool labeled Pool1
+	$ dmg pool create --size=20G Pool1
+	Creating DAOS pool with automatic storage allocation: 20 GB total, 6,94 tier ratio
+	Pool created with 6.00%,94.00% storage tier ratio
+	-------------------------------------------------
+	UUID                 : bf9a1b61-e3ba-4dca-a4ba-f35776edc822
+	Service Ranks        : 0
+	Storage Ranks        : [0-1]
+	Total Size           : 20 GB
+	Storage tier 0 (SCM) : 1.2 GB (600 MB / rank)
+	Storage tier 1 (NVMe): 19 GB (9.4 GB / rank)
 
 	$ dmg storage query usage
 	Hosts	SCM-Total	SCM-Free	SCM-Used	NVMe-Total	NVMe-Free	NVMe-Used
 	-----	---------	--------	--------	----------	---------	---------
-	boro-35	17 GB		12 GB		29 %		0 B			0 B			N/A
-	boro-8	17 GB		11 GB		36 %		0 B			0 B			N/A
+    wolf-180 1.2 GB		1.2 GB		0 %		19 GB		19 GB		0 %
+    wolf-181 1.2 GB		1.2 GB		0 %		19 GB		19 GB		0 %
 
 ### dmg pool create for specified user and group
 
 	# Create a 1GB pool for user:user_1 group:admin_group1
-	$ dmg pool create --group=admin_group1 --user=user_1 --size=1G
-	Creating DAOS pool with automatic storage allocation: 1.0 GB NVMe + 6.00% SCM
-	Pool created with 100.00% SCM/NVMe ratio
-	----------------------------------------
-	UUID			: 64efd827-6bcb-434b-ab78-2010984539ff
-	Service Ranks	: 0
-	Storage Ranks	: 0
-	Total Size		: 1.0 GB
-	SCM				: 1.0 GB (1.0 GB / rank)
-	NVMe			: 0 B (0 B / rank)
+	$ dmg pool create --group=admin_group1 --user=user_1 --size=20G Pool2
+	Creating DAOS pool with automatic storage allocation: 20 GB total, 6,94 tier ratio
+	Pool created with 6.00%,94.00% storage tier ratio
+	-------------------------------------------------
+	UUID                 : 13aaa333-1533-41cb-85d8-8a22728cfbad
+	Service Ranks        : 0
+	Storage Ranks        : [0-1]
+	Total Size           : 20 GB
+	Storage tier 0 (SCM) : 1.2 GB (600 MB / rank)
+	Storage tier 1 (NVMe): 19 GB (9.4 GB / rank)
 
 ### dmg pool create with security setting
-
 	# Create a pool with access-control via a access-list test file
-	$ dmg pool create --size=1G --acl-file=/tmp/acl_test.txt
-	Creating DAOS pool with automatic storage allocation: 1.0 GB NVMe + 6.00% SCM
-	Pool created with 100.00% SCM/NVMe ratio
-	----------------------------------------
-	UUID			: 4533f724-7234-4c70-946c-b7a53d7d0ddf
-	Service Ranks	: 0
-	Storage Ranks	: 0
-	Total Size		: 1.0 GB
-	SCM				: 1.0 GB (1.0 GB / rank)
-	NVMe			: 0 B (0 B / rank)
+	export DAOS_POOL=Pool3
 
 	# Example of access entries on /tmp/acl_test.txt
 	# pool OWNER: read-write permission
@@ -207,8 +197,18 @@ bring-up DAOS servers and clients.
 	A:G:test_group2@:r
 	A::EVERYONE@:
 
+	$ dmg pool create --size=20G --acl-file=/tmp/acl_test.txt $DAOS_POOL
+	Pool created with 6.00%,94.00% storage tier ratio
+	-------------------------------------------------
+	UUID                 : f73eefa5-937d-4f0d-8934-4b3192dba4e4
+	Service Ranks        : 0
+	Storage Ranks        : [0-1]
+	Total Size           : 20 GB
+	Storage tier 0 (SCM) : 1.2 GB (600 MB / rank)
+	Storage tier 1 (NVMe): 19 GB (9.4 GB / rank)
+
 	# Get pool security acl
-	$ dmg pool get-acl --pool=$DAOS_POOL
+	$ dmg pool get-acl $DAOS_POOL
 	# Entries:
 	A::OWNER@:rw
 	A::test_user1@:w
@@ -242,11 +242,13 @@ bring-up DAOS servers and clients.
 	$ dmg pool list
 	Pool UUID								Svc Replicas
 	---------								------------
-	5f362dc2-6154-44c7-8348-9de6f0a3d5d1	0
+	bf9a1b61-e3ba-4dca-a4ba-f35776edc822	0
+	13aaa333-1533-41cb-85d8-8a22728cfbad	0
+	f73eefa5-937d-4f0d-8934-4b3192dba4e4	0
 
 ### dmg pool destroy
 
-	$ dmg pool destroy --pool=$DAOS_POOL
+	$ dmg pool destroy $DAOS_POOL
 	Pool-destroy command succeeded
 
 	$ dmg pool list
@@ -260,7 +262,7 @@ bring-up DAOS servers and clients.
 
 ### dmg pool query
 
-	$ dmg pool create --size=10G
+	$ dmg pool create --size=10G Pool4
 	Creating DAOS pool with automatic storage allocation: 10 GB NVMe + 6.00% SCM
 	Pool created with 100.00% SCM/NVMe ratio
 	----------------------------------------
@@ -276,7 +278,7 @@ bring-up DAOS servers and clients.
 	---------								------------
 	cf860261-4fde-4403-b10b-abe8eb9dd32f	0
 
-	$ dmg pool query --pool=$DAOS_POOL
+	$ dmg pool query Pool4
 	Pool cf860261-4fde-4403-b10b-abe8eb9dd32f, ntarget=16, disabled=0, leader=0, version=1
 	Pool space info:
 	- Target(VOS) count:16
@@ -294,7 +296,7 @@ bring-up DAOS servers and clients.
 
 ### daos tool help
 
-	$ /usr/bin/daos help
+	$ /usr/bin/daos --help
 	daos command (v1.2), libdaos 1.2.0
 	usage: daos RESOURCE COMMAND \[OPTIONS\]
 	resources:
@@ -308,7 +310,7 @@ bring-up DAOS servers and clients.
 
 	use 'daos help RESOURCE' for resource specifics
 
-	$ daos help cont
+	$ daos cont --help
 	daos command (v1.2), libdaos 1.2.0
 
 	container (cont) commands:
@@ -376,7 +378,7 @@ bring-up DAOS servers and clients.
 	0d121c02-a42d-4029-8dce-3919b964b7b3
 
 ### daos container destroy
-
+    $ export export DAOS_CONT=bc4fe707-7470-4b7d-83bf-face75cc98fc
 	$ daos cont destroy --pool=$DAOS_POOL --cont=$DAOS_CONT
 	Successfully destroyed container bc4fe707-7470-4b7d-83bf-face75cc98fc
 
@@ -392,17 +394,24 @@ bring-up DAOS servers and clients.
 
 ### daos container snapshot help/create/list/destroy
 
-	$ daos help cont create-snap
-	daos command (v1.2), libdaos 1.2.0
-	container options (snapshot and rollback-related):
-		--snap=NAME container snapshot (create/destroy-snap, rollback)
-		--epc=EPOCHNUM container epoch (destroy-snap, rollback)
-		--epcrange=B-E container epoch range (destroy-snap)
-	container options (query, and all commands except create):
-		<pool options> with --cont use: (--pool, --sys-name)
-		<pool options> with --path use: (--sys-name)
-		--cont=UUID (mandatory, or use --path)
-		--path=PATHSTR
+	$ daos cont create-snap --help
+	Usage:
+	daos [OPTIONS] container create-snap [create-snap-OPTIONS] [<pool name or UUID>] [<container name or UUID>]
+	
+	Application Options:
+	--debug                         enable debug output
+	--verbose                       enable verbose output (when applicable)
+	-j, --json                          enable JSON output
+	
+	Help Options:
+	-h, --help                          Show this help message
+	
+	[create-snap command options]
+	-G, --sys-name=                 DAOS system name
+	-p, --pool=                     pool UUID (deprecated; use positional arg)
+	-d, --path=                     unified namespace path
+	-c, --cont=                     container UUID (deprecated; use positional arg)
+	-s, --snap=                     snapshot name
 
 	$ daos cont create-snap --pool=$DAOS_POOL --cont=$DAOS_CONT
 	snapshot/epoch 172646116775952384 has been created
@@ -549,7 +558,8 @@ bring-up DAOS servers and clients.
 	$ /usr/bin/df -h -t fuse.daos
 	Filesystem Size Used Avail Use% Mounted on
 	dfuse 954M 144K 954M 1% /tmp/daos_test1
-	$ /usr/bin/fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --directory=/tmp/daos_test1 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reportingrandom-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
+	$ /usr/bin/fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --directory=/tmp/daos_test1 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting
+    random-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
 	...
 	fio-3.7
 	Starting 8 processes
@@ -627,7 +637,7 @@ bring-up DAOS servers and clients.
 ### required rpms
 
 	$ sudo yum install -y mpich
-	$ sudo yum install -y mdtest
+	$ sudo yum install -y ior
 	$ sudo yum install -y Lmod
 	$ sudo module load mpi/mpich-x86_64
 	$ /usr/bin/touch /tmp/daos_test1/testfile
@@ -635,6 +645,7 @@ bring-up DAOS servers and clients.
 ### run mpirun ior and mdtest
 
 	# Run mpirun ior
+    $ /usr/bin/dfuse --m=/tmp/daos_test1 --pool=$DAOS_POOL --cont=$DAOS_CONT
 	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 30 ior -a POSIX -b 26214400 -v -w -k -i 1 -o /tmp/daos_test1/testfile -t 25M
 	IOR-3.4.0+dev: MPI Coordinated Test of Parallel I/O
 	Began : Fri Apr 16 18:07:56 2021

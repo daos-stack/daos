@@ -2,7 +2,8 @@
 
 
 The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.  This document includes
-instructions for CentOS. For setup instructions on OpenSuse, refer to the [OpenSuse setup](../suse_setup/). 
+instructions for CentOS. For setup instructions on OpenSuse, refer to the 
+[OpenSuse setup](setup_suse.md).
 For more details reference the DAOS administration guide:
 <https://daos-stack.github.io/admin/hardware/>
 
@@ -10,8 +11,8 @@ For more details reference the DAOS administration guide:
 
 
 The following steps require two or more hosts which will be divided up
-into admin, client, and server roles.  One node can be used for both the
-admin and client node.  All nodes must have:
+into admin, client, and server roles. One node can be used for both the
+admin and client node. All nodes must have:
 
 -   sudo access configured
 
@@ -19,17 +20,6 @@ admin and client node.  All nodes must have:
 
 -   pdsh installed (or some other means of running multiple remote
     commands in parallel)
-
-In addition the server nodes should also have:
-
--   an InfiniBand network adapter configured
-
--   one or more NVMe devices
-
--   IOMMU is enabled:
-
-
-    <https://daos-stack.github.io/admin/predeployment_check/#enable-iommu-optional>
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -74,18 +64,16 @@ of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
 1.  Configure access to the DAOS package repository at
-    <https://packages.daos.io/v1.2>.
+    <https://packages.daos.io/v2.0>.
 
 
-		pdsh -w $ALL_NODES 'sudo wget -O
-		/etc/yum.repos.d/daos-packages.repo
-		https://packages.daos.io/v1.2/CentOS7/packages/x86_64/daos_packages.repo'
+		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo 
+https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
 
 
 2. Import GPG key on all nodes:
 
-		pdsh -w $ALL_NODES 'sudo rpm --import
-		https://packages.daos.io/RPM-GPG-KEY\
+		pdsh -w $ALL_NODES 'sudo rpm --import https://packages.daos.io/RPM-GPG-KEY'
 
 7.  Perform the additional steps:
 
@@ -103,8 +91,7 @@ daos-server RPM.
 17. Install the DAOS client RPMs on the client and admin nodes:
 
 
-		pdsh -w $ALL_NODES -x $SERVER_NODES 'sudo yum install -y
-		daos-client'
+		pdsh -w $ALL_NODES -x $SERVER_NODES 'sudo yum install -y daos-client'
 
 
 ## Hardware Provisioning
@@ -116,7 +103,7 @@ SSDs will be prepared and configured to be used by DAOS.
 	PMem preparation is required once per DAOS installation.
 
 
-1.     Prepare the pmem devices on Server nodes:
+1.  Prepare the pmem devices on Server nodes:
 
 		daos_server storage prepare --scm-only
 
@@ -265,12 +252,12 @@ for more information.
 16. Set the ownership of the client certificates on each client node:
 
 		pdsh -S -w $CLIENT_NODES sudo chown $USER:$USER /etc/daos/certs/daosCA.crt
-		pdsh -S -w $CLIENT_NODES sudo chown daos_agent:daos_agent /etc/daos/certs/agent.\*
+		pdsh -S -w $CLIENT_NODES sudo chown daos_agent:daos_agent /etc/daos/certs/agent.*
 
 18. Set the ownership of the server certificates on each server node:
 
 		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/daosCA.crt
-		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/server.\*
+		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/server.*
 		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clients/agent.crt
 		pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clients
 
@@ -304,11 +291,11 @@ configuration files will be defined. Examples are available at
 		port: 10001
 
 		transport_config:
-		  allow_insecure: false
-		  client_cert_dir: /etc/daos/certs/clients
-		  ca_cert: /etc/daos/certs/daosCA.crt
-		  cert: /etc/daos/certs/server.crt
-		  key: /etc/daos/certs/server.key
+			allow_insecure: false
+			client_cert_dir: /etc/daos/certs/clients
+			ca_cert: /etc/daos/certs/daosCA.crt
+			cert: /etc/daos/certs/server.crt
+			key: /etc/daos/certs/server.key
 		provider: ofi+verbs;ofi_rxm
 		nr_hugepages: 4096
 		control_log_mask: DEBUG
@@ -316,33 +303,33 @@ configuration files will be defined. Examples are available at
 		helper_log_file: /tmp/daos_admin.log
 		engines:
 		-
-		  targets: 8
-		  nr_xs_helpers: 0
-		  fabric_iface: ib0
-		  fabric_iface_port: 31316
-		  log_mask: INFO
-		  log_file: /tmp/daos_engine_0.log
-		  env_vars:
-			  - CRT_TIMEOUT=30
-		  scm_mount: /mnt/daos0
-		  scm_class: dcpm
-		  scm_list: [/dev/pmem0]
-		  bdev_class: nvme
-		  bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
+			targets: 8
+			nr_xs_helpers: 0
+			fabric_iface: ib0
+			fabric_iface_port: 31316
+			log_mask: INFO
+			log_file: /tmp/daos_engine_0.log
+			env_vars:
+				- CRT_TIMEOUT=30
+			scm_mount: /mnt/daos0
+			scm_class: dcpm
+			scm_list: [/dev/pmem0]
+			bdev_class: nvme
+			bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 		-
-		  targets: 8
-		  nr_xs_helpers: 0
-		  fabric_iface: ib1
-		  fabric_iface_port: 31416
-		  log_mask: INFO
-		  log_file: /tmp/daos_engine_1.log
-		  env_vars:
-			  - CRT_TIMEOUT=30
-		  scm_mount: /mnt/daos1
-		  scm_class: dcpm
-		  scm_list: [/dev/pmem1]
-		  bdev_class: nvme
-		  bdev_list: ["0000:83:00.0"]  # generate regular nvme.conf
+			targets: 8
+			nr_xs_helpers: 0
+			fabric_iface: ib1
+			fabric_iface_port: 31416
+			log_mask: INFO
+			log_file: /tmp/daos_engine_1.log
+			env_vars:
+				- CRT_TIMEOUT=30
+		 	scm_mount: /mnt/daos1
+		 	scm_class: dcpm
+		 	scm_list: [/dev/pmem1]
+		 	bdev_class: nvme
+		 	bdev_list: ["0000:83:00.0"]  # generate regular nvme.conf
 
 1. Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
@@ -354,10 +341,10 @@ configuration files will be defined. Examples are available at
 		port: 10001
 
 		transport_config:
-		  allow_insecure: false
-		  ca_cert: /etc/daos/certs/daosCA.crt
-		  cert: /etc/daos/certs/agent.crt
-		  key: /etc/daos/certs/agent.key
+			allow_insecure: false
+			ca_cert: /etc/daos/certs/daosCA.crt
+			cert: /etc/daos/certs/agent.crt
+			key: /etc/daos/certs/agent.key
 		log_file: /tmp/daos_agent.log
 
 1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node. The following is an example of the `daos_control.yml`. More details on configuring the `daos_control.yml` file are available in the [DMG configuration file details](https://wiki.hpdd.intel.com/display/DAOS/DMG+configuration+file+details).
@@ -367,11 +354,15 @@ configuration files will be defined. Examples are available at
 		hostlist: ['node-4', 'node-5', 'node-6']
 
 		transport_config:
-		  allow_insecure: false
-		  ca_cert: /etc/daos/certs/daosCA.crt
-		  cert: /etc/daos/certs/admin.crt
-		  key: /etc/daos/certs/admin.key
+			allow_insecure: false
+			ca_cert: /etc/daos/certs/daosCA.crt
+			cert: /etc/daos/certs/admin.crt
+			key: /etc/daos/certs/admin.key
 
+1. Create socket directories
+
+		mkdir /var/run/daos_server
+		mkdir /var/run/daos_agent
 
 ## Start the DAOS Servers
 
@@ -386,8 +377,9 @@ configuration files will be defined. Examples are available at
 		pdsh -S -w $SERVER_NODES "sudo systemctl status daos_server"
 
 		# if you see following format messages (depending on number of servers), proceed to storage format
-		wolf-179: May 05 22:21:03 wolf-179.wolf.hpdd.intel.com daos_server[37431]: Metadata format required on instance 0
-
+		Dec 16 00:12:11 wolf-180.wolf.hpdd.intel.com daos_server[290473]: SCM format required on instance 1
+		Dec 16 00:12:11 wolf-180.wolf.hpdd.intel.com daos_server[290473]: SCM format required on instance 0
+   
 		# format storage
 		dmg storage format -l $SERVER_NODES --reformat
 
