@@ -105,7 +105,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -129,7 +129,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -153,7 +153,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -177,7 +177,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -202,7 +202,7 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme3'
+                        label params.CI_NVME_3_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -227,7 +227,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label 'ci_nvme5'
+                        label params.CI_NVME_5_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -252,7 +252,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme9'
+                        label params.CI_NVME_9_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
