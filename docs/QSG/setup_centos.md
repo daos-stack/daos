@@ -67,8 +67,7 @@ daos-server RPM.
     <https://packages.daos.io/v2.0>.
 
 
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo 
-https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
+		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
 
 
 2. Import GPG key on all nodes:
