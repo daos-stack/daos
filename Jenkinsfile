@@ -72,6 +72,9 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: "",
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'BuildType',
+               defaultValue: "",
+               description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',
                defaultValue: "",
                description: 'Test-repeat to use for this run.  Specifies the ' +
