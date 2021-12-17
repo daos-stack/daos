@@ -5,18 +5,17 @@
 ## Introduction
 
 This documentation provides a general tour to the DAOS management commands
-(dmg) for daos\_admin, and DAOS tools (daos) for daos\_client users.
-Help and setup for the following is provided in this chapter:
+(dmg) for daos_admin, and DAOS tools (daos) for daos_client users. Help and
+setup for the following is provided in this chapter:
 
-- Pool and Container create, list, query and destroy on
-DAOS server for daos\_admin and daos\_client users.
-- Common errors and workarounds for new users when using the dmg and daos tools. 
-- Example runs of data transfer between DAOS file systems, by setting up
-of the DAOS dfuse mount point and run traffic with dfuse fio and mpirun
-mdtest.
-- Examples of basic dmg and daos tools run on 2 host DAOS servers
-and 1 host client, and runs of DAOS rebuild over dfuse fio and mpirun mdtest
-on a 4 host DAOS server.
+- Pool and Container create, list, query and destroy on DAOS server for
+  daos_admin and daos_client users.
+- Common errors and workarounds for new users when using the dmg and daos tools.
+- Example runs of data transfer between DAOS file systems, by setting up of the
+  DAOS dfuse mount point and run traffic with dfuse fio and mpirun mdtest.
+- Examples of basic dmg and daos tools run on 2 host DAOS servers and 1 host
+  client, and runs of DAOS rebuild over dfuse fio and mpirun mdtest on a 4 host
+  DAOS server.
 
 ## Requirements
 
@@ -38,9 +37,10 @@ Set environment variables for list of servers, client and admin node.
 
 ## Set-Up
 
-Refer to the [DAOS CentOS Setup](setup_centos.md) or the [DAOS openSUSE Setup](setup_suse.md) for RPM installation, daos
-server/agent/admin configuration yml files, certificate generation, and
-bring-up DAOS servers and clients.
+Refer to the [DAOS CentOS Setup](setup_centos.md) or the
+[DAOS openSUSE Setup](setup_suse.md) for RPM installation, daos
+server/agent/admin configuration yml files, certificate generation, and bring-up
+DAOS servers and clients.
 
 ## DAOS management tool (dmg) usage for daos_admin
 
@@ -160,8 +160,8 @@ bring-up DAOS servers and clients.
 	$ dmg storage query usage
 	Hosts	SCM-Total	SCM-Free	SCM-Used	NVMe-Total	NVMe-Free	NVMe-Used
 	-----	---------	--------	--------	----------	---------	---------
-    wolf-180 1.2 GB		1.2 GB		0 %		19 GB		19 GB		0 %
-    wolf-181 1.2 GB		1.2 GB		0 %		19 GB		19 GB		0 %
+    wolf-180 1.2 GB		1.2 GB		10 %		19 GB		19 GB		0 %
+    wolf-181 1.2 GB		1.2 GB		10 %		19 GB		19 GB		0 %
 
 ### dmg pool create for specified user and group
 
@@ -179,16 +179,15 @@ bring-up DAOS servers and clients.
 
 ### dmg pool create with security setting
 	# Create a pool with access-control via a access-list test file
-	export DAOS_POOL=Pool3
 
 	# Example of access entries on /tmp/acl_test.txt
 	# pool OWNER: read-write permission
 	# pool owner GROUP: read-write permission
-	#  test_user1: write-only permission
-	#  test_user2: read-only permission
-	#  test_group1: write-only permission
-	#  test_group2: read-only permission
-	#  EVERYONE else: no permission
+	#  test_user1: write-only permission
+	#  test_user2: read-only permission
+	#  test_group1: write-only permission
+	#  test_group2: read-only permission
+	#  EVERYONE else: no permission
 	A::OWNER@:rw
 	A:G:GROUP@:rw
 	A::test_user1@:w
@@ -197,7 +196,7 @@ bring-up DAOS servers and clients.
 	A:G:test_group2@:r
 	A::EVERYONE@:
 
-	$ dmg pool create --size=20G --acl-file=/tmp/acl_test.txt $DAOS_POOL
+	$ dmg pool create --size=20G --acl-file=/tmp/acl_test.txt Pool3
 	Pool created with 6.00%,94.00% storage tier ratio
 	-------------------------------------------------
 	UUID                 : f73eefa5-937d-4f0d-8934-4b3192dba4e4
@@ -208,7 +207,7 @@ bring-up DAOS servers and clients.
 	Storage tier 1 (NVMe): 19 GB (9.4 GB / rank)
 
 	# Get pool security acl
-	$ dmg pool get-acl $DAOS_POOL
+	$ dmg pool get-acl Pool3
 	# Entries:
 	A::OWNER@:rw
 	A::test_user1@:w
@@ -219,13 +218,13 @@ bring-up DAOS servers and clients.
 	A::EVERYONE@:
 
 	# Update pool access entry for the existing test_group1 to no-permission
-	dmg pool update-acl -e A:G:test_group1@: --pool=$DAOS_POOL
+	dmg pool update-acl -e A:G:test_group1@: --pool=Pool3
 
 	# Update pool access entry for a new user test_user3 with rw permission
-	dmg pool update-acl -e A::test_user3@:rw --pool=$DAOS_POOL
+	dmg pool update-acl -e A::test_user3@:rw --pool=Pool3
 
 	# Get pool security acl after update-acl
-	$ dmg pool get-acl --pool=$DAOS_POOL
+	$ dmg pool get-acl --pool=Pool3
 
 	# Entries:
 	A::OWNER@:rw
@@ -240,15 +239,21 @@ bring-up DAOS servers and clients.
 ### dmg pool list
 
 	$ dmg pool list
-	Pool UUID								Svc Replicas
-	---------								------------
-	bf9a1b61-e3ba-4dca-a4ba-f35776edc822	0
-	13aaa333-1533-41cb-85d8-8a22728cfbad	0
-	f73eefa5-937d-4f0d-8934-4b3192dba4e4	0
+	Pool  Size   Used Imbalance Disabled
+	----  ----   ---- --------- -------- 
+	Pool1 20.0 GB 0%   0%        0/16      
+	Pool2 20.0 GB 0%   0%        0/16
+	Pool3 20.0 GB 0%   0%        0/16      
 
 ### dmg pool destroy
 
-	$ dmg pool destroy $DAOS_POOL
+	$ dmg pool destroy Pool1
+	Pool-destroy command succeeded
+
+	$ dmg pool destroy Pool2
+	Pool-destroy command succeeded
+
+	$ dmg pool destroy Pool3
 	Pool-destroy command succeeded
 
 	$ dmg pool list
@@ -274,23 +279,21 @@ bring-up DAOS servers and clients.
 	NVMe			: 0 B (0 B / rank)
 
 	$ dmg pool list
-	Pool UUID								Svc Replicas
-	---------								------------
-	cf860261-4fde-4403-b10b-abe8eb9dd32f	0
+	Pool  Size   Used Imbalance Disabled
+	----  ----   ---- --------- -------- 
+	Pool4 10.0 GB 0%   0%        0/16      
 
 	$ dmg pool query Pool4
 	Pool cf860261-4fde-4403-b10b-abe8eb9dd32f, ntarget=16, disabled=0, leader=0, version=1
 	Pool space info:
 	- Target(VOS) count:16
-	- SCM:
-		Total size: 10 GB
-		Free: 10 GB, min:625 MB, max:625 MB, mean:625 MB
-	- NVMe:
-		Total size: 0 B
-		Free: 0 B, min:0 B, max:0 B, mean:0 B
-	Rebuild idle, 0 objs, 0 recs
-
- 
+	- Storage tier 0 (SCM):
+	  Total size: 10.0 GB
+	  Free: 10.0 GB, min:625 MB, max:625 MB, mean:625 MB
+	- Storage tier 1 (NVMe):
+	  Total size: 0 B
+	  Free: 0 B, min:0 B, max:0 B, mean:0 B
+	  Rebuild idle, 0 objs, 0 recs
 
 ## DAOS tool (daos) usage for daos_client
 
@@ -344,7 +347,7 @@ bring-up DAOS servers and clients.
 
 ### daos container create
 
-	$ dmg pool create --size=10G
+	$ dmg pool create --size=10G Pool1
 	Creating DAOS pool with automatic storage allocation: 10 GB NVMe + 6.00% SCM
 	Pool created with 100.00% SCM/NVMe ratio
 	----------------------------------------
@@ -355,42 +358,45 @@ bring-up DAOS servers and clients.
 	SCM				: 10 GB (10 GB / rank)
 	NVMe			: 0 B (0 B / rank)
 
-	$ daos cont create --pool=$DAOS_POOL
+	$ daos cont create --label Cont1 Pool1
 	Successfully created container bfef23e9-bbfa-4743-a95c-144c44078f16
 
 ### daos container create with HDF5 type
 
 	# Create a HDF5 container
 	# By default: type = POSIX
-	$ daos cont create --type=HDF5 --pool=$DAOS_POOL
+	$ daos cont create --type=HDF5 --label Cont2 Pool1
 	Successfully created container bc4fe707-7470-4b7d-83bf-face75cc98fc
 
 ### daos container create with redundancy factor
 
 	# Create a container with oclass RP_2G1, redundancy factor = 1
-	$ daos cont create --oclass=RP_2G1 --properties=rf:1 --pool=$DAOS_POOL
+	$ daos cont create --oclass=RP_2G1 --properties=rf:1 --label Cont3 Pool1 
 	Successfully created container 0d121c02-a42d-4029-8dce-3919b964b7b3
 
 ### daos container list
 
-	$ daos pool list-cont --pool=$DAOS_POOL
-	bc4fe707-7470-4b7d-83bf-face75cc98fc
-	0d121c02-a42d-4029-8dce-3919b964b7b3
+	$ daos pool list-cont Pool1
+	UUID                                 Label
+	----                                 ----- 
+	bfef23e9-bbfa-4743-a95c-144c44078f16 Cont1
+	bc4fe707-7470-4b7d-83bf-face75cc98fc Cont2
+	0d121c02-a42d-4029-8dce-3919b964b7b3 Cont3
 
 ### daos container destroy
-    $ export export DAOS_CONT=bc4fe707-7470-4b7d-83bf-face75cc98fc
-	$ daos cont destroy --pool=$DAOS_POOL --cont=$DAOS_CONT
-	Successfully destroyed container bc4fe707-7470-4b7d-83bf-face75cc98fc
+	$ daos cont destroy Pool1 Cont1
+	Successfully destroyed container Cont1
 
 ### daos container query
 
-	$ daos cont query --pool=$DAOS_POOL --cont=$DAOS_CONT
-	Pool UUID: 528f4710-7eb8-4850-b6aa-09e4b3c8f532
-	Container UUID: bc4fe707-7470-4b7d-83bf-face75cc98fc
-	Number of snapshots: 0
-	Latest Persistent Snapshot: 0
-	Highest Aggregated Epoch: 172477977191481344
-	Container redundancy factor: 1
+	$ daos cont query Pool1 Cont1
+	Container UUID             : bc4fe707-7470-4b7d-83bf-face75cc98fc
+	Container Label            : Cont1                               
+	Container Type             : unknown                             
+	Pool UUID                  : 528f4710-7eb8-4850-b6aa-09e4b3c8f532
+	Number of snapshots        : 0                                   
+	Latest Persistent Snapshot : 0x0                                 
+	Container redundancy factor: 0
 
 ### daos container snapshot help/create/list/destroy
 
@@ -413,18 +419,18 @@ bring-up DAOS servers and clients.
 	-c, --cont=                     container UUID (deprecated; use positional arg)
 	-s, --snap=                     snapshot name
 
-	$ daos cont create-snap --pool=$DAOS_POOL --cont=$DAOS_CONT
+	$ daos cont create-snap Pool1 Cont1
 	snapshot/epoch 172646116775952384 has been created
 
-	$ daos container list-snaps --pool=$DAOS_POOL --cont=$DAOS_CONT
+	$ daos container list-snaps Pool1 Cont1
 	Container's snapshots :
 	172478166024060928
 	172646116775952384
 
-	$ daos container destroy-snap --pool=$DAOS_POOL --cont=$DAOS_CONT
+	$ daos container destroy-snap Pool1 Cont1
 	--epc=172646116775952384
 
-	$ daos container list-snaps --pool=$DAOS_POOL --cont=$DAOS_CONT
+	$ daos container list-snaps Pool1 Cont1
 	Container\'s snapshots :
 	172478166024060928
 
@@ -452,7 +458,7 @@ bring-up DAOS servers and clients.
 
 ### use daos command before daos_agent started
 
-	$ daos cont create --pool=$DAOS_POOL
+	$ daos cont create Pool1
 	daos ERR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
 	mgmt ERR  src/mgmt/cli_mgmt.c:222 get_attach_info() failed to connect to /var/run/daos_agent/daos_agent.sock DER_MISC(-1025): 'Miscellaneous error'
 	failed to initialize daos: Miscellaneous error (-1025)
@@ -482,7 +488,7 @@ bring-up DAOS servers and clients.
 	use 'daos help RESOURCE' for resource specifics
 
 	# Invalid sub-command cont-list
-	$ daos pool cont-list --pool=$DAOS_POOL
+	$ daos pool cont-list Pool1
 	invalid pool command: cont-list
 	error parsing command line arguments
 	daos command (v1.2), libdaos 1.2.0
@@ -498,10 +504,10 @@ bring-up DAOS servers and clients.
 	use 'daos help RESOURCE' for resource specifics
 
 	# Working daos pool command
-	$ daos pool list-cont --pool=$DAOS_POOL
+	$ daos pool list-cont Pool1
 	bc4fe707-7470-4b7d-83bf-face75cc98fc
 
-## dmg pool create failed due to no space
+### dmg pool create failed due to no space
 
 	$ dmg pool create --size=50G
 	Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
@@ -534,7 +540,7 @@ bring-up DAOS servers and clients.
 	# dmg pool destroy Timeout or failed due to pool has active container(s)
 	# Workaround pool destroy --force option
 
-		$ dmg pool destroy --pool=$DAOS_POOL --force
+		$ dmg pool destroy --pool=Pool1 --force
 		Pool-destroy command succeeded
 
 ## Run with dfuse fio
@@ -545,21 +551,19 @@ bring-up DAOS servers and clients.
 
 ### run fio
 
-	$ export DAOS_POOL="mypool"
-	$ export DAOS_CONT="mycont"
-	$ dmg pool create --size 10G $DAOS_POOL
-	$ daos cont create --label $DAOS_CONT --type POSIX $DAOS_POOL
-	$ daos cont query $DAOS_POOL $DAOS_CONT
+	$ dmg pool create --size 10G Pool1
+	$ daos cont create --label Cont1 --type POSIX Pool1
+	$ daos cont query Pool1 Cont1
 	$ /usr/bin/mkdir /tmp/daos_test1
 	$ /usr/bin/touch /tmp/daos_test1/testfile
 	$ /usr/bin/df -h -t fuse.daos
 	df: no file systems processed
-	$ /usr/bin/dfuse --m=/tmp/daos_test1 --pool=$DAOS_POOL --cont=$DAOS_CONT
+	$ /usr/bin/dfuse --m=/tmp/daos_test1 --pool=Pool1 --cont=Cont1
 	$ /usr/bin/df -h -t fuse.daos
 	Filesystem Size Used Avail Use% Mounted on
 	dfuse 954M 144K 954M 1% /tmp/daos_test1
 	$ /usr/bin/fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --directory=/tmp/daos_test1 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting
-    random-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
+	random-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
 	...
 	fio-3.7
 	Starting 8 processes
@@ -645,7 +649,7 @@ bring-up DAOS servers and clients.
 ### run mpirun ior and mdtest
 
 	# Run mpirun ior
-    $ /usr/bin/dfuse --m=/tmp/daos_test1 --pool=$DAOS_POOL --cont=$DAOS_CONT
+    $ /usr/bin/dfuse --m=/tmp/daos_test1 --pool=Pool1 --cont=Cont1
 	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 30 ior -a POSIX -b 26214400 -v -w -k -i 1 -o /tmp/daos_test1/testfile -t 25M
 	IOR-3.4.0+dev: MPI Coordinated Test of Parallel I/O
 	Began : Fri Apr 16 18:07:56 2021
@@ -686,7 +690,7 @@ bring-up DAOS servers and clients.
 	Finished : Fri Apr 16 18:07:57 2021
 
 
-# Run mpirun mdtest
+### Run mpirun mdtest
 
 	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 30 mdtest -a DFS -z 0 -F -C -i 1 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont <container.uuid> --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool <pool_uuid>
 	– started at 04/16/2021 22:01:55 –
@@ -749,19 +753,14 @@ bring-up DAOS servers and clients.
 	  -----             ----------- ------------
 	  boro-[8,35,52-53] 1           0
 
-	$ dmg pool list
-	Pool UUID Svc Replicas
-	--------- ------------
-	733bee7b-c2af-499e-99dd-313b1ef092a9
-	[1-3]
+	$ dmg pool create --size 10G Pool1
+	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rf:2 Pool1  
+	$ daos pool list-cont Pool1
+	UUID                                 Label
+	----                                 ----- 
+	2649aa0f-3ad7-4943-abf5-4343205a637b Cont1
 
-	$ daos cont create --label mycont --type POSIX --oclass RP_3G1 --properties rf:2 $DAOS_POOL
-	Successfully created container 2649aa0f-3ad7-4943-abf5-4343205a637b
-
-	$ daos pool list-cont $DAOS_POOL
-	2649aa0f-3ad7-4943-abf5-4343205a637b
-
-	$ dmg pool query $DAOS_POOL
+	$ dmg pool query Pool1
 	Pool 733bee7b-c2af-499e-99dd-313b1ef092a9, ntarget=32, disabled=0, leader=2, version=1
 	Pool space info:
 	- Target(VOS) count:32
@@ -778,7 +777,7 @@ bring-up DAOS servers and clients.
 
 	$ mkdir /tmp/daos_test1
 
-	$ dfuse --mountpoint=/tmp/daos_test1 --pool=$DAOS_POOL --cont=$DAOS_CONT
+	$ dfuse --mountpoint=/tmp/daos_test1 --pool=Pool1 --cont=Cont1
 
 	$ df -h -t fuse.daos
 	Filesystem      Size  Used Avail Use% Mounted on
@@ -856,10 +855,10 @@ bring-up DAOS servers and clients.
 	--------- ------
 	3 stop OK
 
-	$ daos pool list-cont $DAOS_POOL
+	$ daos pool list-cont Pool1
 	cf2a95ce-9910-4d5e-814c-cafb0a7f0944
 
-	$ dmg pool query $DAOS_POOL
+	$ dmg pool query Pool1
 	Pool 70f73efc-848e-4f6e-b4fd-909bcf9bd427,
 	ntarget=32,
 	disabled=8,
@@ -900,9 +899,7 @@ bring-up DAOS servers and clients.
 
 ### Run mpirun mdtest with rebuild
 
-	$ export DAOS_POOL="mypool1"
-	$ export DAOS_CONT="mycont"
-	$ dmg pool create --size=50G $DAOS_POOL
+	$ dmg pool create --size=50G Pool1
 	Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 	Pool created with 100.00% SCM/NVMe ratio
 	-----------------------------------------
@@ -913,10 +910,10 @@ bring-up DAOS servers and clients.
 	 SCM : 50 GB (12 GB / rank)
 	 NVMe : 0 B (0 B / rank)
 
-	$ daos cont create --label $DAOS_CONT --type POSIX --oclass RP_3G1 --properties rf:2 $DAOS_POOL
+	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rf:2 Pool1  
 	Successfully created container d71ff6a5-15a5-43fe-b829-bef9c65b9ccb
 
-	$ /usr/lib64/mpich/bin/mpirun -host boro-8 -np 30 mdtest -a DFS -z 0 -F -C -i 100 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont $DAOS_CONT --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool $DAOS_POOL
+	$ /usr/lib64/mpich/bin/mpirun -host boro-8 -np 30 mdtest -a DFS -z 0 -F -C -i 100 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont Cont1 --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool Pool1
 
 	started at 04/22/2021 17:46:20 –
 	mdtest-3.4.0+dev was launched with 30 total task(s) on 1 node(s)
@@ -955,14 +952,14 @@ bring-up DAOS servers and clients.
 ## Clean-Up
 
 	# pool reintegrate
-	$ dmg pool reintegrate $DAOS_POOL --rank=2
+	$ dmg pool reintegrate Pool1 --rank=2
 	Reintegration command succeeded
 
 	# destroy container
-	$ daos container destroy $DAOS_POOL $DAOS_CONT
+	$ daos container destroy Pool1 Cont1
 
 	# destroy pool
-	$ dmg pool destroy $DAOS_POOL
+	$ dmg pool destroy Pool1
 	Pool-destroy command succeeded
 
 	# stop clients
