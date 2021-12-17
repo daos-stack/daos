@@ -2339,7 +2339,12 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			  (orw->orw_bulks.ca_arrays != NULL ||
 			   orw->orw_bulks.ca_count != 0) ? true : false);
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+			 (rc == -DER_EXIST &&
+			  (orw->orw_api_flags & (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
+			 (rc == -DER_NONEXIST &&
+			  (orw->orw_api_flags & (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
+			 DB_IO, DLOG_ERR,
 			 DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
 
 out:
@@ -2422,6 +2427,14 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 		rc = obj_local_rw(exec_arg->rpc, exec_arg->ioc, iods, csums,
 				  offs, &dlh->dlh_handle, pin);
+		if (rc != 0)
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+				 (rc == -DER_EXIST && (orw->orw_api_flags &
+				  (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
+				 (rc == -DER_NONEXIST && (orw->orw_api_flags &
+				  (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
+				 DB_IO, DLOG_ERR,
+				 DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid), DP_RC(rc));
 
 comp:
 		if (comp_cb != NULL)
@@ -3288,10 +3301,10 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* non-leader local RPC handler, do not need pin the DTX entry.  */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, dth, false);
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+			 (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
 			 DB_IO, DLOG_ERR,
-			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
-			 DP_RC(rc));
+			 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid), DP_RC(rc));
 
 out:
 	/* Stop the local transaction */
@@ -3371,6 +3384,11 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc,
 				     &dlh->dlh_handle,
 				     !dlh->dlh_handle.dth_solo);
+		if (rc != 0)
+			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+				 (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
+				 DB_IO, DLOG_ERR,
+				 DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid), DP_RC(rc));
 
 comp:
 		if (comp_cb != NULL)
