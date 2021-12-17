@@ -669,10 +669,12 @@ func TestHardware_NetDevClass_String(t *testing.T) {
 
 func TestHardware_FabricScannerConfig_IsValid(t *testing.T) {
 	for name, tc := range map[string]struct {
-		config   *FabricScannerConfig
-		expValid bool
+		config *FabricScannerConfig
+		expErr error
 	}{
-		"nil": {},
+		"nil": {
+			expErr: errors.New("nil"),
+		},
 		"minimal valid": {
 			config: &FabricScannerConfig{
 				TopologyProvider: &MockTopologyProvider{},
@@ -681,7 +683,6 @@ func TestHardware_FabricScannerConfig_IsValid(t *testing.T) {
 				},
 				NetDevClassProvider: &MockNetDevClassProvider{},
 			},
-			expValid: true,
 		},
 		"no TopologyProvider": {
 			config: &FabricScannerConfig{
@@ -690,6 +691,7 @@ func TestHardware_FabricScannerConfig_IsValid(t *testing.T) {
 				},
 				NetDevClassProvider: &MockNetDevClassProvider{},
 			},
+			expErr: errors.New("TopologyProvider is required"),
 		},
 		"no NetDevClassProvider": {
 			config: &FabricScannerConfig{
@@ -698,12 +700,14 @@ func TestHardware_FabricScannerConfig_IsValid(t *testing.T) {
 					&MockFabricInterfaceProvider{},
 				},
 			},
+			expErr: errors.New("NetDevClassProvider is required"),
 		},
 		"no FabricInterfaceProvider": {
 			config: &FabricScannerConfig{
 				TopologyProvider:    &MockTopologyProvider{},
 				NetDevClassProvider: &MockNetDevClassProvider{},
 			},
+			expErr: errors.New("FabricInterfaceProvider is required"),
 		},
 		"multiple FabricInterfaceProviders": {
 			config: &FabricScannerConfig{
@@ -716,11 +720,10 @@ func TestHardware_FabricScannerConfig_IsValid(t *testing.T) {
 				},
 				NetDevClassProvider: &MockNetDevClassProvider{},
 			},
-			expValid: true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expValid, tc.config.IsValid(), "")
+			common.CmpErr(t, tc.expErr, tc.config.Validate())
 		})
 	}
 }
@@ -778,7 +781,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 		},
 		"invalid config": {
 			config: &FabricScannerConfig{},
-			expErr: errors.New("not valid"),
+			expErr: errors.New("invalid"),
 		},
 		"already initialized": {
 			config: GetMockFabricScannerConfig(),
@@ -971,9 +974,10 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 			builder: newFabricInterfaceBuilder(nil),
 			expErr:  errors.New("FabricInterfaceSet is nil"),
 		},
-		"no FI providers": {
-			builder:   newFabricInterfaceBuilder(nil),
+		"uninit": {
+			builder:   &FabricInterfaceBuilder{},
 			set:       NewFabricInterfaceSet(),
+			expErr:    errors.New("uninitialized"),
 			expResult: NewFabricInterfaceSet(),
 		},
 		"success": {
@@ -1141,6 +1145,12 @@ func TestHardware_OSDeviceBuilder_BuildPart(t *testing.T) {
 			builder: newOSDeviceBuilder(nil, testTopo),
 			expErr:  errors.New("FabricInterfaceSet is nil"),
 		},
+		"uninit": {
+			builder:   &OSDeviceBuilder{},
+			set:       NewFabricInterfaceSet(),
+			expErr:    errors.New("uninitialized"),
+			expResult: NewFabricInterfaceSet(),
+		},
 		"empty set": {
 			builder:   newOSDeviceBuilder(nil, testTopo),
 			set:       NewFabricInterfaceSet(),
@@ -1307,6 +1317,12 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 			expErr:    errors.New("NUMAAffinityBuilder is nil"),
 			expResult: NewFabricInterfaceSet(),
 		},
+		"uninit": {
+			builder:   &NUMAAffinityBuilder{},
+			set:       NewFabricInterfaceSet(),
+			expErr:    errors.New("uninitialized"),
+			expResult: NewFabricInterfaceSet(),
+		},
 		"nil set": {
 			builder: newNUMAAffinityBuilder(nil, &Topology{}),
 			expErr:  errors.New("FabricInterfaceSet is nil"),
@@ -1429,6 +1445,12 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 		"nil set": {
 			builder: newNetDevClassBuilder(nil, &MockNetDevClassProvider{}),
 			expErr:  errors.New("FabricInterfaceSet is nil"),
+		},
+		"uninit": {
+			builder:   &NetDevClassBuilder{},
+			set:       NewFabricInterfaceSet(),
+			expErr:    errors.New("uninitialized"),
+			expResult: NewFabricInterfaceSet(),
 		},
 		"empty set": {
 			builder:   newNetDevClassBuilder(nil, &MockNetDevClassProvider{}),

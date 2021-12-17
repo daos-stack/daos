@@ -28,17 +28,20 @@ type Provider struct {
 	root string
 }
 
+func (s *Provider) getRoot() string {
+	if s.root == "" {
+		s.root = "/sys"
+	}
+	return s.root
+}
+
 // GetNetDevClass fetches the network device class for the given network interface.
 func (s *Provider) GetNetDevClass(dev string) (hardware.NetDevClass, error) {
 	if dev == "" {
 		return 0, errors.New("device name required")
 	}
 
-	if s.root == "" {
-		s.root = "/sys"
-	}
-
-	devClass, err := ioutil.ReadFile(filepath.Join(s.root, "class", "net", dev, "type"))
+	devClass, err := ioutil.ReadFile(filepath.Join(s.getRoot(), "class", "net", dev, "type"))
 	if err != nil {
 		return 0, err
 	}

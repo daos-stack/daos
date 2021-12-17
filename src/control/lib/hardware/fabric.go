@@ -331,6 +331,10 @@ func (f *FabricInterfaceBuilder) BuildPart(ctx context.Context, fis *FabricInter
 		return errors.New("FabricInterfaceSet is nil")
 	}
 
+	if len(f.fiProviders) == 0 {
+		return errors.New("FabricInterfaceBuilder is uninitialized")
+	}
+
 	fiSets := make([]*FabricInterfaceSet, 0)
 	for _, fiProv := range f.fiProviders {
 		set, err := fiProv.GetFabricInterfaces(ctx)
@@ -380,6 +384,10 @@ func (o *OSDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet
 		return errors.New("FabricInterfaceSet is nil")
 	}
 
+	if o.topo == nil {
+		return errors.New("OSDeviceBuilder is uninitialized")
+	}
+
 	devsByName := o.topo.AllDevices()
 
 	for _, name := range fis.Names() {
@@ -398,7 +406,7 @@ func (o *OSDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet
 
 		dev, exists := devsByName[name]
 		if !exists {
-			o.log.Errorf("fabric interface %q not found in topology", name)
+			o.log.Debugf("fabric interface %q not found in topology", name)
 			continue
 		}
 
@@ -449,6 +457,10 @@ func (n *NUMAAffinityBuilder) BuildPart(ctx context.Context, fis *FabricInterfac
 		return errors.New("FabricInterfaceSet is nil")
 	}
 
+	if n.topo == nil {
+		return errors.New("NUMAAffinityBuilder is uninitialized")
+	}
+
 	devsByName := n.topo.AllDevices()
 
 	for _, name := range fis.Names() {
@@ -465,7 +477,7 @@ func (n *NUMAAffinityBuilder) BuildPart(ctx context.Context, fis *FabricInterfac
 
 		dev, exists := devsByName[name]
 		if !exists {
-			n.log.Errorf("fabric interface %q not found in topology", name)
+			n.log.Debugf("fabric interface %q not found in topology", name)
 			continue
 		}
 
@@ -498,6 +510,10 @@ func (n *NetDevClassBuilder) BuildPart(ctx context.Context, fis *FabricInterface
 		return errors.New("FabricInterfaceSet is nil")
 	}
 
+	if n.provider == nil {
+		return errors.New("NetDevClassBuilder is uninitialized")
+	}
+
 	for _, name := range fis.Names() {
 		fi, err := fis.GetInterface(name)
 		if err != nil {
@@ -506,7 +522,7 @@ func (n *NetDevClassBuilder) BuildPart(ctx context.Context, fis *FabricInterface
 
 		ndc, err := n.provider.GetNetDevClass(name)
 		if err != nil {
-			n.log.Error(err.Error())
+			n.log.Debug(err.Error())
 		}
 
 		fi.DeviceClass = ndc
@@ -544,25 +560,25 @@ type FabricScannerConfig struct {
 	NetDevClassProvider      NetDevClassProvider
 }
 
-// IsValid checks if the FabricScannerConfig is valid.
-func (c *FabricScannerConfig) IsValid() bool {
+// Validate checks if the FabricScannerConfig is valid.
+func (c *FabricScannerConfig) Validate() error {
 	if c == nil {
-		return false
+		return errors.New("FabricScannerConfig is nil")
 	}
 
 	if c.TopologyProvider == nil {
-		return false
+		return errors.New("TopologyProvider is required")
 	}
 
 	if len(c.FabricInterfaceProviders) == 0 {
-		return false
+		return errors.New("at least one FabricInterfaceProvider is required")
 	}
 
 	if c.NetDevClassProvider == nil {
-		return false
+		return errors.New("NetDevClassProvider is required")
 	}
 
-	return true
+	return nil
 }
 
 // FabricScanner is a type that scans the system for fabric interfaces.
@@ -585,8 +601,8 @@ func NewFabricScanner(log logging.Logger, config *FabricScannerConfig) (*FabricS
 }
 
 func (s *FabricScanner) init(ctx context.Context) error {
-	if !s.config.IsValid() {
-		return errors.New("FabricScannerConfig is not valid")
+	if err := s.config.Validate(); err != nil {
+		return errors.Wrap(err, "invalid FabricScannerConfig")
 	}
 
 	topo, err := s.config.TopologyProvider.GetTopology(ctx)
