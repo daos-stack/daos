@@ -16,7 +16,7 @@ class HarnessSetupTest(TestWithServers):
     def test_setup(self):
         """Verify the TestWithServers.setUp() method.
 
-        Also useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
+        Useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
 
         :avocado: tags=all
         :avocado: tags=hw,small,medium,ib2,large
