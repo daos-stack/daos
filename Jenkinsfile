@@ -72,6 +72,9 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: "",
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'BuildType',
+               defaultValue: "",
+               description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',
                defaultValue: "",
                description: 'Test-repeat to use for this run.  Specifies the ' +
@@ -588,7 +591,7 @@ pipeline {
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: false,
+                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          name: "NLT server leaks",
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
@@ -899,6 +902,8 @@ pipeline {
                     }
                     post {
                         always {
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                                                      scm: 'daos-stack/daos'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: true,

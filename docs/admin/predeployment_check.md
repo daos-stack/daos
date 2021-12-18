@@ -33,24 +33,25 @@ $ sudo reboot
     'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
     but note that this will require running daos_server as root.
 
-!!! note
-	If VFIO is not enabled, you will run into the issue described in:
-	https://github.com/spdk/spdk/issues/1153
+!!! warning
+    If VFIO is not enabled on RHEL 8.x and derivatives, you will run into the issue described in:
+    https://github.com/spdk/spdk/issues/1153
 
-	When using RHEL 8.1 with official kernel from distribution (4.18.0-147.el8.x86_64)
-	it is not possible to bind nvme devices to uio_pci_generic driver and due to that
-	to use them within SPDK environment:
+    The problem manifests with the following signature in the kernel logs:
 
-		[82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
-		[82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
+    ```
+    [82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
+    [82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
+    ```
 
-	The issue was previously reported in SPDK bugzilla [here](https://github.com/spdk/spdk/issues/399) for vanilla kernel 4.18. Unfortunately the kernel used in RHEL 8 does not contain the proper [bugfix](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=linux-4.18.y&id=a34e4f42055a7fe8e804fc9e71dfc1e324c657f1) backported.
+    As a consequence, the use of VFIO on these distributions is a requirement
+    since UIO is not supported.
 
 ## Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
-synchronized across all the storage and client nodes. This can be done
-using NTP or any other equivalent protocol.
+synchronized across all the storage nodes. This can be done using NTP or
+any other equivalent protocol.
 
 ## User/Group Synchronization
 
@@ -65,6 +66,13 @@ the DAOS storage nodes.
 Storage nodes can be configured with multiple network interfaces to run
 multiple engine instances.
 
+### Subnet
+
+Since all engines need to be able to communicate, the different network
+interfaces must be on the same subnet or you must configuring routing
+across the different subnets.
+
+### Infiniband Settings
 
 Some special configuration is required to use librdmacm with multiple
 interfaces.
@@ -103,19 +111,17 @@ $ sysctl -w net.ipv4.conf.<ifaces>.rp_filter=2
 ```
 
 All those parameters can be made persistent in /etc/sysctl.conf by adding a new
-sysctl file under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf) with all
-the relevant settings.
+sysctl file under /usr/lib/sysctl.d (e.g. /usr/lib/sysctl.d/95-daos-net.conf)
+with all the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
-### Subnet
+## Install from Source
 
-Since all engines need to be able to communicate, the different network
-interfaces need to be on the same subnet or routing capabilities across the
-different subnet must be configured.
+When DAOS is installed from source (and not from pre-built packages), extra manual
+settings detailed in this section are required.
 
-
-## Runtime Directory Setup
+### Runtime Directory Setup
 
 DAOS uses a series of Unix Domain Sockets to communicate between its
 various components. On modern Linux systems, Unix Domain Sockets are
@@ -129,7 +135,7 @@ or daos_agent, you may see the message:
 $ mkdir /var/run/daos_server: permission denied
 Unable to create socket directory: /var/run/daos_server
 ```
-### Non-default Directory
+#### Non-default Directory
 
 By default, daos_server and daos_agent will use the directories
 /var/run/daos_server and /var/run/daos_agent respectively. To change
@@ -139,7 +145,15 @@ For the daos_agent, either uncomment and set the runtime_dir configuration value
 /etc/daos/daos_agent.yml or a location can be passed on the command line using
 the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
 
-### Default Directory (non-persistent)
+!!! warning
+    Do not change these when running under `systemd` control.
+    If these directories need to be changed, insure they match the
+    RuntimeDirectory setting in the /usr/lib/systemd/system/daos_agent.service
+    and /usr/lib/systemd/system/daos_server.service configuration files.
+    The socket directories will be created and removed by `systemd` when the
+    services are started and stopped.
+
+#### Default Directory (non-persistent)
 
 Files and directories created in /run and /var/run only survive until
 the next reboot. These directories are required for subsequent runs;
@@ -162,7 +176,7 @@ $ chown user:user /var/run/daos_agent (where user is the user you
     will run daos_agent as)
 ```
 
-### Default Directory (persistent)
+#### Default Directory (persistent)
 
 The following steps are not necessary if DAOS is installed from rpms.
 
@@ -182,12 +196,11 @@ To tell systemd to create the necessary directories for DAOS:
 -   Reboot the system, and the directories will be created automatically
     on all subsequent reboots.
 
-## Elevated Privileges
+### Privileged Helper
 
 DAOS employs a privileged helper binary (`daos_admin`) to perform tasks
 that require elevated privileges on behalf of `daos_server`.
 
-### Privileged Helper Configuration
 
 When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
 to the correct location with the correct permissions. The RPM creates a "daos_server"
@@ -225,7 +238,7 @@ $ sudo ln -s $daospath/include \
     installation is most appropriate for development and predeployment
     proof-of-concept scenarios.
 
-## Memory Lock Limits
+### Memory Lock Limits
 
 Low ulimit for memlock can cause SPDK to fail and emit the following error:
 
@@ -249,3 +262,28 @@ commandline (including source builds), limits should be adjusted in
 `/etc/security/limits.conf` as per
 [this article](https://access.redhat.com/solutions/61334) (which is a RHEL
 specific document but the instructions apply to most Linux distributions).
+
+## Socket receive buffer size
+
+Low socket receive buffer size can cause SPDK to fail and emit the following
+error (receive buffer size is required to be above 1MB):
+
+```bash
+daos_engine:1 pci_event.c:  68:spdk_pci_event_listen: *ERROR*: Failed to set socket
+ option
+```
+
+The socket receive buffer size does not need to be manually adjusted if
+`daos_server` has been installed using an RPM package (as the settings
+will be applied automatically on install).
+
+For non-RPM installations where `daos_server` has been built from source,
+`rmem_default` and `rmem_max` settings should be set to >= 1MB.
+Optionally, the `utils/rpms/10-daos_server.conf` can be copied to `/usr/lib/sysctl.d/`
+to apply the settings automatically on boot.
+Running `/usr/lib/systemd/systemd-sysctl /usr/lib/sysctl.d/10-daos_server.conf`
+will apply these settings immediately (avoiding the need for an immediate reboot).
+For further information see
+[this article on network kernel settings](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/5/html/tuning_and_optimizing_red_hat_enterprise_linux_for_oracle_9i_and_10g_databases/sect-oracle_9i_and_10g_tuning_guide-adjusting_network_settings-changing_network_kernel_settings)
+using any of the methods described in
+[this article on adjusting kernel tunables](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/kernel_administration_guide/working_with_sysctl_and_kernel_tunables).

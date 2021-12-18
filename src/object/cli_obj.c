@@ -567,7 +567,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 	 */
 	D_ASSERT(grp_size >= obj_get_replicas(obj));
 	grp_start = grp_idx * grp_size;
-	idx = grp_start + random() % grp_size;
+	idx = grp_start + d_rand() % grp_size;
 	for (i = 0; i < grp_size; i++, idx++) {
 		uint32_t tgt_id;
 		int index;
@@ -634,6 +634,22 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver, uint8_t
 	return rc;
 }
 
+static int
+obj_ptr2poh(struct dc_object *obj, daos_handle_t *ph)
+{
+	daos_handle_t   coh;
+
+	coh = obj->cob_coh;
+	if (daos_handle_is_inval(coh))
+		return -DER_NO_HDL;
+
+	*ph = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(*ph))
+		return -DER_NO_HDL;
+
+	return 0;
+}
+
 /* If the client has been asked to fetch (list/query) from leader replica,
  * then means that related data is associated with some prepared DTX that
  * may be committable on the leader replica. According to our current DTX
@@ -654,17 +670,35 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver, uint8_t
 int
 obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 {
+	struct dc_pool	*pool;
+	daos_handle_t	ph;
 	int		grp_size;
+	unsigned int	pool_map_ver;
 	uint64_t	grp_idx;
+	int		rc;
+
+	rc = obj_ptr2poh(obj, &ph);
+	if (rc < 0)
+		return rc;
+
+	pool = dc_hdl2pool(ph);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	pool_map_ver = pool_map_get_version(pool->dp_map);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
-	if (obj->cob_version != map_ver) {
+	if (obj->cob_version != map_ver || map_ver < pool_map_ver) {
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		dc_pool_put(pool);
 		return -DER_STALE;
 	}
+	dc_pool_put(pool);
 
 	D_ASSERT(obj->cob_shards_nr >= grp_size);
 
@@ -1213,22 +1247,6 @@ obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
 		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
 }
 
-static int
-obj_ptr2poh(struct dc_object *obj, daos_handle_t *ph)
-{
-	daos_handle_t   coh;
-
-	coh = obj->cob_coh;
-	if (daos_handle_is_inval(coh))
-		return -DER_NO_HDL;
-
-	*ph = dc_cont_hdl2pool_hdl(coh);
-	if (daos_handle_is_inval(*ph))
-		return -DER_NO_HDL;
-
-	return 0;
-}
-
 /* Get pool map version from object handle */
 static int
 obj_ptr2pm_ver(struct dc_object *obj, unsigned int *map_ver)
@@ -1607,7 +1625,7 @@ dc_obj_layout_refresh(daos_handle_t oh)
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
-	     unsigned int srv_pmap_ver, bool *io_task_reinited)
+	     bool *io_task_reinited)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
@@ -1616,7 +1634,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	bool		  keep_result = false;
 
 	if (pmap_stale) {
-		rc = obj_pool_query_task(sched, obj, srv_pmap_ver, &pool_task);
+		rc = obj_pool_query_task(sched, obj, 0, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}
@@ -3951,8 +3969,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 	if ((!obj_auxi->no_retry || task->dt_result == -DER_FETCH_AGAIN) &&
 	     (pm_stale || obj_auxi->io_retry)) {
-		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, obj_auxi->map_ver_reply,
-				  &io_task_reinited);
+		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, &io_task_reinited);
 		if (rc) {
 			D_ERROR(DF_OID "retry io failed: %d\n", DP_OID(obj->cob_md.omd_id), rc);
 			D_ASSERT(obj_auxi->io_retry == 0);
@@ -4897,7 +4914,7 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 
 		/* choose one randomly from the parities */
 		p_size = obj_ec_parity_tgt_nr(oca);
-		idx = random() % p_size;
+		idx = d_rand() % p_size;
 		for (i = 0; i < p_size; i++, idx = (idx + 1) % p_size) {
 			/* let's skip the rebuild shard for non-update op */
 			shard = parities[idx];
@@ -5514,6 +5531,7 @@ dc_obj_query_key(tse_task_t *api_task)
 			D_GOTO(out_task, rc = shard_first);
 	}
 
+	obj_auxi->map_ver_reply = 0;
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = api_task;
 
