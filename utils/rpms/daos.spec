@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.0
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -119,6 +119,7 @@ BuildRequires: cunit-devel
 BuildRequires: ipmctl-devel
 BuildRequires: python3-devel
 BuildRequires: python3-distro
+BuildRequires: python-rpm-macros
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
@@ -516,6 +517,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Thu Dec 16 2021 Brian J. Murrell <brian.murrell@intel.com> 2.0.0-3
+- Add BR: python-rpm-macros for Leap 15 as python3-base dropped that
+  as a R:
+
 * Tue Dec 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.0.0-2
 - Version bump to 2.0.0-2
 
