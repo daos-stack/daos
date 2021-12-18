@@ -49,7 +49,7 @@ def main():
     if single:
         cmd.append('--max-count=1')
     else:
-        cmd.extend(['--max-count=2', '--since=7.days'])
+        cmd.append('--max-count=2')
     cmd.extend(['HEAD', '--'])
     cmd.extend(BUILD_FILES)
 
@@ -80,10 +80,12 @@ def main():
 
     if single:
         build_hash = commits
-
     else:
         lines = commits.splitlines()
-        build_hash = lines.pop(0)
+        if len(lines):
+            build_hash = lines.pop(0)
+        else:
+            build_hash = 'unknown'
 
     if single:
         # Landings builds, embed the current commit in the hash name, load either the exact commit
