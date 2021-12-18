@@ -170,16 +170,20 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		/* it is a file so get LOV ! */
 		fd = open(path, O_RDONLY | O_NOFOLLOW);
 		if (fd == -1) {
+			int err = errno;
+
 			D_ERROR("unable to open '%s' errno %d(%s).\n", path, errno,
 				strerror(errno));
-			return errno;
+			return err;
 		}
 
 		rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, buf);
 		if (rc != 0) {
+			int err = errno;
+
 			D_ERROR("ioctl(LL_IOC_LOV_GETSTRIPE) failed, rc: %d, "
 				"errno %d(%s).\n", rc, errno, strerror(errno));
-			return errno;
+			return err;
 		}
 
 		lfm = (struct lmv_foreign_md *)buf;
