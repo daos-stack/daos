@@ -154,19 +154,6 @@ enum daos_io_mode {
 #define DAOS_OBJ_REPL_MAX	(~0)
 #define DAOS_OBJ_RESIL_MAX	(~0)
 
-/**
- * 192-bit object ID, it can identify a unique bottom level object.
- * (a shard of upper level object).
- */
-typedef struct {
-	/** Public section, high level object ID */
-	daos_obj_id_t		id_pub;
-	/** Private section, object shard index */
-	uint32_t		id_shard;
-	/** Padding */
-	uint32_t		id_pad_32;
-} daos_unit_oid_t;
-
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;

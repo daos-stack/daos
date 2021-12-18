@@ -948,8 +948,9 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 
 struct pipeline_auxi_args {
 	int		opc;                 // I AM SETTING BUT NOT REALLY USING THIS YET
-	uint32_t	map_ver_req;         // I AM SETTING BUT NOT REALLY USING THIS YET
+	uint32_t	map_ver_req;         // FOR IO RETRY
 	daos_obj_id_t	omd_id;              // I AM SETTING BUT NOT REALLY USING THIS YET
+	tse_task_t	*api_task;           // FOR IO RETRY
 	d_list_t	shard_task_head;
 };
 
@@ -1130,6 +1131,22 @@ shard_pipeline_run_task(tse_task_t *task)
 	pri->pri_epoch			= args->pra_epoch.oe_value;
 	pri->pri_epoch_first		= args->pra_epoch.oe_first;
 	pri->pri_target			= args->pra_target;
+	if (args->pra_api_args->dkey != NULL)
+	{
+		pri->pri_dkey		= *(args->pra_api_args->dkey);
+	}
+	else
+	{
+		pri->pri_dkey		= (daos_key_t)
+					 { .iov_buf		= NULL,
+					   .iov_buf_len		= 0,
+					   .iov_len		= 0 };
+	}
+	pri->pri_nr_iods		= *(args->pra_api_args->nr_iods);
+	pri->pri_iods.ca_count		= *(args->pra_api_args->nr_iods);
+	pri->pri_iods.ca_arrays		= args->pra_api_args->iods;
+	pri->pri_anchor			= *(args->pra_api_args->anchor);
+	pri->pri_nr_kds			= *(args->pra_api_args->nr_kds);
 	uuid_copy(pri->pri_pool_uuid, pool->dp_pool);
 	uuid_copy(pri->pri_co_hdl, args->pra_coh_uuid);
 	uuid_copy(pri->pri_co_uuid, args->pra_cont_uuid);
@@ -1221,14 +1238,21 @@ struct shard_task_sched_args {
 static int
 shard_task_sched(tse_task_t *task, void *arg)
 {
-	struct shard_task_sched_args	*sched_arg = arg;
-	int				rc = 0;
+	struct shard_task_sched_args		*sched_arg = arg;
+	int					rc = 0;
+	//struct shard_pipeline_run_args		*shard_args;
+	//struct pipeline_auxi_args		*pipeline_auxi;
+	//tse_task_t				*api_task;
+	//uint32_t				target;
+	//uint32_t				map_ver;
 
-	/** TODO: Retry I/O 
-	* ...
-	* ...
-	* ...
-	*/
+	//shard_args    = tse_task_buf_embedded(task, sizeof(*shard_args));
+	//pipeline_auxi = shard_args->pipeline_auxi;
+	//map_ver       = pipeline_auxi->map_ver_req;
+	//api_task      = pipeline_auxi->api_task;
+
+	/** TODO: Retry I/O */
+	/**/
 
 	tse_task_schedule(task, true);
 	sched_arg->tsa_scheded = true;
@@ -1277,6 +1301,7 @@ pipeline_create_auxi(tse_task_t *api_task, uint32_t map_ver,
 	p_auxi->opc		= DAOS_PIPELINE_RPC_RUN;
 	p_auxi->map_ver_req	= map_ver;
 	p_auxi->omd_id		= obj_md->omd_id;
+	p_auxi->api_task	= api_task;
 	head = &p_auxi->shard_task_head;
 	D_INIT_LIST_HEAD(head);
 

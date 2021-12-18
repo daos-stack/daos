@@ -48,6 +48,11 @@ obj_opc_to_str(crt_opcode_t opc)
 	((uuid_t)		(pri_pool_uuid)		CRT_VAR)	\
 	((uuid_t)		(pri_co_hdl)		CRT_VAR)	\
 	((uuid_t)		(pri_co_uuid)		CRT_VAR)	\
+	((daos_key_t)		(pri_dkey)		CRT_VAR)	\
+	((uint32_t)		(pri_nr_iods)		CRT_VAR)	\
+	((uint32_t)		(pri_nr_kds)		CRT_VAR)	\
+	((daos_iod_t)		(pri_iods)		CRT_ARRAY)	\
+	((daos_anchor_t)	(pri_anchor)		CRT_RAW)	\
 	((uint64_t)		(pri_epoch)		CRT_VAR)	\
 	((uint64_t)		(pri_epoch_first)	CRT_VAR)	\
 	((uint32_t)		(pri_target)		CRT_VAR)	\

@@ -97,6 +97,9 @@ struct daos_task_args {
 		daos_kv_put_t		kv_put;
 		daos_kv_remove_t	kv_remove;
 		daos_kv_list_t		kv_list;
+
+		/** Pipeline */
+		daos_pipeline_run_t	pipeline_run;
 	}		 ta_u;
 	daos_event_t	*ta_ev;
 };
@@ -249,8 +252,12 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 int
 dc_pipeline_run_task_create(daos_handle_t coh, daos_handle_t oh,
 			    daos_handle_t th, daos_pipeline_t pipeline,
-			    daos_event_t *ev, tse_sched_t *tse,
-			    tse_task_t **task);
+			    uint64_t flags, daos_key_t *dkey, uint32_t *nr_iods,
+			    daos_iod_t *iods, daos_anchor_t *anchor,
+			    uint32_t *nr_kds, daos_key_desc_t *kds,
+			    d_sg_list_t *sgl_keys, d_sg_list_t *sgl_recx,
+			    d_sg_list_t *sgl_agg, daos_event_t *ev,
+			    tse_sched_t *tse, tse_task_t **task);
 
 void *
 dc_task_get_args(tse_task_t *task);

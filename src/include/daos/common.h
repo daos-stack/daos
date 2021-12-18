@@ -50,6 +50,19 @@
 #define DP_IOV(i) (i)->iov_buf, (i)->iov_len, (i)->iov_buf_len
 #define MAX_TREE_ORDER_INC	7
 
+/**
+ * 192-bit object ID, it can identify a unique bottom level object.
+ * (a shard of upper level object).
+ */
+typedef struct {
+	/** Public section, high level object ID */
+	daos_obj_id_t		id_pub;
+	/** Private section, object shard index */
+	uint32_t		id_shard;
+	/** Padding */
+	uint32_t		id_pad_32;
+} daos_unit_oid_t;
+
 struct daos_node_overhead {
 	/** Node size in bytes for tree with only */
 	int	no_size;
@@ -894,6 +907,14 @@ int crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			 daos_prop_t **data);
 int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 			     struct daos_acl **data);
+int crt_proc_daos_unit_oid_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			     daos_unit_oid_t *p);
+int crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			 d_sg_list_t *p);
+int crt_proc_daos_key_desc_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			     daos_key_desc_t *key);
+int crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			daos_iod_t *iod);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool, bool input);

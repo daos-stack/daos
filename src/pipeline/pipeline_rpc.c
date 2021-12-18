@@ -8,15 +8,9 @@
 
 #include <daos/rpc.h>
 #include <daos/pipeline.h>
+#include <daos/common.h>
 #include "pipeline_rpc.h"
 #include <mercury_proc.h>
-
-static inline int
-crt_proc_daos_unit_oid_t(crt_proc_t proc, crt_proc_op_t proc_op,
-			 daos_unit_oid_t *p)
-{
-	return crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
-}
 
 static int
 pipeline_t_proc_consts(crt_proc_t proc, crt_proc_op_t proc_op,
