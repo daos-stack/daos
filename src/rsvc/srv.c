@@ -630,8 +630,9 @@ map_distd(void *arg)
 			 * Try again, but back off a little bit to limit the
 			 * retry rate.
 			 */
+			D_ERROR("POOL MAP UPDATE IV failed: %d\n", rc);
 			svc->s_map_dist = true;
-			dss_sleep(3000 /* ms */);
+			dss_sleep(200 /* ms */);
 		}
 	}
 	put_leader(svc);
