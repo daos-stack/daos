@@ -1367,9 +1367,10 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
 	struct rdb_tx		tx;
 	struct pool_buf	       *map_buf = NULL;
-	uint32_t		map_version;
-	int			rc;
+	uint32_t		map_version = 0;
+	int			rc = 0;
 
+	D_INFO(DF_UUID": start distribute pool(1)\n", DP_UUID(svc->ps_uuid));
 	/* Read the pool map into map_buf and map_version. */
 	rc = rdb_tx_begin(rsvc->s_db, rsvc->s_term, &tx);
 	if (rc != 0)
@@ -1378,13 +1379,19 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
+	D_INFO(DF_UUID": start distribute pool(2): rc %d, ver %d\n",
+	       DP_UUID(svc->ps_uuid), rc, map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map buffer: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
 		goto out;
 	}
 
+	D_INFO(DF_UUID": start distribute pool(3): rc %d, ver %d\n",
+	       DP_UUID(svc->ps_uuid), rc, map_version);
 	rc = ds_pool_iv_map_update(svc->ps_pool, map_buf, map_version);
+	D_INFO(DF_UUID": start distribute pool(4): rc %d, ver %d\n",
+	       DP_UUID(svc->ps_uuid), rc, map_version);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to distribute pool map %u: %d\n",
 			DP_UUID(svc->ps_uuid), map_version, rc);
@@ -1392,6 +1399,8 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 out:
 	if (map_buf != NULL)
 		D_FREE(map_buf);
+	D_INFO(DF_UUID": start distribute pool(5): rc %d, ver %d\n",
+	       DP_UUID(svc->ps_uuid), rc, map_version);
 	return rc;
 }
 
