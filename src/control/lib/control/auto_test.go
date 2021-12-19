@@ -795,7 +795,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{
 				0: &coreCounts{16, 7}, 1: &coreCounts{15, 6},
 			},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(7680).WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -808,11 +808,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
 							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
+							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2)...),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
-					WithHelperStreamCount(7),
+					WithTargetCount(15).
+					WithHelperStreamCount(6),
 				defaultEngineCfg(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
@@ -860,7 +861,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithTargetCount(8).
 					WithHelperStreamCount(2)),
 		},
-		"hugepages test, multiple target counts": {
+		"hugepages test, multiple engines": {
 			engineCount:  2,
 			accessPoints: []string{"hostX:10002"},
 			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
@@ -871,7 +872,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{
 				0: &coreCounts{12, 2}, 1: &coreCounts{6, 0},
 			},
-			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(6144).WithEngines(
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(3072).WithEngines(
 				defaultEngineCfg(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -884,12 +885,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
 							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
+							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2)...),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
-					WithTargetCount(12).
-					WithHelperStreamCount(2),
+					WithTargetCount(6).
+					WithHelperStreamCount(0),
 				defaultEngineCfg(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(

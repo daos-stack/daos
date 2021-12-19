@@ -553,6 +553,8 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	seenValues := make(map[string]int)
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
+	seenIdx := 0
+	var seenBdevCount, seenTargetCount, seenHelperStreamCount *int
 
 	for idx, engine := range cfg.Engines {
 		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
@@ -594,6 +596,7 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 			}
 		}
 
+		var bdevCount int
 		for _, bdevConf := range engine.Storage.Tiers.BdevConfigs() {
 			for _, dev := range bdevConf.Bdev.DeviceList {
 				if seenIn, exists := seenBdevSet[dev]; exists {
@@ -602,7 +605,24 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 				}
 				seenBdevSet[dev] = idx
 			}
+			bdevCount += len(bdevConf.Bdev.DeviceList)
 		}
+		if seenBdevCount != nil && bdevCount != *seenBdevCount {
+			return FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx,
+				*seenBdevCount)
+		}
+		if seenTargetCount != nil && engine.TargetCount != *seenTargetCount {
+			return FaultConfigTargetCountMismatch(idx, engine.TargetCount, seenIdx,
+				*seenTargetCount)
+		}
+		if seenHelperStreamCount != nil && engine.HelperStreamCount != *seenHelperStreamCount {
+			return FaultConfigHelperStreamCountMismatch(idx, engine.HelperStreamCount,
+				seenIdx, *seenHelperStreamCount)
+		}
+		seenIdx = idx
+		seenBdevCount = &bdevCount
+		seenTargetCount = &engine.TargetCount
+		seenHelperStreamCount = &engine.HelperStreamCount
 	}
 
 	return nil
