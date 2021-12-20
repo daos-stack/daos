@@ -1,11 +1,11 @@
-Hardware Requirements
-=====================
+# Hardware Requirements
+
 
 The purpose of this section is to describe processor, storage, and
 network requirements to deploy a DAOS system.
 
-Deployment Options
-------------------
+## Deployment Options
+
 
 As illustrated in the figure below, a DAOS storage system can be
 deployed in two different ways:
@@ -26,22 +26,23 @@ While DAOS is mostly deployed following the pooled model, active
 research is conducted to efficiently support the hyper-converged model
 as well.
 
-Processor Requirements
-----------------------
+![](media/image1.png)
+
+
+## Processor Requirements
+
 
 DAOS requires a 64-bit processor architecture and is primarily developed
 on Intel x86\_64 architecture. The DAOS software and the libraries it
 depends on (e.g., ISA-L[^1], SPDK[^2], PMDK[^3], and DPDK[^4]) can take
 advantage of Intel SSE[^5] and AVX[^6] extensions.
 
-The DAOS client is regularly tested on 64-bit ARM processors configured
-in Little Endian mode. The same build instructions that are used for
-x86\_64 are applicable for ARM builds as well. DAOS and its dependencies
-will make the necessary adjustments automatically in their respective
-build systems for ARM platforms.
+Some success was also reported by the community on running the DAOS client
+on 64-bit ARM processors configured in Little Endian mode. That being said,
+ARM testing is not part of the current DAOS CI pipeline and is thus not 
+validated on a regular basis.
 
-Network Requirements
---------------------
+## Network Requirements
 
 The DAOS data plane relies on OFI libfabrics[^7] and supports OFI
 providers for Ethernet/sockets and InfiniBand/verbs. An RDMA-capable
@@ -56,8 +57,8 @@ clusters, however, administration of DAOS servers typically uses an
 additional out-of-band network connecting the nodes in the DAOS service
 cluster.
 
-Storage Requirements
---------------------
+## Storage Requirements
+
 
 DAOS requires each storage node to have direct access to storage-class
 memory (SCM). While DAOS is primarily tested and tuned for Intel
@@ -87,8 +88,8 @@ For testing purposes, SCM can be emulated with DRAM by mounting a tmpfs
 filesystem, and NVMe SSDs can be also emulated with DRAM or a loopback
 file.
 
-Storage Server Design
----------------------
+## Storage Server Design
+
 
 The hardware design of a DAOS storage server balances the network
 bandwidth of the fabric with the aggregate storage bandwidth of the NVMe
@@ -100,11 +101,10 @@ workloads by 8 NVMe4 x4 SSDs. The capacity of the SSDs will determine
 the minimum capacity of the Optane PMem DIMMs needed to provide the 6%
 ratio for DAOS metadata.
 
-![](media/image2.png){width="5.138888888888889in"
-height="3.1944444444444446in"}
+![](media/image2.png)
 
-CPU Affinity
-------------
+## CPU Affinity
+
 
 Recent Intel Xeon data center platforms use two processor CPUs connected
 together with the Ultra Path Interconnect (UPI). PCIe lanes in these
@@ -126,11 +126,10 @@ to that CPU from that server instance. The DAOS control plane is
 responsible for detecting the storage and network affinity and starting
 the I/O Engines accordingly.
 
-![](media/image3.png){width="5.513888888888889in"
-height="5.791666666666667in"}
+![](media/image3.png)
 
-Fault Domains
--------------
+## Fault Domains
+
 
 DAOS relies on single-ported storage massively distributed across
 different storage nodes. Each storage node is thus a single point of
