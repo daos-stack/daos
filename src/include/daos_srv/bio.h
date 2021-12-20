@@ -409,9 +409,9 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-		  int hugepage_size, int tgt_nr, struct sys_db *db,
-		  bool bypass);
+int bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
+		  unsigned int hugepage_size, unsigned int tgt_nr,
+		  struct sys_db *db, bool bypass);
 
 /**
  * Global NVMe finilization.
