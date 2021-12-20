@@ -35,13 +35,13 @@ as well.
 DAOS requires a 64-bit processor architecture and is primarily developed
 on Intel x86\_64 architecture. The DAOS software and the libraries it
 depends on (e.g., [ISA-L](https://github.com/intel/isa-l),
-[SPDK](https://pmem.io/pmdk/), [PMDK](https://spdk.io/), and 
+[SPDK](https://pmem.io/pmdk/), [PMDK](https://spdk.io/), and
 [DPDK](https://www.dpdk.org/) can take
 advantage of Intel Intel Streaming SIMD (SSE) and Intel Advanced Vector (AVX) extensions.
 
 Some success was also reported by the community on running the DAOS client
 on 64-bit ARM processors configured in Little Endian mode. That being said,
-ARM testing is not part of the current DAOS CI pipeline and is thus not 
+ARM testing is not part of the current DAOS CI pipeline and is thus not
 validated on a regular basis.
 
 ## Network Requirements
