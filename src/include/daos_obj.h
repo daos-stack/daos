@@ -540,8 +540,8 @@ enum {
  */
 int
 daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
-                       enum daos_otype_t type, daos_oclass_id_t cid,
-                       daos_oclass_hints_t hints, uint32_t args);
+		       enum daos_otype_t type, daos_oclass_id_t cid,
+		       daos_oclass_hints_t hints, uint32_t args);
 
 /**
  * Open an DAOS object.
