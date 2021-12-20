@@ -34,8 +34,10 @@ as well.
 
 DAOS requires a 64-bit processor architecture and is primarily developed
 on Intel x86\_64 architecture. The DAOS software and the libraries it
-depends on (e.g., ISA-L[^1], SPDK[^2], PMDK[^3], and DPDK[^4]) can take
-advantage of Intel SSE[^5] and AVX[^6] extensions.
+depends on (e.g., [ISA-L](https://github.com/intel/isa-l),
+[SPDK](https://pmem.io/pmdk/), [PMDK](https://spdk.io/), and 
+[DPDK](https://www.dpdk.org/) can take
+advantage of Intel Intel Streaming SIMD (SSE) and Intel Advanced Vector (AVX) extensions.
 
 Some success was also reported by the community on running the DAOS client
 on 64-bit ARM processors configured in Little Endian mode. That being said,
@@ -44,7 +46,8 @@ validated on a regular basis.
 
 ## Network Requirements
 
-The DAOS data plane relies on OFI libfabrics[^7] and supports OFI
+The DAOS data plane relies on [OFI libfabrics](https://ofiwg.github.io/libfabric/)
+and supports OFI
 providers for Ethernet/sockets and InfiniBand/verbs. An RDMA-capable
 fabric is preferred for better performance. DAOS can support multiple
 rails by binding different instances of the DAOS server to individual
@@ -63,17 +66,20 @@ cluster.
 DAOS requires each storage node to have direct access to storage-class
 memory (SCM). While DAOS is primarily tested and tuned for Intel
 Optane^TM^ Persistent Memory, the DAOS software stack is built over the
-Persistent Memory Development Kit (PMDK) and the DAX[^8] feature of the
-Linux operating systems as described in the SNIA NVM Programming
-Model[^9]. As a result, the open-source DAOS software stack should be
+Persistent Memory Development Kit (PMDK) and the Direct Access (DAX) feature of the
+Linux operating systems as described in the [SNIA NVM Programming
+Model](https://www.snia.org/sites/default/files/
+technical\_work/final/NVMProgrammingModel\_v1.2.pdf).
+As a result, the open-source DAOS software stack should be
 able to run transparently over any storage-class memory supported by the
 PMDK.
 
-The storage node can optionally be equipped with NVMe (non-volatile
-memory express)[^10] SSDs to provide capacity. HDDs, as well as SATA and
-SAS SSDs, are not supported by DAOS. Both NVMe 3D-NAND and Optane SSDs
-are supported. Optane SSDs are preferred for DAOS installation that
-targets a very high IOPS rate. NVMe-oF devices are also supported by the
+The storage node can optionally be equipped with [NVMe](https://nvmexpress.org/)
+(non-volatile memory express)[^10] SSDs to provide capacity. HDDs,
+as well as SATA andSAS SSDs, are not supported by DAOS.
+Both NVMe 3D-NAND and Optane SSDs are supported. Optane SSDs are
+preferred for DAOS installation that targets a very high IOPS rate.
+NVMe-oF devices are also supported by the
 userspace storage stack but have never been tested.
 
 A minimum 6% ratio of SCM to SSD capacity will guarantee that DAOS has
@@ -144,24 +150,3 @@ For efficient placement and optimal data resilience, more fault domains
 are better. As a result, it is preferable to distribute storage nodes
 across as many racks as possible.
 
-[^1]: Intelligent Storage Acceleration Library,
-    <https://github.com/intel/isa-l>
-
-[^2]: Persistent Memory Development Kit, <https://pmem.io/pmdk/>
-
-[^3]: Storage Performance Development Kit, <https://spdk.io/>
-
-[^4]: Data Plane Development Kit, <https://www.dpdk.org/>
-
-[^5]: Intel Streaming SIMD Extensions
-
-[^6]: Intel Advanced Vector Extensions
-
-[^7]: <https://ofiwg.github.io/libfabric/>
-
-[^8]: DAX = Direct Access
-
-[^9]: https://www.snia.org/sites/default/files/
-    technical\_work/final/NVMProgrammingModel\_v1.2.pdf
-
-[^10]: <https://nvmexpress.org/>
