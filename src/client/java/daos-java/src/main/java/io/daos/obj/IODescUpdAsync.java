@@ -36,6 +36,8 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
 
   private boolean resultParsed;
 
+  private boolean discarded;
+
   private int retCode = Integer.MAX_VALUE;
 
   public static final int RET_CODE_SUCCEEDED = Constants.RET_CODE_SUCCEEDED;
@@ -165,6 +167,7 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
     descBuffer.readerIndex(0);
     resultParsed = false;
     retCode = -1;
+    event = null;
     if (dataBuffer != null) {
       dataBuffer.release();
       dataBuffer = null;
@@ -181,6 +184,20 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
   @Override
   public boolean alwaysBoundToEvt() {
     return false;
+  }
+
+  @Override
+  public boolean isDiscarded() {
+    return discarded;
+  }
+
+  @Override
+  public void discard() {
+    discarded = true;
+  }
+
+  public int getReturnCode() {
+    return retCode;
   }
 
   @Override

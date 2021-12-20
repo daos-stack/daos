@@ -36,6 +36,8 @@ public abstract class IODataDescBase implements IODataDesc {
 
   protected boolean resultParsed;
 
+  protected boolean discarded;
+
   protected IODataDescBase(String dkey, boolean updateOrFetch) {
     this.dkey = dkey;
     if (dkey != null) {
@@ -111,6 +113,14 @@ public abstract class IODataDescBase implements IODataDesc {
   @Override
   public BaseEntry getEntry(int index) {
     return (BaseEntry) akeyEntries.get(index);
+  }
+
+  public boolean isDiscarded() {
+    return discarded;
+  }
+
+  public void discard() {
+    discarded = true;
   }
 
   public abstract class BaseEntry extends Entry {
