@@ -340,7 +340,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on CentOS 8.3.2011') {
+                stage('Build RPM on CentOS 8.4.2105') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }

@@ -196,6 +196,8 @@ post_provision_config_nodes() {
         cat /etc/do-release
     fi
     cat /etc/os-release
+    
+    ofed_info || true
 
     exit 0
 }
