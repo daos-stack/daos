@@ -6,6 +6,7 @@
 """
 from random import choice
 from re import findall
+from time import sleep
 
 from apricot import TestWithServers
 from general_utils import run_pcmd
@@ -52,6 +53,10 @@ class HarnessAdvancedTest(TestWithServers):
         result = run_pcmd([host], "sudo kill -6 {}".format(pid))
         if len(result) > 1 or result[0]["exit_status"] != 0:
             self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
+
+        # Wait for the core dump to finish
+        self.log.info("Sleeping 30s to allow the dump to finish")
+        sleep(30)
 
         # Display the journalctl log for the process that was sent the signal
         self.server_managers[0].manager.dump_logs([host])

@@ -354,7 +354,8 @@ def run_command(cmd):
     except Exception as error:
         raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
     if retcode:
-        raise RuntimeError("Error executing '{}':\n\tOutput:\n{}".format(" ".join(cmd), stdout))
+        raise RuntimeError(
+            "Error executing '{}' (rc={}):\n\tOutput:\n{}".format(" ".join(cmd), retcode, stdout))
     return stdout
 
 
@@ -2004,6 +2005,9 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                     stack_trace.writelines(get_output(cmd))
             except IOError as error:
                 print("Error writing {}: {}".format(stack_trace_file, error))
+                return_status = False
+            except RuntimeError:
+                print("Error creating {}: {}".format(stack_trace_file, error))
                 return_status = False
         else:
             print(
