@@ -1,9 +1,13 @@
 hosts:
   test_servers:
-    - wolf-179
-    - wolf-189
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
   test_clients:
-    - wolf-179
+    - client-G
 timeout: 300
 server_config:
   name: daos_server
