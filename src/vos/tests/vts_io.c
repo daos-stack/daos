@@ -113,10 +113,10 @@ gen_rand_epoch(void)
 }
 
 daos_unit_oid_t
-gen_oid(daos_ofeat_t ofeats)
+gen_oid(enum daos_otype_t type)
 {
 	vts_cntr.cn_oids++;
-	return dts_unit_oid_gen(ofeats, 0);
+	return dts_unit_oid_gen(type, 0);
 }
 
 static uint32_t	oid_seed;
@@ -130,7 +130,7 @@ reset_oid_stable(uint32_t seed)
 }
 
 daos_unit_oid_t
-gen_oid_stable(daos_ofeat_t ofeats)
+gen_oid_stable(enum daos_otype_t type)
 {
 	daos_unit_oid_t	uoid = {0};
 	uint64_t	hdr;
@@ -142,7 +142,7 @@ gen_oid_stable(daos_ofeat_t ofeats)
 	uoid.id_pub.lo = oid_count;
 	oid_count += 66179; /* prime */
 	uoid.id_pub.lo |= hdr;
-	daos_obj_set_oid(&uoid.id_pub, daos_obj_feat2type(ofeats), OR_RP_3, 1, oid_seed);
+	daos_obj_set_oid(&uoid.id_pub, type, OR_RP_3, 1, oid_seed);
 	oid_count += 1171; /* prime */
 
 	vts_cntr.cn_oids++;
@@ -161,7 +161,7 @@ inc_cntr(unsigned long op_flags)
 	}
 }
 
-static daos_ofeat_t init_ofeats;
+static enum daos_otype_t init_type;
 static int init_num_keys;
 
 void
@@ -179,13 +179,13 @@ test_args_init(struct io_test_args *args,
 	if (rc != 0)
 		print_error("rc = "DF_RC"\n", DP_RC(rc));
 	assert_rc_equal(rc, 0);
-	args->oid = gen_oid(init_ofeats);
-	args->ofeat = init_ofeats;
+	args->oid = gen_oid(init_type);
+	args->ofeat = init_type;
 	args->dkey = UPDATE_DKEY;
 	args->akey = UPDATE_AKEY;
 	args->akey_size = UPDATE_AKEY_SIZE;
 	args->dkey_size = UPDATE_DKEY_SIZE;
-	if (init_ofeats & DAOS_OF_AKEY_UINT64) {
+	if (init_type & DAOS_OF_AKEY_UINT64) {
 		dts_key_gen((char *)&update_akey_sv,
 			    sizeof(update_akey_sv), NULL);
 		dts_key_gen((char *)&update_akey_array,
@@ -193,12 +193,12 @@ test_args_init(struct io_test_args *args,
 		args->akey = NULL;
 		args->akey_size = sizeof(uint64_t);
 	}
-	if (init_ofeats & DAOS_OF_DKEY_UINT64) {
+	if (init_type & DAOS_OF_DKEY_UINT64) {
 		args->dkey = NULL;
 		args->dkey_size = sizeof(uint64_t);
 	}
 	snprintf(args->fname, VTS_BUF_SIZE, "/mnt/daos/vpool.test_%x",
-		 init_ofeats);
+		 init_type);
 
 
 }
@@ -2539,7 +2539,7 @@ static const struct CMUnitTest int_tests[] = {
 };
 
 int
-run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, const char *cfg)
+run_io_test(enum daos_otype_t type, int keys, bool nest_iterators, const char *cfg)
 {
 	char buf[VTS_BUF_SIZE];
 	const char *akey = "hashed";
@@ -2549,32 +2549,32 @@ run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators, const char *cfg)
 
 	init_num_keys = VTS_IO_KEYS;
 
-	feats = feats & DAOS_OF_MASK;
-	if ((feats & DAOS_OF_DKEY_UINT64) && (feats & DAOS_OF_DKEY_LEXICAL)) {
+	type = type & DAOS_OF_MASK;
+	if ((type & DAOS_OF_DKEY_UINT64) && (type & DAOS_OF_DKEY_LEXICAL)) {
 		D_PRINT("Skipping ambiguous ofeat mask\n");
 		return 0;
 	}
-	if ((feats & DAOS_OF_AKEY_UINT64) && (feats & DAOS_OF_AKEY_LEXICAL)) {
+	if ((type & DAOS_OF_AKEY_UINT64) && (type & DAOS_OF_AKEY_LEXICAL)) {
 		D_PRINT("Skipping ambiguous ofeat mask\n");
 		return 0;
 	}
 
-	if (feats & DAOS_OF_DKEY_UINT64)
+	if (type & DAOS_OF_DKEY_UINT64)
 		dkey = "uint";
-	if (feats & DAOS_OF_DKEY_LEXICAL)
+	if (type & DAOS_OF_DKEY_LEXICAL)
 		dkey = "lex";
-	if (feats & DAOS_OF_AKEY_UINT64)
+	if (type & DAOS_OF_AKEY_UINT64)
 		akey = "uint";
-	if (feats & DAOS_OF_AKEY_LEXICAL)
+	if (type & DAOS_OF_AKEY_LEXICAL)
 		akey = "lex";
 
 	snprintf(buf, VTS_BUF_SIZE, "# VOS IO tests (dkey=%-6s akey=%s) %s",
 		 dkey, akey, cfg);
-	init_ofeats = feats;
+	init_type = type;
 	if (keys)
 		init_num_keys = keys;
 	D_PRINT("Running %s\n", buf);
-	if ((feats & DAOS_OF_DKEY_UINT64) && (feats & DAOS_OF_AKEY_UINT64)) {
+	if ((type & DAOS_OF_DKEY_UINT64) && (type & DAOS_OF_AKEY_UINT64)) {
 		buf[0] = '2';
 		rc = cmocka_run_group_tests_name(buf, int_tests, setup_io,
 						 teardown_io);

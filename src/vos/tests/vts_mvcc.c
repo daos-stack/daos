@@ -167,7 +167,7 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 	D_ASSERT(L_O < strlen(path));
 	oid->id_pub.lo = (i << 8) + path[L_O];
 	daos_obj_set_oid(&oid->id_pub,
-			 daos_obj_feat2type(DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64),
+			 DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64,
 			 OR_RP_1, 1, 0);
 	oid->id_shard = 0;
 	oid->id_pad_32 = 0;

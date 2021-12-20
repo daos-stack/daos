@@ -35,13 +35,12 @@ dts_oid_gen(unsigned seed)
 }
 
 daos_unit_oid_t
-dts_unit_oid_gen(daos_ofeat_t ofeats, uint32_t shard)
+dts_unit_oid_gen(enum daos_otype_t type, uint32_t shard)
 {
 	daos_unit_oid_t	uoid;
 
 	uoid.id_pub	= dts_oid_gen(time(NULL));
-	daos_obj_set_oid(&uoid.id_pub, daos_obj_feat2type(ofeats),
-			 DTS_OCLASS_DEF, shard + 1, 0);
+	daos_obj_set_oid(&uoid.id_pub, type, DTS_OCLASS_DEF, shard + 1, 0);
 	uoid.id_shard	= shard;
 	uoid.id_pad_32	= 0;
 

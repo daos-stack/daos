@@ -539,9 +539,9 @@ enum {
  * \param[in]	args	Reserved.
  */
 int
-daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
-		      enum daos_otype_t type, daos_oclass_id_t cid,
-		      daos_oclass_hints_t hints, uint32_t args);
+daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
+                       enum daos_otype_t type, daos_oclass_id_t cid,
+                       daos_oclass_hints_t hints, uint32_t args);
 
 /**
  * Open an DAOS object.
@@ -1130,15 +1130,6 @@ daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
  * Backward compatibility code.
  * Please don't use directly
  */
-typedef uint16_t daos_ofeat_t;
-int
-daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
-		       daos_ofeat_t type, daos_oclass_id_t cid,
-		       daos_oclass_hints_t hints, uint32_t args);
-int
-daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
-		       enum daos_otype_t type, daos_oclass_id_t cid,
-		       daos_oclass_hints_t hints, uint32_t args);
 enum {
 	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
 	 *  in client's byte order and DAOS is responsible for correct behavior
@@ -1173,40 +1164,8 @@ enum {
 
 #if defined(__cplusplus)
 }
-#define daos_obj_generate_oid daos_obj_generate_oid_cpp
-static inline int
-daos_obj_generate_oid_cpp(daos_handle_t coh, daos_obj_id_t *oid,
-			  enum daos_otype_t type, daos_oclass_id_t cid,
-			  daos_oclass_hints_t hints, uint32_t args)
-{
-	return daos_obj_generate_oid2(coh, oid, type, cid, hints, args);
-}
-static inline int
-daos_obj_generate_oid_cpp(daos_handle_t coh, daos_obj_id_t *oid,
-			  daos_ofeat_t feat, daos_oclass_id_t cid,
-			  daos_oclass_hints_t hints, uint32_t args)
-{
-	return daos_obj_generate_oid1(coh, oid, feat, cid, hints, args);
-}
-#else
-/**
- * for backward compatility, support old api where the type was a set of feature
- * flags
- */
-#define daos_obj_generate_oid(coh, oid, type, ...)			\
-	({								\
-		int _ret;						\
-		if (__builtin_types_compatible_p(__typeof__(type),	\
-						 daos_ofeat_t)) {	\
-			_ret = daos_obj_generate_oid((coh), (oid),	\
-						     (type),		\
-						     __VA_ARGS__);	\
-		} else {						\
-			_ret = daos_obj_generate_oid2((coh), (oid),	\
-						      (type),		\
-						      __VA_ARGS__);	\
-		}							\
-		_ret;							\
-	})
 #endif /* __cplusplus */
+
+#define daos_obj_generate_oid daos_obj_generate_oid2
+
 #endif /* __DAOS_OBJ_H__ */

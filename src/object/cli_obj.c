@@ -5796,28 +5796,6 @@ daos_dc_obj2id(void *ptr, daos_obj_id_t *id)
 /** Disable backward compat code */
 #undef daos_obj_generate_oid
 
-int
-daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
-		      enum daos_otype_t in, daos_oclass_id_t cid,
-		      daos_oclass_hints_t hints, uint32_t args)
-{
-	daos_ofeat_t	feat = (daos_ofeat_t)in;
-
-	return daos_obj_generate_oid2(coh, oid, daos_obj_feat2type(feat), cid, hints, args);
-}
-
-/**
- * Create version that uses the deprecated daos_ofeat_t
- */
-int
-daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
-		       daos_ofeat_t feat, daos_oclass_id_t cid,
-		       daos_oclass_hints_t hints, uint32_t args)
-{
-	return daos_obj_generate_oid(coh, oid, (enum daos_otype_t)feat, cid,
-				     hints, args);
-}
-
 /**
  * Real latest & greatest implementation of container create.
  * Used by anyone including the daos_obj.h header file.
@@ -5904,7 +5882,7 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 }
 
 daos_oclass_id_t
-daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 		    daos_oclass_hints_t hints, uint32_t args)
 {
 	daos_handle_t		poh;
@@ -5914,7 +5892,6 @@ daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
 	int			rc;
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
-	enum daos_otype_t	type = daos_obj_feat2type(ofeats);
 
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);

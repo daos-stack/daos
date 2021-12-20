@@ -940,13 +940,12 @@ dtx_19(void **state)
 static void
 dtx_init_oid_req_akey(test_arg_t *arg, daos_obj_id_t *oids, struct ioreq *reqs,
 		      daos_oclass_id_t *ocs, daos_iod_type_t *types, char *akeys[],
-		      int oid_req_cnt, int akey_cnt, uint8_t ofeats)
+		      int oid_req_cnt, int akey_cnt, enum daos_otype_t type)
 {
 	int	i;
 
 	for (i = 0; i < oid_req_cnt; i++) {
-		oids[i] = daos_test_oid_gen(arg->coh, ocs[i],
-				daos_obj_feat2type(ofeats), 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, ocs[i], type, 0, arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], types[i], arg);
 	}
 
