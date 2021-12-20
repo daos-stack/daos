@@ -25,6 +25,11 @@ SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 : "${CHROOT_NAME:='epel-7-x86_64'}"
 : "${TARGET:='centos7'}"
 
+# fix up values per nexus' mish-mash naming
+if [[ $TARGET = 8.[34].* ]]; then
+    TARGET=${TARGET%.*}
+fi
+
 : "${COVFN_DISABLED:=true}"
 if $COVFN_DISABLED; then
   JOB_REPOS=""
