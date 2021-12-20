@@ -13,6 +13,7 @@ from mdtest_test_base import MdtestBase
 from telemetry_test_base import TestWithTelemetry
 from general_utils import DaosTestError, pcmd
 from command_utils import CommandFailure
+from apricot import skipForTicket
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 # pylint: disable=attribute-defined-outside-init
@@ -34,17 +35,12 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
 
         """
         # kill any hanging mdtest processes
-        ret = []
-
-        # DEBUGGING
-        pcmd(self.hostlist_servers, "ps aux")
-
         cmd = "pkill -9 mdtest"
         for retry in range(0, 5):
             ret_codes = pcmd(self.hostlist_servers, cmd)
             if len(ret_codes) > 1 or 0 not in ret_codes:
-                self.log.info("Retry #{}: Not all '{}' commands in pcmd "
-                              "returned 0.".format(retry, cmd))
+                self.log.info("Retry #%d: Not all '%s' commands in pcmd "
+                              "returned 0.", retry, cmd)
 
         # Ignore errors cleaning up mdtest
         return []
@@ -53,12 +49,13 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
         try:
             super().tearDown()
         except (CommandFailure, DaosTestError) as excep:
-            self.log.info("{}: tearDown threw an exception "
+            self.log.info("%s: tearDown threw an exception "
                           "because a rank was (intentionally) "
-                          "stopped midway through a run of mdtest."
-                          .format(repr(excep)))
+                          "stopped midway through a run of mdtest.",
+                          repr(excep))
             pass
 
+    @skipForTicket("DAOS-9106")
     def test_net_telemetry(self):
         """Jira ID: DAOS-9020.
 
@@ -92,8 +89,8 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
             data = self.telemetry.get_metrics(metrics[0])
         except (CommandFailure, DaosTestError) as excep:
             self.log.info("self.telemetry.get_metrics failed on at least one "
-                          "host with '{}', but may have succeeded elsewhere."
-                          .format(repr(excep)))
+                          "host with '{}', but may have succeeded elsewhere.",
+                          repr(excep))
             pass
 
         for host, value in data.items():
@@ -139,8 +136,8 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
             data = self.telemetry.get_metrics(metrics[0])
         except (CommandFailure, DaosTestError) as excep:
             self.log.info("self.telemetry.get_metrics failed on at least one "
-                          "host with {}, but may have succeeded elsewhere."
-                          .format(repr(excep)))
+                          "host with %s, but may have succeeded elsewhere.",
+                          repr(excep))
             pass
 
         for host, value in data.items():
@@ -149,18 +146,18 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
 
         req_timeouts_delta = req_timeouts_finish - req_timeouts_start
         if req_timeouts_delta > 0:
-            self.log.info("Expected {} values to increase by more than 0 "
-                          "during this test, and they did: {}."
-                          .format(str(metrics[0]), str(req_timeouts_delta)))
+            self.log.info("Expected %s values to increase "
+                          "during this test, and they did: %s.",
+                          str(metrics[0]), str(req_timeouts_delta))
         else:
-            self.fail("Expected {} to increase by more than 0 during this "
-                      "test.".format(str(metrics[0])))
+            self.fail("Expected %s to increase during this "
+                      "test.", str(metrics[0]))
 
         # wait a bit for mdtest to complete
         try:
             thread.join(timeout=5)
         except Exception as excep:
-            self.log.info("MDtest threw an exception ({}), but this is not "
+            self.log.info("MDtest threw an exception (%s), but this is not "
                           "entirely unexpected, since we killed one of it's "
-                          "ranks.".format(repr(excep)))
+                          "ranks.", repr(excep))
             pass
