@@ -27,7 +27,7 @@ SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 # fix up values per nexus' mish-mash naming
 if [[ $DISTRO_VERSION = 8.[34].* ]]; then
-    TARGET=${DISTRO_VERSION%.*}
+    DISTRO_VERSION=${DISTRO_VERSION%.*}
 fi
 
 : "${COVFN_DISABLED:=true}"
