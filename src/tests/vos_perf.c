@@ -467,6 +467,40 @@ pf_fetch(struct pf_test *ts, struct pf_param *param)
 }
 
 static int
+pf_aggregate(struct pf_test *ts, struct pf_param *param)
+{
+	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_range_t	epr = {0, ++epoch};
+	int			rc = 0;
+	uint64_t		start = 0;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, NULL, true);
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return rc;
+}
+
+static int
+pf_discard(struct pf_test *ts, struct pf_param *param)
+{
+	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_range_t	epr = {0, ++epoch};
+	int			rc = 0;
+	uint64_t		start = 0;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	rc = vos_discard(ts_ctx.tsc_coh, NULL, &epr, NULL, NULL);
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return rc;
+}
+
+static int
 pf_verify(struct pf_test *ts, struct pf_param *param)
 {
 	int	rc;
@@ -570,6 +604,12 @@ pf_parse_iterate(char *str, struct pf_param *pa, char **strp)
 	return pf_parse_common(str, pa, pf_parse_iterate_cb, strp);
 }
 
+static int
+pf_parse_aggregate(char *str, struct pf_param *pa, char **strp)
+{
+	return pf_parse_common(str, pa, NULL, strp);
+}
+
 /* predefined test cases */
 struct pf_test pf_tests[] = {
 	{
@@ -607,6 +647,18 @@ struct pf_test pf_tests[] = {
 		.ts_name	= "PUNCH",
 		.ts_parse	= pf_parse_rw,
 		.ts_func	= pf_punch,
+	},
+	{
+		.ts_code	= 'A',
+		.ts_name	= "AGGREGATE",
+		.ts_parse	= pf_parse_aggregate,
+		.ts_func	= pf_aggregate,
+	},
+	{
+		.ts_code	= 'D',
+		.ts_name	= "DISCARD",
+		.ts_parse	= pf_parse_aggregate,
+		.ts_func	= pf_discard,
 	},
 	{
 		.ts_code	= 0,
