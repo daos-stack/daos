@@ -1,3 +1,21 @@
+daos (2.0.0-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 16 Dec 2021 15:08:11 -0400
+
+daos (2.0.0-2) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Version bump for 2.0.0 RC2
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 14 Dec 2021 15:03:00 -0100
+
+daos (2.0.0-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump to 2.0.0
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Sat, 11 Dec 2021 10:00:00 -0100
+
 daos (1.3.106-10) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Don't make daos-*-tests-openmi a dependency of anything

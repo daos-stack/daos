@@ -2573,7 +2573,7 @@ ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver)
 
 	migrate_pool_tls_put(tls); /* destroy */
 
-	D_DEBUG(DB_TRACE, "migrate fini one ult "DF_UUID"\n", pool_uuid);
+	D_DEBUG(DB_TRACE, "migrate fini one ult "DF_UUID"\n", DP_UUID(pool_uuid));
 }
 
 struct migrate_abort_arg {
@@ -2642,7 +2642,8 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 	}
 
 	/* Wait until container aggregation are stopped */
-	while (cont->sc_vos_agg_active && !tls->mpt_fini && !cont->sc_stopping) {
+	while ((cont->sc_ec_agg_active || cont->sc_vos_agg_active) &&
+	       !tls->mpt_fini && !cont->sc_stopping) {
 		D_DEBUG(DB_REBUILD, "wait for "DF_UUID"/"DF_UUID"/%u vos aggregation"
 			" to be inactive\n", DP_UUID(tls->mpt_pool_uuid),
 			DP_UUID(cont_uuid), tls->mpt_version);
