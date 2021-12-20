@@ -214,9 +214,15 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL);
 		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
 			rc = -DER_INPROGRESS;
+		else if (rc == DTX_ST_INITED)
+			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
+			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
+			 * request is from old server.
+			 */
+			rc = -DER_NONEXIST;
 
 		break;
 	case DTX_REFRESH:
@@ -245,11 +251,9 @@ dtx_handler(crt_rpc_t *rpc)
 		for (i = 0, rc1 = 0; i < count; i++) {
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
-					     &mbs[i], &dcks[i], false);
+			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i]);
 			/* The DTX status may be changes by DTX resync soon. */
-			if ((*ptr == DTX_ST_PREPARED &&
-			     cont->sc_dtx_resyncing) ||
+			if ((*ptr == DTX_ST_PREPARED && cont->sc_dtx_resyncing) ||
 			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
 				*ptr = -DER_INPROGRESS;
 
@@ -269,6 +273,13 @@ dtx_handler(crt_rpc_t *rpc)
 					       stat.dtx_newest_aggregated);
 					*ptr = -DER_TX_UNCERTAIN;
 				}
+			} else if (*ptr == DTX_ST_INITED) {
+				/* Leader is in progress, it is not important whether ready or not.
+				 * Return DTX_ST_PREPARED to the remote non-leader to handle it as
+				 * non-committable case. If we directly return DTX_ST_INITED, then
+				 * it will cause interoperability trouble if remote server is old.
+				 */
+				*ptr = DTX_ST_PREPARED;
 			}
 
 			if (mbs[i] != NULL)

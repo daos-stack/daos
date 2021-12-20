@@ -1149,8 +1149,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	 * Let's check DTX status locally before marking as 'committable'.
 	 */
 	if (dth->dth_ver < cont->sc_dtx_resync_ver) {
-		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid,
-				   NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid, NULL, NULL, NULL, NULL);
 		/* Committed by race, do nothing. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
 			D_GOTO(abort, result = 0);
@@ -1175,12 +1174,11 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		}
 
 		if (rc != DTX_ST_PREPARED) {
-			D_ASSERT(rc < 0);
+			D_ASSERTF(rc < 0, "Invalid status %d for DTX "DF_DTI"\n",
+				  rc, DP_DTI(&dth->dth_xid));
 
-			D_WARN(DF_UUID": Failed to check local DTX "DF_DTI
-			       "status: "DF_RC"\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
-			       DP_RC(rc));
+			D_WARN(DF_UUID": Failed to check local DTX "DF_DTI" status: "DF_RC"\n",
+			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(rc));
 			D_GOTO(abort, result = rc);
 		}
 	}
@@ -1617,8 +1615,10 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, NULL, true);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, NULL);
 	switch (rc) {
+	case DTX_ST_INITED:
+		return -DER_INPROGRESS;
 	case DTX_ST_PREPARED:
 		return 0;
 	case DTX_ST_COMMITTED:

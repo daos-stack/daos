@@ -1055,8 +1055,7 @@ next:
 			if (failout)
 				D_GOTO(out, rc = -DER_INPROGRESS);
 			continue;
-		case DSHR_COMMITTED:
-		case DSHR_ABORTED:
+		case DSHR_IGNORE:
 			D_FREE(dsp);
 			continue;
 		case DSHR_ABORT_FAILED:
