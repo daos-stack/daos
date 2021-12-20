@@ -39,7 +39,15 @@ To do this, the `LD_PRELOAD` setting must be passed to all tasks
 of the MPI-parallel job, for example with
 `mpirun -genv LD_PRELOAD /usr/lib64/libioil.so -np 8 -f hostfile dcp $SOURCE $DEST`.
 
-When upgrading to DAOS Version 2.0, please also verify the supported
+When planning the upgrade to DAOS Version 2.0, please also verify the supported
 operating system levels as outlined in the
 [DAOS Version 2.0 Support](./support_matrix_v2_0.md) document.
 If an OS upgrade is required, this should be performed prior to upgrading DAOS.
+
+!!! note
+    Note that due to a change in the hwloc version between CentOS 8.3 and
+    CentOS 8.4, it may not be possible to perform an OS update from CentOS
+    8.3 to 8.4 (or 8.5) while DAOS is installed.
+    If this is the case, then it is best to first uninstall the older DAOS version,
+    then perform the OS update, and then install the DAOS 2.0 RPMs. Refer to
+    [DAOS-9348](https://daosio.atlassian.net/browse/DAOS-9348) for details.
