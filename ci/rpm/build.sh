@@ -26,8 +26,8 @@ SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 : "${TARGET:='centos7'}"
 
 # fix up values per nexus' mish-mash naming
-if [[ $TARGET = 8.[34].* ]]; then
-    TARGET=${TARGET%.*}
+if [[ $DISTRO_VERSION = 8.[34].* ]]; then
+    TARGET=${DISTRO_VERSION%.*}
 fi
 
 : "${COVFN_DISABLED:=true}"
