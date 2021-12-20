@@ -11,6 +11,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <fcntl.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/lru.h>
@@ -565,6 +566,7 @@ static int
 vos_self_nvme_init()
 {
 	int rc;
+	int fd;
 
 	/* IV tree used by VEA */
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
@@ -573,9 +575,18 @@ vos_self_nvme_init()
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID, VOS_NVME_MEM_SIZE,
-			   VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET,
-			   vos_db_get(), true);
+	/* Only use hugepages if NVME SSD configuration existed. */
+	fd = open(VOS_NVME_CONF, O_RDONLY, 0600);
+	if (fd < 0) {
+		rc = bio_nvme_init(NULL, VOS_NVME_SHM_ID, 0, 0,
+				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+	} else {
+		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID,
+				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
+				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+		close(fd);
+	}
+
 	if (rc)
 		return rc;
 
