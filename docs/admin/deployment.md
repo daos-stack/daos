@@ -1052,22 +1052,24 @@ also required.
 Example:
 ```
 fabric_ifaces:
-  - numa_node: 0
-    devices:
-    -
-      - iface: ib0
-      - domain: mlx5_0
-    -
-      - iface: ib1
-      - domain: mlx5_1
-  - numa_node: 1
-    devices:
-    -
-      - iface: ib2
-      - domain: mlx5_2
-    -
-      - iface: ib3
-      - domain: mlx5_3
+-
+  numa_node: 0
+  devices:
+  -
+    iface: ib0
+    domain: mlx5_0
+  -
+    iface: ib1
+    domain: mlx5_1
+-
+  numa_node: 1
+  devices:
+  -
+    iface: ib2
+    domain: mlx5_2
+  -
+    iface: ib3
+    domain: mlx5_3
 ```
 
 ### Agent Startup
