@@ -322,7 +322,7 @@ func TestFlags_ObjClassFlag(t *testing.T) {
 			arg: "S2",
 			expFlag: &ObjClassFlag{
 				Set:   true,
-				Class: 201,
+				Class: 16777218,
 			},
 			expString: "S2",
 		},

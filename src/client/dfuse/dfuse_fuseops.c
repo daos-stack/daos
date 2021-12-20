@@ -676,7 +676,6 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 
 struct dfuse_inode_ops dfuse_cont_ops = {
 	.lookup		= dfuse_cont_lookup,
-	.mknod		= dfuse_cont_mknod,
 	.statfs		= dfuse_cb_statfs,
 };
 

@@ -162,7 +162,7 @@ gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 		daos_unit_oid_t	oid;
 
 		gc_add_stat(STAT_OBJ);
-		oid = dts_unit_oid_gen(0, 0, 0);
+		oid = dts_unit_oid_gen(0, 0);
 		if (oids)
 			oids[i] = oid;
 
@@ -246,7 +246,7 @@ gc_key_run(struct gc_test_args *args)
 	int		      i;
 	int		      rc;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 	for (i = 0; i < CREDS_MAX; i++) {
 		daos_iod_t *iod;
 

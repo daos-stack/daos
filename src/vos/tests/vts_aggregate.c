@@ -376,7 +376,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 		punch_or_delete = TF_DELETE;
 
 	if (daos_unit_oid_is_null(ds->td_oid))
-		oid = dts_unit_oid_gen(0, 0, 0);
+		oid = dts_unit_oid_gen(0, 0);
 	else
 		oid = ds->td_oid;
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
@@ -523,7 +523,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	epr_a = &ds_sample->td_agg_epr;
 
 	for (i = 0; i < AT_OBJ_KEY_NR; i++) {
-		oids[i] = dts_unit_oid_gen(0, 0, 0);
+		oids[i] = dts_unit_oid_gen(0, 0);
 		dts_key_gen(dkeys[i], UPDATE_DKEY_SIZE, UPDATE_DKEY);
 		dts_key_gen(akeys[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
 	}
@@ -1030,7 +1030,7 @@ discard_13(void **state)
 	daos_recx_t		 recx_tot;
 	int			 i;
 
-	ds.td_oid = dts_unit_oid_gen(0, 0, 0);
+	ds.td_oid = dts_unit_oid_gen(0, 0);
 	/*
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
@@ -1119,7 +1119,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 	int			 old_flags = arg->ta_flags;
 	daos_recx_t		 recx = {0, 1};
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	arg->ta_flags = TF_USE_VAL;
 
@@ -1280,7 +1280,7 @@ discard_obj_test(void **state, bool empty)
 	int			 old_flags = arg->ta_flags;
 	daos_recx_t		 recx = {0, 1};
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	arg->ta_flags = TF_USE_VAL;
 
@@ -1838,10 +1838,10 @@ print_space_info(vos_pool_info_t *pi, char *desc)
 	VERBOSE_MSG("  NVMe allocator statistics:\n");
 	VERBOSE_MSG("    free_p: "DF_U64", \tfree_t: "DF_U64", "
 		    "\tfrags_large: "DF_U64", \tfrags_small: "DF_U64", "
-		    "\tmax_frag_blks: %u\n",
+		    "\tfrags_aging: "DF_U64"\n",
 		    stat->vs_free_persistent, stat->vs_free_transient,
-		    stat->vs_large_frags, stat->vs_small_frags,
-		    stat->vs_largest_blks);
+		    stat->vs_frags_large, stat->vs_frags_small,
+		    stat->vs_frags_aging);
 	VERBOSE_MSG("    resrv_hit: "DF_U64", \tresrv_large: "DF_U64", "
 		    "\tresrv_small: "DF_U64"\n", stat->vs_resrv_hint,
 		    stat->vs_resrv_large, stat->vs_resrv_small);
@@ -1926,7 +1926,7 @@ aggregate_14(void **state)
 	}
 	fill_size = fill_size / 3;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 
@@ -2093,7 +2093,7 @@ aggregate_22(void **state)
 	char			 buf_u[16];
 	int			 rc;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);

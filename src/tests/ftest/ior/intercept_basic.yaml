@@ -28,25 +28,23 @@ ior:
         np_16:
             np: 16
     test_file: testFile
-    repetitions: 1
-# Remove the below line once DAOS-3143 is resolved
-    dfs_destroy: False
+    repetitions: 5
     iorflags:
         ssf:
-          flags: "-v -D 300 -w -r"
+          flags: "-v -D 600 -w -r"
           ior_api:
             - DFS
             - POSIX
           transfersize_blocksize:
             1M:
               transfer_size: '1M'
-              block_size: '8G'
+              block_size: '2G'
               # Expected performance improvement
               # of write and read for the specific
               # transfer/block size when using
               # interception library.
-              write_x: 3
-              read_x: 2
+              write_x: 1.5
+              read_x: 1.5
           objectclass:
             oclass_SX:
               dfs_oclass: "SX"

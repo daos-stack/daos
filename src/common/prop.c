@@ -688,6 +688,10 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	int			 i;
 	int			 rc = 0;
 
+	if (prop_req == NULL) {
+		D_ERROR("no prop in req.\n");
+		return -DER_INVAL;
+	}
 	if (prop_reply == NULL || prop_reply->dpp_nr == 0 ||
 	    prop_reply->dpp_entries == NULL) {
 		D_ERROR("no prop or empty prop in reply.\n");

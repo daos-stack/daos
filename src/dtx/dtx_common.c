@@ -49,7 +49,10 @@ struct dtx_batched_cont_args {
 	struct dtx_batched_pool_args	*dbca_pool;
 	int				 dbca_refs;
 	uint32_t			 dbca_reg_gen;
-	uint32_t			 dbca_deregister:1;
+	uint32_t			 dbca_deregister:1,
+					 dbca_cleanup_done:1,
+					 dbca_commit_done:1,
+					 dbca_agg_done:1;
 };
 
 struct dtx_cleanup_stale_cb_args {
@@ -106,24 +109,47 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 
 	D_ASSERT(d_list_empty(&dbca->dbca_sys_link));
 
-	if (dbca->dbca_cleanup_req != NULL)
-		sched_req_wait(dbca->dbca_cleanup_req, true);
+	if (dbca->dbca_cleanup_req != NULL) {
+		if (!dbca->dbca_cleanup_done)
+			sched_req_wait(dbca->dbca_cleanup_req, true);
+		/* dtx_batched_commit might put it while we were waiting. */
+		if (dbca->dbca_cleanup_req != NULL) {
+			D_ASSERT(dbca->dbca_cleanup_done);
+			sched_req_put(dbca->dbca_cleanup_req);
+			dbca->dbca_cleanup_req = NULL;
+			dbca->dbca_cleanup_done = 0;
+		}
+	}
 
-	if (dbca->dbca_commit_req != NULL)
-		sched_req_wait(dbca->dbca_commit_req, true);
+	if (dbca->dbca_commit_req != NULL) {
+		if (!dbca->dbca_commit_done)
+			sched_req_wait(dbca->dbca_commit_req, true);
+		/* dtx_batched_commit might put it while we were waiting. */
+		if (dbca->dbca_commit_req != NULL) {
+			D_ASSERT(dbca->dbca_commit_done);
+			sched_req_put(dbca->dbca_commit_req);
+			dbca->dbca_commit_req = NULL;
+			dbca->dbca_commit_done = 0;
+		}
+	}
 
-	if (dbca->dbca_agg_req != NULL)
-		sched_req_wait(dbca->dbca_agg_req, true);
+	if (dbca->dbca_agg_req != NULL) {
+		if (!dbca->dbca_agg_done)
+			sched_req_wait(dbca->dbca_agg_req, true);
+		/* Just to be safe... */
+		if (dbca->dbca_agg_req != NULL) {
+			D_ASSERT(dbca->dbca_agg_done);
+			sched_req_put(dbca->dbca_agg_req);
+			dbca->dbca_agg_req = NULL;
+			dbca->dbca_agg_done = 0;
+		}
+	}
 
 	/* dtx_batched_commit() ULT may hold the last reference on the dbca. */
 	while (dbca->dbca_refs > 0) {
 		D_DEBUG(DB_TRACE, "Sleep 10 mseconds for batched commit ULT\n");
 		dss_sleep(10);
 	}
-
-	D_ASSERT(dbca->dbca_cleanup_req == NULL);
-	D_ASSERT(dbca->dbca_commit_req == NULL);
-	D_ASSERT(dbca->dbca_agg_req == NULL);
 
 	if (d_list_empty(&dbpa->dbpa_cont_list)) {
 		d_list_del(&dbpa->dbpa_sys_link);
@@ -132,23 +158,6 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 
 	D_FREE_PTR(dbca);
 	ds_cont_child_put(cont);
-}
-
-static void
-dtx_init_sched_req(struct ds_cont_child *cont, struct sched_request **sched_req,
-		   ABT_thread ult)
-{
-	uuid_t			anonym_uuid;
-	struct sched_req_attr	attr;
-
-	D_ASSERT(sched_req != NULL);
-	D_ASSERT(*sched_req == NULL);
-
-	if (cont == NULL || !cont->sc_closing) {
-		uuid_clear(anonym_uuid);
-		sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-		*sched_req = sched_req_get(&attr, ult);
-	}
 }
 
 static void
@@ -261,8 +270,7 @@ dtx_cleanup_stale(void *arg)
 				       dsp_link)) != NULL)
 		D_FREE(dsp);
 
-	sched_req_put(dbca->dbca_cleanup_req);
-	dbca->dbca_cleanup_req = NULL;
+	dbca->dbca_cleanup_done = 1;
 
 out:
 	dtx_put_dbca(dbca);
@@ -305,8 +313,7 @@ dtx_aggregate(void *arg)
 			break;
 	}
 
-	sched_req_put(dbca->dbca_agg_req);
-	dbca->dbca_agg_req = NULL;
+	dbca->dbca_agg_done = 1;
 
 out:
 	dtx_put_dbca(dbca);
@@ -315,10 +322,12 @@ out:
 static void
 dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 {
-	ABT_thread			 child;
 	struct dtx_batched_cont_args	*dbca;
 	struct ds_cont_child		*cont;
-	int				 rc;
+	struct sched_req_attr		 attr;
+
+	D_ASSERT(dbpa->dbpa_pool);
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &dbpa->dbpa_pool->spc_uuid);
 
 	while (1) {
 		struct dtx_stat		 stat = { 0 };
@@ -329,6 +338,12 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 		dbca = d_list_entry(dbpa->dbpa_cont_list.next,
 				    struct dtx_batched_cont_args,
 				    dbca_pool_link);
+
+		if (dbca->dbca_agg_req != NULL && dbca->dbca_agg_done) {
+			sched_req_put(dbca->dbca_agg_req);
+			dbca->dbca_agg_req = NULL;
+			dbca->dbca_agg_done = 0;
+		}
 
 		/* Finish this cycle scan. */
 		if (dbca->dbca_agg_gen == dtx_agg_gen)
@@ -359,22 +374,13 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 		      stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) &&
 		     (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) >=
 		      dtx_agg_thd_age_up))) {
+			D_ASSERT(!dbca->dbca_agg_done);
 			dtx_get_dbca(dbca);
-			rc = dss_ult_create(dtx_aggregate, dbca,
-					    DSS_XS_SELF, 0, 0, &child);
-			if (rc != 0) {
-				D_WARN("Fail to start DTX agg ULT (1) for "
-				       DF_UUID": "DF_RC"\n",
-				       DP_UUID(cont->sc_uuid), DP_RC(rc));
-				dtx_put_dbca(dbca);
-				continue;
-			}
-
-			dtx_init_sched_req(cont, &dbca->dbca_agg_req, child);
+			dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
 			if (dbca->dbca_agg_req == NULL) {
-				D_WARN("Fail to get agg sched req (1) for "
-				       DF_UUID"\n", DP_UUID(cont->sc_uuid));
-				ABT_thread_join(child);
+				D_WARN("Fail to start DTX agg ULT (1) for "DF_UUID"\n",
+				       DP_UUID(cont->sc_uuid));
+				dtx_put_dbca(dbca);
 				continue;
 			}
 
@@ -413,22 +419,16 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 
 	dbca = dbpa->dbpa_victim;
 	cont = dbca->dbca_cont;
+	D_ASSERT(dbca->dbca_agg_req == NULL && !dbca->dbca_agg_done);
 	dtx_get_dbca(dbca);
 
-	rc = dss_ult_create(dtx_aggregate, dbca, DSS_XS_SELF, 0, 0, &child);
-	if (rc != 0) {
-		D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID": "DF_RC"\n",
-		       DP_UUID(cont->sc_uuid), DP_RC(rc));
+	dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
+	if (dbca->dbca_agg_req == NULL) {
+		D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID"\n",
+		       DP_UUID(cont->sc_uuid));
 		dtx_put_dbca(dbca);
 	} else {
-		dtx_init_sched_req(cont, &dbca->dbca_agg_req, child);
-		if (dbca->dbca_agg_req == NULL) {
-			D_WARN("Fail to get agg sched req (2) for "DF_UUID"\n",
-			       DP_UUID(cont->sc_uuid));
-			ABT_thread_join(child);
-		} else {
-			dbpa->dbpa_aggregating = 1;
-		}
+		dbpa->dbpa_aggregating = 1;
 	}
 }
 
@@ -464,9 +464,6 @@ dtx_aggregation_main(void *arg)
 
 		sched_req_sleep(dmi->dmi_dtx_agg_req, sleep_time);
 	}
-
-	sched_req_put(dmi->dmi_dtx_agg_req);
-	dmi->dmi_dtx_agg_req = NULL;
 }
 
 static void
@@ -520,8 +517,7 @@ dtx_batched_commit_one(void *arg)
 			break;
 	}
 
-	sched_req_put(dbca->dbca_commit_req);
-	dbca->dbca_commit_req = NULL;
+	dbca->dbca_commit_done = 1;
 
 out:
 	dtx_put_dbca(dbca);
@@ -533,27 +529,23 @@ dtx_batched_commit(void *arg)
 	struct dss_module_info		*dmi = dss_get_module_info();
 	struct dtx_batched_cont_args	*dbca;
 	struct dtx_batched_cont_args	*tmp;
-	ABT_thread			 child;
-	int				 rc;
+	struct sched_req_attr		 attr;
+	uuid_t				 anonym_uuid;
 
-	dtx_init_sched_req(NULL, &dmi->dmi_dtx_cmt_req, ABT_THREAD_NULL);
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
+
+	D_ASSERT(dmi->dmi_dtx_cmt_req == NULL);
+	dmi->dmi_dtx_cmt_req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (dmi->dmi_dtx_cmt_req == NULL) {
 		D_ERROR("Failed to get DTX batched commit sched request.\n");
 		return;
 	}
 
-	rc = dss_ult_create(dtx_aggregation_main, NULL,
-			    DSS_XS_SELF, 0, 0, &child);
-	if (rc != 0) {
-		D_ERROR("Fail to start DTX aggregation main ULT: "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
-	}
-
-	dtx_init_sched_req(NULL, &dmi->dmi_dtx_agg_req, child);
+	D_ASSERT(dmi->dmi_dtx_agg_req == NULL);
+	dmi->dmi_dtx_agg_req = sched_create_ult(&attr, dtx_aggregation_main, NULL, 0);
 	if (dmi->dmi_dtx_agg_req == NULL) {
-		D_ERROR("Failed to get DTX aggregation sched request.\n");
-		ABT_thread_join(child);
+		D_ERROR("Fail to start DTX aggregation main ULT.\n");
 		goto out;
 	}
 
@@ -574,10 +566,17 @@ dtx_batched_commit(void *arg)
 		dbca = d_list_entry(dmi->dmi_dtx_batched_cont_list.next,
 				    struct dtx_batched_cont_args,
 				    dbca_sys_link);
+		dtx_get_dbca(dbca);
 		cont = dbca->dbca_cont;
 		d_list_move_tail(&dbca->dbca_sys_link,
 				 &dmi->dmi_dtx_batched_cont_list);
 		dtx_stat(cont, &stat);
+
+		if (dbca->dbca_commit_req != NULL && dbca->dbca_commit_done) {
+			sched_req_put(dbca->dbca_commit_req);
+			dbca->dbca_commit_req = NULL;
+			dbca->dbca_commit_done = 0;
+		}
 
 		if (!cont->sc_closing &&
 		    !dbca->dbca_deregister && dbca->dbca_commit_req == NULL &&
@@ -585,25 +584,25 @@ dtx_batched_commit(void *arg)
 		     (stat.dtx_oldest_committable_time != 0 &&
 		      dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >=
 		      DTX_COMMIT_THRESHOLD_AGE))) {
+			D_ASSERT(!dbca->dbca_commit_done);
 			sleep_time = 0;
 			dtx_get_dbca(dbca);
-			rc = dss_ult_create(dtx_batched_commit_one, dbca,
-					    DSS_XS_SELF, 0, 0, &child);
-			if (rc != 0) {
-				D_WARN("Fail to start DTX ULT (1) for "
-				       DF_UUID": "DF_RC"\n",
-				       DP_UUID(cont->sc_uuid), DP_RC(rc));
+
+			D_ASSERT(dbca->dbca_cont);
+			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
+			dbca->dbca_commit_req = sched_create_ult(&attr, dtx_batched_commit_one,
+								 dbca, 0);
+			if (dbca->dbca_commit_req == NULL) {
+				D_WARN("Fail to start DTX ULT (1) for "DF_UUID"\n",
+				       DP_UUID(cont->sc_uuid));
 				dtx_put_dbca(dbca);
-			} else {
-				dtx_init_sched_req(cont, &dbca->dbca_commit_req,
-						   child);
-				if (dbca->dbca_commit_req == NULL) {
-					D_WARN("Fail to get sched req (1) for "
-					       DF_UUID"\n",
-					       DP_UUID(cont->sc_uuid));
-					ABT_thread_join(child);
-				}
 			}
+		}
+
+		if (dbca->dbca_cleanup_req != NULL && dbca->dbca_cleanup_done) {
+			sched_req_put(dbca->dbca_cleanup_req);
+			dbca->dbca_cleanup_req = NULL;
+			dbca->dbca_cleanup_done = 0;
 		}
 
 		if (!cont->sc_closing &&
@@ -611,27 +610,22 @@ dtx_batched_commit(void *arg)
 		    stat.dtx_oldest_active_time != 0 &&
 		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
 		    DTX_CLEANUP_THD_AGE_UP) {
+			D_ASSERT(!dbca->dbca_cleanup_done);
 			sleep_time = 0;
 			dtx_get_dbca(dbca);
-			rc = dss_ult_create(dtx_cleanup_stale, dbca,
-					    DSS_XS_SELF, 0, 0, &child);
-			if (rc != 0) {
-				D_WARN("Fail to start DTX ULT (3) for "
-				       DF_UUID": "DF_RC"\n",
-				       DP_UUID(cont->sc_uuid), DP_RC(rc));
+
+			D_ASSERT(dbca->dbca_cont);
+			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
+			dbca->dbca_cleanup_req = sched_create_ult(&attr, dtx_cleanup_stale,
+								  dbca, 0);
+			if (dbca->dbca_cleanup_req == NULL) {
+				D_WARN("Fail to start DTX ULT (3) for "DF_UUID"\n",
+				       DP_UUID(cont->sc_uuid));
 				dtx_put_dbca(dbca);
-			} else {
-				dtx_init_sched_req(cont,
-						   &dbca->dbca_cleanup_req,
-						   child);
-				if (dbca->dbca_cleanup_req == NULL) {
-					D_WARN("Fail to get sched req (3) for "
-					       DF_UUID"\n",
-					       DP_UUID(cont->sc_uuid));
-					ABT_thread_join(child);
-				}
 			}
 		}
+
+		dtx_put_dbca(dbca);
 
 check:
 		if (dss_xstream_exiting(dmi->dmi_xstream))
@@ -640,8 +634,11 @@ check:
 		sched_req_sleep(dmi->dmi_dtx_cmt_req, sleep_time);
 	}
 
-	if (dmi->dmi_dtx_agg_req != NULL)
+	if (dmi->dmi_dtx_agg_req != NULL) {
 		sched_req_wait(dmi->dmi_dtx_agg_req, true);
+		sched_req_put(dmi->dmi_dtx_agg_req);
+		dmi->dmi_dtx_agg_req = NULL;
+	}
 
 out:
 	sched_req_put(dmi->dmi_dtx_cmt_req);
@@ -756,8 +753,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
 		bool solo, bool sync, bool dist, bool migration,
-		bool ignore_uncommitted, bool force_refresh, bool resent,
-		bool prepared, struct dtx_handle *dth)
+		bool ignore_uncommitted, bool resent, bool prepared, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -787,7 +783,6 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_dist = dist ? 1 : 0;
 	dth->dth_for_migration = migration ? 1 : 0;
 	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
-	dth->dth_force_refresh = force_refresh ? 1 : 0;
 	dth->dth_prepared = prepared ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
@@ -1034,7 +1029,6 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_SYNC) ? true : false,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
-			     (flags & DTX_FORCE_REFRESH) ? true : false,
 			     (flags & DTX_RESEND) ? true : false,
 			     (flags & DTX_PREPARED) ? true : false, dth);
 
@@ -1349,7 +1343,6 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
 			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
-			     (flags & DTX_FORCE_REFRESH) ? true : false,
 			     (flags & DTX_RESEND) ? true : false, false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
@@ -1732,6 +1725,10 @@ dtx_leader_exec_ops_ult(void *arg)
 			sub->dss_result = rc;
 			break;
 		}
+
+		/* Yield to avoid holding CPU for too long time. */
+		if (i >= DTX_RPC_YIELD_THD)
+			ABT_thread_yield();
 	}
 
 	if (rc != 0) {

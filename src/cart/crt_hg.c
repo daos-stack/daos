@@ -1164,8 +1164,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_rc = rc;
 
 	if (crt_cbinfo.cci_rc != 0)
-		RPC_ERROR(rpc_priv, "RPC failed; rc: " DF_RC "\n",
-			  DP_RC(crt_cbinfo.cci_rc));
+		RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
+			   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
 
 	RPC_TRACE(DB_TRACE, rpc_priv,
 		  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",

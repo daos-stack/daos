@@ -10,6 +10,7 @@ from daos_utils import DaosCommand
 from nvme_utils import ServerFillUp
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
+from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils, ServerFillUp):
@@ -80,7 +81,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.ior_default_flags = self.ior_w_flags
                     self.ior_cmd.repetitions.update(self.ior_test_repetitions)
                     self.log.info(self.pool.pool_percentage_used())
-                    self.start_ior_load(storage='NVMe', percent=pool_fillup)
+                    self.start_ior_load(storage='NVMe', operation="Auto_Write", percent=pool_fillup)
                     self.log.info(self.pool.pool_percentage_used())
                 else:
                     self.run_ior_thread("Write", oclass, test_seq)
@@ -180,7 +181,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             self.pool = pool[val]
             if data:
                 if pool_fillup > 0:
-                    self.start_ior_load(storage='NVMe', operation='Read', percent=pool_fillup)
+                    self.start_ior_load(storage='NVMe', operation='Auto_Read', percent=pool_fillup)
                 else:
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
@@ -219,6 +220,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.log.info("Offline Reintegration : Multiple Pools")
         self.run_offline_reintegration_test(5, data=True)
 
+    @skipForTicket("DAOS-9313")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
 

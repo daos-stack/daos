@@ -153,7 +153,7 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	D_ASSERT(map->pl_ops != NULL);
 
-	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL, NULL);
 	if (daos_oclass_grp_size(oc_attr) == 1)
 		return 0;
 
@@ -189,7 +189,7 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 
 	D_ASSERT(map->pl_ops != NULL);
 
-	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL, NULL);
 	if (daos_oclass_grp_size(oc_attr) == 1)
 		return 0;
 
@@ -282,12 +282,14 @@ obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
 		DP_OID(oid), layout->ol_ver);
 
 	for (i = 0; i < layout->ol_nr; i++)
-		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s\n",
+		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s %s\n",
 			i, layout->ol_shards[i].po_shard,
 			layout->ol_shards[i].po_target,
 			layout->ol_shards[i].po_fseq,
 			layout->ol_shards[i].po_rebuilding ?
-			"rebuilding" : "healthy");
+			"rebuilding" : "healthy",
+			layout->ol_shards[i].po_reintegrating ?
+			"reintegrating" : "healthy");
 }
 
 /**
@@ -592,12 +594,89 @@ pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr)
 	return rc;
 }
 
+static int
+pl_mbs_sort_tgt_ops_cmp_key(void *array, int i, uint64_t key)
+{
+	struct dtx_daos_target	*ddt = (struct dtx_daos_target *)array;
+	uint32_t		 target = (uint32_t)key;
+
+	if (ddt[i].ddt_id > target)
+		return 1;
+	if (ddt[i].ddt_id < target)
+		return -1;
+	return 0;
+}
+
+static daos_sort_ops_t	pl_mbs_sort_tgt_ops = {
+	.so_cmp_key	= pl_mbs_sort_tgt_ops_cmp_key,
+};
+
+static int
+pl_mbs_sort_sad_ops_cmp_key(void *array, int i, uint64_t key)
+{
+	struct dtx_daos_target	*ddt = (struct dtx_daos_target *)array;
+	uint32_t		 shard = (uint32_t)key;
+
+	if (ddt[i].ddt_shard > shard)
+		return 1;
+	if (ddt[i].ddt_shard < shard)
+		return -1;
+	return 0;
+}
+
+static daos_sort_ops_t	pl_mbs_sort_sad_ops = {
+	.so_cmp_key	= pl_mbs_sort_sad_ops_cmp_key,
+};
+
+static bool
+pl_target_in_mbs(struct pl_obj_shard *shard, struct dtx_memberships *mbs)
+{
+	daos_sort_ops_t		*ops;
+	uint64_t		 key;
+
+	/* If the original leader is not in mbs->dm_tgts, then current shard maybe just such one. */
+	if (mbs == NULL || !(mbs->dm_flags & DMF_CONTAIN_LEADER))
+		return true;
+
+	if (mbs->dm_tgts[0].ddt_id == shard->po_target)
+		return true;
+
+	if (mbs->dm_flags & DMF_SORTED_TGT_ID) {
+		key = shard->po_target;
+		ops = &pl_mbs_sort_tgt_ops;
+	} else if (mbs->dm_flags & DMF_SORTED_SAD_IDX) {
+		key = shard->po_shard;
+		ops = &pl_mbs_sort_sad_ops;
+	} else {
+		int	i;
+
+		/* The mbs->dm_tgts is not sorted, that is upgraded from old storage.
+		 * We cannot do binary search for such case, then have to search from
+		 * the beginning one by one.
+		 */
+
+		for (i = 1; i < mbs->dm_tgt_cnt; i++) {
+			if (mbs->dm_tgts[i].ddt_id == shard->po_target)
+				return true;
+		}
+
+		return false;
+	}
+
+	if (daos_array_find(&mbs->dm_tgts[1], mbs->dm_tgt_cnt - 1, key, ops) < 0)
+		return false;
+
+	return true;
+}
+
 /**
  * Select leader replica for the given object's shard.
  *
  * \param [IN]  oid             The object identifier.
  * \param [IN]  grp_idx         The group index.
  * \param [IN]  grp_size        Group size of obj layout.
+ * \param [IN]  bit_map         Select leader from the shards bit_map, for client IO on EC object.
+ * \param [IN]  mbs             Select leader from the shards array, for server side leader check.
  * \param [OUT] tgt_id          If non-NULL, Require leader target id.
  * \param [IN]  pl_get_shard    The callback function to parse out pl_obj_shard
  *                              from the given @data.
@@ -608,6 +687,7 @@ pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr)
  */
 int
 pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
+		 uint8_t *bit_map, struct dtx_memberships *mbs,
 		 int *tgt_id, pl_get_shard_t pl_get_shard, void *data)
 {
 	struct pl_obj_shard             *shard;
@@ -618,56 +698,65 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	int                              replica_idx;
 	int                              i;
 
-	oc_attr = daos_oclass_attr_find(oid, NULL);
-	if (oc_attr->ca_resil != DAOS_RES_REPL) {
+	start = grp_idx * grp_size;
+	oc_attr = daos_oclass_attr_find(oid, NULL, NULL);
+	if (oc_attr->ca_resil == DAOS_RES_EC) {
 		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
-		int fail_cnt = 0;
-		int idx = grp_idx * grp_size + tgt_nr - 1;
-		bool parity_rebuilding = false;
-		int leader_shard_idx;
 
-		/* For EC object, elect last shard in the group (must to be
-		 * a parity node) as leader.
+		/* For EC object, the leader candidate order is as following:
+		 * 1. The last parity node if healthy, otherwise
+		 * 2. The prior parity to the former one, and the prior if necessary.
+		 * 3. The first healthy one in the given bit_map.
 		 */
-		shard = pl_get_shard(data, idx);
-		while (shard->po_rebuilding || shard->po_shard == -1 ||
-		       shard->po_target == -1) {
-			idx--;
-			if (shard->po_rebuilding)
-				parity_rebuilding = true;
 
-			fail_cnt++;
-			if (fail_cnt > oc_attr->u.ec.e_p) {
-				D_ERROR(DF_OID" fail_cnt %d, exceed e_p %d, "DF_RC"\n",
-					DP_OID(oid), fail_cnt, oc_attr->u.ec.e_p, DP_RC(-DER_IO));
-				return -DER_IO;
-			}
+		for (i = start + tgt_nr - 1; i >= start + oc_attr->u.ec.e_k; i--) {
+			if (bit_map != NIL_BITMAP && isclr(bit_map, i - start))
+				continue;
 
-			shard = pl_get_shard(data, idx);
+			shard = pl_get_shard(data, i);
+			if (shard->po_target == -1 || shard->po_shard == -1 || shard->po_rebuilding)
+				continue;
+
+			if (pl_target_in_mbs(shard, mbs))
+				goto found;
 		}
 
-		if (fail_cnt == oc_attr->u.ec.e_p) {
-			/* If parity is rebuilding, let's return DER_STALE,
-			 * so object I/O might refresh the pool map and layout
-			 * until parity rebuilt finish.
-			 */
-			if (parity_rebuilding)
-				return -DER_STALE;
-			else
-				return -DER_IO;
+		/* If we do not know which data shards participate in the transaction,
+		 * let's return DER_STALE, then object I/O might refresh the pool map
+		 * and layout until parity rebuilt finish.
+		 */
+
+		if (bit_map == NIL_BITMAP && mbs == NULL) {
+			D_WARN(DF_OID" all parity shards %d are in rebuilding, retry later.\n",
+				DP_OID(oid), oc_attr->u.ec.e_p);
+			return -DER_STALE;
 		}
 
-		D_ASSERT(shard->po_target != -1);
-		D_ASSERT(shard->po_shard != -1);
-		D_ASSERT(!shard->po_rebuilding);
+		for (i = start; i < start + oc_attr->u.ec.e_k; i++) {
+			if (bit_map != NIL_BITMAP && isclr(bit_map, i - start))
+				continue;
 
+			shard = pl_get_shard(data, i);
+			if (shard->po_target == -1 || shard->po_shard == -1 || shard->po_rebuilding)
+				break;
+
+			if (pl_target_in_mbs(shard, mbs))
+				goto found;
+		}
+
+		D_ERROR(DF_OID" unhealthy targets exceed the max redundancy, e_p %d\n",
+			DP_OID(oid), oc_attr->u.ec.e_p);
+		return -DER_IO;
+
+found:
 		if (tgt_id != NULL)
 			*tgt_id = shard->po_target;
 
-		leader_shard_idx = (shard->po_shard / tgt_nr) * grp_size +
-				    shard->po_shard % tgt_nr;
-		return leader_shard_idx;
+		return (shard->po_shard / tgt_nr) * grp_size + shard->po_shard % tgt_nr;
 	}
+
+	D_ASSERT(oc_attr->ca_resil == DAOS_RES_REPL);
+	D_ASSERT(bit_map == NIL_BITMAP);
 
 	replicas = oc_attr->u.rp.r_num;
 	if (replicas == DAOS_OBJ_REPL_MAX) {
@@ -706,7 +795,6 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	 *      The one with the lowest f_seq will be elected as the leader
 	 *      to avoid leader switch.
 	 */
-	start = grp_idx * grp_size;
 	replica_idx = (oid.lo + grp_idx) % replicas;
 	for (i = 0, pos = -1; i < replicas;
 	     i++, replica_idx = (replica_idx + 1) % replicas) {
@@ -718,10 +806,11 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		 * case that during reintegration we may have an extended
 		 * layout that with in-adding shards with po_rebuilding set).
 		 */
-		if (shard->po_target == -1 || shard->po_rebuilding)
+		if (shard->po_target == -1 || shard->po_shard == -1 || shard->po_rebuilding ||
+		    !pl_target_in_mbs(shard, mbs))
 			continue;
-		if (pos == -1 ||
-		    pl_get_shard(data, pos)->po_fseq > shard->po_fseq)
+
+		if (pos == -1 || pl_get_shard(data, pos)->po_fseq > shard->po_fseq)
 			pos = off;
 	}
 	if (pos != -1) {

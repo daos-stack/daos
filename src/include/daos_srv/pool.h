@@ -212,9 +212,7 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
 int ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			     uint32_t version, int *tgt_id);
-int ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			     uint32_t version, bool check_shard);
+			     struct dtx_memberships *mbs, uint32_t version, int *tgt_id);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
@@ -244,7 +242,8 @@ int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 
 int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 			    uuid_t *handles, size_t n_handles,
-			    uint32_t destroy, uint32_t force);
+			    uint32_t destroy, uint32_t force,
+			    char *machine, uint32_t *count);
 
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);

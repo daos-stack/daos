@@ -389,7 +389,9 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 			}
 		}
 
-		i++;
+		/* Yield to avoid holding CPU for too long time. */
+		if (++i >= DTX_RPC_YIELD_THD)
+			ABT_thread_yield();
 	}
 
 	return 0;
@@ -397,7 +399,7 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 
 static int
 dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		 d_iov_t *val_iov, struct btr_record *rec)
+		 d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -452,7 +454,7 @@ dtx_cf_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_cf_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  d_iov_t *key, d_iov_t *val)
+		  d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct dtx_req_rec		*drr;
 	struct dtx_cf_rec_bundle	*dcrb;
@@ -482,11 +484,10 @@ btr_ops_t dbtree_dtx_cf_ops = {
 
 static int
 dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
-		 int *length, struct dtx_entry *dte, int count)
+		 int *length, struct dtx_entry *dte, int count, d_rank_t my_rank, uint32_t my_tgtid)
 {
 	struct dtx_memberships		*mbs = dte->dte_mbs;
 	struct dtx_cf_rec_bundle	 dcrb;
-	d_rank_t			 myrank;
 	int				 rc = 0;
 	int				 i;
 
@@ -500,14 +501,17 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 		dcrb.dcrb_length = length;
 	}
 
-	crt_group_rank(NULL, &myrank);
-	for (i = 0; i < mbs->dm_tgt_cnt && rc >= 0; i++) {
+	if (mbs->dm_flags & DMF_CONTAIN_LEADER)
+		/* mbs->dm_tgts[0] is the (current/old) leader, skip it. */
+		i = 1;
+	else
+		i = 0;
+
+	for (; i < mbs->dm_tgt_cnt && rc >= 0; i++) {
 		struct pool_target	*target;
 
-		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
-		ABT_rwlock_unlock(pool->sp_lock);
 		if (rc != 1) {
 			D_WARN("Cannot find target %u at %d/%d, flags %x\n",
 			       mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
@@ -524,10 +528,8 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 		    target->ta_comp.co_status != PO_COMP_ST_UPIN)
 			continue;
 
-		/* skip myself. */
-		if (myrank == target->ta_comp.co_rank &&
-		    dss_get_module_info()->dmi_tgt_id ==
-		    target->ta_comp.co_index)
+		/* Skip myself. */
+		if (my_rank == target->ta_comp.co_rank && my_tgtid == target->ta_comp.co_index)
 			continue;
 
 		if (daos_handle_is_valid(tree)) {
@@ -539,7 +541,8 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 
 			d_iov_set(&riov, &dcrb, sizeof(dcrb));
 			d_iov_set(&kiov, &dcrb.dcrb_key, sizeof(dcrb.dcrb_key));
-			rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &kiov, &riov);
+			rc = dbtree_upsert(tree, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &kiov,
+					   &riov, NULL);
 		} else {
 			struct dtx_req_rec	*drr;
 
@@ -562,20 +565,22 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 static int
 dtx_dti_classify(struct ds_pool *pool, daos_handle_t tree,
 		 d_list_t *head, struct dtx_id *dtis,
-		 struct dtx_entry **dtes, int count)
+		 struct dtx_entry **dtes, int count, d_rank_t my_rank, uint32_t my_tgtid)
 {
 	int	length = 0;
 	int	rc = 0;
 	int	i;
 
+	ABT_rwlock_rdlock(pool->sp_lock);
 	for (i = 0; i < count; i++) {
-		rc = dtx_classify_one(pool, tree, head, &length, dtes[i], count);
+		rc = dtx_classify_one(pool, tree, head, &length, dtes[i], count, my_rank, my_tgtid);
 		if (rc < 0)
 			break;
 
 		if (dtis != NULL)
 			dtis[i] = dtes[i]->dte_xid;
 	}
+	ABT_rwlock_unlock(pool->sp_lock);
 
 	return rc < 0 ? rc : length;
 }
@@ -588,13 +593,15 @@ struct dtx_commit_args {
 	struct dtx_req_args	 *dca_dra;
 	struct dtx_entry	**dca_dtes;
 	int			  dca_count;
+	d_rank_t		  dca_rank;
+	uint32_t		  dca_tgtid;
 };
 
 static int
 dtx_commit_internal(struct ds_cont_child *cont, d_list_t *head,
 		    struct btr_root *tree_root, daos_handle_t *tree_hdl,
 		    struct dtx_req_args *dra, struct dtx_id *dtis,
-		    struct dtx_entry **dtes, int count)
+		    struct dtx_entry **dtes, int count, d_rank_t my_rank, uint32_t my_tgtid)
 {
 	struct umem_attr	 uma = { 0 };
 	struct ds_pool		*pool;
@@ -611,7 +618,7 @@ dtx_commit_internal(struct ds_cont_child *cont, d_list_t *head,
 	if (rc != 0)
 		return rc;
 
-	length = dtx_dti_classify(pool, *tree_hdl, head, dtis, dtes, count);
+	length = dtx_dti_classify(pool, *tree_hdl, head, dtis, dtes, count, my_rank, my_tgtid);
 	if (length < 0)
 		return length;
 
@@ -631,7 +638,7 @@ dtx_commit_helper(void *arg)
 
 	dtx_commit_internal(dca->dca_cont, dca->dca_head, dca->dca_tree_root,
 			    dca->dca_tree_hdl, dca->dca_dra, NULL,
-			    dca->dca_dtes, dca->dca_count);
+			    dca->dca_dtes, dca->dca_count, dca->dca_rank, dca->dca_tgtid);
 
 	D_FREE(dca);
 }
@@ -664,6 +671,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	ABT_thread		 child = ABT_THREAD_NULL;
 	struct dtx_commit_args	*cmt_arg = NULL;
 	struct dtx_id		 dti;
+	d_rank_t		 my_rank;
+	uint32_t		 my_tgtid;
 	bool			 cos;
 	int			 rc;
 	int			 rc1 = 0;
@@ -683,6 +692,9 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 		dtis = &dti;
 	}
 
+	crt_group_rank(NULL, &my_rank);
+	my_tgtid = dss_get_module_info()->dmi_tgt_id;
+
 	if (helper) {
 		D_ALLOC_PTR(cmt_arg);
 		if (cmt_arg == NULL)
@@ -695,6 +707,8 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 		cmt_arg->dca_dra = &dra;
 		cmt_arg->dca_dtes = dtes;
 		cmt_arg->dca_count = count;
+		cmt_arg->dca_rank = my_rank;
+		cmt_arg->dca_tgtid = my_tgtid;
 
 		rc = dss_ult_create(dtx_commit_helper, cmt_arg, DSS_XS_IOFW,
 				    dss_get_module_info()->dmi_tgt_id,
@@ -708,7 +722,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 			dtis[i] = dtes[i]->dte_xid;
 	} else {
 		rc = dtx_commit_internal(cont, &head, &tree_root, &tree_hdl,
-					 &dra, dtis, dtes, count);
+					 &dra, dtis, dtes, count, my_rank, my_tgtid);
 		if (rc != 0)
 			goto out;
 	}
@@ -744,7 +758,7 @@ out:
 		rc1 = 0;
 
 	if (child != ABT_THREAD_NULL)
-		ABT_thread_join(child);
+		ABT_thread_free(&child);
 
 	if (dra.dra_future != ABT_FUTURE_NULL) {
 		rc2 = dtx_req_wait(&dra);
@@ -777,6 +791,7 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	struct dtx_req_rec	*drr;
 	struct ds_pool		*pool;
 	d_list_t		 head;
+	d_rank_t		 my_rank;
 	int			 length = 0;
 	int			 rc;
 
@@ -785,7 +800,11 @@ dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	D_ASSERT(pool != NULL);
 
 	D_INIT_LIST_HEAD(&head);
-	rc = dtx_classify_one(pool, DAOS_HDL_INVAL, &head, &length, dte, 1);
+	crt_group_rank(NULL, &my_rank);
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = dtx_classify_one(pool, DAOS_HDL_INVAL, &head, &length, dte, 1, my_rank,
+			      dss_get_module_info()->dmi_tgt_id);
+	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc < 0)
 		goto out;
 
@@ -826,9 +845,11 @@ int
 dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 {
 	struct dtx_req_args	 dra;
+	struct dtx_memberships	*mbs = dte->dte_mbs;
 	struct ds_pool		*pool;
 	struct dtx_req_rec	*drr;
 	d_list_t		 head;
+	d_rank_t		 my_rank;
 	int			 length = 0;
 	int			 rc = 0;
 
@@ -839,11 +860,15 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	/* If no other target, then current target is the unique
 	 * one that can be committed if it is 'prepared'.
 	 */
-	if (dte->dte_mbs->dm_tgt_cnt == 1)
+	if (mbs->dm_tgt_cnt == 1)
 		return DTX_ST_PREPARED;
 
 	D_INIT_LIST_HEAD(&head);
-	rc = dtx_classify_one(pool, DAOS_HDL_INVAL, &head, &length, dte, 1);
+	crt_group_rank(NULL, &my_rank);
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = dtx_classify_one(pool, DAOS_HDL_INVAL, &head, &length, dte, 1, my_rank,
+			      dss_get_module_info()->dmi_tgt_id);
+	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc < 0)
 		goto out;
 
@@ -894,9 +919,8 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 		if (!(dsp->dsp_mbs.dm_flags & DMF_CONTAIN_LEADER)) {
 
 again:
-			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid,
-						      pool->sp_map_version,
-						      &tgt);
+			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid, &dsp->dsp_mbs,
+						      pool->sp_map_version, &tgt);
 			if (rc < 0) {
 				/* Currently, for EC object, if parity node is
 				 * in rebuilding, we will get -DER_STALE, that

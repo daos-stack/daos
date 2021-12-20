@@ -119,7 +119,7 @@ dtx_metrics_free(void *data)
 static int
 dtx_metrics_count(void)
 {
-	return (sizeof(struct dtx_pool_metrics) / sizeof(struct d_tm_node_t *)) * dss_tgt_nr;
+	return (sizeof(struct dtx_pool_metrics) / sizeof(struct d_tm_node_t *));
 }
 
 struct dss_module_metrics dtx_metrics = {

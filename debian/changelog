@@ -1,32 +1,98 @@
+daos (2.1.100-16) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 16 Dec 2021 15:08:11 -0400
+
+daos (2.1.100-15) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Sat, 11 Dec 2021 15:18:54 -0400
+
+daos (2.1.100-14) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Don't make daos-*-tests-openmi a dependency of anything
+    - If they are wanted, they should be installed explicitly, due to
+      potential conflicts with other MPI stacks
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 10 Dec 2021 09:44:14 -0400
+
+daos (2.1.100-13) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Remove DAOS-9173 workaround from mercury. Apply patch to OFI instead.
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 08 Dec 2021 10:00:01 -0100
+
+daos (2.1.100-12) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Apply DAOS-9173 workaround patch
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 07 Dec 2021 10:00:01 -0100
+
+daos (2.1.100-11) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update mercury to v2.1.0rc4
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Fri, 03 Dec 2021 10:00:01 -0100
+
+daos (2.1.100-8) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Set rmem_{max,default} sysctl values on server package install to enable
+    SPDK pci_event module to operate in unprivileged process (daos_engine).
+
+ -- Tom Nabarro <tom.nabarro@intel.com> Mon, 22 Nov 2021 16:42:54 -0100
+
+daos (2.1.100-7) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Update for libdaos major version bump
+  * Fix version of libpemobj1 for SUSE
+
+ -- Wang Shilong <shilong.wang@intel.com>  Tue, 16 Nov 2021 12:42:54 -0400
+
+daos (2.1.100-6) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update OFI to v1.14.0rc3
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Sat, 13 Nov 2021 10:00:01 -0100
+
+daos (2.1.100-5) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
+  * Rename daos-tests daos-client-tests and make daos-tests require all
+    other test suites to maintain existing behavior
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 26 Oct 2021 22:52:40 -0400
+
 daos (2.1.100-4) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Update mercury to v2.1.0rc2
 
- -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Mon, 25 Oct 2021 010:00:01 -0100
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Mon, 25 Oct 2021 10:00:01 -0100
 
 daos (2.1.100-3) unstable; urgency=medium
   [ Jeff Olivier ]
   * Explicitly require 1.11.0-3 of PMDK
 
- -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 20 Oct 2021 010:00:01 -0100
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 20 Oct 2021 10:00:01 -0100
 
 daos (2.1.100-2) unstable; urgency=medium
   [ David Quigley ]
   * Add defusedxml as a required dependency for the test package.
 
- -- David Quigley <david.quigley@intel.com> Wed, 13 Oct 2021 010:00:00 +0800
+ -- David Quigley <david.quigley@intel.com> Wed, 13 Oct 2021 10:00:00 +0800
 
 daos (2.1.100-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Switch version to 2.1.100 for 2.2 test builds
 
- -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 13 Oct 2021 010:00:00 -0100
+ -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 13 Oct 2021 10:00:00 -0100
 
 daos (1.3.106-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Version bump to 1.3.106 for 2.0 test build 6
 
- -- Johann Lombardi <johann.lombardi@intel.com>  Tue, 12 Oct 2021 010:00:00 -0100
+ -- Johann Lombardi <johann.lombardi@intel.com>  Tue, 12 Oct 2021 10:00:00 -0100
 
 daos (1.3.105-3) unstable; urgency=medium
   [ Li Wei ]
@@ -80,7 +146,7 @@ daos (1.3.103-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Version bump to 1.3.103 for 2.0 test build 3
 
- -- Johann Lombardi <johann.lombardi@intel.com>  Mon, 12 Jul 2021 010:00:00 -0100
+ -- Johann Lombardi <johann.lombardi@intel.com>  Mon, 12 Jul 2021 10:00:00 -0100
 
 daos (1.3.102-3) unstable; urgency=medium
   [ Li Wei ]
@@ -92,7 +158,7 @@ daos (1.3.102-1) unstable; urgency=medium
   [ Johann Lombardi]
   * Version bump to 1.3.102 for 2.0 test build 2
 
- -- Johann Lombardi <johann.lombardi@intel.com>  Fri, 11 Jun 2021 010:00:00 -0100
+ -- Johann Lombardi <johann.lombardi@intel.com>  Fri, 11 Jun 2021 10:00:00 -0100
 
 daos (1.3.101-3) unstable; urgency=medium
   [ Johann Lombardi]

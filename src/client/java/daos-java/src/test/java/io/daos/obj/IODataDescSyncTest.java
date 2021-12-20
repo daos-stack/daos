@@ -214,7 +214,6 @@ public class IODataDescSyncTest {
       Assert.assertNotNull(ee);
       Assert.assertTrue(ee.getMessage().contains("only support for fetch"));
     } finally {
-      buffer.release();
       desc.release();
     }
   }

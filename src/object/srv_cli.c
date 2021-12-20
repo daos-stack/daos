@@ -157,12 +157,14 @@ dsc_obj_id2oc_attr(daos_obj_id_t oid, struct cont_props *prop,
 {
 	struct daos_oclass_attr *tmp;
 	bool			 priv;
+	uint32_t                 nr_grps;
 
-	tmp = daos_oclass_attr_find(oid, &priv);
+	tmp = daos_oclass_attr_find(oid, &priv, &nr_grps);
 	if (!tmp)
 		return -DER_NOSCHEMA;
 
 	*oca = *tmp;
+	oca->ca_grp_nr = nr_grps;
 	if (daos_oclass_is_ec(oca) && !priv) {
 		/* don't ovewrite cell size of private class */
 		D_ASSERT(prop->dcp_ec_cell_sz > 0);

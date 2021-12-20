@@ -88,7 +88,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				21
+#define POOL_DF_VER_1				23
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_VER_1
 
@@ -295,8 +295,12 @@ struct vos_krec_df {
 	/** Incarnation log for key */
 	struct ilog_df			kr_ilog;
 	union {
-		/** btree root under the key */
-		struct btr_root			kr_btr;
+		struct {
+			/** btree root under the key */
+			struct btr_root			kr_btr;
+			/** Offset of known existing akey */
+			umem_off_t			kr_known_akey;
+		};
 		/** evtree root, which is only used by akey */
 		struct evt_root			kr_evt;
 	};
@@ -343,8 +347,10 @@ struct vos_obj_df {
 	daos_unit_oid_t			vo_id;
 	/** The latest sync epoch */
 	daos_epoch_t			vo_sync;
-	/** Attributes of object.  See vos_oi_attr */
-	uint64_t			vo_oi_attr;
+	/** Offset of known existing dkey */
+	umem_off_t			vo_known_dkey;
+	/** Attributes for future use */
+	uint64_t			vo_attr;
 	/** Incarnation log for the object */
 	struct ilog_df			vo_ilog;
 	/** VOS dkey btree root */

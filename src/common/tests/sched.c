@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <setjmp.h>
 #include <cmocka.h>
+#include <pthread.h>
 #include <daos/common.h>
 #include <daos/tse.h>
 
@@ -996,6 +997,229 @@ out:
 	return rc;
 }
 
+static int
+prep_done_cb(tse_task_t *task, void *data)
+{
+	tse_task_complete(task, 0);
+	return 0;
+}
+
+static int
+comp_comp_cb(tse_task_t *task, void *data)
+{
+	tse_task_complete(task, 0);
+	return 0;
+}
+
+static int
+child_func(tse_task_t *task)
+{
+	tse_task_complete(task, 0);
+	return 0;
+}
+
+static bool stop_progress;
+
+struct sched_test_thread_arg {
+	tse_sched_t	*sched;
+	tse_task_t      **tasks;
+	int		th_id;
+};
+
+#define NR_TASKS 10000
+
+static void *
+th_sched_progress(void *arg)
+{
+	tse_sched_t	*sched = arg;
+
+	while (1) {
+		if (stop_progress) {
+			printf("progress thread exiting\n");
+			pthread_exit(NULL);
+		}
+		tse_sched_progress(sched);
+	}
+}
+
+static int
+parent_func(tse_task_t *task)
+{
+	tse_task_t	*task1 = NULL;
+	tse_task_t	*task2 = NULL;
+	d_list_t	io_task_list;
+	int		rc;
+
+	D_INIT_LIST_HEAD(&io_task_list);
+
+	rc = tse_task_create(child_func, tse_task2sched(task), NULL, &task1);
+	if (rc != 0) {
+		print_error("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	tse_task_list_add(task1, &io_task_list);
+
+	rc = tse_task_create(assert_func, tse_task2sched(task), NULL, &task2);
+	if (rc != 0) {
+		print_error("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	/** complete task2 in prep cb */
+	tse_task_register_cbs(task2, prep_done_cb, NULL, 0, NULL, NULL, 0);
+	tse_task_list_add(task2, &io_task_list);
+
+	rc = tse_task_register_deps(task2, 1, &task1);
+	if (rc != 0) {
+		D_ERROR("Failed to register task 2 dependency\n");
+		D_GOTO(out, rc);
+	}
+
+	rc = tse_task_register_deps(task, 1, &task2);
+	if (rc != 0) {
+		D_ERROR("Failed to register task dependency\n");
+		D_GOTO(out, rc);
+	}
+
+	tse_task_list_sched(&io_task_list, false);
+	return 0;
+
+out:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+static void *
+th_create_task(void *arg)
+{
+	tse_task_t			*task;
+	struct sched_test_thread_arg	*args = arg;
+	int				rc, i;
+
+	for (i = 0; i < NR_TASKS; i++) {
+		rc = tse_task_create(parent_func, args->sched, NULL, &task);
+		if (rc != 0) {
+			print_error("Failed to init task: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = tse_task_register_cbs(task, NULL, NULL, 0, comp_comp_cb, NULL, 0);
+		if (rc != 0) {
+			print_error("Failed to register comp cb\n");
+			D_GOTO(out, rc);
+		}
+
+		rc = tse_task_schedule(task, true);
+		if (rc != 0) {
+			print_error("Failed to schedule task %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+out:
+	pthread_exit(NULL);
+}
+
+static int
+sched_test_9()
+{
+	pthread_t			th;
+	pthread_t			*c_th = NULL;
+	struct sched_test_thread_arg	*args = NULL;
+	tse_task_t			**tasks = NULL;
+	tse_sched_t			sched;
+	bool				flag;
+	cpu_set_t			cpuset;
+	int				nr_threads;
+	int				i;
+	int				rc;
+
+	TSE_TEST_ENTRY("9", "Multi threaded task dependency test");
+
+	rc = sched_getaffinity(0, sizeof(cpuset), &cpuset);
+	if (rc != 0) {
+		printf("Failed to get cpuset information\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	nr_threads = CPU_COUNT(&cpuset);
+	printf("Running with %d pthreads..\n", nr_threads);
+
+	D_ALLOC_ARRAY(tasks, NR_TASKS * nr_threads);
+	if (tasks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(c_th, nr_threads);
+	if (c_th == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(args, nr_threads);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	print_message("Init Scheduler\n");
+	rc = tse_sched_init(&sched, NULL, 0);
+	if (rc != 0) {
+		print_error("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("Creating progress thread..\n");
+
+	rc = pthread_create(&th, NULL, th_sched_progress, &sched);
+	if (rc != 0) {
+		print_error("Failed to create pthread: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	for (i = 0; i < nr_threads; i++) {
+		args[i].sched = &sched;
+		args[i].tasks = &tasks[i*NR_TASKS];
+		args[i].th_id = i;
+		rc = pthread_create(&c_th[i], NULL, th_create_task, &args[i]);
+		if (rc != 0) {
+			print_error("Failed to create pthread: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	do {
+		flag = tse_sched_check_complete(&sched);
+		if (flag)
+			printf("sched not empty, sleeping\n");
+		sleep(1);
+	} while (!flag);
+
+	for (i = 0; i < nr_threads; i++) {
+		rc = pthread_join(c_th[i], NULL);
+		if (rc != 0) {
+			print_error("Failed pthread_join: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	stop_progress = true;
+	rc = pthread_join(th, NULL);
+	if (rc != 0) {
+		print_error("Failed pthread_join: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("COMPLETE Scheduler\n");
+	tse_sched_addref(&sched);
+	tse_sched_complete(&sched, 0, false);
+
+	print_message("Check scheduler is empty\n");
+	flag = tse_sched_check_complete(&sched);
+	tse_sched_decref(&sched);
+	if (!flag) {
+		print_error("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+out:
+	D_FREE(tasks);
+	D_FREE(c_th);
+	D_FREE(args);
+	TSE_TEST_EXIT(rc);
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1051,6 +1275,12 @@ main(int argc, char **argv)
 	rc = sched_test_8();
 	if (rc != 0) {
 		print_error("SCHED TEST 8 failed: %d\n", rc);
+		test_fail++;
+	}
+
+	rc = sched_test_9();
+	if (rc != 0) {
+		print_error("SCHED TEST 9 failed: %d\n", rc);
 		test_fail++;
 	}
 

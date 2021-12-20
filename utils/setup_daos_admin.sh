@@ -55,7 +55,7 @@ echo "This script will install daos_admin for developer builds (not for producti
 echo -n "Installing $DA_SRC -> $DA_DST ... "
 chmod -x "$DA_SRC" || true
 cp "$DA_SRC" "$DA_DST"
-if [ "$SL_PREFIX" != "DAOS_LOC" ]; then
+if [ "$SL_PREFIX" != "$DAOS_LOC" ]; then
         rpath=$(patchelf --print-rpath $DA_DST | \
               sed "s|$SL_PREFIX|$DAOS_LOC|g")
         patchelf --set-rpath "$rpath" $DA_DST
@@ -68,10 +68,10 @@ USR_CTL=/usr/share/daos/control
 echo -n "Creating SPDK script links under $USR_SPDK ... "
 mkdir -p "$USR_SPDK/scripts" "$USR_CTL"
 if ! [ -e "$USR_SPDK/scripts/setup.sh" ]; then
-        ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" "$USR_SPDK/scripts"
+        ln -sf "$SL_SPDK_PREFIX/share/spdk/scripts/setup.sh" "$USR_SPDK/scripts"
 fi
 if ! [ -e "$USR_SPDK/scripts/common.sh" ]; then
-        ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" "$USR_SPDK/scripts"
+        ln -sf "$SL_SPDK_PREFIX/share/spdk/scripts/common.sh" "$USR_SPDK/scripts"
 fi
 if ! [ -e "$USR_SPDK/include" ]; then
         ln -s "$SL_PREFIX/include" "$USR_SPDK"/include

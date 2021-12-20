@@ -81,9 +81,9 @@ extern struct dss_module_key vos_module_key;
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
 
-/** Up to 1 million lid entries split into 16 expansion slots */
+/** Up to 1 million lid entries split into 2048 expansion slots */
 #define DTX_ARRAY_LEN		(1 << 20) /* Total array slots for DTX lid */
-#define DTX_ARRAY_NR		(1 << 4)  /* Number of expansion arrays */
+#define DTX_ARRAY_NR		(1 << 11)  /* Number of expansion arrays */
 
 enum {
 	/** Used for marking an in-tree record committed */
@@ -126,6 +126,11 @@ agg_reserve_space(daos_size_t *rsrvd)
 	rsrvd[DAOS_MEDIA_NVME]	+= size;
 }
 
+struct vos_pool_metrics {
+	void	*vp_vea_metrics;
+	/* TODO: add more metrics for VOS */
+};
+
 /**
  * VOS pool (DRAM)
  */
@@ -145,6 +150,8 @@ struct vos_pool {
 	struct umem_attr	vp_uma;
 	/** memory class instance of the pool */
 	struct umem_instance	vp_umm;
+	/** Size of pool file */
+	uint64_t		vp_size;
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
 	/** GC statistics of this pool */
@@ -165,6 +172,7 @@ struct vos_pool {
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
+	struct vos_metrics	*vp_metrics;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
 };
@@ -258,33 +266,6 @@ struct vos_dtx_act_ent {
 					 dae_prepared:1,
 					 dae_resent:1;
 };
-
-#ifdef VOS_STANDALONE
-#define VOS_TIME_START(start, op)		\
-do {						\
-	if (vos_tls_get()->vtl_dp == NULL)	\
-		break;				\
-	start = daos_get_ntime();		\
-} while (0)
-
-#define VOS_TIME_END(start, op)			\
-do {						\
-	struct daos_profile *dp;		\
-	int time_msec;				\
-						\
-	dp = vos_tls_get()->vtl_dp;		\
-	if ((dp) == NULL || start == 0)		\
-		break;				\
-	time_msec = (daos_get_ntime() - start)/1000; \
-	daos_profile_count(dp, op, time_msec);	\
-} while (0)
-
-#else
-
-#define VOS_TIME_START(start, op) D_TIME_START(start, op)
-#define VOS_TIME_END(start, op) D_TIME_END(start, op)
-
-#endif
 
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
 #define DAE_OID(dae)		((dae)->dae_base.dae_oid)
@@ -806,6 +787,7 @@ struct vos_iterator {
 				 it_for_discard:1,
 				 it_for_migration:1,
 				 it_cleanup_stale_dtx:1,
+				 it_show_uncommitted:1,
 				 it_ignore_uncommitted:1;
 };
 
@@ -999,7 +981,7 @@ key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
-	       uint64_t flags, struct vos_ts_set *ts_set,
+	       uint64_t flags, struct vos_ts_set *ts_set, umem_off_t *known_key,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
@@ -1135,15 +1117,16 @@ D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
  *  \param toh[IN]			Open key tree handle
  *  \param type[IN]			Iterator type (VOS_ITER_AKEY/DKEY only)
  *  \param epr[IN]			Valid epoch range for iteration
- *  \param ignore_inprogress[IN]	Fail if there are uncommitted entries
+ *  \param show_uncommitted[IN]		Return uncommitted entries marked as instead of failing
  *  \param cb[IN]			Callback for key
  *  \param arg[IN]			argument to pass to callback
  *  \param dth[IN]			dtx handle
+ *  \param anchor[IN]			Option anchor from where to start iterator
  */
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
-		const daos_epoch_range_t *epr, bool ignore_inprogress,
-		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth);
+		const daos_epoch_range_t *epr, bool show_uncommitted,
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth, daos_anchor_t *anchor);
 
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
