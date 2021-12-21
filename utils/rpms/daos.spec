@@ -218,10 +218,12 @@ Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: python36-distro
 Requires: python36-tabulate
 Requires: python36-defusedxml
+Requires: python36-pyaml
 %else
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
+Requires: python3-pyaml
 %endif
 Requires: fio
 Requires: dbench
@@ -229,6 +231,9 @@ Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
+Requires: lua-lmod
+%else
+Requires: Lmod
 %endif
 
 %description client-tests
@@ -517,9 +522,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Thu Dec 16 2021 Brian J. Murrell <brian.murrell@intel.com> 2.0.0-3
+* Tue Dec 21 2021 Brian J. Murrell <brian.murrell@intel.com> 2.0.0-3
 - Add BR: python-rpm-macros for Leap 15 as python3-base dropped that
   as a R:
+- Fix missing R: python*-pyaml and Lmod/lua-lmod
 
 * Tue Dec 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.0.0-2
 - Version bump to 2.0.0-2
