@@ -1266,7 +1266,7 @@ class TestWithServers(TestWithoutServers):
         """Tear down after each test case."""
 
         # dump engines ULT stacks upon test failure
-        if self.dumped_engines_stacks is False and self.status is not None and
+        if self.dumped_engines_stacks is False and self.status is not None and \
             self.status != 'PASS' and self.status != 'SKIP':
             self.dumped_engines_stacks = True
             self.log.info("Test status is %s, dumping ULT stacks in teardown",
