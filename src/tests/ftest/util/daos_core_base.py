@@ -110,10 +110,6 @@ class DaosCoreBase(TestWithServers):
         num_clients = self.get_test_param("num_clients")
         if num_clients is None:
             num_clients = self.params.get("num_clients", '/run/daos_tests/*')
-        preload_arg = "libdpar.so"
-        if num_clients > 1:
-            preload_arg = "libdpar_mpi.so"
-
 
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
@@ -132,7 +128,6 @@ class DaosCoreBase(TestWithServers):
                 self.orterun,
                 self.client_mca,
                 "-n", str(num_clients),
-                "-x", "=".join(["LD_PRELOAD", preload_arg]),
                 "--hostfile", self.hostfile_clients,
                 "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
                 "--map-by node", "-x", "D_LOG_MASK=DEBUG",
