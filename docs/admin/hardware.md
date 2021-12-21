@@ -7,26 +7,12 @@ network requirements to deploy a DAOS system.
 ## Deployment Options
 
 
-As illustrated in the figure below, a DAOS storage system can be
-deployed in two different ways:
-
--   **Pooled Storage Model**: The DAOS servers can run on dedicated
-    storage nodes in separate racks. This is a traditional pool model
-    where storage is uniformly accessed by all compute nodes. In order
-    to minimize the number of I/O racks and to optimize floor space,
-    this approach usually requires high-density storage servers.
-
--   **Hyper-converged Storage Model**: In this model, the storage nodes
-    are integrated into compute racks and can be either dedicated or
-    shared nodes. The DAOS servers are thus massively distributed, and
-    storage access is non-uniform and must take locality into account.
-    This model is common in hyper-converged infrastructure.
-
-While DAOS is mostly deployed following the pooled model, active
-research is conducted to efficiently support the hyper-converged model
-as well.
-
-![](media/image1.png)
+A DAOS storage system is deployed as a **Pooled Storage Model**.
+The DAOS servers can run on dedicated storage nodes in separate racks.
+This is a traditional pool model where storage is uniformly accessed by
+all compute nodes. In order to minimize the number of I/O racks and to
+optimize floor space, this approach usually requires high-density storage
+servers.
 
 
 ## Processor Requirements
