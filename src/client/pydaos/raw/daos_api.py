@@ -2282,7 +2282,7 @@ class DaosContext():
             'close-obj':       self.libdaos.daos_obj_close,
             'close-tx':        self.libdaos.daos_tx_close,
             'commit-tx':       self.libdaos.daos_tx_commit,
-            'connect-pool':    self.libdaos.daos_pool_connect,
+            'connect-pool':    self.libdaos.daos_pool_connect2,
             'convert-cglobal': self.libdaos.daos_cont_global2local,
             'convert-clocal':  self.libdaos.daos_cont_local2global,
             'convert-pglobal': self.libdaos.daos_pool_global2local,
