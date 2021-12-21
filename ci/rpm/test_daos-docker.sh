@@ -36,8 +36,5 @@ elif $ADD_JENKINS_REPO; then
     add_repo "${BUILD_URL}artifact/artifacts/centos8/"
 fi
 
-DAOS_TEST_FABRIC_IFACE=lo PYTHONPATH="${PWD}/src/tests/ftest/util" src/tests/ftest/config_file_gen.py -n localhost -d /tmp/dmg.yml
-DAOS_TEST_FABRIC_IFACE=lo PYTHONPATH="${PWD}/src/tests/ftest/util" src/tests/ftest/config_file_gen.py -n localhost -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
-
 MODULEPATH=/usr/share/Modules/modulefiles:/etc/modulefiles:/usr/share/modulefiles \
 DAOS_PKG_VERSION="$2" OFI_INTERFACE="lo" "$mydir"/test_daos_node.sh

@@ -79,6 +79,9 @@ fi
 
 sudo $YUM -y install daos-client-tests-openmpi-"${DAOS_PKG_VERSION}"
 
+DAOS_TEST_FABRIC_IFACE=$OFI_INTERFACE PYTHONPATH="/usr/lib/daos/TESTING/ftest/util" /usr/lib/daos/TESTING/ftest/config_file_gen.py -n localhost -d /tmp/dmg.yml
+DAOS_TEST_FABRIC_IFACE=$OFI_INTERFACE PYTHONPATH="/usr/lib/daos/TESTING/ftest/util" /usr/lib/daos/TESTING/ftest/config_file_gen.py -n localhost -a /tmp/daos_agent.yml -s /tmp/daos_server.yml
+
 me=$(whoami)
 for dir in server agent; do
   sudo mkdir "/var/run/daos_$dir"
