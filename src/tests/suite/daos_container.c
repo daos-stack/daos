@@ -2443,8 +2443,8 @@ co_api_compat(void **state)
 	daos_handle_t		coh;
 	daos_cont_info_t	info;
 	int			rc;
-	char 			uuid_str1[37];
-	char                    uuid_str2[37];
+	char			uuid_str1[37];
+	char			uuid_str2[37];
 
 	if (arg->myrank != 0)
 		return;
