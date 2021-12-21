@@ -101,6 +101,10 @@ sudo cp /tmp/dmg.yml /etc/daos/daos.yml
 cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
 cat /etc/daos/daos.yml
+
+# shellcheck: disable=SC1091
+. /usr/share/lmod/lmod/init/bash
+
 if ! module load $OPENMPI; then
     echo "Unable to load OpenMPI module: $OPENMPI"
     module avail

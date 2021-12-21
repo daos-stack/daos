@@ -14,9 +14,6 @@ add_repo() {
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
-# shellcheck: disable=SC1091
-. /usr/share/lmod/lmod/init/bash
-
 PR_REPOS="$1"
 if [ -n "$PR_REPOS" ]; then
     for repo in $PR_REPOS; do
