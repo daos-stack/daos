@@ -1446,6 +1446,17 @@ cont_agg_eph_leader_ult(void *arg)
 					 DP_CONT(svc->cs_pool_uuid,
 						 ec_agg->ea_cont_uuid),
 					DP_RC(rc));
+
+				/* If there are network error or pool map inconsistency,
+				 * let's skip the following eph sync, which will fail
+				 * anyway.
+				 */
+				if (daos_crt_network_error(rc) || rc == -DER_GRPVER) {
+					D_INFO(DF_UUID": skip refresh due to: "DF_RC"\n",
+					       DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+					break;
+				}
+
 				continue;
 			}
 			ec_agg->ea_current_eph = min_eph;
@@ -1474,32 +1485,21 @@ static int
 cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 {
 	struct sched_req_attr	attr;
-	ABT_thread		ec_eph_leader_ult = ABT_THREAD_NULL;
-	int			rc;
 
 	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 	if (unlikely(ec_agg_disabled))
 		return 0;
 
-	rc = dss_ult_create(cont_agg_eph_leader_ult, svc, DSS_XS_SYS,
-			    0, 0, &ec_eph_leader_ult);
-	if (rc) {
-		D_ERROR(DF_UUID" Failed to create aggregation ULT. %d\n",
-			DP_UUID(svc->cs_pool_uuid), rc);
-		return rc;
-	}
-
-	D_ASSERT(ec_eph_leader_ult != ABT_THREAD_NULL);
+	D_ASSERT(svc->cs_ec_leader_ephs_req == NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &svc->cs_pool_uuid);
-	svc->cs_ec_leader_ephs_req = sched_req_get(&attr, ec_eph_leader_ult);
+	svc->cs_ec_leader_ephs_req = sched_create_ult(&attr, cont_agg_eph_leader_ult, svc, 0);
 	if (svc->cs_ec_leader_ephs_req == NULL) {
-		D_ERROR(DF_UUID"Failed to get req for ec eph query ULT\n",
+		D_ERROR(DF_UUID" Failed to create EC leader eph ULT.\n",
 			DP_UUID(svc->cs_pool_uuid));
-		ABT_thread_free(&ec_eph_leader_ult);
 		return -DER_NOMEM;
 	}
 
-	return rc;
+	return 0;
 }
 
 static void

@@ -309,7 +309,6 @@ configuration files will be defined. Examples are available at
 		  cert: /etc/daos/certs/server.crt
 		  key: /etc/daos/certs/server.key
 		provider: ofi+verbs;ofi_rxm
-		socket_dir: /var/run/daos_server
 		nr_hugepages: 4096
 		control_log_mask: DEBUG
 		control_log_file: /tmp/daos_server.log
@@ -359,7 +358,6 @@ configuration files will be defined. Examples are available at
 		  ca_cert: /etc/daos/certs/daosCA.crt
 		  cert: /etc/daos/certs/agent.crt
 		  key: /etc/daos/certs/agent.key
-		runtime_dir: /var/run/daos_agent
 		log_file: /tmp/daos_agent.log
 
 1. Create a dmg configuration file by modifying the default `/etc/daos/daos_control.yml` file on the admin node. The following is an example of the `daos_control.yml`.

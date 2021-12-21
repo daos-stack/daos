@@ -2431,12 +2431,14 @@ fetch_size(void **state)
 	for (i = 0; i < NUM_AKEYS; i++)
 		iod[i].iod_size	= DAOS_REC_ANY;
 
+	print_message("fetch with unknown iod_size and NULL sgl\n");
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
 			    NULL, NULL);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
+	print_message("fetch with unknown iod_size and less buffer\n");
 	for (i = 0; i < NUM_AKEYS; i++) {
 		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);
 		iod[i].iod_size	= DAOS_REC_ANY;
@@ -3189,6 +3191,8 @@ fetch_replica_unavail(void **state)
 	d_rank_t		 rank = 2;
 	char			*buf;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
 	if (!test_runable(arg, 4))
 		skip();
@@ -3760,6 +3764,8 @@ io_pool_map_refresh_trigger(void **state)
 	d_rank_t	leader;
 	d_rank_t	rank = 1;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
@@ -4090,6 +4096,8 @@ io_fetch_retry_another_replica(void **state)
 	struct ioreq	 req;
 	char		fetch_buf[32];
 	char		update_buf[32];
+
+	FAULT_INJECTION_REQUIRED();
 
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))

@@ -476,6 +476,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
 	D_ASSERT(tls != NULL);
+	if (opc == RB_OP_REINT)
+		pool->sp_reintegrating++;
+
 out:
 	D_DEBUG(DB_TRACE, "create tls "DF_UUID": "DF_RC"\n",
 		DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -2553,72 +2556,59 @@ out:
 	return rc;
 }
 
-void
-ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver)
-{
-	struct migrate_pool_tls *tls;
-
-	tls = migrate_pool_tls_lookup(pool_uuid, ver);
-	if (tls == NULL)
-		return;
-
-	tls->mpt_fini = 1;
-
-	ABT_mutex_lock(tls->mpt_inflight_mutex);
-	ABT_cond_broadcast(tls->mpt_inflight_cond);
-	ABT_mutex_unlock(tls->mpt_inflight_mutex);
-	migrate_pool_tls_put(tls); /* lookup */
-	migrate_pool_tls_put(tls); /* destroy */
-}
-
-struct migrate_abort_arg {
+struct migrate_stop_arg {
 	uuid_t	pool_uuid;
 	uint32_t version;
 };
 
-int
+static int
 migrate_fini_one_ult(void *data)
 {
-	struct migrate_abort_arg *arg = data;
-	struct migrate_pool_tls	*tls;
+	struct migrate_stop_arg *arg = data;
+	struct migrate_pool_tls *tls;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
 	if (tls == NULL)
 		return 0;
 
-	D_ASSERT(tls->mpt_refcount > 1);
 	tls->mpt_fini = 1;
 
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
 	ABT_cond_broadcast(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
+	migrate_pool_tls_put(tls); /* lookup */
 	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+
 	migrate_pool_tls_put(tls); /* destroy */
 
-	D_DEBUG(DB_TRACE, "abort one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
+	D_INFO("migrate fini one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
 	return 0;
 }
 
-/* Abort the migration */
+/* stop the migration */
 void
-ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
+ds_migrate_stop(struct ds_pool *pool, unsigned int version)
 {
 	struct migrate_pool_tls *tls;
-	struct migrate_abort_arg arg;
+	struct migrate_stop_arg arg;
 	int			 rc;
 
-	tls = migrate_pool_tls_lookup(pool_uuid, version);
+	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
 	if (tls == NULL)
 		return;
 
-	uuid_copy(arg.pool_uuid, pool_uuid);
+	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
 	rc = dss_thread_collective(migrate_fini_one_ult, &arg, 0);
 	if (rc)
-		D_ERROR("migrate abort: %d\n", rc);
+		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
+	if (tls->mpt_opc == RB_OP_REINT)
+		pool->sp_reintegrating--;
 	migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
+	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 }
 
 static int
@@ -2651,7 +2641,8 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 	}
 
 	/* Wait until container aggregation are stopped */
-	while (cont->sc_vos_agg_active && !tls->mpt_fini && !cont->sc_stopping) {
+	while ((cont->sc_ec_agg_active || cont->sc_vos_agg_active) &&
+	       !tls->mpt_fini && !cont->sc_stopping) {
 		D_DEBUG(DB_REBUILD, "wait for "DF_UUID"/"DF_UUID"/%u vos aggregation"
 			" to be inactive\n", DP_UUID(tls->mpt_pool_uuid),
 			DP_UUID(cont_uuid), tls->mpt_version);

@@ -93,6 +93,16 @@ kv_hdl2ptr(daos_handle_t oh)
 	return container_of(hlink, struct dc_kv, hlink);
 }
 
+daos_handle_t daos_kv2objhandle(daos_handle_t kv_oh)
+{
+	struct dc_kv *dk = kv_hdl2ptr(kv_oh);
+
+	if (dk)
+		return dk->daos_oh;
+
+	return DAOS_HDL_INVAL;
+}
+
 static void
 kv_hdl_link(struct dc_kv *kv)
 {

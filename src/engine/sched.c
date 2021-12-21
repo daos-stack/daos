@@ -1256,6 +1256,34 @@ sched_cur_seq(void)
 	return info->si_cur_seq;
 }
 
+struct sched_request *
+sched_create_ult(struct sched_req_attr *attr, void (*func)(void *), void *arg, size_t stack_size)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_request	*req;
+	ABT_thread		 ult = ABT_THREAD_NULL;
+	int			 rc;
+
+	req = req_get(dx, attr, NULL, NULL, ult, true);
+	if (req == NULL)
+		return NULL;
+
+	/* The ULT must be created on the caller xstream */
+	rc = dss_ult_create(func, arg, DSS_XS_SELF, 0, stack_size, &ult);
+	if (rc) {
+		D_ERROR("Failed to create ULT: "DF_RC"\n", DP_RC(rc));
+		req_put(dx, req);
+		return NULL;
+	}
+	D_ASSERT(ult != ABT_THREAD_NULL);
+
+	req->sr_ult = ult;
+	if (attr->sra_type == SCHED_REQ_GC)
+		req->sr_pool_info->spi_gc_ults++;
+
+	return req;
+}
+
 /*
  * A schedule cycle consists of three stages:
  * 1. Starting with a network poll ULT, number of ULTs to be executed in this

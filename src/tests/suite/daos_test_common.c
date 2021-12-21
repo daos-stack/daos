@@ -628,8 +628,8 @@ d_rank_t ranks_to_kill[MAX_KILLS];
 bool
 test_runable(test_arg_t *arg, unsigned int required_nodes)
 {
-	int		 i;
-	static bool	 runable = true;
+	int	i;
+	bool	runable = true;
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"

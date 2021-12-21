@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	// bdevPciAddrSep defines the separator used between PCI addresses in string lists.
+	// bdevPciAddrSep defines the separator used between PCI addresses in string sets.
 	bdevPciAddrSep = " "
 	// vmdDomainLen defines the expected length of a VMD backing devices address domain.
 	vmdDomainLen = 6
@@ -55,6 +55,14 @@ type PCIAddress struct {
 	Bus      string
 	Device   string
 	Function string
+}
+
+// IsZero returns true if address was uninitialized.
+func (pa *PCIAddress) IsZero() bool {
+	if pa == nil {
+		return false
+	}
+	return pa.Equals(&PCIAddress{})
 }
 
 func (pa *PCIAddress) String() string {
@@ -147,12 +155,23 @@ func NewPCIAddress(addr string) (*PCIAddress, error) {
 	return pa, nil
 }
 
-// PCIAddressSet represents a unique list of PCI addresses.
+// MustNewPCIAddressSet creates a new PCIAddressSet from input string,
+// which must be valid, otherwise a panic will occur.
+func MustNewPCIAddress(addr string) *PCIAddress {
+	pa, err := NewPCIAddress(addr)
+	if err != nil {
+		panic(err)
+	}
+
+	return pa
+}
+
+// PCIAddressSet represents a unique set of PCI addresses.
 type PCIAddressSet struct {
 	addrMap map[string]*PCIAddress
 }
 
-// Contains returns true if provided address is already in list.
+// Contains returns true if provided address is already in set.
 func (pas *PCIAddressSet) Contains(a *PCIAddress) bool {
 	if pas == nil {
 		return false
@@ -170,7 +189,7 @@ func (pas *PCIAddressSet) add(a *PCIAddress) {
 	pas.addrMap[a.String()] = a
 }
 
-// Add adds PCI addresses to slice. Ignores duplicate addresses.
+// Add adds PCI addresses to set. Ignores duplicate addresses.
 func (pas *PCIAddressSet) Add(addrs ...*PCIAddress) error {
 	if pas == nil {
 		return errors.New("PCIAddressSet is nil")
@@ -183,8 +202,8 @@ func (pas *PCIAddressSet) Add(addrs ...*PCIAddress) error {
 	return nil
 }
 
-// AddStrings adds PCI addresses to slice from supplied strings. If any input string is not a valid PCI
-// address then return error and don't add any elements to slice. Ignores duplicateaddresses.
+// AddStrings adds PCI addresses to set from supplied strings. If any input string is not a valid PCI
+// address then return error and don't add any elements to set.
 func (pas *PCIAddressSet) AddStrings(addrs ...string) error {
 	if pas == nil {
 		return errors.New("PCIAddressSet is nil")
@@ -240,7 +259,7 @@ func (pas *PCIAddressSet) String() string {
 	return strings.Join(pas.Strings(), bdevPciAddrSep)
 }
 
-// Len returns length of slice. Required by sort.Interface.
+// Len returns length of set. Required by sort.Interface.
 func (pas *PCIAddressSet) Len() int {
 	if pas == nil {
 		return 0
@@ -262,7 +281,7 @@ func hexStr2Int(s string) int64 {
 	return i
 }
 
-// Intersect returns elements in 'this' AND input address lists.
+// Intersect returns elements in 'this' AND input address sets.
 func (pas *PCIAddressSet) Intersect(in *PCIAddressSet) *PCIAddressSet {
 	intersection := &PCIAddressSet{}
 
@@ -286,7 +305,7 @@ func (pas *PCIAddressSet) Intersect(in *PCIAddressSet) *PCIAddressSet {
 	return intersection
 }
 
-// Difference returns elements in 'this' list but NOT IN input address list.
+// Difference returns elements in 'this' set but NOT IN input address set.
 func (pas *PCIAddressSet) Difference(in *PCIAddressSet) *PCIAddressSet {
 	difference := &PCIAddressSet{}
 
