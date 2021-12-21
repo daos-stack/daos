@@ -1174,11 +1174,26 @@ class TestWithServers(TestWithoutServers):
                 manager.get_config_value("filename"))
             manager.start()
 
+    def fail(self):
+        if self.dumped_engines_stacks is False:
+            self.dumped_engines_stacks = True
+            self.log.info("Test status has failed, dumping ULT stacks")
+            dump_engines_stacks(self.hostlist_servers)
+        super().fail()
+
+    def error(self):
+        if self.dumped_engines_stacks is False:
+            self.dumped_engines_stacks = True
+            self.log.info("Test status has errored, dumping ULT stacks")
+            dump_engines_stacks(self.hostlist_servers)
+        super().error()
+
     def tearDown(self):
         """Tear down after each test case."""
 
         # dump engines ULT stacks upon test failure
-        if self.dumped_engines_stacks is False and self.status != 'PASS' and self.status != 'SKIP':
+        if self.dumped_engines_stacks is False and self.status is not None and
+            self.status != 'PASS' and self.status != 'SKIP':
             self.dumped_engines_stacks = True
             self.log.info("Test status is %s, dumping ULT stacks in teardown",
                 self.status)
