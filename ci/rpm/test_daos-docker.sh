@@ -32,7 +32,7 @@ if [ -n "$PR_REPOS" ]; then
         fi
         add_repo "${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos8/"
     done
-else
+elif $ADD_JENKINS_REPO; then
     add_repo "${BUILD_URL}artifact/artifacts/centos8/"
 fi
 

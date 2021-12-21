@@ -867,7 +867,8 @@ pipeline {
                     }
                     steps {
                         sh label: "Run test",
-                           script: 'ci/rpm/test_daos-docker.sh "' + prRepos() +
+                           script: 'ADD_JENKINS_REPO=' + rpmTestVersion() == '' +
+                                   'ci/rpm/test_daos-docker.sh "' + prRepos() +
                                    '" "' + daosPackagesVersion(next_version) + '"'
                    }
                 } // stage('Test EL8 RPMs on CentOS Stream 8') {
