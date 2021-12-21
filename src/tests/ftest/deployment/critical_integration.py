@@ -40,7 +40,7 @@ class CriticalIntegration(TestWithServers):
                                " 'daos_server version'".format(host))
             remote_root_access = ("ssh -oNumberOfPasswordPrompts=0 root@{}"
                                   " 'echo hello'".format(host))
-            command_for_inter_node = ("pdsh -S -w {}"
+            command_for_inter_node = ("clush --nostdin -S -w {}"
                                       " 'echo hello'".format(','.join(self.hostlist_servers)))
             try:
                 out = run_command(daos_server_cmd)
