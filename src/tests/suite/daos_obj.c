@@ -3191,6 +3191,8 @@ fetch_replica_unavail(void **state)
 	d_rank_t		 rank = 2;
 	char			*buf;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
 	if (!test_runable(arg, 4))
 		skip();
@@ -3762,6 +3764,8 @@ io_pool_map_refresh_trigger(void **state)
 	d_rank_t	leader;
 	d_rank_t	rank = 1;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
@@ -4092,6 +4096,8 @@ io_fetch_retry_another_replica(void **state)
 	struct ioreq	 req;
 	char		fetch_buf[32];
 	char		update_buf[32];
+
+	FAULT_INJECTION_REQUIRED();
 
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))

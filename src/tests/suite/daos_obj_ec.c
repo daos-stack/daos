@@ -435,6 +435,8 @@ ec_partial_update_agg(void **state)
 	char		*data;
 	char		*verify_data;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 6))
 		return;
 
@@ -482,6 +484,8 @@ ec_cross_cell_partial_update_agg(void **state)
 	char		*data;
 	char		*verify_data;
 	daos_size_t	update_size = 500000;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;
@@ -535,6 +539,8 @@ ec_full_partial_update_agg(void **state)
 	int		data_nr;
 	daos_size_t	full_update_size;
 	daos_size_t	partial_update_size;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;
@@ -598,6 +604,8 @@ ec_partial_full_update_agg(void **state)
 	int		data_nr;
 	daos_size_t	full_update_size;
 	daos_size_t	partial_update_size;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;
@@ -998,6 +1006,8 @@ ec_partial_stripe_snapshot_internal(void **state, int data_size)
 	char		*data;
 	char		*verify_data;
 	int		i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;

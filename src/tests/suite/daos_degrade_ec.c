@@ -457,6 +457,8 @@ degrade_ec_partial_update_agg(void **state)
 	char		*data;
 	char		*verify_data;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 6))
 		return;
 

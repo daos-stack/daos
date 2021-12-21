@@ -31,7 +31,7 @@ def build_daos_common(env, client, prereqs):
 def build_dpar(env):
     """Build libdts library"""
 
-    serial_lib = daos_build.library(env, 'libdpar', ['dpar_serial.c'])
+    serial_lib = daos_build.library(env, 'libdpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
     env.Install('$PREFIX/lib64/', serial_lib)
 
     denv = env.Clone()
