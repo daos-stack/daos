@@ -101,7 +101,8 @@ daos-server RPM.
 In this section, PMem (Intel(R) Optane(TM) persistent memory) and NVME
 SSDs will be prepared and configured to be used by DAOS.
 
-!!! note PMem preparation is required once per DAOS installation.
+!!! note
+	PMem preparation is required once per DAOS installation.
 
 1.  Prepare the pmem devices on Server nodes:
 
@@ -196,14 +197,16 @@ See
 <https://daos-stack.github.io/admin/deployment/#certificate-configuration>
 for more information.
 
-!!! note The following commands are run from the `$ADMIN_NODE`.
+!!! note
+	The following commands are run from the `$ADMIN_NODE`.
 
 1.  Generate a new set of certificates:
 
 		cd /tmp
 		/usr/lib64/daos/certgen/gen_certificates.sh
 
-	!!! note These files should be protected from unauthorized access and preserved for future use.
+	!!! note
+		These files should be protected from unauthorized access and preserved for future use.
 
 2.  Copy the certificates to a common location on each node in order to
     move them to the final location:
@@ -217,7 +220,8 @@ for more information.
 		pdsh -S -w $ADMIN_NODE sudo cp /tmp/daosCA/certs/admin.crt /etc/daos/certs/.
 		pdsh -S -w $ADMIN_NODE sudo cp /tmp/daosCA/certs/admin.key /etc/daos/certs/.
 
-	!!! note If the /etc/daos/certs directory does not exist on the admin nodes then use the following command to create it:
+	!!! note
+		If the /etc/daos/certs directory does not exist on the admin nodes then use the following command to create it:
 
 				pdsh -S -w $ADMIN_NODE sudo mkdir /etc/daos/certs
 
@@ -228,7 +232,8 @@ for more information.
 		pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.crt /etc/daos/certs/.
 		pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.key /etc/daos/certs/.
 
-	!!! note If the /etc/daos/certs directory does not exist on the client nodes, use the following command to create it:
+	!!! note
+		If the /etc/daos/certs directory does not exist on the client nodes, use the following command to create it:
 
 			pdsh -S -w $CLIENT_NODES sudo mkdir /etc/daos/certs
 
