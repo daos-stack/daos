@@ -867,7 +867,7 @@ pipeline {
                     }
                     steps {
                         sh label: "Run test",
-                           script: 'ADD_JENKINS_REPO=' + rpmTestVersion() == '' +
+                           script: 'ADD_JENKINS_REPO=' + String.valueOf(rpmTestVersion() == '') +
                                    'ci/rpm/test_daos-docker.sh "' + prRepos() +
                                    '" "' + daosPackagesVersion(next_version) + '"'
                    }
