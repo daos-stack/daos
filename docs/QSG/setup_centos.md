@@ -35,21 +35,22 @@ variables will need to be defined:
 
 -   ALL_NODES
 
-For example, if you want to use node-1 as the admin node, node-2 and
-node-3 as client nodes, and node-\[4-6\] as server nodes,
+For example, if you want to use admin-1 as the admin node, client-1 and
+client-2 as client nodes, and server-\[1-3\] as server nodes,
 these variables would be defined as:
 
 ```console
-ADMIN_NODE=node-1
+ADMIN_NODE=admin-1
 
-CLIENT_NODES=node-2,node-3
+CLIENT_NODES=client-1,client-2
 
-SERVER_NODES=node-4,node-5,node-6
+SERVER_NODES=server-1,server-2,server-3
 
 ALL_NODES=$ADMIN_NODE,$CLIENT_NODES,$SERVER_NODES
 ```
 
-!!!note
+---
+**_Note:_**
 
 	If a client node is also serving as an admin node, exclude
 	`$ADMIN_NODE` from the `ALL_NODES` assignment to prevent duplication.
@@ -57,6 +58,7 @@ ALL_NODES=$ADMIN_NODE,$CLIENT_NODES,$SERVER_NODES
 	For example:
 
 	`ALL_NODES=$CLIENT_NODES,$SERVER_NODES`
+---
 
 ## RPM Installation
 
@@ -101,9 +103,7 @@ daos-server RPM.
 In this section, PMem (Intel(R) Optane(TM) persistent memory) and NVME
 SSDs will be prepared and configured to be used by DAOS.
 
-!!!note
-	PMem preparation is required once per DAOS installation.
-
+**_Note:_** PMem preparation is required once per DAOS installation.
 
 1.  Prepare the pmem devices on Server nodes:
 
@@ -198,16 +198,14 @@ See
 <https://daos-stack.github.io/admin/deployment/#certificate-configuration>
 for more information.
 
-!!!note
-	The following commands are run from the `$ADMIN_NODE`.
+**_Note:_** The following commands are run from the `$ADMIN_NODE`.
 
 1.  Generate a new set of certificates:
 
 		cd /tmp
 		/usr/lib64/daos/certgen/gen_certificates.sh
 
-	!!!note
-		These files should be protected from unauthorized access and preserved for future use.
+	**_Note:_** These files should be protected from unauthorized access and preserved for future use.
 
 2.  Copy the certificates to a common location on each node in order to
     move them to the final location:
@@ -221,10 +219,9 @@ for more information.
 		pdsh -S -w $ADMIN_NODE sudo cp /tmp/daosCA/certs/admin.crt /etc/daos/certs/.
 		pdsh -S -w $ADMIN_NODE sudo cp /tmp/daosCA/certs/admin.key /etc/daos/certs/.
 
-	!!!note
-			If the /etc/daos/certs directory does not exist on the admin nodes then use the following command to create it:
+	**_Note:_** If the /etc/daos/certs directory does not exist on the admin nodes then use the following command to create it:
 
-				pdsh -S -w $ADMIN_NODES sudo mkdir /etc/daos/certs
+				pdsh -S -w $ADMIN_NODE sudo mkdir /etc/daos/certs
 
 4.  Copy the certificates to their default location (/etc/daos) on each
     client node:
@@ -233,8 +230,7 @@ for more information.
 		pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.crt /etc/daos/certs/.
 		pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.key /etc/daos/certs/.
 
-	!!!note
-		If the /etc/daos/certs directory does not exist on the client nodes, use the following command to create it:
+	**_Note:_** If the /etc/daos/certs directory does not exist on the client nodes, use the following command to create it:
 
 			pdsh -S -w $CLIENT_NODES sudo mkdir /etc/daos/certs
 
@@ -247,6 +243,7 @@ for more information.
 		pdsh -S -w $SERVER_NODES sudo cp /tmp/daosCA/certs/agent.crt /etc/daos/certs/clients/agent.crt
 
 6. Cleanup the temp directory
+
 		pdsh -S -w $ALL_NODES sudo rm -rf /tmp/daosCA
 
 7. Set the ownership of the admin certificates on each admin node:
@@ -277,7 +274,7 @@ configuration files will be defined. Examples are available at
 
 		pdsh -S -w $SERVER_NODES sudo lspci | grep -i nvme
 
-	!!!note
+	**_Note:_**
 		Save the addresses of the NVMe devices to use with each DAOS server,
 		e.g. \"81:00.0\", from each server node.  This information will be
 		used to populate the \"bdev_list\" server configuration parameter
@@ -291,7 +288,7 @@ configuration files will be defined. Examples are available at
 
 		name: daos_server
 
-		access_points: ['node-4']
+		access_points: ['server-1']
 		port: 10001
 
 		transport_config:
@@ -340,7 +337,7 @@ configuration files will be defined. Examples are available at
 1. Create an agent configuration file by modifying the default `/etc/daos/daos_agent.yml` file on the client nodes.  The following is an example daos_agent.yml. Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`. 
 
 		name: daos_server
-		access_points: ['node-4']
+		access_points: ['server-1']
 
 		port: 10001
 
@@ -355,18 +352,13 @@ configuration files will be defined. Examples are available at
 
 		name: daos_server
 		port: 10001
-		hostlist: ['node-4', 'node-5', 'node-6']
+		hostlist: ['server-1', 'server-2', 'server-3']
 
 		transport_config:
 			allow_insecure: false
 			ca_cert: /etc/daos/certs/daosCA.crt
 			cert: /etc/daos/certs/admin.crt
 			key: /etc/daos/certs/admin.key
-
-1. Create socket directories
-
-		mkdir /var/run/daos_server
-		mkdir /var/run/daos_agent
 
 ## Start the DAOS Servers
 
@@ -414,8 +406,8 @@ configuration files will be defined. Examples are available at
 		pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"
 
 		# Sample output depending on number of client nodes
-		node-2: agent INFO 2021/05/05 22:38:46 DAOS Agent v1.2 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
-		node-3: agent INFO 2021/05/05 22:38:53 DAOS Agent v1.2 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
+		client-1: agent INFO 2021/05/05 22:38:46 DAOS Agent v1.2 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
+		client-2: agent INFO 2021/05/05 22:38:53 DAOS Agent v1.2 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
 
 
 
