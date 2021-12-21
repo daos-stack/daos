@@ -307,7 +307,7 @@ pipeline {
                 stage('Build RPM on CentOS Stream 8') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { false }
                     }
                     agent {
                         dockerfile {
