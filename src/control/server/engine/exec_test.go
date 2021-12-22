@@ -166,6 +166,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	wantArgs := "-t 42 -x 1 -T 1 -p 1 -I 0 -r 0 -H 0 -s /foo/bar"
 	var gotArgs string
 	env := []string{
+		"FI_OFI_RXM_USE_SRX=1",
 		"CRT_CTX_SHARE_ADDR=1",
 		"CRT_TIMEOUT=30",
 		"OFI_INTERFACE=qib0",

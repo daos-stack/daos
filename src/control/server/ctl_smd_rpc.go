@@ -92,23 +92,37 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 			}
 		}
 
-		if !req.IncludeBioHealth {
-			continue
-		}
-
+		i := 0 // output index
 		for _, dev := range rResp.Devices {
-			/* Skip health query if the device is in "NEW" state */
-			if storage.NvmeDevState(dev.DevState).IsNew() {
-				continue
+			state := storage.NvmeDevState(dev.DevState)
+
+			if req.StateMask != 0 && req.StateMask&dev.DevState == 0 {
+				continue // skip device completely if mask doesn't match
 			}
-			health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-				DevUuid: dev.Uuid,
-			})
-			if err != nil {
-				return errors.Wrapf(err, "device %s, states %q", dev,
-					storage.NvmeDevState(dev.DevState).String())
+
+			// skip health query if the device is in "NEW" state
+			if req.IncludeBioHealth && !state.IsNew() {
+				health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
+					DevUuid: dev.Uuid,
+				})
+				if err != nil {
+					return errors.Wrapf(err, "device %s, states %q", dev, state.String())
+				}
+				dev.Health = health
 			}
-			dev.Health = health
+
+			if req.StateMask != 0 {
+				// as mask is set and matches state, rewrite slice in place
+				rResp.Devices[i] = dev
+				i++
+			}
+		}
+		if req.StateMask != 0 {
+			// prevent memory leak by erasing truncated values
+			for j := i; j < len(rResp.Devices); j++ {
+				rResp.Devices[j] = nil
+			}
+			rResp.Devices = rResp.Devices[:i]
 		}
 	}
 	return nil
@@ -272,7 +286,7 @@ func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryRe
 
 	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &ctlpb.DevReplaceReq{
 		OldDevUuid: req.Uuid,
-		NewDevUuid: req.ReplaceUUID,
+		NewDevUuid: req.ReplaceUuid,
 		NoReint:    req.NoReint,
 	})
 	if err != nil {
@@ -371,7 +385,7 @@ func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq)
 		return svc.smdSetFaulty(ctx, req)
 	}
 
-	if req.ReplaceUUID != "" {
+	if req.ReplaceUuid != "" {
 		return svc.smdReplace(ctx, req)
 	}
 
