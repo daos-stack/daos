@@ -561,16 +561,17 @@ storagehost[0,5-10],10.8.1.[20-100]
 If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
 be reintegrated. Please see the pool operation section for more information.
 
-### Reformat
+### Storage Reformat
 
 To reformat the system after a controlled shutdown, run the command:
 
-`$ dmg storage format --reformat`
+`$ dmg storage format --force`
 
-- `--reformat` flag indicates that a reformat operation should be
+- `--force` flag indicates that a (re)format operation should be
 performed disregarding existing filesystems
 - if no record of previously running ranks can be found, reformat is
-performed on hosts in dmg config file hostlist
+performed on the hosts that are specified in the `daos_control.yml`
+config file's `hostlist` parameter.
 - if system membership has records of previously running ranks, storage
 allocated to those ranks will be formatted
 
@@ -593,6 +594,27 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
     $ wipefs -a /dev/pmem0
     ```
     Then restart DAOS Servers and format.
+
+
+### System Erase
+
+To erase the DAOS sorage configuration, the `dmg system erase`
+command can be used. Before doing this, the affected engines need to be
+stopped by running `dmg system stop` (if necessary with the ´--force` flag).
+The erase operation will destroy any pools that may still exist, and will
+unconfigure the storage. It will not stop the daos_server process, so
+the `dmg` command can still be used. For example, the system can be
+formatted again by running `dmg storage format`.
+
+!!! note
+    Note that `dmg system erase` does not currently reset the SCM.
+    The `/dev/pmemX` devices will remain mounted,
+    and the PMem configuration will not be reset to Memory Mode.
+    To completely unconfigure the SCM, it is advisable to run
+    `daos_server storage prepare --scm-only --reset` which will
+    completely reset the PMem. A reboot will be required to finalize
+    the change of the PMem allocation goals.
+
 
 ### System Extension
 
