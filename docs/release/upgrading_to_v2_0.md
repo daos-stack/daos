@@ -45,9 +45,11 @@ operating system levels as outlined in the
 If an OS upgrade is required, this should be performed prior to upgrading DAOS.
 
 !!! note
-    Note that due to a change in the hwloc version between CentOS 8.3 and
-    CentOS 8.4, it may not be possible to perform an OS update from CentOS
-    8.3 to 8.4 (or 8.5) while DAOS is installed.
-    If this is the case, then it is best to first uninstall the older DAOS version,
-    then perform the OS update, and then install the DAOS 2.0 RPMs. Refer to
-    [DAOS-9348](https://daosio.atlassian.net/browse/DAOS-9348) for details.
+    Note that CentOS 8.3 uses `hwloc-1.11`, while CentOS 8.4 uses `hwloc-2.2`.
+    DAOS requires the hwloc-1 functionality, and DAOS Version 2.0 includes the
+    `compat-hwloc1` RPM that addresses this version change. Older DAOS releases
+    do not include this compatibility package. So updating CentOS 8.3 to
+    CentOS 8.4 while an older DAOS release is installed will likely fail with
+    a dependency error. Adding the DAOS 2.0 packages repository and updating
+    DAOS to Version 2.0 at the same time as performing the CentOS update
+    should eliminate this problem.
