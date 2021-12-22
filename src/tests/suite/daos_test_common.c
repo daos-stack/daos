@@ -629,7 +629,7 @@ bool
 test_runable(test_arg_t *arg, unsigned int required_nodes)
 {
 	int	i;
-	bool	runable = true;
+	int	runable = 1;
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"
@@ -651,7 +651,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
-			runable = false;
+			runable = 0;
 		}
 
 		for (i = 0; i < MAX_KILLS; i++)
@@ -663,7 +663,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Barrier(MPI_COMM_WORLD);
-	return runable;
+	return runable == 1;
 }
 
 int
