@@ -600,9 +600,9 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
 
 To erase the DAOS sorage configuration, the `dmg system erase`
 command can be used. Before doing this, the affected engines need to be
-stopped by running `dmg system stop` (if necessary with the ´--force` flag).
+stopped by running `dmg system stop` (if necessary with the `--force` flag).
 The erase operation will destroy any pools that may still exist, and will
-unconfigure the storage. It will not stop the daos_server process, so
+unconfigure the storage. It will not stop the daos\_server process, so
 the `dmg` command can still be used. For example, the system can be
 formatted again by running `dmg storage format`.
 
@@ -624,9 +624,9 @@ To add a new server to an existing DAOS system, one should install:
 - the server yaml file pointing to the access points of the running
   DAOS system
 
-The daos_control.yml file should also be updated to include the new DAOS server.
+The daos\_control.yml file should also be updated to include the new DAOS server.
 
-Then starts the daos_server via systemd and format the new server via
+Then starts the daos\_server via systemd and format the new server via
 dmg as follows:
 
 ```
