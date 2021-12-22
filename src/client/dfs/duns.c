@@ -639,14 +639,11 @@ err:
 static int
 duns_set_fuse_acl(const char *path, daos_handle_t coh)
 {
-	char		*buf;
 	int		rc = 0;
 	struct daos_acl	*acl;
 	struct daos_ace	*ace;
 	struct stat	stbuf = {};
 	int		uid;
-	struct passwd	pwd = {};
-	struct passwd	*pwdp = NULL;
 	char		*name;
 
 	rc = stat(path, &stbuf);
@@ -662,24 +659,9 @@ duns_set_fuse_acl(const char *path, daos_handle_t coh)
 
 	printf("Setting ACL for new container\n");
 
-	/* TODO: Use daos_acl_uid_to_principal() here */
-
-	D_ALLOC(buf, PW_BUF_SIZE);
-	if (buf == NULL)
-		return ENOMEM;
-
-	errno = 0;
-	rc = getpwuid_r(stbuf.st_uid, &pwd, buf, PW_BUF_SIZE, &pwdp);
-	if (rc == -1 || pwdp == NULL) {
-		int err = errno;
-
-		D_ERROR("getpwuid() failed, (%s)\n", strerror(rc));
-		D_GOTO(out_buf, rc = err);
-	}
-
-	D_ASPRINTF(name, "%s@", pwdp->pw_name);
-	if (name == NULL)
-		D_GOTO(out_buf, rc = ENOMEM);
+	rc = daos_acl_uid_to_principal(stbuf.st_uid, &name);
+	if (rc != 0)
+		return rc;
 
 	ace = daos_ace_create(DAOS_ACL_USER, name);
 	if (ace == NULL) {
@@ -707,8 +689,6 @@ out_ace:
 	daos_ace_free(ace);
 out_name:
 	D_FREE(name);
-out_buf:
-	D_FREE(buf);
 	return rc;
 }
 
@@ -1008,8 +988,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 				D_INFO("Path is not in a filesystem that supports the DAOS unified "
 					"namespace\n");
 			} else {
-				D_ERROR("Failed to set DAOS xattr: %s\n",
-					strerror(rc));
+				D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
 			}
 			goto err_link;
 		}

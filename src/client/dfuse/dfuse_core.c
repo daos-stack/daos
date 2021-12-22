@@ -1073,8 +1073,8 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	if (dfs->dfs_multi_user) {
-		args.argv[5] = strdup("-oallow_other");
-		if (!args.argv[5])
+		args.argv[4] = strdup("-oallow_other");
+		if (!args.argv[4])
 			D_GOTO(err, rc = -DER_NOMEM);
 	}
 
@@ -1124,11 +1124,12 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 		return rc;
 
 err_ie_remove:
+	dfs_release(ie->ie_obj);
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
-	fuse_opt_free_args(&args);
 	D_FREE(ie);
+	fuse_session_destroy(fs_handle->dpi_info->di_session);
 	return rc;
 }
 

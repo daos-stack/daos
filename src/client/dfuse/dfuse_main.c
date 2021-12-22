@@ -189,7 +189,7 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 
 	rc = fuse_session_mount(dfuse_info->di_session,	dfuse_info->di_mountpoint);
 	if (rc != 0) {
-		DFUSE_TRA_ERROR("Could not mount fuse");
+		DFUSE_TRA_ERROR(dfuse_info, "Could not mount fuse");
 		return -DER_INVAL;
 	}
 
@@ -427,13 +427,13 @@ main(int argc, char **argv)
 	/* Reserve one CPU thread for the daos event queue */
 	dfuse_info->di_thread_count -= 1;
 
-	if (cont_name && !pool_name) {
-		printf("Container name specified without pool\n");
+	if (dfuse_info->di_multi_user && !cont_name) {
+		printf("Multi-user mode requires a container\n");
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
-	if (dfuse_info->di_multi_user && !cont_name) {
-		printf("Multi-user mode requires a container\n");
+	if (cont_name && !pool_name) {
+		printf("Container name specified without pool\n");
 		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 

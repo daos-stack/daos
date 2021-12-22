@@ -876,7 +876,7 @@ class DaosServer():
         return self.test_pool.uuid
 
     def get_test_pool_id(self):
-        """Return a pool uuid to be used for testing
+        """Return a pool label to be used for testing
 
         Create a pool as required"""
 
@@ -1104,7 +1104,7 @@ class DFuse():
                 if os.path.exists(self.log_file):
                     log_test(self.conf, self.log_file)
                 os.rmdir(self.dir)
-                raise Exception('dfuse died waiting for start')
+                raise Exception('dfuse exited waiting for start')
             except subprocess.TimeoutExpired:
                 pass
             total_time += 1
@@ -3272,16 +3272,13 @@ def run_dfuse(server, conf):
         print('Reached the end, no errors')
     return fatal_errors.errors
 
-def run_in_fg(server, conf):
+def run_in_fg(server, conf, args):
     """Run dfuse in the foreground.
 
     Block until ctrl-c is pressed.
     """
 
-    pool = server.get_test_pool()
-
-    dfuse = DFuse(server, conf, pool=pool)
-    dfuse.start()
+    pool = server.get_test_pool_id()
 
     container = create_cont(conf, pool, ctype="POSIX")
 
@@ -3291,18 +3288,18 @@ def run_in_fg(server, conf):
                   '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
                  show_stdout=True)
 
-    t_dir = os.path.join(dfuse.dir, container)
+    dfuse = DFuse(server, conf, pool=pool, container=container, multi_user=args.multi_user)
+    dfuse.start()
 
-    os.mkdir(t_dir)
     t_dir = dfuse.dir
 
     print('Running at {}'.format(t_dir))
     print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
-    print('daos container create --type POSIX ' \
-          '{} --path {}/uns-link'.format(
-              pool, t_dir))
+    print('export PATH=$PATH:{}'.format(os.path.join(conf['PREFIX'], 'bin')))
+    if args.multi_user:
+        print('dmg pool --insecure update-acl -e A::root@:rw {}'.format(pool))
+    print('daos container create --type POSIX --path {}/uns-link'.format(t_dir))
     print('cd {}/uns-link'.format(t_dir))
-
     print('daos container destroy --path {}/uns-link'.format(t_dir))
     print('daos cont list {}'.format(pool))
     try:
@@ -4130,7 +4127,7 @@ def run(wf, args):
         server.start()
         try:
             if args.mode == 'launch':
-                run_in_fg(server, conf)
+                run_in_fg(server, conf, args)
             elif args.mode == 'kv':
                 test_pydaos_kv(server, conf)
             elif args.mode == 'overlay':

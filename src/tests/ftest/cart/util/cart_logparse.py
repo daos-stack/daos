@@ -602,7 +602,7 @@ class LogIter():
             fields = line.split(None, 8)
             index += 1
             l_pid = None
-            if len(fields) < 6 or len(fields[0]) != 17:
+            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 position += len(line)
                 continue
             pidtid = fields[2][5:-1]
