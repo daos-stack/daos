@@ -62,6 +62,8 @@ class SoakTestBase(TestWithServers):
         self.all_failed_harassers = None
         self.soak_errors = None
         self.check_errors = None
+        self.initial_resv_file = None
+        self.resv_cont = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -123,6 +125,21 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info("<<preTearDown Started>> at %s", time.ctime())
         errors = []
+        # verify reserved container data
+        if self.resv_cont:
+            final_resv_file = os.path.join(self.test_dir, "final", "resv_file")
+            try:
+                reserved_file_copy(self, final_resv_file, self.pool[0], self.resv_cont)
+            except CommandFailure as error:
+                self.soak_errors.append("<<FAILED: Soak reserved container read failed>>")
+
+            if not cmp(self.initial_resv_file, final_resv_file):
+                self.soak_errors.append("<<FAILED: Data verification error on reserved pool"
+                                        " after SOAK completed>>")
+            for file in [self.initial_resv_file, final_resv_file]:
+                os.remove(file)
+            self.container.append(self.resv_cont)
+
         # display final metrics
         run_metrics_check(self, prefix="final")
         # clear out any jobs in squeue;
@@ -507,12 +524,15 @@ class SoakTestBase(TestWithServers):
         # Create the reserved container
         resv_cont = self.get_container(
             self.pool[0], "/run/container_reserved/*", True)
-        # populate reserved container with a 500MB file
-        initial_resv_file = os.path.join(
-            os.environ["DAOS_TEST_LOG_DIR"], "initial", "resv_file")
+        # populate reserved container with a 500MB file unless test is smoke
+        if "smoke" in self.test_name:
+            num_bytes = 500
+        else:
+            num_bytes = 500000000
+        self.initial_resv_file = os.path.join(self.test_dir, "initial", "resv_file")
         try:
-            reserved_file_copy(self, initial_resv_file, self.pool[0], resv_cont,
-                               num_bytes=500000000, cmd="write")
+            reserved_file_copy(self, self.initial_resv_file, self.pool[0], self.resv_cont,
+                               num_bytes=num_bytes, cmd="write")
         except CommandFailure as error:
             self.fail(error)
 
@@ -602,32 +622,6 @@ class SoakTestBase(TestWithServers):
             if self.loop == 1 and run_harasser:
                 self.harasser_loop_time = loop_time
             self.loop += 1
-        # verify reserved container data
-        final_resv_file = os.path.join(
-            os.environ["DAOS_TEST_LOG_DIR"], "final", "resv_file")
-        try:
-            reserved_file_copy(self, final_resv_file, self.pool[0], resv_cont)
-        except CommandFailure as error:
-            self.soak_errors.append(
-                "<<FAILED: Soak reserved container read failed>>")
-
-        if not cmp(initial_resv_file, final_resv_file):
-            self.soak_errors.append("Data verification error on reserved pool"
-                                    " after SOAK completed")
-        for file in [initial_resv_file, final_resv_file]:
-            if os.path.isfile(file):
-                file_name = os.path.split(os.path.dirname(file))[-1]
-                # save a copy of the POSIX file in self.outputsoakdir
-                copy_cmd = "cp -p {} {}/{}_resv_file".format(
-                    file, self.outputsoakdir, file_name)
-                try:
-                    run_command(copy_cmd, timeout=30)
-                except DaosTestError as error:
-                    self.soak_errors.append(
-                        "Reserved data file {} failed to archive".format(file))
-                os.remove(file)
-        self.container.append(resv_cont)
-        # Gather the daos logs from the client nodes
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>>", DDHHMMSS_format(
                 time.time() - start_time))
