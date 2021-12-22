@@ -380,7 +380,7 @@ configuration files will be defined. Examples are available at
 		Dec 16 00:12:11 wolf-180.wolf.hpdd.intel.com daos_server[290473]: SCM format required on instance 0
    
 		# format storage
-		dmg storage format -l $SERVER_NODES --reformat
+		dmg storage format -l $SERVER_NODES --force
 
 1. Verify that all servers have started:
 
