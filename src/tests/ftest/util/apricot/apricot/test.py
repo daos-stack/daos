@@ -1248,19 +1248,19 @@ class TestWithServers(TestWithoutServers):
             errors.append("Error removing temporary test files")
         return errors
 
-    def fail(self, msg=None):
+    def fail(self, message=None):
         if self.dumped_engines_stacks is False:
             self.dumped_engines_stacks = True
             self.log.info("Test status has failed, dumping ULT stacks")
             dump_engines_stacks(self.hostlist_servers)
-        super().fail(msg)
+        super().fail(message)
 
-    def error(self, msg=None):
+    def error(self, message=None):
         if self.dumped_engines_stacks is False:
             self.dumped_engines_stacks = True
             self.log.info("Test status has errored, dumping ULT stacks")
             dump_engines_stacks(self.hostlist_servers)
-        super().error(msg)
+        super().error(message)
 
     def tearDown(self):
         """Tear down after each test case."""
