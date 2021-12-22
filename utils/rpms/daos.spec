@@ -546,7 +546,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Tue Dec 21 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-17
-- Fix missing R: python*-pyaml and Lmod/lua-lmod
+- Fix missing R: python*-pyaml
 
 * Thu Dec 16 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-16
 - Add BR: python-rpm-macros for Leap 15 as python3-base dropped that
