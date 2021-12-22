@@ -24,6 +24,7 @@ class CriticalIntegration(TestWithServers):
     #Provision all daos nodes using provisioning tool provided by HPCM
 
     def test_passwdlessssh_versioncheck(self):
+        # pylint: disable=protected-access
         """
         Test Description: Verify passwordless ssh amongst the server
                           server nodes available and verify all server
@@ -73,8 +74,8 @@ class CriticalIntegration(TestWithServers):
             self.log.info("Servers and Clients have same daos version")
         else:
             self.log.info("Not all servers and clients have same daos version")
-            self.log.info("Clients: {}".format(dmg_version_list))
-            self.log.info("servers: {}".format(daos_server_version_list))
+            self.log.info("Clients: %s", dmg_version_list)
+            self.log.info("servers: %s", daos_server_version_list)
             self.fail()
 
     def test_ras(self):
