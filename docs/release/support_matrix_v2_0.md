@@ -112,6 +112,7 @@ with 3rd gen Intel Xeon Scalable processors (Ice Lake)
 or newer Intel Xeon processor generations.
 
 Links to CentOS Linux 7 and RHEL 7 Release Notes:
+
 * [CentOS 7.9.2009](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS7.2009)
 * [RHEL 7.9](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/7.9_release_notes/index)
 
@@ -127,6 +128,7 @@ DAOS tickets for DAOS nodes running CentOS 8.4, but may request that the environ
 is updated to the latest CentOS Linux 8 release if that is deemed necessary to fix the issue.
 
 Links to CentOS Linux 8 Release Notes:
+
 * [CentOS 8.4.2105](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS8.2105)
 * [CentOS 8.5.2111](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS8.2111)
 
@@ -141,6 +143,7 @@ Customers with Extended Update Support (EUS) for RHEL 8 will also be supported
 with the latest RHEL 8 EUS release (currently RHEL 8.4) on the DAOS servers.
 
 Links to RHEL 8 Release Notes:
+
 * [RHEL 8.4](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.4_release_notes/index)
 * [RHEL 8.5](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.5_release_notes/index)
 
@@ -153,6 +156,7 @@ DAOS Version 2.0 does not yet support Rocky Linux,
 but Rocky Linux support is targeted for a future DAOS release.
 
 Links to Rocky Linux Release Notes:
+
 * [Rocky Linux 8.4](https://docs.rockylinux.org/release_notes/8.4/)
 * [Rocky Linux 8.5](https://docs.rockylinux.org/release_notes/8.5/)
 
@@ -161,6 +165,7 @@ Links to Rocky Linux Release Notes:
 DAOS Version 2.0 is supported on openSUSE Leap 15.3.
 
 Links to openSUSE Leap 15 Release Notes:
+
 * [openSUSE Leap 15.3](https://doc.opensuse.org/release-notes/x86_64/openSUSE/Leap/15.3/)
 
 ### SUSE Linux Enterprise Server 15
@@ -168,6 +173,7 @@ Links to openSUSE Leap 15 Release Notes:
 DAOS Version 2.0 is supported on SLES 15 SP3.
 
 Links to SLES 15 Release Notes:
+
 * [SLES 15 SP3](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP3/)
 
 ### Unsupported Linux Distributions
@@ -262,6 +268,7 @@ have been performed on InfiniBand fabrics with the libfabric `verbs`provider.
 DAOS scaling targets
 (these are order of magnitude figures that indicate what the DAOS architecture
 should support - see below for the scales at which DAOS 2.0 has been validated):
+
 * DAOS client nodes in a DAOS system:   10<sup>6</sup> (hundreds of thousands)
 * DAOS servers in a DAOS system:        10<sup>3</sup> (thousands)
 * DAOS engines per DAOS server:         10<sup>0</sup> (less than ten)
@@ -278,6 +285,7 @@ in a DAOS system, because the number of storage targets is encoded in
 16 of the 32 "DAOS internal bits" within the 128-bit DAOS Object ID.
 
 DAOS Version 2.0 has been validated at the following scales:
+
 * DAOS client nodes in a DAOS system:   256
 * DAOS servers in a DAOS system:        128
 * DAOS engines per DAOS server:         1, 2 and 4
@@ -288,5 +296,5 @@ DAOS Version 2.0 has been validated at the following scales:
 * DAOS containers in a DAOS pool:       100
 * DAOS objects in a DAOS container:     6 billion (in mdtest benchmarks)
 * Application tasks accessing a DAOS container: 3072 (using verbs)
-This test coverage will be expanded in subsequent DAOS releases.
 
+This test coverage will be expanded in subsequent DAOS releases.
