@@ -109,6 +109,7 @@ if [ -d "/mnt/daos" ]; then
                                           --num-callers=20 \
                                           --error-limit=no \
                                           --suppressions=${VALGRIND_SUPP} \
+                                          --gen-suppressions=all \
                                           --error-exitcode=42 \
                                           --xml=yes \
                                           --xml-file=${VALGRIND_XML_PATH}"
@@ -166,12 +167,9 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_mgmt"
     run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
-    run_test "${SL_PREFIX}/bin/vos_perf" -R '"U;p F;p V"' -o 5 -d 5 \
-             -a 5 -n 10
-    run_test "${SL_PREFIX}/bin/vos_perf" -R '"U;p F;p V"' -o 5 -d 5 \
-             -a 5 -n 10 -A
-    run_test "${SL_PREFIX}/bin/vos_perf" -R '"U Q;p V"' -o 5 -d 5 \
-             -n 10 -A -i -I
+    run_test "${SL_PREFIX}/bin/vos_perf" -o 5 -d 5 -a 5 -n 10 -R '"U;p F;p V"'
+    run_test "${SL_PREFIX}/bin/vos_perf" -o 5 -d 5 -a 5 -n 10 -A -R '"U;p F;p V"'
+    run_test "${SL_PREFIX}/bin/vos_perf" -o 5 -d 5 -n 10 -A -i -I -R '"U Q;p V"'
     run_test "${SL_PREFIX}/bin/jump_pl_map"
 
     # Tests launched by scripts

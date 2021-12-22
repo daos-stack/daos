@@ -1,12 +1,11 @@
 #include <stdio.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <dlfcn.h>
 #include <inttypes.h>
 #include <string.h>
 #include <daos/dpar.h>
-
-static pthread_once_t once_control = PTHREAD_ONCE_INIT;
 
 struct par_stubs {
 	int	(*ps_init)(int *argc, char ***argv);
@@ -49,12 +48,14 @@ static void		*stubs_handle;
 	} while (0);
 
 
+static pthread_once_t init_control = PTHREAD_ONCE_INIT;
+
 static void
 init_routine(void)
 {
 	bool	 fail = false;
 
-	stubs_handle = dlopen("libdpar_mpi.so", RTLD_LAZY);
+	stubs_handle = dlopen("libdpar_mpi.so", RTLD_NOW);
 
 	if (stubs_handle == NULL) {
 		printf("No MPI found, using serial library\n");
@@ -72,14 +73,23 @@ load_stubs(void)
 {
 	int	rc;
 
-	rc = pthread_once(&once_control, init_routine);
+	rc = pthread_once(&init_control, init_routine);
+
+	if (rc != 0)
+		printf("Failure to run execute init_routine: %d: %s\n", rc, strerror(errno));
 }
 
 static void __attribute__((destructor))
-shutdown(void)
+fini_routine(void)
 {
 	if (stubs_handle != NULL)
 		dlclose(stubs_handle);
+}
+
+static void
+unload_stubs(void)
+{
+	memset(&stubs, 0, sizeof(stubs));
 }
 
 int
@@ -96,19 +106,19 @@ par_init(int *argc, char ***argv)
 int
 par_fini(void)
 {
-	load_stubs();
+	int	rc;
 
 	if (stubs.ps_fini)
-		return stubs.ps_fini();
+		rc = stubs.ps_fini();
 
-	return 0;
+	unload_stubs();
+
+	return rc;
 }
 
 int
 par_barrier(void)
 {
-	load_stubs();
-
 	if (stubs.ps_barrier)
 		return stubs.ps_barrier();
 
@@ -118,8 +128,6 @@ par_barrier(void)
 int
 par_rank(int *rank)
 {
-	load_stubs();
-
 	if (stubs.ps_rank)
 		return stubs.ps_rank(rank);
 
@@ -131,8 +139,6 @@ par_rank(int *rank)
 int
 par_size(int *size)
 {
-	load_stubs();
-
 	if (stubs.ps_size)
 		return stubs.ps_size(size);
 
@@ -166,8 +172,6 @@ par_reduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, en
 {
 	ssize_t	size;
 
-	load_stubs();
-
 	if (stubs.ps_reduce)
 		return stubs.ps_reduce(sendbuf, recvbuf, count, type, op, root);
 
@@ -190,8 +194,6 @@ par_gather(const void *sendbuf, void *recvbuf, int count, enum par_type type,
 {
 	ssize_t	size;
 
-	load_stubs();
-
 	if (stubs.ps_gather)
 		return stubs.ps_gather(sendbuf, recvbuf, count, type, root);
 
@@ -212,8 +214,6 @@ int
 par_allreduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, enum par_op op)
 {
 	ssize_t	size;
-
-	load_stubs();
 
 	if (stubs.ps_allreduce)
 		return stubs.ps_allreduce(sendbuf, recvbuf, count, type, op);
@@ -236,8 +236,6 @@ par_allgather(const void *sendbuf, void *recvbuf, int count, enum par_type type)
 {
 	ssize_t	size;
 
-	load_stubs();
-
 	if (stubs.ps_allgather)
 		return stubs.ps_allgather(sendbuf, recvbuf, count, type);
 
@@ -257,8 +255,6 @@ par_allgather(const void *sendbuf, void *recvbuf, int count, enum par_type type)
 int
 par_bcast(void *buffer, int count, enum par_type type, int root)
 {
-	load_stubs();
-
 	if (stubs.ps_bcast)
 		return stubs.ps_bcast(buffer, count, type, root);
 
