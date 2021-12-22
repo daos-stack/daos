@@ -12,7 +12,7 @@ We are pleased to announce the release of DAOS version 2.0.
 
 In this release we have added the following changes to the DAOS support matrix:
 
-- Starting with DAOS Version 2.0, Commercial Level-3 Support for DAOS is available 
+- Starting with DAOS Version 2.0, Commercial Level-3 Support for DAOS is available
 - Added support for 3rd gen Intel(r) Xeon(r) scalable processors and Intel Optane Persistent memory 200 series
 - CentOS Linux 8 and openSUSE Leap 15.3  support is added
 
@@ -62,7 +62,7 @@ into a OR_{RP|RS} redundancy schema + a number of groups.
 
 ### mpifileutils integration
 
-Tools for parallel data set copy are located within mpiFileUtils.  mpiFileUtils provides an MPI-based suite of tools to handle large datasets.  A DAOS backend was written to support tools like dcp and dsync.  Custom tools were written to support DAOS serialization with daos-serialize and daos-deserialize. 
+Tools for parallel data set copy are located within mpiFileUtils.  mpiFileUtils provides an MPI-based suite of tools to handle large datasets.  A DAOS backend was written to support tools like dcp and dsync.  Custom tools were written to support DAOS serialization with daos-serialize and daos-deserialize.
 
 
 
@@ -78,7 +78,7 @@ Tools for parallel data set copy are located within mpiFileUtils.  mpiFileUtils 
 	It is recommended to not use these versions of mofed on CentOS 8.5 until this issue is resolved.
 
 - CPU utilization
-	
+
 	Some users have reported instances of high CPU utilization on DAOS servers when the system is at rest. This will be investigated and resolved in a future release.
 
 - Add support for co-located (targets) shards in placement [DAOS-5499](https://daosio.atlassian.net/browse/DAOS-5499)
@@ -92,7 +92,7 @@ Tools for parallel data set copy are located within mpiFileUtils.  mpiFileUtils 
 
 - der_nospace under certain conditions [DAOS-8400](https://daosio.atlassian.net/browse/DAOS-8400)
 
-	(**Michael** to verify ticket - it may be this ticket instead - 
+	(**Michael** to verify ticket - it may be this ticket instead -
 	[https://daosio.atlassian.net/browse/DAOS-8943](https://daosio.atlassian.net/browse/DAOS-8943))
 
 - The daos_server.yml file has security enabled by default [DAOS-8114](https://daosio.atlassian.net/browse/DAOS-8114)
