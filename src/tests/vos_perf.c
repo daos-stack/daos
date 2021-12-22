@@ -393,18 +393,11 @@ objects_open(void)
 
 	perf_setup_keys();
 
-	for (i = 0; i < ts_obj_p_cont; i++) {
-		if (!ts_oid_init) {
-			ts_oids[i] = daos_test_oid_gen(
-				DAOS_HDL_INVAL, DAOS_OC_RAW, ts_flags, 0,
-				ts_ctx.tsc_mpi_rank);
-		}
-
-		ts_uoids[i].id_pub = ts_oids[i];
-		ts_uoids[i].id_shard = 0;
-		ts_uoids[i].id_pad_32 = 0;
+	if (!ts_oid_init) {
+		for (i = 0; i < ts_obj_p_cont; i++)
+			ts_uoids[i] = dts_unit_oid_gen(ts_flags, 0);
+		ts_oid_init = true;
 	}
-	ts_oid_init = true;
 	return 0;
 }
 
