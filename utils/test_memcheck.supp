@@ -295,46 +295,13 @@
    ...
 }
 {
-   A leak without any useful callstack, probably due to dlopen of mpi
+   Leak in start thread, mpi
    Memcheck:Leak
-   match-leak-kinds: definite
+   match-leak-kinds: all
    fun:malloc
+   ...
    obj:*
    fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
-   obj:*
-   fun:???
+   ...
+   fun:start_thread
 }
