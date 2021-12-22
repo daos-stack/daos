@@ -12,6 +12,7 @@ from ior_test_base import IorTestBase
 from apricot import TestWithServers
 from command_utils_base import CommandFailure
 
+
 class CriticalIntegration(TestWithServers):
     """Test Class Description: Verify the basic integration of
                                the server nodes with available
@@ -60,7 +61,6 @@ class CriticalIntegration(TestWithServers):
                 dmg_version_list.append(out.stdout.split(b' ')[2])
             except DaosTestError as error:
                 self.fail("SSH check for client nodes failed.\n {}".format(error))
-
 
         result_daos_server = (daos_server_version_list.count(daos_server_version_list[0])
                               == len(daos_server_version_list))
