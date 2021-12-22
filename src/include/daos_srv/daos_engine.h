@@ -43,10 +43,10 @@ extern const char	*dss_socket_dir;
 extern int		 dss_nvme_shm_id;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode (in MB) */
-extern int		 dss_nvme_mem_size;
+extern unsigned int	dss_nvme_mem_size;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation (in MB) */
-extern int		 dss_nvme_hugepage_size;
+extern unsigned int	 dss_nvme_hugepage_size;
 
 /** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;

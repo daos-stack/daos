@@ -4437,9 +4437,8 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 }
 
 static void
-ds_obj_dtx_leader_ult(void *arg)
+ds_obj_dtx_leader(struct daos_cpd_args *dca)
 {
-	struct daos_cpd_args		*dca = arg;
 	struct dtx_leader_handle	*dlh = NULL;
 	struct ds_obj_exec_arg		 exec_arg;
 	struct obj_cpd_in		*oci = crt_req_get(dca->dca_rpc);
@@ -4454,18 +4453,6 @@ ds_obj_dtx_leader_ult(void *arg)
 	int				 req_cnt = 0;
 	int				 rc = 0;
 	bool				 need_abort = false;
-
-	/* TODO: For the daos targets in the first redundancy (modification)
-	 *	 group, they are the DTX leader candidates when DTX recovery.
-	 *	 During DTX recovery, because the server that only holds read
-	 *	 operations does not have DTX record, the new leader needs to
-	 *	 re-dispatch related read-only sub requests to such server to
-	 *	 handle the case of the old leader did not dispatch to it. So
-	 *	 the DTX leader need to dispatch all read sub requests to the
-	 *	 DTX leader candidates even if these sub requests will not be
-	 *	 executed on DTX leader candidates. The DTX leader candidates
-	 *	 will store related information the DTX entry.
-	 */
 
 	dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
 
@@ -4631,6 +4618,15 @@ out:
 
 	ds_obj_cpd_set_sub_result(oco, dca->dca_idx, rc,
 				  dcsh->dcsh_epoch.oe_value);
+}
+
+static void
+ds_obj_dtx_leader_ult(void *arg)
+{
+	struct daos_cpd_args	*dca = arg;
+	int			 rc;
+
+	ds_obj_dtx_leader(dca);
 
 	rc = ABT_future_set(dca->dca_future, NULL);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
@@ -4712,7 +4708,17 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	oco->oco_sub_rets.ca_count = tx_count;
 	oco->oco_sub_epochs.ca_count = tx_count;
 
-	/* TODO: optimize it if there is only single DTX in the CPD RPC. */
+	if (tx_count == 1) {
+		struct daos_cpd_args	dca;
+
+		dca.dca_ioc = &ioc;
+		dca.dca_rpc = rpc;
+		dca.dca_future = ABT_FUTURE_NULL;
+		dca.dca_idx = 0;
+		ds_obj_dtx_leader(&dca);
+
+		D_GOTO(reply, rc = 0);
+	}
 
 	D_ALLOC_ARRAY(dcas, tx_count);
 	if (dcas == NULL)
