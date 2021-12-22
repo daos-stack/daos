@@ -1294,8 +1294,12 @@ def run_tests(test_files, tag_filter, args):
 
             # Optionally process core files
             if args.process_cores:
-                if not process_the_cores(
-                        avocado_logs_dir, test_file["yaml"], args):
+                try:
+                    if not process_the_cores(
+                            avocado_logs_dir, test_file["yaml"], args):
+                        return_code |= 256
+                except Exception as error:  # pylint: disable=broad-except
+                    print("Detected unhandled exception processing core files: {}".format(error))
                     return_code |= 256
 
         if args.jenkinslog:
