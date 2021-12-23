@@ -92,37 +92,23 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 			}
 		}
 
-		i := 0 // output index
-		for _, dev := range rResp.Devices {
-			state := storage.NvmeDevState(dev.DevState)
-
-			if req.StateMask != 0 && req.StateMask&dev.DevState == 0 {
-				continue // skip device completely if mask doesn't match
-			}
-
-			// skip health query if the device is in "NEW" state
-			if req.IncludeBioHealth && !state.IsNew() {
-				health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-					DevUuid: dev.Uuid,
-				})
-				if err != nil {
-					return errors.Wrapf(err, "device %s, states %q", dev, state.String())
-				}
-				dev.Health = health
-			}
-
-			if req.StateMask != 0 {
-				// as mask is set and matches state, rewrite slice in place
-				rResp.Devices[i] = dev
-				i++
-			}
+		if !req.IncludeBioHealth {
+			continue
 		}
-		if req.StateMask != 0 {
-			// prevent memory leak by erasing truncated values
-			for j := i; j < len(rResp.Devices); j++ {
-				rResp.Devices[j] = nil
+
+		for _, dev := range rResp.Devices {
+			/* Skip health query if the device is in "NEW" state */
+			if storage.NvmeDevState(dev.DevState).IsNew() {
+				continue
 			}
-			rResp.Devices = rResp.Devices[:i]
+			health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
+				DevUuid: dev.Uuid,
+			})
+			if err != nil {
+				return errors.Wrapf(err, "device %s, states %q", dev,
+					storage.NvmeDevState(dev.DevState).String())
+			}
+			dev.Health = health
 		}
 	}
 	return nil
@@ -286,7 +272,7 @@ func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryRe
 
 	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &ctlpb.DevReplaceReq{
 		OldDevUuid: req.Uuid,
-		NewDevUuid: req.ReplaceUuid,
+		NewDevUuid: req.ReplaceUUID,
 		NoReint:    req.NoReint,
 	})
 	if err != nil {
@@ -385,7 +371,7 @@ func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq)
 		return svc.smdSetFaulty(ctx, req)
 	}
 
-	if req.ReplaceUuid != "" {
+	if req.ReplaceUUID != "" {
 		return svc.smdReplace(ctx, req)
 	}
 

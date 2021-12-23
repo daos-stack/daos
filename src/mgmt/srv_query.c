@@ -67,6 +67,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 	} else {
 		D_ERROR("Blobstore UUID is not provided for state query\n");
 		return -DER_INVAL;
+
 	}
 
 	/* Create a ULT on the tgt_id */

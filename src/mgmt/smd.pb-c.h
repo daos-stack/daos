@@ -352,19 +352,19 @@ struct  _Ctl__SmdQueryReq
   /*
    * query should omit devices
    */
-  protobuf_c_boolean omit_devices;
+  protobuf_c_boolean omitdevices;
   /*
    * query should omit pools
    */
-  protobuf_c_boolean omit_pools;
+  protobuf_c_boolean omitpools;
   /*
    * query should include BIO health for devices
    */
-  protobuf_c_boolean include_bio_health;
+  protobuf_c_boolean includebiohealth;
   /*
    * set the specified device to FAULTY
    */
-  protobuf_c_boolean set_faulty;
+  protobuf_c_boolean setfaulty;
   /*
    * constrain query to this UUID (pool or device)
    */
@@ -378,25 +378,21 @@ struct  _Ctl__SmdQueryReq
    */
   char *target;
   /*
+   * UUID of new device to replace storage with
+   */
+  char *replaceuuid;
+  /*
    * specify if device reint is needed (used for replace cmd)
    */
-  protobuf_c_boolean no_reint;
+  protobuf_c_boolean noreint;
   /*
    * set the VMD LED state to quickly blink
    */
   protobuf_c_boolean identify;
-  /*
-   * show only devices with state matching bit-mask
-   */
-  uint32_t state_mask;
-  /*
-   * UUID of new device to replace storage with
-   */
-  char *replace_uuid;
 };
 #define CTL__SMD_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_req__descriptor) \
-    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, (char *)protobuf_c_empty_string }
+    , 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Ctl__SmdQueryResp__Device

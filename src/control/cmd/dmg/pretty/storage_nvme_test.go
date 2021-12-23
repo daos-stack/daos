@@ -302,13 +302,13 @@ func TestPretty_PrintNVMetaMap(t *testing.T) {
 			UUID:      common.MockUUID(0),
 			TargetIDs: []int32{0, 1, 2},
 			Rank:      0,
-			NvmeState: storage.MockNvmeStateNormal,
+			NvmeState: storage.NvmeDevStateNormal,
 		},
 		{
 			UUID:      common.MockUUID(1),
 			TargetIDs: []int32{3, 4, 5},
 			Rank:      0,
-			NvmeState: storage.MockNvmeStateEvicted,
+			NvmeState: storage.NvmeDevStateFaulty,
 		},
 	}
 	controllerF.SmdDevices = []*storage.SmdDevice{
@@ -316,13 +316,13 @@ func TestPretty_PrintNVMetaMap(t *testing.T) {
 			UUID:      common.MockUUID(2),
 			TargetIDs: []int32{6, 7, 8},
 			Rank:      1,
-			NvmeState: storage.MockNvmeStateNormal,
+			NvmeState: storage.NvmeDevStateNormal,
 		},
 		{
 			UUID:      common.MockUUID(3),
 			TargetIDs: []int32{9, 10, 11},
 			Rank:      1,
-			NvmeState: storage.MockNvmeStateEvicted,
+			NvmeState: storage.NvmeDevStateFaulty,
 		},
 	}
 	for name, tc := range map[string]struct {

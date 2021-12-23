@@ -13,7 +13,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -104,25 +103,17 @@ func (cmd *tgtHealthQueryCmd) Execute(_ []string) error {
 type listDevicesQueryCmd struct {
 	smdQueryCmd
 	rankCmd
-	Health      bool   `short:"b" long:"health" description:"Include device health in results"`
-	UUID        string `short:"u" long:"uuid" description:"Device UUID (all devices if blank)"`
-	EvictedOnly bool   `short:"e" long:"show-evicted" description:"Show only evicted faulty devices"`
+	Health bool   `short:"b" long:"health" description:"Include device health in results"`
+	UUID   string `short:"u" long:"uuid" description:"Device UUID (all devices if blank)"`
 }
 
 func (cmd *listDevicesQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
-
-	mask := storage.NvmeDevState(0)
-	if cmd.EvictedOnly {
-		mask = storage.NvmeStateFaulty
-	}
-
 	req := &control.SmdQueryReq{
 		OmitPools:        true,
 		IncludeBioHealth: cmd.Health,
 		Rank:             cmd.GetRank(),
 		UUID:             cmd.UUID,
-		StateMask:        mask,
 	}
 	return cmd.makeRequest(ctx, req)
 }

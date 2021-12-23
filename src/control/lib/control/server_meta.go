@@ -41,17 +41,16 @@ type (
 	// operation.
 	SmdQueryReq struct {
 		unaryRequest
-		OmitDevices      bool                 `json:"omit_devices"`
-		OmitPools        bool                 `json:"omit_pools"`
-		IncludeBioHealth bool                 `json:"include_bio_health"`
-		SetFaulty        bool                 `json:"set_faulty"`
-		UUID             string               `json:"uuid"` // UUID of pool or device for single result
-		Rank             system.Rank          `json:"rank"`
-		Target           string               `json:"target"`
-		ReplaceUUID      string               `json:"replace_uuid"` // UUID of new device to replace storage
-		NoReint          bool                 `json:"no_reint"`     // for device replacement
-		Identify         bool                 `json:"identify"`     // for VMD LED device identification
-		StateMask        storage.NvmeDevState `json:"state_mask"`   // show devices with state matching mask
+		OmitDevices      bool
+		OmitPools        bool
+		IncludeBioHealth bool
+		SetFaulty        bool
+		UUID             string // UUID of pool or device for single result
+		Rank             system.Rank
+		Target           string
+		ReplaceUUID      string // UUID of new device to replace storage
+		NoReint          bool   // for device replacement
+		Identify         bool   // for VMD LED device identification
 	}
 
 	// SmdQueryResp represents the results of performing
@@ -119,8 +118,6 @@ func (sqr *SmdQueryResp) addHostResponse(hr *HostResponse) (err error) {
 // or otherwise) are received, and returns a single response structure
 // containing results for all SMD operations.
 func SmdQuery(ctx context.Context, rpcClient UnaryInvoker, req *SmdQueryReq) (*SmdQueryResp, error) {
-	rpcClient.Debugf("SmdQuery() called with request %+v", req)
-
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
