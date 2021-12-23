@@ -40,6 +40,6 @@ else
     exit 1
 fi
 
-echo "$pkgs"
+echo -n "$pkgs"
 
 exit 0
