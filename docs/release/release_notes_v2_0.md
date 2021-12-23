@@ -100,8 +100,9 @@ Tools for parallel data set copy are located within mpiFileUtils.  mpiFileUtils
 - Validation of CentOS 8.5 indicates an integration issue with
 MLNX_OFED_LINUX-5.5-1.0.3.2 and 5.4-3.1.0.0
 
-	It is recommended to not use these versions of mofed on CentOS 8.5 until
-	this issue is resolved.
+	Please open a Jira ticket if you experience issues with CentOS 8.5
+	and MOFED , so those can be analyzed and fixed in a future DAOS
+	patch level.
 
 - CPU utilization
 
