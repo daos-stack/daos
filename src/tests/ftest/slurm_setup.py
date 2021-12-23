@@ -160,14 +160,14 @@ def configuring_packages(args, action):
         action (str):  install or remove
 
     """
-    # Install yum packages on control and compute nodes
+    # Install packages on control and compute nodes
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     cmd_list = []
     for package in PACKAGE_LIST:
         if PACKAGE_VERSION:
             package = package + "-" + PACKAGE_VERSION
         logging.info("%s %s on %s", action, package, all_nodes)
-        cmd_list.append("yum {} -y ".format(action) + package)
+        cmd_list.append("dnf {} -y ".format(action) + package)
     return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
 
 
@@ -248,21 +248,19 @@ def start_slurm(args):
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
         return 1
 
-    # Startup the slurm service
-    status = execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
-    if status > 0 or args.debug:
-        execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
-    if status > 0:
-        return 1
-
     # Startup the slurm control service
     status = execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo)
     if status > 0 or args.debug:
         execute_cluster_cmds(args.control, SLURMCTLD_STARTUP_DEBUG, args.sudo)
     if status > 0:
         return 1
-    # wait until the ctl node updates the slurm state from unknown to idle
-    sleep(20)
+
+    # Startup the slurm service
+    status = execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
+    if status > 0 or args.debug:
+        execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
+    if status > 0:
+        return 1
 
     # ensure that the nodes are in the idle state
     cmd_list = ["scontrol update nodename={} state=idle".format(args.nodes)]

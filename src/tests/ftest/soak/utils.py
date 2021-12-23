@@ -42,7 +42,7 @@ def DDHHMMSS_format(seconds):
     seconds = int(seconds)
     if seconds < 86400:
         return time.strftime("%H:%M:%S", time.gmtime(seconds))
-    num_days = seconds / 86400
+    num_days = int(seconds / 86400)
     return "{} {} {}".format(
         num_days, 'Day' if num_days == 1 else 'Days', time.strftime(
             "%H:%M:%S", time.gmtime(seconds % 86400)))
@@ -145,11 +145,14 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
         fscopy_cmd.run()
 
 
-def get_remote_logs(self):
+def get_remote_logs(self, source_dir, dest_dir, host_list, rm_remote=True):
     """Copy files from remote dir to local dir.
 
     Args:
         self (obj): soak obj
+        source_dir (str): Source directory to archive
+        dest_dir (str): Destinaton directory
+        host_list (str):
 
     Raises:
         SoakTestError: if there is an error with the remote copy
@@ -157,40 +160,35 @@ def get_remote_logs(self):
     """
     # copy the files from the client nodes to a shared directory
     command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
-        self.test_log_dir, self.sharedsoakdir)
-    result = slurm_utils.srun(
-        NodeSet.fromlist(self.hostlist_clients), command, self.srun_params)
-    if result.exit_status == 0:
-        # copy the local logs and the logs in the shared dir to avocado dir
-        for directory in [self.test_log_dir, self.sharedsoakdir]:
-            command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(
-                directory, self.outputsoakdir)
-            try:
-                result = run_command(command, timeout=30)
-            except DaosTestError as error:
-                raise SoakTestError(
-                    "<<FAILED: job logs failed to copy>>") from error
+        source_dir, self.sharedsoaktest_dir)
+    try:
+        slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params)
+    except DaosTestError as error:
+        raise SoakTestError(
+            "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host_list))
+    # copy the local logs and the logs in the shared dir to avocado dir
+    for directory in [source_dir, self.sharedsoaktest_dir]:
+        command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(directory, dest_dir)
+        try:
+            run_command(command, timeout=30)
+        except DaosTestError as error:
+            raise SoakTestError("<<FAILED: job logs failed to copy>>") from error
+    if rm_remote:
         # remove the remote soak logs for this pass
-        command = "/usr/bin/rm -rf {0}".format(self.test_log_dir)
-        slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients), command,
-            self.srun_params)
+        command = "/usr/bin/rm -rf {0}".format(source_dir)
+        slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params)
         # remove the local log for this pass
-        for directory in [self.test_log_dir, self.sharedsoakdir]:
+        for directory in [source_dir, self.sharedsoaktest_dir]:
             command = "/usr/bin/rm -rf {0}".format(directory)
             try:
-                result = run_command(command)
+                run_command(command)
             except DaosTestError as error:
                 raise SoakTestError(
                     "<<FAILED: job logs failed to delete>>") from error
-    else:
-        raise SoakTestError(
-            "<<FAILED: Soak remote logfiles not copied "
-            "from clients>>: {}".format(self.hostlist_clients))
 
 
 def write_logfile(data, name, destination):
-    """Write date to the local destination file.
+    """Write data to the local destination file.
 
     Args:
         self (obj): soak obj
@@ -275,7 +273,7 @@ def run_metrics_check(self, logging=True, prefix=None):
             name = "pass" + str(self.loop) + "_metrics_{}.csv".format(engine)
             if prefix:
                 name = prefix + "_metrics_{}.csv".format(engine)
-            destination = self.outputsoakdir
+            destination = self.outputsoak_dir
             daos_metrics = "sudo daos_metrics -S {} --csv".format(engine)
             self.log.info("Running %s", daos_metrics)
             results = run_pcmd(hosts=self.hostlist_servers,
@@ -681,7 +679,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     dfuse.set_dfuse_params(pool)
     dfuse.set_dfuse_cont_param(container)
     dfuse_log = os.path.join(
-        self.test_log_dir,
+        self.soaktest_dir,
         self.test_name + "_" + name + "_${SLURM_JOB_NODELIST}_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
     dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
@@ -841,7 +839,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     mpirun_cmd = Mpirun(ior_cmd, mpitype="mpich")
                     mpirun_cmd.assign_processes(nodesperjob * ppn)
                     mpirun_cmd.assign_environment(env, True)
-                    mpirun_cmd.genv.update(env)
+                    env_list = mpirun_cmd.env.get_list()
+                    mpirun_cmd.genv.update(env_list)
                     mpirun_cmd.ppn.update(ppn)
                     sbatch_cmds.append(str(mpirun_cmd))
                     sbatch_cmds.append("status=$?")
@@ -900,14 +899,9 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.read_bytes.update(read_bytes)
                         mdtest_cmd.depth.update(depth)
                         mdtest_cmd.flags.update(flag)
-                        mdtest_cmd.num_of_files_dirs.update(
-                            num_of_files_dirs)
-                        if "POSIX" in api:
-                            mdtest_cmd.dfs_oclass.update(None)
-                            mdtest_cmd.dfs_dir_oclass.update(None)
-                        else:
-                            mdtest_cmd.dfs_oclass.update(oclass)
-                            mdtest_cmd.dfs_dir_oclass.update(oclass)
+                        mdtest_cmd.num_of_files_dirs.update(num_of_files_dirs)
+                        mdtest_cmd.dfs_oclass.update(oclass)
+                        mdtest_cmd.dfs_dir_oclass.update(oclass)
                         if "EC" in oclass:
                             # oclass_dir can not be EC must be RP based on rf
                             rf = get_rf(oclass)
@@ -938,7 +932,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mpirun_cmd = Mpirun(mdtest_cmd, mpitype="mpich")
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
                         mpirun_cmd.assign_environment(env, True)
-                        mpirun_cmd.genv.update(env)
+                        env_list = mpirun_cmd.env.get_list()
+                        mpirun_cmd.genv.update(env_list)
                         mpirun_cmd.ppn.update(ppn)
                         sbatch_cmds.append(str(mpirun_cmd))
                         sbatch_cmds.append("status=$?")
@@ -969,7 +964,7 @@ def create_racer_cmdline(self, job_spec):
     daos_racer.namespace = racer_namespace
     daos_racer.get_params(self)
     racer_log = os.path.join(
-        self.test_log_dir,
+        self.soaktest_dir,
         self.test_name + "_" + job_spec + "_${SLURM_JOB_NODELIST}_"
         "${SLURM_JOB_ID}_" + "racer_log")
     env = daos_racer.get_environment(self.server_managers[0], racer_log)
@@ -1091,7 +1086,7 @@ def build_job_script(self, commands, job, nodesperjob):
         if isinstance(cmd, str):
             cmd = [cmd]
         output = os.path.join(
-            self.test_log_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
+            self.soaktest_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
             "time": str(job_timeout) + ":00",
@@ -1104,7 +1099,7 @@ def build_job_script(self, commands, job, nodesperjob):
         sbatch.update(self.srun_params)
         unique = get_random_string(5, self.used)
         script = slurm_utils.write_slurm_script(
-            self.test_log_dir, job, output, nodesperjob,
+            self.soaktest_dir, job, output, nodesperjob,
             prepend_cmds + cmd + append_cmds + exit_cmd, unique, sbatch)
         script_list.append(script)
         self.used.append(unique)

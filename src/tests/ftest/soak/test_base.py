@@ -40,11 +40,10 @@ class SoakTestBase(TestWithServers):
         """Initialize a SoakBase object."""
         super().__init__(*args, **kwargs)
         self.failed_job_id_list = None
-        self.test_log_dir = None
+        self.soaktest_dir = None
         self.exclude_slurm_nodes = None
         self.loop = None
-        self.log_dir = None
-        self.outputsoakdir = None
+        self.outputsoak_dir = None
         self.test_name = None
         self.test_timeout = None
         self.end_time = None
@@ -62,6 +61,8 @@ class SoakTestBase(TestWithServers):
         self.all_failed_harassers = None
         self.soak_errors = None
         self.check_errors = None
+        self.initial_resv_file = None
+        self.resv_cont = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -73,13 +74,12 @@ class SoakTestBase(TestWithServers):
         self.exclude_slurm_nodes = []
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
-        self.log_dir = get_log_file("soak")
-        self.outputsoakdir = self.outputdir + "/soak"
+        self.outputsoak_dir = self.outputdir + "/soak"
         # Create the remote log directories on all client nodes
-        self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
-        self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
-        self.sharedlog_dir = self.tmp + "/soak"
-        self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
+        self.soak_dir = self.test_dir + "/soak"
+        self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
+        self.sharedsoak_dir = self.tmp + "/soak"
+        self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
         self.dmg_command = self.get_dmg_command()
         # Fail if slurm partition is not defined
@@ -123,6 +123,23 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info("<<preTearDown Started>> at %s", time.ctime())
         errors = []
+        # verify reserved container data
+        if self.resv_cont:
+            final_resv_file = os.path.join(self.test_dir, "final", "resv_file")
+            try:
+                reserved_file_copy(self, final_resv_file, self.pool[0], self.resv_cont)
+            except CommandFailure as error:
+                self.soak_errors.append("<<FAILED: Soak reserved container read failed>>")
+
+            if not cmp(self.initial_resv_file, final_resv_file):
+                self.soak_errors.append("<<FAILED: Data verification error on reserved pool"
+                                        " after SOAK completed>>")
+
+            for file in [self.initial_resv_file, final_resv_file]:
+                os.remove(file)
+
+            self.container.append(self.resv_cont)
+
         # display final metrics
         run_metrics_check(self, prefix="final")
         # clear out any jobs in squeue;
@@ -407,7 +424,7 @@ class SoakTestBase(TestWithServers):
                         "<< Job %s failed with status %s>>", job, result)
             # gather all the logfiles for this pass and cleanup test nodes
             try:
-                get_remote_logs(self)
+                get_remote_logs(self, self.soaktest_dir, self.outputsoak_dir, self.hostlist_clients)
             except SoakTestError as error:
                 self.log.info("Remote copy failed with %s", error)
             self.soak_results = {}
@@ -434,19 +451,22 @@ class SoakTestBase(TestWithServers):
         """
         job_script_list = []
         # Update the remote log directories from new loop/pass
-        self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
-        self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
-        local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
+        self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
+        self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
+        outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), "mkdir -p {}".format(
-                self.test_log_dir), self.srun_params)
+                self.soaktest_dir), self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: logfile directory not"
                 "created on clients>>: {}".format(self.hostlist_clients))
-        # Create local log directory
-        os.makedirs(local_pass_dir)
-        os.makedirs(self.sharedsoakdir)
+        # Create local avocado log directory for this pass
+        os.makedirs(outputsoaktest_dir)
+        # Create shared log directory for this pass
+        os.makedirs(self.sharedsoaktest_dir)
+        # Create local test log directory for this pass
+        os.makedirs(self.soaktest_dir)
         # create the batch scripts
         job_script_list = self.job_setup(jobs, pools)
         # randomize job list
@@ -494,6 +514,7 @@ class SoakTestBase(TestWithServers):
             "single_test_pool", test_param + "*", True)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
+        resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
         if harassers:
             run_harasser = True
@@ -504,14 +525,13 @@ class SoakTestBase(TestWithServers):
         # self.pool[0] will always be the reserved pool
         add_pools(self, ["pool_reserved"])
         # Create the reserved container
-        resv_cont = self.get_container(
+        self.resv_cont = self.get_container(
             self.pool[0], "/run/container_reserved/*", True)
-        # populate reserved container with a 500MB file
-        initial_resv_file = os.path.join(
-            os.environ["DAOS_TEST_LOG_DIR"], "initial", "resv_file")
+        # populate reserved container with a 500MB file unless test is smoke
+        self.initial_resv_file = os.path.join(self.test_dir, "initial", "resv_file")
         try:
-            reserved_file_copy(self, initial_resv_file, self.pool[0], resv_cont,
-                               num_bytes=500000000, cmd="write")
+            reserved_file_copy(self, self.initial_resv_file, self.pool[0], self.resv_cont,
+                               num_bytes=resv_bytes, cmd="write")
         except CommandFailure as error:
             self.fail(error)
 
@@ -525,13 +545,13 @@ class SoakTestBase(TestWithServers):
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), "rm -rf {}".format(
-                self.log_dir), self.srun_params)
+                self.soak_dir), self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(self.hostlist_clients))
         # cleanup test_node
-        for log_dir in [self.log_dir, self.sharedlog_dir]:
+        for log_dir in [self.soak_dir, self.sharedsoak_dir]:
             cmd = "rm -rf {}".format(log_dir)
             try:
                 result = run_command(cmd, timeout=30)
@@ -601,32 +621,6 @@ class SoakTestBase(TestWithServers):
             if self.loop == 1 and run_harasser:
                 self.harasser_loop_time = loop_time
             self.loop += 1
-        # verify reserved container data
-        final_resv_file = os.path.join(
-            os.environ["DAOS_TEST_LOG_DIR"], "final", "resv_file")
-        try:
-            reserved_file_copy(self, final_resv_file, self.pool[0], resv_cont)
-        except CommandFailure as error:
-            self.soak_errors.append(
-                "<<FAILED: Soak reserved container read failed>>")
-
-        if not cmp(initial_resv_file, final_resv_file):
-            self.soak_errors.append("Data verification error on reserved pool"
-                                    " after SOAK completed")
-        for file in [initial_resv_file, final_resv_file]:
-            if os.path.isfile(file):
-                file_name = os.path.split(os.path.dirname(file))[-1]
-                # save a copy of the POSIX file in self.outputsoakdir
-                copy_cmd = "cp -p {} {}/{}_resv_file".format(
-                    file, self.outputsoakdir, file_name)
-                try:
-                    run_command(copy_cmd, timeout=30)
-                except DaosTestError as error:
-                    self.soak_errors.append(
-                        "Reserved data file {} failed to archive".format(file))
-                os.remove(file)
-        self.container.append(resv_cont)
-        # Gather the daos logs from the client nodes
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>>", DDHHMMSS_format(
                 time.time() - start_time))
