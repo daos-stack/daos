@@ -89,11 +89,10 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
             data = self.telemetry.get_metrics(metrics[0])
         except (CommandFailure, DaosTestError) as excep:
             self.log.info("self.telemetry.get_metrics failed on at least one "
-                          "host with '{}', but may have succeeded elsewhere.",
+                          "host with '%s', but may have succeeded elsewhere.",
                           repr(excep))
-            pass
 
-        for host, value in data.items():
+        for value in data.values():
             for metric in value[metrics[0]]["metrics"]:
                 req_timeouts_start += metric["value"]
 
@@ -140,7 +139,7 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
                           repr(excep))
             pass
 
-        for host, value in data.items():
+        for value in data.values():
             for metric in value[metrics[0]]["metrics"]:
                 req_timeouts_finish += metric["value"]
 
@@ -154,10 +153,4 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
                       "test.", str(metrics[0]))
 
         # wait a bit for mdtest to complete
-        try:
-            thread.join(timeout=5)
-        except Exception as excep:
-            self.log.info("MDtest threw an exception (%s), but this is not "
-                          "entirely unexpected, since we killed one of it's "
-                          "ranks.", repr(excep))
-            pass
+        thread.join(timeout=5)
