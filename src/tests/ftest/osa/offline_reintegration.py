@@ -10,6 +10,7 @@ from daos_utils import DaosCommand
 from nvme_utils import ServerFillUp
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
+from apricot import skipForTicket
 
 
 class OSAOfflineReintegration(OSAUtils, ServerFillUp):
@@ -219,6 +220,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.log.info("Offline Reintegration : Multiple Pools")
         self.run_offline_reintegration_test(5, data=True)
 
+    @skipForTicket("DAOS-9313")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
 
