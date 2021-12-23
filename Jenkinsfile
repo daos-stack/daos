@@ -1045,7 +1045,8 @@ pipeline {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
                                                      'centos7-gcc-unit-memcheck',
-                                                     'centos7-gcc-cart-memcheck']
+                                                     'centos7-gcc-cart-memcheck'],
+                                  valgrind_pattern: '**/*.memcheck.xml'
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
