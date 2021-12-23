@@ -86,8 +86,7 @@ predefined list, providing a greater flexibility of options.
 
 Tools for parallel data set copy are located within mpiFileUtils.  mpiFileUtils
  provides an MPI-based suite of tools to handle large datasets.  A DAOS backend
- was written to support tools like dcp and dsync.  Custom tools were written to
- support DAOS serialization with daos-serialize and daos-deserialize.
+ was written to support tools like dcp and dsync.
 
 
 
