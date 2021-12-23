@@ -1049,7 +1049,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	fprintf(stdout, "(shard callback) RESULT = %lu\n", pro->pro_pong);
+	fprintf(stdout, "(shard callback) RESULT = %u\n", pro->pro_pad32_1);
 	fflush(stdout);
 
 out:
@@ -1126,11 +1126,13 @@ shard_pipeline_run_task(tse_task_t *task)
 
 	pri = crt_req_get(req);
 	D_ASSERT(pri != NULL);
+	pri->pri_dti			= args->pra_dti;
 	pri->pri_pipe			= args->pra_api_args->pipeline;
 	pri->pri_oid			= args->pra_oid;
 	pri->pri_epoch			= args->pra_epoch.oe_value;
 	pri->pri_epoch_first		= args->pra_epoch.oe_first;
 	pri->pri_target			= args->pra_target;
+
 	if (args->pra_api_args->dkey != NULL)
 	{
 		pri->pri_dkey		= *(args->pra_api_args->dkey);
@@ -1143,8 +1145,8 @@ shard_pipeline_run_task(tse_task_t *task)
 					   .iov_len		= 0 };
 	}
 	pri->pri_nr_iods		= *(args->pra_api_args->nr_iods);
-	pri->pri_iods.ca_count		= *(args->pra_api_args->nr_iods);
-	pri->pri_iods.ca_arrays		= args->pra_api_args->iods;
+	pri->pri_iods.nr		= *(args->pra_api_args->nr_iods);
+	pri->pri_iods.iods		= args->pra_api_args->iods;
 	pri->pri_anchor			= *(args->pra_api_args->anchor);
 	pri->pri_nr_kds			= *(args->pra_api_args->nr_kds);
 	uuid_copy(pri->pri_pool_uuid, pool->dp_pool);
@@ -1330,7 +1332,6 @@ dc_pipeline_run(tse_task_t *api_task)
 	struct pipeline_auxi_args	*pipeline_auxi;
 	bool				priv;
 	struct shard_task_sched_args	sched_arg;
-
 
 	coh	= dc_obj_hdl2cont_hdl(api_args->oh);
 	rc	= dc_obj_hdl2obj_md(api_args->oh, &obj_md);

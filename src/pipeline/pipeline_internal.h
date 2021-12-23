@@ -7,6 +7,11 @@
 #ifndef __DAOS_PIPE_INTERNAL_H__
 #define __DAOS_PIPE_INTERNAL_H__
 
+typedef struct {
+	uint32_t	nr;
+	daos_iod_t	*iods;
+} daos_pipeline_iods_t;
+
 void ds_pipeline_run_handler(crt_rpc_t *rpc);
 
 #endif /* __DAOS_PIPE_INTERNAL_H__ */

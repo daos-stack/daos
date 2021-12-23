@@ -539,7 +539,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	/** iods: information about what akeys to retrieve */
 	for (i = 0; i < NR_IODS; i++) {
 		iods[i].iod_nr		= 1;
-		iods[i].iod_size	= STRING_LEN;
+		iods[i].iod_size	= strlen(fields[i]);
 		iods[i].iod_recxs	= NULL;
 		iods[i].iod_type	= DAOS_IOD_SINGLE;
 		d_iov_set(&iods[i].iod_name, (void *) fields[i],

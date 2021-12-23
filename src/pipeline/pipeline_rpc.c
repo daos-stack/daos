@@ -22,7 +22,11 @@ pipeline_t_proc_consts(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	if (DECODING(proc_op))
 	{
-		D_ALLOC(*constants, num_constants * sizeof(d_iov_t));
+		D_ALLOC_ARRAY(*constants, num_constants);
+		if (*constants == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
 	}
 	for (i = 0; i < num_constants; i++)
 	{
@@ -31,10 +35,19 @@ pipeline_t_proc_consts(crt_proc_t proc, crt_proc_op_t proc_op,
 		rc = crt_proc_d_iov_t(proc, proc_op, constant);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 	}
 
+	if (FREEING(proc_op))
+	{
+exit_free:
+		D_FREE(*constants);
+	}
 exit:
 	return rc;
 }
@@ -44,64 +57,114 @@ pipeline_t_proc_parts(crt_proc_t proc, crt_proc_op_t proc_op,
 		      uint32_t num_parts, daos_filter_part_t ***parts)
 {
 	int			rc = 0;
-	uint32_t		i;
+	uint32_t		i = 0;
+	uint32_t		j;
 	daos_filter_part_t	*part;
 
 	if (DECODING(proc_op))
 	{
-		D_ALLOC(*parts, num_parts * sizeof(daos_filter_part_t *));
+		D_ALLOC_ARRAY(*parts, num_parts);
+		if (*parts == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
 	}
-	for (i = 0; i < num_parts; i++)
+	while (i < num_parts)
 	{
 		if (DECODING(proc_op))
 		{
 			D_ALLOC((*parts)[i], sizeof(daos_filter_part_t));
+			if ((*parts)[i] == NULL)
+			{
+				D_GOTO(exit_free, rc = -DER_NOMEM);
+			}
 		}
-		part = (*parts)[i];
+		part = (*parts)[i++];
 
 		rc = crt_proc_d_iov_t(proc, proc_op, &part->part_type);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_d_iov_t(proc, proc_op, &part->data_type);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint32_t(proc, proc_op, &part->num_operands);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_d_iov_t(proc, proc_op, &part->akey);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint64_t(proc, proc_op, &part->num_constants);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 		rc = pipeline_t_proc_consts(proc, proc_op, part->num_constants,
 					    &part->constant);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint64_t(proc, proc_op, &part->data_offset);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint64_t(proc, proc_op, &part->data_len);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 	}
 
+	if (FREEING(proc_op))
+	{
+exit_free:
+		for (j = 0; j < i; j++)
+		{
+			D_FREE((*parts)[j]);
+		}
+		D_FREE(*parts);
+	}
 exit:
 	return rc;
 }
@@ -111,39 +174,69 @@ pipeline_t_proc_filters(crt_proc_t proc, crt_proc_op_t proc_op,
 			uint32_t num_filters, daos_filter_t ***filters)
 {
 	int		rc = 0;
-	uint32_t	i;
+	uint32_t	i = 0;
+	uint32_t	j;
 	daos_filter_t	*filter;
 
 	if (DECODING(proc_op))
 	{
-		D_ALLOC(*filters, num_filters * sizeof(daos_filter_t *));
+		D_ALLOC_ARRAY(*filters, num_filters);
+		if (*filters == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
 	}
-	for (i = 0; i < num_filters; i++)
+	while (i < num_filters)
 	{
 		if (DECODING(proc_op))
 		{
 			D_ALLOC((*filters)[i], sizeof(daos_filter_t));
+			if ((*filters)[i] == NULL)
+			{
+				D_GOTO(exit_free, rc = -DER_NOMEM);
+			}
 		}
-		filter = (*filters)[i];
+		filter = (*filters)[i++];
 
 		rc = crt_proc_d_iov_t(proc, proc_op, &filter->filter_type);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 		rc = crt_proc_uint32_t(proc, proc_op, &filter->num_parts);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 		rc = pipeline_t_proc_parts(proc, proc_op, filter->num_parts,
 					   &filter->parts);
 		if (unlikely(rc))
 		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
 			D_GOTO(exit, rc);
 		}
 	}
 
+	if (FREEING(proc_op))
+	{
+exit_free:
+		for (j = 0; j < i; j++)
+		{
+			D_FREE((*filters)[j]);
+		}
+		D_FREE(*filters);
+	}
 exit:
 	return rc;
 }
@@ -182,6 +275,118 @@ crt_proc_daos_pipeline_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		D_GOTO(exit, rc);
 	}
 
+exit:
+	return rc;
+}
+
+static int
+crt_proc_daos_pipeline_iods_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			      daos_pipeline_iods_t *iods)
+{
+	int		rc = 0;
+	uint32_t 	i = 0;
+	uint32_t 	j;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &iods->nr);
+	if (unlikely(rc))
+	{
+		D_GOTO(exit, rc);
+	}
+	if (DECODING(proc_op))
+	{
+		D_ALLOC_ARRAY(iods->iods, iods->nr);
+		if (iods->iods == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+	}
+
+	while (i < iods->nr)
+	{
+		rc = crt_proc_d_iov_t(proc, proc_op, &iods->iods[i].iod_name);
+		if (unlikely(rc))
+		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
+			D_GOTO(exit, rc);
+		}
+		rc = crt_proc_memcpy(proc, proc_op, &iods->iods[i].iod_type,
+				     sizeof(iods->iods[i].iod_type));
+		if (unlikely(rc))
+		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
+			D_GOTO(exit, rc);
+		}
+		rc = crt_proc_uint64_t(proc, proc_op, &iods->iods[i].iod_size);
+		if (unlikely(rc))
+		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
+			D_GOTO(exit, rc);
+		}
+		rc = crt_proc_uint64_t(proc, proc_op, &iods->iods[i].iod_flags);
+		if (unlikely(rc))
+		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
+			D_GOTO(exit, rc);
+		}
+		rc = crt_proc_uint32_t(proc, proc_op, &iods->iods[i].iod_nr);
+		if (unlikely(rc))
+		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
+			D_GOTO(exit, rc);
+		}
+		if (iods->iods[i].iod_type == DAOS_IOD_ARRAY &&
+			iods->iods[i].iod_nr > 0)
+		{
+			if (DECODING(proc_op))
+			{
+				D_ALLOC_ARRAY(iods->iods[i].iod_recxs,
+					      iods->iods[i].iod_nr);
+				if (iods->iods[i].iod_recxs == NULL)
+				{
+					D_GOTO(exit_free, rc = -DER_NOMEM);
+				}
+			}
+			rc = crt_proc_memcpy(proc, proc_op,
+					     iods->iods[i].iod_recxs,
+					     iods->iods[i].iod_nr *
+					     sizeof(*iods->iods[i].iod_recxs));
+			if (unlikely(rc))
+			{
+				if (DECODING(proc_op))
+				{
+					i++;
+					D_GOTO(exit_free, rc);
+				}
+				D_GOTO(exit, rc);
+			}
+		}
+		i++;
+	}
+
+	if (FREEING(proc_op))
+	{
+exit_free:
+		for (j = 0; j < i; j++)
+		{
+			D_FREE(iods->iods[j].iod_recxs);
+		}
+		D_FREE(iods->iods);
+	}
 exit:
 	return rc;
 }
