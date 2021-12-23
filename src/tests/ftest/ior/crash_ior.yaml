@@ -35,7 +35,7 @@ ior:
   transfersize_blocksize:
     4K:
       transfer_size: '4K'
-      block_size: '4G'
+      block_size: '10G'
   objectclass:
     SX:
       dfs_oclass: "SX"
