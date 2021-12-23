@@ -125,8 +125,8 @@ MLNX_OFED_LINUX-5.5-1.0.3.2 and 5.4-3.1.0.0
 	Please refer to the "Fabric Support" section of the support matrix
 	for details.
 
-- der_nospace under certain conditions [DAOS-8400]
-(https://daosio.atlassian.net/browse/DAOS-8400)
+- Reclaiming free NVMe space is too slow, causing ENOSPACE [DAOS-8943]
+(https://daosio.atlassian.net/browse/DAOS-8943)
 
 
 - The daos_server.yml file has security enabled by default [DAOS-8114]
