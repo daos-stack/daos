@@ -73,9 +73,10 @@ was written to support tools like dcp and dsync.
 
 ## Known Issues and limitations
 
-- Application segfault on CentOS 8.5 and MOFED / [DAOS-9376](https://daosio.atlassian.net/browse/DAOS-9376)
+- Application segfault with  MOFED > 5.4-1.0.3.0 / [DAOS-9376](https://daosio.atlassian.net/browse/DAOS-9376)
   Validation of CentOS 8.5 indicates an integration issue with
-  MLNX\_OFED\_LINUX-5.5-1.0.3.2 and 5.4-3.1.0.0
+  MLNX\_OFED\_LINUX-5.5-1.0.3.2 and 5.4-3.1.0.0. The same issue
+  can be reproduced with CentOS 8.4 and MOFED > 5.4-1.0.3.0.
 
 - High CPU utilization / [DAOS-9325](https://daosio.atlassian.net/browse/DAOS-9325)
   Some users have reported high CPU utilization on DAOS servers
