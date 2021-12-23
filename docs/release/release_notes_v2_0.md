@@ -122,6 +122,8 @@ MLNX_OFED_LINUX-5.5-1.0.3.2 and 5.4-3.1.0.0
 (https://daosio.atlassian.net/browse/DAOS-9254)
 
 - No OPA/PSM2 support
+	Please refer to the "Fabric Support" section of the support matrix
+	for details.
 
 - der_nospace under certain conditions [DAOS-8400]
 (https://daosio.atlassian.net/browse/DAOS-8400)
