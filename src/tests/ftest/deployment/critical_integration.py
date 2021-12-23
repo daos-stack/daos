@@ -31,12 +31,13 @@ class CriticalIntegration(TestWithServers):
                           and client nodes have same daos versions.
         :avocado: tags=all,deployment,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=criticalintegration,passwdlessssh_versiocheck
+        :avocado: tags=criticalintegration,passwdlessssh_versioncheck
         """
 
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
         daos_server_version_list = []
         dmg_version_list = []
+        failed_nodes = []
         for host in self.hostlist_servers:
             daos_server_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
                                " 'daos_server version'".format(host))
@@ -51,7 +52,10 @@ class CriticalIntegration(TestWithServers):
                     run_command(remote_root_access)
                 IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
             except (DaosTestError, CommandFailure) as error:
-                self.fail("Ssh check Failed.\n {}".format(error))
+                self.log.error("Error: %s", error)
+                failed_nodes.append(host)
+        if failed_nodes:
+            self.fail("Ssh check failed on following nodes.\n {}".format(failed_nodes))
 
         for host in self.hostlist_clients:
             dmg_version_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
@@ -61,7 +65,10 @@ class CriticalIntegration(TestWithServers):
                 out = run_command(dmg_version_cmd)
                 dmg_version_list.append(out.stdout.split(b' ')[2])
             except DaosTestError as error:
-                self.fail("SSH check for client nodes failed.\n {}".format(error))
+                self.log.error("Error: %s", error)
+                failed_nodes.append(host)
+        if failed_nodes:
+            self.fail("SSH check for client nodes failed.\n {}".format(failed_nodes))
 
         result_daos_server = (daos_server_version_list.count(daos_server_version_list[0])
                               == len(daos_server_version_list))
