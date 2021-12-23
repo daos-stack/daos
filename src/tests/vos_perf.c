@@ -792,7 +792,7 @@ main(int argc, char **argv)
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
-			"Test :\n\t%s\n"
+			"Test :\n\tVOS storage\n"
 			"Pool :\n\t%s\n"
 			"Parameters :\n"
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n"
@@ -805,7 +805,7 @@ main(int argc, char **argv)
 			"\tstride size   : %u\n"
 			"\tzero copy     : %s\n"
 			"\tVOS file      : %s\n",
-			pf_class2name(DAOS_OC_RAW), uuid_buf,
+			uuid_buf,
 			(unsigned int)(ts_scm_size >> 20),
 			(unsigned int)(ts_nvme_size >> 20),
 			credits,
