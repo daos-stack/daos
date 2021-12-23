@@ -95,6 +95,8 @@ smoke:
         - fio_smoke
         - daos_racer
         - mdtest_smoke
+    # num of bytes to write to reserved container
+    resv_bytes: 500
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO

@@ -512,6 +512,7 @@ class SoakTestBase(TestWithServers):
             "single_test_pool", test_param + "*", True)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
+        resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
         if harassers:
             run_harasser = True
@@ -525,14 +526,10 @@ class SoakTestBase(TestWithServers):
         self.resv_cont = self.get_container(
             self.pool[0], "/run/container_reserved/*", True)
         # populate reserved container with a 500MB file unless test is smoke
-        if "smoke" in self.test_name:
-            num_bytes = 500
-        else:
-            num_bytes = 500000000
         self.initial_resv_file = os.path.join(self.test_dir, "initial", "resv_file")
         try:
             reserved_file_copy(self, self.initial_resv_file, self.pool[0], self.resv_cont,
-                               num_bytes=num_bytes, cmd="write")
+                               num_bytes=resv_bytes, cmd="write")
         except CommandFailure as error:
             self.fail(error)
 
