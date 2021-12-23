@@ -522,7 +522,7 @@ class SoakTestBase(TestWithServers):
         # self.pool[0] will always be the reserved pool
         add_pools(self, ["pool_reserved"])
         # Create the reserved container
-        resv_cont = self.get_container(
+        self.resv_cont = self.get_container(
             self.pool[0], "/run/container_reserved/*", True)
         # populate reserved container with a 500MB file unless test is smoke
         if "smoke" in self.test_name:
