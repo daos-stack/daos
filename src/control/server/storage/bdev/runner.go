@@ -99,7 +99,7 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 	nrHugepages := req.HugePageCount
-	if nrHugepages < 0 {
+	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages
 	}
 

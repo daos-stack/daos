@@ -97,9 +97,6 @@ smd_db_unlock(void)
 void
 smd_fini(void)
 {
-	if (!smd_db_ready())
-		return;
-
 	smd_db = NULL;
 }
 

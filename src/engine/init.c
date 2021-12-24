@@ -60,10 +60,10 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
-unsigned int		dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
+int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation */
-unsigned int		dss_nvme_hugepage_size;
+int			dss_nvme_hugepage_size;
 
 /** I/O Engine instance index */
 unsigned int		dss_instance_idx;
@@ -75,7 +75,7 @@ int			dss_core_depth;
 /** number of physical cores, w/o hyperthreading */
 int			dss_core_nr;
 /** start offset index of the first core for service XS */
-unsigned int		dss_core_offset;
+int			dss_core_offset;
 /** NUMA node to bind to */
 int			dss_numa_node = -1;
 hwloc_bitmap_t	core_allocation_bitmap;
@@ -86,7 +86,7 @@ int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 /** Number of storage tiers: 2 for SCM and NVMe */
-unsigned int		dss_storage_tiers = 2;
+int dss_storage_tiers = 2;
 
 /** Flag to indicate Arbogots is initialized */
 static bool dss_abt_init;
@@ -248,7 +248,7 @@ modules_load(void)
  * passed in preferred number of threads.
  */
 static int
-dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
+dss_tgt_nr_get(int ncores, int nr, bool oversubscribe)
 {
 	int tgt_nr;
 
@@ -320,10 +320,10 @@ dss_topo_init()
 		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
 					    tgt_oversub);
 
-		if (dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %u "
+		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
+			D_ERROR("invalid dss_core_offset %d "
 				"(set by \"-f\" option),"
-				" should within range [0, %u]",
+				" should within range [0, %d]",
 				dss_core_offset, dss_core_nr - 1);
 			return -DER_INVAL;
 		}
@@ -374,7 +374,7 @@ dss_topo_init()
 
 	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
 				    tgt_oversub);
-	if (dss_core_offset >= dss_num_cores_numa_node) {
+	if (dss_core_offset < 0 || dss_core_offset >= dss_num_cores_numa_node) {
 		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
 			"should within range [0, %d]", dss_core_offset,
 			dss_num_cores_numa_node - 1);
@@ -870,19 +870,6 @@ Options:\n\
 		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
 }
 
-static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
-{
-	char *ptr_parse_end = NULL;
-
-	*value = strtoul(str, &ptr_parse_end, 0);
-	if (ptr_parse_end && *ptr_parse_end != '\0') {
-		printf("invalid numeric value: %s (set by %s)\n", str, opt);
-		return -DER_INVAL;
-	}
-
-	return 0;
-}
-
 static int
 parse(int argc, char **argv)
 {
@@ -926,14 +913,13 @@ parse(int argc, char **argv)
 			printf("\"-c\" option is deprecated, please use \"-t\" "
 			       "instead.\n");
 		case 't':
-			rc = arg_strtoul(optarg, &nr_threads, "\"-t\"");
+			nr_threads = atoi(optarg);
 			break;
 		case 'x':
-			rc = arg_strtoul(optarg, &dss_tgt_offload_xs_nr,
-					 "\"-x\"");
+			dss_tgt_offload_xs_nr = atoi(optarg);
 			break;
 		case 'f':
-			rc = arg_strtoul(optarg, &dss_core_offset, "\"-f\"");
+			dss_core_offset = atoi(optarg);
 			break;
 		case 'g':
 			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
@@ -961,23 +947,22 @@ parse(int argc, char **argv)
 			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'r':
-			rc = arg_strtoul(optarg, &dss_nvme_mem_size, "\"-r\"");
+			dss_nvme_mem_size = atoi(optarg);
 			break;
 		case 'H':
-			rc = arg_strtoul(optarg, &dss_nvme_hugepage_size,
-					 "\"-H\"");
+			dss_nvme_hugepage_size = atoi(optarg);
 			break;
 		case 'h':
 			usage(argv[0], stdout);
 			break;
 		case 'I':
-			rc = arg_strtoul(optarg, &dss_instance_idx, "\"-I\"");
+			dss_instance_idx = atoi(optarg);
 			break;
 		case 'b':
 			dss_nvme_bypass_health_check = true;
 			break;
 		case 'T':
-			rc = arg_strtoul(optarg, &dss_storage_tiers, "\"-T\"");
+			dss_storage_tiers = atoi(optarg);
 			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
 				printf("Requires 1 or 2 tiers\n");
 				rc = -DER_INVAL;

@@ -100,7 +100,7 @@ extern int		dss_core_depth;
 /** number of physical cores, w/o hyper-threading */
 extern int		dss_core_nr;
 /** start offset index of the first core for service XS */
-extern unsigned int	dss_core_offset;
+extern int		dss_core_offset;
 /** NUMA node to bind to */
 extern int		dss_numa_node;
 /** bitmap describing core allocation */

@@ -17,7 +17,7 @@ dma_free_chunk(struct bio_dma_chunk *chunk)
 	D_ASSERT(chunk->bdc_ref == 0);
 	D_ASSERT(d_list_empty(&chunk->bdc_link));
 
-	if (bio_spdk_inited)
+	if (bio_nvme_configured())
 		spdk_dma_free(chunk->bdc_ptr);
 	else
 		free(chunk->bdc_ptr);
@@ -39,7 +39,7 @@ dma_alloc_chunk(unsigned int cnt)
 		return NULL;
 	}
 
-	if (bio_spdk_inited) {
+	if (bio_nvme_configured()) {
 		chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
 	} else {
 		rc = posix_memalign(&chunk->bdc_ptr, BIO_DMA_PAGE_SZ, bytes);
