@@ -469,7 +469,7 @@ pf_aggregate(struct pf_test *ts, struct pf_param *param)
 
 	TS_TIME_START(&param->pa_duration, start);
 
-	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, NULL, true);
+	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, true);
 
 	TS_TIME_END(&param->pa_duration, start);
 
