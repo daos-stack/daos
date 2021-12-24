@@ -1266,6 +1266,8 @@ class TestWithServers(TestWithoutServers):
         """Tear down after each test case."""
 
         # dump engines ULT stacks upon test failure
+        # XXX check of Avocado test status during teardown is presently useless
+        # (see Avocado issue #5217)
         if self.dumped_engines_stacks is False and self.status is not None and \
             self.status != 'PASS' and self.status != 'SKIP':
             self.dumped_engines_stacks = True
