@@ -1251,6 +1251,16 @@ class TestWithServers(TestWithoutServers):
             errors.append("Error removing temporary test files")
         return errors
 
+    def report_timeout(self):
+        """Dump ULTs stacks if this test case was timed out."""
+        if not self._timeout_reported:
+            if self.timeout is not None and self.time_elapsed > self.timeout:
+                # dump engines ULT stacks upon test timeout
+                if self.dumped_engines_stacks is False:
+                    self.dumped_engines_stacks = True
+                    self.log.info("Test status has timed-out, dumping ULT stacks")
+                    dump_engines_stacks(self.hostlist_servers)
+
     def fail(self, message=None):
         # dump engines ULT stacks upon test failure
         if self.dumped_engines_stacks is False:
