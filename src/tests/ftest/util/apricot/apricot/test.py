@@ -28,7 +28,8 @@ from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
+    get_default_config_file, pcmd, get_file_listing, DaosTestError, \
+    run_command, dump_engines_stacks
 from logger_utils import TestLogger
 from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
@@ -483,6 +484,9 @@ class TestWithServers(TestWithoutServers):
 
     :avocado: recursive
     """
+
+    # whether engines ULT stacks have been already dumped
+    dumped_engines_stacks = False
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
@@ -1242,8 +1246,45 @@ class TestWithServers(TestWithoutServers):
             errors.append("Error removing temporary test files")
         return errors
 
+    def report_timeout(self):
+        """Dump ULTs stacks if this test case was timed out."""
+        if not self._timeout_reported:
+            if self.timeout is not None and self.time_elapsed > self.timeout:
+                # dump engines ULT stacks upon test timeout
+                if self.dumped_engines_stacks is False:
+                    self.dumped_engines_stacks = True
+                    self.log.info("Test status has timed-out, dumping ULT stacks")
+                    dump_engines_stacks(self.hostlist_servers)
+
+    def fail(self, message=None):
+        # dump engines ULT stacks upon test failure
+        if self.dumped_engines_stacks is False:
+            self.dumped_engines_stacks = True
+            self.log.info("Test has failed, dumping ULT stacks")
+            dump_engines_stacks(self.hostlist_servers)
+        super().fail(message)
+
+    def error(self, message=None):
+        # dump engines ULT stacks upon test error
+        if self.dumped_engines_stacks is False:
+            self.dumped_engines_stacks = True
+            self.log.info("Test has errored, dumping ULT stacks")
+            dump_engines_stacks(self.hostlist_servers)
+        super().error(message)
+
     def tearDown(self):
         """Tear down after each test case."""
+
+        # dump engines ULT stacks upon test failure
+        # XXX check of Avocado test status during teardown is presently useless
+        # (see Avocado issue #5217)
+        if self.dumped_engines_stacks is False and self.status is not None and \
+            self.status != 'PASS' and self.status != 'SKIP':
+            self.dumped_engines_stacks = True
+            self.log.info("Test status is %s, dumping ULT stacks in teardown",
+                self.status)
+            dump_engines_stacks(self.hostlist_servers)
+
         # Report whether or not the timeout has expired
         self.report_timeout()
 
@@ -1464,6 +1505,11 @@ class TestWithServers(TestWithoutServers):
                 errors.append(
                     "ERROR: At least one multi-variant server was not found in "
                     "its expected state; stopping all servers")
+                # dump engines stacks if not already done
+                if self.dumped_engines_stacks is False:
+                    self.dumped_engines_stacks = True
+                    self.log.info("Some engine not in expected state, dumping ULT stacks")
+                    dump_engines_stacks(self.hostlist_servers)
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))
