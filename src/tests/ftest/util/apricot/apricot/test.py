@@ -343,11 +343,6 @@ class Test(avocadoTest):
                     "*** TEARDOWN called due to TIMEOUT: "
                     "%s second timeout exceeded ***", str(self.timeout))
                 self.log.info("test execution has been terminated by avocado")
-                # dump engines ULT stacks upon test timeout
-                if self.dumped_engines_stacks is False:
-                    self.dumped_engines_stacks = True
-                    self.log.info("Test status has timed-out, dumping ULT stacks")
-                    dump_engines_stacks(self.hostlist_servers)
             else:
                 # Normal operation
                 remaining = str(self.timeout - self.time_elapsed)
