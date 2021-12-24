@@ -124,7 +124,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 				}
 			}
 		} else if opts.ConfigPath != "" {
-			log.Infof("DAOS Server config has been supplied but this command will not use it")
+			return errors.Errorf("DAOS Server config has been supplied but this command will not use it")
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {
