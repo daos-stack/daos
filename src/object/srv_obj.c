@@ -1027,7 +1027,7 @@ obj_log_csum_err(void)
 		return;
 	}
 
-	bio_log_csum_err(bxc, info->dmi_tgt_id);
+	bio_log_csum_err(bxc);
 }
 
 static void
