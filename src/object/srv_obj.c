@@ -888,10 +888,12 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		if (!csum_iod_is_supported(iod))
 			continue;
 
-		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD","
-				 " csum_nr: %d, first data csum: "DF_CI"\n",
-			DP_C_UOID_DKEY(*uoid, dkey), i,
-			DP_C_IOD(iod), csum->ic_nr, DP_CI(*csum->ic_data));
+		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD", csum_nr: %d\n",
+			DP_C_UOID_DKEY(*uoid, dkey), i, DP_C_IOD(iod), csum->ic_nr);
+
+		if (csum->ic_nr > 0)
+			D_DEBUG(DB_CSUM, "first data csum: "DF_CI"\n", DP_CI(*csum->ic_data));
+
 		rc = daos_csummer_verify_key(csummer,
 					     &iod->iod_name,
 					     &csum->ic_akey);
@@ -1027,7 +1029,7 @@ obj_log_csum_err(void)
 		return;
 	}
 
-	bio_log_csum_err(bxc, info->dmi_tgt_id);
+	bio_log_csum_err(bxc);
 }
 
 static void
