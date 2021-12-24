@@ -321,7 +321,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, dcks, j, false);
+		rc = dtx_commit(cont, pdte, dcks, j);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,

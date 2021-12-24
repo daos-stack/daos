@@ -686,8 +686,11 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_agents:
             self.start_agents(force=force_agent_start)
 
+        self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
+
         # If there's no server started, then there's no server log to write to.
-        if self.setup_start_servers:
+        if (self.setup_start_servers and self.setup_start_agents and
+            not self.skip_add_log_msg):
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
@@ -743,7 +746,7 @@ class TestWithServers(TestWithoutServers):
 
             for manager in self.agent_managers:
                 cart_ctl.group_name.value = manager.get_config_value("name")
-                # cart_ctl.run()
+                cart_ctl.run()
         else:
             self.log.info(
                 "Unable to write message to the server log: %d servers groups "

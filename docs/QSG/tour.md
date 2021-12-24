@@ -5,11 +5,11 @@
 ## Introduction
 
 This documentation provides a general tour to the DAOS management commands
-(dmg) for daos_admin, and DAOS tools (daos) for daos_client users.
+(dmg) for daos\_admin, and DAOS tools (daos) for daos\_client users.
 Help and setup for the following is provided in this chapter:
 
 - Pool and Container create, list, query and destroy on
-DAOS server for daos_admin and daos_client users.
+DAOS server for daos\_admin and daos\_client users.
 - Common errors and workarounds for new users when using the dmg and daos tools. 
 - Example runs of data transfer between DAOS file systems, by setting up
 of the DAOS dfuse mount point and run traffic with dfuse fio and mpirun
@@ -50,15 +50,11 @@ bring-up DAOS servers and clients.
 
 ### run fio
 
-	$ dmg pool create --size=10G
-	$ daos cont create --pool=$DAOS_POOL --type=POSIX
-	$ daos cont query --pool=$DAOS_POOL --cont=$DAOS_CONT
-	Pool UUID: f688f2ad-76ae-4368-8d1b-5697ca016a43
-	Container UUID: bcc5c793-60dc-4ec1-8bab-9d63ea18e794
-	Number of snapshots: 0
-	Latest Persistent Snapshot: 0
-	Highest Aggregated Epoch: 0
-	Container redundancy factor: 0
+	$ export DAOS_POOL="mypool"
+	$ export DAOS_CONT="mycont"
+	$ dmg pool create --size 10G $DAOS_POOL
+	$ daos cont create --label $DAOS_CONT --type POSIX $DAOS_POOL
+	$ daos cont query $DAOS_POOL $DAOS_CONT
 	$ /usr/bin/mkdir /tmp/daos_test1
 	$ /usr/bin/touch /tmp/daos_test1/testfile
 	$ /usr/bin/df -h -t fuse.daos
@@ -235,7 +231,7 @@ bring-up DAOS servers and clients.
 	Tree removal : 0.000 0.000 0.000 0.000
 	– finished at 04/16/2021 22:02:27 –
 
-## Run with 4 DAOS hosts server, rebuild with dfuse_io and mpirun
+## Run with 4 DAOS hosts server, rebuild with dfuse io and mpirun
 
 ### Environment variables setup
 
@@ -262,13 +258,13 @@ bring-up DAOS servers and clients.
 	733bee7b-c2af-499e-99dd-313b1ef092a9
 	[1-3]
 
-	$ daos cont create --pool=$DAOS_POOL --type=POSIX --oclass=RP_3G1 --properties=rf:2
+	$ daos cont create --label mycont --type POSIX --oclass RP_3G1 --properties rf:2 $DAOS_POOL
 	Successfully created container 2649aa0f-3ad7-4943-abf5-4343205a637b
 
-	$ daos pool list-cont --pool=$DAOS_POOL
+	$ daos pool list-cont $DAOS_POOL
 	2649aa0f-3ad7-4943-abf5-4343205a637b
 
-	$ dmg pool query --pool=$DAOS_POOL
+	$ dmg pool query $DAOS_POOL
 	Pool 733bee7b-c2af-499e-99dd-313b1ef092a9, ntarget=32, disabled=0, leader=2, version=1
 	Pool space info:
 	- Target(VOS) count:32
@@ -363,10 +359,10 @@ bring-up DAOS servers and clients.
 	--------- ------
 	3 stop OK
 
-	$ daos pool list-cont --pool=$DAOS_POOL
+	$ daos pool list-cont $DAOS_POOL
 	cf2a95ce-9910-4d5e-814c-cafb0a7f0944
 
-	$ dmg pool query --pool=$DAOS_POOL
+	$ dmg pool query $DAOS_POOL
 	Pool 70f73efc-848e-4f6e-b4fd-909bcf9bd427,
 	ntarget=32,
 	disabled=8,
@@ -407,7 +403,9 @@ bring-up DAOS servers and clients.
 
 ### Run mpirun mdtest with rebuild
 
-	$ dmg pool create --size=50G
+	$ export DAOS_POOL="mypool1"
+	$ export DAOS_CONT="mycont"
+	$ dmg pool create --size=50G $DAOS_POOL
 	Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 	Pool created with 100.00% SCM/NVMe ratio
 	-----------------------------------------
@@ -418,7 +416,7 @@ bring-up DAOS servers and clients.
 	 SCM : 50 GB (12 GB / rank)
 	 NVMe : 0 B (0 B / rank)
 
-	$ daos cont create --pool=$DAOS_POOL --type=POSIX --oclass=RP_3G1 --properties=rf:2
+	$ daos cont create --label $DAOS_CONT --type POSIX --oclass RP_3G1 --properties rf:2 $DAOS_POOL
 	Successfully created container d71ff6a5-15a5-43fe-b829-bef9c65b9ccb
 
 	$ /usr/lib64/mpich/bin/mpirun -host boro-8 -np 30 mdtest -a DFS -z 0 -F -C -i 100 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont $DAOS_CONT --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool $DAOS_POOL
@@ -460,14 +458,14 @@ bring-up DAOS servers and clients.
 ## Clean-Up
 
 	# pool reintegrate
-	$ dmg pool reintegrate --pool=$DAOS_POOL --rank=2
+	$ dmg pool reintegrate $DAOS_POOL --rank=2
 	Reintegration command succeeded
 
 	# destroy container
-	$ daos container destroy --pool=$DAOS_POOL --cont=$DAOS_CONT
+	$ daos container destroy $DAOS_POOL $DAOS_CONT
 
 	# destroy pool
-	$ dmg pool destroy --pool=$DAOS_POOL
+	$ dmg pool destroy $DAOS_POOL
 	Pool-destroy command succeeded
 
 	# stop clients
