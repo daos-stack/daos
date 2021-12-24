@@ -842,7 +842,10 @@ cont_child_started(struct ds_cont_child *cont_child)
 static void
 cont_child_stop(struct ds_cont_child *cont_child)
 {
-	if (!cont_child->sc_stopping) {
+	/* Some ds_cont_child will only created by ds_cont_child_lookup().
+	 * never be started at all
+	 */
+	if (cont_child_started(cont_child)) {
 		D_DEBUG(DF_DSMS, DF_CONT"[%d]: Stopping container\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid,
 				cont_child->sc_uuid),
@@ -854,8 +857,6 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		/* cont_stop_agg() may yield */
 		cont_stop_agg(cont_child);
 		ds_cont_child_put(cont_child);
-	} else {
-		D_ASSERT(!cont_child_started(cont_child));
 	}
 }
 
