@@ -343,8 +343,11 @@ class Test(avocadoTest):
                     "*** TEARDOWN called due to TIMEOUT: "
                     "%s second timeout exceeded ***", str(self.timeout))
                 self.log.info("test execution has been terminated by avocado")
-                # XXX could we assume that the engines stacks have been already
-                # dumped due to (self.status == 'INTERRUPTED') ?
+                # dump engines ULT stacks upon test timeout
+                if self.dumped_engines_stacks is False:
+                    self.dumped_engines_stacks = True
+                    self.log.info("Test status has timed-out, dumping ULT stacks")
+                    dump_engines_stacks(self.hostlist_servers)
             else:
                 # Normal operation
                 remaining = str(self.timeout - self.time_elapsed)
@@ -1249,16 +1252,18 @@ class TestWithServers(TestWithoutServers):
         return errors
 
     def fail(self, message=None):
+        # dump engines ULT stacks upon test failure
         if self.dumped_engines_stacks is False:
             self.dumped_engines_stacks = True
-            self.log.info("Test status has failed, dumping ULT stacks")
+            self.log.info("Test has failed, dumping ULT stacks")
             dump_engines_stacks(self.hostlist_servers)
         super().fail(message)
 
     def error(self, message=None):
+        # dump engines ULT stacks upon test error
         if self.dumped_engines_stacks is False:
             self.dumped_engines_stacks = True
-            self.log.info("Test status has errored, dumping ULT stacks")
+            self.log.info("Test has errored, dumping ULT stacks")
             dump_engines_stacks(self.hostlist_servers)
         super().error(message)
 
@@ -1497,6 +1502,8 @@ class TestWithServers(TestWithoutServers):
                     "its expected state; stopping all servers")
                 # dump engines stacks if not already done
                 if self.dumped_engines_stacks is False:
+                    self.dumped_engines_stacks = True
+                    self.log.info("Some engine not in expected state, dumping ULT stacks")
                     dump_engines_stacks(self.hostlist_servers)
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
