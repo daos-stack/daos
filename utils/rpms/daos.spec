@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-1%{?dist}
+%global mercury_version 2.1.0~rc4-3%{?dist}
 %global libfabric_version 1.14.0~rc3-2
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       16%{?relval}%{?dist}
+Release:       17%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -539,6 +539,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Dec 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-17
+- Update to v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage
+
 * Thu Dec 16 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-16
 - Add BR: python-rpm-macros for Leap 15 as python3-base dropped that
   as a R:
