@@ -496,7 +496,7 @@ dtx_batched_commit_one(void *arg)
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, true);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc != 0) {
 			D_WARN("Fail to batched commit %d entries for "DF_UUID": "DF_RC"\n",
@@ -1248,7 +1248,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 sync:
 	if (dth->dth_sync) {
 		dte = &dth->dth_dte;
-		rc = dtx_commit(cont, &dte, NULL, 1, false);
+		rc = dtx_commit(cont, &dte, NULL, 1);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
 				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
@@ -1449,7 +1449,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 			  (unsigned long)total,
 			  (unsigned long)stat.dtx_committable_count);
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, true);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 	}
 
@@ -1819,7 +1819,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, true);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc < 0) {
 			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));
