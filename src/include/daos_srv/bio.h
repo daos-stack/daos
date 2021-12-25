@@ -88,6 +88,8 @@ struct bio_desc;
 struct bio_io_context;
 /* Opaque per-xstream context */
 struct bio_xs_context;
+/* Opaque BIO copy descriptor */
+struct bio_copy_desc;
 
 /**
  * Header for SPDK blob per VOS pool
@@ -217,6 +219,8 @@ bio_iov_alloc_raw_buf(struct bio_iov *biov, uint64_t len)
 static inline void *
 bio_iov2req_buf(const struct bio_iov *biov)
 {
+	if (biov->bi_buf == NULL)
+		return NULL;
 	return biov->bi_buf + biov->bi_prefix_len;
 }
 
@@ -741,7 +745,7 @@ void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
 int bio_dev_set_faulty(struct bio_xs_context *xs);
 
 /* Function to increment CSUM media error. */
-void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
+void bio_log_csum_err(struct bio_xs_context *xs);
 
 /* Too many blob IO queued, need to schedule a NVMe poll? */
 bool bio_need_nvme_poll(struct bio_xs_context *xs);
@@ -816,5 +820,76 @@ void *bio_buf_bulk(struct bio_desc *biod, unsigned int *bulk_off);
  * \return			Buffer address
  */
 void *bio_buf_addr(struct bio_desc *biod);
+
+/*
+ * Prepare source and target bio SGLs for direct data copy between these two
+ * SGLs. bio_copy_post() must be called after a success bio_copy_prep() call.
+ *
+ * \param ioctxt	[IN]	BIO io context
+ * \param bsgl_src	[IN]	Source BIO SGL
+ * \param bsgl_dst	[IN]	Target BIO SGL
+ *
+ * \return			BIO copy descriptor on success, NULL on error
+ */
+struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt,
+				    struct bio_sglist *bsgl_src,
+				    struct bio_sglist *bsgl_dst);
+
+struct bio_csum_desc {
+	uint8_t		*bmd_csum_buf;
+	uint32_t	 bmd_csum_buf_len;
+	uint32_t	 bmd_chunk_sz;
+	uint16_t	 bmd_csum_len;
+	uint16_t	 bmd_csum_type;
+};
+
+/*
+ * Copy data between source and target bio SGLs prepared in @copy_desc
+ *
+ * \param copy_desc	[IN]	Copy descriptor created by bio_copy_prep()
+ * \param copy_size	[IN]	Specified copy size, the size must be aligned
+ *				with source IOVs. 0 means copy all source IOVs
+ * \param csum_desc	[IN]	Checksum descriptor for csum generation
+ *
+ * \return			0 on success, negative value on error
+ */
+int bio_copy_run(struct bio_copy_desc *copy_desc, unsigned int copy_size,
+		 struct bio_csum_desc *csum_desc);
+
+/*
+ * Release resource held by bio_copy_prep(), write data back to NVMe if the
+ * copy target is located on NVMe.
+ *
+ * \param copy_desc	[IN]	Copy descriptor created by bio_copy_prep()
+ *
+ * \return			0 on success, negative value on error
+ */
+int bio_copy_post(struct bio_copy_desc *copy_desc);
+
+/*
+ * Get the prepared source or target BIO SGL from a copy descriptor.
+ *
+ * \param copy_desc	[IN]	Copy descriptor created by bio_copy_prep()
+ * \param src		[IN]	Return Source or target BIO SGL?
+ *
+ * \return			Source/Target BIO SGL
+ */
+struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
+
+/*
+ * Copy data from source BIO SGL to target BIO SGL.
+ *
+ * \param ioctxt	[IN]	BIO io context
+ * \param bsgl_src	[IN]	Source BIO SGL
+ * \param bsgl_dst	[IN]	Target BIO SGL
+ * \param copy_size	[IN]	Specified copy size, the size must be aligned
+ *				with source IOVs. 0 means copy all source IOVs
+ * \param csum_desc	[IN]	Checksum descriptor for csum generation
+ *
+ * \return			0 on success, negative value on error
+ */
+int bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
+	     struct bio_sglist *bsgl_dst, unsigned int copy_size,
+	     struct bio_csum_desc *csum_desc);
 
 #endif /* __BIO_API_H__ */
