@@ -239,7 +239,7 @@ Available commands:
 To query SCM and NVMe storage space usage and show how much space is available to
 create new DAOS pools with, run the following command:
 
-- Query Per-Server Space Utilisation:
+- Query Per-Server Space Utilization:
 ```bash
 $ dmg storage query usage --help
 Usage:
