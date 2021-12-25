@@ -19,42 +19,43 @@ struct crt_na_dict crt_na_dict[] = {
 	{
 		.nad_type	= CRT_NA_SM,
 		.nad_str	= "sm",
+		.nad_alt_str	= "",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
 		.nad_type	= CRT_NA_OFI_SOCKETS,
 		.nad_str	= "ofi+sockets",
+		.nad_alt_str	= "ofi+socket",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
 		.nad_type	= CRT_NA_OFI_VERBS_RXM,
 		.nad_str	= "ofi+verbs;ofi_rxm",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = true,
-	}, {
-	/* verbs is not supported. Keep entry in order to print warning */
-		.nad_type	= CRT_NA_OFI_VERBS,
-		.nad_str	= "ofi+verbs",
+		.nad_alt_str	= "ofi+verbs",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
 		.nad_type	= CRT_NA_OFI_GNI,
 		.nad_str	= "ofi+gni",
+		.nad_alt_str	= "",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
 		.nad_type	= CRT_NA_OFI_PSM2,
 		.nad_str	= "ofi+psm2",
+		.nad_alt_str	= "",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
 		.nad_type	= CRT_NA_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
+		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
 		.nad_type	= CRT_NA_OFI_CXI,
 		.nad_str	= "ofi+cxi",
+		.nad_alt_str	= "",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
@@ -104,7 +105,8 @@ crt_prov_str_to_na_type(const char *prov_str)
 	int i;
 
 	for (i = 0; i < CRT_NA_OFI_COUNT; i++) {
-		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0)
+		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
+		    strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0)
 			return crt_na_dict[i].nad_type;
 	}
 

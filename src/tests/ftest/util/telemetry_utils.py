@@ -480,7 +480,7 @@ class TelemetryUtils():
         try:
             provider = re.sub("[+;]", "_", server.manager.job.get_config_value("provider"))
         except TypeError:
-            provider = "ofi_sockets"
+            provider = "ofi_tcp"
         net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
         all_metrics_names.extend(net_metrics)
 

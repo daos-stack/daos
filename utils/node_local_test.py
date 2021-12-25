@@ -3082,7 +3082,8 @@ def set_server_fi(server):
     cmd_env = get_base_env()
 
     cmd_env['OFI_INTERFACE'] = 'eth0'
-    cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
+    cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+tcp;ofi_rxm'
+
     vh = ValgrindHelper(server.conf)
 
     if server.conf.args.memcheck == 'no':
