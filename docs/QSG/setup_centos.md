@@ -390,7 +390,7 @@ More details on configuring `dmg` are available in the [daos_control.yml sample 
 		wolf-179: May 05 22:21:03 wolf-179.wolf.hpdd.intel.com daos_server[37431]: Metadata format required on instance 0
 
 		# format storage
-		dmg storage format -l $SERVER_NODES --reformat
+		dmg storage format -l $SERVER_NODES --force
 
 1. Verify that all servers have started:
 

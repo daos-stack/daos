@@ -3,6 +3,10 @@
 # Script to run doxygen against modified headers and report results.
 # see .github/workflows/doxygen.yml
 
+# Github only annotates the first 10 warnings, and we currently have more than that
+# in our include dir, so create a copy of the modified source files and run doxygen
+# on them only.
+
 set -e
 
 echo ::group::Setting up src
@@ -31,10 +35,6 @@ mv src/include src/include.old
 # Move in the ones to test.
 mv src/include2 src/include
 
-echo ::endgroup::
-
-echo ::group::Installing doxygen
-sudo apt-get install doxygen
 echo ::endgroup::
 
 echo ::group::Running check

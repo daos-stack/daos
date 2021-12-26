@@ -413,8 +413,13 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 	ABT_thread_attr		 attr;
 	struct dss_xstream	*dx;
 	int			 rc, rc1;
+	int			 stream_id;
 
-	dx = dss_get_xstream(sched_ult2xs(xs_type, tgt_idx));
+	stream_id = sched_ult2xs(xs_type, tgt_idx);
+	if (stream_id == -DER_INVAL)
+		return stream_id;
+
+	dx = dss_get_xstream(stream_id);
 	if (dx == NULL)
 		return -DER_NONEXIST;
 
@@ -572,4 +577,15 @@ dss_ult_create_all(void (*func)(void *), void *arg, bool main)
 	}
 
 	return rc;
+}
+
+int
+dss_offload_exec(int (*func)(void *), void *arg)
+{
+	struct dss_module_info *info = dss_get_module_info();
+
+	D_ASSERT(info != NULL);
+	D_ASSERT(info->dmi_xstream->dx_main_xs);
+
+	return dss_ult_execute(func, arg, NULL, NULL, DSS_XS_OFFLOAD, info->dmi_tgt_id, 0);
 }
