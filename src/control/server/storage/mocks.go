@@ -6,6 +6,12 @@
 
 package storage
 
+/*
+#include "stdlib.h"
+#include "daos_srv/control.h"
+*/
+import "C"
+
 import (
 	"fmt"
 	"math/rand"
@@ -15,6 +21,14 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+)
+
+// NvmeDevState constant definitions to represent mock bitset flag combinations.
+const (
+	MockNvmeStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
+	MockNvmeStateNormal   NvmeDevState = MockNvmeStateNew | C.NVME_DEV_FL_INUSE
+	MockNvmeStateEvicted  NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_FAULTY
+	MockNvmeStateIdentify NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_IDENTIFY
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -98,7 +112,7 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	return &SmdDevice{
 		UUID:      common.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		State:     "NORMAL",
+		NvmeState: MockNvmeStateIdentify,
 		TrAddr:    parentTrAddr,
 	}
 }

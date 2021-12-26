@@ -177,11 +177,12 @@ host list.
 devices, taking into account any specified network device class preference
 (ethernet or infiniband).
 
-Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
-that prevented `ndctl` from being able to report the NUMA affinity for a
-namespace.
-This prevents generation of dual engine configs using `dmg config generate`
-when running with one of the above-mentioned affected kernels.
+!!! note
+    Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
+    that prevented `ndctl` from being able to report the NUMA affinity for a
+    namespace.
+    This prevents generation of dual engine configs using `dmg config generate`
+    when running with one of the above-mentioned affected kernels.
 
 #### Certificate Configuration
 
@@ -360,6 +361,10 @@ preference to the default location e.g. `~/.daos_control.yml`.
 Once the DAOS server started, the storage and network can be configured on the
 storage nodes via the dmg utility.
 
+!!! note
+    `daos_server` storage commands are not config aware meaning they will not
+    read parameters from the server configuration file.
+
 ### SCM Preparation
 
 This section addresses how to verify that PMem (Intel(R) Optane(TM) persistent
@@ -428,6 +433,10 @@ used by DAOS.
 The server configuration file gives an administrator the ability to control
 storage selection.
 
+!!! note
+    `daos_server` storage commands are not config aware meaning they will not
+    read parameters from the server configuration file.
+
 #### Discovery
 
 `dmg storage scan` can be run to query remote running `daos_server`
@@ -437,7 +446,7 @@ processes over the management network.
 directly (scans locally-attached SSDs and Intel Persistent Memory Modules usable
 by DAOS).
 NVMe SSDs need to be made accessible first by running
-`daos_server storage prepare --nvme-only -u <current_user` prior.
+`daos_server storage prepare --nvme-only`.
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
@@ -1052,22 +1061,24 @@ also required.
 Example:
 ```
 fabric_ifaces:
-  - numa_node: 0
-    devices:
-    -
-      - iface: ib0
-      - domain: mlx5_0
-    -
-      - iface: ib1
-      - domain: mlx5_1
-  - numa_node: 1
-    devices:
-    -
-      - iface: ib2
-      - domain: mlx5_2
-    -
-      - iface: ib3
-      - domain: mlx5_3
+-
+  numa_node: 0
+  devices:
+  -
+    iface: ib0
+    domain: mlx5_0
+  -
+    iface: ib1
+    domain: mlx5_1
+-
+  numa_node: 1
+  devices:
+  -
+    iface: ib2
+    domain: mlx5_2
+  -
+    iface: ib3
+    domain: mlx5_3
 ```
 
 ### Agent Startup
