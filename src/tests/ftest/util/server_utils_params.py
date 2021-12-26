@@ -108,7 +108,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
-        self.nr_hugepages = BasicParameter(None, 4096)
+        self.nr_hugepages = BasicParameter(None, 0)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
@@ -155,6 +155,10 @@ class DaosServerYamlParameters(YamlParameters):
 
         for engine_params in self.engine_params:
             engine_params.get_params(test)
+
+        if self.using_nvme and self.nr_hugepages.value == 0:
+            self.log.debug("Setting hugepages when bdev class is 'nvme'")
+            self.nr_hugepages.update(4096, "nr_hugepages")
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.

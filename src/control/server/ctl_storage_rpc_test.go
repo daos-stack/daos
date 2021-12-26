@@ -384,7 +384,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		ctrlr.Namespaces = make([]*ctlpb.NvmeController_Namespace, len(smdIndexes))
 		for i, idx := range smdIndexes {
 			sd := proto.MockSmdDevice(ctrlr.PciAddr, idx+1)
-			sd.DevState = storage.NvmeDevStateNormal.Uint32()
+			sd.DevState = storage.MockNvmeStateNormal.Uint32()
 			sd.Rank = uint32(ctrlrIdx)
 			sd.TrAddr = ctrlr.PciAddr
 			ctrlr.SmdDevices[i] = sd
@@ -424,12 +424,12 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	}
 
 	smdDevRespStateNew := newSmdDevResp(1)
-	smdDevRespStateNew.Devices[0].DevState = storage.NvmeDevStateNew.Uint32()
+	smdDevRespStateNew.Devices[0].DevState = storage.MockNvmeStateNew.Uint32()
 
 	ctrlrPBwMetaNew := newCtrlrPBwMeta(1)
 	ctrlrPBwMetaNew.SmdDevices[0].AvailBytes = 0
 	ctrlrPBwMetaNew.SmdDevices[0].TotalBytes = 0
-	ctrlrPBwMetaNew.SmdDevices[0].DevState = storage.NvmeDevStateNew.Uint32()
+	ctrlrPBwMetaNew.SmdDevices[0].DevState = storage.MockNvmeStateNew.Uint32()
 
 	mockPbScmMount0 := proto.MockScmMountPoint(0)
 	mockPbScmNamespace0 := proto.MockScmNamespace(0)

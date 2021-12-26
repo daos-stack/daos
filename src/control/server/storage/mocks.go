@@ -27,10 +27,10 @@ import (
 
 // NvmeDevState constant definitions to represent mock bitset flag combinations.
 const (
-	NvmeDevStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	NvmeDevStateNormal   NvmeDevState = NvmeDevStateNew | C.NVME_DEV_FL_INUSE
-	NvmeDevStateFaulty   NvmeDevState = NvmeDevStateNormal | C.NVME_DEV_FL_FAULTY
-	NvmeDevStateIdentify NvmeDevState = NvmeDevStateNormal | C.NVME_DEV_FL_IDENTIFY
+	MockNvmeStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
+	MockNvmeStateNormal   NvmeDevState = MockNvmeStateNew | C.NVME_DEV_FL_INUSE
+	MockNvmeStateEvicted  NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_FAULTY
+	MockNvmeStateIdentify NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_IDENTIFY
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -114,7 +114,7 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	return &SmdDevice{
 		UUID:      common.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		NvmeState: NvmeDevStateIdentify,
+		NvmeState: MockNvmeStateIdentify,
 		TrAddr:    parentTrAddr,
 	}
 }

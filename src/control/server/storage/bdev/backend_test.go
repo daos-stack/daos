@@ -937,6 +937,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
+				HugePageCount:         -1,
 				TargetUser:            username,
 				EnableVMD:             false,
 				DisableCleanHugePages: true,
