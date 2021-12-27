@@ -717,14 +717,14 @@ kickoff:
 }
 
 static inline void
-process_req_list(struct dss_xstream *dx, d_list_t *list)
+process_req_list(struct dss_xstream *dx, d_list_t *list, bool stop_early)
 {
 	struct sched_request	*req, *tmp;
 	int			 rc;
 
 	d_list_for_each_entry_safe(req, tmp, list, sr_link) {
 		rc = process_req(dx, req);
-		if (rc)
+		if (rc && stop_early)
 			break;
 	}
 }
@@ -853,9 +853,9 @@ out:
 	reset_req_limit(dx, spi, SCHED_REQ_SCRUB, scrub_max);
 	reset_req_limit(dx, spi, SCHED_REQ_MIGRATE, mig_max);
 
-	process_req_list(dx, pool2req_list(spi, SCHED_REQ_GC));
-	process_req_list(dx, pool2req_list(spi, SCHED_REQ_SCRUB));
-	process_req_list(dx, pool2req_list(spi, SCHED_REQ_MIGRATE));
+	process_req_list(dx, pool2req_list(spi, SCHED_REQ_GC), true);
+	process_req_list(dx, pool2req_list(spi, SCHED_REQ_SCRUB), true);
+	process_req_list(dx, pool2req_list(spi, SCHED_REQ_MIGRATE), true);
 
 	return 0;
 }
@@ -874,7 +874,7 @@ policy_fifo_process(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 
-	process_req_list(dx, &info->si_fifo_list);
+	process_req_list(dx, &info->si_fifo_list, false);
 }
 
 struct sched_policy_ops {
