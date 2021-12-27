@@ -70,9 +70,15 @@ dnf install \
     valgrind-devel \
     yasm
 
+echo "is fedora java? $fedora_java"
+
 if [ "$fedora_java" = "yes" ]; then
 	dnf install java-1.8.0-openjdk-devel
-	curl --output ./apache-maven-3.6.3-bin.tar.gz https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz && tar -xf apache-maven-3.6.3-bin.tar.gz && find ./ -name "mvn" | { read d; f=$(dirname $d); cp -r $(readlink -f $f)/../* /usr/local; }
+	curl --output ./apache-maven-3.6.3-bin.tar.gz \
+https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz \
+&& tar -xf apache-maven-3.6.3-bin.tar.gz \
+&& find ./ -name "mvn" | \
+{ read -r d; f="$(dirname $d)"; cp -r "$(readlink -f $f)/../*" /usr/local; }
 else
 	dnf install maven
 fi
