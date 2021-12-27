@@ -10,6 +10,7 @@ hosts:
 timeout: 1800
 setup:
   start_servers_once: False
+skip_add_log_msg: True
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -49,6 +50,7 @@ pool:
     nvme_size: 108000000000
     svcn: 4
     control_method: dmg
+    rebuild_timeout: 240
 container:
     type: POSIX
     control_method: daos
@@ -117,3 +119,6 @@ snapshot:
   test_with_snapshot: True
 test_ranks:
   rank_list: ["2","5"]
+pool_capacity:
+  pool_fillup: 50
+  pool_test_oclass: RP_2GX

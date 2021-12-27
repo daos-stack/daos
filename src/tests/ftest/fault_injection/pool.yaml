@@ -4,10 +4,9 @@ hosts:
     - server-B
     - server-C
     - server-D
-    - server-E
   test_clients:
     - client-H
-timeout: 600
+timeout: 1200
 server_config:
   name: daos_server
   servers:
@@ -17,6 +16,8 @@ pool:
   control_method: dmg
   size: 12G
   nranks: 4
+  rebuild_timeout: 120
+  pool_query_timeout: 60
 container:
   object_qty: 100
   record_qty: 100
@@ -37,13 +38,3 @@ faults:
       - DAOS_CONT_DESTROY_FAIL_CORPC
       - DAOS_CONT_CLOSE_FAIL_CORPC
       - DAOS_CONT_QUERY_FAIL_CORPC
-      - DAOS_CONT_OPEN_FAIL
-      - DAOS_REBUILD_DROP_SCAN
-      - DAOS_REBUILD_NO_HDL
-      - DAOS_REBUILD_DROP_OBJ
-      - DAOS_REBUILD_UPDATE_FAIL
-      - DAOS_REBUILD_STALE_POOL
-      - DAOS_REBUILD_TGT_IV_UPDATE_FAIL
-      - DAOS_REBUILD_TGT_START_FAIL
-      - DAOS_REBUILD_TGT_SEND_OBJS_FAIL
-      - DAOS_REBUILD_TGT_NOSPACE

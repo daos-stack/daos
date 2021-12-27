@@ -151,10 +151,11 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	struct pool_domain      *root;
 	daos_obj_id_t           oid;
 	int                     rc;
+	uint32_t		nr_grps;
 
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid, NULL);
+	oc_attr = daos_oclass_attr_find(oid, NULL, &nr_grps);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
@@ -176,7 +177,7 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		if (grp_max == 0)
 			grp_max = 1;
 
-		jmop->jmop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
+		jmop->jmop_grp_nr = nr_grps;
 		if (jmop->jmop_grp_nr == DAOS_OBJ_GRP_MAX)
 			jmop->jmop_grp_nr = grp_max;
 		else if (jmop->jmop_grp_nr > grp_max)
@@ -1126,7 +1127,7 @@ out:
 	if (extend_layout != NULL)
 		pl_obj_layout_free(extend_layout);
 
-	if (rc < 0) {
+	if (rc != 0) {
 		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
 			DP_RC(rc));
 		if (layout != NULL)

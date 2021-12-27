@@ -491,6 +491,8 @@ func listContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
 	}
 
+	C.free(unsafe.Pointer(cConts))
+
 	return out, nil
 }
 

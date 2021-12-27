@@ -417,7 +417,8 @@ struct bio_desc {
 	unsigned int		 bd_buffer_prep:1,
 				 bd_dma_issued:1,
 				 bd_retry:1,
-				 bd_rdma:1;
+				 bd_rdma:1,
+				 bd_copy_dst:1;
 	/* Cached bulk handles being used by this IOD */
 	struct bio_bulk_hdl    **bd_bulk_hdls;
 	unsigned int		 bd_bulk_max;
@@ -487,6 +488,7 @@ struct media_error_msg {
 
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
+extern bool		bio_spdk_inited;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
@@ -607,7 +609,7 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
-/* b<o_config.c */
+/* bio_config.c */
 int bio_add_allowed_alloc(const char *json_config_file,
 			  struct spdk_env_opts *opts);
 #endif /* __BIO_INTERNAL_H__ */

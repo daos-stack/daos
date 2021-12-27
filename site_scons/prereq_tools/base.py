@@ -599,7 +599,8 @@ class PreReqComponent():
         for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
                     "http_proxy", "https_proxy",
                     "PKG_CONFIG_PATH", "MODULEPATH",
-                    "MODULESHOME", "MODULESLOADED"]:
+                    "MODULESHOME", "MODULESLOADED",
+                    "I_MPI_ROOT"]:
             value = os.environ.get(var)
             if value:
                 real_env[var] = value

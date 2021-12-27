@@ -476,6 +476,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
 	D_ASSERT(tls != NULL);
+	if (opc == RB_OP_REINT)
+		pool->sp_reintegrating++;
+
 out:
 	D_DEBUG(DB_TRACE, "create tls "DF_UUID": "DF_RC"\n",
 		DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -1502,7 +1505,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	dsc_cont_get_props(coh, &props);
 	rc = dsc_obj_id2oc_attr(mrone->mo_oid.id_pub, &props, &mrone->mo_oca);
 	if (rc) {
-		D_ERROR("Unknown object class: %d\n",
+		D_ERROR("Unknown object class: %u\n",
 			daos_obj_id2class(mrone->mo_oid.id_pub));
 		D_GOTO(obj_close, rc);
 	}
@@ -1623,8 +1626,7 @@ migrate_one_ult(void *arg)
 	while (tls->mpt_inflight_size + data_size >=
 	       tls->mpt_inflight_max_size && tls->mpt_inflight_max_size != 0
 	       && !tls->mpt_fini) {
-		D_DEBUG(DB_REBUILD, "mrone %p wait "DF_U64"/"DF_U64"\n",
-			mrone, tls->mpt_inflight_size,
+		D_INFO("mrone %p wait "DF_U64"/"DF_U64"\n", mrone, tls->mpt_inflight_size,
 			tls->mpt_inflight_max_size);
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
@@ -1708,7 +1710,7 @@ migrate_merge_iod_recx(daos_iod_t *dst_iod, daos_epoch_t **p_dst_ephs, daos_recx
 		if (recxs == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		if (dst_ephs != NULL) {
+		if (p_dst_ephs != NULL) {
 			D_ALLOC_ARRAY(dst_ephs, nr_recxs);
 			if (dst_ephs == NULL) {
 				D_FREE(recxs);
@@ -1748,12 +1750,12 @@ out:
 	return rc;
 }
 
+/* Merge new_iod/new_recx/new_ephs into iods which assume @iods has enough space. */
 static int
 migrate_insert_recxs_sgl(daos_iod_t *iods, daos_epoch_t **iods_ephs, uint32_t *iods_num,
 			 daos_iod_t *new_iod, daos_recx_t *new_recxs, daos_epoch_t *new_ephs,
 			 int new_recxs_nr, d_sg_list_t *sgls, d_sg_list_t *new_sgl)
 {
-	daos_iod_t *dst_iod;
 	int	   rc = 0;
 	int	   i;
 
@@ -1762,82 +1764,54 @@ migrate_insert_recxs_sgl(daos_iod_t *iods, daos_epoch_t **iods_ephs, uint32_t *i
 			break;
 	}
 
-	/* None duplicate iods, let's create new one */
-	if (i == *iods_num) {
-		rc = daos_iod_copy(&iods[i], new_iod);
+	/* This IOD already exists, let's check if iod_size and type matched */
+	if (iods[i].iod_type != DAOS_IOD_NONE &&
+	    (iods[i].iod_size != new_iod->iod_size ||
+	     iods[i].iod_type != new_iod->iod_type ||
+	     iods[i].iod_type == DAOS_IOD_SINGLE)) {
+		D_ERROR(DF_KEY" dst_iod size "DF_U64" != "DF_U64
+			" dst_iod type %d != %d\n",
+			DP_KEY(&new_iod->iod_name), iods[i].iod_size,
+			new_iod->iod_size, iods[i].iod_type,
+			new_iod->iod_type);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	/* Insert new IOD */
+	if (iods[i].iod_type == DAOS_IOD_NONE) {
+		D_ASSERT(i == *iods_num);
+		rc = daos_iov_copy(&iods[i].iod_name, &new_iod->iod_name);
 		if (rc)
-			return rc;
+			D_GOTO(out, rc);
+		iods[i].iod_type = new_iod->iod_type;
+		iods[i].iod_size = new_iod->iod_size;
 
 		if (new_sgl) {
 			rc = daos_sgl_alloc_copy_data(&sgls[i], new_sgl);
 			if (rc)
-				return rc;
+				D_GOTO(out, rc);
 		}
+		(*iods_num)++;
+	}
 
-		if (new_iod->iod_type == DAOS_IOD_SINGLE) {
-			iods[i].iod_recxs = NULL;
-			if (iods_ephs != NULL) {
-				D_ALLOC_ARRAY(iods_ephs[i], 1);
-				if (iods_ephs[i] == NULL)
-					return -DER_NOMEM;
-				iods_ephs[i][0] = new_ephs[0];
-				iods[i].iod_nr = new_recxs_nr;
-			}
-		} else {
-			int j;
-
-			D_ALLOC_ARRAY(iods[i].iod_recxs, new_recxs_nr);
-			if (iods[i].iod_recxs == NULL)
-				return -DER_NOMEM;
-
-			if (iods_ephs != NULL) {
-				D_ALLOC_ARRAY(iods_ephs[i], new_recxs_nr);
-				if (iods_ephs[i] == NULL) {
-					D_FREE(iods[i].iod_recxs);
-					iods[i].iod_recxs = NULL;
-					return -DER_NOMEM;
-				}
-			}
-
-			for (j = 0; j < new_recxs_nr; j++) {
-				iods[i].iod_recxs[j] = new_recxs[j];
-				if (iods_ephs != NULL)
-					iods_ephs[i][j] = new_ephs[j];
-			}
+	if (new_iod->iod_type == DAOS_IOD_SINGLE) {
+		iods[i].iod_recxs = NULL;
+		if (iods_ephs != NULL) {
+			D_ALLOC_ARRAY(iods_ephs[i], 1);
+			if (iods_ephs[i] == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			iods_ephs[i][0] = new_ephs[0];
 			iods[i].iod_nr = new_recxs_nr;
 		}
-		D_DEBUG(DB_REBUILD, "add new akey "DF_KEY" at %d\n",
-			DP_KEY(&new_iod->iod_name), i);
-		(*iods_num)++;
-		return rc;
+	} else {
+		rc = migrate_merge_iod_recx(&iods[i], iods_ephs ? &iods_ephs[i] : NULL,
+					    new_recxs, new_ephs, new_recxs_nr);
 	}
 
-	/* Try to merge the iods to the existent IOD */
-	dst_iod = &iods[i];
-	if (dst_iod->iod_size != new_iod->iod_size ||
-	    dst_iod->iod_type != new_iod->iod_type) {
-		D_ERROR(DF_KEY" dst_iod size "DF_U64" != "DF_U64
-			" dst_iod type %d != %d\n",
-			DP_KEY(&new_iod->iod_name), dst_iod->iod_size,
-			new_iod->iod_size, dst_iod->iod_type,
-			new_iod->iod_type);
-		D_GOTO(out, rc);
-	}
-
-	rc = migrate_merge_iod_recx(dst_iod, iods_ephs ? &iods_ephs[i] : NULL, new_recxs,
-				    new_ephs, new_recxs_nr);
-	if (rc)
-		D_GOTO(out, rc);
-
-	if (new_sgl) {
-		rc = daos_sgl_merge(&sgls[i], new_sgl);
-		if (rc)
-			D_GOTO(out, rc);
-	}
-
-	D_DEBUG(DB_REBUILD, "Merge akey "DF_KEY" to %d\n",
-		DP_KEY(&new_iod->iod_name), i);
 out:
+	D_DEBUG(DB_REBUILD, "Merge akey "DF_KEY" at %d: %d\n",
+		DP_KEY(&new_iod->iod_name), i, rc);
+
 	return rc;
 }
 
@@ -2422,7 +2396,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	dsc_cont_get_props(coh, &props);
 	rc = dsc_obj_id2oc_attr(arg->oid.id_pub, &props, &unpack_arg.oc_attr);
 	if (rc) {
-		D_ERROR("Unknown object class: %d\n",
+		D_ERROR("Unknown object class: %u\n",
 			daos_obj_id2class(arg->oid.id_pub));
 		D_GOTO(out_cont, rc);
 	}
@@ -2500,7 +2474,8 @@ retry:
 			if (rc != -DER_INPROGRESS) {
 				daos_anchor_set_flags(&dkey_anchor,
 						      DIOF_WITH_SPEC_EPOCH |
-						      DIOF_TO_SPEC_GROUP);
+						      DIOF_TO_SPEC_GROUP |
+						      DIOF_FOR_MIGRATION);
 				D_DEBUG(DB_REBUILD, "retry to non leader "
 					DF_UOID": "DF_RC"\n",
 					DP_UOID(arg->oid), DP_RC(rc));
@@ -2581,72 +2556,59 @@ out:
 	return rc;
 }
 
-void
-ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver)
-{
-	struct migrate_pool_tls *tls;
-
-	tls = migrate_pool_tls_lookup(pool_uuid, ver);
-	if (tls == NULL)
-		return;
-
-	tls->mpt_fini = 1;
-
-	ABT_mutex_lock(tls->mpt_inflight_mutex);
-	ABT_cond_broadcast(tls->mpt_inflight_cond);
-	ABT_mutex_unlock(tls->mpt_inflight_mutex);
-	migrate_pool_tls_put(tls); /* lookup */
-	migrate_pool_tls_put(tls); /* destroy */
-}
-
-struct migrate_abort_arg {
+struct migrate_stop_arg {
 	uuid_t	pool_uuid;
 	uint32_t version;
 };
 
-int
+static int
 migrate_fini_one_ult(void *data)
 {
-	struct migrate_abort_arg *arg = data;
-	struct migrate_pool_tls	*tls;
+	struct migrate_stop_arg *arg = data;
+	struct migrate_pool_tls *tls;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
 	if (tls == NULL)
 		return 0;
 
-	D_ASSERT(tls->mpt_refcount > 1);
 	tls->mpt_fini = 1;
 
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
 	ABT_cond_broadcast(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
+	migrate_pool_tls_put(tls); /* lookup */
 	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+
 	migrate_pool_tls_put(tls); /* destroy */
 
-	D_DEBUG(DB_TRACE, "abort one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
+	D_INFO("migrate fini one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
 	return 0;
 }
 
-/* Abort the migration */
+/* stop the migration */
 void
-ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
+ds_migrate_stop(struct ds_pool *pool, unsigned int version)
 {
 	struct migrate_pool_tls *tls;
-	struct migrate_abort_arg arg;
+	struct migrate_stop_arg arg;
 	int			 rc;
 
-	tls = migrate_pool_tls_lookup(pool_uuid, version);
+	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
 	if (tls == NULL)
 		return;
 
-	uuid_copy(arg.pool_uuid, pool_uuid);
+	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
 	rc = dss_thread_collective(migrate_fini_one_ult, &arg, 0);
 	if (rc)
-		D_ERROR("migrate abort: %d\n", rc);
+		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
+	if (tls->mpt_opc == RB_OP_REINT)
+		pool->sp_reintegrating--;
 	migrate_pool_tls_put(tls);
+	migrate_pool_tls_put(tls);
+	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 }
 
 static int
@@ -2679,7 +2641,8 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 	}
 
 	/* Wait until container aggregation are stopped */
-	while (cont->sc_vos_agg_active && !tls->mpt_fini && !cont->sc_stopping) {
+	while ((cont->sc_ec_agg_active || cont->sc_vos_agg_active) &&
+	       !tls->mpt_fini && !cont->sc_stopping) {
 		D_DEBUG(DB_REBUILD, "wait for "DF_UUID"/"DF_UUID"/%u vos aggregation"
 			" to be inactive\n", DP_UUID(tls->mpt_pool_uuid),
 			DP_UUID(cont_uuid), tls->mpt_version);
@@ -3301,7 +3264,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		pool_tls->mpt_ult_running = 1;
 		migrate_pool_tls_get(pool_tls);
 		rc = dss_ult_create(migrate_ult, pool_tls, DSS_XS_SELF,
-				    0, 0, NULL);
+				    0, MIGRATE_STACK_SIZE, NULL);
 		if (rc) {
 			pool_tls->mpt_ult_running = 0;
 			migrate_pool_tls_put(pool_tls);

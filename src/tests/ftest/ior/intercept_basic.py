@@ -47,11 +47,11 @@ class IorIntercept(IorTestBase):
         apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
         for api in apis:
             self.ior_cmd.api.update(api)
-            out = self.run_ior_with_pool(fail_on_warning=False)
+            out = self.run_ior_with_pool(fail_on_warning=True)
             without_intercept = IorCommand.get_ior_metrics(out)
             if api == "POSIX":
                 intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                out = self.run_ior_with_pool(intercept, fail_on_warning=False)
+                out = self.run_ior_with_pool(intercept, fail_on_warning=True)
                 with_intercept = IorCommand.get_ior_metrics(out)
                 max_mib = int(IorMetrics.Max_MiB)
                 min_mib = int(IorMetrics.Min_MiB)
@@ -72,7 +72,10 @@ class IorIntercept(IorTestBase):
                 # Verifying read performance
                 self.assertTrue(float(with_intercept[1][max_mib]) >
                                 read_x * float(without_intercept[1][max_mib]))
-                self.assertTrue(float(with_intercept[1][min_mib]) >
-                                read_x * float(without_intercept[1][min_mib]))
+                # DAOS-5857 There's a lot of volatility in this result, so disable it to reduce
+                # testing noise.  This test runs IOR with multiple iterations so it should only
+                # affect min results, mean and max results should be more resilient.
+                #self.assertTrue(float(with_intercept[1][min_mib]) >
+                #                read_x * float(without_intercept[1][min_mib]))
                 self.assertTrue(float(with_intercept[1][mean_mib]) >
                                 read_x * float(without_intercept[1][mean_mib]))

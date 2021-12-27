@@ -235,7 +235,11 @@ func TestPromExp_NewCollector(t *testing.T) {
 		expResult *Collector
 	}{
 		"no sources": {
-			expErr: errors.New("must have > 0 sources"),
+			expResult: &Collector{
+				summary: &prometheus.SummaryVec{
+					MetricVec: &prometheus.MetricVec{},
+				},
+			},
 		},
 		"defaults": {
 			sources: testSrc,
@@ -281,8 +285,10 @@ func TestPromExp_NewCollector(t *testing.T) {
 				cmpopts.IgnoreUnexported(regexp.Regexp{}),
 				cmp.AllowUnexported(Collector{}),
 				cmp.FilterPath(func(p cmp.Path) bool {
-					// Ignore the logger
-					return strings.HasSuffix(p.String(), "log")
+					// Ignore a few specific fields
+					return (strings.HasSuffix(p.String(), "log") ||
+						strings.HasSuffix(p.String(), "sourceMutex") ||
+						strings.HasSuffix(p.String(), "cleanupSource"))
 				}, cmp.Ignore()),
 			}
 			if diff := cmp.Diff(tc.expResult, result, cmpOpts...); diff != "" {
@@ -591,6 +597,187 @@ func TestPromExp_extractLabels(t *testing.T) {
 					t.Fatalf("key %q was not expected", key)
 				}
 				common.AssertEqual(t, expVal, val, "incorrect value")
+			}
+		})
+	}
+}
+
+func TestPromExp_Collector_AddSource(t *testing.T) {
+	testSrc := func() []*EngineSource {
+		return []*EngineSource{
+			{Index: 1},
+			{Index: 2},
+			{Index: 3},
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		startSrc   []*EngineSource
+		es         *EngineSource
+		fn         func()
+		expSrc     []*EngineSource
+		expAddedFn bool
+	}{
+		"nil EngineSource": {
+			startSrc: testSrc(),
+			fn:       func() {},
+			expSrc:   testSrc(),
+		},
+		"nil func": {
+			es:     &EngineSource{},
+			expSrc: []*EngineSource{{}},
+		},
+		"add to empty": {
+			es:         &EngineSource{},
+			fn:         func() {},
+			expSrc:     []*EngineSource{{}},
+			expAddedFn: true,
+		},
+		"add to existing list": {
+			startSrc:   testSrc(),
+			es:         &EngineSource{},
+			fn:         func() {},
+			expSrc:     append(testSrc(), &EngineSource{}),
+			expAddedFn: true,
+		},
+		"add as duplicate": {
+			startSrc:   testSrc(),
+			es:         testSrc()[1],
+			fn:         func() {},
+			expSrc:     testSrc(),
+			expAddedFn: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			collector, err := NewCollector(log, nil, tc.startSrc...)
+			if err != nil {
+				t.Fatalf("failed to set up collector: %s", err)
+			}
+			collector.AddSource(tc.es, tc.fn)
+
+			// Ordering changes are possible, so we can't directly compare the structs
+			common.AssertEqual(t, len(tc.expSrc), len(collector.sources), "")
+			for _, exp := range tc.expSrc {
+				found := false
+				for _, actual := range collector.sources {
+					if actual.Index == exp.Index {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					t.Errorf("expected EngineSource %d not found", exp.Index)
+				}
+			}
+
+			var found bool
+			if tc.es != nil {
+				_, found = collector.cleanupSource[tc.es.Index]
+			}
+			common.AssertEqual(t, tc.expAddedFn, found, "")
+		})
+	}
+}
+
+func TestPromExp_Collector_RemoveSource(t *testing.T) {
+	badCleanup := func() {
+		t.Fatal("wrong cleanup function called")
+	}
+
+	var goodCleanupCalled int
+	goodCleanup := func() {
+		goodCleanupCalled++
+	}
+
+	for name, tc := range map[string]struct {
+		startSrc         []*EngineSource
+		startCleanup     map[uint32]func()
+		idx              uint32
+		expSrc           []*EngineSource
+		expCleanupKeys   []uint32
+		expCleanupCalled int
+	}{
+		"not found": {
+			startSrc: []*EngineSource{
+				{Index: 1},
+			},
+			startCleanup: map[uint32]func(){
+				1: badCleanup,
+			},
+			idx: 42,
+			expSrc: []*EngineSource{
+				{Index: 1},
+			},
+			expCleanupKeys: []uint32{1},
+		},
+		"success": {
+			startSrc: []*EngineSource{
+				{Index: 1},
+				{Index: 2},
+				{Index: 3},
+			},
+			startCleanup: map[uint32]func(){
+				1: badCleanup,
+				2: goodCleanup,
+				3: badCleanup,
+			},
+			idx: 2,
+			expSrc: []*EngineSource{
+				{Index: 1},
+				{Index: 3},
+			},
+			expCleanupKeys:   []uint32{1, 3},
+			expCleanupCalled: 1,
+		},
+		"remove engine with no cleanup": {
+			startSrc: []*EngineSource{
+				{Index: 1},
+				{Index: 2},
+				{Index: 3},
+			},
+			startCleanup: map[uint32]func(){
+				1: badCleanup,
+				3: badCleanup,
+			},
+			idx: 2,
+			expSrc: []*EngineSource{
+				{Index: 1},
+				{Index: 3},
+			},
+			expCleanupKeys: []uint32{1, 3},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			collector, err := NewCollector(log, nil, tc.startSrc...)
+			if err != nil {
+				t.Fatalf("failed to set up collector: %s", err)
+			}
+
+			collector.cleanupSource = tc.startCleanup
+			goodCleanupCalled = 0
+
+			collector.RemoveSource(tc.idx)
+
+			if diff := cmp.Diff(tc.expSrc, collector.sources, cmpopts.IgnoreUnexported(EngineSource{})); diff != "" {
+				t.Fatalf("(-want, +got)\n%s", diff)
+			}
+
+			common.AssertEqual(t, tc.expCleanupCalled, goodCleanupCalled, "")
+
+			common.AssertEqual(t, len(tc.expCleanupKeys), len(collector.cleanupSource), "")
+			for _, key := range tc.expCleanupKeys {
+				fn, found := collector.cleanupSource[key]
+				common.AssertTrue(t, found, fmt.Sprintf("expected to find %d in cleanup map", key))
+				if fn == nil {
+					t.Fatal("cleanup function was nil")
+				}
 			}
 		})
 	}

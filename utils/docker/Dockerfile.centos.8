@@ -43,9 +43,12 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
           -i /etc/dnf/dnf.conf;                                 \
       dnf -y upgrade epel-release;                              \
     else                                                        \
-      dnf -y install epel-release dnf-plugins-core &&           \
+      dnf -y install dnf-plugins-core &&                        \
       dnf config-manager --assumeyes --set-enabled powertools;  \
+      dnf -y install epel-release;                              \
     fi;                                                         \
+    dnf config-manager --save --setopt=assumeyes=True &&        \
+    dnf config-manager --save --setopt=install_weak_deps=False && \
     dnf clean all
 
 # Currently the appstream REPO can not be part of a repo group
@@ -102,11 +105,18 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         dnf repolist; \
         dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
+# For conditional build DAOS and Java
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-centos8.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh
-RUN /tmp/install.sh
+RUN if [ "${BASE_DISTRO/:*/}" = "fedora" ] && [ "$BUILD_JAVA" = "yes" ]; then
+	. /tmp/install.sh yes
+    else
+	. /tmp/install.sh no
+    fi
 
 ARG UID=1000
 
@@ -116,7 +126,6 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
@@ -187,17 +196,17 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
       TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
-# force an upgrade to get any newly built RPMs
+# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 USER root:root
 ARG CACHEBUST
-RUN dnf -y upgrade \
-        --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    dnf clean all
+RUN [ -z "$CACHEBUST" ] || \
+    { dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    dnf clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.
-LABEL DAOS=stage1
+LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -212,7 +221,6 @@ USER daos_server:daos_server
 ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
@@ -224,10 +232,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
-
-USER root:root
-LABEL DAOS=true
-USER daos_server:daos_server
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java
@@ -243,8 +247,6 @@ RUN echo -e "<settings>\n\
                 </mirror>\n\
         </mirrors>\n\
 </settings>" > /home/daos/.m2/settings.xml
-
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos

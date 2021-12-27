@@ -216,9 +216,29 @@ func setDeadlineIfUnset(parent context.Context, req UnaryRequest) (context.Conte
 
 	rd := req.getDeadline()
 	if rd.IsZero() {
-		rd = time.Now().Add(defaultRequestTimeout)
+		req.SetTimeout(defaultRequestTimeout)
+		rd = req.getDeadline()
 	}
 	return context.WithDeadline(parent, rd)
+}
+
+// isTimeout returns true if the error is a context timeout error.
+func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	cause := errors.Cause(err)
+	return cause == context.DeadlineExceeded || status.Code(cause) == codes.DeadlineExceeded
+}
+
+// wrapReqTimeout checks the error for a timeout and returns a
+// structured error with more information if it's available.
+func wrapReqTimeout(req UnaryRequest, err error) error {
+	if isTimeout(err) {
+		return FaultRpcTimeout(req)
+	}
+	return err
 }
 
 // InvokeUnaryRPCAsync performs an asynchronous invocation of the given RPC
@@ -303,7 +323,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 
 		ur := new(UnaryResponse)
 		if err := gatherResponses(reqCtx, respChan, ur); err != nil {
-			return nil, err
+			return nil, wrapReqTimeout(req, err)
 		}
 		return ur, nil
 	}
@@ -336,22 +356,6 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 	// Copy the starting hostlist to use for reset on retry later.
 	startHostList := make([]string, len(req.getHostList()))
 	copy(startHostList, req.getHostList())
-
-	isTimeout := func(err error) bool {
-		if err == nil {
-			return false
-		}
-
-		// Get the wrapped error.
-		cause := errors.Cause(err)
-		switch {
-		case cause == context.DeadlineExceeded,
-			status.Code(cause) == codes.DeadlineExceeded:
-			return true
-		default:
-			return false
-		}
-	}
 
 	isHardFailure := func(err error, reqCtx context.Context) bool {
 		if err == nil {
@@ -402,19 +406,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 		respChan, err := c.InvokeUnaryRPCAsync(tryCtx, req)
 		if isHardFailure(err, reqCtx) {
-			if isTimeout(err) {
-				return nil, FaultRpcTimeout(req)
-			}
-			return nil, err
+			return nil, wrapReqTimeout(req, err)
 		}
 
 		ur := &UnaryResponse{fromMS: true}
 		err = gatherResponses(tryCtx, respChan, ur)
 		if isHardFailure(err, reqCtx) {
-			if isTimeout(err) {
-				return nil, FaultRpcTimeout(req)
-			}
-			return nil, err
+			return nil, wrapReqTimeout(req, err)
 		}
 
 		_, err = ur.getMSResponse()

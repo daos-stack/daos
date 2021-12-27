@@ -730,7 +730,6 @@ iv_destroy_cb(crt_iv_namespace_t ivns, void *arg)
 {
 	D_ASSERT(ivns != NULL);
 	D_ASSERT(arg != NULL);
-	D_ASSERT(ivns == ivns);
 
 	D_DEBUG(DB_TRACE, "ivns %p was destroyed, arg %p\n", ivns, arg);
 }

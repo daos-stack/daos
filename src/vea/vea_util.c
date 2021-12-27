@@ -7,6 +7,7 @@
 
 #include <daos/common.h>
 #include <daos/dtx.h>
+#include <gurt/telemetry_producer.h>
 #include "vea_internal.h"
 
 int
@@ -264,4 +265,151 @@ repeat:
 	}
 
 	return rc;
+}
+
+void
+vea_metrics_free(void *data)
+{
+	D_FREE(data);
+}
+
+static inline char *
+rsrv_type2str(int rsrv_type)
+{
+	switch (rsrv_type) {
+	case STAT_RESRV_HINT:
+		return "hint";
+	case STAT_RESRV_LARGE:
+		return "large";
+	case STAT_RESRV_SMALL:
+		return "small";
+	default:
+		return "unknown";
+	}
+}
+
+static inline char *
+frags_type2str(int frags_type)
+{
+	switch (frags_type) {
+	case STAT_FRAGS_LARGE:
+		return "large";
+	case STAT_FRAGS_SMALL:
+		return "small";
+	case STAT_FRAGS_AGING:
+		return "aging";
+	default:
+		return "unknown";
+	}
+}
+
+#define VEA_TELEMETRY_DIR	"block_allocator"
+
+void *
+vea_metrics_alloc(const char *path, int tgt_id)
+{
+	struct vea_metrics	*metrics;
+	char			 desc[40];
+	int			 i, rc;
+
+	D_ASSERT(tgt_id >= 0);
+
+	D_ALLOC_PTR(metrics);
+	if (metrics == NULL)
+		return NULL;
+
+	for (i = 0; i < STAT_RESRV_TYPE_MAX; i++) {
+		snprintf(desc, sizeof(desc), "number of %s block allocs", rsrv_type2str(i));
+
+		rc = d_tm_add_metric(&metrics->vm_rsrv[i], D_TM_COUNTER, desc, "allocs",
+				     "%s/%s/alloc/%s/tgt_%u", path, VEA_TELEMETRY_DIR,
+				     rsrv_type2str(i), tgt_id);
+		if (rc)
+			D_WARN("Failed to create 'alloc/%s' telemetry: "DF_RC"\n",
+			       rsrv_type2str(i), DP_RC(rc));
+	}
+
+	for (i = 0; i < STAT_FRAGS_TYPE_MAX; i++) {
+		int type = i + STAT_FRAGS_LARGE;
+
+		snprintf(desc, sizeof(desc), "number of %s frags", frags_type2str(type));
+
+		rc = d_tm_add_metric(&metrics->vm_frags[i], D_TM_COUNTER, desc, "frags",
+				     "%s/%s/frags/%s/tgt_%u", path, VEA_TELEMETRY_DIR,
+				     frags_type2str(type), tgt_id);
+		if (rc)
+			D_WARN("Failed to create 'frags/%s' telemetry: "DF_RC"\n",
+			       frags_type2str(type), DP_RC(rc));
+	}
+
+	rc = d_tm_add_metric(&metrics->vm_free_blks, D_TM_GAUGE, "number of free blocks",
+			     "blks", "%s/%s/free_blks/tgt_%u", path, VEA_TELEMETRY_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create free blks telemetry: "DF_RC"\n", DP_RC(rc));
+
+	return metrics;
+}
+
+int
+vea_metrics_count(void)
+{
+	return (sizeof(struct vea_metrics) / sizeof(struct d_tm_node_t *));
+}
+
+static void
+update_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr, bool dec)
+{
+	struct vea_metrics	*metrics = vsi->vsi_metrics;
+	int			 frag_idx;
+
+	switch (type) {
+	case STAT_RESRV_HINT:
+	case STAT_RESRV_LARGE:
+	case STAT_RESRV_SMALL:
+		D_ASSERT(!dec && nr == 1);
+		vsi->vsi_stat[type] += nr;
+		if (metrics && metrics->vm_rsrv[type])
+			d_tm_set_counter(metrics->vm_rsrv[type], vsi->vsi_stat[type]);
+		break;
+	case STAT_FRAGS_LARGE:
+	case STAT_FRAGS_SMALL:
+	case STAT_FRAGS_AGING:
+		D_ASSERT(nr == 1 && type >= STAT_FRAGS_LARGE);
+		if (dec) {
+			D_ASSERT(vsi->vsi_stat[type] > 0);
+			vsi->vsi_stat[type] -= nr;
+		} else {
+			vsi->vsi_stat[type] += nr;
+		}
+		frag_idx = type - STAT_FRAGS_LARGE;
+		if (metrics && metrics->vm_frags[frag_idx])
+			d_tm_set_counter(metrics->vm_frags[frag_idx], vsi->vsi_stat[type]);
+		break;
+	case STAT_FREE_BLKS:
+		if (dec) {
+			D_ASSERTF(vsi->vsi_stat[type] >= nr, "free:"DF_U64" < rsrvd:"DF_U64"\n",
+				  vsi->vsi_stat[type], nr);
+			vsi->vsi_stat[type] -= nr;
+		} else {
+			vsi->vsi_stat[type] += nr;
+		}
+		if (metrics && metrics->vm_free_blks)
+			d_tm_set_gauge(metrics->vm_free_blks, vsi->vsi_stat[type]);
+		break;
+	default:
+		D_ASSERTF(0, "Invalid stat type %u\n", type);
+		break;
+	}
+}
+
+void
+dec_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr)
+{
+	return update_stats(vsi, type, nr, true);
+}
+
+void
+inc_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr)
+{
+	return update_stats(vsi, type, nr, false);
 }

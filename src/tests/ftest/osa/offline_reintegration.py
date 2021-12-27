@@ -7,11 +7,13 @@
 import random
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
+from nvme_utils import ServerFillUp
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
+from apricot import skipForTicket
 
 
-class OSAOfflineReintegration(OSAUtils):
+class OSAOfflineReintegration(OSAUtils, ServerFillUp):
     # pylint: disable=too-many-ancestors
     """OSA offline Reintegration test cases.
 
@@ -29,6 +31,8 @@ class OSAOfflineReintegration(OSAUtils):
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        self.ior_test_repetitions = self.params.get("pool_test_repetitions",
+                                                    '/run/pool_capacity/*')
         self.loop_test_cnt = 1
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
@@ -36,7 +40,7 @@ class OSAOfflineReintegration(OSAUtils):
         self.dmg_command.exit_status_exception = True
 
     def run_offline_reintegration_test(self, num_pool, data=False,
-                                       server_boot=False, oclass=None):
+                                       server_boot=False, oclass=None, pool_fillup=0):
         """Run the offline reintegration without data.
 
         Args:
@@ -46,6 +50,8 @@ class OSAOfflineReintegration(OSAUtils):
             server_boot (bool) : Perform system stop/start on a rank.
                                  Defaults to False.
             oclass (str) : daos object class string (eg: "RP_2G8")
+            pool_fillup (int) : Percentage of pool filled up with data before performing OSA
+                                operations.
         """
         # Create a pool
         pool = {}
@@ -65,8 +71,21 @@ class OSAOfflineReintegration(OSAUtils):
             self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]
             if data:
-                self.run_ior_thread("Write", oclass, test_seq)
-                self.run_mdtest_thread(oclass)
+                # if pool_fillup is greater than 0, then
+                # use start_ior_load method from nvme_utils.py.
+                # Otherwise, use the osa_utils.py run_ior_thread
+                # method.
+                if pool_fillup > 0:
+                    self.ior_cmd.dfs_oclass.update(oclass)
+                    self.ior_cmd.dfs_dir_oclass.update(oclass)
+                    self.ior_default_flags = self.ior_w_flags
+                    self.ior_cmd.repetitions.update(self.ior_test_repetitions)
+                    self.log.info(self.pool.pool_percentage_used())
+                    self.start_ior_load(storage='NVMe', operation="Auto_Write", percent=pool_fillup)
+                    self.log.info(self.pool.pool_percentage_used())
+                else:
+                    self.run_ior_thread("Write", oclass, test_seq)
+                    self.run_mdtest_thread(oclass)
                 if self.test_with_snapshot is True:
                     # Create a snapshot of the container
                     # after IOR job completes.
@@ -101,6 +120,8 @@ class OSAOfflineReintegration(OSAUtils):
                     elif (self.test_with_rf is True and val > 0):
                         continue
                     else:
+                        if pool_fillup > 0 and val > 0:
+                            continue
                         output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                                rank[val])
                 else:
@@ -138,6 +159,8 @@ class OSAOfflineReintegration(OSAUtils):
                 elif (self.test_with_rf is True and val > 0):
                     continue
                 else:
+                    if pool_fillup > 0 and val > 0:
+                        continue
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val])
                 self.print_and_assert_on_rebuild_failure(output)
@@ -157,13 +180,16 @@ class OSAOfflineReintegration(OSAUtils):
         for val in range(0, num_pool):
             self.pool = pool[val]
             if data:
-                self.run_ior_thread("Read", oclass, test_seq)
-                self.run_mdtest_thread(oclass)
-                self.container = self.pool_cont_dict[self.pool][0]
-                kwargs = {"pool": self.pool.uuid,
-                          "cont": self.container.uuid}
-                output = self.daos_command.container_check(**kwargs)
-                self.log.info(output)
+                if pool_fillup > 0:
+                    self.start_ior_load(storage='NVMe', operation='Auto_Read', percent=pool_fillup)
+                else:
+                    self.run_ior_thread("Read", oclass, test_seq)
+                    self.run_mdtest_thread(oclass)
+                    self.container = self.pool_cont_dict[self.pool][0]
+                    kwargs = {"pool": self.pool.uuid,
+                              "cont": self.container.uuid}
+                    output = self.daos_command.container_check(**kwargs)
+                    self.log.info(output)
 
     def test_osa_offline_reintegration_without_checksum(self):
         """Test ID: DAOS-6923
@@ -194,6 +220,7 @@ class OSAOfflineReintegration(OSAUtils):
         self.log.info("Offline Reintegration : Multiple Pools")
         self.run_offline_reintegration_test(5, data=True)
 
+    @skipForTicket("DAOS-9313")
     def test_osa_offline_reintegration_server_stop(self):
         """Test ID: DAOS-6748.
 
@@ -298,3 +325,16 @@ class OSAOfflineReintegration(OSAUtils):
                                                   '/run/snapshot/*')
         self.log.info("Offline Reintegration : Test with snapshot")
         self.run_offline_reintegration_test(1, data=True)
+
+    def test_osa_offline_reintegrate_with_less_pool_space(self):
+        """Test ID: DAOS-7160
+        Test Description: Reintegrate rank will less pool space.
+
+        :avocado: tags=all,full_regression,hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=offline_reintegrate_with_less_pool_space
+        """
+        self.log.info("Offline Reintegration : Test with less pool space")
+        oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
+        pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
+        self.run_offline_reintegration_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)

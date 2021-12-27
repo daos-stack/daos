@@ -10,10 +10,13 @@
 
 set -e
 
-dnf -y upgrade
-dnf -y install \
+fedora_java=$1
+
+dnf upgrade
+dnf install \
     boost-python3-devel \
-    clang-analyzer \
+    clang \
+    clang-tools-extra \
     cmake \
     CUnit-devel \
     e2fsprogs \
@@ -27,6 +30,7 @@ dnf -y install \
     glibc-langpack-en \
     golang \
     graphviz \
+    help2man \
     hwloc-devel \
     ipmctl \
     java-1.8.0-openjdk \
@@ -44,7 +48,6 @@ dnf -y install \
     Lmod \
     lz4-devel \
     make \
-    maven \
     meson \
     ndctl \
     ninja-build \
@@ -54,7 +57,6 @@ dnf -y install \
     openssl-devel \
     patch \
     patchelf \
-    pciutils \
     python3-defusedxml \
     python3-devel \
     python3-distro \
@@ -65,7 +67,14 @@ dnf -y install \
     python3-scons \
     python3-yaml \
     sg3_utils \
-    sudo \
     valgrind-devel \
     yasm
+
+if [ "$fedora_java" = "yes" ]; then
+	dnf install java-1.8.0-openjdk-devel
+	curl --output ./apache-maven-3.6.3-bin.tar.gz https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz && tar -xf apache-maven-3.6.3-bin.tar.gz && find ./ -name "mvn" | { read d; f=$(dirname $d); cp -r $(readlink -f $f)/../* /usr/local; }
+else
+	dnf install maven
+fi
+
 dnf clean all

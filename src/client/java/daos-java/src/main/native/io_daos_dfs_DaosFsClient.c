@@ -760,6 +760,7 @@ Java_io_daos_dfs_DaosFsClient_allocateDfsDesc(JNIEnv *env,
 	/* move by 8 and skip offset, length, event id */
 	desc_buffer += 26;
 	desc->ret_buf_address = desc_buffer;
+	desc->event = NULL;
 	/* copy back address */
 	memcpy((char *)descBufAddress, &desc, 8);
 	return *(jlong *)&desc;
@@ -828,8 +829,8 @@ Java_io_daos_dfs_DaosFsClient_dfsRead(JNIEnv *env, jobject client,
 }
 
 static inline void
-decode_dfs_desc(char *buf, dfs_desc_t **desc_ret, daos_event_t **event_ret,
-		uint64_t *offset_ret, uint64_t *len)
+decode_dfs_desc(char *buf, dfs_desc_t **desc_ret, uint64_t *offset_ret,
+		uint64_t *len)
 {
 	uint64_t dfs_mem;
 	uint16_t eid;
@@ -849,7 +850,7 @@ decode_dfs_desc(char *buf, dfs_desc_t **desc_ret, daos_event_t **event_ret,
 	desc->iov.iov_len = desc->iov.iov_buf_len = (size_t)(*len);
 	/* event */
 	memcpy(&eid, buf, 2);
-	*event_ret = desc->eq->events[eid];
+	desc->event = desc->eq->events[eid];
 }
 
 static int
@@ -862,7 +863,8 @@ update_actual_size(void *udata, daos_event_t *ev, int ret)
 	memcpy(desc_buffer, &ret, 4);
 	desc_buffer += 4;
 	memcpy(desc_buffer, &value, 4);
-	ev->ev_error = 0;
+	desc->event->status = 0;
+	return 0;
 }
 
 JNIEXPORT void JNICALL
@@ -876,11 +878,11 @@ Java_io_daos_dfs_DaosFsClient_dfsReadAsync(JNIEnv *env, jobject client,
 	uint64_t offset;
 	uint64_t len;
 	dfs_desc_t *desc;
-	daos_event_t *event;
 	int rc;
 
-	decode_dfs_desc(buf, &desc, &event, &offset, &len);
-	rc = daos_event_register_comp_cb(event,
+	decode_dfs_desc(buf, &desc, &offset, &len);
+	desc->event->event.ev_error = 0;
+	rc = daos_event_register_comp_cb(&desc->event->event,
 					 update_actual_size, desc);
 	if (rc) {
 		char *msg = "Failed to register dfs read callback";
@@ -888,8 +890,8 @@ Java_io_daos_dfs_DaosFsClient_dfsReadAsync(JNIEnv *env, jobject client,
 		throw_exception_const_msg_object(env, msg, rc);
 		return;
 	}
-	event->ev_error = EVENT_IN_USE;
-	rc = dfs_read(dfs, file, &desc->sgl, offset, &desc->size, event);
+	desc->event->status = EVENT_IN_USE;
+	rc = dfs_read(dfs, file, &desc->sgl, offset, &desc->size, &desc->event->event);
 	if (rc) {
 		char *msg;
 
@@ -953,7 +955,8 @@ update_ret_code(void *udata, daos_event_t *ev, int ret)
 	char *desc_buffer = desc->ret_buf_address;
 
 	memcpy(desc_buffer, &ret, 4);
-	ev->ev_error = 0;
+	desc->event->status = 0;
+	return 0;
 }
 
 JNIEXPORT void JNICALL
@@ -967,19 +970,19 @@ Java_io_daos_dfs_DaosFsClient_dfsWriteAsync(JNIEnv *env, jobject client,
 	uint64_t offset;
 	uint64_t len;
 	dfs_desc_t *desc;
-	daos_event_t *event;
 	int rc;
 
-	decode_dfs_desc(buf, &desc, &event, &offset, &len);
-	rc = daos_event_register_comp_cb(event, update_ret_code, desc);
+	decode_dfs_desc(buf, &desc, &offset, &len);
+	desc->event->event.ev_error = 0;
+	rc = daos_event_register_comp_cb(&desc->event->event, update_ret_code, desc);
 	if (rc) {
 		char *msg = "Failed to register dfs write callback";
 
 		throw_exception_const_msg_object(env, msg, rc);
 		return;
 	}
-	event->ev_error = EVENT_IN_USE;
-	rc = dfs_write(dfs, file, &desc->sgl, offset, event);
+	desc->event->status = EVENT_IN_USE;
+	rc = dfs_write(dfs, file, &desc->sgl, offset, &desc->event->event);
 	if (rc) {
 		char *msg;
 

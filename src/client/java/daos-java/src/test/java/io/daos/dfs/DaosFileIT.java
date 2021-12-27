@@ -11,7 +11,6 @@ import org.junit.Test;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -153,10 +152,13 @@ public class DaosFileIT {
       bytes[i] = (byte) i;
     }
     buffer.writeBytes(bytes);
-
-    long wl = daosFile.write(buffer, 0, 0, length);
-    Assert.assertEquals(length, daosFile.length());
-    Assert.assertEquals(length, wl);
+    try {
+      long wl = daosFile.write(buffer, 0, 0, length);
+      Assert.assertEquals(length, daosFile.length());
+      Assert.assertEquals(length, wl);
+    } finally {
+      buffer.release();
+    }
   }
 
   @Test
@@ -172,7 +174,7 @@ public class DaosFileIT {
     buffer.writeBytes(bytes);
 
     daosFile.write(buffer, 0, 0, length);
-
+    buffer.release();
     System.out.println(daosFile.length());
 
     ByteBuf buffer2 = BufferAllocator.directNettyBuf(length + 30);
@@ -182,6 +184,7 @@ public class DaosFileIT {
     byte[] bytes2 = new byte[length];
     buffer2.readBytes(bytes2);
     Assert.assertTrue(Arrays.equals(bytes, bytes2));
+    buffer2.release();
     daosFile.release();
   }
 
@@ -196,6 +199,7 @@ public class DaosFileIT {
       bytes[i] = (byte) i;
     }
     buffer.writeBytes(bytes);
+    buffer.release();
 
     DaosEventQueue eq = DaosEventQueue.getInstance(-1);
     IODfsDesc desc = DaosFile.createDfsDesc(buffer, eq);
@@ -320,6 +324,7 @@ public class DaosFileIT {
     file.write(buffer, 0, 0, str.length());
     StatAttributes attributes = file.getStatAttributes();
     Assert.assertEquals(str.length(), (int) attributes.getLength());
+    buffer.release();
   }
 
   @Test

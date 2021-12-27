@@ -328,13 +328,15 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	/* Read each others URIs from the file */
 	memset(other_server_uri, 0x0, sizeof(other_server_uri));
-	other_server_uri[MAX_URI] = '\0';
+
 	lseek(fd_read, 0, SEEK_SET);
 	rc = read(fd_read, other_server_uri, MAX_URI);
 	if (rc < 0) {
 		D_ERROR("Failed to read uri from a file\n");
 		error_exit();
 	}
+	/* Terminate the string read by read since it won't do it on its own */
+	other_server_uri[rc] = '\0';
 
 	DBG_PRINT("Other servers uri is '%s'\n", other_server_uri);
 

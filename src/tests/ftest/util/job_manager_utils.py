@@ -184,6 +184,16 @@ class JobManager(ExecutableCommand):
         # processes running by returning a "R" state.
         return "R" if 1 not in results or len(results) > 1 else None
 
+    def stop(self):
+        """Stop the subprocess command and kill any job processes running on hosts.
+
+        Raises:
+            CommandFailure: if unable to stop
+
+        """
+        super().stop()
+        self.kill()
+
     def kill(self):
         """Forcibly terminate any job processes running on hosts."""
         regex = self.job.command_regex
@@ -236,6 +246,7 @@ class Orterun(JobManager):
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
+        self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -340,6 +351,7 @@ class Mpirun(JobManager):
         self.envlist = FormattedParameter("-envlist {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
+        self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
         self.mpitype = mpitype
 
     def assign_hosts(self, hosts, path=None, slots=None):
@@ -808,6 +820,28 @@ class Systemctl(JobManager):
             self._systemctl.service.value, ", ".join(data))
         return status
 
+    def get_journalctl_command(self, since, until=None):
+        """Get the journalctl command to capture all unit activity from since to until.
+
+        Args:
+            since (str): show log entries from this date.
+            until (str, optional): show log entries up to this date. Defaults
+                to None, in which case it is not utilized.
+
+        Returns:
+            str: journalctl command to capture all unit activity
+
+        """
+        command = [
+            "sudo",
+            "journalctl",
+            "--unit={}".format(self._systemctl.service.value),
+            "--since=\"{}\"".format(since),
+        ]
+        if until:
+            command.append("--until=\"{}\"".format(until))
+        return " ".join(command)
+
     def get_log_data(self, hosts, since, until=None, timeout=60):
         """Gather log output for the command running on each host.
 
@@ -840,19 +874,11 @@ class Systemctl(JobManager):
         # Setup the journalctl command to capture all unit activity from the
         # specified start date to now or a specified end date
         #   --output=json?
-        command = [
-            "sudo",
-            "journalctl",
-            "--unit={}".format(self._systemctl.service.value),
-            "--since=\"{}\"".format(since),
-        ]
-        if until:
-            command.append("--until=\"{}\"".format(until))
-        self.log.info(
-            "Gathering log data on %s: %s", str(hosts), " ".join(command))
+        command = self.get_journalctl_command(since, until)
+        self.log.info("Gathering log data on %s: %s", str(hosts), command)
 
         # Gather the log information per host
-        results = run_pcmd(hosts, " ".join(command), False, timeout, None)
+        results = run_pcmd(hosts, command, False, timeout, None)
 
         # Determine if the command completed successfully without a timeout
         status = True
@@ -927,6 +953,74 @@ class Systemctl(JobManager):
                 data.append("    {}".format(line))
         return "\n".join(data)
 
+    def search_logs(self, pattern, since, until, quantity=1, timeout=60, verbose=False):
+        """Search the command logs on each host for a specified string.
+
+        Args:
+            pattern (str): regular expression to search for in the logs
+            since (str): search log entries from this date.
+            until (str, optional): search log entries up to this date. Defaults
+                to None, in which case it is not utilized.
+            quantity (int, optional): number of times to expect the search
+                pattern per host. Defaults to 1.
+            timeout (int, optional): maximum number of seconds to wait to detect
+                the specified pattern. Defaults to 60.
+            verbose (bool, optional): whether or not to display the log data upon successful pattern
+                detection. Defaults to False.
+
+        Returns:
+            tuple:
+                (bool) - if the pattern was found quantity number of times
+                (str)  - string indicating the number of patterns found in what duration
+
+        """
+        self.log.info(
+            "Searching for '%s' in '%s' output on %s",
+            pattern, self.get_journalctl_command(since, until), self._hosts)
+
+        log_data = None
+        detected = 0
+        complete = False
+        timed_out = False
+        start = time.time()
+        duration = 0
+
+        # Search for patterns in the subprocess output until:
+        #   - the expected number of pattern matches are detected (success)
+        #   - the time out is reached (failure)
+        #   - the service is no longer running (failure)
+        while not complete and not timed_out and self.service_running():
+            detected = 0
+            log_data = self.get_log_data(self._hosts, since, until, timeout)
+            for entry in log_data:
+                match = re.findall(pattern, "\n".join(entry["data"]))
+                detected += len(match) if match else 0
+
+            complete = detected == quantity
+            duration = time.time() - start
+            if timeout is not None:
+                timed_out = duration > timeout
+
+            if verbose:
+                self.display_log_data(log_data)
+
+        # Summarize results
+        msg = "{}/{} '{}' messages detected in".format(detected, quantity, pattern)
+        runtime = "{}/{} seconds".format(duration, timeout)
+
+        if not complete:
+            # Report the error / timeout
+            reason = "ERROR detected"
+            details = ""
+            if timed_out:
+                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
+                runtime = "{} seconds".format(duration)
+            if log_data:
+                details = ":\n{}".format(self.str_log_data(log_data))
+            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+
+        return complete, " ".join([msg, runtime])
+
     def check_logs(self, pattern, since, until, quantity=1, timeout=60):
         """Check the command logs on each host for a specified string.
 
@@ -945,64 +1039,14 @@ class Systemctl(JobManager):
                 host
 
         """
-        self.log.info(
-            "Searching for '%s' in '%s' output on %s",
-            pattern, self._systemctl, self._hosts)
-
-        log_data = None
-        detected = 0
-        complete = False
-        timed_out = False
-        start = time.time()
-
-        # Search for patterns in the subprocess output until:
-        #   - the expected number of pattern matches are detected (success)
-        #   - the time out is reached (failure)
-        #   - the service is no longer running (failure)
-        while not complete and not timed_out and self.service_running():
-            detected = 0
-            log_data = self.get_log_data(self._hosts, since, until, timeout)
-            for entry in log_data:
-                match = re.findall(pattern, "\n".join(entry["data"]))
-                detected += len(match) if match else 0
-
-            complete = detected == quantity
-            timed_out = time.time() - start > timeout
-
-            if complete:
-                self.timestamps["running"] = datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S")
-
-        # Summarize results
-        msg = "{}/{} '{}' messages detected in".format(
-            detected, quantity, pattern)
-        runtime = "{}/{} seconds".format(time.time() - start, timeout)
-
-        if not complete:
-            # Report the error / timeout
-            reason = "ERROR detected"
-            details = ""
-            if timed_out:
-                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
-                runtime = "{} seconds".format(time.time() - start)
-            if log_data:
-                details = ":\n{}".format(self.str_log_data(log_data))
-            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
-            if timed_out:
-                self.log.debug(
-                    "If needed the %s second timeout can be adjusted via "
-                    "the 'pattern_timeout' test yaml parameter under %s",
-                    timeout, self.namespace)
-        else:
+        # Find the pattern in the logs
+        complete, message = self.search_logs(pattern, since, until, quantity, timeout, False)
+        if complete:
             # Report the successful start
-            # self.display_log_data(log_data)
-            self.log.info(
-                "%s subprocess startup detected - %s %s",
-                self._command, msg, runtime)
-
+            self.log.info("%s subprocess startup detected - %s", self._command, message)
         return complete
 
-    def dump_logs(self, hosts=None):
+    def dump_logs(self, hosts=None, timestamp=None):
         """Display the journalctl log data since detecting server start.
 
         Args:
@@ -1010,10 +1054,9 @@ class Systemctl(JobManager):
                 journalctl log data. Defaults to None which will log the
                 journalctl log data from all of the hosts.
         """
-        timestamp = None
-        if self.timestamps["running"]:
+        if timestamp is None and self.timestamps["running"]:
             timestamp = self.timestamps["running"]
-        elif self.timestamps["verified"]:
+        elif timestamp is None and self.timestamps["verified"]:
             timestamp = self.timestamps["verified"]
         if timestamp:
             if hosts is None:

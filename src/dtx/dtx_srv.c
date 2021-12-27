@@ -119,7 +119,7 @@ dtx_metrics_free(void *data)
 static int
 dtx_metrics_count(void)
 {
-	return (sizeof(struct dtx_pool_metrics) / sizeof(struct d_tm_node_t *)) * dss_tgt_nr;
+	return (sizeof(struct dtx_pool_metrics) / sizeof(struct d_tm_node_t *));
 }
 
 struct dss_module_metrics dtx_metrics = {
@@ -256,15 +256,19 @@ dtx_handler(crt_rpc_t *rpc)
 			if (*ptr == -DER_NONEXIST) {
 				struct dtx_stat		stat = { 0 };
 
-				/* dtx_id::dti_hlc is client side time stamp. Usually, it is
-				 * older than the time of the DTX being handled on the leader.
-				 * If it is older than the time of next to be aggregated DTX
-				 * entry, then it may has been removed by DTX aggregation.
-				 * Under such case, return -DER_TX_UNCERTAIN to non-leader.
+				/* dtx_id::dti_hlc is client side time stamp. If it is
+				 * older than the time of the most new DTX entry that
+				 * has been aggregated, then it may has been removed by
+				 * DTX aggregation. Under such case, return -DER_TX_UNCERTAIN.
 				 */
 				vos_dtx_stat(cont->sc_hdl, &stat, DSF_SKIP_BAD);
-				if (dtis->dti_hlc < stat.dtx_first_cmt_blob_time_up)
+				if (dtis->dti_hlc <= stat.dtx_newest_aggregated) {
+					D_WARN("Not sure about whether the old DTX "
+					       DF_DTI" is committed or not: %lu/%lu\n",
+					       DP_DTI(dtis), dtis->dti_hlc,
+					       stat.dtx_newest_aggregated);
 					*ptr = -DER_TX_UNCERTAIN;
+				}
 			}
 
 			if (mbs[i] != NULL)
@@ -317,7 +321,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, dcks, j, false);
+		rc = dtx_commit(cont, pdte, dcks, j);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
@@ -377,7 +381,7 @@ dtx_init(void)
 		dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
 	}
 
-	dtx_agg_thd_age_lo = dtx_agg_thd_age_up * 6 / 7;
+	dtx_agg_thd_age_lo = dtx_agg_thd_age_up - 30;
 
 	D_INFO("Set DTX aggregation time threshold as %d (seconds)\n",
 	       dtx_agg_thd_age_up);
