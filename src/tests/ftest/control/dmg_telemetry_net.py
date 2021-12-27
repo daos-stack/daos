@@ -53,7 +53,6 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
                           "because a rank was (intentionally) "
                           "stopped midway through a run of mdtest.",
                           repr(excep))
-            pass
 
     @skipForTicket("DAOS-9106")
     def test_net_telemetry(self):
@@ -137,7 +136,6 @@ class TestWithTelemetryNet(MdtestBase, TestWithTelemetry):
             self.log.info("self.telemetry.get_metrics failed on at least one "
                           "host with %s, but may have succeeded elsewhere.",
                           repr(excep))
-            pass
 
         for value in data.values():
             for metric in value[metrics[0]]["metrics"]:
