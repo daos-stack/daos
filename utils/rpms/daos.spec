@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       16%{?relval}%{?dist}
+Release:       17%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -219,10 +219,16 @@ Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: python36-distro
 Requires: python36-tabulate
 Requires: python36-defusedxml
+Requires: python36-PyYAML
 %else
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
+%if (0%{?rhel} >= 8)
+Requires: python3-pyyaml
+%else
+Requires: python3-pyaml
+%endif
 %endif
 Requires: fio
 Requires: dbench
@@ -539,6 +545,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Dec 21 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-17
+- Fix missing R: python*-pyaml
+
 * Thu Dec 16 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-16
 - Add BR: python-rpm-macros for Leap 15 as python3-base dropped that
   as a R:
