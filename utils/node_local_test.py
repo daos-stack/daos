@@ -20,10 +20,12 @@ import uuid
 import json
 import copy
 import signal
+import pprint
 import stat
 import errno
 import argparse
 import tabulate
+import threading
 import functools
 import traceback
 import subprocess #nosec
@@ -240,9 +242,8 @@ class WarningsFactory():
         self.ts = None
         self.close()
 
-    def add_test_case(self, name, failure=None, test_class='core',
-                      output=None,
-                      duration=None):
+    def add_test_case(self, name, failure=None, test_class='core', output=None, duration=None,
+                      stdout=None, stderr=None):
         """Add a test case to the results
 
         class and other metadata will be set automatically,
@@ -252,9 +253,8 @@ class WarningsFactory():
         if not self.ts:
             return
 
-        tc = junit_xml.TestCase(name,
-                                classname=self._class_name(test_class),
-                                elapsed_sec=duration)
+        tc = junit_xml.TestCase(name, classname=self._class_name(test_class), elapsed_sec=duration,
+                                stdout=stdout, stderr=stderr)
         if failure:
             tc.add_failure_info(failure, output=output)
         self.ts.test_cases.append(tc)
@@ -944,7 +944,9 @@ class ValgrindHelper():
         if not self._logid:
             self._logid = get_inc_id()
 
-        self._xml_file = 'dnt.{}.memcheck'.format(self._logid)
+        with tempfile.NamedTemporaryFile(prefix='dnt.{}.'.format(self._logid), dir='.',
+                                         suffix='.memcheck', delete=False) as log_file:
+            self._xml_file = log_file.name
 
         cmd = ['valgrind', '--fair-sched=yes']
 
@@ -1003,7 +1005,7 @@ class DFuse():
         if mount_path:
             self.dir = mount_path
         else:
-            self.dir = os.path.join(conf.dfuse_parent_dir, 'dfuse_mount')
+            self.dir = tempfile.mkdtemp(dir=conf.dfuse_parent_dir, prefix='dfuse_mount.')
         self.pool = pool
         self.uns_path = uns_path
         self.container = container
@@ -1192,6 +1194,36 @@ def import_daos(server, conf):
     daos = __import__('pydaos')
     return daos
 
+class daos_cmd_return():
+    """Class to enable pretty printing of daos output"""
+
+    def __init__(self):
+        self.rc = None
+        self.valgrind = []
+        self.cmd = []
+
+    def __getattr__(self, item):
+        return getattr(self.rc, item)
+
+    def __str__(self):
+        if not self.rc:
+            return 'daos_command_return, process not yet run'
+        output = "CompletedDaosCommand(cmd='{}')".format(' '.join(self.cmd))
+        output += '\nReturncode is {}'.format(self.rc.returncode)
+        if self.valgrind:
+            output += "\nProcess ran under valgrind with '{}'".format(' '.join(self.valgrind))
+
+        try:
+            pp = pprint.PrettyPrinter()
+            output += '\njson output:\n' + pp.pformat(self.rc.json)
+        except AttributeError:
+            for line in self.rc.stdout.splitlines():
+                output += '\nstdout: {}'.format(line)
+
+        for line in self.rc.stderr.splitlines():
+            output += '\nstderr: {}'.format(line)
+        return output
+
 def run_daos_cmd(conf,
                  cmd,
                  show_stdout=False,
@@ -1207,6 +1239,8 @@ def run_daos_cmd(conf,
     if prefix is set to False do not run a DAOS command, but instead run what's
     provided, however run it under the IL.
     """
+
+    dcr = daos_cmd_return()
     vh = ValgrindHelper(conf)
 
     if conf.args.memcheck == 'no':
@@ -1216,10 +1250,13 @@ def run_daos_cmd(conf,
         vh.use_valgrind = False
 
     exec_cmd = vh.get_cmd_prefix()
-    exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
+    dcr.valgrind = list(exec_cmd)
+    daos_cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos')]
     if use_json:
-        exec_cmd.append('--json')
-    exec_cmd.extend(cmd)
+        daos_cmd.append('--json')
+    daos_cmd.extend(cmd)
+    dcr.cmd = daos_cmd
+    exec_cmd.extend(daos_cmd)
 
     cmd_env = get_base_env()
     if not log_check:
@@ -1269,7 +1306,8 @@ def run_daos_cmd(conf,
         rc.returncode = 0
     if use_json:
         rc.json = json.loads(rc.stdout.decode('utf-8'))
-    return rc
+    dcr.rc = rc
+    return dcr
 
 def create_cont(conf,
                 pool=None,
@@ -1303,8 +1341,7 @@ def create_cont(conf,
         """Helper function for create_cont"""
 
         rc = run_daos_cmd(conf, cmd, use_json=True, log_check=log_check, valgrind=valgrind)
-        print('rc is {}'.format(rc))
-        print(rc.json)
+        print(rc)
         return rc
 
     rc = _create_cont()
@@ -1436,6 +1473,38 @@ def needs_dfuse_no_cache(method):
         return rc
     return _helper
 
+class print_stat():
+    """Class for nicely showing file 'stat' data, similar to ls -l"""
+
+    headers = ['uid', 'gid', 'size', 'mode', 'filename']
+
+    def __init__(self, filename=None):
+        # Setup the object, and maybe add some data to it.
+        self._stats = []
+        if filename:
+            self.add(filename)
+
+    def add(self, filename, attr=None, show_dir=False):
+        """Add an entry to be displayed"""
+
+        if attr is None:
+            attr = os.stat(filename)
+
+        self._stats.append([attr.st_uid,
+                            attr.st_gid,
+                            attr.st_size,
+                            stat.filemode(attr.st_mode),
+                            filename])
+
+        if show_dir:
+            tab = '.' * len(filename)
+            for fname in os.listdir(filename):
+                self.add(os.path.join(tab, fname),
+                         attr=os.stat(os.path.join(filename, fname)))
+
+    def __str__(self):
+        return tabulate.tabulate(self._stats, self.headers)
+
 # This is test code where methods are tests, so we want to have lots of them.
 # pylint: disable=too-many-public-methods
 class posix_tests():
@@ -1460,15 +1529,32 @@ class posix_tests():
         self.needs_more = False
         self.test_name = ''
 
-    # pylint: disable=no-self-use
-    def fail(self):
+    @staticmethod
+    def fail():
         """Mark a test method as failed"""
         raise NLTestFail
+
+    @staticmethod
+    def _check_dirs_equal(expected, dir_name):
+        """Verify that the directory contents are as expected
+
+        Takes a list of expected files, and a directory name.
+        """
+        files = sorted(os.listdir(dir_name))
+
+        expected = sorted(expected)
+
+        print('Comparing real vs expected contents of {}'.format(dir_name))
+        print('expected: "{}"'.format(','.join(expected)))
+        print('actual:   "{}"'.format(','.join(files)))
+
+        assert files == expected
 
     def test_cont_list(self):
         """Test daos container list"""
 
         rc = run_daos_cmd(self.conf, ['container', 'list', self.pool.id()])
+        print(rc)
         assert rc.returncode == 0, rc
 
     def test_cache(self):
@@ -1576,8 +1662,6 @@ class posix_tests():
         dfuse1 = DFuse(self.server,
                        self.conf,
                        caching=True,
-                       mount_path=os.path.join(self.conf.dfuse_parent_dir,
-                                               'dfuse_mount_1'),
                        pool=self.pool.uuid,
                        container=self.container)
         dfuse1.start(v_hint='two_1')
@@ -1898,7 +1982,7 @@ class posix_tests():
         print(os.listdir(path))
 
     @needs_dfuse
-    def test_rename(self):
+    def test_rename_clobber(self):
         """Test that rename clobbers files correctly
 
         use rename to delete a file, but where the kernel is aware of a different file.
@@ -1927,8 +2011,7 @@ class posix_tests():
                       self.conf,
                       pool=self.pool.id(),
                       container=self.container,
-                      caching=False,
-                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+                      caching=False)
         dfuse.start(v_hint='rename_other')
 
         print(os.listdir(self.dfuse.dir))
@@ -1946,10 +2029,125 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-        # Finally, perform some more I/O so we can tell from the dfuse logs where the test ends and
-        # dfuse teardown starts.  At this point file 1 and file 2 have been deleted.
-        time.sleep(1)
-        print(os.statvfs(self.dfuse.dir))
+    @needs_dfuse
+    def test_rename(self):
+        """Test that tries various rename scenarios"""
+
+        def _go(root):
+            dfd = os.open(root, os.O_RDONLY)
+            try:
+
+                # Test renaming a file into a directory.
+                pre_fname = os.path.join(root, 'file')
+                with open(pre_fname, 'w') as fd:
+                    fd.write('test')
+                dname = os.path.join(root, 'dir')
+                os.mkdir(dname)
+                post_fname = os.path.join(dname, 'file')
+                # os.rename and 'mv' have different semantics, use mv here which will put the file
+                # in the directory.
+                subprocess.run(['mv', pre_fname, dname], check=True)
+                self._check_dirs_equal(['file'], dname)
+
+                os.unlink(post_fname)
+                os.rmdir('dir', dir_fd=dfd)
+
+                # Test renaming a file over a directory.
+                pre_fname = os.path.join(root, 'file')
+                with open(pre_fname, 'w') as fd:
+                    fd.write('test')
+                dname = os.path.join(root, 'dir')
+                os.mkdir(dname)
+                post_fname = os.path.join(dname, 'file')
+                # Try os.rename here, which we expect to fail.
+                try:
+                    os.rename(pre_fname, dname)
+                    self.fail()
+                except IsADirectoryError:
+                    pass
+                os.unlink(pre_fname)
+                os.rmdir('dir', dir_fd=dfd)
+
+                # Check renaming a file over a file.
+                for index in range(2):
+                    with open(os.path.join(root, 'file.{}'.format(index)), 'w') as fd:
+                        fd.write('test')
+
+                print(os.listdir(dfd))
+                os.rename('file.0', 'file.1', src_dir_fd=dfd, dst_dir_fd=dfd)
+
+                self._check_dirs_equal(['file.1'], root)
+                os.unlink('file.1', dir_fd=dfd)
+
+                # dir onto file.
+                dname = os.path.join(root, 'dir')
+                os.mkdir(dname)
+                fname = os.path.join(root, 'file')
+                with open(fname, 'w') as fd:
+                    fd.write('test')
+                try:
+                    os.rename(dname, fname)
+                    self.fail()
+                except NotADirectoryError:
+                    pass
+                os.unlink('file', dir_fd=dfd)
+                os.rmdir('dir', dir_fd=dfd)
+
+                # Now check for dir rename into other dir though mv.
+                src_dir = os.path.join(root, 'src')
+                dst_dir = os.path.join(root, 'dst')
+                os.mkdir(src_dir)
+                os.mkdir(dst_dir)
+                subprocess.run(['mv', src_dir, dst_dir], check=True)
+                self._check_dirs_equal(['dst'], root)
+                self._check_dirs_equal(['src'], os.path.join(root, 'dst'))
+                os.rmdir(os.path.join(dst_dir, 'src'))
+                os.rmdir(dst_dir)
+
+                # Check for dir rename over other dir though python, in this case it should clobber
+                # the target directory.
+                for index in range(2):
+                    os.mkdir(os.path.join(root, 'dir.{}'.format(index)))
+                os.rename('dir.0', 'dir.1', src_dir_fd=dfd, dst_dir_fd=dfd)
+                self._check_dirs_equal(['dir.1'], root)
+                self._check_dirs_equal([], os.path.join(root, 'dir.1'))
+                os.rmdir(os.path.join(root, 'dir.1'))
+                for index in range(2):
+                    with open(os.path.join(root, 'file.{}'.format(index)), 'w') as fd:
+                        fd.write('test')
+                os.rename('file.0', 'file.1', src_dir_fd=dfd, dst_dir_fd=dfd)
+                self._check_dirs_equal(['file.1'], root)
+                os.unlink('file.1', dir_fd=dfd)
+
+                # Rename a dir over another, where the target is not empty.
+                dst_dir = os.path.join(root, 'ddir')
+                dst_file = os.path.join(dst_dir, 'file')
+                os.mkdir('sdir', dir_fd=dfd)
+                os.mkdir(dst_dir)
+                with open(dst_file, 'w') as fd:
+                    fd.write('test')
+                # According to the man page this can return ENOTEMPTY or EEXIST, and /tmp is
+                # returning one and dfuse the other so catch both.
+                try:
+                    os.rename('sdir', dst_dir, src_dir_fd=dfd)
+                    self.fail()
+                except FileExistsError:
+                    pass
+                except OSError as e:
+                    assert e.errno == errno.ENOTEMPTY
+                os.rmdir('sdir', dir_fd=dfd)
+                os.unlink(dst_file)
+                os.rmdir(dst_dir)
+
+
+            finally:
+                os.close(dfd)
+
+        # Firstly validate the check
+        with tempfile.TemporaryDirectory(prefix='rename_test_ref_dir.') as tmp_dir:
+            _go(tmp_dir)
+
+        _go(self.dfuse.dir)
 
     @needs_dfuse
     def test_complex_unlink(self):
@@ -1974,8 +2172,7 @@ class posix_tests():
                       self.conf,
                       pool=self.pool.id(),
                       container=self.container,
-                      caching=False,
-                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+                      caching=False)
         dfuse.start(v_hint='unlink')
 
         print(os.listdir(self.dfuse.dir))
@@ -1997,6 +2194,86 @@ class posix_tests():
 
         for fd in fds:
             fd.close()
+
+    def test_cont_rw(self):
+        """Test write access to another users container"""
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+
+        dfuse.start(v_hint='cont_rw_1')
+
+        ps = print_stat(dfuse.dir)
+        testfile = os.path.join(dfuse.dir, 'testfile')
+        with open(testfile, 'w') as fd:
+            ps.add(testfile, attr=os.fstat(fd.fileno()))
+
+        dirname = os.path.join(dfuse.dir, 'rw_dir')
+        os.mkdir(dirname)
+
+        ps.add(dirname)
+
+        dir_perms = os.stat(dirname).st_mode
+        base_perms = stat.S_IMODE(dir_perms)
+
+        os.chmod(dirname, base_perms | stat.S_IWGRP | stat.S_IXGRP | stat.S_IXOTH | stat.S_IWOTH)
+        ps.add(dirname)
+        print(ps)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+            # Update container ACLs so current user has rw permissions only, the minimum required.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'update-acl',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--entry',
+                                      'A::{}@:rwta'.format(os.getlogin())])
+        print(rc)
+
+        # Assign the container to someone else.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'set-owner',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--user',
+                                      'root@',
+                                      '--group',
+                                      'root@'])
+        print(rc)
+
+        # Now start dfuse and access the container, see who the file is owned by.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='cont_rw_2')
+
+        ps = print_stat()
+        ps.add(dfuse.dir, show_dir=True)
+
+        with open(os.path.join(dfuse.dir, 'testfile'), 'r') as fd:
+            ps.add(os.path.join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
+
+        dirname = os.path.join(dfuse.dir, 'rw_dir')
+        testfile = os.path.join(dirname, 'new_file')
+        fd = os.open(testfile, os.O_RDWR | os.O_CREAT, mode=int('600', base=8))
+        os.write(fd, b'read-only-data')
+        ps.add(testfile, attr=os.fstat(fd))
+        os.close(fd)
+        print(ps)
+
+        with open(os.path.join(dfuse.dir, 'rw_dir', 'new_file'), 'r') as fd:
+            data = fd.read()
+            print(data)
+
+        if dfuse.stop():
+            self.fatal_errors = True
 
     @needs_dfuse
     def test_complex_rename(self):
@@ -2020,8 +2297,7 @@ class posix_tests():
                       self.conf,
                       pool=self.pool.id(),
                       container=self.container,
-                      caching=False,
-                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+                      caching=False)
         dfuse.start(v_hint='rename')
 
         os.mkdir(os.path.join(dfuse.dir, 'step_dir'))
@@ -2070,8 +2346,7 @@ class posix_tests():
                       self.conf,
                       pool=self.pool.id(),
                       container=self.container,
-                      caching=False,
-                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+                      caching=False)
         dfuse.start(v_hint='cont_ro')
         print(os.listdir(dfuse.dir))
 
@@ -2178,11 +2453,11 @@ class posix_tests():
         uns_path = os.path.join(dfuse.dir, pool, container, 'ep0', 'ep')
         second_path = os.path.join(dfuse.dir, pool, uns_container)
 
-        uns_container = str(uuid.uuid4())
+        uns_container_2 = str(uuid.uuid4())
 
         # Make a link within the new container.
         print('Inserting entry point')
-        create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
+        create_cont(conf, pool=pool, cont=uns_container_2, path=uns_path)
 
         # List the root container again.
         print(os.listdir(os.path.join(dfuse.dir, pool, container)))
@@ -2198,7 +2473,7 @@ class posix_tests():
         print(uns_stat)
         assert uns_stat.st_ino == direct_stat.st_ino
 
-        third_path = os.path.join(dfuse.dir, pool, uns_container)
+        third_path = os.path.join(dfuse.dir, pool, uns_container_2)
         third_stat = os.stat(third_path)
         print(third_stat)
         assert third_stat.st_ino == direct_stat.st_ino
@@ -2209,6 +2484,8 @@ class posix_tests():
         dfuse = DFuse(server, conf, caching=False)
         dfuse.start('uns-3')
 
+        second_path = os.path.join(dfuse.dir, pool, uns_container)
+        uns_path = os.path.join(dfuse.dir, pool, container, 'ep0', 'ep')
         files = os.listdir(second_path)
         print(files)
         print(os.listdir(uns_path))
@@ -2416,6 +2693,83 @@ class posix_tests():
         destroy_container(self.conf, self.pool.id(), container)
 # pylint: enable=too-many-public-methods
 
+class nlt_stdout_wrapper():
+    """Class for capturing stdout from threads"""
+
+    def __init__(self):
+        self._stdout = sys.stdout
+        self._outputs = {}
+        sys.stdout = self
+
+    def write(self, value):
+        """Print to stdout.  If this is the main thread then print it, always save it"""
+
+        thread = threading.current_thread()
+        if not thread.daemon:
+            self._stdout.write(value)
+        thread_id = thread.ident
+        try:
+            self._outputs[thread_id] += value
+        except KeyError:
+            self._outputs[thread_id] = value
+
+    def sprint(self, value):
+        """Really print something to stdout"""
+        self._stdout.write(value + '\n')
+
+    def get_thread_output(self):
+        """Return the stdout by the calling thread, and reset for next time"""
+        thread_id = threading.get_ident()
+        try:
+            data = self._outputs[thread_id]
+            del self._outputs[thread_id]
+            return data
+        except KeyError:
+            return None
+
+    def flush(self):
+        """Flush"""
+        self._stdout.flush()
+
+    def __del__(self):
+        sys.stdout = self._stdout
+
+class nlt_stderr_wrapper():
+    """Class for capturing stderr from threads"""
+
+    def __init__(self):
+        self._stderr = sys.stderr
+        self._outputs = {}
+        sys.stderr = self
+
+    def write(self, value):
+        """Print to stderr.  Always print it, always save it"""
+
+        thread = threading.current_thread()
+        self._stderr.write(value)
+        thread_id = thread.ident
+        try:
+            self._outputs[thread_id] += value
+        except KeyError:
+            self._outputs[thread_id] = value
+
+    def get_thread_err(self):
+        """Return the stderr by the calling thread, and reset for next time"""
+        thread_id = threading.get_ident()
+        try:
+            data = self._outputs[thread_id]
+            del self._outputs[thread_id]
+            return data
+        except KeyError:
+            return None
+
+    def flush(self):
+        """Flush"""
+        self._stderr.flush()
+
+    def __del__(self):
+        sys.stderr = self._stderr
+
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests
 
@@ -2423,70 +2777,115 @@ def run_posix_tests(server, conf, test=None):
     isolated from others.
     """
 
-    def _run_test():
-        pt.call_index = 0
+    def _run_test(ptl=None, function=None, test_cb=None):
+        ptl.call_index = 0
         while True:
-            pt.needs_more = False
-            pt.test_name = fn
+            ptl.needs_more = False
+            ptl.test_name = function
             start = time.time()
-            print('Calling {}'.format(fn))
+            out_wrapper.sprint('Calling {}'.format(function))
+            print('Calling {}'.format(function))
+
+            # Do this with valgrind disabled as this code is run often and valgrind has a big
+            # performance impact.  There are other tests that run with valgrind enabled so this
+            # should not reduce coverage.
             try:
-                # Do this with valgrind disabled as this code is run often and valgrind has a big
-                # performance impact.  There are other tests that run with valgrind enabled so this
-                # should not reduce coverage.
-                pt.container = create_cont(conf,
-                                           pool.id(),
-                                           ctype="POSIX",
-                                           valgrind=False,
-                                           log_check=False,
-                                           label=fn)
-                pt.container_label = fn
-                rc = obj()
-                destroy_container(conf,
-                                  pool.id(),
-                                  pt.container_label,
+                ptl.container = create_cont(conf,
+                                            pool.id(),
+                                            ctype="POSIX",
+                                            valgrind=False,
+                                            log_check=False,
+                                            label=function)
+                ptl.container_label = function
+                test_cb()
+                destroy_container(conf, pool.id(),
+                                  ptl.container_label,
                                   valgrind=False,
                                   log_check=False)
-                pt.container = None
+                ptl.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
                 duration = time.time() - start
-                conf.wf.add_test_case(pt.test_name,
+                out_wrapper.sprint('{} Failed'.format(function))
+                conf.wf.add_test_case(ptl.test_name,
                                       repr(inst),
+                                      stdout = out_wrapper.get_thread_output(),
+                                      stderr = err_wrapper.get_thread_err(),
                                       output = trace,
                                       test_class='test',
                                       duration = duration)
                 raise
             duration = time.time() - start
-            print('rc from {} is {}'.format(fn, rc))
-            print('Took {:.1f} seconds'.format(duration))
-            conf.wf.add_test_case(pt.test_name,
+            out_wrapper.sprint('Test {} took {:.1f} seconds'.format(function, duration))
+            conf.wf.add_test_case(ptl.test_name,
+                                  stdout = out_wrapper.get_thread_output(),
+                                  stderr = err_wrapper.get_thread_err(),
                                   test_class='test',
                                   duration = duration)
-            if not pt.needs_more:
+            if not ptl.needs_more:
                 break
-            pt.call_index = pt.call_index + 1
+            ptl.call_index = ptl.call_index + 1
+
+        if ptl.fatal_errors:
+            pto.fatal_errors = True
 
     server.get_test_pool()
     pool = server.test_pool
 
-    pt = posix_tests(server, conf, pool=pool)
+    out_wrapper = nlt_stdout_wrapper()
+    err_wrapper = nlt_stderr_wrapper()
+
+    pto = posix_tests(server, conf, pool=pool)
     if test:
         fn = 'test_{}'.format(test)
-        obj = getattr(pt, fn)
+        obj = getattr(pto, fn)
 
-        _run_test()
+        _run_test(ptl=pto, test_cb=obj, function=fn)
     else:
 
-        for fn in sorted(dir(pt)):
-            if not fn.startswith('test'):
+        threads = []
+
+        slow_tests = ['test_readdir_25', 'test_uns_basic', 'test_daos_fs_tool']
+
+        tests = dir(pto)
+        tests.sort(key=lambda x: x not in slow_tests)
+
+        for fn in tests:
+            if not fn.startswith('test_'):
                 continue
-            obj = getattr(pt, fn)
+
+            ptl = posix_tests(server, conf, pool=pool)
+            obj = getattr(ptl, fn)
             if not callable(obj):
                 continue
-            _run_test()
 
-    return pt.fatal_errors
+            thread = threading.Thread(None,
+                                      target=_run_test,
+                                      name='test {}'.format(fn),
+                                      kwargs={'ptl': ptl, 'test_cb': obj, 'function': fn},
+                                      daemon=True)
+            thread.start()
+            threads.append(thread)
+
+            # Limit the number of concurrent tests, but poll all active threads so there's no
+            # expectation for them to complete in order.  At the minute we only have a handlful of
+            # long-running tests which dominate the time, so whilst a higher value here would
+            # work there's no benefit in rushing to finish the quicker tests.  The long-running
+            # tests are started first.
+            while len(threads) > 5:
+                for td in threads:
+                    td.join(timeout=0)
+                    if td.is_alive():
+                        continue
+                    threads.remove(td)
+
+        for td in threads:
+            td.join()
+
+    out_wrapper = None
+    err_wrapper = None
+
+    return pto.fatal_errors
 
 def run_tests(dfuse):
     """Run some tests"""

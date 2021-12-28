@@ -393,18 +393,11 @@ objects_open(void)
 
 	perf_setup_keys();
 
-	for (i = 0; i < ts_obj_p_cont; i++) {
-		if (!ts_oid_init) {
-			ts_oids[i] = daos_test_oid_gen(
-				DAOS_HDL_INVAL, DAOS_OC_RAW, ts_flags, 0,
-				ts_ctx.tsc_mpi_rank);
-		}
-
-		ts_uoids[i].id_pub = ts_oids[i];
-		ts_uoids[i].id_shard = 0;
-		ts_uoids[i].id_pad_32 = 0;
+	if (!ts_oid_init) {
+		for (i = 0; i < ts_obj_p_cont; i++)
+			ts_uoids[i] = dts_unit_oid_gen(ts_flags, 0);
+		ts_oid_init = true;
 	}
-	ts_oid_init = true;
 	return 0;
 }
 
@@ -463,6 +456,40 @@ pf_fetch(struct pf_test *ts, struct pf_param *param)
 		return rc;
 
 	rc = objects_close();
+	return rc;
+}
+
+static int
+pf_aggregate(struct pf_test *ts, struct pf_param *param)
+{
+	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_range_t	epr = {0, ++epoch};
+	int			rc = 0;
+	uint64_t		start = 0;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, true);
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return rc;
+}
+
+static int
+pf_discard(struct pf_test *ts, struct pf_param *param)
+{
+	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_range_t	epr = {0, ++epoch};
+	int			rc = 0;
+	uint64_t		start = 0;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	rc = vos_discard(ts_ctx.tsc_coh, NULL, &epr, NULL, NULL);
+
+	TS_TIME_END(&param->pa_duration, start);
+
 	return rc;
 }
 
@@ -570,6 +597,12 @@ pf_parse_iterate(char *str, struct pf_param *pa, char **strp)
 	return pf_parse_common(str, pa, pf_parse_iterate_cb, strp);
 }
 
+static int
+pf_parse_aggregate(char *str, struct pf_param *pa, char **strp)
+{
+	return pf_parse_common(str, pa, NULL, strp);
+}
+
 /* predefined test cases */
 struct pf_test pf_tests[] = {
 	{
@@ -607,6 +640,18 @@ struct pf_test pf_tests[] = {
 		.ts_name	= "PUNCH",
 		.ts_parse	= pf_parse_rw,
 		.ts_func	= pf_punch,
+	},
+	{
+		.ts_code	= 'A',
+		.ts_name	= "AGGREGATE",
+		.ts_parse	= pf_parse_aggregate,
+		.ts_func	= pf_aggregate,
+	},
+	{
+		.ts_code	= 'D',
+		.ts_name	= "DISCARD",
+		.ts_parse	= pf_parse_aggregate,
+		.ts_func	= pf_discard,
 	},
 	{
 		.ts_code	= 0,
@@ -799,7 +844,7 @@ main(int argc, char **argv)
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
-			"Test :\n\t%s\n"
+			"Test :\n\tVOS storage\n"
 			"Pool :\n\t%s\n"
 			"Parameters :\n"
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n"
@@ -812,7 +857,7 @@ main(int argc, char **argv)
 			"\tstride size   : %u\n"
 			"\tzero copy     : %s\n"
 			"\tVOS file      : %s\n",
-			pf_class2name(DAOS_OC_RAW), uuid_buf,
+			uuid_buf,
 			(unsigned int)(ts_scm_size >> 20),
 			(unsigned int)(ts_nvme_size >> 20),
 			credits,
