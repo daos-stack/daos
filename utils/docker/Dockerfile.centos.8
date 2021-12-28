@@ -223,7 +223,7 @@ USER daos_server:daos_server
 ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
-
+RUN echo "DAOS_BUILD is $DAOS_BUILD"
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
