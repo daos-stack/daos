@@ -1100,7 +1100,7 @@ Java_io_daos_obj_DaosObjClient_updateObjNoDecode(JNIEnv *env,
 	/* sgl */
 	d_iov_set(&desc->iovs[0], data_buf, (uint64_t)len);
 	desc->sgls[0].sg_nr_out = 0;
-	rc = daos_event_register_comp_cb(desc->event,
+	rc = daos_event_register_comp_cb(&desc->event->event,
 		update_ret_code_no_decode,
 		desc);
 	if (rc) {
@@ -1115,7 +1115,7 @@ Java_io_daos_obj_DaosObjClient_updateObjNoDecode(JNIEnv *env,
 	desc->event->event.ev_error = 0;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0L, &desc->dkey,
 			1, desc->iods,
-			desc->sgls, desc->event);
+			desc->sgls, &desc->event->event);
 	if (rc) {
 		throw_const_obj(env,
 				"Failed to update DAOS object",

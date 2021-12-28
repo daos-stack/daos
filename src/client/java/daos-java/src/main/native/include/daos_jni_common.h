@@ -77,7 +77,7 @@ typedef struct {
 typedef struct {
     daos_key_t dkey;
     uint16_t maxKeyLen;
-    daos_event_t *event;
+    data_event_t *event;
     daos_iod_t *iods;
     d_sg_list_t *sgls;
     daos_recx_t *recxs;
