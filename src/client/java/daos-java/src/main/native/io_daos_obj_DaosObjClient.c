@@ -1025,7 +1025,7 @@ update_ret_code_no_decode(void *udata, daos_event_t *ev, int ret)
 	if (ev) {
 		ev->ev_error = 0;
 	}
-	// free native desc if not reuse
+	/* free native desc if not reuse */
 	if (desc->maxKeyLen == -1) {
 		release_desc_upd_async(desc);
 	}
@@ -1070,6 +1070,7 @@ Java_io_daos_obj_DaosObjClient_updateObjNoDecode(JNIEnv *env,
 		desc_buf += desc->maxKeyLen;
 	} else { /* not reusable */
 		char *msg = "memory allocation failed";
+
 		desc =	(data_desc_upd_async_t *)malloc(
 			sizeof(data_desc_upd_async_t));
 
@@ -1092,7 +1093,7 @@ Java_io_daos_obj_DaosObjClient_updateObjNoDecode(JNIEnv *env,
 				&eqWrapHdl;
 
 	desc->event = eq->events[eqId];
-	// offset
+	/* offset */
 	desc->recxs[0].rx_idx = offset;
 	/* length */
 	desc->recxs[0].rx_nr = (uint64_t)len;
@@ -1110,14 +1111,15 @@ Java_io_daos_obj_DaosObjClient_updateObjNoDecode(JNIEnv *env,
 				rc);
 		return;
 	}
-	// desc->event->ev_error = EVENT_IN_USE;
+	desc->event->status = EVENT_IN_USE;
+	desc->event->event.ev_error = 0;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0L, &desc->dkey,
 			1, desc->iods,
 			desc->sgls, desc->event);
 	if (rc) {
 		throw_const_obj(env,
-		 		"Failed to update DAOS object",
-		 		rc);
+				"Failed to update DAOS object",
+				rc);
 	}
 }
 
