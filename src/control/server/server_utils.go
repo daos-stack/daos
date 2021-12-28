@@ -183,7 +183,11 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 	// The config value is intended to be per-engine, so we need to adjust
 	// based on the number of engines.
 	if srv.cfg.NrHugepages > 0 {
-		prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
+		if len(srv.cfg.Engines) == 0 {
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		} else {
+			prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
+		}
 	}
 	if hasBdevs {
 		// Perform these checks to avoid even trying a prepare if the system
