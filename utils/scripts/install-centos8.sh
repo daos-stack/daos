@@ -78,7 +78,7 @@ if [ "$fedora_java" = "yes" ]; then
 https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz \
 && tar -xf apache-maven-3.6.3-bin.tar.gz \
 && find ./ -name "mvn" | \
-{ read -r d; f="$(dirname "$d")"; cp -r "$(readlink -f "$f")/../*" /usr/local; }
+{ read -r d; f="$(dirname "$d")"; cp -r "$(readlink -f "$f")"/../* /usr/local; }
 else
 	dnf install maven
 fi
