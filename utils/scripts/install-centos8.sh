@@ -68,6 +68,7 @@ dnf install \
     python3-yaml \
     sg3_utils \
     valgrind-devel \
+    which \
     yasm
 
 echo "is fedora java? $fedora_java"
