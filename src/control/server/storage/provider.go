@@ -435,6 +435,12 @@ func (p *Provider) SetBdevCache(resp BdevScanResponse) {
 	p.vmdEnabled = resp.VMDEnabled
 }
 
+// WithVMDEnabled enables VMD on storage provider.
+func (p *Provider) WithVMDEnabled() *Provider {
+	p.vmdEnabled = true
+	return p
+}
+
 // QueryBdevFirmware queries NVMe SSD firmware.
 func (p *Provider) QueryBdevFirmware(req NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
 	return p.bdev.QueryFirmware(req)
