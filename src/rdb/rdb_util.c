@@ -354,7 +354,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		value->iov_len = bio_iov2len(biov);
 	}
 
-	rc = bio_iod_post(vos_ioh2desc(io));
+	rc = bio_iod_post(vos_ioh2desc(io), 0);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
 	rc = vos_fetch_end(io, NULL, 0 /* err */);
