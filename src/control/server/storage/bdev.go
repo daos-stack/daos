@@ -9,6 +9,7 @@ package storage
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -373,6 +374,7 @@ func NewBdevForwarder(log logging.Logger) *BdevForwarder {
 
 type BdevAdminForwarder struct {
 	pbin.Forwarder
+	reqMutex sync.Mutex
 }
 
 func NewBdevAdminForwarder(log logging.Logger) *BdevAdminForwarder {
@@ -381,6 +383,13 @@ func NewBdevAdminForwarder(log logging.Logger) *BdevAdminForwarder {
 	return &BdevAdminForwarder{
 		Forwarder: *pf,
 	}
+}
+
+func (f *BdevAdminForwarder) SendReq(method string, fwdReq interface{}, fwdRes interface{}) error {
+	f.reqMutex.Lock()
+	defer f.reqMutex.Unlock()
+
+	return f.Forwarder.SendReq(method, fwdReq, fwdRes)
 }
 
 func (f *BdevAdminForwarder) Scan(req BdevScanRequest) (*BdevScanResponse, error) {
