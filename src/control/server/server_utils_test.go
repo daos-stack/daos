@@ -106,9 +106,10 @@ func TestServer_getSrxSetting(t *testing.T) {
 	defCfg := config.DefaultServer()
 
 	for name, tc := range map[string]struct {
-		cfg        *config.Server
-		expSetting int32
-		expErr     error
+		cfg           *config.Server
+		hugePageCount int
+		expSetting    int32
+		expErr        error
 	}{
 		"no engines": {
 			cfg:        config.DefaultServer(),
@@ -334,9 +335,10 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			cfg := &config.Server{
-				BdevExclude: tc.blockList,
-				BdevInclude: tc.allowList,
-				EnableVMD:   tc.enableVMD,
+				BdevExclude:   tc.blockList,
+				BdevInclude:   tc.allowList,
+				EnableVMD:     tc.enableVMD,
+				HugePageCount: tc.hugePageCount,
 			}
 			srv, err := newServer(context.TODO(), log, cfg, &system.FaultDomain{})
 			if err != nil {

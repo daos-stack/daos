@@ -155,32 +155,8 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 }
 
 func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
-	// Perform an automatic prepare based on the values in the config file.
-	prepReq := storage.BdevPrepareRequest{
-		// Default to minimum necessary for scan to work correctly.
-		HugePageCount: minHugePageCount,
-		TargetUser:    srv.runningUser,
-		PCIAllowList:  strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
-		PCIBlockList:  strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
-		DisableVFIO:   srv.cfg.DisableVFIO,
-		EnableVMD:     srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
-		Reset_:        true, // first reset allocations before preparing devices
-	}
-
 	hasBdevs := cfgHasBdevs(srv.cfg)
-	// Use default value
-	if srv.cfg.NrHugepages < 0 {
-		srv.cfg.NrHugepages = 4096
-	}
-	// The config value is intended to be per-engine, so we need to adjust
-	// based on the number of engines.
-	if srv.cfg.NrHugepages > 0 {
-		if len(srv.cfg.Engines) == 0 {
-			prepReq.HugePageCount = srv.cfg.NrHugepages
-		} else {
-			prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
-		}
-	}
+
 	if hasBdevs {
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
@@ -195,18 +171,59 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		}
 	}
 
-	// Run prepare with reset first to release resources.
+	// Perform an automatic prepare based on the values in the config file.
+	prepReq := storage.BdevPrepareRequest{
+		TargetUser:   srv.runningUser,
+		PCIAllowList: strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
+		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
+		DisableVFIO:  srv.cfg.DisableVFIO,
+		EnableVMD:    srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
+		Reset_:       true, // Run prepare with reset first to release resources.
+	}
+
+	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
+		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
+	}
+
+	if hasBdevs {
+		// Use default value if bdevs have been configured but nr_hugepages unset in config.
+		if srv.cfg.NrHugepages < 0 {
+			srv.cfg.NrHugepages = 4096
+		}
+
+		prepReq.HugePageCount = srv.cfg.NrHugepages
+
+		// The config value is intended to be per-engine, so we need to allocate hugepages on
+		// each engine's numa node.
+		if srv.cfg.NrHugepages > 0 {
+			var nodes []string
+			for _, ec := range srv.cfg.Engines {
+				nodes = append(nodes, fmt.Sprintf("%d", ec.Storage.NumaNodeIndex))
+			}
+			if len(nodes) != 0 {
+				// Allocate HugePageCount on each numa node in HugeNodes.
+				prepReq.HugeNodes = strings.Join(nodes, ",")
+			}
+		} else {
+			return errors.New("bdevs detected in config but no hugepages requested")
+		}
+	} else {
+		// If nr_hugepages unset and no bdevs in config, set minimum needed for scanning.
+		if srv.cfg.NrHugepages < 0 {
+			prepReq.HugePageCount = minHugePageCount
+		} else {
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		}
+		srv.cfg.NrHugepages = 0
+	}
+
+	// Run prepare to bind devices to user-space driver and allocate hugepages.
 	//
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	prepReq.Reset_ = true
+	prepReq.Reset_ = false
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
-	} else {
-		prepReq.Reset_ = false
-		if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-			srv.log.Errorf("automatic NVMe prepare failed: %s", err)
-		}
+		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}
 
 	hugePages, err := hpiGetter()
