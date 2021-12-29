@@ -42,6 +42,21 @@ group_repo_post() {
 }
 
 distro_custom() {
+    if ${STREAM:-false}; then
+        # hack in stream repos since we don't have a stream test image yet
+        # now upgrade to CentOS 8 Stream
+        # TODO: move this to the start of distro_custom, but for now leave here
+        #       to verify that it is getting upgraded to Stream
+        sed -i -e '/repo\.dc\.hpdd\.intel\.com/s/8.3[^-]*/8-stream/g' \
+            /etc/yum.repos.d/repo.dc.hpdd.intel.com_repository_centos-8.3*
+        if ! retry_cmd 600 dnf -y upgrade --allowerasing --exclude "$EXCLUDE_UPGRADE"; then
+            dump_repos
+            exit 1
+        fi
+        # disable newly added upstream repos
+        dnf config-manager --disable baseos appstream extras
+    fi
+
     # install avocado
     dnf -y install python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
                    clustershell
@@ -94,7 +109,7 @@ post_provision_config_nodes() {
                     branch="${branch%:*}"
                 fi
             fi
-            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
+            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME${REPO_POSTFIX:-}/
             dnf config-manager --add-repo="${repo_url}"
             disable_gpg_check "$repo_url"
         done

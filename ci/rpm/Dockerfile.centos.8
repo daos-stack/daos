@@ -1,0 +1,139 @@
+# Copyright (C) 2021 Intel Corporation
+# All rights reserved.
+#
+# 'recipe' for Docker to run a daos server, agent and daos_test
+#
+
+# Pull base image
+FROM centos:8
+LABEL maintainer="daos@daos.groups.io"
+
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
+
+# If a local distro repository is supplied, then we should use it
+# and disable using the distro repositories that can be mirrored.
+# The Docker image starts out with the DISTRO provided GPG keys
+# on the disk, but not installed.  These must be installed before
+# adding any repo that needs GPG keys but does not provide meta
+# data for installing those keys.  Then the epel-release
+# package must be installed and the GPG key it provides must be
+# installed.
+ARG REPO_URL
+ARG REPO_DISTRO
+RUN if [ -n "$REPO_DISTRO" ]; then                              \
+      rpm --import /etc/pki/rpm-gpg/*;                          \
+      set -x;                                                   \
+      os_ver=$(sed -e 's/.* //' /etc/redhat-release);           \
+      if [ "$os_ver" != "8.5.2111" ]; then                      \
+          os_ver=${os_ver%.*};                                  \
+      fi;                                                       \
+      for repo in centos-${os_ver}-{base,extras,powertools}; do \
+          MY_REPO="${REPO_URL}repository/$repo-x86_64-proxy";   \
+          MY_NAME="${MY_REPO#*//}";                             \
+          MY_NAME="${MY_NAME//\//_}";                           \
+          echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;      \
+      done;                                                     \
+      dnf -y --disablerepo=baseos,powertools,extras             \
+          install dnf-plugins-core dnf-utils;                   \
+      dnf -y --quiet config-manager --disable                   \
+          baseos powertools extras;                             \
+      dnf -y install epel-release;                              \
+      rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
+      dnf -y --quiet config-manager --disable                   \
+          epel epel-modular;                                    \
+      for repo in epel-el-8; do                                 \
+          MY_REPO="${REPO_URL}repository/$repo-x86_64-proxy";   \
+          MY_NAME="${MY_REPO#*//}";                             \
+          MY_NAME="${MY_NAME//\//_}";                           \
+          echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;      \
+      done;                                                     \
+      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
+          -i /etc/dnf/dnf.conf;                                 \
+      dnf -y upgrade epel-release;                              \
+    else                                                        \
+      dnf -y install epel-release dnf-plugins-core &&           \
+      dnf -y config-manager --set-enabled powertools;           \
+    fi;                                                         \
+    dnf clean all
+
+# Currently the appstream REPO can not be part of a repo group
+ARG REPO_APPSTREAM
+RUN if [ -n "$REPO_APPSTREAM" ]; then                                                     \
+      MY_REPO="${REPO_URL}${REPO_APPSTREAM/8.?/$(sed -e 's/.* //' /etc/redhat-release)}"; \
+      MY_NAME="${MY_REPO#*//}";                                                           \
+      MY_NAME="${MY_NAME//\//_}";                                                         \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;                            \
+      dnf -y --quiet config-manager --assumeyes --disable                                 \
+          appstream;                                                                      \
+    fi
+
+# If a local DAOS repository is supplied, then we should use it
+# This is mainly for quickbuilds
+ARG REPO_DAOS
+RUN if [ -n "$REPO_DAOS" ]; then                                \
+      REPO_DAOS="repository/daos-stack-el-8-x86_64-stable-local"; \
+      MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
+      MY_NAME="${MY_REPO#*//}";                                 \
+      MY_NAME="${MY_NAME//\//_}";                               \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
+    fi
+
+ARG JENKINS_URL
+ARG REPOS
+RUN for repo in $REPOS; do                                                \
+        branch="master";                                                  \
+        build_number="lastSuccessfulBuild";                               \
+        if [[ $repo = *@* ]]; then                                        \
+            branch="${repo#*@}";                                          \
+            repo="${repo%@*}";                                            \
+            if [[ $branch = *:* ]]; then                                  \
+                build_number="${branch#*:}";                              \
+                branch="${branch%:*}";                                    \
+            fi;                                                           \
+        fi;                                                               \
+        echo -e "[$repo:$branch:$build_number]\n\
+name=$repo:$branch:$build_number\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos8/\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
+    done
+
+RUN dnf -y install epel-release dnf-plugins-core && \
+    dnf config-manager --set-enabled powertools &&  \
+    dnf -y upgrade &&                               \
+    dnf -y install                                  \
+        redhat-lsb-core                             \
+        sudo
+
+RUN dnf clean all
+
+ARG UID=1000
+
+# Add DAOS users
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
+            --home /home/daos daos_server
+RUN echo "daos_server:daos_server" | chpasswd
+RUN useradd --user-group --create-home --shell /bin/bash daos_agent
+RUN echo "daos_agent:daos_agent" | chpasswd
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup

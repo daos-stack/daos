@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@bmurrell/centos-stream-8") _
 
 // For master, this is just some wildly high number
 next_version = "2.1.0"
@@ -304,6 +304,41 @@ pipeline {
                 expression { ! skipStage() }
             }
             parallel {
+                stage('Build RPM on CentOS Stream 8') {
+                    when {
+                        beforeAgent true
+                        expression { false }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.mockbuild'
+                            dir 'utils/rpms/packaging'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs()
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                        }
+                    }
+                    steps {
+                        buildRpm()
+                    }
+                    post {
+                        success {
+                            buildRpmPost condition: 'success'
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup'
+                        }
+                    }
+                }
                 stage('Build RPM on CentOS 7') {
                     when {
                         beforeAgent true
@@ -787,6 +822,56 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
+                /* method code too large and not likely to fail
+                stage('Test CentOS Stream 8 RPMs on CentOS Stream 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                daos_pkg_version: daosPackagesVersion(next_version)
+                   }
+                } // stage('Test CentOS Stream 8 RPMs on CentOS Stream 8') {
+                */
+                stage('Test CentOS 8 RPMs on CentOS Stream 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                daos_pkg_version: daosPackagesVersion(next_version)
+                   }
+                } // stage('Test EL8 RPMs on CentOS Stream 8') {
+                stage('Test CentOS 8 RPMs in Docker') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'ci/rpm/Dockerfile.centos.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable') +
+                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
+                            args '--cap-add SYS_PTRACE --tmpfs /mnt/daos'
+                        }
+                    }
+                    steps {
+                        sh label: "Run test",
+                           script: 'ADD_JENKINS_REPO=' + String.valueOf(rpmTestVersion() == '') + ' ' +
+                                   'ci/rpm/test_daos-docker.sh "' + prRepos() +
+                                   '" "' + daosPackagesVersion(next_version) + '"'
+                   }
+                } // stage('Test EL8 RPMs on CentOS Stream 8') {
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -814,6 +899,54 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
+                stage('Test CentOS Stream 8 RPMs on EL8.4.2105') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'el8.4',
+                                ignore_failure: true,
+                                daos_pkg_version: daosPackagesVersion("centos8", next_version)
+                   }
+                } // stage('Test CentOS Stream 8 RPMs on EL8.4.2105') {
+                /* method code too large
+                stage('Test CentOS Stream 8 RPMs on EL8.5.2111') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'el8.5',
+                                daos_pkg_version: daosPackagesVersion("centos8", next_version)
+                   }
+                } // stage('Test CentOS Stream 8 RPMs on EL8.5.2111') {
+                */
+                stage('Test CentOS Stream 8 RPMs on EL8.3.2011') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'el8.3',
+                                ignore_failure: true,
+                                daos_pkg_version: daosPackagesVersion("centos8", next_version)
+                   }
+                } // stage('Test CentOS Stream 8 RPMs on EL8.3.2011') {
+                /* method code too large
+                   and we already know 15.2 cannot run 15.3 binaries
                 stage('Test Leap 15.2 RPMs') {
                     when {
                         beforeAgent true
@@ -827,7 +960,8 @@ pipeline {
                                 target: 'leap15.2',
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
-                } // stage('Test Leap 15 RPMs')
+                } // stage('Test Leap 15.2 RPMs')
+                */
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
