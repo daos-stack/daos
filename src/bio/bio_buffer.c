@@ -1164,24 +1164,24 @@ failed:
 }
 
 int
-bio_iod_post(struct bio_desc *biod)
+bio_iod_post(struct bio_desc *biod, int err)
 {
 	struct bio_dma_buffer *bdb;
 
 	if (!biod->bd_buffer_prep)
 		return -DER_INVAL;
 
-	/* No more actions for SCM IOVs */
+	/* No more actions for direct accessed SCM IOVs */
 	if (biod->bd_rsrvd.brd_rg_cnt == 0) {
 		iod_release_buffer(biod);
-		return 0;
+		return err;
 	}
 
 	/* Land data from buffer to media on write */
-	if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
+	if (err == 0 && biod->bd_type == BIO_IOD_TYPE_UPDATE)
 		dma_rw(biod);
 	else
-		biod->bd_result = 0;
+		biod->bd_result = err;
 
 	iod_release_buffer(biod);
 	bdb = iod_dma_buf(biod);
@@ -1294,7 +1294,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 		D_ERROR("Copy biod failed, "DF_RC"\n", DP_RC(rc));
 
 	/* release DMA buffer, write data back to NVMe device for write */
-	rc = bio_iod_post(biod);
+	rc = bio_iod_post(biod, rc);
 
 out:
 	bio_iod_free(biod); /* also calls bio_sgl_fini */
@@ -1417,7 +1417,7 @@ bio_buf_free(struct bio_desc *biod)
 {
 	D_ASSERT(biod != NULL);
 	D_ASSERT(biod->bd_type == BIO_IOD_TYPE_GETBUF);
-	bio_iod_post(biod);
+	bio_iod_post(biod, 0);
 	bio_iod_free(biod);
 }
 
@@ -1510,7 +1510,7 @@ bio_copy_prep(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
 	copy_desc->bcd_iod_dst->bd_copy_dst = 1;
 	rc = bio_iod_prep(copy_desc->bcd_iod_dst, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc) {
-		rc = bio_iod_post(copy_desc->bcd_iod_src);
+		rc = bio_iod_post(copy_desc->bcd_iod_src, 0);
 		D_ASSERT(rc == 0);
 		goto free;
 	}
@@ -1551,13 +1551,13 @@ bio_copy_run(struct bio_copy_desc *copy_desc, unsigned int copy_size,
 }
 
 int
-bio_copy_post(struct bio_copy_desc *copy_desc)
+bio_copy_post(struct bio_copy_desc *copy_desc, int err)
 {
 	int	rc;
 
-	rc = bio_iod_post(copy_desc->bcd_iod_src);
+	rc = bio_iod_post(copy_desc->bcd_iod_src, 0);
 	D_ASSERT(rc == 0);
-	rc = bio_iod_post(copy_desc->bcd_iod_dst);
+	rc = bio_iod_post(copy_desc->bcd_iod_dst, err);
 
 	free_copy_desc(copy_desc);
 
@@ -1581,14 +1581,14 @@ bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
 	 struct bio_csum_desc *csum_desc)
 {
 	struct bio_copy_desc	*copy_desc;
-	int			 rc, err;
+	int			 rc;
 
 	copy_desc = bio_copy_prep(ioctxt, bsgl_src, bsgl_dst);
 	if (copy_desc == NULL)
 		return -DER_NOMEM;
 
 	rc = bio_copy_run(copy_desc, copy_size, csum_desc);
-	err = bio_copy_post(copy_desc);
+	rc = bio_copy_post(copy_desc, rc);
 
-	return rc ? rc : err;
+	return rc;
 }
