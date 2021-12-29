@@ -147,32 +147,8 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 }
 
 func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
-	// Perform an automatic prepare based on the values in the config file.
-	prepReq := storage.BdevPrepareRequest{
-		// Default to minimum necessary for scan to work correctly.
-		HugePageCount: minHugePageCount,
-		TargetUser:    srv.runningUser,
-		PCIAllowList:  strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
-		PCIBlockList:  strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
-		DisableVFIO:   srv.cfg.DisableVFIO,
-		EnableVMD:     srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
-		Reset_:        true, // first reset allocations before preparing devices
-	}
-
 	hasBdevs := cfgHasBdevs(srv.cfg)
-	// Use default value
-	if srv.cfg.NrHugepages < 0 {
-		srv.cfg.NrHugepages = 4096
-	}
-	// The config value is intended to be per-engine, so we need to adjust
-	// based on the number of engines.
-	if srv.cfg.NrHugepages > 0 {
-		if len(srv.cfg.Engines) == 0 {
-			prepReq.HugePageCount = srv.cfg.NrHugepages
-		} else {
-			prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
-		}
-	}
+
 	if hasBdevs {
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
@@ -185,20 +161,69 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 				return FaultIommuDisabled
 			}
 		}
+		if srv.cfg.NrHugepages == 0 {
+			// TODO: add fault
+			return errors.New("bdevs detected in config but zero hugepages requested")
+		}
 	}
 
-	// Run prepare with reset first to release resources.
+	if srv.cfg.NrHugepages == 0 {
+		// Zero hugepages requested so skip NVMe prepare.
+		srv.log.Debugf("skip nvme prepare, no hugepages allocd as nr_hugepages 0 in config")
+		return nil
+	}
+
+	prepReq := storage.BdevPrepareRequest{
+		TargetUser:   srv.runningUser,
+		PCIAllowList: strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
+		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
+		DisableVFIO:  srv.cfg.DisableVFIO,
+		EnableVMD:    srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
+		Reset_:       true, // Run prepare with reset first to release resources.
+	}
+
+	// Perform prepare reset based on the values in the config file.
+	// Note that prepare reset will not allocate hugepages.
+	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
+		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
+	}
+
+	if hasBdevs {
+		// Use default value if bdevs have been configured but nr_hugepages unset in config.
+		if srv.cfg.NrHugepages < 0 {
+			srv.cfg.NrHugepages = 4096
+		}
+
+		prepReq.HugePageCount = srv.cfg.NrHugepages
+
+		// The config value is intended to be per-engine, so we need to allocate hugepages on
+		// each engine's numa node.
+		var nodes []string
+		for _, ec := range srv.cfg.Engines {
+			nodes = append(nodes, fmt.Sprintf("%d", ec.Storage.NumaNodeIndex))
+		}
+		if len(nodes) != 0 {
+			// Allocate HugePageCount on each numa node in HugeNodes.
+			prepReq.HugeNodes = strings.Join(nodes, ",")
+		}
+	} else {
+		// If nr_hugepages unset and no bdevs in config, set minimum needed for scanning and
+		// set number of hugepages for engine to zero.
+		if srv.cfg.NrHugepages < 0 {
+			prepReq.HugePageCount = minHugePageCount
+			srv.cfg.NrHugepages = 0
+		} else {
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		}
+	}
+
+	// Run prepare to bind devices to user-space driver and allocate hugepages.
 	//
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	prepReq.Reset_ = true
+	prepReq.Reset_ = false
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
-	} else {
-		prepReq.Reset_ = false
-		if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-			srv.log.Errorf("automatic NVMe prepare failed: %s", err)
-		}
+		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}
 
 	hugePages, err := hpiGetter()

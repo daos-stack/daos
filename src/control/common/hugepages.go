@@ -15,9 +15,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-type GetHugePageInfoFn func() (*hugePageInfo, error)
+type GetHugePageInfoFn func() (*HugePageInfo, error)
 
-type hugePageInfo struct {
+type HugePageInfo struct {
 	Total      int
 	Free       int
 	Reserved   int
@@ -25,11 +25,11 @@ type hugePageInfo struct {
 	PageSizeKb int
 }
 
-func (hpi *hugePageInfo) TotalMB() int {
+func (hpi *HugePageInfo) TotalMB() int {
 	return (hpi.Total * hpi.PageSizeKb) / 1024
 }
 
-func (hpi *hugePageInfo) FreeMB() int {
+func (hpi *HugePageInfo) FreeMB() int {
 	return (hpi.Free * hpi.PageSizeKb) / 1024
 }
 
@@ -41,8 +41,8 @@ func parseInt(a string, i *int) {
 	*i = v
 }
 
-func parseHugePageInfo(input io.Reader) (*hugePageInfo, error) {
-	hpi := new(hugePageInfo)
+func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
+	hpi := new(HugePageInfo)
 
 	scn := bufio.NewScanner(input)
 	for scn.Scan() {
@@ -79,7 +79,7 @@ func parseHugePageInfo(input io.Reader) (*hugePageInfo, error) {
 	return hpi, scn.Err()
 }
 
-func GetHugePageInfo() (*hugePageInfo, error) {
+func GetHugePageInfo() (*HugePageInfo, error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return nil, err

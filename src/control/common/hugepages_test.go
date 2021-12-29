@@ -25,12 +25,12 @@ func TestServer_getHugePageInfo(t *testing.T) {
 func TestServer_parseHugePageInfo(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input     string
-		expOut    *hugePageInfo
+		expOut    *HugePageInfo
 		expFreeMB int
 		expErr    error
 	}{
 		"none parsed": {
-			expOut:    &hugePageInfo{},
+			expOut:    &HugePageInfo{},
 			expFreeMB: 0,
 		},
 		"2MB pagesize": {
@@ -41,7 +41,7 @@ HugePages_Rsvd:        0
 HugePages_Surp:        0
 Hugepagesize:       2048 kB
 			`,
-			expOut: &hugePageInfo{
+			expOut: &HugePageInfo{
 				Total:      1024,
 				Free:       1023,
 				PageSizeKb: 2048,
@@ -56,7 +56,7 @@ HugePages_Rsvd:        0
 HugePages_Surp:        0
 Hugepagesize:       1048576 kB
 			`,
-			expOut: &hugePageInfo{
+			expOut: &HugePageInfo{
 				Total:      16,
 				Free:       16,
 				PageSizeKb: 1048576,

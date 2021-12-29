@@ -294,6 +294,7 @@ type (
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
 		HugePageCount         int
+		HugeNodes             string
 		DisableCleanHugePages bool
 		PCIAllowList          string
 		PCIBlockList          string
