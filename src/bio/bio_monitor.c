@@ -88,9 +88,9 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
 }
 
-/* Call internal method to increment CSUM media error. */
+/* FIXME: Should be replaced by some common csum RAS event API */
 void
-bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
+bio_log_csum_err(struct bio_xs_context *bxc)
 {
 	struct media_error_msg	*mem;
 
@@ -101,7 +101,7 @@ bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 		return;
 	mem->mem_bs		= bxc->bxc_blobstore;
 	mem->mem_err_type	= MET_CSUM;
-	mem->mem_tgt_id		= tgt_id;
+	mem->mem_tgt_id		= bxc->bxc_tgt_id;
 	spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
 }
 

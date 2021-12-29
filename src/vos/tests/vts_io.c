@@ -604,7 +604,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	*/
 	assert_true(srv_iov->iov_len == sgl->sg_iovs[0].iov_len);
 
-	rc = bio_iod_post(vos_ioh2desc(ioh));
+	rc = bio_iod_post(vos_ioh2desc(ioh), rc);
 end:
 	if (rc == 0 && (arg->ta_flags & TF_ZERO_COPY))
 		rc = vos_update_end(ioh, 0, dkey, rc, NULL, dth);
@@ -668,7 +668,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	dst_iov->iov_len = off;
 	assert_true(dst_iov->iov_buf_len >= dst_iov->iov_len);
 
-	rc = bio_iod_post(vos_ioh2desc(ioh));
+	rc = bio_iod_post(vos_ioh2desc(ioh), 0);
 end:
 	rc = vos_fetch_end(ioh, NULL, rc);
 	if (((flags & VOS_COND_FETCH_MASK) && rc == -DER_NONEXIST) ||
