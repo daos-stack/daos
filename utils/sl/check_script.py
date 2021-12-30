@@ -25,7 +25,7 @@ import re
 import os
 import sys
 import argparse
-import subprocess
+import subprocess #nosec
 import tempfile
 import errno
 #pylint: disable=import-error

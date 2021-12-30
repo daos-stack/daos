@@ -71,7 +71,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 		D_GOTO(out, rc);
 
 	D_DEBUG(DB_TRACE, "before update "DF_UUIDF"\n", DP_UUID(pool_uuid));
-	rc = dc_pool_map_update(pool, map, pool_map_get_version(map), true);
+	rc = dc_pool_map_update(pool, map, true);
 	if (rc)
 		D_GOTO(out, rc);
 

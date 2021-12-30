@@ -87,6 +87,7 @@ type JoinRequest struct {
 	FabricURI      string
 	FabricContexts uint32
 	FaultDomain    *FaultDomain
+	Incarnation    uint64
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -145,6 +146,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		curMember.FabricURI = req.FabricURI
 		curMember.FabricContexts = req.FabricContexts
 		curMember.FaultDomain = req.FaultDomain
+		curMember.Incarnation = req.Incarnation
 		if err := m.db.UpdateMember(curMember); err != nil {
 			return nil, err
 		}
@@ -168,6 +170,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 
 	newMember := &Member{
 		Rank:           req.Rank,
+		Incarnation:    req.Incarnation,
 		UUID:           req.UUID,
 		Addr:           req.ControlAddr,
 		FabricURI:      req.FabricURI,
@@ -470,7 +473,10 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 
 // MarkRankDead is a helper method to mark a rank as dead in response to a
 // swim_rank_dead event.
-func (m *Membership) MarkRankDead(rank Rank) error {
+func (m *Membership) MarkRankDead(rank Rank, incarnation uint64) error {
+	m.Lock()
+	defer m.Unlock()
+
 	member, err := m.db.FindMemberByRank(rank)
 	if err != nil {
 		return err
@@ -488,11 +494,20 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 		return errors.New(msg)
 	}
 
+	if member.State() == MemberStateJoined && member.Incarnation > incarnation {
+		m.log.Debugf("ignoring rank dead event for previous incarnation of %d (%x < %x)", rank, incarnation, member.Incarnation)
+		return errors.Errorf("event is for previous incarnation of %d", rank)
+	}
+
+	m.log.Infof("marking rank %d as %s in response to rank dead event", rank, ns)
 	member.state = ns
 	return m.db.UpdateMember(member)
 }
 
 func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
+	m.Lock()
+	defer m.Unlock()
+
 	ei := evt.GetEngineStateInfo()
 	if ei == nil {
 		m.log.Error("no extended info in EngineDied event received")
@@ -531,8 +546,6 @@ func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
 	case events.RASEngineDied:
 		m.handleEngineFailure(evt)
-	default:
-		m.log.Debugf("no handler registered for event: %v", evt)
 	}
 }
 

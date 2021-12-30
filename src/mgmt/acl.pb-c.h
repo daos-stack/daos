@@ -66,9 +66,9 @@ struct  _Mgmt__GetACLReq
    */
   char *sys;
   /*
-   * Target UUID
+   * Target UUID or label
    */
-  char *uuid;
+  char *id;
   /*
    * List of pool service ranks
    */
@@ -92,9 +92,9 @@ struct  _Mgmt__ModifyACLReq
    */
   char *sys;
   /*
-   * Target UUID
+   * Target UUID or label
    */
-  char *uuid;
+  char *id;
   /*
    * List of ACEs to overwrite ACL with
    */
@@ -122,9 +122,9 @@ struct  _Mgmt__DeleteACLReq
    */
   char *sys;
   /*
-   * Target UUID
+   * Target UUID or label
    */
-  char *uuid;
+  char *id;
   /*
    * Principal whose entry is to be deleted
    */

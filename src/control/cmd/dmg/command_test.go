@@ -136,16 +136,14 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 			break
 		}
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{})
+	case *control.SystemCleanupReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemCleanupResp{})
 	case *control.LeaderQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})
 	case *control.ListPoolsReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ListPoolsResp{})
 	case *control.ContSetOwnerReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ContSetOwnerResp{})
-	case *control.PoolResolveIDReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolResolveIDResp{
-			Uuid: defaultPoolUUID,
-		})
 	case *control.PoolQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{})
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
@@ -193,7 +191,6 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 				testExpectedError(t, st.expectedErr, err)
 				return
 			}
-
 			if diff := cmp.Diff(st.expectedCalls, strings.Join(conn.called, " ")); diff != "" {
 				t.Fatalf("unexpected function calls (-want, +got):\n%s\n", diff)
 			}

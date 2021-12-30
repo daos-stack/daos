@@ -395,7 +395,7 @@ main(int argc, char *argv[])
 
 	ctl_ctx.tsc_pmem_file = pmem_file;
 
-	rc = dts_ctx_init(&ctl_ctx);
+	rc = dts_ctx_init(&ctl_ctx, &vos_engine);
 	if (rc != 0) {
 		fprintf(stderr, "Failed to initialize utility: "DF_RC"\n",
 			DP_RC(rc));

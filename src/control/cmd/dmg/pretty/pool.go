@@ -75,8 +75,10 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	}
 
 	tierRatio := make([]float64, len(pcr.TierBytes))
-	for tierIdx, tierBytes := range pcr.TierBytes {
-		tierRatio[tierIdx] = float64(tierBytes) / float64(totalSize)
+	if totalSize != 0 {
+		for tierIdx, tierBytes := range pcr.TierBytes {
+			tierRatio[tierIdx] = float64(tierBytes) / float64(totalSize)
+		}
 	}
 
 	if len(pcr.TgtRanks) == 0 {
@@ -97,7 +99,8 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 			title += ","
 			tierName = "NVMe"
 		}
-		title += fmt.Sprintf("%0.2f%%%%", tierRatio*100)
+
+		title += fmt.Sprintf("%0.2f%%", tierRatio*100)
 		fmtName := fmt.Sprintf("Storage tier %d (%s)", tierIdx, tierName)
 		fmtArgs = append(fmtArgs, txtfmt.TableRow{fmtName: fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.TierBytes[tierIdx]*numRanks), humanize.Bytes(pcr.TierBytes[tierIdx]))})
 	}
@@ -129,7 +132,7 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	}
 
 	// display imbalance of the most imbalanced tier
-	imbalance := pool.Usage[0].Imbalance
+	var imbalance uint32
 	for ti := 0; ti < len(pool.Usage); ti++ {
 		if pool.Usage[ti].Imbalance > imbalance {
 			imbalance = pool.Usage[ti].Imbalance

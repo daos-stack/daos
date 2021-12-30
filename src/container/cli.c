@@ -17,6 +17,7 @@
 #include <daos/event.h>
 #include <daos/mgmt.h>
 #include <daos/pool.h>
+#include <daos/object.h>
 #include <daos/rsvc.h>
 #include <daos_types.h>
 #include "cli_internal.h"
@@ -44,7 +45,11 @@ dc_cont_init(void)
 void
 dc_cont_fini(void)
 {
-	daos_rpc_unregister(&cont_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&cont_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 /*
@@ -76,15 +81,16 @@ cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 }
 
 struct cont_args {
-	struct dc_pool		*pool;
-	crt_rpc_t		*rpc;
-	daos_prop_t		*prop;
+	struct dc_pool			*pool;
+	crt_rpc_t			*rpc;
+	daos_prop_t			*prop;
 };
 
 static int
 cont_create_complete(tse_task_t *task, void *data)
 {
 	struct cont_args       *arg = (struct cont_args *)data;
+	daos_cont_create_t     *args;
 	struct dc_pool	       *pool = arg->pool;
 	struct cont_create_out *out = crt_reply_get(arg->rpc);
 	int			rc = task->dt_result;
@@ -109,6 +115,11 @@ cont_create_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	args = dc_task_get_args(task);
+	/** Returned container UUID upon successful creation */
+	if (args->cuuid != NULL)
+		uuid_copy(*args->cuuid, args->uuid);
+
 	D_DEBUG(DF_DSMC, "completed creating container\n");
 
 out:
@@ -128,19 +139,22 @@ daos_prop_has_entry(daos_prop_t *prop, uint32_t entry_type)
 /*
  * If no owner/group prop was supplied, translates euid/egid to user and group
  * names, and adds them as owners to a new copy of the daos_prop_t passed in.
+ * Allocate root objid if not specified by the caller.
  * The newly allocated prop is expected to be freed by the cont create callback.
  */
 static int
-dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
+dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
+		      daos_prop_t *prop_in)
 {
-	char	       *owner = NULL;
-	char	       *owner_grp = NULL;
-	daos_prop_t    *final_prop = NULL;
-	uint32_t	idx = 0;
-	uint32_t	entries;
-	int		rc = 0;
-	uid_t		uid = geteuid();
-	gid_t		gid = getegid();
+	char				*owner = NULL;
+	char				*owner_grp = NULL;
+	struct daos_prop_co_roots	*roots = NULL;
+	daos_prop_t			*final_prop = NULL;
+	uint32_t			idx = 0;
+	uint32_t			entries;
+	int				rc = 0;
+	uid_t				uid = geteuid();
+	gid_t				gid = getegid();
 
 	entries = (prop_in == NULL) ? 0 : prop_in->dpp_nr;
 
@@ -164,10 +178,44 @@ dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
 		entries++;
 	}
 
+	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_ROOTS)) {
+		uint64_t rf;
+
+		/**
+		 * If user did not provide a root object id, let's generate
+		 * it here. Worst case is that it is not used by the middleware.
+		 */
+
+		D_ALLOC_PTR(roots);
+		if (roots == NULL) {
+			D_ERROR("Failed to allocate structure for root objid\n");
+			D_GOTO(err_out, rc = -DER_NOMEM);
+		}
+
+		/** allocate objid according to the redundancy factor */
+		roots->cr_oids[0].lo = 0;
+		roots->cr_oids[0].hi = 0;
+		rf = daos_cont_prop2redunfac(prop_in);
+		rc = daos_obj_generate_oid_by_rf(poh, rf, &roots->cr_oids[0], 0,
+						 0, 0, 0);
+		if (rc) {
+			D_ERROR("Failed to generate root OID "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(err_out, rc);
+		}
+
+		/** only one root oid is needed in the common case */
+		roots->cr_oids[1] = DAOS_OBJ_NIL;
+		roots->cr_oids[2] = DAOS_OBJ_NIL;
+		roots->cr_oids[3] = DAOS_OBJ_NIL;
+
+		entries++;
+	}
+
 	/* We always free this prop in the callback - so need to make a copy */
 	final_prop = daos_prop_alloc(entries);
 	if (final_prop == NULL)
-		D_GOTO(err_out, -DER_NOMEM);
+		D_GOTO(err_out, rc = -DER_NOMEM);
 
 	if (prop_in != NULL && prop_in->dpp_nr > 0) {
 		rc = daos_prop_copy(final_prop, prop_in);
@@ -192,6 +240,14 @@ dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
 			owner_grp = NULL; /* prop is responsible for it now */
 			idx++;
 		}
+
+		if (roots != NULL) {
+			final_prop->dpp_entries[idx].dpe_type =
+				DAOS_PROP_CO_ROOTS;
+			final_prop->dpp_entries[idx].dpe_val_ptr = roots;
+			roots = NULL; /* prop is responsible for it now */
+			idx++;
+		}
 	}
 
 	*prop_out = final_prop;
@@ -200,6 +256,7 @@ dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
 
 err_out:
 	daos_prop_free(final_prop);
+	D_FREE(roots);
 	D_FREE(owner);
 	D_FREE(owner_grp);
 	return rc;
@@ -214,13 +271,14 @@ dc_cont_create(tse_task_t *task)
 	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
-	struct cont_args	arg;
+	struct cont_args	arg = {0, };
 	int			rc;
 	daos_prop_t	       *rpc_prop = NULL;
 
 	args = dc_task_get_args(task);
-	if (uuid_is_null(args->uuid))
-		D_GOTO(err_task, rc = -DER_INVAL);
+	if (!daos_uuid_valid(args->uuid))
+		/** generate a UUID for the new container */
+		uuid_generate(args->uuid);
 
 	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
 	if (entry != NULL) {
@@ -234,7 +292,8 @@ dc_cont_create(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
-	rc = dup_with_default_ownership_props(&rpc_prop, args->prop);
+	/** duplicate properties and add extra ones (e.g. ownership) */
+	rc = dup_cont_create_props(args->poh, &rpc_prop, args->prop);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
 
@@ -556,8 +615,8 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 			goto out;
 		}
 
-		rc = dc_task_reg_comp_cb(task, pmap_refresh_cb, cb_arg,
-					 sizeof(*cb_arg));
+		rc = tse_task_register_comp_cb(task, pmap_refresh_cb, cb_arg,
+					       sizeof(*cb_arg));
 		if (rc) {
 			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), failed "
 				"to reg_comp_cb, "DF_RC"\n",
@@ -586,7 +645,6 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 	struct dc_pool			*pool;
 	struct pmap_refresh_cb_arg	 cb_arg;
 	tse_sched_t			*sched;
-	daos_pool_query_t		*pargs;
 	tse_task_t			*ptask = NULL;
 	int				 rc;
 
@@ -595,17 +653,15 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 		return -DER_NO_HDL;
 
 	sched = (task != NULL) ? tse_task2sched(task) : NULL;
-	rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);
+	rc = dc_pool_create_map_refresh_task(pool, pm_ver, sched, &ptask);
 	if (rc != 0)
 		goto out;
 
-	pargs = dc_task_get_args(ptask);
-	pargs->poh = poh;
 	cb_arg.pra_pool = pool;
 	cb_arg.pra_pm_ver = pm_ver;
 	cb_arg.pra_retry_nr = 0;
-	rc = dc_task_reg_comp_cb(ptask, pmap_refresh_cb, &cb_arg,
-				 sizeof(cb_arg));
+	rc = tse_task_register_comp_cb(ptask, pmap_refresh_cb, &cb_arg,
+				       sizeof(cb_arg));
 	if (rc != 0)
 		goto out;
 
@@ -615,14 +671,14 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 			goto out;
 	}
 
-	rc = dc_task_schedule(ptask, true);
+	rc = tse_task_schedule(ptask, true);
 	return rc;
 
 out:
 	if (rc) {
 		dc_pool_put(pool);
 		if (ptask)
-			dc_task_decref(ptask);
+			dc_pool_abandon_map_refresh_task(ptask);
 	}
 	return rc;
 }
@@ -718,10 +774,8 @@ cont_open_complete(tse_task_t *task, void *data)
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
 	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
-	/* TODO */
-	arg->coa_info->ci_nsnapshots = 0;
-	arg->coa_info->ci_snapshots = NULL;
-	arg->coa_info->ci_lsnapshot = 0;
+	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
+	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1105,13 +1159,10 @@ cont_query_complete(tse_task_t *task, void *data)
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
-	arg->cqa_info->ci_hae = out->cqo_hae;
 	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
-	/* TODO */
-	arg->cqa_info->ci_nsnapshots = 0;
-	arg->cqa_info->ci_snapshots = NULL;
-	arg->cqa_info->ci_lsnapshot = 0;
+	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
+	arg->cqa_info->ci_lsnapshot = out->cqo_lsnapshot;
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1250,8 +1301,6 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
 	in->cqi_bits = cont_query_bits(args->prop);
-	if (args->info != NULL)
-		in->cqi_bits |= DAOS_CO_QUERY_TGT;
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -1684,16 +1733,6 @@ struct cont_oid_alloc_args {
 };
 
 static int
-pool_query_cb(tse_task_t *task, void *data)
-{
-	daos_pool_query_t	*args;
-
-	args = dc_task_get_args(task);
-	D_FREE(args->info);
-	return task->dt_result;
-}
-
-static int
 cont_oid_alloc_complete(tse_task_t *task, void *data)
 {
 	struct cont_oid_alloc_args *arg = (struct cont_oid_alloc_args *)data;
@@ -1704,45 +1743,29 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 
 	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
 		tse_sched_t *sched = tse_task2sched(task);
-		daos_pool_query_t *pargs;
 		tse_task_t *ptask;
+		unsigned int map_version = out->coao_op.co_map_version;
 
-		/** pool map update task */
-		rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);
+		/** pool map refresh task */
+		rc = dc_pool_create_map_refresh_task(pool, map_version, sched,
+						     &ptask);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		pargs = dc_task_get_args(ptask);
-		pargs->poh = arg->coaa_cont->dc_pool_hdl;
-		D_ALLOC_PTR(pargs->info);
-		if (pargs->info == NULL) {
-			dc_task_decref(ptask);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-
-		rc = dc_task_reg_comp_cb(ptask, pool_query_cb, NULL, 0);
+		rc = dc_task_depend(task, 1, &ptask);
 		if (rc != 0) {
-			D_FREE(pargs->info);
-			dc_task_decref(ptask);
+			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
 		}
 
 		rc = dc_task_resched(task);
 		if (rc != 0) {
-			D_FREE(pargs->info);
-			dc_task_decref(ptask);
-			D_GOTO(out, rc);
-		}
-
-		rc = dc_task_depend(task, 1, &ptask);
-		if (rc != 0) {
-			D_FREE(pargs->info);
-			dc_task_decref(ptask);
+			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
 		}
 
 		/* ignore returned value, error is reported by comp_cb */
-		dc_task_schedule(ptask, true);
+		tse_task_schedule(ptask, true);
 		D_GOTO(out, rc = 0);
 	} else if (rc != 0) {
 		/** error but non retryable RPC */
@@ -1784,7 +1807,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	if (tgt_cnt == 0 || tgts == NULL)
 		return -DER_INVAL;
 
-	*rank = tgts[rand() % tgt_cnt].ta_comp.co_rank;
+	*rank = tgts[d_rand() % tgt_cnt].ta_comp.co_rank;
 
 	D_FREE(tgts);
 
@@ -1899,7 +1922,7 @@ struct dc_cont_glob {
 static inline daos_size_t
 dc_cont_glob_buf_size()
 {
-       return sizeof(struct dc_cont_glob);
+	return sizeof(struct dc_cont_glob);
 }
 
 static inline void
@@ -2474,12 +2497,13 @@ dc_cont_get_attr(tse_task_t *task)
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
-		D_GOTO(out, rc);
+		D_GOTO(out_rpc, rc);
 	}
 	for (i = 0 ; i < args->n ; i++) {
 		uint64_t len;
@@ -2488,22 +2512,21 @@ dc_cont_get_attr(tse_task_t *task)
 		in->cagi_key_length += len + 1;
 		D_STRNDUP(new_names[i], args->names[i], len);
 		if (new_names[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_names[i], sizeof(char *));
 		if (rc) {
 			D_FREE(new_names[i]);
-			D_GOTO(out, rc);
+			D_GOTO(out_rpc, rc);
 		}
 	}
 
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
 			      CRT_BULK_RW, &in->cagi_bulk);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, &cb_args);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
 
 	cb_args.cra_bulk = in->cagi_bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
@@ -2516,6 +2539,8 @@ dc_cont_get_attr(tse_task_t *task)
 	crt_req_addref(cb_args.cra_rpc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
+out_rpc:
+	cont_req_cleanup(CLEANUP_RPC, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to get container attributes: "DF_RC"\n",
@@ -2923,6 +2948,9 @@ dc_cont_list_snap(tse_task_t *task)
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
+
+		/* TODO: iovs for names[] and list_snap bulk create function */
+
 		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->sli_bulk);
 		if (rc != 0) {

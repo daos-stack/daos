@@ -430,11 +430,8 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
         objClient = new DaosObjClient(poolId, contId, builder);
       } else {
         //check existing client
-        if (poolId == null) {
-          throw new IllegalArgumentException("need pool UUID.");
-        }
-        if (contId == null) {
-          throw new IllegalArgumentException("need container UUID.");
+        if (poolId == null || contId == null) {
+          throw new IllegalArgumentException("need pool UUID/label and container UUID/label");
         }
         String key = poolId + contId;
         objClient = pcObjMap.get(key);

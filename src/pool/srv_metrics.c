@@ -10,10 +10,21 @@
 #include <abt.h>
 #include <gurt/telemetry_producer.h>
 
+
+/* Estimate of bytes per typical metric node */
+#define NODE_BYTES		(sizeof(struct d_tm_node_t) + \
+				 sizeof(struct d_tm_metric_t) + \
+				 64 /* buffer for metadata */)
+/* Estimate of bytes per histogram bucket */
+#define BUCKET_BYTES		(sizeof(struct d_tm_bucket_t) + NODE_BYTES)
 /*
- * Size in bytes of each per-pool metric directory.
- */
-#define POOL_METRICS_DIR_BYTES	(96 * 1024)
+   Estimate of bytes per metric.
+   This is a generous high-water mark assuming most metrics are not using
+   histograms. May need adjustment if the balance of metrics changes.
+*/
+#define PER_METRIC_BYTES	(NODE_BYTES + sizeof(struct d_tm_stats_t) + \
+				 sizeof(struct d_tm_histogram_t) + \
+				 BUCKET_BYTES)
 
 /**
  * Initializes the pool metrics
@@ -49,6 +60,12 @@ ds_pool_metrics_alloc(const char *path, int tgt_id)
 	return metrics;
 }
 
+int
+ds_pool_metrics_count(void)
+{
+	return (sizeof(struct pool_metrics) / sizeof(struct d_tm_node_t *));
+}
+
 /**
  * Release the pool metrics
  */
@@ -72,6 +89,12 @@ pool_metrics_gen_path(const uuid_t pool_uuid, char *path, size_t path_len)
 	path[path_len - 1] = '\0';
 }
 
+static int
+get_pool_dir_size(void)
+{
+	return dss_module_nr_pool_metrics() * PER_METRIC_BYTES;
+}
+
 /**
  * Add metrics for a specific pool.
  *
@@ -86,7 +109,7 @@ ds_pool_metrics_start(struct ds_pool *pool)
 			      sizeof(pool->sp_path));
 
 	/** create new shmem space for per-pool metrics */
-	rc = d_tm_add_ephemeral_dir(NULL, POOL_METRICS_DIR_BYTES, pool->sp_path);
+	rc = d_tm_add_ephemeral_dir(NULL, get_pool_dir_size(), pool->sp_path);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": unable to create metrics dir for pool, "
 			DF_RC "\n", DP_UUID(pool->sp_uuid), DP_RC(rc));

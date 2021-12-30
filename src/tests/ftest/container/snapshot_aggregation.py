@@ -27,12 +27,14 @@ class SnapshotAggregation(IorTestBase):
         self.free_space = {"scm": [], "nvme": []}
 
     def update_free_space(self):
-        """Append the free space list with the current pool capacities."""
+        """Append to the free space list with the current pool capacities."""
         for index, name in enumerate(("scm", "nvme")):
-            self.free_space[name].append({
-                "dmg": self.pool.query_data["response"][name]["free"],
-                "api": int(self.pool.info.pi_space.ps_space.s_free[index])
-            })
+            for tier in self.pool.query_data["response"]["tier_stats"]:
+                if tier["media_type"] == name:
+                    self.free_space[name].append({
+                        "dmg": tier["free"],
+                        "api": int(self.pool.info.pi_space.ps_space.s_free[index])
+                    })
 
     def test_snapshot_aggregation(self):
         """JIRA ID: DAOS-3751.
@@ -45,7 +47,7 @@ class SnapshotAggregation(IorTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=container,snapshot,snap
+        :avocado: tags=container,snap
         :avocado: tags=snapshot_aggregation
         """
         self.dmg = self.get_dmg_command()
@@ -105,7 +107,10 @@ class SnapshotAggregation(IorTestBase):
             "NVMe free pool space was not reduced by the overwrite")
 
         # Enable the aggregation
+        # Test UUID.
+        self.pool.use_label = False
         self.pool.set_property("reclaim", "time")
+        self.pool.use_label = True
 
         # Delete the snapshot.
         daos.container_destroy_snap(

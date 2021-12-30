@@ -7,6 +7,7 @@ usr/bin/daos_admin
 # set daos_server to be setgid daos_server in order to invoke daos_admin
 usr/bin/daos_server
 usr/bin/daos_engine
+usr/bin/daos_metrics
 usr/lib64/daos_srv/libcont.so
 usr/lib64/daos_srv/libdtx.so
 usr/lib64/daos_srv/libmgmt.so
@@ -25,5 +26,6 @@ usr/lib64/daos_srv/libplacement.so
 usr/lib64/libdaos_common_pmem.so
 usr/share/daos/control/setup_spdk.sh
 usr/lib/systemd/system/daos_server.service
+usr/lib/sysctl.d/10-daos_server.conf
 usr/bin/daos_storage_estimator.py
 usr/lib64/python3.8/site-packages/storage_estimator/*.py

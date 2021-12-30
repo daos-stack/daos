@@ -207,13 +207,13 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		if (uf_arg->snap == true) {
 			rc = daos_cont_create_snap(arg->coh, &snap_epoch, NULL,
 						   NULL);
-			*op->snap_epoch  = snap_epoch;
+			op->snap_epoch  = snap_epoch;
 		}
 	} else{
 		th_open = DAOS_TX_NONE;
 		/*Open snapshot and read the data from snapshot epoch*/
 		if (uf_arg->snap == true) {
-			rc = daos_tx_open_snap(arg->coh, *op->snap_epoch,
+			rc = daos_tx_open_snap(arg->coh, op->snap_epoch,
 					       &th_open, NULL);
 			D_ASSERT(rc == 0);
 		}
@@ -342,9 +342,9 @@ daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
 		 char **rbuf, daos_size_t *rbuf_size)
 {
 	print_message("add rank %u\n", op->ae_arg.ua_rank);
-	test_rebuild_wait(&arg, 1);
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			  op->ae_arg.ua_rank);
+	test_rebuild_wait(&arg, 1);
 	return 0;
 }
 
@@ -364,6 +364,9 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 				    arg->dmg_config,
 				    op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 	}
+
+	test_rebuild_wait(&arg, 1);
+	daos_cont_status_clear(arg->coh, NULL);
 	return 0;
 }
 
@@ -403,7 +406,7 @@ static int
 test_cb_noop(test_arg_t *arg, struct test_op_record *op,
 	     char **rbuf, daos_size_t *rbuf_size)
 {
-	return -DER_NOSYS;
+	return 0;
 }
 
 struct test_op_dict op_dict[] = {
@@ -497,7 +500,7 @@ cmd_line_get(FILE *fp, char *line)
 
 	D_ASSERT(line != NULL && fp != NULL);
 	do {
-		if (fgets(line, CMD_LINE_LEN_MAX, fp) == NULL)
+		if (fgets(line, CMD_LINE_LEN_MAX - 1, fp) == NULL)
 			return -DER_ENOENT;
 		for (p = line; isspace(*p); p++)
 			;
@@ -1158,9 +1161,9 @@ static int
 cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 	       struct test_op_record **op)
 {
-	char			 cmd[CMD_LINE_LEN_MAX] = { 0 };
+	char			 cmd[CMD_LINE_LEN_MAX + 1] = { 0 };
 	struct test_op_record	*op_rec = NULL;
-	char			*argv[CMD_LINE_ARGC_MAX] = { 0 };
+	char			*argv[CMD_LINE_ARGC_MAX + 1] = { 0 };
 	char			*dkey = NULL;
 	char			*akey = NULL;
 	size_t			 cmd_size;
@@ -1257,8 +1260,7 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 					      shard[i]);
 			}
 			fail_val = daos_shard_fail_value(shard, argc - 2);
-			arg->fail_loc = DAOS_FAIL_SHARD_FETCH |
-					DAOS_FAIL_ALWAYS;
+			arg->fail_loc = DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS;
 			arg->fail_value = fail_val;
 		} else if (strcmp(argv[1], "clear") == 0) {
 			arg->fail_loc = 0;
@@ -1458,10 +1460,8 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 {
 	struct test_op_record	*op = NULL;
 	FILE			*fp;
-	char			 cmd_line[CMD_LINE_LEN_MAX] = {};
+	char			 cmd_line[CMD_LINE_LEN_MAX - 1] = {};
 	int			 rc = 0;
-	/*Array for snapshot epoch*/
-	daos_epoch_t		sn_epoch[DTS_MAX_EPOCH_TIMES] = {};
 
 	if (io_conf == NULL || strlen(io_conf) == 0) {
 		print_message("invalid io_conf.\n");
@@ -1475,17 +1475,19 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 		return daos_errno2der(errno);
 	}
 
+	int line_nr = 0;
+
 	do {
 		size_t	cmd_size;
 
-		memset(cmd_line, 0, CMD_LINE_LEN_MAX);
+		memset(cmd_line, 0, CMD_LINE_LEN_MAX - 1);
 		if (cmd_line_get(fp, cmd_line) != 0)
 			break;
 
-		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX);
+		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX - 1);
 		if (cmd_size == 0)
 			continue;
-		if (cmd_size >= CMD_LINE_LEN_MAX) {
+		if (cmd_size >= CMD_LINE_LEN_MAX - 1) {
 			print_message("bad cmd_line, exit.\n");
 			break;
 		}
@@ -1496,7 +1498,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 		}
 
 		if (op != NULL) {
-			op->snap_epoch = &sn_epoch[op->tx];
+			print_message("will run cmd_line %s, line_nr %d\n", cmd_line, ++line_nr);
 			rc = cmd_line_run(arg, op);
 			if (rc) {
 				print_message("run cmd_line %s failed, "

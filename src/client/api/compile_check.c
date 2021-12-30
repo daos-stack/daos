@@ -4,11 +4,15 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <gurt/debug.h>
 #include <daos.h>
+#include <daos_fs.h>
 
 #if defined(__cplusplus)
 #define check_uuid(var, expect, type) (void)0
+#define check_uuidp(var, expect, type) (void)0
 #define check_string(var, expect, type) (void)0
 #define check_uuid_func(...) (void)0
 #define check_const_uuid_func(...) (void)0
@@ -82,10 +86,17 @@ int main(int argc, char **argv)
 {
 	daos_handle_t	coh;
 	daos_handle_t	poh;
+	uuid_t		uuid1;
+	uuid_t		uuid2;
 
 	FOREACH_TYPE(DECLARE_ACTION, poh, coh);
 
 	FOREACH_ALL(RUN_ACTION, poh, coh);
+
+	daos_cont_create(poh, uuid1, NULL, NULL);
+	daos_cont_create(poh, &uuid2, NULL, NULL);
+	dfs_cont_create(poh, uuid1, NULL, NULL, NULL);
+	dfs_cont_create(poh, &uuid2, NULL, NULL, NULL);
 
 	check_uuid_func(uuid);
 	check_const_uuid_func(uuid);

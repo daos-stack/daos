@@ -62,7 +62,7 @@ func createEmptyFile(log logging.Logger, path string, size uint64) error {
 	return nil
 }
 
-func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWriteNvmeConfigRequest) error {
+func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWriteConfigRequest) error {
 	if buf.Len() == 0 {
 		return errors.New("generated file is unexpectedly empty")
 	}
@@ -87,8 +87,28 @@ func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWrite
 		req.OwnerUID, req.OwnerGID)
 }
 
-func writeJsonConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteNvmeConfigRequest) error {
-	nsc, err := newSpdkConfig(log, enableVmd, req)
+// writeJSONConf generates nvme config file for given bdev type to be consumed
+// by spdk.
+func writeJSONConf(log logging.Logger, req *storage.BdevWriteConfigRequest) error {
+	if len(req.TierProps) == 0 {
+		return nil
+	}
+	if req.ConfigOutputPath == "" {
+		return errors.New("no output config directory set in request")
+	}
+	hasBdevs := false
+	for _, tierProp := range req.TierProps {
+		if tierProp.Class != storage.ClassNvme || len(tierProp.DeviceList) > 0 {
+			hasBdevs = true
+			break
+		}
+	}
+	if !hasBdevs {
+		log.Debug("skip write nvme conf for empty device list")
+		return nil
+	}
+
+	nsc, err := newSpdkConfig(log, req)
 	if err != nil {
 		return err
 	}
@@ -102,28 +122,5 @@ func writeJsonConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteN
 		return err
 	}
 
-	return nil
-}
-
-// writeNvmeConf generates nvme config file for given bdev type to be consumed
-// by spdk.
-func (sb *spdkBackend) writeNvmeConfig(req *storage.BdevWriteNvmeConfigRequest) error {
-	if len(req.TierProps) == 0 {
-		return nil
-	}
-	if req.ConfigOutputPath == "" {
-		return errors.New("no output config directory set in request")
-	}
-
-	for _, tierProp := range req.TierProps {
-		if tierProp.Class != storage.ClassNvme || len(tierProp.DeviceList) > 0 {
-			sb.log.Debugf("write nvme output json config: %+v", req)
-			// TODO DAOS-8040: re-enable VMD
-			// return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
-			return writeJsonConfig(sb.log, false, req)
-		}
-	}
-
-	sb.log.Debug("skip write nvme conf for empty device list")
 	return nil
 }

@@ -8,6 +8,7 @@
 #include <grp.h>
 #include <linux/limits.h>
 #include <json-c/json.h>
+#include <stdlib.h>
 
 #include <daos/common.h>
 #include <daos/tests_lib.h>
@@ -396,6 +397,7 @@ dmg_pool_create(const char *dmg_config_file,
 	FILE			*tmp_file = NULL;
 	daos_mgmt_pool_info_t	pool_info = {};
 	struct json_object	*dmg_out = NULL;
+	bool			 has_label = false;
 	int			fd = -1, rc = 0;
 
 	if (grp != NULL) {
@@ -487,7 +489,28 @@ dmg_pool_create(const char *dmg_config_file,
 					    entry->dpe_str);
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			has_label = true;
 		}
+	}
+
+	if (!has_label) {
+		char	 path[] = "/tmp/test_XXXXXX";
+		int	 tmp_fd;
+		char	*label = &path[5];
+
+		/* pool label is required, generate a unique one randomly */
+		tmp_fd = mkstemp(path);
+		if (tmp_fd < 0) {
+			D_ERROR("failed to generate unique label: %s\n",
+				strerror(errno));
+			D_GOTO(out, rc = d_errno2der(errno));
+		}
+		close(tmp_fd);
+		unlink(path);
+
+		args = cmd_push_arg(args, &argcount, "--label=%s ", label);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (svc != NULL) {
@@ -635,7 +658,8 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	struct json_object	*targets;
 	int			tgts_len;
 	int			i, j;
-	char		*tmp_var;
+	int			rc;
+	char			*tmp_var;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
@@ -653,8 +677,12 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			D_ERROR("unable to extract uuid from JSON\n");
 			return -DER_INVAL;
 		}
-		uuid_parse(json_object_get_string(tmp),
-			   devices[*disks].device_id);
+
+		rc = uuid_parse(json_object_get_string(tmp), devices[*disks].device_id);
+		if (rc != 0) {
+			D_ERROR("failed parsing uuid_str\n");
+			return -DER_INVAL;
+		}
 
 		if (!json_object_object_get_ex(dev, "tgt_ids",
 					       &targets)) {
@@ -824,7 +852,8 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	struct json_object	*smd_info = NULL;
 	struct json_object	*storage_info = NULL;
 	struct json_object	*health_info = NULL;
-	struct json_object	*dev = NULL;
+	struct json_object	*devices = NULL;
+	struct json_object	*dev_info = NULL;
 	struct json_object	*tmp = NULL;
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			argcount = 0;
@@ -846,7 +875,6 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 		D_ERROR("dmg command failed");
 		goto out_json;
 	}
-
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
 		D_ERROR("unable to extract host_storage_map from JSON\n");
@@ -856,25 +884,27 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	json_object_object_foreach(storage_map, key, val) {
 		D_DEBUG(DB_TEST, "key:\"%s\",val=%s\n", key,
 			json_object_to_json_string(val));
+
 		if (!json_object_object_get_ex(val, "storage", &storage_info)) {
-			D_ERROR("unable to extract hosts from JSON\n");
+			D_ERROR("unable to extract storage info from JSON\n");
 			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		if (!json_object_object_get_ex(storage_info, "smd_info",
 					       &smd_info)) {
-			D_ERROR("unable to extract hosts from JSON\n");
+			D_ERROR("unable to extract smd_info from JSON\n");
 			D_GOTO(out_json, rc = -DER_INVAL);
 		}
-		json_object_object_foreach(smd_info, key1, val1) {
-			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
-				json_object_to_json_string(val1));
-			dev = json_object_array_get_idx(val1, 0);
-			json_object_object_get_ex(dev, "health", &health_info);
-			if (health_info != NULL) {
-				json_object_object_get_ex(health_info, stats,
-							  &tmp);
-				strcpy(stats, json_object_to_json_string(tmp));
-			}
+		if (!json_object_object_get_ex(smd_info, "devices", &devices)) {
+			D_ERROR("unable to extract devices list from JSON\n");
+			D_GOTO(out_json, rc = -DER_INVAL);
+		}
+
+		dev_info = json_object_array_get_idx(devices, 0);
+		json_object_object_get_ex(dev_info, "health", &health_info);
+		if (health_info != NULL) {
+			json_object_object_get_ex(health_info, stats,
+						  &tmp);
+			strcpy(stats, json_object_to_json_string(tmp));
 		}
 	}
 

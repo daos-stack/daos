@@ -82,7 +82,20 @@ insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
        struct ioreq *req, uint64_t flags);
 
 void
+insert_nowait(const char *dkey, int nr, const char **akey,
+	      daos_size_t *iod_size, int *rx_nr, uint64_t *idx, void **val,
+	      daos_handle_t th, struct ioreq *req, uint64_t flags);
+
+void
+insert_wait(struct ioreq *req);
+
+void
 insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
+	     daos_size_t data_size, struct ioreq *req);
+
+void
+inset_recxs_dkey_uint64(uint64_t *dkey, const char *akey, daos_size_t iod_size,
 	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req);
 
@@ -221,7 +234,7 @@ struct test_op_record {
 	d_list_t		or_queue_link;
 	struct test_key_record	*or_key_rec; /* back pointer */
 	int			tx;
-	daos_epoch_t		*snap_epoch;
+	daos_epoch_t		snap_epoch;
 	enum test_op_type	or_op;
 	union {
 		struct test_update_fetch_arg	uf_arg;

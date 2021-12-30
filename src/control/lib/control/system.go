@@ -9,6 +9,7 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -96,6 +98,7 @@ type SystemJoinReq struct {
 	NumContexts uint32              `json:"Nctxs"`
 	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
 	InstanceIdx uint32              `json:"Idx"`
+	Incarnation uint64              `json:"Incarnation"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -135,7 +138,10 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	req.retryTimeout = SystemJoinRetryTimeout
 	req.retryTestFn = func(err error, _ uint) bool {
 		switch {
-		case IsConnectionError(err), system.IsUnavailable(err):
+		case IsRetryableConnErr(err), system.IsNotReady(err):
+			return true
+		}
+		if err == errNoMsResponse {
 			return true
 		}
 		return false
@@ -144,6 +150,7 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
+		rpcClient.Debugf("failed to invoke system join RPC: %s", err)
 		return nil, err
 	}
 
@@ -222,7 +229,7 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 		// retry behavior, return true for specific errors in order
 		// to implement our own retry behavior.
 		return req.FailOnUnavailable &&
-			(system.IsUnavailable(err) || IsConnectionError(err) ||
+			(system.IsUnavailable(err) || IsRetryableConnErr(err) ||
 				system.IsNotLeader(err) || system.IsNotReplica(err))
 	}
 	req.retryFn = func(_ context.Context, _ uint) error {
@@ -738,4 +745,70 @@ func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 	rpcClient.Debugf("DAOS system ping-ranks request: %+v", req)
 
 	return invokeRPCFanout(ctx, rpcClient, req)
+}
+
+// SystemCleanupReq contains the inputs for the system cleanup request.
+type SystemCleanupReq struct {
+	unaryRequest
+	msRequest
+	sysRequest
+	Machine string `json:"machine"`
+}
+
+type CleanupResult struct {
+	Status int32  `json:"status"`  // Status returned from this specific evict call
+	Msg    string `json:"msg"`     // Error message if Status is not Success
+	PoolID string `json:"pool_id"` // Unique identifier
+	Count  uint32 `json:"count"`   // Number of pools reclaimed
+}
+
+// SystemCleanupResp contains the request response.
+type SystemCleanupResp struct {
+	Results []*CleanupResult `json:"results"`
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system cleanup response.
+func (scr *SystemCleanupResp) Errors() error {
+	out := new(strings.Builder)
+
+	for _, r := range scr.Results {
+		if r.Status != int32(drpc.DaosSuccess) {
+			fmt.Fprintf(out, "%s\n", r.Msg)
+		}
+	}
+
+	if out.String() != "" {
+		return errors.New(out.String())
+	}
+
+	return nil
+}
+
+// SystemCleanup requests resources associated with a machine name be cleanedup.
+func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemCleanupReq) (*SystemCleanupResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	if req.Machine == "" {
+		return nil, errors.New("SystemCleanup requires a machine name.")
+	}
+
+	pbReq := new(mgmtpb.SystemCleanupReq)
+	pbReq.Machine = req.Machine
+	pbReq.Sys = req.getSystem(rpcClient)
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCleanup(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system cleanup request: %s", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemCleanupResp)
+	return resp, convertMSResponse(ur, resp)
 }

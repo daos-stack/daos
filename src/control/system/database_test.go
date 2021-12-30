@@ -641,40 +641,44 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 		"pool svc replicas update miss": {
 			poolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 			event: events.NewPoolSvcReplicasUpdateEvent(
 				"foo", 1, puuidAnother.String(), []uint32{2, 3, 5, 6, 7}, 1),
 			expPoolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 		},
 		"pool svc replicas update hit": {
 			poolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 			event: events.NewPoolSvcReplicasUpdateEvent(
 				"foo", 1, puuid.String(), []uint32{2, 3, 5, 6, 7}, 1),
 			expPoolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{2, 3, 5, 6, 7},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{2, 3, 5, 6, 7},
+					LastUpdate: time.Now(),
 				},
 			},
 		},
@@ -702,13 +706,85 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 
 			<-ctx.Done()
 
-			poolSvcs, err := db.PoolServiceList()
+			poolSvcs, err := db.PoolServiceList(false)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(PoolService{}),
+				cmpopts.EquateApproxTime(time.Second),
+			}
+			if diff := cmp.Diff(tc.expPoolSvcs, poolSvcs, cmpOpts...); diff != "" {
+				t.Errorf("unexpected pool service replicas (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystemDatabase_PoolServiceList(t *testing.T) {
+	ready := &PoolService{
+		PoolUUID:   uuid.New(),
+		PoolLabel:  "pool0001",
+		State:      PoolServiceStateReady,
+		Replicas:   []Rank{1, 2, 3, 4, 5},
+		LastUpdate: time.Now(),
+	}
+	creating := &PoolService{
+		PoolUUID:   uuid.New(),
+		PoolLabel:  "pool0002",
+		State:      PoolServiceStateCreating,
+		Replicas:   []Rank{1, 2, 3, 4, 5},
+		LastUpdate: time.Now(),
+	}
+	destroying := &PoolService{
+		PoolUUID:   uuid.New(),
+		PoolLabel:  "pool0003",
+		State:      PoolServiceStateDestroying,
+		Replicas:   []Rank{1, 2, 3, 4, 5},
+		LastUpdate: time.Now(),
+	}
+
+	for name, tc := range map[string]struct {
+		poolSvcs    []*PoolService
+		all         bool
+		expPoolSvcs []*PoolService
+	}{
+		"empty": {
+			expPoolSvcs: []*PoolService{},
+		},
+		"all: false": {
+			poolSvcs:    []*PoolService{creating, ready, destroying},
+			expPoolSvcs: []*PoolService{ready},
+		},
+		"all: true": {
+			poolSvcs:    []*PoolService{creating, ready, destroying},
+			all:         true,
+			expPoolSvcs: []*PoolService{creating, ready, destroying},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			for _, ps := range tc.poolSvcs {
+				if err := db.AddPoolService(ps); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			poolSvcs, err := db.PoolServiceList(tc.all)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.SortSlices(func(x, y *PoolService) bool {
+					return x.PoolLabel < y.PoolLabel
+				}),
+				cmpopts.IgnoreUnexported(PoolService{}),
+				cmpopts.EquateApproxTime(time.Second),
 			}
 			if diff := cmp.Diff(tc.expPoolSvcs, poolSvcs, cmpOpts...); diff != "" {
 				t.Errorf("unexpected pool service replicas (-want, +got):\n%s\n", diff)

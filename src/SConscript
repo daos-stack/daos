@@ -10,7 +10,8 @@ HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
 HEADERS_SRV = ['vos.h', 'vos_types.h']
 HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'heap.h', 'fault_inject.h', 'debug_setup.h',
-                'types.h', 'atomic.h', 'slab.h']
+                'types.h', 'atomic.h', 'slab.h',
+                'telemetry_consumer.h', 'telemetry_common.h']
 
 # Keep versioned libs for now to avoid any conflict with 1.0
 CART_VERSION = "4.9.0"
@@ -34,9 +35,6 @@ def scons():
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
-
-    env.AppendUnique(RPATH_FULL=[Dir('gurt')])
-    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('gurt').path])
 
     # Detect if we have explicit_bzero
     conf = Configure(env)
@@ -83,6 +81,9 @@ def scons():
     SConscript('object/SConscript')
     SConscript('rebuild/SConscript')
     SConscript('security/SConscript')
+
+    # Build cart utilities library
+    SConscript('cart/utils/SConscript')
 
     # Build DAOS client libraries
     SConscript('client/SConscript')

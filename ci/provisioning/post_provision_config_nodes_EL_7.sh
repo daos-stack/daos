@@ -5,31 +5,8 @@ DISTRO_NAME=centos7
 LSB_RELEASE=redhat-lsb-core
 EXCLUDE_UPGRADE=fuse,mercury,daos,daos-\*
 
-timeout_yum() {
-    local timeout="$1"
-    shift
-
-    # now make sure everything is fully up-to-date
-    local tries=3
-    while [ $tries -gt 0 ]; do
-        if time timeout "$timeout" yum -y "$@"; then
-            # succeeded, return with success
-            return 0
-        fi
-        if [ "${PIPESTATUS[0]}" = "124" ]; then
-            # timed out, try again
-            (( tries-- ))
-            continue
-        fi
-        # yum failed for something other than timeout
-        return 1
-    done
-
-    return 1
-}
-
 bootstrap_dnf() {
-    timeout_yum 5m install dnf 'dnf-command(config-manager)'
+    timeout_cmd 5m yum -y install dnf 'dnf-command(config-manager)'
 }
 
 group_repo_post() {
@@ -69,6 +46,7 @@ EOF
 
     # Mellanox OFED hack
     if ls -d /usr/mpi/gcc/openmpi-*; then
+        mkdir -p /etc/modulefiles/mpi/
         cat <<EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
 #%Module 1.0
 #
@@ -93,10 +71,6 @@ setenv			MPI_SUFFIX	_openmpi
 setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.0rc5
 EOF
     fi
-
-    # CORCI-1096
-    echo 'relayhost = [mail.wolf.hpdd.intel.com]' >> /etc/postfix/main.cf
-    postfix reload
 
 }
 
@@ -146,11 +120,17 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    time dnf -y install $LSB_RELEASE
+    retry_cmd 360 dnf -y install $LSB_RELEASE
+
+    if lspci | grep "ConnectX-6"; then
+        # No openmpi3 or MACSio-openmpi3 can be installed currently
+        # when the ConnnectX-6 driver is installed
+        INST_RPMS="${INST_RPMS// openmpi3/}"
+        INST_RPMS="${INST_RPMS// MACSio-openmpi3}"
+    fi
 
     # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ] &&
-       ! time dnf -y install $INST_RPMS; then
+    if [ -n "$INST_RPMS" ] && ! retry_cmd 360 dnf -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
@@ -159,8 +139,7 @@ post_provision_config_nodes() {
     distro_custom
 
     # now make sure everything is fully up-to-date
-    if ! time dnf -y upgrade \
-                  --exclude "$EXCLUDE_UPGRADE"; then
+    if ! retry_cmd 600 dnf -y upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
     fi

@@ -33,8 +33,19 @@ import (
 const (
 	sConfigUncomment = "daos_server_uncomment.yml"
 	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
-	psm2Example      = "../../../../utils/config/examples/daos_server_psm2.yml"
+	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
+	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
+)
+
+var (
+	defConfigCmpOpts = []cmp.Option{
+		cmpopts.IgnoreUnexported(
+			Server{},
+			security.CertificateConfig{},
+		),
+		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn", "Path"),
+	}
 )
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
@@ -121,7 +132,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 	}{
 		"uncommented default config": {inPath: "uncommentedDefault"},
 		"socket example config":      {inPath: socketsExample},
-		"psm2 example config":        {inPath: psm2Example},
+		"verbs example config":       {inPath: verbsExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
 			inPath: "/foo/bar/baz.yml",
@@ -177,14 +188,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(
-					Server{},
-					security.CertificateConfig{},
-				),
-				cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn"),
-			}
-			if diff := cmp.Diff(configA, configB, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(configA, configB, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
@@ -213,8 +217,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithControlPort(10001).
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
-		WithDisableVFIO(true). // vfio enabled by default
-		WithDisableVMD(false). // vmd disabled by default
+		WithDisableVFIO(true).   // vfio enabled by default
+		WithEnableVMD(true).     // vmd disabled by default
+		WithEnableHotplug(true). // hotplug disabled by default
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
@@ -223,7 +228,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
-		WithCrtCtxShareAddr(1).
+		WithCrtCtxShareAddr(0).
 		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
@@ -231,115 +236,76 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithHyperthreads(true). // hyper-threads disabled by default
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub).
-		WithEngines(
-			engine.NewConfig().
-				WithRank(0).
-				WithTargetCount(16).
-				WithHelperStreamCount(6).
-				WithServiceThreadCore(0).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmMountPoint("/mnt/daos/1").
-						WithScmClass("ram").
-						WithScmRamdiskSize(16),
-					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList("0000:81:00.0"),
-				).
-				WithFabricInterface("qib0").
-				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(&numaNode0).
-				WithBypassHealthChk(&bypass).
-				WithEnvVars("CRT_TIMEOUT=30").
-				WithLogFile("/tmp/daos_engine.0.log").
-				WithLogMask("WARN"),
-			engine.NewConfig().
-				WithRank(1).
-				WithTargetCount(16).
-				WithHelperStreamCount(6).
-				WithServiceThreadCore(22).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmMountPoint("/mnt/daos/2").
-						WithScmClass("dcpm").
-						WithScmDeviceList("/dev/pmem1"),
-					storage.NewTierConfig().
-						WithBdevClass("file").
-						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-						WithBdevFileSize(16),
-				).
-				WithFabricInterface("qib1").
-				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(&numaNode1).
-				WithEnvVars("CRT_TIMEOUT=100").
-				WithLogFile("/tmp/daos_engine.1.log").
-				WithLogMask("WARN"),
-		)
+		WithGetNetworkDeviceClass(getDeviceClassStub)
+
+	// add engines explicitly to test functionality applied in WithEngines()
+	constructed.Engines = []*engine.Config{
+		engine.NewConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("./.daos/daos_server").
+			WithRank(0).
+			WithTargetCount(16).
+			WithHelperStreamCount(4).
+			WithServiceThreadCore(0).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos/1").
+					WithScmClass("ram").
+					WithScmRamdiskSize(16),
+				storage.NewTierConfig().
+					WithBdevClass("nvme").
+					WithBdevDeviceList("0000:81:00.0"),
+			).
+			WithFabricInterface("ib0").
+			WithFabricInterfacePort(20000).
+			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithCrtCtxShareAddr(0).
+			WithCrtTimeout(30).
+			WithPinnedNumaNode(&numaNode0).
+			WithBypassHealthChk(&bypass).
+			WithEnvVars("CRT_TIMEOUT=30").
+			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogMask("WARN").
+			WithStorageEnableHotplug(true),
+		engine.NewConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("./.daos/daos_server").
+			WithRank(1).
+			WithTargetCount(16).
+			WithHelperStreamCount(4).
+			WithServiceThreadCore(22).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos/2").
+					WithScmClass("dcpm").
+					WithScmDeviceList("/dev/pmem1"),
+				storage.NewTierConfig().
+					WithBdevClass("file").
+					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
+					WithBdevFileSize(16),
+			).
+			WithFabricInterface("ib1").
+			WithFabricInterfacePort(20000).
+			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithCrtCtxShareAddr(0).
+			WithCrtTimeout(30).
+			WithPinnedNumaNode(&numaNode1).
+			WithBypassHealthChk(&bypass).
+			WithEnvVars("CRT_TIMEOUT=100").
+			WithLogFile("/tmp/daos_engine.1.log").
+			WithLogMask("WARN").
+			WithStorageEnableHotplug(true),
+	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
-	cmpOpts := []cmp.Option{
-		cmpopts.IgnoreUnexported(
-			Server{},
-			security.CertificateConfig{},
-		),
-		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn"),
+	for i := range constructed.Engines {
+		t.Logf("constructed: %+v", constructed.Engines[i])
+		t.Logf("default: %+v", defaultCfg.Engines[i])
 	}
-	if diff := cmp.Diff(defaultCfg, constructed, cmpOpts...); diff != "" {
+
+	if diff := cmp.Diff(defaultCfg, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
 	}
-}
-
-func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
-	// open original file
-	f, err := os.Open(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-
-	// create temp file
-	tmp, err := ioutil.TempFile("", "replace-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tmp.Close()
-
-	// replace while copying from f to tmp
-	if err := replaceText(f, tmp, oldTxt, newTxt); err != nil {
-		t.Fatal(err)
-	}
-
-	// make sure the tmp file was successfully written to
-	if err := tmp.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// close the file we're reading from
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// overwrite the original file with the temp file
-	if err := os.Rename(tmp.Name(), name); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func replaceText(r io.Reader, w io.Writer, oldTxt, newTxt string) error {
-	// use scanner to read line by line
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
-		line := sc.Text()
-		if line == oldTxt {
-			line = newTxt
-		}
-		if _, err := io.WriteString(w, line+"\n"); err != nil {
-			return err
-		}
-	}
-
-	return sc.Err()
 }
 
 func TestServerConfig_Validation(t *testing.T) {
@@ -510,15 +476,118 @@ func TestServerConfig_Validation(t *testing.T) {
 	}
 }
 
+// replaceLine only matches when oldTxt is exactly the same as a file line.
+func replaceLine(r io.Reader, w io.Writer, oldTxt, newTxt string) (int, error) {
+	var changedLines int
+
+	// use scanner to read line by line
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		line := sc.Text()
+		if line == oldTxt {
+			line = newTxt
+			changedLines++
+		}
+		if _, err := io.WriteString(w, line+"\n"); err != nil {
+			return changedLines, err
+		}
+	}
+
+	return changedLines, sc.Err()
+}
+
+func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
+	// open original file
+	f, err := os.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	// create temp file
+	tmp, err := ioutil.TempFile("", "replace-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmp.Close()
+
+	// replace while copying from f to tmp
+	linesChanged, err := replaceLine(f, tmp, oldTxt, newTxt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linesChanged == 0 {
+		t.Fatalf("no recurrences of %q in file %q", oldTxt, name)
+	}
+
+	// make sure the tmp file was successfully written to
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// close the file we're reading from
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// overwrite the original file with the temp file
+	if err := os.Rename(tmp.Name(), name); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestServerConfig_Parsing(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
+
+	cfgFromFile := func(t *testing.T, testFile, matchText, replaceText string) (*Server, error) {
+		t.Helper()
+
+		if matchText != "" {
+			replaceFile(t, testFile, matchText, replaceText)
+		}
+
+		return mockConfigFromFile(t, testFile)
+	}
+
+	// load a config based on the server config with all options uncommented.
+	loadFromDefaultFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+		t.Helper()
+
+		defaultConfigFile := filepath.Join(testDir, sConfigUncomment)
+		uncommentServerConfig(t, defaultConfigFile)
+
+		return cfgFromFile(t, defaultConfigFile, matchText, replaceText)
+	}
+
+	// load a config file with a legacy storage config
+	loadFromLegacyFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+		t.Helper()
+
+		lcp := strings.Split(legacyConfig, "/")
+		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
+		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
+			return nil, err
+		}
+
+		return cfgFromFile(t, testLegacyConfigFile, matchText, replaceText)
+	}
+
+	loadFromFile := func(t *testing.T, testDir, matchText, replaceText string, legacy bool) (*Server, error) {
+		if legacy {
+			return loadFromLegacyFile(t, testDir, matchText, replaceText)
+		}
+
+		return loadFromDefaultFile(t, testDir, matchText, replaceText)
+	}
 
 	for name, tt := range map[string]struct {
 		inTxt          string
 		outTxt         string
+		legacyStorage  bool
 		extraConfig    func(c *Server) *Server
 		expParseErr    error
 		expValidateErr error
+		expCheck       func(c *Server) error
 	}{
 		"bad engine section": {
 			inTxt:       "engines:",
@@ -543,7 +612,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
 					engine.NewConfig().
-						WithFabricInterface("qib0").
+						WithFabricInterface("ib0").
 						WithFabricInterfacePort(20000).
 						WithStorage(
 							storage.NewTierConfig().
@@ -557,32 +626,79 @@ func TestServerConfig_Parsing(t *testing.T) {
 			},
 			expValidateErr: errors.New("bdev_list contains duplicate pci"),
 		},
+		"legacy storage; empty bdev_list": {
+			legacyStorage: true,
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 1 {
+					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+				}
+				return nil
+			},
+		},
+		"legacy storage; no bdev_list": {
+			legacyStorage: true,
+			inTxt:         "  bdev_list: []",
+			outTxt:        "",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 1 {
+					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+				}
+				return nil
+			},
+		},
+		"legacy storage; no bdev_class": {
+			legacyStorage: true,
+			inTxt:         "  bdev_class: nvme",
+			outTxt:        "",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 1 {
+					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+				}
+				return nil
+			},
+		},
+		"legacy storage; non-empty bdev_list": {
+			legacyStorage: true,
+			inTxt:         "  bdev_list: []",
+			outTxt:        "  bdev_list: [0000:80:00.0]",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 2 {
+					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
+
 			if tt.extraConfig == nil {
 				tt.extraConfig = noopExtra
 			}
 
-			testDir, cleanup := CreateTestDir(t)
-			defer cleanup()
-
-			// First, load a config based on the server config with all options uncommented.
-			testFile := filepath.Join(testDir, sConfigUncomment)
-			uncommentServerConfig(t, testFile)
-
-			replaceFile(t, testFile, tt.inTxt, tt.outTxt)
-
-			config, errParse := mockConfigFromFile(t, testFile)
+			config, errParse := loadFromFile(t, testDir, tt.inTxt, tt.outTxt, tt.legacyStorage)
 			CmpErr(t, tt.expParseErr, errParse)
 			if tt.expParseErr != nil {
 				return
 			}
 			config = tt.extraConfig(config)
+			log.Debugf("%+v", config)
 
 			CmpErr(t, tt.expValidateErr, config.Validate(log))
+
+			if tt.expCheck != nil {
+				if err := tt.expCheck(config); err != nil {
+					t.Fatal(err)
+				}
+			}
 		})
 	}
 }
@@ -860,6 +976,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotNetDevCls, gotErr := DefaultServer().
+				WithProviderValidator(netdetect.ValidateProviderStub).
 				WithFabricProvider("test").
 				WithGetNetworkDeviceClass(getDeviceClassStub).
 				WithEngines(tc.configA, tc.configB).

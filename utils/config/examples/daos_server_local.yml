@@ -2,9 +2,7 @@
 
 name: daos_server
 access_points: ['localhost']
-# port: 10001
 provider: ofi+sockets
-nr_hugepages: 4096
 control_log_file: /tmp/daos_server.log
 transport_config:
    allow_insecure: true
@@ -19,9 +17,6 @@ engines:
   log_file: /tmp/daos_engine.0.log
 
   env_vars:
-  - DAOS_MD_CAP=1024
-  - CRT_CTX_SHARE_ADDR=0
-  - CRT_TIMEOUT=30
   - FI_SOCKETS_MAX_CONN_RETRY=1
   - FI_SOCKETS_CONN_TIMEOUT=2000
 

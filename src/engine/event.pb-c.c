@@ -269,7 +269,7 @@ const ProtobufCMessageDescriptor shared__rasevent__pool_svc_event_info__descript
   (ProtobufCMessageInit) shared__rasevent__pool_svc_event_info__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
+static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[19] =
 {
   {
     "id",
@@ -356,8 +356,20 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "hw_id",
+    "incarnation",
     8,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Shared__RASEvent, incarnation),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "hw_id",
+    9,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -369,7 +381,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "proc_id",
-    9,
+    10,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -381,7 +393,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "thread_id",
-    10,
+    11,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -393,7 +405,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "job_id",
-    11,
+    12,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -405,7 +417,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "pool_uuid",
-    12,
+    13,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -417,7 +429,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "cont_uuid",
-    13,
+    14,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -429,7 +441,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "obj_id",
-    14,
+    15,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -441,7 +453,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "ctl_op",
-    15,
+    16,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -453,7 +465,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "str_info",
-    16,
+    17,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     offsetof(Shared__RASEvent, extended_info_case),
@@ -465,7 +477,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "engine_state_info",
-    17,
+    18,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Shared__RASEvent, extended_info_case),
@@ -477,7 +489,7 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
   {
     "pool_svc_info",
-    18,
+    19,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Shared__RASEvent, extended_info_case),
@@ -489,29 +501,30 @@ static const ProtobufCFieldDescriptor shared__rasevent__field_descriptors[18] =
   },
 };
 static const unsigned shared__rasevent__field_indices_by_name[] = {
-  12,   /* field[12] = cont_uuid */
-  14,   /* field[14] = ctl_op */
-  16,   /* field[16] = engine_state_info */
+  13,   /* field[13] = cont_uuid */
+  15,   /* field[15] = ctl_op */
+  17,   /* field[17] = engine_state_info */
   5,   /* field[5] = hostname */
-  7,   /* field[7] = hw_id */
+  8,   /* field[8] = hw_id */
   0,   /* field[0] = id */
-  10,   /* field[10] = job_id */
+  7,   /* field[7] = incarnation */
+  11,   /* field[11] = job_id */
   1,   /* field[1] = msg */
-  13,   /* field[13] = obj_id */
-  17,   /* field[17] = pool_svc_info */
-  11,   /* field[11] = pool_uuid */
-  8,   /* field[8] = proc_id */
+  14,   /* field[14] = obj_id */
+  18,   /* field[18] = pool_svc_info */
+  12,   /* field[12] = pool_uuid */
+  9,   /* field[9] = proc_id */
   6,   /* field[6] = rank */
   4,   /* field[4] = severity */
-  15,   /* field[15] = str_info */
-  9,   /* field[9] = thread_id */
+  16,   /* field[16] = str_info */
+  10,   /* field[10] = thread_id */
   2,   /* field[2] = timestamp */
   3,   /* field[3] = type */
 };
 static const ProtobufCIntRange shared__rasevent__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 18 }
+  { 0, 19 }
 };
 const ProtobufCMessageDescriptor shared__rasevent__descriptor =
 {
@@ -521,7 +534,7 @@ const ProtobufCMessageDescriptor shared__rasevent__descriptor =
   "Shared__RASEvent",
   "shared",
   sizeof(Shared__RASEvent),
-  18,
+  19,
   shared__rasevent__field_descriptors,
   shared__rasevent__field_indices_by_name,
   1,  shared__rasevent__number_ranges,

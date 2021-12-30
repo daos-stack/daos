@@ -63,6 +63,7 @@ class CartCtlCommand(ExecutableCommand):
         self.l = FormattedParameter("-l {}")
         self.n = BasicParameter("-n")
         self.m = FormattedParameter("-m {}")
+        self.use_daos_agent_env = FormattedParameter("--use_daos_agent_env", True)
 
 class CartCtl(CartCtlCommand):
     """Class defining an object of type CartCtlCommand."""

@@ -66,6 +66,7 @@ struct io_test_args {
 	uuid_t			 addn_co_uuid;
 	daos_handle_t		 addn_co;
 	/* testing flags, see vts_test_flags */
+	daos_epoch_t		 epr_lo;
 	unsigned long		 ta_flags;
 	const char		*dkey;
 	const char		*akey;

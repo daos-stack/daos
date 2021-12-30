@@ -74,6 +74,10 @@ vos_ilog_init(void);
 void
 vos_ilog_fetch_init(struct vos_ilog_info *info);
 
+/** Move ilog information from src to dest, clearing src */
+void
+vos_ilog_fetch_move(struct vos_ilog_info *dest, struct vos_ilog_info *src);
+
 /** Finalize incarnation log information */
 void
 vos_ilog_fetch_finish(struct vos_ilog_info *info);
@@ -188,6 +192,7 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
  * \param	ilog[IN]	Incarnation log
  * \param	epr[IN]		Aggregation range
  * \param	discard[IN]	Discard all entries in range
+ * \param	inprogress[IN]	Discard only uncommitted entries
  * \param	punched[IN]	Highest epoch where parent is punched
  * \param	info[IN]	Incarnation log info
  *
@@ -197,9 +202,8 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
  *		< 0		Failure
  */
 int
-vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
-		   const daos_epoch_range_t *epr, bool discard,
-		   const struct vos_punch_record *parent_punch,
+vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_range_t *epr,
+		   bool discard, bool inprogress, const struct vos_punch_record *parent_punch,
 		   struct vos_ilog_info *info);
 
 /* #define ILOG_TRACE */

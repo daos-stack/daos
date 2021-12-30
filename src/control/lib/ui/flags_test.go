@@ -28,11 +28,6 @@ func TestFlags_LabelOrUUIDFlag(t *testing.T) {
 		expString string
 		expErr    error
 	}{
-		// An invalid UUID will be parsed as a label and fail validation.
-		"invalid UUID": {
-			arg:    "13167ad2-4479-4b88-9d45-13181c15297",
-			expErr: errors.New("invalid label"),
-		},
 		"unset": {
 			expErr: errors.New("invalid label"),
 		},
@@ -45,12 +40,12 @@ func TestFlags_LabelOrUUIDFlag(t *testing.T) {
 			expString: "13167ad2-4479-4b88-9d45-13181c152974",
 		},
 		"valid label": {
-			arg: "this:is_a_good_label.",
+			arg: "this:is_a_good-label.",
 			expFlag: &ui.LabelOrUUIDFlag{
-				Label: "this:is_a_good_label.",
+				Label: "this:is_a_good-label.",
 			},
 			hasLabel:  true,
-			expString: "this:is_a_good_label.",
+			expString: "this:is_a_good-label.",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

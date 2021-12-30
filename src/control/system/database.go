@@ -481,6 +481,15 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 	}
 }
 
+// IncMapVer forces the system database to increment the map version.
+func (db *Database) IncMapVer() error {
+	if err := db.CheckLeader(); err != nil {
+		return err
+	}
+
+	return db.submitIncMapVer()
+}
+
 func newGroupMap(version uint32) *GroupMap {
 	return &GroupMap{
 		Version:  version,
@@ -800,8 +809,9 @@ func copyPoolService(in *PoolService) *PoolService {
 }
 
 // PoolServiceList returns a list of pool services registered
-// with the system.
-func (db *Database) PoolServiceList() ([]*PoolService, error) {
+// with the system. If the all parameter is not true, only
+// pool services in the "Ready" state are returned.
+func (db *Database) PoolServiceList(all bool) ([]*PoolService, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -811,11 +821,12 @@ func (db *Database) PoolServiceList() ([]*PoolService, error) {
 	// NB: This is expensive! We make a copy of the
 	// pool services to ensure that they can't be changed
 	// elsewhere.
-	dbCopy := make([]*PoolService, len(db.data.Pools.Uuids))
-	copyIdx := 0
+	dbCopy := make([]*PoolService, 0, len(db.data.Pools.Uuids))
 	for _, ps := range db.data.Pools.Uuids {
-		dbCopy[copyIdx] = copyPoolService(ps)
-		copyIdx++
+		if ps.State != PoolServiceStateReady && !all {
+			continue
+		}
+		dbCopy = append(dbCopy, copyPoolService(ps))
 	}
 	return dbCopy, nil
 }

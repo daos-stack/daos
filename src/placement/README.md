@@ -12,7 +12,7 @@ A placement map is essentially an abstracted and permuted pool map; it does not 
 
 **Pool-map and placement maps**
 
-![../../doc/graph/Fig_043.png](../../doc/graph/Fig_043.png "Pool-map and placement maps")
+![../../docs/graph/Fig_043.png](../../docs/graph/Fig_043.png "Pool-map and placement maps")
 
 A placement map does not maintain a copy of status or any characteristics of the corresponding pool map components, but only references pool map components. Each time DAOS computes an object distribution based on a placement map, it also needs to check the corresponding component status and attributes from the pool map. This adds an extra step for indirect memory access, but can significantly reduce cache pollution and memory consumption when there are many placement maps but only one pool map in a DAOS pool.
 

@@ -8,7 +8,9 @@
 #define __CRT_DEBUG_H__
 
 #ifndef CRT_USE_GURT_FAC
+#ifndef DD_FAC
 #define DD_FAC(name)	crt_##name##_logfac
+#endif /* !DD_FAC */
 #endif
 
 #ifndef D_LOGFAC

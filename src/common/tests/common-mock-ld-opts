@@ -1,0 +1,11 @@
+--wrap=socket
+--wrap=connect
+--wrap=bind
+--wrap=fcntl
+--wrap=listen
+--wrap=accept
+--wrap=close
+--wrap=sendmsg
+--wrap=recvmsg
+--wrap=poll
+--wrap=unlink

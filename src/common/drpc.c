@@ -166,16 +166,20 @@ new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 
 	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (comm->fd < 0) {
-		D_ERROR("Failed to open socket, errno=%d\n", errno);
+		int rc = errno;
+
+		D_ERROR("Failed to open socket, errno=%d\n", rc);
 		D_FREE(comm);
-		return -DER_MISC;
+		return daos_errno2der(rc);
 	}
 
 	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
+		int rc = errno;
+
 		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
-			comm->fd, errno);
+			comm->fd, rc);
 		unixcomm_close(comm);
-		return -DER_MISC;
+		return daos_errno2der(rc);
 	}
 
 	comm->flags = flags;
@@ -191,7 +195,7 @@ fill_socket_address(const char *sockpath, struct sockaddr_un *address)
 	memset(address, 0, sizeof(struct sockaddr_un));
 
 	address->sun_family = AF_UNIX;
-	strncpy(address->sun_path, sockpath, UNIX_PATH_MAX-1);
+	strncpy(address->sun_path, sockpath, UNIX_PATH_MAX - 1);
 }
 
 static int
@@ -209,14 +213,13 @@ unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
 
 	fill_socket_address(sockaddr, &address);
 	errno = 0;
-	ret = connect(handle->fd, (struct sockaddr *) &address,
-			sizeof(address));
-	if (ret < 0) {
-		ret = daos_errno2der(ret);
+	if (connect(handle->fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+		int rc = errno;
+
 		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
-			address.sun_path, errno, strerror(errno));
+			address.sun_path, rc, strerror(rc));
 		unixcomm_close(handle);
-		return ret;
+		return daos_errno2der(rc);
 	}
 
 	*newcommp = handle;
@@ -238,19 +241,22 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 		return ret;
 
 	fill_socket_address(sockaddr, &address);
-	if (bind(comm->fd, (struct sockaddr *)&address,
-		 sizeof(struct sockaddr_un)) < 0) {
+	if (bind(comm->fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) < 0) {
+		int rc = errno;
+
 		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
-			sockaddr, comm->fd, errno);
+			sockaddr, comm->fd, rc);
 		unixcomm_close(comm);
-		return -DER_MISC;
+		return daos_errno2der(rc);
 	}
 
 	if (listen(comm->fd, SOMAXCONN) < 0) {
+		int rc = errno;
+
 		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
-			comm->fd, errno);
+			comm->fd, rc);
 		unixcomm_close(comm);
-		return -DER_MISC;
+		return daos_errno2der(rc);
 	}
 
 	*newcommp = comm;

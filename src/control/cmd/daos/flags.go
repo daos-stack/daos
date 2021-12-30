@@ -33,6 +33,25 @@ func flagTestInit() (func(), error) {
 	}, nil
 }
 
+type EpochFlag struct {
+	Set   bool
+	Value uint64
+}
+
+func (f *EpochFlag) String() string {
+	return fmt.Sprintf("%#x", f.Value)
+}
+
+func (f *EpochFlag) UnmarshalFlag(fv string) (err error) {
+	f.Value, err = strconv.ParseUint(fv, 0, 64)
+	if err != nil {
+		return errors.Errorf("failed to parse %q as uint64\n", fv)
+	}
+
+	f.Set = true
+	return nil
+}
+
 type EpochRangeFlag struct {
 	Set   bool
 	Begin C.uint64_t
@@ -40,7 +59,7 @@ type EpochRangeFlag struct {
 }
 
 func (f *EpochRangeFlag) String() string {
-	return fmt.Sprintf("%d-%d", f.Begin, f.End)
+	return fmt.Sprintf("%#x-%#x", f.Begin, f.End)
 }
 
 func (f *EpochRangeFlag) UnmarshalFlag(fv string) error {
@@ -49,12 +68,12 @@ func (f *EpochRangeFlag) UnmarshalFlag(fv string) error {
 		return errors.Errorf("failed to parse %q as epoch range (expected A-B)", fv)
 	}
 
-	val, err := strconv.ParseUint(comps[0], 10, 64)
+	val, err := strconv.ParseUint(comps[0], 0, 64)
 	if err != nil {
 		return errors.Errorf("failed to parse %q as uint64", comps[0])
 	}
 	f.Begin = C.uint64_t(val)
-	val, err = strconv.ParseUint(comps[1], 10, 64)
+	val, err = strconv.ParseUint(comps[1], 0, 64)
 	if err != nil {
 		return errors.Errorf("failed to parse %q as uint64", comps[1])
 	}
@@ -94,7 +113,7 @@ func (f *ChunkSizeFlag) String() string {
 
 type ObjClassFlag struct {
 	Set   bool
-	Class C.ushort
+	Class C.uint
 }
 
 func (f *ObjClassFlag) UnmarshalFlag(fv string) error {
@@ -105,7 +124,7 @@ func (f *ObjClassFlag) UnmarshalFlag(fv string) error {
 	cObjClass := C.CString(fv)
 	defer freeString(cObjClass)
 
-	f.Class = (C.ushort)(C.daos_oclass_name2id(cObjClass))
+	f.Class = (C.uint)(C.daos_oclass_name2id(cObjClass))
 	if f.Class == C.OC_UNKNOWN {
 		return errors.Errorf("unknown object class %q", fv)
 	}
@@ -188,6 +207,35 @@ func (f *ConsModeFlag) UnmarshalFlag(fv string) error {
 		f.Mode = C.DFS_BALANCED
 	default:
 		return errors.Errorf("unknown consistency mode %q", fv)
+	}
+
+	f.Set = true
+	return nil
+}
+
+type ContTypeFlag struct {
+	Set  bool
+	Type C.ushort
+}
+
+func (f *ContTypeFlag) String() string {
+	cTypeStr := [16]C.char{}
+	C.daos_unparse_ctype(f.Type, &cTypeStr[0])
+
+	return C.GoString(&cTypeStr[0])
+}
+
+func (f *ContTypeFlag) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("empty container type")
+	}
+
+	cTypeStr := C.CString(strings.ToUpper(fv))
+	defer freeString(cTypeStr)
+
+	C.daos_parse_ctype(cTypeStr, &f.Type)
+	if f.Type == C.DAOS_PROP_CO_LAYOUT_UNKNOWN {
+		return errors.Errorf("unknown container type %q", fv)
 	}
 
 	f.Set = true

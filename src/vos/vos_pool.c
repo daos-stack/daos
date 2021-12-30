@@ -20,6 +20,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
 #include <errno.h>
@@ -94,6 +96,25 @@ pool_hlink2ptr(struct d_ulink *hlink)
 }
 
 static void
+vos_delete_blob(uuid_t pool_uuid)
+{
+	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
+	int			 rc;
+
+	/* NVMe device isn't configured */
+	if (!bio_nvme_configured() || xs_ctxt == NULL)
+		return;
+
+	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
+		xs_ctxt, DP_UUID(pool_uuid));
+
+	rc = bio_blob_delete(pool_uuid, xs_ctxt);
+	if (rc)
+		D_ERROR("Deleting blob for xs:%p pool="DF_UUID" failed: "DF_RC"\n",
+			xs_ctxt, DP_UUID(pool_uuid), DP_RC(rc));
+}
+
+static void
 pool_hop_free(struct d_ulink *hlink)
 {
 	struct vos_pool	*pool = pool_hlink2ptr(hlink);
@@ -121,10 +142,22 @@ pool_hop_free(struct d_ulink *hlink)
 	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
+	if (pool->vp_size != 0) {
+		rc = munlock((void *)pool->vp_umm.umm_base, pool->vp_size);
+		if (rc != 0)
+			D_WARN("Failed to unlock pool memory at "DF_X64": errno=%d (%s)\n",
+			       pool->vp_umm.umm_base, errno, strerror(errno));
+		else
+			D_DEBUG(DB_MGMT, "Unlocked VOS pool memory: "DF_U64" bytes at "DF_X64"\n",
+				pool->vp_size, pool->vp_umm.umm_base);
+	}
 	if (pool->vp_uma.uma_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
 
 	vos_dedup_fini(pool);
+
+	if (pool->vp_dying)
+		vos_delete_blob(pool->vp_id);
 
 	D_FREE(pool);
 }
@@ -231,7 +264,7 @@ vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
 }
 
 static int pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
-		     unsigned int flags, daos_handle_t *poh);
+		     unsigned int flags, void *metrics, daos_handle_t *poh);
 
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
@@ -261,8 +294,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {
 		D_ASSERT(pool != NULL);
-		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
-			pool->vp_opened, pool);
+		D_ERROR("Found already opened(%d) pool:%p dying(%d)\n",
+			pool->vp_opened, pool, pool->vp_dying);
 		vos_pool_decref(pool);
 		return -DER_EXIST;
 	}
@@ -390,13 +423,13 @@ open:
 		goto close;
 
 	/* Create a VOS pool handle using ph. */
-	rc = pool_open(ph, pool_df, uuid, flags, poh);
-	if (rc != 0)
-		goto close;
+	rc = pool_open(ph, pool_df, uuid, flags, NULL, poh);
 	ph = NULL;
 
 close:
-	/* Close this local handle, if it hasn't been consumed by pool_open. */
+	/* Close this local handle, if it hasn't been consumed nor already
+	 * been closed by pool_open upon error.
+	 */
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
 	return rc;
@@ -407,11 +440,10 @@ close:
  * - detach from GC, delete SPDK blob
  */
 int
-vos_pool_kill(uuid_t uuid, bool force)
+vos_pool_kill(uuid_t uuid)
 {
-	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
-	struct d_uuid		 ukey;
-	int			 rc;
+	struct d_uuid	ukey;
+	int		rc;
 
 	uuid_copy(ukey.uuid, uuid);
 	while (1) {
@@ -425,7 +457,6 @@ vos_pool_kill(uuid_t uuid, bool force)
 		}
 
 		D_ASSERT(pool != NULL);
-		pool->vp_dying = 1;
 		if (gc_have_pool(pool)) {
 			/* still pinned by GC, un-pin it because there is no
 			 * need to run GC for this pool anymore.
@@ -434,31 +465,20 @@ vos_pool_kill(uuid_t uuid, bool force)
 			vos_pool_decref(pool); /* -1 for lookup */
 			continue;	/* try again */
 		}
+		pool->vp_dying = 1;
 		vos_pool_decref(pool); /* -1 for lookup */
 
-		if (force) {
-			D_ERROR("Open reference exists, force kill\n");
-			/* NB: rebuild might still take refcount vos_pool,
-			 * we don't want to fail destroy or locking space.
-			 */
-			break;
-		}
-		D_ERROR("Open reference exists, cannot kill pool\n");
+		D_WARN(DF_UUID": Open reference exists, pool destroy is deferred\n",
+		       DP_UUID(uuid));
+		VOS_NOTIFY_RAS_EVENTF(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
+				      NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
+				      "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
+		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
 	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
 
-	/* NVMe device is configured */
-	if (bio_nvme_configured() && xs_ctxt) {
-		D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
-			xs_ctxt, DP_UUID(uuid));
-		rc = bio_blob_delete(uuid, xs_ctxt);
-		if (rc) {
-			D_ERROR("Destroy blob for pool="DF_UUID" rc=%s\n",
-				DP_UUID(uuid), d_errstr(rc));
-			/* do not return the error, nothing we can do */
-		}
-	}
+	vos_delete_blob(uuid);
 	return 0;
 }
 
@@ -473,7 +493,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	D_DEBUG(DB_MGMT, "delete path: %s UUID: "DF_UUID"\n",
 		path, DP_UUID(uuid));
 
-	rc = vos_pool_kill(uuid, false);
+	rc = vos_pool_kill(uuid);
 	if (rc)
 		return rc;
 
@@ -583,7 +603,8 @@ static int
 vos_register_slabs(struct umem_attr *uma)
 {
 	struct pobj_alloc_class_desc	*slab;
-	int				 i, rc;
+	int				 i, rc, j;
+	bool				 skip_set;
 
 	D_ASSERT(uma->uma_pool != NULL);
 	for (i = 0; i < VOS_SLAB_MAX; i++) {
@@ -595,6 +616,22 @@ vos_register_slabs(struct umem_attr *uma)
 			D_ERROR("Failed to get unit size %d. rc:%d\n", i, rc);
 			return rc;
 		}
+
+		skip_set = false;
+		for (j = 0; j < i; j++) {
+			if (uma->uma_slabs[j].unit_size == slab->unit_size) {
+				/** PMDK will fail to register a new slab of the same size
+				 *  so reuse the class id
+				 */
+				slab->class_id = uma->uma_slabs[j].class_id;
+				skip_set = true;
+				D_ASSERT(slab->class_id != 0);
+				break;
+			}
+		}
+
+		if (skip_set)
+			continue;
 
 		rc = pmemobj_ctl_set(uma->uma_pool, "heap.alloc_class.new.desc",
 				     slab);
@@ -610,13 +647,63 @@ vos_register_slabs(struct umem_attr *uma)
 	return 0;
 }
 
+enum {
+	/** Memory locking flag not initialized */
+	LM_FLAG_UNINIT,
+	/** Memory locking disabled */
+	LM_FLAG_DISABLED,
+	/** Memory locking enabled */
+	LM_FLAG_ENABLED
+};
+
+static void
+lock_pool_memory(struct vos_pool *pool)
+{
+	static		 int lock_mem = LM_FLAG_UNINIT;
+	struct rlimit	 rlim;
+	int		 rc;
+
+	if (lock_mem == LM_FLAG_UNINIT) {
+		rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
+		if (rc != 0) {
+			D_WARN("getrlimit() failed; errno=%d (%s)\n", errno, strerror(errno));
+			lock_mem = LM_FLAG_DISABLED;
+			return;
+		}
+
+		if (rlim.rlim_cur != RLIM_INFINITY || rlim.rlim_max != RLIM_INFINITY) {
+			D_WARN("Infinite rlimit not detected, not locking VOS pool memory\n");
+			lock_mem = LM_FLAG_DISABLED;
+			return;
+		}
+
+		lock_mem = LM_FLAG_ENABLED;
+	}
+
+	if (lock_mem == LM_FLAG_DISABLED)
+		return;
+
+	rc = mlock((void *)pool->vp_umm.umm_base, pool->vp_pool_df->pd_scm_sz);
+	if (rc != 0) {
+		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
+		       "; errno=%d (%s)\n", pool->vp_pool_df->pd_scm_sz, pool->vp_umm.umm_base,
+		       errno, strerror(errno));
+		return;
+	}
+
+	/* Only save the size if the locking was successful */
+	pool->vp_size = pool->vp_pool_df->pd_scm_sz;
+	D_DEBUG(DB_MGMT, "Locking VOS pool in memory "DF_U64" bytes at "DF_X64"\n", pool->vp_size,
+		pool->vp_umm.umm_base);
+}
+
 /*
- * If successful, this function consumes ph, which the caller shall not close
- * in this case.
+ * If successful, this function consumes ph, and closes it upon any error.
+ * So the caller shall not close ph in any case.
  */
 static int
 pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
-	  unsigned int flags, daos_handle_t *poh)
+	  unsigned int flags, void *metrics, daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool		*pool = NULL;
@@ -628,6 +715,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	rc = pool_alloc(uuid, &pool); /* returned with refcount=1 */
 	if (rc != 0) {
 		D_ERROR("Error allocating pool handle\n");
+		vos_pmemobj_close(ph);
 		return rc;
 	}
 
@@ -670,13 +758,17 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	}
 
 	if (bio_nvme_configured() && pool_df->pd_nvme_sz != 0) {
-		struct vea_unmap_context unmap_ctxt;
+		struct vea_unmap_context	 unmap_ctxt;
+		struct vos_pool_metrics		*vp_metrics = metrics;
+		void				*vea_metrics = NULL;
 
+		if (vp_metrics)
+			vea_metrics = vp_metrics->vp_vea_metrics;
 		/* set unmap callback fp */
 		unmap_ctxt.vnc_unmap = vos_blob_unmap_cb;
 		unmap_ctxt.vnc_data = pool->vp_io_ctxt;
 		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
-			      &unmap_ctxt, &pool->vp_vea_info);
+			      &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {
 			D_ERROR("Failed to load block space info: "DF_RC"\n",
 				DP_RC(rc));
@@ -704,6 +796,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
+	lock_pool_memory(pool);
 	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
 	return 0;
 failed:
@@ -712,8 +805,8 @@ failed:
 }
 
 int
-vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
-	      daos_handle_t *poh)
+vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
+		      daos_handle_t *poh)
 {
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool = NULL;
@@ -738,6 +831,11 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 		D_ASSERT(pool != NULL);
 		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
 			pool->vp_opened, pool);
+		if (pool->vp_dying) {
+			D_ERROR("Found dying pool : %p\n", pool);
+			vos_pool_decref(pool);
+			return -DER_BUSY;
+		}
 		if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
 			vos_pool_decref(pool);
 			return -DER_BUSY;
@@ -783,20 +881,26 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
-		rc = -DER_IO;
+		rc = -DER_ID_MISMATCH;
 		goto out;
 	}
 
-	rc = pool_open(ph, pool_df, uuid, flags, poh);
-	if (rc != 0)
-		goto out;
+	rc = pool_open(ph, pool_df, uuid, flags, metrics, poh);
 	ph = NULL;
 
 out:
-	/* Close this local handle, if it hasn't been consumed by pool_open. */
+	/* Close this local handle, if it hasn't been consumed nor already
+	 * been closed by pool_open upon error.
+	 */
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
 	return rc;
+}
+
+int
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *poh)
+{
+	return vos_pool_open_metrics(path, uuid, flags, NULL, poh);
 }
 
 /**
@@ -865,8 +969,12 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 
 	uuid_copy(ukey.uuid, pool_id);
 	rc = pool_lookup(&ukey, &pool);
-	if (rc)
+	if (rc) {
 		return rc;
+	} else if (pool->vp_dying) {
+		vos_pool_decref(pool);
+		return -DER_NONEXIST;
+	}
 
 	D_ASSERT(pool != NULL);
 	rc = vos_space_query(pool, vps, false);
@@ -901,14 +1009,6 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 		return -DER_NOSYS;
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
-		break;
-	case VOS_PO_CTL_VEA_PLUG:
-		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info, true);
-		break;
-	case VOS_PO_CTL_VEA_UNPLUG:
-		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info, false);
 		break;
 	}
 

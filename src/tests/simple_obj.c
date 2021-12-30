@@ -486,7 +486,7 @@ example_daos_array()
 	 * daos_obj_generate_oid() that adds the required feature flags for an
 	 * array: DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY
 	 */
-	daos_array_generate_id(&oid, OC_SX, true, 0);
+	daos_array_generate_oid(coh, &oid, true, 0, 0, 0);
 
 	/*
 	 * Create the array object with cell size 1 (byte array) and 1m chunk
@@ -612,7 +612,7 @@ example_daos_kv()
 	oid.hi = 0;
 	oid.lo = 4;
 	/** the KV API requires the flat feature flag be set in the oid */
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, OC_SX, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	ASSERT(rc == 0, "KV open failed with %d", rc);
@@ -676,7 +676,6 @@ example_daos_kv()
 int
 main(int argc, char **argv)
 {
-	uuid_t		pool_uuid, co_uuid;
 	int		rc;
 
 	rc = MPI_Init(&argc, &argv);
@@ -697,13 +696,9 @@ main(int argc, char **argv)
 	rc = daos_init();
 	ASSERT(rc == 0, "daos_init failed with %d", rc);
 
-	/** parse the pool information and connect to the pool */
-	rc = uuid_parse(argv[1], pool_uuid);
-	ASSERT(rc == 0, "Failed to parse 'Pool uuid': %s", argv[1]);
-
 	/** Call connect on rank 0 only and broadcast handle to others */
 	if (rank == 0) {
-		rc = daos_pool_connect(pool_uuid, NULL, DAOS_PC_RW, &poh,
+		rc = daos_pool_connect(argv[1], NULL, DAOS_PC_RW, &poh,
 				       NULL, NULL);
 		ASSERT(rc == 0, "pool connect failed with %d", rc);
 	}
@@ -718,16 +713,13 @@ main(int argc, char **argv)
 	 * and pass the uuid to the app.
 	 */
 	if (rank == 0) {
-		/** generate uuid for container */
-		uuid_generate(co_uuid);
-
 		/** create container */
-		rc = daos_cont_create(poh, co_uuid, NULL /* properties */,
-				      NULL /* event */);
+		rc = daos_cont_create_with_label(poh, "simple_obj", NULL, NULL,
+						 NULL);
 		ASSERT(rc == 0, "container create failed with %d", rc);
 
 		/** open container */
-		rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, NULL,
+		rc = daos_cont_open(poh, "simple_obj", DAOS_COO_RW, &coh, NULL,
 				    NULL);
 		ASSERT(rc == 0, "container open failed with %d", rc);
 	}

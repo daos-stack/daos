@@ -74,7 +74,9 @@ struct vos_io_context {
 				 ic_dedup_verify:1,
 				 ic_read_ts_only:1,
 				 ic_check_existence:1,
-				 ic_remove:1;
+				 ic_remove:1,
+				 ic_skip_fetch:1,
+				 ic_ec:1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -652,13 +654,14 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_save_recx = ((vos_flags & VOS_OF_FETCH_RECX_LIST) != 0);
 	ioc->ic_dedup = ((vos_flags & VOS_OF_DEDUP) != 0);
 	ioc->ic_dedup_verify = ((vos_flags & VOS_OF_DEDUP_VERIFY) != 0);
+	ioc->ic_skip_fetch = ((vos_flags & VOS_OF_SKIP_FETCH) != 0);
 	ioc->ic_dedup_th = dedup_th;
 	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
 		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
 	else if (vos_flags & VOS_OF_FETCH_SET_TS_ONLY)
 		ioc->ic_read_ts_only = 1;
-	ioc->ic_remove =
-		((vos_flags & VOS_OF_REMOVE) != 0);
+	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
+	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
@@ -979,8 +982,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	filter.fr_punch_epc = ioc->ic_akey_info.ii_prior_punch.pr_epc;
 	filter.fr_punch_minor_epc =
 		ioc->ic_akey_info.ii_prior_punch.pr_minor_epc;
-
 	evt_ent_array_init(ioc->ic_ent_array, 0);
+
 	rc = evt_find(toh, &filter, ioc->ic_ent_array);
 	if (rc != 0 || vos_dtx_hit_inprogress())
 		D_GOTO(failed, rc = (rc == 0 ? -DER_INPROGRESS : rc));
@@ -988,6 +991,9 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	holes = 0;
 	rsize = 0;
 	inob = ioc->ic_ent_array->ea_inob;
+	if (ioc->ic_skip_fetch)
+		goto fill;
+
 	evt_ent_array_for_each(ent, ioc->ic_ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
@@ -1060,6 +1066,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		index = lo + nr;
 	}
 
+fill:
 	D_ASSERT(index <= end);
 	if (index < end)
 		holes += end - index;
@@ -1125,11 +1132,10 @@ key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 
 	rc = vos_ilog_check(info, &epr, epr_out, true);
 out:
-	D_DEBUG(DB_TRACE, "ilog check returned "DF_RC" epr_in="DF_X64"-"DF_X64
-		" punch="DF_PUNCH" epr_out="DF_X64"-"DF_X64"\n", DP_RC(rc),
-		epr.epr_lo, epr.epr_hi, DP_PUNCH(&info->ii_prior_punch),
-		epr_out ? epr_out->epr_lo : 0,
-		epr_out ? epr_out->epr_hi : 0);
+	D_CDEBUG(rc == 0, DB_TRACE, DB_IO, "ilog check returned "DF_RC" epr_in="
+		 DF_X64"-"DF_X64" punch="DF_PUNCH" epr_out="DF_X64"-"DF_X64"\n",
+		 DP_RC(rc), epr.epr_lo, epr.epr_hi, DP_PUNCH(&info->ii_prior_punch),
+		 epr_out ? epr_out->epr_lo : 0, epr_out ? epr_out->epr_hi : 0);
 	return rc;
 }
 
@@ -1381,9 +1387,10 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 			      dkey, 0, DAOS_INTENT_DEFAULT, &krec,
 			      &toh, ioc->ic_ts_set);
-
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, true)) {
+		D_DEBUG(DB_IO, "Stop fetch "DF_UOID": "DF_RC"\n", DP_UOID(obj->obj_id),
+			DP_RC(rc));
 		if (rc == 0 && !ioc->ic_read_ts_only) {
 			for (i = 0; i < ioc->ic_iod_nr; i++)
 				iod_empty_sgl(ioc, i);
@@ -1400,6 +1407,8 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, false)) {
 		if (rc == 0 && !ioc->ic_read_ts_only) {
+			D_DEBUG(DB_IO, "Stop fetch "DF_UOID": "DF_RC"\n", DP_UOID(obj->obj_id),
+				DP_RC(rc));
 			if (has_uncertainty(ioc, &ioc->ic_dkey_info)) {
 				/** There is a value in the uncertainty range so
 				 *  we need to continue the fetch.
@@ -1692,8 +1701,11 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
 			      &krec, &toh, ioc->ic_ts_set);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("akey "DF_KEY" update, key_tree_prepare failed, "DF_RC"\n",
+			DP_KEY(&iod->iod_name), DP_RC(rc));
 		return rc;
+	}
 
 	if (ioc->ic_ts_set) {
 		uint64_t akey_flags;
@@ -1734,12 +1746,17 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		uint64_t	gsize;
+		uint64_t	gsize = iod->iod_size;
 
-		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
-						   (uintptr_t)iod->iod_recxs;
+		/* See obj_singv_ec_rw_filter. */
+		if (ioc->ic_ec && iod->iod_recxs != NULL)
+			gsize = (uintptr_t)iod->iod_recxs;
+
 		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc,
 					minor_epc);
+		if (rc)
+			D_ERROR("akey "DF_KEY" update, akey_update_single failed, "DF_RC"\n",
+				DP_KEY(&iod->iod_name), DP_RC(rc));
 		goto out;
 	} /* else: array */
 
@@ -1760,8 +1777,11 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
 				      recx_csum, iod->iod_size, ioc,
 				      minor_epc);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("akey "DF_KEY" update, akey_update_recx failed, "DF_RC"\n",
+				DP_KEY(&iod->iod_name), DP_RC(rc));
 			goto out;
+		}
 	}
 
 out:
@@ -2210,10 +2230,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
-	uint64_t		 time = 0;
 	bool			 tx_started = false;
 
-	VOS_TIME_START(time, VOS_UPDATE_END);
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
 
@@ -2311,7 +2329,6 @@ abort:
 	if (err != 0)
 		update_cancel(ioc);
 
-	VOS_TIME_END(time, VOS_UPDATE_END);
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
 
 	if (size != NULL && err == 0)
@@ -2660,17 +2677,17 @@ static int
 vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	     unsigned int sgl_nr)
 {
-	int rc, err;
+	int rc;
 
 	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
 	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		return rc;
 
-	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
-	rc = bio_iod_post(ioc->ic_biod);
+	rc = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	rc = bio_iod_post(ioc->ic_biod, rc);
 
-	return err ? err : rc;
+	return rc;
 }
 
 int

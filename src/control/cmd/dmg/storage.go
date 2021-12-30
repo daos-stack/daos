@@ -19,12 +19,12 @@ import (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Scan     storageScanCmd     `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format   storageFormatCmd   `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query    storageQueryCmd    `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	Set      setFaultyCmd       `command:"set" alias:"s" description:"Manually set the device state."`
-	Replace  storageReplaceCmd  `command:"replace" alias:"r" description:"Replace a storage device that has been hot-removed with a new device."`
-	Identify storageIdentifyCmd `command:"identify" alias:"i" description:"Blink the status LED on a given VMD device for visual SSD identification."`
+	Scan     storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format   storageFormatCmd   `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query    storageQueryCmd    `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	Set      setFaultyCmd       `command:"set" description:"Manually set the device state."`
+	Replace  storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
+	Identify storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -56,10 +56,15 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth || cmd.NvmeMeta),
 	}
 	req.SetHostList(cmd.hostlist)
+
+	cmd.log.Debugf("storage scan request: %+v", req)
+
 	resp, err := control.StorageScan(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
+
+	cmd.log.Debugf("storage scan response: %+v", resp.HostStorage)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, resp.Errors())
@@ -155,7 +160,7 @@ func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) er
 
 // setFaultyCmd is the struct representing the set storage subcommand
 type setFaultyCmd struct {
-	NVMe nvmeSetFaultyCmd `command:"nvme-faulty" alias:"n" description:"Manually set the device state of an NVMe SSD to FAULTY."`
+	NVMe nvmeSetFaultyCmd `command:"nvme-faulty" description:"Manually set the device state of an NVMe SSD to FAULTY."`
 }
 
 // nvmeSetFaultyCmd is the struct representing the set-faulty storage subcommand
@@ -187,7 +192,7 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 
 // storageReplaceCmd is the struct representing the replace storage subcommand
 type storageReplaceCmd struct {
-	NVMe nvmeReplaceCmd `command:"nvme" alias:"n" description:"Replace an evicted/FAULTY NVMe SSD with another device."`
+	NVMe nvmeReplaceCmd `command:"nvme" description:"Replace an evicted/FAULTY NVMe SSD with another device."`
 }
 
 // nvmeReplaceCmd is the struct representing the replace nvme storage subcommand
@@ -220,7 +225,7 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 
 // storageIdentifyCmd is the struct representing the identify storage subcommand.
 type storageIdentifyCmd struct {
-	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds."`
+	VMD vmdIdentifyCmd `command:"vmd" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds."`
 }
 
 // vmdIdentifyCmd is the struct representing the identify vmd storage subcommand.

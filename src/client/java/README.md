@@ -36,13 +36,7 @@ operation.
 
 * DaosUns
 
-It wraps some DAOS UNS APIs, like creating, resolving and destroying UNS path, as well as parsing DAOS UNS string
-attribute. Besides, this class can be run from command line in which you can call all DAOS UNS APIs with different
-parameters. Use below command to show its usage in details.
-
-```bash
-$ java -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns --help
-```
+It wraps some DAOS UNS APIs, like resolving UNS path, as well as parsing DAOS UNS string attribute.
 
 #### DAOS Object (obj)
 
@@ -72,17 +66,17 @@ asynchronous read/write. And this class can be reused for repeatible read/write.
 
 * IOSimpleDDAsync
 
-Similar to IOSimpleDataDesc, except it's non-reusable and soly for asynchronous read/write.
+Similar to IOSimpleDataDesc, except it's non-reusable and only for asynchronous read/write.
 
 #### Daos Event
 
-To support asynchronous read/write in dfs and obj, we need Java correspondings of DAOS Event Queue and DAOS Event.
+To support asynchronous read/write in dfs and obj, we need Java corresponding of DAOS Event Queue and DAOS Event.
 We put Daos Event related classes in DaosEventQueue. To use Daos Event, there are typical scenario.
 - Get per-thread DaosEventQueue instance.
 - Acquire event from the DaosEventQueue instance.
 - Bind event to IO Description class, like IODfsDesc or IODataDesc.
 - Read/write with given IO Description.
-- Try to poll completed event with given DaosEventQueue instance until you got something or timedout.
+- Try to poll completed event with given DaosEventQueue instance until you got something or timed out.
 - Get the IO Description in form of attachment from the completed event.
 
 ### hadoop-daos
@@ -102,74 +96,64 @@ It supports both synchronous and asynchronous. The default is asynchronous. You 
 
 ##### DAOS URIs
 
-DAOS FileSystem binds to schema, "daos". And DAOS URIs are in the format of "daos://\[authority\]//\[path\]".
-Both authority and path are optional. There are two types of DAOS URIs, with and without DAOS UNS path depending on
-where you want DAOS Filesystem get initialized and configured.
-
-* With DAOS UNS Path
-
-The simple form of URI is "daos:///\<your uns path\>\[/sub path\]". "\<your path\>" is your OS file path created
-with DAOS command or Java DAOS UNS method, DaosUns.create(). "\[sub path\]" is optional. You can create the UNS path
-with below command.
-
-```bash
-$ daos cont create --pool <pool UUID> --path <your path> --type=POSIX
-```
-Or
-
-```bash
-$ java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns create
-```
-
-After creation, you can use below command to see what DAOS properties set to the path.
-
-```path
-$ getfattr -d -m - <your path>
-```
-
-* Without DAOS UNS Path
-
-The simple form of URI is "daos:///\[sub path\]". Please check description of "fs.defaultFS" in
-[example](hadoop-daos/src/main/resources/daos-site-example.xml) for how to configure filesystem.
-In this way, preferred configurations are in daos-site.xml which should be put in right place, e.g., Java classpath, and
-loadable by Hadoop DAOS FileSystem.
+* daos://<pool UUID>/<container UUID>/.
+* daos://<pool label>/<container label>/.
+* daos://[authority starts with "uns-id"]/<uns path>. The authority is optional.
+   If the authority doesn't start with "uns-id", it will be considered as either pool UUID or label. You will get
+unexpected parse error.
 
 You may want to connect to two DAOS servers or two DFS instances mounted to different containers in one DAOS server from
-same JVM. Then, you need to add authority to your URI to make it unique since Hadoop caches filesystem instance keyed by
-"schema + authority" in global (JVM). It applies to the both types of URIs described above.
+same JVM. Then, you need to add authority to your UNS URI to make it unique since Hadoop caches filesystem instance
+keyed by "schema + authority" in global (JVM).
 
 ##### Tune More Configurations
 
-If your DAOS URI has no UNS path, you can follow descriptions of each config item in
-[example](hadoop-daos/src/main/resources/daos-site-example.xml) to set your own values in loadable daos-site.xml.
+The following config items starting from 6th can put into application, Hadoop config files and DAOS container
+via "daos cont set-attr" command (see examples in next section for the command). The config priority is,
+application > Hadoop config files > DAOS container. The items from 1st to 5th are item-specific.
 
-If your DAOS URI is with UNS path, your configurations, except those set by DAOS UNS creation, in daos-site.xml can
-still be effective. To make configuration source consistent, an alternative to configuration file, daos-site.xml, is to
-set all configurations to the UNS path. You put the configs to the same UNS path with below command.
+        name                            default value           description
 
-```bash
-# install attr package if get "command not found" error
-$ setfattr -n user.daos.hadoop -v "fs.daos.server.group=daos_server:fs.daos.pool.svc=0" <your path>
-```
-Or
+        1. fs.defaultFS                 no default              one of above DAOS URIs. Read from application or Hadoop
+                                                                config files
 
-```bash
-$ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=daos_server:fs.daos.pool.svc=0"
-        -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns setappinfo
-```
+        2. fs.daos.server.group         daos_server             DAOS server group. Read from application or Hadoop
+                                                                config files
 
-For the "value" property, you need to follow pattern, key1=value1:key2=value2... And key* should be from
-[example](hadoop-daos/src/main/resources/daos-site-example.xml). If value* contains characters of '=' or ':', you need
-to escape the value with below command.
+        3. fs.daos.pool.id              UUID or label           user should not set it directly
+                                        parsed from DAOS URI
 
-```bash
-$ java -Dop=escape-app-value -Dinput="daos_server:1=2" -cp ./daos-java-1.1.0-shaded.jar io.daos.dfs.DaosUns util
-```
+        4. fs.daos.container.id         UUID or label           user should not set it directly
+                                        parsed from DAOS URI
 
-You'll get escaped value, "daos_server\u003a1\u003d2", for "daos_server:1=2".
+        5. fs.daos.pool.flags           2                       daos pool access flags, 1 for readonly,
+                                                                2 for read/write, 4 for execute. Read from application
+                                                                or Hadoop config files
 
-If you configure the same property in both daos-site.mxl and UNS path, the value in daos-sitem.xml takes priority. If
-user set Hadoop configuration before initializing Hadoop DAOS FileSystem, the user's configuration takes priority.
+        6. fs.daos.choice               no default              multiple applications can use different choices to
+                                                                apply their own configurations or override default
+                                                                values. E.g., if Spark set "fs.daos.choice" to "spark".
+                                                                DAOS FS will try to read "spark.fs.daos.*" (from item 6)
+                                                                first. Then fall back to "fs.daos.*".
+
+        7. fs.daos.read.buffer.size     1048576                 size of direct buffer for reading data from DAOS.
+                                                                Default is 1m. Value range is 64k - 2g
+
+        8. fs.daos.read.min.size        65536                   minimum size of direct buffer for reading data from
+                                                                DAOS. Default is 64k. Value range is 64k - 2g. It should
+                                                                be no more than fs.daos.read.buffer.size
+
+        9. fs.daos.write.buffer.size    1048576                 size of direct buffer for writing data to DAOS. Default
+                                                                is 1m. Value range is 64k - 2g
+
+        10. fs.daos.block.size          134217728               size for splitting large file into blocks when read by
+                                                                Hadoop. Default is 128m. Value range is 16m - 2m.
+
+        11. fs.daos.chunk.size          1048576                 size of DAOS file chunk. Default is 1m. Value range is
+                                                                4k - 2g.
+
+        12. fs.daos.io.async            true                    perform DAOS IO asynchronously. Default is true.
+                                                                Set to false to use synchronous IO.
 
 ## Build
 
@@ -196,10 +180,12 @@ with below command.
 Before issuing above command, you need [protobuf 3](https://github.com/protocolbuffers/protobuf.git) and its
 [C plugin](https://github.com/protobuf-c/protobuf-c.git) installed.
 
-If you have DAOS pool and DAOS container with type of posix, you can run integration test when build with below command.
-Before running it, make sure you have DAOS environment properly setup, including server and user environment variables.
+If you have DAOS pool and DAOS container with type of posix and both have labels defined, you can run integration test
+when build with below command. Before running it, make sure you have DAOS environment properly setup, including server
+and user environment variables.
 
-    mvn -Dpool_id=<your pool uuid> -Dcont_id=<your container uuid> -Dgpg.skip clean install
+    mvn -Dpool_id=<your pool uuid> -Dcont_id=<your container uuid> -Dpool_label=<pool label> -Dcont_label=<cont label>
+        -Dgpg.skip clean install
 
 User can go to each submodule and build it separately too.
 
@@ -219,11 +205,10 @@ Beside DAOS setup and environment variables, one more environment for JVM signal
 
 * daos-java Jars
 
-There are three choices when put daos-java jar, depending on your application.<br/>
+There are two choices when put daos-java jar, depending on your application.<br/>
 1, daos-java-\<version\>.jar, if your app has protobuf 3 in your classpath.<br/>
-2, daos-java-\<version\>-protobuf3-shaded.jar, if your app don't have protobuf 3 or have protobuf 2 in your classpath.
-<br/>
-3, daos-java-\<version\>-shaded.jar, if you want to run daos-jar as standalone app.<br/>
+2, daos-java-\<version\>-protobuf3-netty4-shaded.jar, if your app don't have protobuf3 or netty4 or different versions
+in your classpath.<br/>
 
 * YARN
 
@@ -249,4 +234,4 @@ file, like capacity-scheduler.xml in yarn.
 ## Contacts
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos). Bugs should be reported through our 
 [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and
- [debug logs](./doc/debugging.md).
+ [debug logs](./docs/debugging.md).

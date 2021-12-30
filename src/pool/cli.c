@@ -52,7 +52,11 @@ dc_pool_init(void)
 void
 dc_pool_fini(void)
 {
-	daos_rpc_unregister(&pool_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&pool_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister pool RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 static void
@@ -158,6 +162,8 @@ dc_pool_alloc(unsigned int nr)
 		goto failed;
 	}
 
+	/* Every pool map begins at version 1. */
+	pool->dp_map_version_known = 1;
 	pool->dp_map_sz = pool_buf_size(nr);
 
 	return pool;
@@ -221,15 +227,16 @@ choose:
 
 /* Assume dp_map_lock is locked before calling this function */
 int
-dc_pool_map_update(struct dc_pool *pool, struct pool_map *map,
-		   unsigned int map_version, bool connect)
+dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
 {
-	int rc;
+	unsigned int	map_version;
+	int		rc;
 
 	D_ASSERT(map != NULL);
+	map_version = pool_map_get_version(map);
+
 	if (pool->dp_map == NULL) {
-		rc = pl_map_update(pool->dp_pool, map, connect,
-				DEFAULT_PL_TYPE);
+		rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -261,7 +268,8 @@ dc_pool_map_update(struct dc_pool *pool, struct pool_map *map,
 out_update:
 	pool_map_addref(map);
 	pool->dp_map = map;
-	pool->dp_ver = map_version;
+	if (pool->dp_map_version_known < map_version)
+		pool->dp_map_version_known = map_version;
 out:
 	return rc;
 }
@@ -289,7 +297,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
-	rc = dc_pool_map_update(pool, map, map_version, connect);
+	rc = dc_pool_map_update(pool, map, connect);
 	if (rc)
 		D_GOTO(out_unlock, rc);
 
@@ -429,28 +437,6 @@ out:
 	explicit_bzero(pci->pci_cred.iov_buf, pci->pci_cred.iov_buf_len);
 	daos_iov_free(&pci->pci_cred);
 	if (put_pool)
-		dc_pool_put(pool);
-	return rc;
-}
-
-int
-dc_pool_update_map(daos_handle_t ph, struct pool_map *map)
-{
-	struct dc_pool	*pool;
-	int		 rc;
-
-	pool = dc_hdl2pool(ph);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	if (pool->dp_ver >= pool_map_get_version(map))
-		D_GOTO(out, rc = 0); /* nothing to do */
-
-	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
-	rc = dc_pool_map_update(pool, map, pool_map_get_version(map), false);
-	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
-out:
-	if (pool)
 		dc_pool_put(pool);
 	return rc;
 }
@@ -969,6 +955,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 {
 	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
+	struct pool_map		*map = NULL;
 	void			*p;
 	int			 rc = 0;
 
@@ -1000,16 +987,14 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	if (rc < 0)
 		goto out;
 
-	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
-			     &pool->dp_map);
+	rc = pool_map_create(map_buf, pool_glob->dpg_map_version, &map);
 	if (rc != 0) {
 		D_ERROR("failed to create local pool map: "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
-	rc = pl_map_update(pool->dp_pool, pool->dp_map, true,
-			DEFAULT_PL_TYPE);
+	rc = dc_pool_map_update(pool, map, true /* connect */);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1024,6 +1009,8 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 out:
 	if (rc != 0)
 		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
+	if (map != NULL)
+		pool_map_decref(map);
 	if (pool != NULL)
 		dc_pool_put(pool);
 	return rc;
@@ -1332,21 +1319,9 @@ out:
 }
 
 /**
- * Query the latest pool information (i.e., mainly the pool map). This is meant
- * to be an "uneventful" interface; callers wishing to play with events shall
- * do so with \a cb and \a cb_arg.
+ * Query the latest pool information.
  *
- * \param[in]	pool	pool handle object
- * \param[in]	ctx	RPC context
- * \param[out]	tgts	if not NULL, pool target ranks returned on success
- * \param[in,out]
- *		info	if not NULL, pool information returned on success
- * \param[in]	cb	callback called only on success
- * \param[in]	cb_arg	argument passed to \a cb
- * \return		zero or error
- *
- * TODO: Avoid redundant POOL_QUERY RPCs triggered by multiple
- * threads/operations.
+ * For pool map refreshes, use dc_pool_create_map_refresh_task instead.
  */
 int
 dc_pool_query(tse_task_t *task)
@@ -1425,6 +1400,443 @@ out_pool:
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
+}
+
+/*
+ * Is the cached pool map known to be stale? Must be called under
+ * pool->dp_map_lock.
+ */
+static bool
+map_known_stale(struct dc_pool *pool)
+{
+	unsigned int cached = pool_map_get_version(pool->dp_map);
+
+	D_ASSERTF(pool->dp_map_version_known >= cached, "%u >= %u\n",
+		  pool->dp_map_version_known, cached);
+
+	return (pool->dp_map_version_known > cached);
+}
+
+/*
+ * Arg and state of map_refresh
+ *
+ * mra_i is an index in the internal node array of a pool map. It is used to
+ * perform a round robin of the array starting from a random element.
+ */
+struct map_refresh_arg {
+	struct dc_pool	       *mra_pool;
+	bool			mra_passive;
+	unsigned int		mra_map_version;
+	int			mra_i;
+	struct d_backoff_seq	mra_backoff_seq;
+};
+
+/*
+ * When called repeatedly, this performs a round robin of the pool map rank
+ * array starting from a random index.
+ */
+static d_rank_t
+choose_map_refresh_rank(struct map_refresh_arg *arg)
+{
+	struct pool_domain     *nodes;
+	int			n;
+	int			i;
+	int			j;
+	int			k = -1;
+
+	n = pool_map_find_nodes(arg->mra_pool->dp_map, PO_COMP_ID_ALL, &nodes);
+	/* There must be at least one rank. */
+	D_ASSERTF(n > 0, "%d\n", n);
+
+	if (arg->mra_i == -1) {
+		/* Let i be a random integer in [0, n). */
+		i = ((double)rand() / RAND_MAX) * n;
+		if (i == n)
+			i = 0;
+	} else {
+		/* Continue the round robin. */
+		i = arg->mra_i;
+	}
+
+	/* Find next UPIN rank via a round robin from i. */
+	for (j = 0; j < n; j++) {
+		k = (i + j) % n;
+
+		if (nodes[k].do_comp.co_status == PO_COMP_ST_UPIN)
+			break;
+	}
+	/* There must be at least one UPIN rank. */
+	D_ASSERT(j < n);
+	D_ASSERT(k != -1);
+
+	arg->mra_i = k + 1;
+
+	return nodes[k].do_comp.co_rank;
+}
+
+static int
+create_map_refresh_rpc(struct dc_pool *pool, unsigned int map_version,
+		       crt_context_t ctx, crt_group_t *group, d_rank_t rank,
+		       crt_rpc_t **rpc, struct pool_buf **map_buf)
+{
+	crt_endpoint_t			ep;
+	crt_rpc_t		       *c;
+	struct pool_tgt_query_map_in   *in;
+	struct pool_buf		       *b;
+	int				rc;
+
+	ep.ep_grp = group;
+	ep.ep_rank = rank;
+	ep.ep_tag = 0;
+
+	rc = pool_req_create(ctx, &ep, POOL_TGT_QUERY_MAP, &c);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create POOL_TGT_QUERY_MAP: %d\n",
+			DP_UUID(pool->dp_pool), rc);
+		return rc;
+	}
+
+	in = crt_req_get(c);
+	uuid_copy(in->tmi_op.pi_uuid, pool->dp_pool);
+	uuid_copy(in->tmi_op.pi_hdl, pool->dp_pool_hdl);
+	in->tmi_map_version = map_version;
+
+	rc = map_bulk_create(ctx, &in->tmi_map_bulk, &b, pool_buf_nr(pool->dp_map_sz));
+	if (rc != 0) {
+		crt_req_decref(c);
+		return rc;
+	}
+
+	*rpc = c;
+	*map_buf = b;
+	return 0;
+}
+
+static void
+destroy_map_refresh_rpc(crt_rpc_t *rpc, struct pool_buf *map_buf)
+{
+	struct pool_tgt_query_map_in *in = crt_req_get(rpc);
+
+	map_bulk_destroy(in->tmi_map_bulk, map_buf);
+	crt_req_decref(rpc);
+}
+
+struct map_refresh_cb_arg {
+	crt_rpc_t	       *mrc_rpc;
+	struct pool_buf	       *mrc_map_buf;
+};
+
+static int
+map_refresh_cb(tse_task_t *task, void *varg)
+{
+	struct map_refresh_cb_arg      *cb_arg = varg;
+	struct map_refresh_arg	       *arg = tse_task_buf_embedded(task, sizeof(*arg));
+	struct dc_pool		       *pool = arg->mra_pool;
+	struct pool_tgt_query_map_in   *in = crt_req_get(cb_arg->mrc_rpc);
+	struct pool_tgt_query_map_out  *out = crt_reply_get(cb_arg->mrc_rpc);
+	unsigned int			version_cached;
+	struct pool_map		       *map;
+	bool				reinit = false;
+	int				rc = task->dt_result;
+
+	/*
+	 * If it turns out below that we do need to update the cached pool map,
+	 * then holding the lock while doing so will be okay, since we probably
+	 * do not want other threads to proceed with a known-stale pool anyway.
+	 * Otherwise, we will release the lock quickly.
+	 */
+	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
+
+	D_DEBUG(DB_MD, DF_UUID": %p: crt: "DF_RC"\n", DP_UUID(pool->dp_pool), task, DP_RC(rc));
+	if (daos_rpc_retryable_rc(rc)) {
+		reinit = true;
+		goto out;
+	} else if (rc != 0) {
+		goto out;
+	}
+
+	rc = out->tmo_op.po_rc;
+	if (rc == -DER_TRUNC) {
+		/*
+		 * cb_arg->mrc_map_buf is not large enough. Retry with the size
+		 * suggested by the server side.
+		 */
+		D_DEBUG(DB_MD, DF_UUID": %p: map buf < required %u\n",
+			DP_UUID(pool->dp_pool), task, out->tmo_map_buf_size);
+		pool->dp_map_sz = out->tmo_map_buf_size;
+		reinit = true;
+		goto out;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID": failed to fetch pool map: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out;
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_POOL_FAIL_MAP_REFRESH))
+		out->tmo_op.po_map_version = 0;
+
+	if (out->tmo_op.po_map_version <= in->tmi_map_version) {
+		/*
+		 * The server side does not have a version we requested for. If
+		 * the rank has a version < the highest known version, it has a
+		 * stale version itself, for which we need to try another one.
+		 * If the cached pool map version is known to be stale, we also
+		 * need to retry. Otherwise, we are done.
+		 */
+		D_DEBUG(DB_MD,
+			DF_UUID": %p: no requested version from rank %u: "
+			"requested=%u known=%u remote=%u\n",
+			DP_UUID(pool->dp_pool), task,
+			cb_arg->mrc_rpc->cr_ep.ep_rank, in->tmi_map_version,
+			pool->dp_map_version_known, out->tmo_op.po_map_version);
+		if (out->tmo_op.po_map_version < pool->dp_map_version_known ||
+		    map_known_stale(pool))
+			reinit = true;
+		goto out;
+	}
+
+	version_cached = pool_map_get_version(pool->dp_map);
+
+	if (out->tmo_op.po_map_version < pool->dp_map_version_known ||
+	    out->tmo_op.po_map_version <= version_cached) {
+		/*
+		 * The server side has provided a version we requested for, but
+		 * we are no longer interested in it.
+		 */
+		D_DEBUG(DB_MD, DF_UUID": %p: got stale %u < known %u or <= cached %u\n",
+			DP_UUID(pool->dp_pool), task, out->tmo_op.po_map_version,
+			pool->dp_map_version_known, version_cached);
+		reinit = true;
+		goto out;
+	}
+
+	rc = pool_map_create(cb_arg->mrc_map_buf, out->tmo_op.po_map_version, &map);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool map: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out;
+	}
+
+	rc = dc_pool_map_update(pool, map, false /* connect */);
+	pool_map_decref(map);
+
+out:
+	destroy_map_refresh_rpc(cb_arg->mrc_rpc, cb_arg->mrc_map_buf);
+
+	if (reinit) {
+		uint32_t	backoff;
+		int		rc_tmp;
+
+		backoff = d_backoff_seq_next(&arg->mra_backoff_seq);
+		rc_tmp = tse_task_reinit_with_delay(task, backoff);
+		if (rc_tmp == 0) {
+			D_DEBUG(DB_MD,
+				DF_UUID": %p: reinitialized due to "DF_RC" with backoff %u\n",
+				DP_UUID(pool->dp_pool), task, DP_RC(rc), backoff);
+			rc = 0;
+		} else {
+			D_ERROR(DF_UUID": failed to reinitialize pool map "
+				"refresh task: "DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
+			if (rc == 0)
+				rc = rc_tmp;
+			reinit = false;
+		}
+	}
+
+	if (!reinit) {
+		D_ASSERTF(pool->dp_map_task == task, "%p == %p\n", pool->dp_map_task, task);
+		tse_task_decref(pool->dp_map_task);
+		pool->dp_map_task = NULL;
+	}
+
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+
+	if (!reinit) {
+		d_backoff_seq_fini(&arg->mra_backoff_seq);
+		dc_pool_put(arg->mra_pool);
+	}
+
+	return rc;
+}
+
+static int
+map_refresh(tse_task_t *task)
+{
+	struct map_refresh_arg	       *arg = tse_task_buf_embedded(task, sizeof(*arg));
+	struct dc_pool		       *pool = arg->mra_pool;
+	d_rank_t			rank;
+	unsigned int			version;
+	crt_rpc_t		       *rpc;
+	struct map_refresh_cb_arg	cb_arg;
+	int				rc;
+
+	if (arg->mra_passive) {
+		/*
+		 * Passive pool map refresh tasks do nothing besides waiting
+		 * for the active one to complete. They avoid complexities like
+		 * whether a dc_pool_create_map_refresh_task caller should
+		 * schedule the resulting task or not and how the caller would
+		 * register its completion callback to the bottom of the
+		 * resulting task's callback stack.
+		 */
+		D_DEBUG(DB_MD, DF_UUID": %p: passive done\n", DP_UUID(pool->dp_pool), task);
+		rc = 0;
+		goto out_task;
+	}
+
+	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
+
+	/* Update the highest known pool map version in all cases. */
+	if (pool->dp_map_version_known < arg->mra_map_version)
+		pool->dp_map_version_known = arg->mra_map_version;
+
+	if (arg->mra_map_version != 0 && !map_known_stale(pool)) {
+		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+		rc = 0;
+		goto out_task;
+	}
+
+	if (pool->dp_map_task != NULL && pool->dp_map_task != task) {
+		/*
+		 * An active pool map refresh task already exists; become a
+		 * passive one. If this is use case 1 (see
+		 * dc_pool_create_map_refresh_task), there is little benefit in
+		 * immediately querying the server side again. If this is use
+		 * case 2, the active pool map refresh task will pick up the
+		 * known version here via the pool->dp_map_version_known update
+		 * above, and retry till the highest known version is cached.
+		 */
+		D_DEBUG(DB_MD, DF_UUID": %p: becoming passive waiting for %p\n",
+			DP_UUID(pool->dp_pool), task, pool->dp_map_task);
+		arg->mra_passive = true;
+		rc = tse_task_register_deps(task, 1, &pool->dp_map_task);
+		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to depend on active pool map "
+				"refresh task: "DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
+			goto out_task;
+		}
+		rc = tse_task_reinit(task);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to reinitialize task %p: "DF_RC"\n",
+				DP_UUID(pool->dp_pool), task, DP_RC(rc));
+			goto out_task;
+		}
+		goto out;
+	}
+
+	/* No active pool map refresh task; become one. */
+	D_DEBUG(DB_MD, DF_UUID": %p: becoming active\n", DP_UUID(pool->dp_pool), task);
+	tse_task_addref(task);
+	pool->dp_map_task = task;
+
+	rank = choose_map_refresh_rank(arg);
+
+	/*
+	 * The server side will see if it has a pool map version >
+	 * in->tmi_map_version. So here we are asking for a version >= the
+	 * highest version known but also > the version cached.
+	 */
+	version = max(pool->dp_map_version_known - 1, pool_map_get_version(pool->dp_map));
+
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+
+	rc = create_map_refresh_rpc(pool, version, daos_task2ctx(task), pool->dp_sys->sy_group,
+				    rank, &rpc, &cb_arg.mrc_map_buf);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool refresh RPC: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out_map_task;
+	}
+
+	crt_req_addref(rpc);
+	cb_arg.mrc_rpc = rpc;
+
+	rc = tse_task_register_comp_cb(task, map_refresh_cb, &cb_arg, sizeof(cb_arg));
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to task completion callback: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out_cb_arg;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID": %p: asking rank %u for version > %u\n",
+		DP_UUID(pool->dp_pool), task, rank, version);
+	return daos_rpc_send(rpc, task);
+
+out_cb_arg:
+	crt_req_decref(cb_arg.mrc_rpc);
+	destroy_map_refresh_rpc(rpc, cb_arg.mrc_map_buf);
+out_map_task:
+	D_ASSERTF(pool->dp_map_task == task, "%p == %p\n", pool->dp_map_task, task);
+	tse_task_decref(pool->dp_map_task);
+	pool->dp_map_task = NULL;
+out_task:
+	d_backoff_seq_fini(&arg->mra_backoff_seq);
+	dc_pool_put(arg->mra_pool);
+	tse_task_complete(task, rc);
+out:
+	return rc;
+}
+
+/**
+ * Create a pool map refresh task. All pool map refreshes shall use this
+ * interface. Two use cases are anticipated:
+ *
+ *   1 Check if there is a pool map version > the cached version, and if there
+ *     is, get it. In this case, pass 0 in \a map_version.
+ *
+ *   2 Get a pool map version >= a known version (learned from a server). In
+ *     this case, pass the known version in \a map_version.
+ *
+ * In either case, the pool map refresh task may temporarily miss the latest
+ * pool map version in certain scenarios, resulting in extra retries.
+ *
+ * \param[in]	pool		pool
+ * \param[in]	map_version	known pool map version
+ * \param[in]	sched		scheduler
+ * \param[out]	task		pool map refresh task
+ */
+int
+dc_pool_create_map_refresh_task(struct dc_pool *pool, uint32_t map_version,
+				tse_sched_t *sched, tse_task_t **task)
+{
+	tse_task_t	       *t;
+	struct map_refresh_arg *a;
+	int			rc;
+
+	rc = tse_task_create(map_refresh, sched, NULL /* priv */, &t);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool map refresh task: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		return rc;
+	}
+
+	a = tse_task_buf_embedded(t, sizeof(*a));
+	dc_pool_get(pool);
+	a->mra_pool = pool;
+	a->mra_passive = false;
+	a->mra_map_version = map_version;
+	a->mra_i = -1;
+	rc = d_backoff_seq_init(&a->mra_backoff_seq, 1 /* nzeros */, 4 /* factor */,
+				16 /* next (us) */, 1 << 20 /* max (us) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
+
+	*task = t;
+	return 0;
+}
+
+/**
+ * Destroy a pool map refresh task that has not been scheduled yet, typically
+ * for error handling purposes.
+ */
+void
+dc_pool_abandon_map_refresh_task(tse_task_t *task)
+{
+	struct map_refresh_arg *arg = tse_task_buf_embedded(task, sizeof(*arg));
+
+	d_backoff_seq_fini(&arg->mra_backoff_seq);
+	dc_pool_put(arg->mra_pool);
+	tse_task_decref(task);
 }
 
 struct pool_lc_arg {

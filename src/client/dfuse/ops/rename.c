@@ -36,7 +36,7 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 
 	/* If the move is not from where we thought the file was then invalidate the old entry */
 	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
-		(strncmp(ie->ie_name, name, NAME_MAX + 1) != 0)) {
+		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
 		DFUSE_TRA_DEBUG(ie, "Invalidating old name");
 
 		rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
@@ -48,7 +48,7 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 	}
 
 	/* Update the inode entry data */
-	ie->ie_parent = newparent->ie_parent;
+	ie->ie_parent = newparent->ie_stat.st_ino;
 	strncpy(ie->ie_name, newname, NAME_MAX);
 
 	/* Set the new parent and name */
@@ -70,13 +70,25 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	fs_handle = fuse_req_userdata(req);
 
-	if (flags != 0)
+	if (flags != 0) {
+#ifdef RENAME_NOREPLACE
+		if (flags != RENAME_NOREPLACE) {
+			if (flags & RENAME_EXCHANGE)
+				DFUSE_TRA_DEBUG(parent, "Unsupported flag RENAME_EXCHANGE");
+			else
+				DFUSE_TRA_INFO(parent, "Unsupported flags %#x", flags);
+			D_GOTO(out, rc = ENOTSUP);
+		}
+#else
+		DFUSE_TRA_INFO(parent, "Unsupported flags %#x", flags);
 		D_GOTO(out, rc = ENOTSUP);
+#endif
+	}
 
 	if (!newparent)
 		newparent = parent;
 
-	rc = dfs_move_internal(parent->ie_dfs->dfs_ns, parent->ie_obj, (char *)name,
+	rc = dfs_move_internal(parent->ie_dfs->dfs_ns, flags, parent->ie_obj, (char *)name,
 			       newparent->ie_obj, (char *)newname, &moid, &oid);
 	if (rc)
 		D_GOTO(out, rc);

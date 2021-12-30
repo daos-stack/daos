@@ -18,7 +18,7 @@ public class DaosFileSystemAsyncIT {
     DaosFileSystem daosFileSystem = new DaosFileSystem();
     Configuration cfg = new Configuration();
     DaosFSFactory.config(cfg, true);
-    daosFileSystem.initialize(URI.create("daos:///"), cfg);
+    daosFileSystem.initialize(URI.create(DaosFSFactory.DAOS_URI), cfg);
     Assert.assertTrue(Whitebox.getInternalState(daosFileSystem, "async"));
     daosFileSystem.close();
   }
@@ -28,7 +28,7 @@ public class DaosFileSystemAsyncIT {
     DaosFileSystem daosFileSystem = new DaosFileSystem();
     Configuration cfg = new Configuration();
     DaosFSFactory.config(cfg, true);
-    daosFileSystem.initialize(URI.create("daos:///"), cfg);
+    daosFileSystem.initialize(URI.create(DaosFSFactory.DAOS_URI), cfg);
     String path = "/async_1";
     DaosFile file = DaosFSFactory.getFsClient().getFile(path);
     file.createNewFile();
@@ -46,7 +46,7 @@ public class DaosFileSystemAsyncIT {
     DaosFileSystem daosFileSystem = new DaosFileSystem();
     Configuration cfg = new Configuration();
     DaosFSFactory.config(cfg, true);
-    daosFileSystem.initialize(URI.create("daos:///"), cfg);
+    daosFileSystem.initialize(URI.create(DaosFSFactory.DAOS_URI), cfg);
     String path = "/async_2";
 
     FSDataOutputStream fos = daosFileSystem.create(new Path(path));

@@ -106,17 +106,18 @@ func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.
-func updateFabricEnvars(ctx context.Context, cfg *engine.Config) error {
-	// In the case of ofi+verbs provider, mercury uses the interface name
+func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Config) error {
+	// In the case of some providers, mercury uses the interface name
 	// such as ib0, while OFI uses the device name such as hfi1_0 CaRT and
 	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
-	if strings.HasPrefix(cfg.Fabric.Provider, "ofi+verbs") && !cfg.HasEnvVar("OFI_DOMAIN") {
-		deviceAlias, err := netdetect.GetDeviceAlias(ctx, cfg.Fabric.Interface)
+	if !cfg.HasEnvVar("OFI_DOMAIN") {
+		domain, err := netdetect.GetDeviceDomain(ctx, cfg.Fabric.Provider, cfg.Fabric.Interface)
 		if err != nil {
-			return errors.Wrapf(err, "failed to resolve alias for %s", cfg.Fabric.Interface)
+			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
 		}
-		envVar := "OFI_DOMAIN=" + deviceAlias
+		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
+		envVar := "OFI_DOMAIN=" + domain
 		cfg.WithEnvVars(envVar)
 	}
 
@@ -153,7 +154,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	}
 
 	for _, engine := range cfg.Engines {
-		if err := updateFabricEnvars(ctx, engine); err != nil {
+		if err := updateFabricEnvars(ctx, log, engine); err != nil {
 			return 0, errors.Wrap(err, "update engine fabric envars")
 		}
 	}
@@ -167,19 +168,28 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    srv.runningUser,
-		PCIAllowlist:  strings.Join(srv.cfg.BdevInclude, " "),
-		PCIBlocklist:  strings.Join(srv.cfg.BdevExclude, " "),
+		PCIAllowList:  strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
+		PCIBlockList:  strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:   srv.cfg.DisableVFIO,
-		DisableVMD:    srv.cfg.DisableVMD || srv.cfg.DisableVFIO || !iommuEnabled,
-		// TODO: pass vmd include list
+		EnableVMD:     srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
+		Reset_:        true, // first reset allocations before preparing devices
 	}
 
 	hasBdevs := cfgHasBdevs(srv.cfg)
+	// Use default value
+	if srv.cfg.NrHugepages < 0 {
+		srv.cfg.NrHugepages = 4096
+	}
+	// The config value is intended to be per-engine, so we need to adjust
+	// based on the number of engines.
+	if srv.cfg.NrHugepages > 0 {
+		if len(srv.cfg.Engines) == 0 {
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		} else {
+			prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
+		}
+	}
 	if hasBdevs {
-		// The config value is intended to be per-engine, so we need to adjust
-		// based on the number of engines.
-		prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
-
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
 		if srv.runningUser != "root" {
@@ -193,11 +203,18 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		}
 	}
 
+	// Run prepare with reset first to release resources.
+	//
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+	prepReq.Reset_ = true
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
+	} else {
+		prepReq.Reset_ = false
+		if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
+			srv.log.Errorf("automatic NVMe prepare failed: %s", err)
+		}
 	}
 
 	hugePages, err := hpiGetter()
@@ -205,24 +222,22 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	if hasBdevs {
-		// Double-check that we got the requested number of huge pages after prepare.
-		if hugePages.Free < prepReq.HugePageCount {
-			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
-		}
+	// Double-check that we got the requested number of huge pages after prepare.
+	if srv.cfg.NrHugepages > 0 && hugePages.Free < prepReq.HugePageCount {
+		return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
 	}
 
 	for _, engineCfg := range srv.cfg.Engines {
 		// Calculate mem_size per I/O engine (in MB)
 		PageSizeMb := hugePages.PageSizeKb >> 10
-		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
+		engineCfg.MemSize = srv.cfg.NrHugepages
 		engineCfg.MemSize *= PageSizeMb
 		// Pass hugepage size, do not assume 2MB is used
 		engineCfg.HugePageSz = PageSizeMb
 		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
 		// Warn if hugepages are not enough to sustain average
-		// I/O workload (~1GB), ignore warning if only using SCM backend
-		if !hasBdevs {
+		// I/O workload (~1GB), ignore warning if using SCM backend with 0 hugepages
+		if !hasBdevs && engineCfg.MemSize == 0 {
 			continue
 		}
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
@@ -348,10 +363,16 @@ func registerLeaderSubscriptions(srv *server) {
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
+				ts, err := evt.GetTimestamp()
+				if err != nil {
+					srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
+					return
+				}
+				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank)); err == nil {
-					srv.mgmtSvc.reqGroupUpdate(ctx)
+				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err == nil {
+					srv.mgmtSvc.reqGroupUpdate(ctx, false)
 				}
 			}
 		}))
@@ -402,26 +423,28 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 	}
 
 	srxVarName := "FI_OFI_RXM_USE_SRX"
-	getSetting := func(ev string) (bool, int32) {
+	getSetting := func(ev string) (bool, int32, error) {
 		kv := strings.Split(ev, "=")
 		if len(kv) != 2 {
-			return false, -1
+			return false, -1, nil
 		}
 		if kv[0] != srxVarName {
-			return false, -1
+			return false, -1, nil
 		}
 		v, err := strconv.ParseInt(kv[1], 10, 32)
 		if err != nil {
-			return true, -1
+			return false, -1, err
 		}
-		return true, int32(v)
+		return true, int32(v), nil
 	}
 
 	engineVals := make([]int32, len(cfg.Engines))
 	for idx, ec := range cfg.Engines {
 		engineVals[idx] = -1 // default to unset
 		for _, ev := range ec.EnvVars {
-			if match, engSrx := getSetting(ev); match {
+			if match, engSrx, err := getSetting(ev); err != nil {
+				return -1, err
+			} else if match {
 				engineVals[idx] = engSrx
 				break
 			}
@@ -439,6 +462,12 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 		if engineVals[i] != cliSrx {
 			return -1, errors.Errorf("%s setting must be the same for all engines", srxVarName)
 		}
+	}
+
+	// If the SRX config was not explicitly set via env vars, use the
+	// global config value.
+	if cliSrx == -1 {
+		cliSrx = int32(common.BoolAsInt(!cfg.Fabric.DisableSRX))
 	}
 
 	return cliSrx, nil

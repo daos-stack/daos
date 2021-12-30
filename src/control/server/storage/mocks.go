@@ -6,6 +6,12 @@
 
 package storage
 
+/*
+#include "stdlib.h"
+#include "daos_srv/control.h"
+*/
+import "C"
+
 import (
 	"fmt"
 	"math/rand"
@@ -15,6 +21,14 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+)
+
+// NvmeDevState constant definitions to represent mock bitset flag combinations.
+const (
+	MockNvmeStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
+	MockNvmeStateNormal   NvmeDevState = MockNvmeStateNew | C.NVME_DEV_FL_INUSE
+	MockNvmeStateEvicted  NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_FAULTY
+	MockNvmeStateIdentify NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_IDENTIFY
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -98,7 +112,7 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	return &SmdDevice{
 		UUID:      common.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		State:     "NORMAL",
+		NvmeState: MockNvmeStateIdentify,
 		TrAddr:    parentTrAddr,
 	}
 }
@@ -165,7 +179,9 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 	idx := common.GetIndex(varIdx...)
 
 	return &ScmMountPoint{
+		Class:      ClassDcpm,
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
+		DeviceList: []string{fmt.Sprintf("pmem%d", idx)},
 		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
 		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
 	}
@@ -189,6 +205,6 @@ func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys System
 	p := DefaultProvider(log, idx, engineStorage)
 	p.Sys = sys
 	p.Scm = scm
-	p.Bdev = bdev
+	p.bdev = bdev
 	return p
 }

@@ -51,7 +51,7 @@ struct pool_iv_map {
 
 /* The structure to serialize the prop for IV */
 struct pool_iv_prop {
-	char		pip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char		pip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	uint64_t	pip_space_rb;
@@ -147,12 +147,16 @@ int ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
+void ds_pool_tgt_query_map_handler(crt_rpc_t *rpc);
 
 /*
  * srv_util.c
  */
 int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 				  d_rank_list_t *failed, d_rank_list_t *alt);
+int ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
+			     crt_rpc_t *rpc, crt_bulk_t remote_bulk,
+			     uint32_t *required_buf_size);
 extern struct bio_reaction_ops nvme_reaction_ops;
 
 /*
@@ -187,6 +191,7 @@ void ds_stop_scrubbing_ult(struct ds_pool_child *child);
  */
 void *ds_pool_metrics_alloc(const char *path, int tgt_id);
 void ds_pool_metrics_free(void *data);
+int ds_pool_metrics_count(void);
 int ds_pool_metrics_start(struct ds_pool *pool);
 void ds_pool_metrics_stop(struct ds_pool *pool);
 

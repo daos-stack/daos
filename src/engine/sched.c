@@ -55,7 +55,9 @@ struct sched_request {
 	uint64_t		 sr_wakeup_time;
 	/* When the request is enqueued, in msecs */
 	uint64_t		 sr_enqueue_ts;
-	unsigned int		 sr_abort:1;
+	unsigned int		 sr_abort:1,
+				 /* sr_ult is sched_request-owned */
+				 sr_owned:1;
 };
 
 bool		sched_prio_disabled;
@@ -63,6 +65,7 @@ unsigned int	sched_stats_intvl;
 unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 unsigned int	sched_relax_mode;
 unsigned int	sched_unit_runtime_max = 32; /* ms */
+bool		sched_watchdog_all;
 
 enum {
 	/* All requests for various pools are processed in FIFO */
@@ -427,6 +430,7 @@ sched_info_init(struct dss_xstream *dx)
 	int			 rc;
 
 	info->si_cur_ts = daos_getmtime_coarse();
+	info->si_cur_seq = 0;
 	info->si_stats.ss_tot_time = 0;
 	info->si_stats.ss_relax_time = 0;
 	info->si_stats.ss_busy_ts = info->si_cur_ts;
@@ -501,7 +505,7 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 
 static struct sched_request *
 req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
-	void (*func)(void *), void *arg, ABT_thread ult)
+	void (*func)(void *), void *arg, ABT_thread ult, bool owned)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi;
@@ -534,6 +538,7 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	req->sr_arg	= arg;
 	req->sr_ult	= ult;
 	req->sr_abort	= 0;
+	req->sr_owned	= (owned ? 1 : 0);
 	req->sr_pool_info = spi;
 
 	return req;
@@ -651,7 +656,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 
 	if (spi->spi_space_pressure != SCHED_SPACE_PRESS_NONE &&
 	    spi->spi_space_pressure != orig_pressure) {
-		D_INFO("XS(%d): pool:"DF_UUID" is under %d presure, "
+		D_INFO("XS(%d): pool:"DF_UUID" is under %d pressure, "
 		       "SCM: tot["DF_U64"], sys["DF_U64"], free["DF_U64"] "
 		       "NVMe: tot["DF_U64"], sys["DF_U64"], free["DF_U64"]\n",
 		       dx->dx_xs_id, DP_UUID(spi->spi_pool_id),
@@ -966,7 +971,7 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		return req_kickoff_internal(dx, attr, func, arg);
 
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
-	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL);
+	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL, false);
 	if (req == NULL) {
 		D_ERROR("XS(%d): get req failed.\n", dx->dx_xs_id);
 		return -DER_NOMEM;
@@ -1079,13 +1084,16 @@ sched_req_wakeup(struct sched_request *req)
 void
 sched_req_wait(struct sched_request *req, bool abort)
 {
+	int	rc;
+
 	D_ASSERT(req != NULL);
 	if (abort) {
 		req->sr_abort = 1;
 		sched_req_wakeup(req);
 	}
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
-	ABT_thread_join(req->sr_ult);
+	rc = ABT_thread_join(req->sr_ult);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_thread_join: %d\n", rc);
 }
 
 inline bool
@@ -1113,7 +1121,11 @@ wakeup_all(struct dss_xstream *dx)
 
 	/* Update current ts stored in sched_info */
 	cur_ts = daos_getmtime_coarse();
-	D_ASSERT(cur_ts >= info->si_cur_ts);
+	if (cur_ts < info->si_cur_ts) {
+		D_WARN("Backwards time: cur_ts:"DF_U64", si_cur_ts:"DF_U64"\n",
+		       cur_ts, info->si_cur_ts);
+		cur_ts = info->si_cur_ts;
+	}
 	info->si_stats.ss_tot_time += (cur_ts - info->si_cur_ts);
 	info->si_cur_ts = cur_ts;
 
@@ -1138,6 +1150,7 @@ struct sched_request *
 sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
+	bool			 owned;
 	struct sched_request	*req;
 	int			 rc;
 
@@ -1147,15 +1160,32 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 		ABT_thread	self;
 
 		rc = ABT_thread_self(&self);
-		if (rc) {
-			D_ERROR("Failed to get self thread. "DF_RC"\n",
-				DP_RC(dss_abterr2der(rc)));
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("Failed to get self thread: %d\n", rc);
 			return NULL;
 		}
 		ult = self;
+		owned = false;
+	} else {
+		ABT_bool unnamed;
+
+		/*
+		 * Since Argobots prohibits freeing unnamed ULTs, don't own
+		 * them.
+		 */
+		rc = ABT_thread_is_unnamed(ult, &unnamed);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("Failed to get thread type: %d\n", rc);
+			return NULL;
+		}
+		if (unnamed == ABT_TRUE) {
+			D_ERROR("Unnamed threads are not supported\n");
+			return NULL;
+		}
+		owned = true;
 	}
 
-	req = req_get(dx, attr, NULL, NULL, ult);
+	req = req_get(dx, attr, NULL, NULL, ult, owned);
 	if (req != NULL && attr->sra_type == SCHED_REQ_GC)
 		req->sr_pool_info->spi_gc_ults++;
 
@@ -1167,9 +1197,17 @@ sched_req_put(struct sched_request *req)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	struct sched_info	*info = &dx->dx_sched_info;
+	int			 rc;
 
 	D_ASSERT(req != NULL && req->sr_ult != ABT_THREAD_NULL);
 	D_ASSERT(d_list_empty(&req->sr_link));
+	if (req->sr_owned) {
+		/* We are responsible for freeing a req-owned ULT. */
+		rc = ABT_thread_free(&req->sr_ult);
+		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	} else {
+		req->sr_ult = ABT_THREAD_NULL;
+	}
 	d_list_add_tail(&req->sr_link, &info->si_idle_list);
 
 	if (req->sr_attr.sra_type == SCHED_REQ_GC) {
@@ -1198,6 +1236,52 @@ sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
 	ABT_cond_wait(cond, mutex);
 	D_ASSERT(info->si_wait_cnt > 0);
 	info->si_wait_cnt -= 1;
+}
+
+uint64_t
+sched_cur_msec(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	return info->si_cur_ts;
+}
+
+uint64_t
+sched_cur_seq(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	return info->si_cur_seq;
+}
+
+struct sched_request *
+sched_create_ult(struct sched_req_attr *attr, void (*func)(void *), void *arg, size_t stack_size)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_request	*req;
+	ABT_thread		 ult = ABT_THREAD_NULL;
+	int			 rc;
+
+	req = req_get(dx, attr, NULL, NULL, ult, true);
+	if (req == NULL)
+		return NULL;
+
+	/* The ULT must be created on the caller xstream */
+	rc = dss_ult_create(func, arg, DSS_XS_SELF, 0, stack_size, &ult);
+	if (rc) {
+		D_ERROR("Failed to create ULT: "DF_RC"\n", DP_RC(rc));
+		req_put(dx, req);
+		return NULL;
+	}
+	D_ASSERT(ult != ABT_THREAD_NULL);
+
+	req->sr_ult = ult;
+	if (attr->sra_type == SCHED_REQ_GC)
+		req->sr_pool_info->spi_gc_ults++;
+
+	return req;
 }
 
 /*
@@ -1572,67 +1656,97 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	}
 }
 
-struct sched_unit {
-	uint64_t	 su_start;
-	void		*su_func_addr;
-};
-
 static inline bool
 watchdog_enabled(struct dss_xstream *dx)
 {
-	/* Enable watchdog for sys xstream only */
-	return sched_unit_runtime_max != 0 && dx->dx_xs_id == 0;
+	if (sched_unit_runtime_max == 0)
+		return false;
+
+	return dx->dx_xs_id == 0 || (sched_watchdog_all && dx->dx_main_xs);
+}
+
+int
+sched_exec_time(uint64_t *msecs, const char *ult_name)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+	uint64_t		 cur;
+
+	if (!watchdog_enabled(dx))
+		return -DER_NOSYS;
+
+	cur = daos_getmtime_coarse();
+	if (cur < info->si_ult_start) {
+		D_WARN("cur:"DF_U64" < start:"DF_U64"\n", cur, info->si_ult_start);
+		*msecs = 0;
+		return 0;
+	}
+
+	*msecs = cur - info->si_ult_start;
+	if (*msecs > sched_unit_runtime_max && ult_name != NULL)
+		D_WARN("ULT:%s executed "DF_U64" msecs\n", ult_name, *msecs);
+	return 0;
 }
 
 static void
-sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit,
-		    struct sched_unit *su)
+sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 {
-	ABT_thread	thread;
-	void		(*thread_func)(void *);
-	int		rc;
+	struct sched_info	*info = &dx->dx_sched_info;
+	ABT_thread		 thread;
+	void			 (*thread_func)(void *);
+	int			 rc;
 
 	if (!watchdog_enabled(dx))
 		return;
 
-	su->su_start = daos_getmtime_coarse();
+	info->si_ult_start = daos_getmtime_coarse();
 	rc = ABT_unit_get_thread(unit, &thread);
 	D_ASSERT(rc == ABT_SUCCESS);
 	rc = ABT_thread_get_thread_func(thread, &thread_func);
 	D_ASSERT(rc == ABT_SUCCESS);
-	su->su_func_addr = thread_func;
+	info->si_ult_func = thread_func;
 }
 
 static void
-sched_watchdog_post(struct dss_xstream *dx, struct sched_unit *su)
+sched_watchdog_post(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	uint64_t		 cur;
 	unsigned int		 elapsed;
 	char			**strings;
 
+	/* A ULT is just scheduled, increase schedule seq */
+	info->si_cur_seq++;
+
 	if (!watchdog_enabled(dx))
 		return;
 
 	cur = daos_getmtime_coarse();
-	D_ASSERT(cur >= su->su_start);
-	elapsed = cur - su->su_start;
+	if (cur < info->si_ult_start) {
+		D_WARN("Backwards time, cur:"DF_U64", start:"DF_U64"\n",
+		       cur, info->si_ult_start);
+		return;
+	}
 
+	elapsed = cur - info->si_ult_start;
 	if (elapsed <= sched_unit_runtime_max)
 		return;
 
 	/* Throttle printing a bit */
-	D_ASSERT(cur >= info->si_stats.ss_watchdog_ts);
-	if (info->si_stats.ss_last_unit == su->su_func_addr &&
+	D_ASSERTF(cur >= info->si_stats.ss_watchdog_ts,
+		  "cur:"DF_U64" < watchdog_ts:"DF_U64"\n",
+		  cur, info->si_stats.ss_watchdog_ts);
+
+	if (info->si_stats.ss_last_unit == info->si_ult_func &&
 	    (cur - info->si_stats.ss_watchdog_ts) <= 2000)
 		return;
 
-	info->si_stats.ss_last_unit = su->su_func_addr;
+	info->si_stats.ss_last_unit = info->si_ult_func;
 	info->si_stats.ss_watchdog_ts = cur;
 
-	strings = backtrace_symbols(&su->su_func_addr, 1);
+	strings = backtrace_symbols(&info->si_ult_func, 1);
 	D_ERROR("WATCHDOG: XS(%d) Thread %p took %u ms. symbol:%s\n",
-		dx->dx_xs_id, su->su_func_addr, elapsed,
+		dx->dx_xs_id, info->si_ult_func, elapsed,
 		strings != NULL ? strings[0] : NULL);
 
 	free(strings);
@@ -1648,7 +1762,6 @@ sched_run(ABT_sched sched)
 	ABT_pool		 pool;
 	ABT_unit		 unit;
 	uint32_t		 work_count = 0;
-	struct sched_unit	 su = { 0 };
 	int			 ret;
 
 	ABT_sched_get_data(sched, (void **)&data);
@@ -1691,11 +1804,11 @@ sched_run(ABT_sched sched)
 		goto check_event;
 execute:
 		D_ASSERT(pool != ABT_POOL_NULL);
-		sched_watchdog_prep(dx, unit, &su);
+		sched_watchdog_prep(dx, unit);
 
 		ABT_xstream_run_unit(unit, pool);
 
-		sched_watchdog_post(dx, &su);
+		sched_watchdog_post(dx);
 start_cycle:
 		if (cycle->sc_new_cycle) {
 			sched_start_cycle(data, pools);

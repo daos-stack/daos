@@ -249,6 +249,10 @@ smd_dev_list(d_list_t *dev_list, int *devs)
 	struct smd_trav_data td;
 	int		     rc;
 
+	/* There is no NVMe, smd will not be initialized */
+	if (!smd_db_ready())
+		return 0;
+
 	td.td_count = 0;
 	D_INIT_LIST_HEAD(&td.td_list);
 

@@ -35,7 +35,7 @@ drpc_hdlr_fini(void)
 static bool
 module_id_is_valid(int module_id)
 {
-	return module_id < NUM_DRPC_MODULES;
+	return (module_id >= 0 && module_id < NUM_DRPC_MODULES);
 }
 
 int

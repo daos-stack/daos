@@ -34,6 +34,7 @@ const (
 	maxScmDeviceLen = 1
 )
 
+// Class indicates a specific type of storage.
 type Class string
 
 func (c *Class) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -56,6 +57,7 @@ func (s Class) String() string {
 	return string(s)
 }
 
+// Class type definitions.
 const (
 	ClassNone Class = ""
 	ClassDcpm Class = "dcpm"
@@ -166,17 +168,28 @@ func (sc *Config) Validate() error {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
+	var pruned TierConfigs
+	for _, tier := range sc.Tiers {
+		if tier.IsBdev() && len(tier.Bdev.DeviceList) == 0 {
+			continue // prune empty bdev tier
+		}
+		pruned = append(pruned, tier)
+	}
+	sc.Tiers = pruned
+
+	scmCfgs := sc.Tiers.ScmConfigs()
+	bdevCfgs := sc.Tiers.BdevConfigs()
+
+	if len(scmCfgs) == 0 {
+		return errors.New("missing scm storage tier in config")
+	}
+
 	// set persistent location for engine bdev config file to be consumed by
 	// provider backend, set to empty when no devices specified
 	sc.ConfigOutputPath = ""
-	scmCfgs := sc.Tiers.ScmConfigs()
-	bdevCfgs := sc.Tiers.BdevConfigs()
-	if len(scmCfgs) > 0 && sc.Tiers.CfgHasBdevs() {
-		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
-	}
-
-	// set the VOS env:
 	if len(bdevCfgs) > 0 {
+		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
 		switch bdevCfgs[0].Class {
 		case ClassFile, ClassKdev:
 			sc.VosEnv = "AIO"
@@ -253,9 +266,6 @@ func (sc *ScmConfig) Validate(class Class) error {
 	if sc.MountPoint == "" {
 		return errors.New("no scm_mount set")
 	}
-	if sc.RamdiskSize < 0 {
-		return errors.New("negative scm_size")
-	}
 
 	switch class {
 	case ClassDcpm:
@@ -283,7 +293,6 @@ func (sc *ScmConfig) Validate(class Class) error {
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
 	DeviceList  []string `yaml:"bdev_list,omitempty"`
-	VmdDisabled bool     `yaml:"-"` // set during start-up
 	DeviceCount int      `yaml:"bdev_number,omitempty"`
 	FileSize    int      `yaml:"bdev_size,omitempty"`
 }
@@ -328,11 +337,8 @@ func (bc *BdevConfig) Validate(class Class) error {
 			return err
 		}
 	case ClassNvme:
-		for _, pci := range bc.DeviceList {
-			_, _, _, _, err := common.ParsePCIAddress(pci)
-			if err != nil {
-				return errors.Wrapf(err, "parse pci address %s", pci)
-			}
+		if _, err := common.NewPCIAddressSet(bc.DeviceList...); err != nil {
+			return errors.Wrapf(err, "parse pci addresses %v", bc.DeviceList)
 		}
 	default:
 		return errors.Errorf("bdev_class value %q not supported (valid: nvme/kdev/file)", class)
@@ -345,4 +351,5 @@ type Config struct {
 	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool        `yaml:"-"`
 }

@@ -14,6 +14,7 @@
 #include <daos/tse.h>
 #include <daos_types.h>
 #include <daos/pool.h>
+#include "svc.pb-c.h"
 
 int dc_mgmt_init(void);
 
@@ -63,5 +64,12 @@ int dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label,
 int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
 int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);
+
+int dc_get_attach_info(const char *name, bool all_ranks,
+		       struct dc_mgmt_sys_info *info,
+		       Mgmt__GetAttachInfoResp **respp);
+
+void dc_put_attach_info(struct dc_mgmt_sys_info *info,
+			Mgmt__GetAttachInfoResp *resp);
 
 #endif

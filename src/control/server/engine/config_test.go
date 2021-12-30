@@ -128,8 +128,6 @@ func TestConstructedConfig(t *testing.T) {
 	// just set all values regardless of validity
 	constructed := NewConfig().
 		WithRank(37).
-		WithSystemName("foo").
-		WithSocketDir("/foo/bar").
 		WithFabricProvider("foo+bar").
 		WithFabricInterface("qib42").
 		WithFabricInterfacePort(100).
@@ -324,7 +322,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			expErr: errors.New("no storage class"),
 		},
 		"nvme class; no devices": {
-			// output config path should be empty
+			// output config path should be empty and the empty tier removed
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
@@ -420,16 +418,20 @@ func TestConfig_BdevValidation(t *testing.T) {
 				return
 			}
 
-			if tc.expCls == "" {
-				tc.expCls = storage.ClassNvme // default if unset
-			}
-			common.AssertEqual(t, tc.expCls, tc.cfg.Storage.Tiers.BdevConfigs()[0].Class, "unexpected bdev class")
-
 			var ecp string
 			if !tc.expEmptyCfgPath {
-				ecp = filepath.Join(tc.cfg.Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, storage.BdevOutConfName)
+				if tc.expCls == "" {
+					tc.expCls = storage.ClassNvme // default if unset
+				}
+				common.AssertEqual(t, tc.expCls,
+					tc.cfg.Storage.Tiers.BdevConfigs()[0].Class,
+					"unexpected bdev class")
+
+				ecp = filepath.Join(tc.cfg.Storage.Tiers.ScmConfigs()[0].Scm.MountPoint,
+					storage.BdevOutConfName)
 			}
-			common.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath, "unexpected config path")
+			common.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath,
+				"unexpected config path")
 		})
 	}
 }
@@ -572,6 +574,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
 		"CRT_CTX_SHARE_ADDR=" + strconv.FormatUint(uint64(crtCtxShareAddr), 10),
+		"FI_OFI_RXM_USE_SRX=1",
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()

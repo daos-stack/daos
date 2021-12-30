@@ -212,7 +212,6 @@ DP_UUID(const void *uuid)
 
 #ifndef DAOS_BUILD_RELEASE
 #define DF_KEY_MAX		8
-#define DF_KEY_STR_SIZE		64
 
 static __thread int thread_key_buf_idx;
 static __thread char thread_key_buf[DF_KEY_MAX][DF_KEY_STR_SIZE];
@@ -225,10 +224,11 @@ daos_key2str(daos_key_t *key)
 	if (!key->iov_buf || key->iov_len == 0) {
 		strcpy(buf, "<NULL>");
 	} else {
-		int len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
-		int i;
-		char *akey = key->iov_buf;
-		bool can_print = true;
+		int	len = min(key->iov_len, DF_KEY_STR_SIZE - 1);
+		char	*akey = key->iov_buf;
+		bool	can_print = true;
+		bool	is_int = key->iov_len == sizeof(uint64_t);
+		int	i;
 
 		for (i = 0 ; i < len ; i++) {
 			if (akey[i] == '\0')
@@ -238,9 +238,15 @@ daos_key2str(daos_key_t *key)
 				break;
 			}
 		}
+
 		if (can_print) {
-			strncpy(buf, key->iov_buf, len);
-			buf[len] = 0;
+			if (is_int)
+				snprintf(buf, DF_KEY_STR_SIZE, "%.*s uint64:"DF_U64, len, akey,
+					 *(uint64_t *)akey);
+			else
+				snprintf(buf, DF_KEY_STR_SIZE, "%.*s", len, akey);
+		} else if (is_int) {
+			snprintf(buf, DF_KEY_STR_SIZE, "uint64:"DF_U64, *(uint64_t *)akey);
 		} else {
 			strcpy(buf, "????");
 		}

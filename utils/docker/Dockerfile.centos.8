@@ -43,9 +43,12 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
           -i /etc/dnf/dnf.conf;                                 \
       dnf -y upgrade epel-release;                              \
     else                                                        \
-      dnf -y install epel-release dnf-plugins-core &&           \
+      dnf -y install dnf-plugins-core &&                        \
       dnf config-manager --assumeyes --set-enabled powertools;  \
+      dnf -y install epel-release;                              \
     fi;                                                         \
+    dnf config-manager --save --setopt=assumeyes=True &&        \
+    dnf config-manager --save --setopt=install_weak_deps=False && \
     dnf clean all
 
 # Currently the appstream REPO can not be part of a repo group
@@ -104,70 +107,9 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
-# that come from the core repo.
-# Clean up any repos afterwards to save space.
-# Switch to dnf as it seems a bit faster.
-# libatomic should be in this list, but can not for now due to CI
-# post provisioning issue.
-# *** Keep these in as much alphbetical order as possible ***
-RUN dnf -y upgrade && \
-    dnf -y install \
-        boost-python3-devel \
-        clang-analyzer \
-        cmake \
-        CUnit-devel \
-        e2fsprogs \
-        file \
-        flex \
-        fuse3 \
-        fuse3-devel \
-        gcc \
-        gcc-c++ \
-        git \
-        glibc-langpack-en \
-        golang \
-        graphviz \
-        hwloc-devel \
-        ipmctl \
-        java-1.8.0-openjdk \
-        json-c-devel \
-        libaio-devel \
-        libcmocka-devel \
-        libevent-devel \
-        libipmctl-devel \
-        libiscsi-devel \
-        libtool \
-        libtool-ltdl-devel \
-        libunwind-devel \
-        libuuid-devel \
-        libyaml-devel \
-        Lmod \
-        lz4-devel \
-        make \
-        maven \
-        meson \
-        ndctl \
-        ninja-build \
-        numactl \
-        numactl-devel \
-        openmpi-devel \
-        openssl-devel \
-        patch \
-        patchelf \
-        pciutils \
-        python3-devel \
-        python3-distro \
-        python3-junit_xml \
-        python3-pip \
-        python3-pyxattr \
-        python3-tabulate \
-        python3-scons \
-        python3-yaml \
-        sg3_utils \
-        sudo \
-        valgrind-devel \
-        yasm && \
-    dnf clean all
+COPY ./utils/scripts/install-centos8.sh /tmp/install.sh
+RUN chmod +x /tmp/install.sh
+RUN /tmp/install.sh
 
 ARG UID=1000
 
@@ -177,7 +119,6 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
@@ -248,17 +189,17 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
       TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
-# force an upgrade to get any newly built RPMs
+# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 USER root:root
 ARG CACHEBUST
-RUN dnf -y upgrade \
-        --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    dnf clean all
+RUN [ -z "$CACHEBUST" ] || \
+    { dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+    dnf clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.
-LABEL DAOS=stage1
+LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -285,10 +226,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
-
-USER root:root
-LABEL DAOS=true
-USER daos_server:daos_server
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java

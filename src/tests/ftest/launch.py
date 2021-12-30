@@ -11,18 +11,25 @@
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from datetime import datetime
+import errno
 import json
 import os
 import re
 import socket
-import subprocess
+import subprocess #nosec
 import site
 import sys
 import time
+from xml.etree.ElementTree import Element, SubElement, tostring #nosec
 import yaml
-import errno
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
+from defusedxml import minidom
+import defusedxml.ElementTree as ET
+
+# Graft some functions from xml.etree into defusedxml etree.
+ET.Element = Element
+ET.SubElement = SubElement
+ET.tostring = tostring
+
 
 from avocado.utils.distro import detect
 from ClusterShell.NodeSet import NodeSet
@@ -152,60 +159,11 @@ def set_test_environment(args):
     path = os.environ.get("PATH")
 
     if not args.list:
-        # Get the default interface to use if OFI_INTERFACE is not set
-        interface = os.environ.get("OFI_INTERFACE")
-        if interface is None:
-            # Find all the /sys/class/net interfaces on the launch node
-            # (excluding lo)
-            print("Detecting network devices - OFI_INTERFACE not set")
-            available_interfaces = {}
-            net_path = os.path.join(os.path.sep, "sys", "class", "net")
-            net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
-            for device in sorted(net_list):
-                if device == "bonding_masters":
-                    continue
-                # Get the interface state - only include active (up) interfaces
-                device_operstate = os.path.join(net_path, device, "operstate")
-                with open(device_operstate, "r") as file_handle:
-                    state = file_handle.read().strip()
-                # Only include interfaces that are up
-                if state.lower() == "up":
-                    # Get the interface speed - used to select the fastest
-                    # available
-                    device_speed = os.path.join(net_path, device, "speed")
-                    with open(device_speed, "r") as file_handle:
-                        try:
-                            speed = int(file_handle.read().strip())
-                            # KVM/Qemu/libvirt returns an EINVAL
-                        except IOError as ioerror:
-                            if ioerror.errno == errno.EINVAL:
-                                speed = 1000
-                            else:
-                                raise
-                    print(
-                        "  - {0:<5} (speed: {1:>6} state: {2})".format(
-                            device, speed, state))
-                    # Only include the first active interface for each speed -
-                    # first is determined by an alphabetic sort: ib0 will be
-                    # checked before ib1
-                    if speed not in available_interfaces:
-                        available_interfaces[speed] = device
-            print("Available interfaces: {}".format(available_interfaces))
-            try:
-                # Select the fastest active interface available by sorting
-                # the speed
-                interface = \
-                    available_interfaces[sorted(available_interfaces)[-1]]
-            except IndexError:
-                print(
-                    "Error obtaining a default interface from: {}".format(
-                        os.listdir(net_path)))
-                sys.exit(1)
-        print("Using {} as the default interface".format(interface))
+        # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
+        set_interface_environment()
 
-        # Update env definitions
-        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-        os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
+        # Get the default provider if CRT_PHY_ADDR_STR is not set
+        set_provider_environment(os.environ["DAOS_TEST_FABRIC_IFACE"], args)
 
         # Set the default location for daos log files written during testing
         # if not already defined.
@@ -228,6 +186,122 @@ def set_test_environment(args):
         print("ENVIRONMENT VARIABLES")
         for key in sorted(os.environ):
             print("  {}: {}".format(key, os.environ[key]))
+
+
+def set_interface_environment():
+    """Set up the interface environment variables.
+
+    Use the existing OFI_INTERFACE setting if already defined, or select the fastest, active
+    interface on this host to define the DAOS_TEST_FABRIC_IFACE environment variable.
+
+    The DAOS_TEST_FABRIC_IFACE defines the default fabric_iface value in the daos_server
+    configuration file.
+    """
+    # Get the default interface to use if OFI_INTERFACE is not set
+    interface = os.environ.get("OFI_INTERFACE")
+    if interface is None:
+        # Find all the /sys/class/net interfaces on the launch node
+        # (excluding lo)
+        print("Detecting network devices - OFI_INTERFACE not set")
+        available_interfaces = {}
+        net_path = os.path.join(os.path.sep, "sys", "class", "net")
+        net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
+        for device in sorted(net_list):
+            if device == "bonding_masters":
+                continue
+            # Get the interface state - only include active (up) interfaces
+            device_operstate = os.path.join(net_path, device, "operstate")
+            with open(device_operstate, "r") as file_handle:
+                state = file_handle.read().strip()
+            # Only include interfaces that are up
+            if state.lower() == "up":
+                # Get the interface speed - used to select the fastest
+                # available
+                device_speed = os.path.join(net_path, device, "speed")
+                with open(device_speed, "r") as file_handle:
+                    try:
+                        speed = int(file_handle.read().strip())
+                        # KVM/Qemu/libvirt returns an EINVAL
+                    except IOError as ioerror:
+                        if ioerror.errno == errno.EINVAL:
+                            speed = 1000
+                        else:
+                            raise
+                print(
+                    "  - {0:<5} (speed: {1:>6} state: {2})".format(
+                        device, speed, state))
+                # Only include the first active interface for each speed -
+                # first is determined by an alphabetic sort: ib0 will be
+                # checked before ib1
+                if speed not in available_interfaces:
+                    available_interfaces[speed] = device
+        print("Available interfaces: {}".format(available_interfaces))
+        try:
+            # Select the fastest active interface available by sorting
+            # the speed
+            interface = \
+                available_interfaces[sorted(available_interfaces)[-1]]
+        except IndexError:
+            print(
+                "Error obtaining a default interface from: {}".format(
+                    os.listdir(net_path)))
+            sys.exit(1)
+
+    # Update env definitions
+    os.environ["CRT_CTX_SHARE_ADDR"] = "0"
+    os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
+    print("Testing with {} as the default interface".format(interface))
+    for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
+        try:
+            print("Testing with {}={}".format(name, os.environ[name]))
+        except KeyError:
+            print("Testing with {} unset".format(name))
+
+
+def set_provider_environment(interface, args):
+    """Set up the provider environment variables.
+
+    Use the existing CRT_PHY_ADDR_STR setting if already defined, otherwise
+    select the appropriate provider based upon the interface driver.
+
+    Args:
+        interface (str): the current interface being used.
+    """
+    # Use the detected provider if one is not set
+    provider = os.environ.get("CRT_PHY_ADDR_STR")
+    if provider is None:
+        provider = "ofi+sockets"
+        # Confirm the interface is a Mellanox device - verbs did not work with OPA devices.
+        command = "sudo mst status -v"
+        task = get_remote_output(list(args.test_servers), command)
+        if check_remote_output(task, command):
+            # Detect the provider for the specified interface
+            print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
+            command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
+            task = get_remote_output(list(args.test_servers), command)
+            if check_remote_output(task, command):
+                # Verify each server host has the same interface driver
+                output_data = list(task.iter_buffers())
+                if len(output_data) > 1:
+                    print("ERROR: Non-homogeneous drivers detected.")
+                    sys.exit(1)
+                # Select the provider - currently use verbs or sockets
+                for line in output_data[0][0]:
+                    provider_name = line.decode("utf-8").replace(":", "")
+                    # Temporary code to only enable verbs on HW Large stages
+                    if "verbs" in provider_name:
+                        provider = "ofi+verbs;ofi_rxm"
+                        break
+                    if "sockets" in provider_name:
+                        provider = "ofi+sockets"
+                        break
+        else:
+            print("No Infiniband devices found - using sockets")
+        print("  Found {} provider for {}".format(provider, interface))
+
+    # Update env definitions
+    os.environ["CRT_PHY_ADDR_STR"] = provider
+    print("Testing with CRT_PHY_ADDR_STR={}".format(os.environ["CRT_PHY_ADDR_STR"]))
 
 
 def set_python_environment():
@@ -254,7 +328,7 @@ def set_python_environment():
             if required_path not in defined_python_paths:
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
-    print("Using PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
+    print("Testing with PYTHONPATH={}".format(os.environ["PYTHONPATH"]))
 
 
 def run_command(cmd):
@@ -520,8 +594,8 @@ def get_test_list(tags):
             # then and faults are enabled
             pass
     for tag in tags:
-        if ".py" in tag:
-            # Assume '.py' indicates a test and just add it to the list
+        if os.path.isfile(tag):
+            # Assume an existing file is a test and just add it to the list
             test_list.append(tag)
             fault_filter = "--filter-by-tags=-faults"
             if faults_disabled and fault_filter not in test_tags:
@@ -556,13 +630,14 @@ def get_test_list(tags):
     return test_tags, test_list
 
 
-def get_test_files(test_list, args, yaml_dir):
+def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
     """Get a list of the test scripts to run and their yaml files.
 
     Args:
         test_list (list): list of test scripts to run
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
+        vmd_flag (bool): PCI address list contains VMD address.
 
     Returns:
         list: a list of dictionaries of each test script and yaml file; If
@@ -570,11 +645,13 @@ def get_test_files(test_list, args, yaml_dir):
             dictionary entry will be set to None.
 
     """
-    test_files = [{"py": test, "yaml": None} for test in test_list]
+    test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        test_file["yaml"] = replace_yaml_file(
-            "{}.yaml".format(base), args, yaml_dir)
+        yaml_file, env_vars = replace_yaml_file(
+            "{}.yaml".format(base), args, yaml_dir, vmd_flag)
+        test_file["yaml"] = yaml_file
+        test_file["env"] = env_vars
 
     return test_files
 
@@ -607,6 +684,9 @@ def get_nvme_replacement(args):
     Returns:
         str: a comma-separated list of nvme device pci addresses available on
             all of the specified test servers
+        bool: VMD PCI address included in the pci address string (True)
+              VMD PCI address not included in the pci address string (False)
+              Defaults to False (For NVME only)
 
     """
     # A list of server host is required to able to auto-detect NVMe devices
@@ -614,13 +694,22 @@ def get_nvme_replacement(args):
         print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
         sys.exit(1)
 
-    # Get a list of NVMe devices from each specified server host
+    # Get a list of NVMe, VMD devices from each specified server host
+    # if nvme:auto is set, all PCI Non-volatile memory controller
+    # devices are considered NVME (some NVMEs might be behind the VMD
+    # controller). if nvme:vmd, then ignore the NVME
+    # PCI addressed devices behind the VMD controller.
     host_list = list(args.test_servers)
+
     command_list = [
-        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
+        "/sbin/lspci -D",
+        "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+        "Non-Volatile memory controller:'"]
     if ":" in args.nvme:
         command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+
     command = " | ".join(command_list)
+
     task = get_remote_output(host_list, command)
 
     # Verify the command was successful on each server host
@@ -641,6 +730,160 @@ def get_nvme_replacement(args):
     return ",".join(devices)
 
 
+def get_vmd_replacement(args):
+    """Determine the value to use for the '--nvme=auto_vmd*' command line argument.
+
+    Parse the lspci output for any VMD devices, (e.g. --nvme=auto_vmd)
+        $ lspci -D | grep Volume
+        0000:5d:05.5 RAID bus controller:
+            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
+
+    Other command line options which will be supported are:
+    (e.g. '--nvme=auto_vmd_disks') [Use all NVME devices behind the VMD
+    controller]
+        $ lspci | grep 'Non-Volatile memory controller:' | grep '10001'
+        10001:01:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    (e.g. '--name=auto_vmd_mixed) [Use the NVME devices and VMD controller PCI
+    address]
+        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
+        0000:5d:05.5 RAID bus controller:
+            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
+        0000:da:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    (e.g. '--name=auto_vmd_nvme) [Use the NVME devices and NVME devices behind
+    VMD controller]
+        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
+        0000:da:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+        10001:01:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        str: a comma-separated list of vmd,nvme device pci addresses available
+        on all of the specified test servers
+        bool: VMD PCI address included in the pci address string (True)
+              VMD PCI address not included in the pci address string (False)
+    """
+    # A list of server host is required to able to auto-detect NVMe devices
+    if not args.test_servers:
+        print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
+        sys.exit(1)
+
+    # Get a list of NVMe, VMD devices from each specified server host
+    # if nvme:auto is set, all PCI Non-volatile memory controller
+    # devices are considered NVME (some NVMEs might be behind the VMD
+    # controller). if nvme:vmd, then ignore the NVME
+    # PCI addressed devices behind the VMD controller.
+    host_list = list(args.test_servers)
+    vmd_include_flag = False
+
+    if args.nvme == "auto_vmd":
+        command_list = [
+            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
+        vmd_include_flag = True
+    elif args.nvme == "auto_vmd_disks":
+        command_list = [
+            "/sbin/lspci -D",
+            "grep -E '^[0-9a-f]{5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+            "Non-Volatile memory controller:'"]
+    elif args.nvme == "auto_vmd_nvme":
+        command_list = [
+            "/sbin/lspci -D",
+            "grep -E '^[0-9a-f]{4,5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+            "Non-Volatile memory controller:'"]
+    elif args.nvme == "auto_vmd_mixed":
+        command_list1 = [
+            "/sbin/lspci -D",
+            "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+            "Non-Volatile memory controller:'"]
+        command_list2 = [
+            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
+        vmd_include_flag = True
+    else:
+        print("ERROR: Invalid --nvme argument")
+        sys.exit(1)
+
+    if ":" in args.nvme and args.nvme != "auto_vmd_mixed":
+        command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+    elif ":" in args.nvme and args.nvme == "auto_vmd_mixed":
+        command_list1.append("grep '{}'".format(args.nvme.split(":")[1]))
+        command_list2.append("grep '{}'".format(args.nvme.split(":")[1]))
+
+    if args.nvme != "auto_vmd_mixed":
+        command = " | ".join(command_list)
+    else:
+        command1 = " | ".join(command_list1)
+        command2 = " | ".join(command_list2)
+        command = command1 + ";" + command2
+
+    task = get_remote_output(host_list, command)
+
+    # Verify the command was successful on each server host
+    if not check_remote_output(task, command):
+        print("ERROR: Issuing commands to detect VMD/NVME PCI addresses.")
+        sys.exit(1)
+
+    # Verify each server host has the same VMD/NVMe PCI addresses
+    output_data = list(task.iter_buffers())
+    if len(output_data) > 1:
+        print("ERROR: Non-homogeneous VMD/NVMe PCI addresses.")
+        sys.exit(1)
+
+    # Get the list of NVMe PCI addresses found in the output
+    output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
+    all_vmd_devices = find_pci_address(output_str)
+
+    # Get the only VMD device addresses which has NVMe device connected.
+    devices = get_vmd_address_backed_nvme(host_list, all_vmd_devices)
+    print("Auto-detected VMD device which has NVMe devices connected {}: {}"
+          .format(host_list, devices))
+
+    return ",".join(devices), vmd_include_flag
+
+
+def get_vmd_address_backed_nvme(host_list, value):
+    """Find valid VMD address which has backing NVMe.
+
+    Args:
+        host_list (list): list of hosts
+        value (list): list of all PCI address.
+
+    Returns:
+        list: a list of the VMD PCI addresses only which has connected NVMe
+              devices.
+
+    """
+    command = "ls -l /sys/block/ | grep nvme | cut -d\'>\' -f2 | cut -d'/' -f4"
+
+    task = get_remote_output(host_list, command)
+
+    # Verify the command was successful on each server host
+    if not check_remote_output(task, command):
+        print("ERROR: Issuing commands ls -l /sys/block/")
+        sys.exit(1)
+
+    # Verify each server host has the same NVMe device behind VMD addresses.
+    output_data = list(task.iter_buffers())
+    if len(output_data) > 1:
+        print("ERROR: Non-homogeneous NVMe device behind VMD addresses.")
+        sys.exit(1)
+
+    output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
+
+    # Remove the VMD PCI address if no NVMe is backed-up and connected.
+    for device in value:
+        if device not in output_str:
+            value.remove(device)
+
+    return value
+
+
 def find_pci_address(value):
     """Find PCI addresses in the specified string.
 
@@ -651,11 +894,11 @@ def find_pci_address(value):
         list: a list of all the PCI addresses found in the string
 
     """
-    pattern = r"[{0}]{{4}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
+    pattern = r"[{0}]{{4,5}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
     return re.findall(pattern, str(value))
 
 
-def replace_yaml_file(yaml_file, args, yaml_dir):
+def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
     """Create a temporary test yaml file with any requested values replaced.
 
     Optionally replace the following test yaml file values if specified by the
@@ -684,13 +927,19 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
         yaml_file (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
+        vmd_flag (bool): PCI address includes VMD address (True)
+                         PCI address doesn't include VMD address (False).
+                         Defaults to False
 
     Returns:
         str: the test yaml file; None if the yaml file contains placeholders
             w/o replacements
+        env_vars (dict): Returns environment variable dictionary. Presently,
+            returns DAOS_ENABLE_VMD: "False" or "True" dictionary.
 
     """
     replacements = {}
+    env_vars = {"DAOS_ENABLE_VMD": "False"}
 
     if args.test_servers or args.nvme:
         # Find the test yaml keys and values that match the replaceable fields
@@ -743,8 +992,12 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
                     values_to_replace = [
                         value_format.format(item)
                         for item in find_pci_address(yaml_find[key])]
+                    # if VMD pci address in present under nvme_data,
+                    # set DAOS_ENABLE_VMD to True
+                    if vmd_flag is True:
+                        env_vars["DAOS_ENABLE_VMD"] = "True"
 
-                # Add the next user-specified value as a replacement for the key
+                # Add the next user-specified value as a replacement for key
                 for value in values_to_replace:
                     if value in replacements:
                         continue
@@ -803,7 +1056,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
             print(get_output(cmd, False))
 
     # Return the untouched or modified yaml file
-    return yaml_file
+    return yaml_file, env_vars
 
 
 def setup_test_directory(args, mode="all"):
@@ -887,6 +1140,8 @@ def run_tests(test_files, tag_filter, args):
         command_list.append("--show-job-log")
     if tag_filter:
         command_list.extend(tag_filter)
+    if args.failfast:
+        command_list.extend(["--failfast", "on"])
 
     # Run each test
     skip_reason = None
@@ -928,6 +1183,10 @@ def run_tests(test_files, tag_filter, args):
                         return_code |= 64
                     return_code |= 128
                     continue
+
+            # Set the environment variable for each test.
+            for key in test_file["env"]:
+                os.environ[key] = test_file["env"][key]
 
             # Execute this test
             test_command_list = list(command_list)
@@ -1013,6 +1272,18 @@ def run_tests(test_files, tag_filter, args):
                 # Compress any log file that haven't been remotely compressed.
                 compress_log_files(avocado_logs_dir, args)
 
+                valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR",
+                                                   os.environ['HOME'])
+
+                # Archive valgrind log files from shared dir
+                return_code |= archive_files(
+                    "valgrind log files",
+                    os.path.join(avocado_logs_dir, "latest", "valgrind_logs"),
+                    [test_hosts[0]],
+                    "{}/valgrind*".format(valgrind_logs_dir),
+                    args,
+                    avocado_logs_dir)
+
             # Optionally rename the test results directory for this test
             if args.rename:
                 return_code |= rename_logs(
@@ -1034,6 +1305,12 @@ def run_tests(test_files, tag_filter, args):
                 hosts,
                 "/tmp/test.cov*",
                 args)
+
+        # If the test failed and the user requested that testing should
+        # stop after the first failure, then we should break out of the
+        # loop and not re-run the tests.
+        if return_code != 0 and args.failfast:
+            break
 
     return return_code
 
@@ -1194,7 +1471,6 @@ def archive_files(description, destination, hosts, source_files, args,
         destination (str): path in which to archive files
         hosts (list): hosts from which to archive files
         source_files (str): remote files to archive
-        cart (str): enable running cart_logtest.py
         args (argparse.Namespace): command line arguments for this program
         avocado_logs_dir (optional, str): path to the avocado log files.
             Required for checking for large log files - see 'test_name'.
@@ -1308,6 +1584,10 @@ def rename_logs(avocado_logs_dir, test_file, loop, args):
             status |= 1024
             return status
 
+        # save it for the Launchable [de-]mangle
+        org_xml_data = xml_data
+
+        # First, mangle the in-place file for Jenkins to consume
         test_dir = os.path.split(os.path.dirname(test_file))[-1]
         org_class = "classname=\""
         new_class = "{}FTEST_{}.".format(org_class, test_dir)
@@ -1320,6 +1600,20 @@ def rename_logs(avocado_logs_dir, test_file, loop, args):
             print("Error writing {}: {}".format(xml_file, str(error)))
             status |= 1024
 
+        # Now mangle (or rather unmangle back to canonical xunit1 format)
+        # another copy for Launchable
+        xml_data = org_xml_data
+        org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
+        new_name = r'\1\2\3 file="{}"'.format(test_file)
+        xml_data = re.sub(org_name, new_name, xml_data)
+        xml_file = xml_file[0:-11] + "xunit1_results.xml"
+
+        try:
+            with open(xml_file, "w") as xml_buffer:
+                xml_buffer.write(xml_data)
+        except OSError as error:
+            print("Error writing {}: {}".format(xml_file, str(error)))
+            status |= 1024
     return status
 
 
@@ -2046,6 +2340,10 @@ def main():
         help="when replacing server/client yaml file placeholders, discard "
              "any placeholders that do not end up with a replacement value")
     parser.add_argument(
+        "--failfast",
+        action="store_true",
+        help="stop the test suite after the first failure")
+    parser.add_argument(
         "-i", "--include_localhost",
         action="store_true",
         help="include the local host when cleaning and archiving")
@@ -2057,6 +2355,14 @@ def main():
         "-m", "--modify",
         action="store_true",
         help="modify the test yaml files but do not run the tests")
+    parser.add_argument(
+        "-mo", "--mode",
+        choices=['normal', 'manual'],
+        default='normal',
+        help="provide the mode of test to be run under. Default is normal, "
+             "in which the final return code of launch.py is still zero if "
+             "any of the tests failed. 'manual' is where the return code is "
+             "non-zero if any of the tests as part of launch.py failed.")
     parser.add_argument(
         "-n", "--nvme",
         action="store",
@@ -2137,9 +2443,11 @@ def main():
 
     # Setup the user environment
     set_test_environment(args)
-
+    vmd_flag = False
     # Auto-detect nvme test yaml replacement values if requested
-    if args.nvme and args.nvme.startswith("auto"):
+    if args.nvme and args.nvme.startswith("auto_vmd"):
+        args.nvme, vmd_flag = get_vmd_replacement(args)
+    elif args.nvme and args.nvme.startswith("auto"):
         args.nvme = get_nvme_replacement(args)
 
     # Process the tags argument to determine which tests to run
@@ -2165,7 +2473,7 @@ def main():
             os.mkdir(yaml_dir)
 
     # Create a dictionary of test and their yaml files
-    test_files = get_test_files(test_list, args, yaml_dir)
+    test_files = get_test_files(test_list, args, yaml_dir, vmd_flag)
     if args.modify:
         sys.exit(0)
 
@@ -2186,6 +2494,8 @@ def main():
     else:
         if status & 1 == 1:
             print("Detected one or more avocado test failures!")
+            if args.mode == 'manual':
+                ret_code = 1
         if status & 8 == 8:
             print("Detected one or more interrupted avocado jobs!")
         if status & 2 == 2:

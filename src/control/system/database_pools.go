@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
@@ -42,11 +43,12 @@ type (
 	// PoolService represents a pool service created to manage metadata
 	// for a DAOS Pool.
 	PoolService struct {
-		PoolUUID  uuid.UUID
-		PoolLabel string
-		State     PoolServiceState
-		Replicas  []Rank
-		Storage   *PoolServiceStorage
+		PoolUUID   uuid.UUID
+		PoolLabel  string
+		State      PoolServiceState
+		Replicas   []Rank
+		Storage    *PoolServiceStorage
+		LastUpdate time.Time
 	}
 
 	// PoolRankMap provides a map of Rank->[]*PoolService.
@@ -252,6 +254,7 @@ func (pdb *PoolDatabase) updateService(cur, new *PoolService) {
 		panic("PoolDatabase.updateService() called with non-member pointer")
 	}
 	cur.State = new.State
+	cur.LastUpdate = new.LastUpdate
 
 	// TODO: Update svc rank map
 	cur.Replicas = new.Replicas
