@@ -14,9 +14,11 @@ import "C"
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -37,14 +39,14 @@ type NvmeDevState uint32
 // NvmeDevState values representing individual bit-flags.
 const (
 	NvmeStatePlugged  NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
 	NvmeStateInUse    NvmeDevState = C.NVME_DEV_FL_INUSE
+	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
 	NvmeStateIdentify NvmeDevState = C.NVME_DEV_FL_IDENTIFY
 )
 
 // IsNew returns true if SSD is not in use by DAOS.
 func (bs NvmeDevState) IsNew() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty == 0 && bs&NvmeStateInUse == 0
+	return bs&NvmeStatePlugged != 0 && bs&NvmeStateInUse == 0
 }
 
 // IsNormal returns true if SSD is in a normal, non-faulty state.
@@ -59,18 +61,7 @@ func (bs NvmeDevState) IsFaulty() bool {
 
 // StatusString summarizes the device status.
 func (bs NvmeDevState) StatusString() string {
-	switch {
-	case bs&C.NVME_DEV_FL_PLUGGED == 0:
-		return "UNPLUGGED"
-	case bs&C.NVME_DEV_FL_IDENTIFY != 0:
-		return "IDENTIFY"
-	case bs&C.NVME_DEV_FL_FAULTY != 0:
-		return "EVICTED"
-	case bs&C.NVME_DEV_FL_INUSE != 0:
-		return "NORMAL"
-	default:
-		return "NEW"
-	}
+	return C.GoString(C.nvme_state2str(C.int(bs)))
 }
 
 func (bs NvmeDevState) String() string {
@@ -82,6 +73,13 @@ func (bs NvmeDevState) String() string {
 // Uint32 returns uint32 representation of BIO device state.
 func (bs NvmeDevState) Uint32() uint32 {
 	return uint32(bs)
+}
+
+func NvmeDevStateFromString(status string) NvmeDevState {
+	cstr := C.CString(status)
+	defer C.free(unsafe.Pointer(cstr))
+
+	return NvmeDevState(C.nvme_str2state(cstr))
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -154,12 +152,55 @@ type NvmeNamespace struct {
 type SmdDevice struct {
 	UUID       string       `json:"uuid"`
 	TargetIDs  []int32      `hash:"set" json:"tgt_ids"`
-	NvmeState  NvmeDevState `json:"dev_state"`
+	NvmeState  NvmeDevState `json:"-"`
 	Rank       system.Rank  `json:"rank"`
 	TotalBytes uint64       `json:"total_bytes"`
 	AvailBytes uint64       `json:"avail_bytes"`
 	Health     *NvmeHealth  `json:"health"`
 	TrAddr     string       `json:"tr_addr"`
+}
+
+// MarshalJSON marshals SmdDevice to JSON.
+func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
+	if sd == nil {
+		return nil, errors.New("tried to marshal nil SmdDevice")
+	}
+
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON SmdDevice
+	return json.Marshal(&struct {
+		NvmeStateStr string `json:"dev_state"`
+		*toJSON
+	}{
+		NvmeStateStr: sd.NvmeState.StatusString(),
+		toJSON:       (*toJSON)(sd),
+	})
+}
+
+// UnmarshalJSON unmarshals SmaDevice from JSON.
+func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	// use a type alias to leverage the default unmarshal for
+	// most fields
+	type fromJSON SmdDevice
+	from := &struct {
+		NvmeStateStr string `json:"dev_state"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sd),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
+
+	return nil
 }
 
 // NvmeController represents a NVMe device controller which includes health

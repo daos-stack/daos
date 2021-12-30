@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-/*
+/**
  * Primitives to share between data and control planes.
  */
 
@@ -14,21 +14,108 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <string.h>
 
-/*
+/**
  * Space separated string of CLI options to pass to DPDK when started during
  * spdk_env_init(). These options will override the DPDK defaults.
  */
 extern const char *
 dpdk_cli_override_opts;
 
-/* Device state flags */
+/** Device state flags */
 #define NVME_DEV_FL_PLUGGED	(1 << 0)
 #define NVME_DEV_FL_INUSE	(1 << 1) /* Used by DAOS (present in SMD) */
 #define NVME_DEV_FL_FAULTY	(1 << 2)
 #define NVME_DEV_FL_IDENTIFY	(1 << 3) /* SSD being identified by LED activity */
 
-/*
+/** Device state combinations */
+#define NVME_DEV_STATE_NORMAL (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
+#define NVME_DEV_STATE_FAULTY (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
+#define NVME_DEV_STATE_NEW (NVME_DEV_FL_PLUGGED)
+
+static inline char *
+nvme_state2str(int dev_state)
+{
+	switch (dev_state) {
+	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY):
+		return "EVICTED|IDENTIFY";
+	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY):
+		return "EVICTED";
+	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_IDENTIFY):
+		return "IDENTIFY";
+	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE):
+		return "NORMAL";
+	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY):
+		return "NEW|EVICTED|IDENTIFY";
+	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY):
+		return "NEW|EVICTED";
+	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_IDENTIFY):
+		return "NEW|IDENTIFY";
+	case NVME_DEV_FL_PLUGGED:
+		return "NEW";
+	case (NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY):
+		return "UNPLUGGED|EVICTED|IDENTIFY";
+	case (NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY):
+		return "UNPLUGGED|EVICTED";
+	case (NVME_DEV_FL_INUSE | NVME_DEV_FL_IDENTIFY):
+		return "UNPLUGGED|IDENTIFY";
+	case NVME_DEV_FL_INUSE:
+		return "UNPLUGGED";
+	case (NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY):
+		return "UNPLUGGED|NEW|EVICTED|IDENTIFY";
+	case NVME_DEV_FL_FAULTY:
+		return "UNPLUGGED|NEW|EVICTED";
+	case NVME_DEV_FL_IDENTIFY:
+		return "UNPLUGGED|NEW|IDENTIFY";
+	case 0:
+		return "UNPLUGGED|NEW";
+	}
+
+	return "UNKNOWN";
+}
+
+static inline int
+nvme_str2state(char *state_str)
+{
+	if (strcmp(state_str, "EVICTED|IDENTIFY") == 0) {
+		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY);
+	} else if (strcmp(state_str, "EVICTED") == 0) {
+		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY);
+	} else if (strcmp(state_str, "IDENTIFY") == 0) {
+		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_IDENTIFY);
+	} else if (strcmp(state_str, "NORMAL") == 0) {
+		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE);
+	} else if (strcmp(state_str, "NEW|EVICTED|IDENTIFY") == 0) {
+		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY);
+	} else if (strcmp(state_str, "NEW|EVICTED") == 0) {
+		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY);
+	} else if (strcmp(state_str, "NEW|IDENTIFY") == 0) {
+		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_IDENTIFY);
+	} else if (strcmp(state_str, "NEW") == 0) {
+		return NVME_DEV_FL_PLUGGED;
+	} else if (strcmp(state_str, "UNPLUGGED|EVICTED|IDENTIFY") == 0) {
+		return (NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY);
+	} else if (strcmp(state_str, "UNPLUGGED|EVICTED") == 0) {
+		return (NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY);
+	} else if (strcmp(state_str, "UNPLUGGED|IDENTIFY") == 0) {
+		return (NVME_DEV_FL_INUSE | NVME_DEV_FL_IDENTIFY);
+	} else if (strcmp(state_str, "UNPLUGGED") == 0) {
+		return NVME_DEV_FL_INUSE;
+	} else if (strcmp(state_str, "UNPLUGGED|NEW|EVICTED|IDENTIFY") == 0) {
+		return (NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY);
+	} else if (strcmp(state_str, "UNPLUGGED|NEW|EVICTED") == 0) {
+		return NVME_DEV_FL_FAULTY;
+	} else if (strcmp(state_str, "UNPLUGGED|NEW|IDENTIFY") == 0) {
+		return NVME_DEV_FL_IDENTIFY;
+	} else if (strcmp(state_str, "UNPLUGGED|NEW") == 0) {
+		return 0;
+	}
+
+	return 0;
+}
+
+/**
  * Current device health state (health statistics). Periodically updated in
  * bio_bs_monitor(). Used to determine faulty device status.
  * Also retrieved on request via go-spdk bindings from the control-plane.
@@ -94,4 +181,4 @@ struct nvme_stats {
  * \return		Zero on success, negative value on error
  */
 int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
-#endif /* __CONTROL_H_ */
+#endif /** __CONTROL_H_ */

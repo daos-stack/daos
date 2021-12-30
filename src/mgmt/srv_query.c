@@ -14,6 +14,20 @@
 #include "srv_internal.h"
 
 
+static int
+write_devstate(char *dest, int state)
+{
+	char	*state_str;
+
+	state_str = nvme_state2str(state);
+	D_ALLOC(dest, strlen(state_str) + 1);
+	if (dest == NULL)
+		return -DER_NOMEM;
+	strncpy(dest, state_str, strlen(state_str));
+
+	return 0;
+}
+
 static void
 bs_state_query(void *arg)
 {
@@ -241,7 +255,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 {
 	struct bio_dev_info	   *dev_info = NULL, *tmp;
 	struct bio_list_devs_info   list_devs_info = { 0 };
-	int			    buflen = 10;
+	int			    buflen = 32;
 	int			    i = 0, j;
 	int			    rc = 0;
 
@@ -287,7 +301,10 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		uuid_unparse_lower(dev_info->bdi_dev_id,
 				   resp->devices[i]->uuid);
 
-		resp->devices[i]->dev_state = dev_info->bdi_flags;
+		rc = write_devstate(resp->devices[i]->dev_state, dev_info->bdi_flags);
+		if (rc != 0) {
+			break;
+		}
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
@@ -336,6 +353,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 					D_FREE(resp->devices[i]->tgt_ids);
 				if (resp->devices[i]->tr_addr != NULL)
 					D_FREE(resp->devices[i]->tr_addr);
+				if (resp->devices[i]->dev_state != NULL)
+					D_FREE(resp->devices[i]->dev_state);
 				D_FREE(resp->devices[i]);
 			}
 		}
@@ -453,6 +472,7 @@ int
 ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 {
 	struct smd_dev_info	*dev_info;
+	int			 dev_state;
 	int			 rc = 0;
 
 	if (uuid_is_null(dev_uuid))
@@ -472,9 +492,16 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	}
 
 	/* Device is in-use so set relevant flags */
-	resp->dev_state = NVME_DEV_FL_INUSE | NVME_DEV_FL_PLUGGED;
 	if ((dev_info->sdi_state & SMD_DEV_FAULTY) != 0)
-		resp->dev_state |= NVME_DEV_FL_FAULTY;
+		dev_state = NVME_DEV_STATE_FAULTY;
+	else
+		dev_state = NVME_DEV_STATE_NORMAL;
+
+	rc = write_devstate(resp->dev_state, dev_state);
+	if (rc != 0) {
+		D_ERROR("Failed to write device state");
+		goto out;
+	}
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
@@ -491,6 +518,8 @@ out:
 	if (rc != 0) {
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
 	}
 
 	return rc;
@@ -618,7 +647,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	}
 
 	dev_info->sdi_state = SMD_DEV_FAULTY;
-	resp->dev_state = NVME_DEV_FL_INUSE | NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY;
+	rc = write_devstate(resp->dev_state, NVME_DEV_STATE_FAULTY);
 
 out:
 	smd_dev_free_info(dev_info);
@@ -626,6 +655,8 @@ out:
 	if (rc != 0) {
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
 	}
 
 	return rc;
@@ -696,13 +727,15 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	}
 
 	/* BIO device state after reintegration should be NORMAL */
-	resp->dev_state = NVME_DEV_FL_INUSE | NVME_DEV_FL_PLUGGED;
+	rc = write_devstate(resp->dev_state, NVME_DEV_STATE_NORMAL);
 
 out:
 
 	if (rc != 0) {
 		if (resp->new_dev_uuid != NULL)
 			D_FREE(resp->new_dev_uuid);
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
 	}
 
 	return rc;
@@ -766,14 +799,19 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 	if (rc != 0)
 		goto out;
 
-	/* Device must be plugged in order to be identified */
-	resp->dev_state = NVME_DEV_FL_PLUGGED | NVME_DEV_FL_IDENTIFY;
+	/**
+	 * Device must be plugged in order to be identified.
+	 * TODO: retrieve in-use state as device maybe new
+	 */
+	rc = write_devstate(resp->dev_state, NVME_DEV_STATE_NORMAL | NVME_DEV_FL_IDENTIFY);
 
 out:
 
 	if (rc != 0) {
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
 	}
 
 	return rc;
