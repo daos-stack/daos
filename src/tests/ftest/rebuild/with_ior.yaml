@@ -10,9 +10,14 @@ hosts:
     - client-G
 timeout: 240
 server_config:
-  name: daos_server
-  servers:
+    name: daos_server
+    servers:
     targets: 2
+        log_mask: INFO
+        bdev_class: nvme
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
   mode: 146
   name: daos_server
@@ -28,13 +33,13 @@ ior:
     ior_timeout: 120
     rank_to_kill: 3
     client_processes:
-        np: 4
+        np: 8
     repetitions: 1
     test_file: daos:/testFile
     api: DFS
     dfs_oclass: "RP_2GX"
     transfer_size: '1M'
-    block_size: '256M'
+    block_size: '128M'
     iorflags:
         write_flg: "-C -k -e -w -g -G 27 -Q 1 -vv"
         read_flg: "-C -k -e -r -R -g -G 27 -Q 1 -vv"
