@@ -902,19 +902,11 @@ dss_xstreams_init(void)
 	if (sched_prio_disabled)
 		D_INFO("ULT prioritizing is disabled.\n");
 
-	d_getenv_int("DAOS_SCHED_STATS_INTVL", &sched_stats_intvl);
-	if (sched_stats_intvl != 0) {
-		D_INFO("Print sched stats every %u seconds\n",
-		       sched_stats_intvl);
-		/* Convert seconds to milliseconds */
-		sched_stats_intvl = sched_stats_intvl * 1000;
-	}
-
 	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
-		       sched_stats_intvl, SCHED_RELAX_INTVL_DEFAULT);
+		       sched_relax_intvl, SCHED_RELAX_INTVL_DEFAULT);
 		sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 	} else {
 		D_INFO("CPU relax interval is set to %u msecs\n",

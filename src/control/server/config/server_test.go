@@ -231,7 +231,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithScmRamdiskSize(16),
 				storage.NewTierConfig().
 					WithBdevClass("nvme").
-					WithBdevDeviceList("0000:81:00.0").
+					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
 					WithBdevBusidRange("0x80-0x8f"),
 			).
 			WithFabricInterface("ib0").
@@ -260,8 +260,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithBdevClass("file").
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-					WithBdevFileSize(16).
-					WithBdevBusidRange("0xd0-0xdf"),
+					WithBdevFileSize(16),
 			).
 			WithPinnedNumaNode(1).
 			WithFabricInterface("ib1").
@@ -427,6 +426,34 @@ func TestServerConfig_Validation(t *testing.T) {
 				return c.WithTelemetryPort(-123)
 			},
 			expErr: FaultConfigBadTelemetryPort,
+		},
+		"different number of ssds": {
+			extraConfig: func(c *Server) *Server {
+				// add multiple bdevs for engine 0 to create mismatch
+				c.Engines[0].Storage.Tiers.BdevConfigs()[0].
+					WithBdevDeviceList("0000:10:00.0", "0000:11:00.0", "0000:12:00.0")
+
+				return c
+			},
+			expErr: FaultConfigBdevCountMismatch(1, 2, 0, 3),
+		},
+		"different number of targets": {
+			extraConfig: func(c *Server) *Server {
+				// change engine 0 number of targets to create mismatch
+				c.Engines[0].WithTargetCount(1)
+
+				return c
+			},
+			expErr: FaultConfigTargetCountMismatch(1, 16, 0, 1),
+		},
+		"different number of helper streams": {
+			extraConfig: func(c *Server) *Server {
+				// change engine 0 number of targets to create mismatch
+				c.Engines[0].WithHelperStreamCount(9)
+
+				return c
+			},
+			expErr: FaultConfigHelperStreamCountMismatch(1, 4, 0, 9),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

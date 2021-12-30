@@ -555,32 +555,51 @@ func defaultEngineCfg(idx int) *engine.Config {
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
 }
 
-// genConfig generates server config file from details of network, storage and CPU hardware.
+// genConfig generates server config file from details of network, storage and CPU hardware after
+// performing some basic sanity checks.
 func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
-	// basic sanity checks
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
 	}
+
 	if len(nd.numaIfaces) < nd.engineCount {
 		return nil, errors.Errorf(errInsufNrIfaces, "", nd.engineCount,
 			len(nd.numaIfaces), nd.numaIfaces)
 	}
+
 	if len(sd.numaPMems) < nd.engineCount {
 		return nil, errors.Errorf(errInsufNrPMemGroups, sd.numaPMems, nd.engineCount,
 			len(sd.numaPMems))
 	}
-	if len(sd.numaSSDs) > 0 && (len(sd.numaSSDs) < nd.engineCount) {
-		return nil, errors.New("invalid number of ssd groups") // shouldn't happen
+
+	// enforce consistent ssd count across engine configs
+	minSsds := math.MaxUint32
+	numaWithMinSsds := 0
+	if len(sd.numaSSDs) > 0 {
+		if len(sd.numaSSDs) < nd.engineCount {
+			return nil, errors.New("invalid number of ssd groups") // should never happen
+		}
+
+		for numa, ssds := range sd.numaSSDs {
+			if len(ssds) < minSsds {
+				minSsds = len(ssds)
+				numaWithMinSsds = numa
+			}
+		}
 	}
+
 	if len(ccs) < nd.engineCount {
-		return nil, errors.New("invalid number of core count groups") // shouldn't happen
+		return nil, errors.New("invalid number of core count groups") // should never happen
 	}
+	// enforce consistent target and helper count across engine configs
+	nrTgts := ccs[numaWithMinSsds].nrTgts
+	nrHlprs := ccs[numaWithMinSsds].nrHlprs
 
 	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
 		engineCfg := newEngineCfg(nn).
-			WithTargetCount(ccs[nn].nrTgts).
-			WithHelperStreamCount(ccs[nn].nrHlprs)
+			WithTargetCount(nrTgts).
+			WithHelperStreamCount(nrHlprs)
 		if len(sd.numaPMems) > 0 {
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
@@ -593,7 +612,7 @@ func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCf
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
 					WithBdevClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(sd.numaSSDs[nn]...),
+					WithBdevDeviceList(sd.numaSSDs[nn][:minSsds]...),
 			)
 		}
 
@@ -617,13 +636,7 @@ func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCf
 	if hugepage_size == 0 {
 		return nil, errors.New("unable to read system hugepage size")
 	}
-	max_nrTgts := 0
-	for i := 0; i < nd.engineCount; i++ {
-		if ccs[i].nrTgts > max_nrTgts {
-			max_nrTgts = ccs[i].nrTgts
-		}
-	}
-	nr_hugepages := (minDMABuffer * max_nrTgts) / hugepage_size
+	nr_hugepages := (minDMABuffer * nrTgts) / hugepage_size
 
 	cfg := config.DefaultServer().
 		WithAccessPoints(accessPoints...).
