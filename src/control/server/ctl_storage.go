@@ -239,7 +239,7 @@ func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (
 			}
 
 			if err := ei.updateInUseBdevs(ctx, ctrlrMap); err != nil {
-				return nil, errors.Wrap(err, "updating bdev health and smd info")
+				return nil, err
 			}
 
 			ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
