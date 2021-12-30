@@ -1169,7 +1169,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"io instances already running": { // await should exit immediately
+		"io instance already running": { // await should exit immediately
 			instancesStarted: true,
 			scmMounted:       true,
 			sMounts:          []string{"/mnt/daos"},
@@ -1537,17 +1537,22 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			}
 			defer cancel()
 
+			// Trigger await storage ready on each instance and send results to
+			// awaitCh. awaitStorageReady() will set "waitFormat" flag, fire off
+			// "onAwaitFormat" callbacks, select on "storageReady" channel then
+			// finally unset "waitFormat" flag.
 			awaitCh := make(chan error)
-			inflight := 0
 			for _, ei := range instances {
-				inflight++
+				t.Logf("call awaitStorageReady() (%d)", ei.Index())
 				go func(e *EngineInstance) {
 					awaitCh <- e.awaitStorageReady(ctx, tc.recreateSBs)
 				}(ei.(*EngineInstance))
 			}
 
+			// When all instances are in awaiting format state ("waitFormat" set),
+			// close awaitingFormat channel to signal ready state.
 			awaitingFormat := make(chan struct{})
-			t.Log("waiting for awaiting format state")
+			t.Log("polling on 'waitFormat' state(s)")
 			go func(ctxIn context.Context) {
 				for {
 					ready := true
@@ -1570,24 +1575,27 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 			select {
 			case <-awaitingFormat:
-				t.Log("storage is waiting")
+				t.Log("storage is ready and waiting for format")
 			case err := <-awaitCh:
-				inflight--
+				t.Log("rx on awaitCh from unusual awaitStorageReady() returns")
 				common.CmpErr(t, tc.expAwaitErr, err)
 				if !tc.expAwaitExit {
 					t.Fatal("unexpected exit from awaitStorageReady()")
 				}
 			case <-ctx.Done():
+				t.Logf("context done (%s)", ctx.Err())
 				common.CmpErr(t, tc.expAwaitErr, ctx.Err())
 				if tc.expAwaitErr == nil {
 					t.Fatal(ctx.Err())
 				}
-				if !tc.scmMounted || inflight > 0 {
+				if !tc.scmMounted {
 					t.Fatalf("unexpected behavior of awaitStorageReady")
 				}
 			}
 
-			resp, fmtErr := cs.StorageFormat(context.TODO(), &ctlpb.StorageFormatReq{Reformat: tc.reformat})
+			resp, fmtErr := cs.StorageFormat(context.TODO(), &ctlpb.StorageFormatReq{
+				Reformat: tc.reformat,
+			})
 			if fmtErr != nil {
 				t.Fatal(fmtErr)
 			}
