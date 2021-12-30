@@ -26,8 +26,8 @@ class IorHard(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_array
-        :avocado: tags=ec_ior,ior_hard
+        :avocado: tags=ec,ec_array,ec_ior,ior
+        :avocado: tags=ior_hard
         """
         ior_read_flags = self.params.get("read_flags", "/run/ior/*")
         self.run_ior_with_pool()

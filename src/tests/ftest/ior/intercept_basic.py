@@ -41,7 +41,7 @@ class IorIntercept(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse,il
+        :avocado: tags=daosio,dfuse,il,ior
         :avocado: tags=iorinterceptbasic
         """
         apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
@@ -56,10 +56,8 @@ class IorIntercept(IorTestBase):
                 max_mib = int(IorMetrics.Max_MiB)
                 min_mib = int(IorMetrics.Min_MiB)
                 mean_mib = int(IorMetrics.Mean_MiB)
-                write_x = self.params.get("write_x",
-                                          "/run/ior/iorflags/ssf/*", 1)
-                read_x = self.params.get("read_x",
-                                         "/run/ior/iorflags/ssf/*", 1)
+                write_x = self.params.get("write_x", "/run/ior/iorflags/ssf/*", 1)
+                read_x = self.params.get("read_x", "/run/ior/iorflags/ssf/*", 1)
 
                 # Verifying write performance
                 self.assertTrue(float(with_intercept[0][max_mib]) >

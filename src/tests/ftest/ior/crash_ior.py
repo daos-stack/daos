@@ -36,7 +36,10 @@ class CrashIor(IorTestBase):
             Check daos server does not need to be restarted when the
             application crashes.
 
-        :avocado: tags=all,daosio,hw,medium,ib2,full_regression,crashior
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=daosio,ior
+        :avocado: tags=crashior
         """
         # run ior and crash it during write process
         self.run_ior_with_pool()

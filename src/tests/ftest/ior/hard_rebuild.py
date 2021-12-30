@@ -31,7 +31,7 @@ class EcodIorHardRebuild(ErasureCodeIor):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_ior,ior_hard
+        :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild,ec_ior,ior_hard,ior
         :avocado: tags=ec_ior_hard_online_rebuild
         """
         # This is IOR Hard so skip the warning messages

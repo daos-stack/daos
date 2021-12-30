@@ -44,10 +44,9 @@ class IorHdf5(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,hdf5,vol,checksum
+        :avocado: tags=daosio,hdf5,vol,checksum,ior
         :avocado: tags=iorhdf5vol
         """
         hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
         mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
-        self.run_ior_with_pool(plugin_path=hdf5_plugin_path,
-                               mount_dir=mount_dir)
+        self.run_ior_with_pool(plugin_path=hdf5_plugin_path, mount_dir=mount_dir)

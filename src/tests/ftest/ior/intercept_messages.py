@@ -33,7 +33,7 @@ class IorInterceptMessages(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse,il
+        :avocado: tags=daosio,dfuse,il,ior
         :avocado: tags=iorinterceptmessages
         """
         d_il_report_value = self.params.get("value",

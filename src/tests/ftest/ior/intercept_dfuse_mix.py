@@ -45,7 +45,8 @@ class IorInterceptDfuseMix(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,ior_intercept_mix
+        :avocado: tags=daosio,dfuse,il,ior
+        :avocado: tags=ior_intercept_mix
         """
         self.add_pool()
         self.add_container(self.pool)

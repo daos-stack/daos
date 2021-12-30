@@ -34,15 +34,14 @@ class IorSmall(IorTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,mpiio,checksum,mpich,dfuse,DAOS_5610
+        :avocado: tags=daosio,mpiio,checksum,mpich,dfuse,ior,DAOS_5610
         :avocado: tags=iorsmall
         """
         cncl_tickets = []
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         dfuse_mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
-        transfer_block_size = self.params.get("transfer_block_size",
-                                              '/run/ior/iorflags/*')
+        transfer_block_size = self.params.get("transfer_block_size", '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
 
         results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
