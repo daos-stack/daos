@@ -238,12 +238,10 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 // XXX DAOS-9196 Some extra bytes are needed for the metadata of the pool: at least 135 MB
 // are needed.  The extraByes is a little bigger than this limit, because the size of the
 // metadata will eventually grow along the life of the pool.
-const PoolMetadataBytes uint64 = uint64(200)*uint64(humanize.MiByte)
+const PoolMetadataBytes uint64 = uint64(200) * uint64(humanize.MiByte)
 
 // Return the maximal size of a pool which could be created with all the storage nodes
-func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64,
-                                                               nvmeBytes uint64,
-                                                               errOut error) {
+func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64, nvmeBytes uint64, errOut error) {
 	storageScanReq := &control.StorageScanReq{Usage: true}
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, storageScanReq)
 	if err != nil {
@@ -266,7 +264,7 @@ func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64,
 			// XXX DAOS-9196 After code investigation, the HostSet should always
 			// contains one and only one host
 			msg := fmt.Sprintf("HostSet should always contains one host: HostSet=%s",
-			                   hostSet.RangedString())
+				hostSet.RangedString())
 			panic(msg)
 		}
 
@@ -280,7 +278,7 @@ func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64,
 
 		if hostStorage.ScmNamespaces.Free() == uint64(0) {
 			msg := fmt.Sprintf("Host without SCM storage: hostname=%s",
-			                   hostSet.String())
+				hostSet.String())
 			errOut = errors.New(msg)
 			return
 		}
@@ -297,15 +295,15 @@ func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64,
 			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
 
 			if scmNamespaceFreeBytes < PoolMetadataBytes {
-				missingBytes := PoolMetadataBytes-scmNamespaceFreeBytes
+				missingBytes := PoolMetadataBytes - scmNamespaceFreeBytes
 				msg := "Not enough SCM storage available with the SCM namespace " +
-				       "\"%s\" of the the host %s: " +
-				       "at least %s of SCM storage (%s missing) is needed"
+					"\"%s\" of the the host %s: " +
+					"at least %s of SCM storage (%s missing) is needed"
 				msg = fmt.Sprintf(msg,
-				                  scmNamespace.Mount.Path,
-				                  hostSet.String(),
-				                  humanize.Bytes(PoolMetadataBytes),
-				                  humanize.Bytes(missingBytes))
+					scmNamespace.Mount.Path,
+					hostSet.String(),
+					humanize.Bytes(PoolMetadataBytes),
+					humanize.Bytes(missingBytes))
 				errOut = errors.New(msg)
 				return
 			}
@@ -315,13 +313,13 @@ func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64,
 			}
 		}
 
-		nvmeRanksBytes := make(map[system.Rank] uint64, 0)
+		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
 		for _, nvmeController := range hostStorage.NvmeDevices {
 			for _, smdDevice := range nvmeController.SmdDevices {
 				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
 			}
 		}
-		for _, nvmeRankBytes := range(nvmeRanksBytes) {
+		for _, nvmeRankBytes := range nvmeRanksBytes {
 			if nvmeBytes > nvmeRankBytes {
 				nvmeBytes = nvmeRankBytes
 			}

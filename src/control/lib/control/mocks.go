@@ -9,11 +9,11 @@ package control
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-	"strconv"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -563,16 +563,16 @@ type (
 )
 
 func MockStorageScanResp(testRunner *testing.T,
-                         mockScmConfigArray []MockScmConfig,
-                         mockNvmeConfigArray []MockNvmeConfig) *ctlpb.StorageScanResp {
+	mockScmConfigArray []MockScmConfig,
+	mockNvmeConfigArray []MockNvmeConfig) *ctlpb.StorageScanResp {
 	serverScanResponse := &ctlpb.StorageScanResp{
-		Nvme: &ctlpb.ScanNvmeResp { },
-		Scm:  &ctlpb.ScanScmResp { },
+		Nvme: &ctlpb.ScanNvmeResp{},
+		Scm:  &ctlpb.ScanScmResp{},
 	}
 
 	scmNamespaces := make(storage.ScmNamespaces, 0, len(mockScmConfigArray))
 	for index, mockScmConfig := range mockScmConfigArray {
-		scmNamespace := &storage.ScmNamespace {
+		scmNamespace := &storage.ScmNamespace{
 			UUID:        common.MockUUID(int32(index)),
 			BlockDevice: fmt.Sprintf("pmem%d", index),
 			Name:        fmt.Sprintf("namespace%d.0", index),
@@ -580,7 +580,7 @@ func MockStorageScanResp(testRunner *testing.T,
 			Size:        mockScmConfig.TotalBytes,
 		}
 		if mockScmConfig.TotalBytes > uint64(0) {
-			scmNamespace.Mount = &storage.ScmMountPoint {
+			scmNamespace.Mount = &storage.ScmMountPoint{
 				Class:      storage.ClassDcpm,
 				Path:       fmt.Sprintf("/mnt/daos%d", index),
 				DeviceList: []string{fmt.Sprintf("pmem%d", index)},
@@ -614,7 +614,7 @@ func mockRanks(rankSet string) (ranks []uint32) {
 	for _, item := range strings.Split(rankSet, ",") {
 		rank, err := strconv.ParseUint(item, 10, 32)
 		if err != nil {
-			panic("Invalid ranks definition: "+err.Error())
+			panic("Invalid ranks definition: " + err.Error())
 		}
 		ranks = append(ranks, uint32(rank))
 	}
@@ -629,11 +629,11 @@ type MockPoolRespConfig struct {
 }
 
 func MockPoolCreateResp(testRunner *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCreateResp {
-	poolCreateResp := &PoolCreateResp {
-		UUID:     common.MockUUID(),
-		SvcReps:  mockRanks(config.Ranks),
-		TgtRanks: mockRanks(config.Ranks),
-		TierBytes: []uint64{ config.ScmBytes, config.NvmeBytes},
+	poolCreateResp := &PoolCreateResp{
+		UUID:      common.MockUUID(),
+		SvcReps:   mockRanks(config.Ranks),
+		TgtRanks:  mockRanks(config.Ranks),
+		TierBytes: []uint64{config.ScmBytes, config.NvmeBytes},
 	}
 
 	poolCreateRespMsg := new(mgmtpb.PoolCreateResp)
