@@ -957,7 +957,8 @@ struct pipeline_auxi_args {
 struct shard_pipeline_run_args {
 	struct dtx_epoch		pra_epoch;  // I AM SETTING BUT NOT REALLY USING THIS YET
 	uint32_t			pra_map_ver;// I AM SETTING BUT NOT REALLY USING THIS YET
-	uint32_t			pra_shard;  // I AM SETTING BUT NOT REALLY USING THIS YET
+	uint32_t			pra_shard;
+	uint32_t			pra_shards;
 	uint32_t			pra_target;
 
 	daos_pipeline_run_t		*pra_api_args;
@@ -1075,6 +1076,8 @@ shard_pipeline_run_task(tse_task_t *task)
 	struct pool_target		*map_tgt;
 	struct pipeline_run_cb_args	cb_args;
 	struct pipeline_run_in		*pri;
+	uint32_t			nr_kds;
+	uint32_t			shard_nr_kds;
 	int				rc;
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
@@ -1122,33 +1125,53 @@ shard_pipeline_run_task(tse_task_t *task)
 		D_GOTO(out_req, rc);
 	}
 
+	/** -- calculating nr_kds for this shard */
+
+	D_ASSERT(args->pra_shards > 0 && args->pra_shard > 0);
+	D_ASSERT(args->pra_shard < args->pra_shards);
+
+	nr_kds		= *(args->pra_api_args->nr_kds);
+	shard_nr_kds	= nr_kds / args->pra_shards;
+	if (shard_nr_kds * args->pra_shards < nr_kds)
+	{
+		shard_nr_kds++;
+		if (args->pra_shard == args->pra_shards - 1)
+		{
+			shard_nr_kds = nr_kds % shard_nr_kds;
+		}
+	}
+
 	/** -- sending the RPC */
 
 	pri = crt_req_get(req);
 	D_ASSERT(pri != NULL);
-	pri->pri_dti			= args->pra_dti;
-	pri->pri_pipe			= args->pra_api_args->pipeline;
-	pri->pri_oid			= args->pra_oid;
-	pri->pri_epoch			= args->pra_epoch.oe_value;
-	pri->pri_epoch_first		= args->pra_epoch.oe_first;
-	pri->pri_target			= args->pra_target;
-
+	pri->pri_dti		= args->pra_dti;
+	pri->pri_pipe		= args->pra_api_args->pipeline;
+	pri->pri_oid		= args->pra_oid;
+	pri->pri_epoch		= args->pra_epoch.oe_value;
+	pri->pri_epoch_first	= args->pra_epoch.oe_first;
+	pri->pri_target		= args->pra_target;
 	if (args->pra_api_args->dkey != NULL)
 	{
-		pri->pri_dkey		= *(args->pra_api_args->dkey);
+		pri->pri_dkey	= *(args->pra_api_args->dkey);
 	}
 	else
 	{
-		pri->pri_dkey		= (daos_key_t)
-					 { .iov_buf		= NULL,
-					   .iov_buf_len		= 0,
-					   .iov_len		= 0 };
+		pri->pri_dkey	= (daos_key_t)
+				 { .iov_buf		= NULL,
+				   .iov_buf_len		= 0,
+				   .iov_len		= 0 };
 	}
-	pri->pri_nr_iods		= *(args->pra_api_args->nr_iods);
-	pri->pri_iods.nr		= *(args->pra_api_args->nr_iods);
-	pri->pri_iods.iods		= args->pra_api_args->iods;
-	pri->pri_anchor			= *(args->pra_api_args->anchor);
-	pri->pri_nr_kds			= *(args->pra_api_args->nr_kds);
+	pri->pri_iods.nr	= *(args->pra_api_args->nr_iods);
+	pri->pri_iods.iods	= args->pra_api_args->iods;
+	pri->pri_sgl_keys.nr	= shard_nr_kds;
+	pri->pri_sgl_keys.sgls	= args->pra_api_args->sgl_keys;
+	pri->pri_sgl_recx.nr	= shard_nr_kds;
+	pri->pri_sgl_recx.sgls	= args->pra_api_args->sgl_recx;
+	pri->pri_sgl_aggr.nr	= args->pra_api_args->pipeline.num_aggr_filters;
+	pri->pri_sgl_aggr.sgls	= args->pra_api_args->sgl_agg;
+	pri->pri_anchor		= *(args->pra_api_args->anchor);
+	pri->pri_flags		= args->pra_api_args->flags;
 	uuid_copy(pri->pri_pool_uuid, pool->dp_pool);
 	uuid_copy(pri->pri_co_hdl, args->pra_coh_uuid);
 	uuid_copy(pri->pri_co_uuid, args->pra_cont_uuid);
@@ -1186,7 +1209,7 @@ shard_pipeline_task_abort(tse_task_t *task, void *arg)
 static int
 queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout,
 			      struct pipeline_auxi_args *pipeline_auxi,
-			      struct dtx_epoch *epoch, int shard,
+			      struct dtx_epoch *epoch, int shard, int shards,
 			      unsigned int map_ver, struct dtx_id *dti,
 			      daos_unit_oid_t oid, uuid_t coh_uuid, uuid_t cont_uuid)
 {
@@ -1210,6 +1233,7 @@ queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout
 	args->pra_epoch		= *epoch;
 	args->pra_map_ver	= map_ver;
 	args->pra_shard		= shard;
+	args->pra_shards	= shards;
 	args->pra_dti		= *dti;
 	args->pra_oid		= oid;
 	args->pipeline_auxi	= pipeline_auxi;
@@ -1332,6 +1356,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	struct pipeline_auxi_args	*pipeline_auxi;
 	bool				priv;
 	struct shard_task_sched_args	sched_arg;
+	int				total_shards;
 
 	coh	= dc_obj_hdl2cont_hdl(api_args->oh);
 	rc	= dc_obj_hdl2obj_md(api_args->oh, &obj_md);
@@ -1412,28 +1437,33 @@ dc_pipeline_run(tse_task_t *api_task)
 		int j;
 
 		/** Try leader for current group */
-		start_shard = i * layout->ol_grp_size;
+		start_shard	= i * layout->ol_grp_size;
+		total_shards	= layout->ol_grp_nr; /* one replica per group */
+
 		if (!daos_oclass_is_ec(oca) ||
 				likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY)))
 		{
 			int leader;
 
-			leader =
-			     pl_select_leader(obj_md.omd_id,
-					      start_shard / layout->ol_grp_size,
-					      layout->ol_grp_size, NULL,
-					      pl_obj_get_shard, layout);
+			leader	= pl_select_leader(obj_md.omd_id, i,
+						   layout->ol_grp_size,
+						   NULL, pl_obj_get_shard,
+						   layout);
+
 			if (leader >= 0)
 			{
 				oid.id_pub	= obj_md.omd_id;
 				oid.id_shard	= leader;
 				oid.id_pad_32	= 0;
 
-				rc = queue_shard_pipeline_run_task(api_task, layout,
-								   pipeline_auxi,
-								   &epoch, leader,
-								   map_ver, &dti, oid,
-								   coh_uuid, cont_uuid);
+				rc = queue_shard_pipeline_run_task(
+								api_task, layout,
+								pipeline_auxi,
+								&epoch, leader,
+								total_shards,
+								map_ver, &dti, oid,
+								coh_uuid, cont_uuid
+								);
 				if (rc)
 				{
 					D_GOTO(out, rc);
@@ -1452,10 +1482,12 @@ dc_pipeline_run(tse_task_t *api_task)
 		/** Then try non-leader shards */
 		D_DEBUG(DB_IO, DF_OID" try non-leader shards for group %d.\n",
 			DP_OID(obj_md.omd_id), i);
+		total_shards *= oca->u.ec.e_k; /* groups x data_cells_in_each_group */
 		for (j = start_shard; j < start_shard + oca->u.ec.e_k; j++) {
 			rc = queue_shard_pipeline_run_task(api_task, layout, pipeline_auxi,
-							   &epoch, j, map_ver, &dti,
-							   oid, coh_uuid, cont_uuid);
+							   &epoch, j, total_shards,
+							   map_ver, &dti, oid, coh_uuid,
+							   cont_uuid);
 			if (rc)
 			{
 				D_GOTO(out, rc);

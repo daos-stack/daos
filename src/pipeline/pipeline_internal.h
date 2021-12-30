@@ -12,6 +12,11 @@ typedef struct {
 	daos_iod_t	*iods;
 } daos_pipeline_iods_t;
 
+typedef struct {
+	uint32_t	nr;
+	d_sg_list_t	*sgls;
+} daos_pipeline_sgls_t;
+
 void ds_pipeline_run_handler(crt_rpc_t *rpc);
 
 #endif /* __DAOS_PIPE_INTERNAL_H__ */

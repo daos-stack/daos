@@ -391,6 +391,36 @@ exit:
 	return rc;
 }
 
+static int
+crt_proc_daos_pipeline_sgls_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			      daos_pipeline_sgls_t *sgls)
+{
+	return 0;
+/*	int		rc = 0;
+	uint32_t 	i = 0;
+	uint32_t 	j;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &sgls->nr);
+	if (unlikely(rc))
+	{
+		D_GOTO(exit, rc);
+	}
+	if (DECODING(proc_op))
+	{
+		D_ALLOC_ARRAY(sgls->sgls, sgls->nr);
+		if (sgls->sgls == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+	}
+
+	if (FREEING(proc_op)) // TODO
+	{
+exit_free:
+	}
+exit:
+	return rc;*/
+}
 
 CRT_RPC_DEFINE(pipeline_run, DAOS_ISEQ_PIPELINE_RUN, DAOS_OSEQ_PIPELINE_RUN)
 

@@ -244,23 +244,37 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *
  * \param[in,out]	nr_kds		[in]: Number of key descriptors in
  *					\a kds.
- *					[out:] Number of returned key descriptors.
+ *					[out]: Number of returned key
+ *					descriptors.
  *
- * \param[in,out]	kds		[in]: Optional preallocated array of \nr
- *					key descriptors.
+ * \param[in,out]	kds		[in]: Preallocated array of \nr_kds key
+ *					descriptors. Optional if \dkey passed.
  *					[out]: Size of each individual key along
  *					with checksum type and size stored just
  *					after the key in \a sgl_keys.
  *
- * \param[out]		sgl_keys	Optional sgl storing all dkeys to be
- *					returned.
+ * \param[out]		sgl_keys	[in]: Preallocated array of \nr_kds
+ *					sgls storing all the dkeys to be
+ *					returned. Optional when \dkey passed.
+ *					[out]: All returned dkeys.
  *
- * \param[out]		sgl_recx	Optional sgl storing all the records to
- *					be returned. Allocated by the user, and
- *					array size has to be nr_kds*nr_iods.
+ * \param[out]		sgl_recx	[in]: Preallocated array of 
+ *					(\nr_kds * \nr_iods) sgls storing all
+ *					the records to be returned. When doing
+ *					aggregation (i.e., when no returned
+ *					records are required), or when \dkey is
+ *					passed, this array must be of size at
+ *					least \nr_iods. For the aggregation
+ *					case, even when no returned records are
+ *					required, one record (if there is at
+ *					least one, of course) is returned.
+ *					[out]: All returned records.
  *
- * \param[out]		sgl_agg		Optional sgl with the returned value of
- *					the aggregator(s).
+ * \param[out]		sgl_agg		[in]: Optional preallocated array for
+ *					aggregated values (number of values has
+ *					to match the number of aggregation
+ *					filters defined in the pipeline object).
+ *					[out]: All returned aggregated values.
  *
  * \param[in]		ev		Completion event. It is optional.
  *					Function will run in blocking mode if
