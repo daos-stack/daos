@@ -41,7 +41,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
@@ -64,7 +64,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
@@ -78,7 +78,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
@@ -99,7 +99,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
@@ -123,7 +123,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
@@ -156,13 +156,13 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath0).
 						WithScmDeviceList(mockScmNs0.BlockDevice),
 				},
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockScmMountPath1).
 						WithScmDeviceList(mockScmNs1.BlockDevice),
 				},
