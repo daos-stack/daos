@@ -866,7 +866,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 
 func TestBackend_Prepare(t *testing.T) {
 	const (
-		testNrHugePages       = 42
+		testNrHugePages       = 8192
 		nonexistentTargetUser = "nonexistentTargetUser"
 		username              = "bob"
 	)
@@ -937,7 +937,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         -1,
+				HugePageCount:         128,
 				TargetUser:            username,
 				EnableVMD:             false,
 				DisableCleanHugePages: true,
@@ -946,11 +946,20 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, 128),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 				},
 			},
+		},
+		"prepare setup; unset hugepages": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         -1,
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			expErr: errors.New("number of hugepages not specified in request"),
 		},
 		"prepare setup; user-specified values": {
 			req: storage.BdevPrepareRequest{
