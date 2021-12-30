@@ -65,11 +65,12 @@ class ServerFillUp(IorTestBase):
         self.dmg = None
         self.set_faulty_device = False
         self.set_online_rebuild = False
-        self.rank_to_kill = None
         self.scm_fill = False
         self.nvme_fill = False
         self.ior_matrix = None
         self.fail_on_warning = False
+        self.rank_to_kill = []
+        self.pool_exclude = {}
 
     def setUp(self):
         """Set up each test case."""
@@ -87,6 +88,7 @@ class ServerFillUp(IorTestBase):
         # Get the number of daos_engine
         self.engines = self.server_managers[0].manager.job.yaml.engine_params
         self.out_queue = queue.Queue()
+        self.dmg_command = self.get_dmg_command()
 
     def start_ior_thread(self, results, create_cont, operation):
         """Start IOR write/read threads and wait until all threads are finished.
@@ -250,6 +252,25 @@ class ServerFillUp(IorTestBase):
         # Create the Pool
         self.pool.create()
 
+    def kill_rank_thread(self, rank):
+        """
+        Server rank kill thread function
+
+        Args:
+            rank: Rank number to kill the daos server
+        """
+        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
+
+    def exclude_target_thread(self, rank, target):
+        """
+        Target kill thread function
+
+        Args:
+            rank(int): Rank number to kill the target from
+            target(str): target number or range of targets to kill
+        """
+        self.dmg_command.pool_exclude(self.pool.uuid, rank, str(target))
+
     def start_ior_load(self, storage='NVMe', operation="WriteRead",
                        percent=1, create_cont=True):
         """Fill up the server either SCM or NVMe.
@@ -262,6 +283,8 @@ class ServerFillUp(IorTestBase):
             percent (int): % of storage to be filled
             create_cont (bool): To create the new container for IOR
         """
+        kill_rank_job = []
+        kill_target_job = []
         self.capacity = percent
         # Fill up NVMe by default
         self.nvme_fill = 'NVMe' in storage
@@ -283,11 +306,28 @@ class ServerFillUp(IorTestBase):
         # Kill the server rank while IOR in progress
         if self.set_online_rebuild:
             time.sleep(30)
-            # Kill the server rank
-            if self.rank_to_kill is not None:
-                self.server_managers[0].stop_ranks([self.rank_to_kill], self.d_log, force=True)
+            # Kill the server rank in BG thread
+            for _id, _rank in enumerate(self.rank_to_kill):
+                kill_rank_job.append(threading.Thread(target=self.kill_rank_thread,
+                                                     kwargs={"rank": _rank}))
+                kill_rank_job[_id].start()
 
-        # Wait to finish the thread
+            # Kill the target from rank in BG thread
+            for _id, (key, value) in enumerate(self.pool_exclude.items()):
+                kill_target_job.append(threading.Thread(target=self.exclude_target_thread,
+                                                        kwargs={"rank": key,
+                                                                "target": value}))
+                kill_target_job[_id].start()
+
+            # Wait for server kill thread to finish
+            for _kill_rank in kill_rank_job:
+                _kill_rank.join()
+
+            # Wait for rank kill thread to finish
+            for _kill_tgt in kill_target_job:
+                _kill_tgt.join()
+
+        # Wait to finish the IOR thread
         job.join()
 
         # Verify the queue and make sure no FAIL for any IOR run
