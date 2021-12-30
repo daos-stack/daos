@@ -1,0 +1,14 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+timeout: 90
+server_config:
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+dmg_storage_format_perf:
+  max_s_per_device: 20
