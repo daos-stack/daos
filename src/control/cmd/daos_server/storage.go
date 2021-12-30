@@ -44,7 +44,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	if cmd.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.log.Errorf("unable to configtandre privileged helper logging: %s", err)
+			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
 		}
 	}
 
