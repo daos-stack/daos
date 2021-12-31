@@ -11,8 +11,8 @@ hosts:
 timeout: 240
 server_config:
     name: daos_server
-    servers:
     targets: 2
+    servers:
         log_mask: INFO
         bdev_class: nvme
         bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
