@@ -1181,7 +1181,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 {
 	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
 	daos_handle_t		 ioh;
-	int			 rc, rc1, i, ret, sgl_cnt = 0;
+	int			 rc, rc1, i, sgl_cnt = 0;
 	struct daos_csummer	*csummer = NULL;
 	d_iov_t			 csum_iov_fetch = {0};
 	struct dcs_iod_csums	*iod_csums = NULL;
@@ -1274,12 +1274,10 @@ post:
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
-	ret = bio_iod_post(vos_ioh2desc(ioh));
-	if (ret) {
+	rc = bio_iod_post(vos_ioh2desc(ioh), rc);
+	if (rc)
 		D_ERROR("Post EIOD for "DF_UOID" error: "DF_RC"\n",
-			DP_UOID(mrone->mo_oid), DP_RC(ret));
-		rc = rc ? : ret;
-	}
+			DP_UOID(mrone->mo_oid), DP_RC(rc));
 
 	for (i = 0; rc == 0 && i < iod_num; i++) {
 		if (iods[i].iod_size == 0) {
