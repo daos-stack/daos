@@ -395,10 +395,11 @@ static int
 crt_proc_daos_pipeline_sgls_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			      daos_pipeline_sgls_t *sgls)
 {
-	return 0;
-/*	int		rc = 0;
+	int		rc = 0;
 	uint32_t 	i = 0;
-	uint32_t 	j;
+	uint32_t 	k;
+	d_iov_t		*sg_iovs;
+	uint32_t	sg_nr;
 
 	rc = crt_proc_uint32_t(proc, proc_op, &sgls->nr);
 	if (unlikely(rc))
@@ -414,12 +415,93 @@ crt_proc_daos_pipeline_sgls_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 	}
 
-	if (FREEING(proc_op)) // TODO
+	if (FREEING(proc_op))
+	{
+		i = sgls->nr;
+	}
+	while (i < sgls->nr)
+	{
+		rc = crt_proc_uint32_t(proc, proc_op, &sgls->sgls[i].sg_nr);
+		if (unlikely(rc))
+		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
+			D_GOTO(exit, rc);
+		}
+		rc = crt_proc_uint32_t(proc, proc_op, &sgls->sgls[i].sg_nr_out);
+		if (unlikely(rc))
+		{
+			if (DECODING(proc_op))
+			{
+				D_GOTO(exit_free, rc);
+			}
+			D_GOTO(exit, rc);
+		}
+		if (sgls->sgls[i].sg_nr == 0)
+		{
+			i++;
+			continue;
+		}
+		if (DECODING(proc_op))
+		{
+			D_ALLOC_ARRAY(sgls->sgls[i].sg_iovs, sgls->sgls[i].sg_nr);
+			if (sgls->sgls[i].sg_iovs == NULL)
+			{
+				D_GOTO(exit_free, rc = -DER_NOMEM);
+			}
+		}
+		sg_iovs		= sgls->sgls[i].sg_iovs;
+		sg_nr		= sgls->sgls[i].sg_nr;
+		i++;
+		for (k = 0; k < sg_nr; k++)
+		{
+			rc = crt_proc_uint64_t(proc, proc_op, &sg_iovs[k].iov_buf_len);
+			if (unlikely(rc))
+			{
+				if (DECODING(proc_op))
+				{
+					D_GOTO(exit_free, rc);
+				}
+				D_GOTO(exit, rc);
+			}
+			rc = crt_proc_uint64_t(proc, proc_op, &sg_iovs[k].iov_len);
+			if (unlikely(rc))
+			{
+				if (DECODING(proc_op))
+				{
+					D_GOTO(exit_free, rc);
+				}
+				D_GOTO(exit, rc);
+			}
+			if (sg_iovs[k].iov_buf_len < sg_iovs[k].iov_len)
+			{
+				D_ERROR("invalid iov buf len "DF_U64" < iov len "DF_U64"\n",
+					sg_iovs[k].iov_buf_len, sg_iovs[k].iov_len);
+				if (DECODING(proc_op))
+				{
+					D_GOTO(exit_free, rc = -DER_HG);
+				}
+				D_GOTO(exit, rc = -DER_HG);
+			}
+		}
+	}
+
+	if (FREEING(proc_op))
 	{
 exit_free:
+		for (k = 0; k < i; k++)
+		{
+			if (sgls->sgls[k].sg_nr > 0)
+			{
+				D_FREE(sgls->sgls[k].sg_iovs);
+			}
+		}
+		D_FREE(sgls->sgls);
 	}
 exit:
-	return rc;*/
+	return rc;
 }
 
 CRT_RPC_DEFINE(pipeline_run, DAOS_ISEQ_PIPELINE_RUN, DAOS_OSEQ_PIPELINE_RUN)
