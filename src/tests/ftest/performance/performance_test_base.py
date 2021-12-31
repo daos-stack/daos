@@ -5,14 +5,13 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import re
 import time
 import types
 
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from mdtest_utils import MdtestMetrics
-from general_utils import get_subprocess_stdout, run_pcmd
+from general_utils import get_subprocess_stdout
 from ior_utils import IorMetrics
 from command_utils_base import EnvironmentVariables
 import oclass_utils
@@ -22,11 +21,11 @@ import oclass_utils
 class PerformanceTestBase(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
     """Base performance class.
-    
+
     Optional yaml config values:
         performance/phase_barrier_s (int): seconds to wait between IOR write/read phases.
         performance/env (list): list of env vars to set for IOR/MDTest.
-    
+
     Outputs:
         */data/performance.log: Contains input parameters and output metrics.
         */data/daos_metrics/<host>_engine<idx>.csv: daos_metrics output for each host/engine
@@ -75,7 +74,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         performance:
             env:
                 - D_LOG_MASK=ERR
-            
+
         """
         perf_env = self.params.get("env", "/run/performance/*", {})
         if not perf_env:
@@ -97,7 +96,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         """
         old_get_default_env = cmd.get_default_env
         performance_env = self.performance_env
-        def new_get_default_env(self, *args, **kwargs):
+        def new_get_default_env(self, *args, **kwargs): # pylint: disable=unused-argument
             env = old_get_default_env(*args, **kwargs)
             for key, val in performance_env.items():
                 env[key] = val
@@ -153,19 +152,19 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
     def phase_barrier(self):
         """Sleep barrier meant to be used between IO phases.
-        
+
         Useful for flushing system IO.
         """
         if self.phase_barrier_s > 0:
             self.log.info("Sleeping for %s seconds", str(self.phase_barrier_s))
             time.sleep(self.phase_barrier_s)
 
-    def _log_performance_params(self, group, extra_params=[]):
+    def _log_performance_params(self, group, extra_params=None):
         """Log performance parameters.
 
         Args:
             group (str): ior or mdtest
-            extra_params (list, optional): extra params to print
+            extra_params (list, optional): extra params to print. Default is None.
 
         """
         group = group.upper()
@@ -211,7 +210,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             ]
 
         # Add the extra params
-        params += extra_params
+        if extra_params:
+            params += extra_params
 
         # Print and align all parameters in the format:
         # PARAM_NAME : PARAM_VALUE
@@ -263,7 +263,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
     def _run_performance_ior_single(self, stop_rank_s=None, intercept=None):
         """Run a single IOR execution.
-        
+
         Args:
             stop_rank_s (float, optional): stop a rank this many seconds after starting IOR.
                 Default is None, which does not stop a rank.
@@ -316,8 +316,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
                 rank during read phase. Must be between 0 and 1. Default is None.
             num_iterations (int, optional): number of times to run the tests.
                 Default is 1.
-            restart_between_iterations (int, optional): whether to restart the servers between iterations.
-                Default is True.
+            restart_between_iterations (int, optional): whether to restart the servers between
+                iterations. Default is True.
 
         """
         if stop_delay_write is not None and (stop_delay_write < 0 or stop_delay_write > 1):
@@ -329,7 +329,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.ior_cmd.namespace = namespace
             self.ior_cmd.get_params(self)
             self.set_processes_ppn(namespace)
-        
+
         if use_intercept and self.ior_cmd.api.value == 'POSIX':
             intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         else:
@@ -372,7 +372,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             if restart_between_iterations and iteration > 0:
                 self.restart_servers()
 
-            self.log.info("Running IOR write ({})".format(iteration))
+            self.log.info("Running IOR write (%s)", str(iteration))
             self.ior_cmd.flags.update(write_flags)
             self.ior_cmd.sw_wearout.update(write_sw_wearout)
             self.ior_cmd.sw_deadline.update(write_sw_deadline)
@@ -388,7 +388,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             # Wait between write and read
             self.phase_barrier()
 
-            self.log.info("Running IOR read ({})".format(iteration))
+            self.log.info("Running IOR read (%s)", str(iteration))
             self.ior_cmd.flags.update(read_flags)
             self.ior_cmd.sw_wearout.update(None)
             self.ior_cmd.sw_deadline.update(None)

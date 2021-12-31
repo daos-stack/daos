@@ -159,24 +159,20 @@ class MdtestCommand(ExecutableCommand):
         return env
 
 class MdtestMetrics():
+    # pylint: disable=too-few-public-methods
     """Represents metrics from mdtest output.
-    
+
     Metrics are split into groups "rates" and "times".
-    Each group contains metrics for each MdtestMetrics.OPERATIONS.
+    Each group contains metrics for each operations.
     Each operation contains values for max, min, mean, stddev.
     For example:
         self.rates.file_creation.max
         self.times.directory_stat.min
-    
+
     """
 
-    # Aligned with output from mdtest. E.g. "File creation" -> "file_creation"
-    OPERATIONS = [
-        "directory_creation", "directory_stat", "directory_rename", "directory_removal",
-        "file_creation", "file_stat", "file_read", "file_rename", "file_removal",
-        "tree_creation", "tree_removal"]
-
     class MdtestMetricsOperation():
+        # pylint: disable=too-few-public-methods
         """Metrics for an individual operation. E.g. File creation."""
         def __init__(self):
             """Initialize operations values."""
@@ -186,17 +182,21 @@ class MdtestMetrics():
             self.stddev = 0
 
     class MdtestMetricsGroup():
+        # pylint: disable=too-few-public-methods
         """Group of metrics. E.g. "SUMMARY rate" and "SUMMARY time"."""
         def __init__(self):
-            """Initialize each operation."""
-            for operation_name in MdtestMetrics.OPERATIONS:
-                setattr(self, operation_name, MdtestMetrics.MdtestMetricsOperation())
-
-        def __iter__(self):
-            """Iterator to loop over each operation."""
-            return iter([
-                operation for operation in dir(self)
-                if isinstance(getattr(self, operation), MdtestMetrics.MdtestMetricsOperation)])
+            """Initialize each operation. Names are aligned with output from mdtest."""
+            self.directory_creation = MdtestMetrics.MdtestMetricsOperation()
+            self.directory_stat = MdtestMetrics.MdtestMetricsOperation()
+            self.directory_rename = MdtestMetrics.MdtestMetricsOperation()
+            self.directory_removal = MdtestMetrics.MdtestMetricsOperation()
+            self.file_creation = MdtestMetrics.MdtestMetricsOperation()
+            self.file_stat = MdtestMetrics.MdtestMetricsOperation()
+            self.file_read = MdtestMetrics.MdtestMetricsOperation()
+            self.file_rename = MdtestMetrics.MdtestMetricsOperation()
+            self.file_removal = MdtestMetrics.MdtestMetricsOperation()
+            self.tree_creation = MdtestMetrics.MdtestMetricsOperation()
+            self.tree_removal = MdtestMetrics.MdtestMetricsOperation()
 
     def __init__(self, output=None):
         """Initialize MdtestMetrics.
@@ -228,7 +228,7 @@ class MdtestMetrics():
         Args:
             output (str): output from mdtest from which to parse metrics.
             group_obj (MdtestMetrics.MdtestMetricsGroup): the group object.
-            group_suffix (str): "rate" or "time" header in the output. 
+            group_suffix (str): "rate" or "time" header in the output.
 
         """
         # Extract just one group, in case both are in the output

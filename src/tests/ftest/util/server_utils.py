@@ -765,7 +765,7 @@ class DaosServerManager(SubprocessManager):
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
 
-    def stop_random_rank(self, daos_log, force=False, exclude_ranks=[]):
+    def stop_random_rank(self, daos_log, force=False, exclude_ranks=None):
         """Kill/Stop a random server rank that is expected to be running.
 
         Args:
@@ -773,7 +773,7 @@ class DaosServerManager(SubprocessManager):
             force (bool, optional): whether to use --force option to dmg system
                 stop. Defaults to False.
             exclude_ranks (list, optional): ranks to exclude from the random selection.
-                Default is [].
+                Default is None.
 
         Raises:
             avocado.core.exceptions.TestFail: if there is an issue stopping the server ranks.
@@ -790,7 +790,7 @@ class DaosServerManager(SubprocessManager):
                     continue
 
         # Exclude specified ranks
-        for rank in exclude_ranks:
+        for rank in exclude_ranks or []:
             if rank in candidate_ranks:
                 del candidate_ranks[candidate_ranks.index(rank)]
 

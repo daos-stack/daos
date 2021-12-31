@@ -244,7 +244,7 @@ class IorTestBase(DfuseTestBase):
                 self.job_manager.process, self.ior_cmd):
             self.fail("Exiting Test: Subprocess not running")
 
-    def run_ior(self, manager, processes, intercept=None,  display_space=True,
+    def run_ior(self, manager, processes, intercept=None, display_space=True,
                 plugin_path=None, fail_on_warning=False, pool=None,
                 out_queue=None, env=None):
         """Run the IOR command.
