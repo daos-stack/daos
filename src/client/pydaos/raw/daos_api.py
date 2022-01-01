@@ -82,8 +82,13 @@ class DaosPool():
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
+
+        if self.uuid is None:
+            raise DaosApiError("Pool uuid is None.")
+        uuid_str = self.get_uuid_str()
+
         if cb_func is None:
-            ret = func(self.uuid, self.group, c_flags,
+            ret = func(bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
                        ctypes.byref(self.handle), ctypes.byref(c_info), None)
 
             if ret != 0:
@@ -93,7 +98,7 @@ class DaosPool():
             self.connected = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, c_flags,
+            params = [bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
