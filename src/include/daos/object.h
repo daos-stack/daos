@@ -645,40 +645,6 @@ daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 	return dup_lists;
 }
 
-/* merge adjacent recxs for same epoch */
-static inline void
-daos_recx_ep_lists_merge(struct daos_recx_ep_list *lists, unsigned int nr)
-{
-	struct daos_recx_ep_list	*list;
-	struct daos_recx_ep		*recx_ep, *next;
-	unsigned int			 i, j, k;
-
-	for (i = 0; i < nr; i++) {
-		list = &lists[i];
-		if (list->re_nr < 2)
-			continue;
-		for (j = 0; j < list->re_nr - 1; j++) {
-			recx_ep = &list->re_items[j];
-			next = &list->re_items[j + 1];
-			if (recx_ep->re_ep != next->re_ep ||
-			    recx_ep->re_rec_size != next->re_rec_size ||
-			    recx_ep->re_type != next->re_type ||
-			    !DAOS_RECX_ADJACENT(recx_ep->re_recx, next->re_recx))
-				continue;
-
-			recx_ep->re_recx.rx_nr += next->re_recx.rx_nr;
-			if (recx_ep->re_recx.rx_idx > next->re_recx.rx_idx)
-				recx_ep->re_recx.rx_idx = next->re_recx.rx_idx;
-
-			for (k = j + 1; k < list->re_nr - 1; k++)
-				list->re_items[k] = list->re_items[k + 1];
-
-			list->re_nr--;
-			j--;
-		}
-	}
-}
-
 static inline void
 daos_recx_ep_list_hilo(struct daos_recx_ep_list *list, daos_recx_t *hi_ptr,
 		       daos_recx_t *lo_ptr)
