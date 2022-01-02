@@ -733,6 +733,8 @@ dtx_handle_reinit(struct dtx_handle *dth)
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
 	dth->dth_cos_done = 0;
+	dth->dth_verified = 0;
+	dth->dth_aborted = 0;
 
 	dth->dth_op_seq = 0;
 	dth->dth_oid_cnt = 0;
@@ -784,6 +786,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_for_migration = migration ? 1 : 0;
 	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
 	dth->dth_prepared = prepared ? 1 : 0;
+	dth->dth_verified = 0;
+	dth->dth_aborted = 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -1095,15 +1099,25 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	 * should still wait for remote object to finish the request.
 	 */
 
-	if (dlh->dlh_sub_cnt != 0)
+	if (dlh->dlh_sub_cnt != 0) {
 		rc = dtx_leader_wait(dlh);
+		if (unlikely(rc == -DER_ALREADY))
+			rc = 0;
+	}
+
+	if (unlikely(result == -DER_ALREADY))
+		result = 0;
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
 	if (dth->dth_pinned || dth->dth_prepared) {
+		/* During waiting for bulk data transfer or other non-leaders, the DTX
+		 * status may be changes by others (such as DTX resync or DTX refresh)
+		 * by race. Let's check it.
+		 */
 		status = vos_dtx_validation(dth);
-		if (status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE)
+		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE))
 			D_GOTO(out, result = 0);
 	}
 
@@ -1115,10 +1129,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	case DTX_ST_PREPARED:
 		break;
 	case DTX_ST_INITED:
-		if (dth->dth_modification_cnt == 0 ||
-		    !dth->dth_active)
+		if (dth->dth_modification_cnt == 0 || !dth->dth_active)
 			break;
-		/* full through */
+		/* Fall through */
 	case DTX_ST_ABORTED:
 		D_GOTO(abort, result = -DER_INPROGRESS);
 	default:
@@ -1275,6 +1288,7 @@ out:
 			vos_dtx_cleanup(dth);
 
 		vos_dtx_rsrvd_fini(dth);
+		vos_dtx_detach(dth);
 
 		D_DEBUG(DB_IO,
 			"Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, "
@@ -1404,6 +1418,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
 	vos_dtx_rsrvd_fini(dth);
+	vos_dtx_detach(dth);
 
 out:
 	D_FREE(dth->dth_oid_array);

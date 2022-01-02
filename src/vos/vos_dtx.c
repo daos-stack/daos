@@ -36,6 +36,11 @@ enum {
 
 #define dtx_evict_lid(cont, dae)					\
 	do {								\
+		if (dae->dae_dth != NULL &&				\
+		    dae->dae_dth->dth_ent != NULL) {			\
+			D_ASSERT(dae->dae_dth->dth_ent == dae);		\
+			dae->dae_dth->dth_ent = NULL;			\
+		}							\
 		D_DEBUG(DB_TRACE, "Evicting lid "DF_DTI": lid=%d\n",	\
 			DP_DTI(&DAE_XID(dae)), DAE_LID(dae));		\
 		d_list_del_init(&dae->dae_link);			\
@@ -1006,6 +1011,8 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	/* Will be set as dbd::dbd_index via vos_dtx_prepared(). */
 	DAE_INDEX(dae) = DTX_INDEX_INVAL;
 	dae->dae_dbd = dbd;
+	dae->dae_dth = dth;
+
 	D_DEBUG(DB_IO, "Allocated new lid DTX: "DF_DTI" lid=%d dae=%p"
 		" dae_dbd=%p\n", DP_DTI(&dth->dth_xid), DAE_LID(dae), dae, dbd);
 
@@ -1294,14 +1301,17 @@ uint32_t
 vos_dtx_get(void)
 {
 	struct dtx_handle	*dth = vos_dth_get();
-	struct vos_dtx_act_ent	*dae;
 
-	if (!dtx_is_valid_handle(dth) || dth->dth_ent == NULL)
+	if (!dtx_is_valid_handle(dth))
 		return DTX_LID_COMMITTED;
 
-	dae = dth->dth_ent;
+	if (unlikely(dth->dth_aborted))
+		return DTX_LID_ABORTED;
 
-	return DAE_LID(dae);
+	if (dth->dth_ent == NULL)
+		return DTX_LID_COMMITTED;
+
+	return DAE_LID((struct vos_dtx_act_ent *)dth->dth_ent);
 }
 
 int
@@ -1312,6 +1322,7 @@ vos_dtx_validation(struct dtx_handle *dth)
 
 	D_ASSERT(dtx_is_valid_handle(dth));
 
+	dth->dth_verified = 1;
 	dae = dth->dth_ent;
 
 	/* During current ULT waiting for some event, such as bulk data
@@ -1321,13 +1332,12 @@ vos_dtx_validation(struct dtx_handle *dth)
 	 * It is also possible that the DTX has been committed by other
 	 * (for resend), then return DTX_ST_COMMITTED.
 	 *
-	 * More cases, the DTX entry is aborted by other during current
-	 * ULT waiting. Then the DTX entry is recreated on the same (or
-	 * not) cache slot.
+	 * More cases, the DTX entry has been is aborted by other during
+	 * current ULT yield, and then the DTX was recreated on the same
+	 * (or different) DTX LRU array slot.
 	 */
 
-	if (dae == NULL /* resentc case */ ||
-	    !daos_dti_equal(&dth->dth_xid, &DAE_XID(dae))) {
+	if (unlikely(dae == NULL || dth->dth_aborted)) {
 		struct vos_container	*cont;
 		d_iov_t			 kiov;
 		d_iov_t			 riov;
@@ -1347,8 +1357,11 @@ vos_dtx_validation(struct dtx_handle *dth)
 
 		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 		if (rc != 0) {
-			D_DEBUG(DB_IO, "DTX "DF_DTI" is aborted by race(1)\n",
-				DP_DTI(&dth->dth_xid));
+			/* Failed to lookup DTX entry, in spite of whether it is DER_NONEXIST
+			 * or not, then handle it as aborted that will cause client to retry.
+			 */
+			D_DEBUG(DB_IO, "DTX "DF_DTI" is aborted by race(1): "DF_RC"\n",
+				DP_DTI(&dth->dth_xid), DP_RC(rc));
 			return DTX_ST_ABORTED;
 		}
 
@@ -1373,7 +1386,7 @@ vos_dtx_validation(struct dtx_handle *dth)
 	if (dae->dae_prepared)
 		return DTX_ST_PREPARED;
 
-	return DTX_ST_INITED;
+	return dth->dth_aborted ? DTX_ST_ABORTED : DTX_ST_INITED;
 }
 
 /* The caller has started PMDK transaction. */
@@ -1399,7 +1412,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 		return 0;
 	}
 
-	if (dth->dth_pinned) {
+	if (dth->dth_pinned && !dth->dth_verified) {
 		rc = vos_dtx_validation(dth);
 		switch (rc) {
 		case DTX_ST_INITED:
@@ -1407,11 +1420,16 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 		case DTX_ST_PREPARED:
 		case DTX_ST_COMMITTED:
 		case DTX_ST_COMMITTABLE:
-			/* Prepared/committed (and may has been re-created
-			 * before that), return -DER_AGAIN for leader retry.
+			/* Aborted then prepared/committed by race.
+			 * Return -DER_ALREADY to avoid repeated modification.
+			 *
+			 * Reset current dth->dth_ent to bypass cleanup.
 			 */
-			D_GOTO(out, rc = -DER_AGAIN);
+			dth->dth_ent = NULL;
+			D_GOTO(out, rc = -DER_ALREADY);
 		case DTX_ST_ABORTED:
+			D_ASSERT(dth->dth_ent == NULL);
+			D_ASSERT(dth->dth_aborted);
 			/* Aborted, return -DER_INPROGRESS for client retry. */
 			D_GOTO(out, rc = -DER_INPROGRESS);
 		default:
@@ -1470,10 +1488,9 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 
 out:
 	D_DEBUG(DB_TRACE, "Register DTX record for "DF_DTI
-		": lid=%d entry %p, type %d, %s ilog entry, rc %d\n",
-		DP_DTI(&dth->dth_xid),
-		DAE_LID((struct vos_dtx_act_ent *)dth->dth_ent), dth->dth_ent,
-		type, dth->dth_modify_shared ? "has" : "has not", rc);
+		": lid=%d entry %p, type %d, %s ilog entry, rc %d\n", DP_DTI(&dth->dth_xid),
+		dth->dth_ent == NULL ? 0 : DAE_LID((struct vos_dtx_act_ent *)dth->dth_ent),
+		dth->dth_ent, type, dth->dth_modify_shared ? "has" : "has not", rc);
 
 	return rc;
 }
@@ -2112,6 +2129,16 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 	if (rc == 0) {
 		rc = dtx_rec_release(cont, dae, true);
 		rc = umem_tx_end(umm, rc);
+		if (rc == 0 && dae->dae_dth != NULL) {
+			struct dtx_handle	*dth = dae->dae_dth;
+
+			D_ASSERT(dth->dth_ent == dae || dth->dth_ent == NULL);
+
+			dae->dae_dth = NULL;
+			dth->dth_aborted = 1;
+			dtx_act_ent_cleanup(cont, dae, dth, true);
+			dth->dth_ent = NULL;
+		}
 	}
 
 out:
@@ -2687,7 +2714,7 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 		/* 'prepared' DTX can be either committed or aborted,
 		 * but not cleanup.
 		 */
-		if (dae->dae_prepared)
+		if (dae->dae_prepared || dae->dae_committable || dae->dae_committed)
 			return;
 	}
 
@@ -2700,7 +2727,7 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 }
 
 int
-vos_dtx_pin(struct dtx_handle *dth, bool persistent)
+vos_dtx_attach(struct dtx_handle *dth, bool persistent)
 {
 	struct vos_container	*cont;
 	struct umem_instance	*umm = NULL;
@@ -2745,10 +2772,9 @@ vos_dtx_pin(struct dtx_handle *dth, bool persistent)
 
 	if (dth->dth_ent == NULL) {
 		rc = vos_dtx_alloc(dbd, dth);
-	} else {
+	} else if (dbd != NULL) {
 		struct vos_dtx_act_ent	*dae = dth->dth_ent;
 
-		D_ASSERT(dbd != NULL);
 		D_ASSERT(dbd->dbd_magic == DTX_ACT_BLOB_MAGIC);
 
 		dae->dae_df_off = cont->vc_cont_df->cd_dtx_active_tail +
@@ -2789,6 +2815,20 @@ out:
 	}
 
 	return rc;
+}
+
+void
+vos_dtx_detach(struct dtx_handle *dth)
+{
+	struct vos_dtx_act_ent	*dae = dth->dth_ent;
+
+	if (dae != NULL) {
+		D_ASSERT(dae->dae_dth == dth);
+
+		dae->dae_dth = NULL;
+		dth->dth_ent = NULL;
+	}
+	dth->dth_pinned = 0;
 }
 
 /** Allocate space for saving the vos reservations and deferred actions */
