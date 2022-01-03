@@ -25,7 +25,7 @@ vos_pool_get_scm_cutoff(void)
 
 int
 vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
-		      uint64_t ofeat, struct daos_tree_overhead *ovhd)
+		      uint64_t otype, struct daos_tree_overhead *ovhd)
 {
 	int	rc = 0;
 	int	btr_class = 0;
@@ -69,7 +69,7 @@ vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
 		break;
 	};
 
-	rc = dbtree_overhead_get(alloc_overhead, btr_class, ofeat, tree_order,
+	rc = dbtree_overhead_get(alloc_overhead, btr_class, otype, tree_order,
 				 ovhd);
 out:
 	return rc;

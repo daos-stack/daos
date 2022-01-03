@@ -28,8 +28,8 @@ print_usage()
 	print_message("Use one of these opt(s) for specific test\n");
 	print_message("vos_tests -p|--pool_tests\n");
 	print_message("vos_tests -c|--container_tests\n");
-	print_message("vos_tests -i|--io_tests <ofeat>\n");
-	print_message("ofeats = DAOS_OT_DKEY_UINT64, DAOS_OT_DKEY_LEXICAL\n");
+	print_message("vos_tests -i|--io_tests <otype>\n");
+	print_message("otypes = DAOS_OT_DKEY_UINT64, DAOS_OT_DKEY_LEXICAL\n");
 	print_message("%8s DAOS_OT_AKEY_UINT64, DAOS_OT_AKEY_LEXICAL\n", " ");
 	print_message("vos_tests -d |--discard-tests\n");
 	print_message("vos_tests -a |--aggregate-tests\n");
@@ -112,7 +112,7 @@ main(int argc, char **argv)
 	int	nr_failed = 0;
 	int	opt = 0;
 	int	index = 0;
-	int	ofeats;
+	int	otypes;
 	int	keys;
 	bool	nest_iterators = false;
 	const char *short_options = "apcdglzni:mXA:hf:e:tC";
@@ -200,8 +200,8 @@ main(int argc, char **argv)
 			nest_iterators = true;
 			break;
 		case 'i':
-			ofeats = strtol(optarg, NULL, 16);
-			nr_failed += run_io_test(ofeats, 0,
+			otypes = strtol(optarg, NULL, 16);
+			nr_failed += run_io_test(otypes, 0,
 						 nest_iterators,
 						 "");
 			test_run = true;

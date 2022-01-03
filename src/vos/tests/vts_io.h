@@ -71,7 +71,7 @@ struct io_test_args {
 	const char		*dkey;
 	const char		*akey;
 	void			*custom;
-	enum daos_otype_t 	 ofeat;
+	enum daos_otype_t 	 otype;
 	int			 akey_size;
 	int			 dkey_size;
 	int			 co_create_step;

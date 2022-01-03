@@ -602,11 +602,11 @@ punch_model_test(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* Set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OT_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OT_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], arg->otype & DAOS_OT_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->otype & DAOS_OT_AKEY_UINT64);
 
 	rex.rx_idx = 0;
 	rex.rx_nr = strlen(under);
@@ -1671,11 +1671,11 @@ minor_epoch_punch_sv(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* Set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OT_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OT_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], arg->otype & DAOS_OT_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->otype & DAOS_OT_AKEY_UINT64);
 
 	rex.rx_idx = 0;
 	rex.rx_nr = strlen(first);
@@ -1756,11 +1756,11 @@ minor_epoch_punch_array(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* Set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OT_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OT_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], arg->otype & DAOS_OT_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->otype & DAOS_OT_AKEY_UINT64);
 
 	rex.rx_idx = 0;
 	rex.rx_nr = strlen(first);
@@ -1850,11 +1850,11 @@ minor_epoch_punch_rebuild(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OT_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OT_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], arg->otype & DAOS_OT_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->otype & DAOS_OT_AKEY_UINT64);
 
 	rc = d_sgl_init(&sgl, 1);
 	assert_rc_equal(rc, 0);
@@ -2018,15 +2018,15 @@ test_inprogress_parent_punch(void **state)
 	memset(&iod, 0, sizeof(iod));
 
 	/* set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey1_buf[0], arg->akey_size, false, arg);
 	vts_key_gen(&akey2_buf[0], arg->akey_size, false, arg);
 	vts_key_gen(&akey3_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OT_DKEY_UINT64);
-	set_iov(&akey1, &akey1_buf[0], arg->ofeat & DAOS_OT_AKEY_UINT64);
-	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OT_AKEY_UINT64);
-	set_iov(&akey3, &akey3_buf[0], arg->ofeat & DAOS_OT_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], arg->otype & DAOS_OT_DKEY_UINT64);
+	set_iov(&akey1, &akey1_buf[0], arg->otype & DAOS_OT_AKEY_UINT64);
+	set_iov(&akey2, &akey2_buf[0], arg->otype & DAOS_OT_AKEY_UINT64);
+	set_iov(&akey3, &akey3_buf[0], arg->otype & DAOS_OT_AKEY_UINT64);
 
 	rc = d_sgl_init(&sgl, 1);
 	assert_rc_equal(rc, 0);
@@ -2273,16 +2273,16 @@ many_tx(void **state)
 
 	/* Set up dkey and akey */
 	for (i = 0; i < nr_obj; i++)
-		oid[i] = gen_oid(arg->ofeat);
+		oid[i] = gen_oid(arg->otype);
 	for (i = 0; i < nr_dkey; i++) {
 		vts_key_gen(&dkey_buf[i][0], arg->dkey_size, true, arg);
 		set_iov(&dkey[i], &dkey_buf[i][0],
-			arg->ofeat & DAOS_OT_DKEY_UINT64);
+			arg->otype & DAOS_OT_DKEY_UINT64);
 	}
 	for (i = 0; i < nr_akey; i++) {
 		vts_key_gen(&akey_buf[i][0], arg->akey_size, true, arg);
 		set_iov(&akey[i], &akey_buf[i][0],
-			arg->ofeat & DAOS_OT_AKEY_UINT64);
+			arg->otype & DAOS_OT_AKEY_UINT64);
 		iod[i].iod_type = DAOS_IOD_SINGLE;
 		iod[i].iod_size = strlen(first);
 		iod[i].iod_name = akey[i];
@@ -2484,13 +2484,13 @@ uncommitted_parent(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OT_DKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], arg->otype & DAOS_OT_DKEY_UINT64);
 	vts_key_gen(&akey_buf[0][0], arg->akey_size, true, arg);
-	set_iov(&akey[0], &akey_buf[0][0], arg->ofeat & DAOS_OT_AKEY_UINT64);
+	set_iov(&akey[0], &akey_buf[0][0], arg->otype & DAOS_OT_AKEY_UINT64);
 	vts_key_gen(&akey_buf[1][0], arg->akey_size, true, arg);
-	set_iov(&akey[1], &akey_buf[1][0], arg->ofeat & DAOS_OT_AKEY_UINT64);
+	set_iov(&akey[1], &akey_buf[1][0], arg->otype & DAOS_OT_AKEY_UINT64);
 
 	execute_op(coh, oid, epoch, &dkey, &akey[0], &sgl, first, 5, true,
 		   TX_OP_UPDATE1);
@@ -2550,13 +2550,13 @@ test_multiple_key_conditionals_common(void **state, bool with_dtx)
 	memset(iod, 0, sizeof(iod));
 
 	/* set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
+	oid = gen_oid(arg->otype);
 	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 	vts_key_gen(&akey1_buf[0], arg->akey_size, false, arg);
 	vts_key_gen(&akey2_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OT_DKEY_UINT64);
-	set_iov(&akey1, &akey1_buf[0], arg->ofeat & DAOS_OT_AKEY_UINT64);
-	set_iov(&akey2, &akey2_buf[0], arg->ofeat & DAOS_OT_AKEY_UINT64);
+	set_iov(&dkey, &dkey_buf[0], arg->otype & DAOS_OT_DKEY_UINT64);
+	set_iov(&akey1, &akey1_buf[0], arg->otype & DAOS_OT_AKEY_UINT64);
+	set_iov(&akey2, &akey2_buf[0], arg->otype & DAOS_OT_AKEY_UINT64);
 
 	rc = d_sgl_init(&sgl[0], 1);
 	assert_rc_equal(rc, 0);
