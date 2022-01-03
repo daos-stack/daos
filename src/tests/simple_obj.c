@@ -484,7 +484,7 @@ example_daos_array()
 	 * generate an array objid to encode feature flags and object class to
 	 * the OID. This is a convenience function over the
 	 * daos_obj_generate_oid() that adds the required feature flags for an
-	 * array: DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY
+	 * array: DAOS_OT_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OT_ARRAY
 	 */
 	daos_array_generate_oid(coh, &oid, true, 0, 0, 0);
 

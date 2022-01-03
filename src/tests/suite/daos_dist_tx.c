@@ -2199,7 +2199,7 @@ dtx_33(void **state)
 		skip();
 
 	dtx_init_oid_req_akey(arg, oids, reqs, ocs, types, NULL, 2, 0,
-			      DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64);
+			      DAOS_OT_DKEY_UINT64 | DAOS_OT_AKEY_UINT64);
 
 	for (i = 0; i < 10; i++) {
 		dkeys[i] = 3 + i * 10;

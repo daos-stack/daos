@@ -582,7 +582,7 @@ degrade_ec_update(void **state)
 
 	data = (char *)malloc(TEST_EC_STRIPE_SIZE);
 	assert_true(data != NULL);
-	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G2, DAOS_OF_DKEY_UINT64, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G2, DAOS_OT_DKEY_UINT64, 0, arg->myrank);
 	dkey_int = 4;
 
 	arg->fail_loc = DAOS_FAIL_SHARD_NONEXIST | DAOS_FAIL_ONCE;

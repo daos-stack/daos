@@ -5793,15 +5793,12 @@ daos_dc_obj2id(void *ptr, daos_obj_id_t *id)
 	*id = obj->cob_md.omd_id;
 }
 
-/** Disable backward compat code */
-#undef daos_obj_generate_oid
-
 /**
  * Real latest & greatest implementation of container create.
  * Used by anyone including the daos_obj.h header file.
  */
 int
-daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 		       enum daos_otype_t type, daos_oclass_id_t cid,
 		       daos_oclass_hints_t hints, uint32_t args)
 {

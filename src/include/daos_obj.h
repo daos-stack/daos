@@ -6,6 +6,8 @@
 #ifndef __DAOS_OBJ_H__
 #define __DAOS_OBJ_H__
 
+#define daos_obj_generate_oid daos_obj_generate_oid2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -91,6 +93,9 @@ enum daos_otype_t {
 
 	/** Byte Array with no metadata (eg DFS/POSIX) */
 	DAOS_OT_ARRAY_BYTE	= 13,
+
+	/** Mask for convenience (16-bit) */
+	DAOS_OT_MASK            = ((1 << 16) - 1),
 
 	/**
 	 * reserved: Multi Dimensional Array
@@ -539,7 +544,7 @@ enum {
  * \param[in]	args	Reserved.
  */
 int
-daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 		       enum daos_otype_t type, daos_oclass_id_t cid,
 		       daos_oclass_hints_t hints, uint32_t args);
 
@@ -1126,46 +1131,8 @@ int
 daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 	      daos_anchor_t *anchor, daos_event_t *ev);
 
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-enum {
-	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_DKEY_UINT64	= (1 << 0),
-	/** DKEY keys not hashed and sorted lexically */
-	DAOS_OF_DKEY_LEXICAL	= (1 << 1),
-	/** AKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_AKEY_UINT64	= (1 << 2),
-	/** AKEY keys not hashed and sorted lexically */
-	DAOS_OF_AKEY_LEXICAL	= (1 << 3),
-	/** reserved: 1-level flat KV store */
-	DAOS_OF_KV_FLAT		= (1 << 4),
-	/** reserved: 1D Array with metadata stored in the DAOS object */
-	DAOS_OF_ARRAY		= (1 << 5),
-	/** reserved: Multi Dimensional Array */
-	DAOS_OF_ARRAY_MD	= (1 << 6),
-	/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
-	DAOS_OF_ARRAY_BYTE	= (1 << 7),
-	/**
-	 * benchmark-only feature bit, I/O is a network echo, no data is going
-	 * to be stored/returned
-	 *
-	 * NB: this is the last feature bits.
-	 */
-	DAOS_OF_ECHO		= (1 << 15),
-	/** Mask for convenience (16-bit) */
-	DAOS_OF_MASK		= ((1 << 16) - 1),
-};
-
 #if defined(__cplusplus)
 }
 #endif /* __cplusplus */
-
-#define daos_obj_generate_oid daos_obj_generate_oid2
 
 #endif /* __DAOS_OBJ_H__ */
