@@ -9,6 +9,8 @@
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
 
+#define daos_pool_connect daos_pool_connect2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -190,7 +192,7 @@ struct daos_pool_cont_info {
  *			-DER_NONEXIST	Pool is nonexistent
  */
 int
-daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
 /**
@@ -417,7 +419,5 @@ daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
 #if defined(__cplusplus)
 }
 #endif
-
-#define daos_pool_connect daos_pool_connect2
 
 #endif /* __DAOS_POOL_H__ */

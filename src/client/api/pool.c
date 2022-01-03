@@ -11,15 +11,12 @@
 #include "client_internal.h"
 #include "task_internal.h"
 
-/** Disable backward compat code */
-#undef daos_pool_connect
-
 /**
  * Real latest & greatest implementation of pool connect.
  * Used by anyone including the daos_pool.h header file.
  */
 int
-daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 		   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_connect_t	*args;
