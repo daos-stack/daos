@@ -22,6 +22,7 @@ import json
 import copy
 import signal
 import stat
+import errno
 import argparse
 import tabulate
 import functools
@@ -1657,6 +1658,36 @@ class posix_tests():
         os.unlink(fname)
         print(os.fstat(ofd.fileno()))
         ofd.close()
+
+    @needs_dfuse
+    def test_chown_self(self):
+        """Test that a file can be chowned to the current user, but not to other users"""
+
+        fname = os.path.join(self.dfuse.dir, 'new_file')
+        with open(fname, 'w') as fd:
+            os.chown(fd.fileno(), os.getuid(), -1)
+            os.chown(fd.fileno(), -1, os.getgid())
+
+            # Chgrp to root, should fail but will likely be refused by the kernel.
+            try:
+                os.chown(fd.fileno(), -1, 1)
+                assert False
+            except PermissionError:
+                pass
+
+            # Chgrp to another group which this process is in, will work for the default group, but
+            # should fail for all others.
+            groups = os.getgroups()
+            print(groups)
+            for group in groups:
+                try:
+                    os.chown(fd.fileno(), -1, group)
+                    assert group == os.getgid()
+                except OSError as e:
+                    print(e)
+                    if e.errno != errno.ENOTSUP:
+                        raise
+                    assert group != os.getgid()
 
     @needs_dfuse
     def test_symlink_broken(self):
