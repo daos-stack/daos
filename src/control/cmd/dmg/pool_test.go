@@ -968,7 +968,7 @@ func TestDmg_GetMaxPoolSize(testRunner *testing.T) {
 					},
 				},
 				{
-					HostName: "bar",
+					HostName: "bar[1,3]",
 					ScmConfig: []control.MockScmConfig{
 						{
 							MockStorageConfig: control.MockStorageConfig{
@@ -1159,43 +1159,6 @@ func TestDmg_GetMaxPoolSize_Errors(testRunner *testing.T) {
 		common.CmpErr(testRunner,
 			errors.New("unable to unpack message"),
 			err)
-	})
-
-	testRunner.Run("Multi Host Response", func(testRunner *testing.T) {
-		log, buf := logging.NewTestLogger(testRunner.Name())
-		defer common.ShowBufferOnFailure(testRunner, buf)
-
-		storageScanResp := control.MockStorageScanResp(testRunner,
-			[]control.MockScmConfig{},
-			[]control.MockNvmeConfig{})
-		mockInvokerConfig := &control.MockInvokerConfig{
-			UnaryResponse: &control.UnaryResponse{
-				Responses: []*control.HostResponse{
-					&control.HostResponse{
-						Addr:    "foo[1,2]",
-						Message: storageScanResp,
-					},
-				},
-			},
-		}
-
-		mockInvoker := control.NewMockInvoker(log, mockInvokerConfig)
-
-		cmd := new(PoolCreateCmd)
-		cmd.setInvoker(mockInvoker)
-		cmd.setLog(log)
-
-		defer func() {
-			errMsg := recover()
-			if errMsg == nil {
-				testRunner.Fatal("Expected panic: HostResponse with multiple host")
-			}
-			common.CmpErr(testRunner,
-				errors.New("HostSet should always contains one host"),
-				errors.New(errMsg.(string)))
-		}()
-
-		cmd.GetMaxPoolSize(context.TODO())
 	})
 
 	for testName, testData := range map[string]struct {

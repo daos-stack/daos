@@ -118,7 +118,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		return errors.Wrap(err, "parsing rank list")
 	}
 
-	if cmd.All {
+	switch {
+	case cmd.All:
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("all", "num-ranks")
 		}
@@ -141,7 +142,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		req.TierRatio = nil
 
 		cmd.log.Infof("Creating DAOS pool with full automatic storage allocation")
-	} else if cmd.Size != "" {
+	case cmd.Size != "":
 		// auto-selection of storage values
 		req.TotalBytes, err = humanize.ParseBytes(cmd.Size)
 		if err != nil {
@@ -179,7 +180,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 		cmd.log.Infof("Creating DAOS pool with automatic storage allocation: "+
 			"%s total, %s tier ratio", humanize.Bytes(req.TotalBytes), cmd.TierRatio)
-	} else {
+	default:
 		// manual selection of storage values
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("nranks", "scm-size")
@@ -258,33 +259,17 @@ func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64, 
 	nvmeBytes = math.MaxUint64
 	for _, key := range hostStorageMap.Keys() {
 		hostStorageSet := hostStorageMap[key]
-
-		hostSet := hostStorageSet.HostSet
-		if hostSet.Count() != 1 {
-			// XXX DAOS-9196 After code investigation, the HostSet should always
-			// contains one and only one host
-			msg := fmt.Sprintf("HostSet should always contains one host: HostSet=%s",
-				hostSet.RangedString())
-			panic(msg)
-		}
-
 		hostStorage := hostStorageSet.HostStorage
-		if hostStorage.RebootRequired {
-			// XXX DAOS-9196 After code investigation, the attribute RebootRequired
-			// is never updated when a message StorageScanResp is converted to
-			// a HostStorage struct
-			panic("RebootRequired should never be set with storage scan")
-		}
 
 		if hostStorage.ScmNamespaces.Free() == uint64(0) {
 			msg := fmt.Sprintf("Host without SCM storage: hostname=%s",
-				hostSet.String())
+				hostStorageSet.HostSet.String())
 			errOut = errors.New(msg)
 			return
 		}
 
 		// FIXME DAOS-9196 At this time the rank associated to one namespace is not defined
-		// in the StorageScanResp.  Thus we rely on the hypothesis that eacch SCM namespace
+		// in the StorageScanResp.  Thus we rely on the hypothesis that each SCM namespace
 		// is associated to one and only one rank. Eventually, the protocol should be
 		// changed to define if a SCM namespace is associated with one rank or not. If yes,
 		// it should define with which rank the SCM namespace is associated.
@@ -301,7 +286,7 @@ func (cmd *PoolCreateCmd) GetMaxPoolSize(ctx context.Context) (scmBytes uint64, 
 					"at least %s of SCM storage (%s missing) is needed"
 				msg = fmt.Sprintf(msg,
 					scmNamespace.Mount.Path,
-					hostSet.String(),
+					hostStorageSet.HostSet.String(),
 					humanize.Bytes(PoolMetadataBytes),
 					humanize.Bytes(missingBytes))
 				errOut = errors.New(msg)
