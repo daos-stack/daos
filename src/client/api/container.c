@@ -142,15 +142,12 @@ out_prop:
 	return rc;
 }
 
-/** Disable backward compat code */
-#undef daos_cont_open
-
 /**
  * Real latest & greatest implementation of container open.
  * Used by anyone including the daos_cont.h header file.
  */
 int
-daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
 		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 {
 	daos_cont_open_t	*args;
@@ -193,15 +190,12 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 	return dc_task_schedule(task, true);
 }
 
-/** Disable backward compat code */
-#undef daos_cont_destroy
-
 /**
  * Real latest & greatest implementation of container destroy.
  * Used by anyone including the daos_cont.h header file.
  */
 int
-daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
 		   daos_event_t *ev)
 {
 	daos_cont_destroy_t	*args;

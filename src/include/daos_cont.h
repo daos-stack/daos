@@ -12,6 +12,9 @@
 #ifndef __DAOS_CONT_H__
 #define __DAOS_CONT_H__
 
+#define daos_cont_open daos_cont_open2
+#define daos_cont_destroy daos_cont_destroy2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -191,7 +194,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
  *			-DER_RF		#failures exceed RF, data possibly lost
  */
 int
-daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
 	       daos_cont_info_t *info, daos_event_t *ev);
 
 /**
@@ -238,7 +241,7 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
  *			-DER_BUSY	Pool is busy
  */
 int
-daos_cont_destroy2(daos_handle_t poh, const char *cont, int force, daos_event_t *ev);
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *ev);
 
 /**
  * Query container information.
@@ -703,8 +706,5 @@ daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_pro
 	})
 
 #endif /* __cplusplus */
-
-#define daos_cont_open daos_cont_open2
-#define daos_cont_destroy daos_cont_destroy2
 
 #endif /* __DAOS_CONT_H__ */
