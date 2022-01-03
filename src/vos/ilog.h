@@ -52,8 +52,7 @@ struct ilog_desc_cbs {
 	 *  return error code < 0.
 	 */
 	int (*dc_log_status_cb)(struct umem_instance *umm, uint32_t tx_id,
-				daos_epoch_t epoch, uint32_t intent,
-				void *args);
+				daos_epoch_t epoch, uint32_t intent, bool retry, void *args);
 	void	*dc_log_status_args;
 	/** Check if the log entry was created by current transaction */
 	int (*dc_is_same_tx_cb)(struct umem_instance *umm, uint32_t tx_id,

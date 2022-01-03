@@ -1228,7 +1228,7 @@ evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
 	if (!cbs->dc_log_status_cb) {
 		return ALB_AVAILABLE_CLEAN;
 	} else {
-		return cbs->dc_log_status_cb(evt_umm(tcx), epoch, desc, intent,
+		return cbs->dc_log_status_cb(evt_umm(tcx), epoch, desc, intent, true,
 					     cbs->dc_log_status_args);
 	}
 }

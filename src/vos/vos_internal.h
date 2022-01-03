@@ -390,6 +390,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  * \param epoch		[IN]	Epoch of update
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
+ * \param retry		[IN]	Whether need to retry if hit non-committed DTX entry.
  *
  * \return	positive value	If available to outside.
  *		zero		If unavailable to outside.
@@ -403,7 +404,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  */
 int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
-			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type, bool retry);
 
 /**
  * Get local entry DTX state. Only used by VOS aggregation.

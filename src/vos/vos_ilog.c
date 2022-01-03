@@ -14,15 +14,14 @@
 
 static int
 vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
-		    daos_epoch_t epoch, uint32_t intent, void *args)
+		    daos_epoch_t epoch, uint32_t intent, bool retry, void *args)
 {
 	int	rc;
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(coh, tx_id, epoch, intent,
-					DTX_RT_ILOG);
+	rc = vos_dtx_check_availability(coh, tx_id, epoch, intent, DTX_RT_ILOG, retry);
 	if (rc < 0)
 		return rc;
 
