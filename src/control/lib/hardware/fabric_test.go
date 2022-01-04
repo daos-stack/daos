@@ -1466,39 +1466,48 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 				&MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
-							NDC: Ether,
+							ExpInput: "net1",
+							NDC:      Ether,
 						},
 						{
-							NDC: Infiniband,
+							ExpInput: "net2",
+							NDC:      Infiniband,
 						},
 						{
-							NDC: Infiniband,
+							ExpInput: "net2",
+							NDC:      Infiniband,
 						},
 					},
 				},
 			),
 			set: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name: "net1",
+					Name:     "net1",
+					OSDevice: "net1",
 				},
 				&FabricInterface{
-					Name: "ofi2",
+					Name:     "ofi2",
+					OSDevice: "net2",
 				},
 				&FabricInterface{
-					Name: "net2",
+					Name:     "net2",
+					OSDevice: "net2",
 				},
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
 					Name:        "net1",
+					OSDevice:    "net1",
 					DeviceClass: Ether,
 				},
 				&FabricInterface{
 					Name:        "ofi2",
+					OSDevice:    "net2",
 					DeviceClass: Infiniband,
 				},
 				&FabricInterface{
 					Name:        "net2",
+					OSDevice:    "net2",
 					DeviceClass: Infiniband,
 				},
 			),
@@ -1508,38 +1517,47 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 				&MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
-							Err: errors.New("mock GetNetDevClass"),
+							ExpInput: "net1",
+							Err:      errors.New("mock GetNetDevClass"),
 						},
 						{
-							NDC: Infiniband,
+							ExpInput: "net2",
+							NDC:      Infiniband,
 						},
 						{
-							NDC: Infiniband,
+							ExpInput: "net2",
+							NDC:      Infiniband,
 						},
 					},
 				},
 			),
 			set: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name: "net1",
+					Name:     "net1",
+					OSDevice: "net1",
 				},
 				&FabricInterface{
-					Name: "ofi2",
+					Name:     "ofi2",
+					OSDevice: "net2",
 				},
 				&FabricInterface{
-					Name: "net2",
+					Name:     "net2",
+					OSDevice: "net2",
 				},
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name: "net1",
+					Name:     "net1",
+					OSDevice: "net1",
 				},
 				&FabricInterface{
 					Name:        "ofi2",
+					OSDevice:    "net2",
 					DeviceClass: Infiniband,
 				},
 				&FabricInterface{
 					Name:        "net2",
+					OSDevice:    "net2",
 					DeviceClass: Infiniband,
 				},
 			),

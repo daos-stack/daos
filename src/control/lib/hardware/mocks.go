@@ -8,6 +8,8 @@ package hardware
 
 import (
 	"context"
+
+	"github.com/pkg/errors"
 )
 
 // MockNUMANode returns a mock NUMA node for testing.
@@ -64,8 +66,9 @@ func (m *MockFabricInterfaceProvider) GetFabricInterfaces(_ context.Context) (*F
 
 // MockGetNetDevClassResult is used to set up a MockNetDevClassProvider's results for GetNetDevClass.
 type MockGetNetDevClassResult struct {
-	NDC NetDevClass
-	Err error
+	ExpInput string
+	NDC      NetDevClass
+	Err      error
 }
 
 // MockNetDevClassProvider is a NetDevClassProvider for testing.
@@ -74,12 +77,15 @@ type MockNetDevClassProvider struct {
 	GetNetDevClassCalled int
 }
 
-func (m *MockNetDevClassProvider) GetNetDevClass(string) (NetDevClass, error) {
+func (m *MockNetDevClassProvider) GetNetDevClass(in string) (NetDevClass, error) {
 	if len(m.GetNetDevClassReturn) == 0 {
-		return Netrom, nil
+		return 0, nil
 	}
 
 	result := m.GetNetDevClassReturn[m.GetNetDevClassCalled%len(m.GetNetDevClassReturn)]
+	if in != result.ExpInput {
+		return 0, errors.Errorf("MOCK: unexpected input %q != %q", in, result.ExpInput)
+	}
 	m.GetNetDevClassCalled++
 	return result.NDC, result.Err
 }

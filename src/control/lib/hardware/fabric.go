@@ -526,7 +526,7 @@ func (n *NetDevClassBuilder) BuildPart(ctx context.Context, fis *FabricInterface
 			return err
 		}
 
-		ndc, err := n.provider.GetNetDevClass(name)
+		ndc, err := n.provider.GetNetDevClass(fi.OSDevice)
 		if err != nil {
 			n.log.Debug(err.Error())
 		}
