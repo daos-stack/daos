@@ -283,6 +283,7 @@ func DefaultServer() *Server {
 	return &Server{
 		SystemName:      build.DefaultSystemName,
 		SocketDir:       defaultRuntimeDir,
+		NrHugepages:     -1, // mapped to 4096 by default.
 		AccessPoints:    []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
 		ControlPort:     build.DefaultControlPort,
 		TransportConfig: security.DefaultServerTransportConfig(),
