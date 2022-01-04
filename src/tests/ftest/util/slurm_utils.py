@@ -165,6 +165,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
 
         for cmd in list(cmds):
             script_file.write(cmd + "\n")
+        script_file.close()
     return scriptfile
 
 

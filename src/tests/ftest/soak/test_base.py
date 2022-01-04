@@ -20,7 +20,7 @@ from ClusterShell.NodeSet import NodeSet
 from getpass import getuser
 import socket
 from agent_utils import include_local_host
-from utils import DDHHMMSS_format, add_pools, get_remote_logs, \
+from utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
@@ -142,6 +142,11 @@ class SoakTestBase(TestWithServers):
 
         # display final metrics
         run_metrics_check(self, prefix="final")
+
+        # Gather daos logs
+
+        # Gather journal logs
+
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
             job_id = " ".join([str(job) for job in self.failed_job_id_list])
@@ -424,7 +429,7 @@ class SoakTestBase(TestWithServers):
                         "<< Job %s failed with status %s>>", job, result)
             # gather all the logfiles for this pass and cleanup test nodes
             try:
-                get_remote_logs(self, self.soaktest_dir, self.outputsoak_dir, self.hostlist_clients)
+                get_remote_dir(self, self.soaktest_dir, self.outputsoak_dir, self.hostlist_clients)
             except SoakTestError as error:
                 self.log.info("Remote copy failed with %s", error)
             self.soak_results = {}

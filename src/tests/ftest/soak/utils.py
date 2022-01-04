@@ -145,7 +145,7 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
         fscopy_cmd.run()
 
 
-def get_remote_logs(self, source_dir, dest_dir, host_list, rm_remote=True):
+def get_remote_dir(self, source_dir, dest_dir, host_list, rm_remote=True):
     """Copy files from remote dir to local dir.
 
     Args:
@@ -206,20 +206,20 @@ def write_logfile(data, name, destination):
         else:
             script_file.write(str(data))
 
-
-def run_event_check(self, since, until):
+def run_event_check(self, since, until, log=False):
     """Run a check on specific events in journalctl.
 
     Args:
         self (obj): soak obj
+        since (str): start time
+        until (str): end time
+        log (bool):  If true; write the events to a logfile
 
     Returns list of any matched events found in system log
 
     """
     events_found = []
     detected = 0
-    # to do: currently all events are from - t kernel;
-    # when systemctl is enabled add daos events
     events = self.params.get("events", "/run/*")
     # check events on all nodes
     hosts = list(set(self.hostlist_servers))

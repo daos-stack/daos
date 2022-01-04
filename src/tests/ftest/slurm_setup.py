@@ -78,7 +78,7 @@ def update_config_cmdlist(args):
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         sys.exit(1)
-    if distro == "el8" or distro == "suse.lp153":
+    if distro in ["el8", "suse.lp153"]:
         cmd_list = [
             "sed -i -e 's/SlurmctldHost=linux0/SlurmctldHost={}/g' {}".format(
                 args.control, SLURM_CONF),
