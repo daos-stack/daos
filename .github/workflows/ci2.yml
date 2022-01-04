@@ -27,6 +27,9 @@ jobs:
       with:
         submodules: true
         fetch-depth: 500
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: git log
+      run: git log
     - name: Setup git hash
       run: ./ci/gha_helper.py
       id: commit-hash
@@ -93,6 +96,7 @@ jobs:
       with:
         submodules: true
         fetch-depth: 500
+        ref: ${{ github.event.pull_request.head.sha }}
     - name: Setup git hash
       run: ./ci/gha_helper.py
       id: commit-hash
