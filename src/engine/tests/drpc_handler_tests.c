@@ -148,6 +148,8 @@ drpc_hdlr_register_bad_module_id(void **state)
 {
 	assert_rc_equal(drpc_hdlr_register(NUM_DRPC_MODULES,
 					   dummy_drpc_handler2), -DER_INVAL);
+	assert_rc_equal(drpc_hdlr_register(-1,
+					   dummy_drpc_handler2), -DER_INVAL);
 }
 
 static void

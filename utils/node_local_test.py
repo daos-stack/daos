@@ -490,6 +490,16 @@ class DaosServer():
         else:
             self.dfuse_cores = None
 
+        self.fuse_procs = []
+
+    def add_fuse(self, fuse):
+        """Register a new fuse instance"""
+        self.fuse_procs.append(fuse)
+
+    def remove_fuse(self, fuse):
+        """Deregister a fuse instance"""
+        self.fuse_procs.remove(fuse)
+
     def __del__(self):
         if self._agent:
             self._stop_agent()
@@ -713,6 +723,12 @@ class DaosServer():
 
     def stop(self, wf):
         """Stop a previously started DAOS server"""
+
+        for fuse in self.fuse_procs:
+            print('Stopping server with running fuse procs, cleaning up')
+            self._add_test_case('server-stop-with-running-fuse', failure=str(fuse))
+            fuse.stop()
+
         if self._agent:
             self._stop_agent()
 
@@ -1022,6 +1038,15 @@ class DFuse():
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
+    def __str__(self):
+
+        if self._sp:
+            running = 'running'
+        else:
+            running = 'not running'
+
+        return 'DFuse instance at {} ({})'.format(self.dir, running)
+
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
@@ -1101,6 +1126,8 @@ class DFuse():
             if total_time > 60:
                 raise Exception('Timeout starting dfuse')
 
+        self._daos.add_fuse(self)
+
     def _close_files(self):
         work_done = False
         for fname in os.listdir('/proc/self/fd'):
@@ -1137,7 +1164,10 @@ class DFuse():
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
-            if ret != 0:
+            if ret == 42:
+                self.conf.wf.add_test_case(str(self), failure='valgrind errors', output=ret)
+                self.conf.valgrind_errors = True
+            elif ret != 0:
                 fatal_errors = True
         except subprocess.TimeoutExpired:
             print('Timeout stopping dfuse')
@@ -1152,6 +1182,7 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
         os.rmdir(self.dir)
+        self._daos.remove_fuse(self)
         return fatal_errors
 
     def wait_for_exit(self):
@@ -1302,6 +1333,7 @@ def run_daos_cmd(conf,
     if vh.use_valgrind and rc.returncode == 42:
         print("Valgrind errors detected")
         print(rc)
+        conf.wf.add_test_case(' '.join(cmd), failure='valgrind errors', output=rc)
         conf.valgrind_errors = True
         rc.returncode = 0
     if use_json:
@@ -1473,6 +1505,38 @@ def needs_dfuse_no_cache(method):
         return rc
     return _helper
 
+class print_stat():
+    """Class for nicely showing file 'stat' data, similar to ls -l"""
+
+    headers = ['uid', 'gid', 'size', 'mode', 'filename']
+
+    def __init__(self, filename=None):
+        # Setup the object, and maybe add some data to it.
+        self._stats = []
+        if filename:
+            self.add(filename)
+
+    def add(self, filename, attr=None, show_dir=False):
+        """Add an entry to be displayed"""
+
+        if attr is None:
+            attr = os.stat(filename)
+
+        self._stats.append([attr.st_uid,
+                            attr.st_gid,
+                            attr.st_size,
+                            stat.filemode(attr.st_mode),
+                            filename])
+
+        if show_dir:
+            tab = '.' * len(filename)
+            for fname in os.listdir(filename):
+                self.add(os.path.join(tab, fname),
+                         attr=os.stat(os.path.join(filename, fname)))
+
+    def __str__(self):
+        return tabulate.tabulate(self._stats, self.headers)
+
 # This is test code where methods are tests, so we want to have lots of them.
 # pylint: disable=too-many-public-methods
 class posix_tests():
@@ -1497,10 +1561,26 @@ class posix_tests():
         self.needs_more = False
         self.test_name = ''
 
-    # pylint: disable=no-self-use
-    def fail(self):
+    @staticmethod
+    def fail():
         """Mark a test method as failed"""
         raise NLTestFail
+
+    @staticmethod
+    def _check_dirs_equal(expected, dir_name):
+        """Verify that the directory contents are as expected
+
+        Takes a list of expected files, and a directory name.
+        """
+        files = sorted(os.listdir(dir_name))
+
+        expected = sorted(expected)
+
+        print('Comparing real vs expected contents of {}'.format(dir_name))
+        print('expected: "{}"'.format(','.join(expected)))
+        print('actual:   "{}"'.format(','.join(files)))
+
+        assert files == expected
 
     def test_cont_list(self):
         """Test daos container list"""
@@ -1934,7 +2014,7 @@ class posix_tests():
         print(os.listdir(path))
 
     @needs_dfuse
-    def test_rename(self):
+    def test_rename_clobber(self):
         """Test that rename clobbers files correctly
 
         use rename to delete a file, but where the kernel is aware of a different file.
@@ -1981,10 +2061,125 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-        # Finally, perform some more I/O so we can tell from the dfuse logs where the test ends and
-        # dfuse teardown starts.  At this point file 1 and file 2 have been deleted.
-        time.sleep(1)
-        print(os.statvfs(self.dfuse.dir))
+    @needs_dfuse
+    def test_rename(self):
+        """Test that tries various rename scenarios"""
+
+        def _go(root):
+            dfd = os.open(root, os.O_RDONLY)
+            try:
+
+                # Test renaming a file into a directory.
+                pre_fname = os.path.join(root, 'file')
+                with open(pre_fname, 'w') as fd:
+                    fd.write('test')
+                dname = os.path.join(root, 'dir')
+                os.mkdir(dname)
+                post_fname = os.path.join(dname, 'file')
+                # os.rename and 'mv' have different semantics, use mv here which will put the file
+                # in the directory.
+                subprocess.run(['mv', pre_fname, dname], check=True)
+                self._check_dirs_equal(['file'], dname)
+
+                os.unlink(post_fname)
+                os.rmdir('dir', dir_fd=dfd)
+
+                # Test renaming a file over a directory.
+                pre_fname = os.path.join(root, 'file')
+                with open(pre_fname, 'w') as fd:
+                    fd.write('test')
+                dname = os.path.join(root, 'dir')
+                os.mkdir(dname)
+                post_fname = os.path.join(dname, 'file')
+                # Try os.rename here, which we expect to fail.
+                try:
+                    os.rename(pre_fname, dname)
+                    self.fail()
+                except IsADirectoryError:
+                    pass
+                os.unlink(pre_fname)
+                os.rmdir('dir', dir_fd=dfd)
+
+                # Check renaming a file over a file.
+                for index in range(2):
+                    with open(os.path.join(root, 'file.{}'.format(index)), 'w') as fd:
+                        fd.write('test')
+
+                print(os.listdir(dfd))
+                os.rename('file.0', 'file.1', src_dir_fd=dfd, dst_dir_fd=dfd)
+
+                self._check_dirs_equal(['file.1'], root)
+                os.unlink('file.1', dir_fd=dfd)
+
+                # dir onto file.
+                dname = os.path.join(root, 'dir')
+                os.mkdir(dname)
+                fname = os.path.join(root, 'file')
+                with open(fname, 'w') as fd:
+                    fd.write('test')
+                try:
+                    os.rename(dname, fname)
+                    self.fail()
+                except NotADirectoryError:
+                    pass
+                os.unlink('file', dir_fd=dfd)
+                os.rmdir('dir', dir_fd=dfd)
+
+                # Now check for dir rename into other dir though mv.
+                src_dir = os.path.join(root, 'src')
+                dst_dir = os.path.join(root, 'dst')
+                os.mkdir(src_dir)
+                os.mkdir(dst_dir)
+                subprocess.run(['mv', src_dir, dst_dir], check=True)
+                self._check_dirs_equal(['dst'], root)
+                self._check_dirs_equal(['src'], os.path.join(root, 'dst'))
+                os.rmdir(os.path.join(dst_dir, 'src'))
+                os.rmdir(dst_dir)
+
+                # Check for dir rename over other dir though python, in this case it should clobber
+                # the target directory.
+                for index in range(2):
+                    os.mkdir(os.path.join(root, 'dir.{}'.format(index)))
+                os.rename('dir.0', 'dir.1', src_dir_fd=dfd, dst_dir_fd=dfd)
+                self._check_dirs_equal(['dir.1'], root)
+                self._check_dirs_equal([], os.path.join(root, 'dir.1'))
+                os.rmdir(os.path.join(root, 'dir.1'))
+                for index in range(2):
+                    with open(os.path.join(root, 'file.{}'.format(index)), 'w') as fd:
+                        fd.write('test')
+                os.rename('file.0', 'file.1', src_dir_fd=dfd, dst_dir_fd=dfd)
+                self._check_dirs_equal(['file.1'], root)
+                os.unlink('file.1', dir_fd=dfd)
+
+                # Rename a dir over another, where the target is not empty.
+                dst_dir = os.path.join(root, 'ddir')
+                dst_file = os.path.join(dst_dir, 'file')
+                os.mkdir('sdir', dir_fd=dfd)
+                os.mkdir(dst_dir)
+                with open(dst_file, 'w') as fd:
+                    fd.write('test')
+                # According to the man page this can return ENOTEMPTY or EEXIST, and /tmp is
+                # returning one and dfuse the other so catch both.
+                try:
+                    os.rename('sdir', dst_dir, src_dir_fd=dfd)
+                    self.fail()
+                except FileExistsError:
+                    pass
+                except OSError as e:
+                    assert e.errno == errno.ENOTEMPTY
+                os.rmdir('sdir', dir_fd=dfd)
+                os.unlink(dst_file)
+                os.rmdir(dst_dir)
+
+
+            finally:
+                os.close(dfd)
+
+        # Firstly validate the check
+        with tempfile.TemporaryDirectory(prefix='rename_test_ref_dir.') as tmp_dir:
+            _go(tmp_dir)
+
+        _go(self.dfuse.dir)
 
     @needs_dfuse
     def test_complex_unlink(self):
@@ -2032,6 +2227,86 @@ class posix_tests():
         for fd in fds:
             fd.close()
 
+    def test_cont_rw(self):
+        """Test write access to another users container"""
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+
+        dfuse.start(v_hint='cont_rw_1')
+
+        ps = print_stat(dfuse.dir)
+        testfile = os.path.join(dfuse.dir, 'testfile')
+        with open(testfile, 'w') as fd:
+            ps.add(testfile, attr=os.fstat(fd.fileno()))
+
+        dirname = os.path.join(dfuse.dir, 'rw_dir')
+        os.mkdir(dirname)
+
+        ps.add(dirname)
+
+        dir_perms = os.stat(dirname).st_mode
+        base_perms = stat.S_IMODE(dir_perms)
+
+        os.chmod(dirname, base_perms | stat.S_IWGRP | stat.S_IXGRP | stat.S_IXOTH | stat.S_IWOTH)
+        ps.add(dirname)
+        print(ps)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+            # Update container ACLs so current user has rw permissions only, the minimum required.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'update-acl',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--entry',
+                                      'A::{}@:rwta'.format(os.getlogin())])
+        print(rc)
+
+        # Assign the container to someone else.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'set-owner',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--user',
+                                      'root@',
+                                      '--group',
+                                      'root@'])
+        print(rc)
+
+        # Now start dfuse and access the container, see who the file is owned by.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='cont_rw_2')
+
+        ps = print_stat()
+        ps.add(dfuse.dir, show_dir=True)
+
+        with open(os.path.join(dfuse.dir, 'testfile'), 'r') as fd:
+            ps.add(os.path.join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
+
+        dirname = os.path.join(dfuse.dir, 'rw_dir')
+        testfile = os.path.join(dirname, 'new_file')
+        fd = os.open(testfile, os.O_RDWR | os.O_CREAT, mode=int('600', base=8))
+        os.write(fd, b'read-only-data')
+        ps.add(testfile, attr=os.fstat(fd))
+        os.close(fd)
+        print(ps)
+
+        with open(os.path.join(dfuse.dir, 'rw_dir', 'new_file'), 'r') as fd:
+            data = fd.read()
+            print(data)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
     @needs_dfuse
     def test_complex_rename(self):
         """Test for rename semantics, and that rename is correctly updating the dfuse data for
@@ -2074,6 +2349,8 @@ class posix_tests():
         print(os.fstat(ofd.fileno()))
 
         ofd.close()
+        if dfuse.stop():
+            self.fatal_errors = True
 
     def test_cont_ro(self):
         """Test access to a read-only container"""
@@ -2638,6 +2915,15 @@ def run_posix_tests(server, conf, test=None):
 
         for td in threads:
             td.join()
+
+    # Now check for running dfuse instances, there should be none at this point as all tests have
+    # completed.  It's not possible to do this check as each test finishes due to the fact that
+    # the tests are running in parallel.  We could revise this so there's a dfuse method on
+    # posix_tests class itself if required.
+    for fuse in server.fuse_procs:
+        conf.wf.add_test_case('fuse leak in tests',
+                              'Test leaked dfuse instance at {}'.format(fuse),
+                              test_class='test',)
 
     out_wrapper = None
     err_wrapper = None
@@ -3968,8 +4254,8 @@ def run(wf, args):
         wf.add_test_case('Errors')
 
     if conf.valgrind_errors:
+        wf.add_test_case('Errors', 'Valgrind errors encountered')
         print("Valgrind errors detected during execution")
-        fatal_errors.add_result(True)
 
     wf_server.close()
     conf.flush_bz2()
