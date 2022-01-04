@@ -193,6 +193,8 @@ struct ilog_entries {
  *				that are provably not needed.  If discard is
  *				set, it will remove everything in the epoch
  *				range.
+ *  \param	inprogress[in]	If discarding, leave committed entries alone.
+ *				Remove only uncommitted entries.
  *  \param	punch_major[in]	Max major epoch punch of parent incarnation log
  *  \param	punch_major[in]	Max minor epoch punch of parent incarnation log
  *  \param	entries[in]	Used for efficiency since aggregation is used
@@ -205,7 +207,7 @@ struct ilog_entries {
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
-	       bool discard, daos_epoch_t punch_major, uint16_t punch_minor,
+	       bool discard, bool inprogress, daos_epoch_t punch_major, uint16_t punch_minor,
 	       struct ilog_entries *entries);
 
 /** Initialize an ilog_entries struct for fetch
@@ -214,6 +216,15 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
  */
 void
 ilog_fetch_init(struct ilog_entries *entries);
+
+/** Assuming src has already been copied to dest, just fix up internal pointers
+ *  and reset src
+ *
+ *  \param	dest[in]	Destination entries
+ *  \param	src[in]		Source entries
+ */
+void
+ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src);
 
 /** Fetch the entire incarnation log.  This function will refresh only when
  * the underlying log or the intent has changed.  If the struct is shared

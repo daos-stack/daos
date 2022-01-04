@@ -1,0 +1,83 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+  test_clients:
+    - server-F
+    - server-G
+    - server-H
+timeout: 900
+setup:
+  start_agents_once: False
+  start_servers_once: False
+server_config:
+  engines_per_host: 2
+  name: daos_server
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      log_mask: ERR
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+      log_mask: ERR
+pool:
+    name: daos_server
+    control_method: dmg
+    scm_size: 25%
+    nvme_size: 93%
+    cell_size: !mux
+      cell_size_4K:
+        properties: ec_cell_sz:4KiB
+      cell_size_64K:
+        properties: ec_cell_sz:64KiB
+      cell_size_128K:
+        properties: ec_cell_sz:128KiB
+      cell_size_1M:
+        properties: ec_cell_sz:1MiB
+container:
+    type: POSIX
+    control_method: daos
+ior:
+  api: "DFS"
+  client_processes:
+    np: 48
+  dfs_destroy: False
+  iorflags:
+      flags: "-w -W -r -R -G 1 -vv"
+  test_file: /testFile
+  repetitions: 1
+  transfersize_blocksize: !mux
+    1M_128M:
+      transfer_size: 8k
+      block_size: 64M
+    2M_128M:
+      transfer_size: 1M
+      block_size: 128M
+  objectclass:
+      dfs_oclass:
+      - "EC_2P1GX"
+      - "EC_2P2GX"
+      - "EC_4P1GX"
+      - "EC_4P2GX"
+      - "EC_8P2GX"

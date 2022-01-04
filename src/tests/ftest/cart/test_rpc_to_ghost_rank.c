@@ -308,7 +308,7 @@ test_init(void)
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
-	flag = test_g.t_is_service ? CRT_FLAG_BIT_SERVER : 0;
+	flag = test_g.t_is_service ? (CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE) : 0;
 	rc = crt_init(test_g.t_local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 

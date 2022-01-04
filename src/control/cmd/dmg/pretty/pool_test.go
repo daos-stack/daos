@@ -154,8 +154,8 @@ func TestPretty_PrintPoolCreateResp(t *testing.T) {
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool created with 5.66%%%%,94.34%%%% storage tier ratio
----------------------------------------------------
+Pool created with 5.66%%,94.34%% storage tier ratio
+-------------------------------------------------
   UUID                 : %s
   Service Ranks        : [0-2]                               
   Storage Ranks        : [0-3]                               
@@ -175,8 +175,8 @@ Pool created with 5.66%%%%,94.34%%%% storage tier ratio
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool created with 100.00%%%% storage tier ratio
----------------------------------------------
+Pool created with 100.00%% storage tier ratio
+--------------------------------------------
   UUID                 : %s
   Service Ranks        : [0-2]                               
   Storage Ranks        : [0-3]                               
@@ -238,7 +238,12 @@ no pools in system
 					},
 				},
 			},
-			expErr: errors.New("no usage"),
+			expPrintStr: `
+Pool     Size Used Imbalance Disabled 
+----     ---- ---- --------- -------- 
+00000001 0 B  0%   0%        0/0      
+
+`,
 		},
 		"one pool; no uuid": {
 			resp: &control.ListPoolsResp{

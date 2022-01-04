@@ -28,6 +28,7 @@ struct test_global_t {
 	sem_t			 tg_token_to_proceed;
 	bool			 tg_use_cfg;
 	bool			 tg_save_cfg;
+	bool			 tg_use_daos_agent_env;
 	char			*tg_cfg_path;
 	uint32_t		 tg_num_proto;
 };
@@ -284,6 +285,7 @@ test_parse_args(int argc, char **argv)
 	};
 
 	test.tg_use_cfg = true;
+	test.tg_use_daos_agent_env = false;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:s:p:u:h", long_options,

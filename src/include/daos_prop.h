@@ -75,6 +75,9 @@ enum daos_pool_props {
 	DAOS_PROP_PO_MAX,
 };
 
+#define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
+#define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
+
 /**
  * Number of pool property types
  */
@@ -198,7 +201,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_STATUS,
 	/** OID value to start allocation from */
 	DAOS_PROP_CO_ALLOCED_OID,
-	/** EC cell size, it can overwrite DAOS_PROP_EC_CELL_SZ of pool */
+	/** EC cell size, it can overwrite DAOS_PROP_CO_EC_CELL_SZ of pool */
 	DAOS_PROP_CO_EC_CELL_SZ,
 	DAOS_PROP_CO_MAX,
 };
@@ -362,11 +365,13 @@ struct daos_prop_entry {
 
 /** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
 #define DAOS_PROP_LABEL_MAX_LEN		(127)
+/** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
+#define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
 
 /**
  * Check if DAOS (pool or container property) label string is valid.
  * DAOS labels must consist only of alphanumeric characters, colon ':',
- * period '.' or underscore '_', and must be of length
+ * period '.', hyphen '-' or underscore '_', and must be of length
  * [1 - DAOS_PROP_LABEL_MAX_LEN].
  *
  * \param[in]	label	Label string
@@ -379,6 +384,7 @@ daos_label_is_valid(const char *label)
 {
 	int	len;
 	int	i;
+	bool	maybe_uuid = false;
 
 	/** Label cannot be NULL */
 	if (label == NULL)
@@ -389,14 +395,42 @@ daos_label_is_valid(const char *label)
 	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN)
 		return false;
 
-	/** Verify that it contains only alphanumeric characters or :._ */
+	/** Verify that it contains only alphanumeric characters or :.-_ */
 	for (i = 0; i < len; i++) {
 		char c = label[i];
 
 		if (isalnum(c) || c == '.' || c == '_' || c == ':')
 			continue;
+		if (c == '-') {
+			maybe_uuid = true;
+			continue;
+		}
 
 		return false;
+	}
+
+	/** Check to see if it could be a valid UUID */
+	if (maybe_uuid && strnlen(label, 36) == 36) {
+		bool		is_uuid = true;
+		const char	*p;
+
+		/** Implement the check directly to avoid uuid_parse() overhead */
+		for (i = 0, p = label; i < 36; i++, p++) {
+			if (i == 8 || i == 13 || i == 18 || i == 23) {
+				if (*p != '-') {
+					is_uuid = false;
+					break;
+				}
+				continue;
+			}
+			if (!isxdigit(*p)) {
+				is_uuid = false;
+				break;
+			}
+		}
+
+		if (is_uuid)
+			return false;
 	}
 
 	return true;
@@ -442,6 +476,21 @@ void
 daos_prop_free(daos_prop_t *prop);
 
 /**
+ * Allocate a new property from a string buffer of property entries and values. That buffer has to
+ * be of the format:
+ * prop_entry_name1:value1;prop_entry_name2:value2;prop_entry_name3:value3;
+ * \a prop must be freed with daos_prop_free() to release allocated space.
+ * This supports properties that can be modified on container creation only:
+ * label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression, encryption, rf, ec_cell
+ *
+ * \param[in]	str	Serialized string of property entries and their values
+ * \param[in]	len	Serialized string length
+ * \param[out]	prop	Property that is created
+ */
+int
+daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **prop);
+
+/**
  * Merge a set of new DAOS properties into a set of existing DAOS properties.
  *
  * \param[in]	old_prop	Existing set of properties
@@ -451,6 +500,69 @@ daos_prop_free(daos_prop_t *prop);
  */
 daos_prop_t *
 daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
+
+/**
+ * Search and return a property entry of type \a type in the property list
+ * \a prop
+ * Return NULL if not found.
+ *
+ * \param[in]		prop		Property list
+ * \param[in]		type		Type of property to look for
+ */
+struct daos_prop_entry *
+daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
+
+/**
+ * Set the string value of a property entry in a property. The property type must expect that it's
+ * entry is of a string type. This duplicates the string internally and the entry string is freed
+ * with daos_free_prop(). The user does not need to keep the string buffer around after this
+ * function is called. If the entry already has a string value set, it frees that and overwrites it
+ * with this new string.
+ *
+ * \param[in]		prop		Property list
+ * \param[in]		type		Type of property to look for
+ * \param[in]		str		String value to set in the prop entry
+ * \param[in]           len		Length of \a str
+ */
+int
+daos_prop_set_str(daos_prop_t *prop, uint32_t type, const char *str, daos_size_t len);
+
+/**
+ * Set the entry string value with the provided \a str.
+ * Convenience Function.
+ *
+ * \param[in,out]	entry		Entry where to duplicate the str into.
+ * \param[in]		str		String value to set in the prop entry
+ * \param[in]           len		Length of \a str
+ */
+int
+daos_prop_entry_set_str(struct daos_prop_entry *entry, const char *str, daos_size_t len);
+
+/**
+ * Set the pointer value of a property entry in a property. The property type must expect that it's
+ * entry is of a pointer type. This duplicates the buffer internally and the entry buffer is freed
+ * with daos_free_prop(). The user does not need to keep the string buffer around after this
+ * function is called. If the entry already has a value set, it frees that and overwrites it with
+ * this new value.
+ *
+ * \param[in]		prop		Property list
+ * \param[in]		type		Type of property to look for
+ * \param[in]		ptr		Pointer to value of entry to set
+ * \param[in]           size		Size of value
+ */
+int
+daos_prop_set_ptr(daos_prop_t *prop, uint32_t type, const void *ptr, daos_size_t size);
+
+/**
+ * Set the entry pointer value with the provided \a ptr.
+ * Convenience Function.
+ *
+ * \param[in,out]	entry		Entry where to copy the value.
+ * \param[in]		ptr             Pointer to value of entry to set
+ * \param[in]           size            Size of value
+ */
+int
+daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_size_t size);
 
 /**
  * Duplicate a generic pointer value from one DAOS prop entry to another.

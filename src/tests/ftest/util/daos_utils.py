@@ -16,35 +16,6 @@ class DaosCommand(DaosCommandBase):
 
     METHOD_REGEX = {
         "run": r"(.*)",
-        "container_create": r"container ([0-9a-f-]+)",
-        # Sample pool query output.
-        # 04/19-18:31:26.90 wolf-3 Pool 3e59b386-fda0-404e-af7e-3ff0a38d1f81,
-        #    ntarget=8, disabled=0
-        # 04/19-18:31:26.90 wolf-3 Pool space info:
-        # 04/19-18:31:26.90 wolf-3 - Target(VOS) count:8
-        # 04/19-18:31:26.90 wolf-3 - SCM:
-        # 04/19-18:31:26.90 wolf-3   Total size: 1000000000
-        # 04/19-18:31:26.90 wolf-3   Free: 999997440, min:124999680,
-        #     max:124999680, mean:124999680
-        # 04/19-18:31:26.90 wolf-3 - NVMe:
-        # 04/19-18:31:26.90 wolf-3   Total size: 0
-        # 04/19-18:31:26.90 wolf-3   Free: 0, min:0, max:0, mean:0
-        # 04/19-18:31:26.90 wolf-3 Rebuild idle, 0 objs, 0 recs
-        "pool_query": r"(?:Pool\s*([A-Za-z0-9-]+),\s*ntarget=([0-9])," +
-                      r"\s*disabled=([0-9])|Target\(VOS\) count:\s*([0-9])|" +
-                      r"(?:SCM:\s+.*|NVMe:\s+.*)Total\s+size:\s+([0-9]+)" +
-                      r"\s+.*Free:\s+([0-9]+),\s+min:([0-9]+),\s+" +
-                      r"max:([0-9]+),\s+mean:([0-9]+)|" +
-                      r"Rebuild\s*idle,\s*([0-9]+)\s*objs,\s*([0-9]+)\s*recs)",
-        # Sample list-attrs output.
-        # 04/19-21:16:31.62 wolf-3 Pool attributes:
-        # 04/19-21:16:31.62 wolf-3 attr0
-        # 04/19-21:16:31.62 wolf-3 attr1
-        "pool_list_attrs": r"\b([^:\s]+)\n",
-        # Sample get-attr output - no line break.
-        # 04/19-21:16:32.66 wolf-3 Pool's attr2 attribute value:
-        # 04/19-21:16:32.66 wolf-3 val2
-        "pool_get_attr": r"\b(\S+)$",
         "container_query":
             r"Pool UUID:\s+([0-9a-f-]+)\n" +
             r"Container UUID:\s+([0-9a-f-]+)\n" +
@@ -63,14 +34,13 @@ class DaosCommand(DaosCommandBase):
             sys (str, optional): [description]. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool query command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("pool", "query"), pool=pool, sys_name=sys_name, sys=sys)
 
     def pool_autotest(self, pool):
@@ -112,14 +82,13 @@ class DaosCommand(DaosCommandBase):
             acl_file (str, optional): ACL file. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container create command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("container", "create"), pool=pool, sys_name=sys_name,
             cont=cont, path=path, type=cont_type, oclass=oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file)
@@ -270,38 +239,46 @@ class DaosCommand(DaosCommandBase):
             ("container", "update-acl"), pool=pool, cont=cont,
             entry=entry, acl_file=acl_file)
 
-    def pool_list_cont(self, pool, sys_name=None):
+    def container_list(self, pool, sys_name=None):
         """List containers in the given pool.
 
         Args:
-            pool (str): Pool UUID
+            pool (str): Pool label or UUID
             sys_name (str, optional): System name. Defaults to None.
 
         Returns:
-            dict: Dictionary that contains the list of UUIDs in the key "uuids".
+            dict: JSON output
 
         Raises:
-            CommandFailure: if the daos pool list-containers command fails.
+            CommandFailure: if the daos container list command fails.
 
         """
-        self._get_result(
-            ("cont", "list"), pool=pool, sys_name=sys_name)
         # Sample output.
-        # c8bfc7c9-cb19-4574-bae2-af4046d24b58
-        # 182347e4-08ce-4069-b5e2-0dd04406dffd
-        data = {}
-        if self.result.exit_status == 0:
-            data["uuids"] = re.findall(r"([0-9a-f-]{36})",
-            self.result.stdout_text)
-        return data
+        # {
+        #   "response": [
+        #     {
+        #       "UUID": "bad80a98-aabd-498c-b001-6547cd061c8c",
+        #       "Label": "container_label_not_set"
+        #     },
+        #     {
+        #       "UUID": "dd9fc365-5729-4736-9d34-e46504a4a92d",
+        #       "Label": "mkc1"
+        #     }
+        #   ],
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(
+            ("container", "list"), pool=pool, sys_name=sys_name)
 
-    def pool_set_attr(self, pool, attr, value):
+    def pool_set_attr(self, pool, attr, value, sys_name=None):
         """Set pool attribute.
 
         Args:
             pool (str): Pool UUID.
             attr (str): Attribute name.
-            value (str): Attribute value
+            value (str): Attribute value.
+            sys_name (str): DAOS system name. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -312,41 +289,46 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("pool", "set-attr"), pool=pool, attr=attr, value=value)
+            ("pool", "set-attr"), pool=pool, attr=attr, value=value,
+            sys_name=sys_name)
 
-    def pool_get_attr(self, pool, attr):
+    def pool_get_attr(self, pool, attr, sys_name=None):
         """Set pool attribute.
 
         Args:
             pool (str): Pool UUID.
             attr (str): Pool UUID.
+            sys_name (str): DAOS system name. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool query command fails.
 
         """
-        return self._get_result(
-            ("pool", "get-attr"), pool=pool, attr=attr)
+        return self._get_json_result(
+            ("pool", "get-attr"), pool=pool, attr=attr, sys_name=sys_name)
 
-    def pool_list_attrs(self, pool):
+    def pool_list_attrs(self, pool, sys_name=None, verbose=False):
         """List pool attributes.
 
         Args:
             pool (str): Pool UUID.
+            sys_name (str): DAOS system name. Defaults to None.
+            verbose (bool): False - name only. True - name and value. Defaults
+                to False.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool list-attrs command fails.
 
         """
-        return self._get_result(("pool", "list-attrs"), pool=pool)
+        return self._get_json_result(
+            ("pool", "list-attrs"), pool=pool, sys_name=sys_name,
+            verbose=verbose)
 
     def container_query(self, pool, cont, sys_name=None):
         """Query a container.
@@ -358,16 +340,14 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos container query command fails.
 
         """
-        return self._get_result(
-            ("container", "query"), pool=pool, cont=cont,
-            sys_name=sys_name)
+        return self._get_json_result(
+            ("container", "query"), pool=pool, cont=cont, sys_name=sys_name)
 
     def container_set_prop(self, pool, cont, prop, value):
         """Call daos container set-prop.
@@ -465,30 +445,16 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            dict: Dictionary that stores the attribute and value in "attr" and
-                "value" key.
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos get-attr command fails.
 
         """
-        self._get_result(
-            ("container", "get-attr"), pool=pool, cont=cont,
-            sys_name=sys_name, attr=attr)
+        return self._get_json_result(
+            ("container", "get-attr"), pool=pool, cont=cont, attr=attr, sys_name=sys_name)
 
-        # Sample output.
-        # Container's `&()\;'"!<> attribute value: attr12
-        match = re.findall(
-            r"Container's\s+([\S ]+)\s+attribute\s+value:\s+(.+)$",
-            self.result.stdout_text)
-        data = {}
-        if match:
-            data["attr"] = match[0][0]
-            data["value"] = match[0][1]
-
-        return data
-
-    def container_list_attrs(self, pool, cont, sys_name=None):
+    def container_list_attrs(self, pool, cont, sys_name=None, verbose=False):
         """Call daos container list-attrs.
 
         Args:
@@ -496,26 +462,18 @@ class DaosCommand(DaosCommandBase):
             cont (str): Container UUID.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
+            verbose (bool, optional): True - fetch values of all attributes.
 
         Returns:
-            dict: Dictionary that stores the attribute values in the key "attrs"
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container list-attrs command fails.
 
         """
-        self._get_result(
-            ("container", "list-attrs"), pool=pool, cont=cont,
-            sys_name=sys_name)
-
-        # Sample output.
-        # Container attributes:
-        # attr0
-        # ~@#$%^*-=_+[]{}:/?,.
-        # aa bb
-        # attr48
-        match = re.findall(r"\n([\S ]+)", self.result.stdout_text)
-        return {"attrs": match}
+        return self._get_json_result(
+            ("container", "list-attrs"), pool=pool, cont=cont, sys_name=sys_name,
+            verbose=verbose)
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
                               sys_name=None):
@@ -541,10 +499,9 @@ class DaosCommand(DaosCommandBase):
             sys_name=sys_name, snap=snap_name, epc=epoch)
 
         # Sample create-snap output.
-        # snapshot/epoch 1582610056530034697 has been created
+        # snapshot/epoch 0x51e719907180000 has been created
         data = {}
-        match = re.findall(
-            r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout_text)
+        match = re.findall(r"[A-Za-z\/]+\s(0x[0-9a-fA-F]+)\s[a-z\s]+", self.result.stdout_text)
         if match:
             data["epoch"] = match[0]
 
@@ -600,9 +557,12 @@ class DaosCommand(DaosCommandBase):
 
         # Sample container list-snaps output.
         # Container's snapshots :
-        # 1598478249040609297 1598478258840600594 1598478287952543761
+        # 0x51ebe2f21500000
+        # 0x51ebe4f5b6c0000
+        # 0x51ebe5233780000
         data = {}
-        match = re.findall(r"(\d+)", self.result.stdout_text)
+        match = re.findall(r"(0x[0-9a-fA-F]+)", self.result.stdout_text)
+
         if match:
             data["epochs"] = match
         return data
@@ -672,7 +632,7 @@ class DaosCommand(DaosCommandBase):
 
         return data
 
-    def filesystem_copy(self, src, dst):
+    def filesystem_copy(self, src, dst, preserve_props=None):
         """Copy a POSIX container or path to another POSIX container or path.
 
         Args:
@@ -680,6 +640,7 @@ class DaosCommand(DaosCommandBase):
                 daos:<pool>/<cont>/<path> or posix:<path>
             dst (str): The destination, formatted as
                 daos:<pool>/<cont>/<path> or posix:<path>
+            preserve_props (str): The filename to read or write container properties
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -690,4 +651,4 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("filesystem", "copy"), src=src, dst=dst)
+            ("filesystem", "copy"), src=src, dst=dst, preserve_props=preserve_props)

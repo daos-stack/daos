@@ -249,8 +249,8 @@ decode_initial(data_desc_t *desc, char *desc_buffer)
 	uint64_t value64;
 	int i;
 
-	if (desc->iods == NULL || desc->sgls == NULL
-		|| desc->recxs == NULL || desc->iovs == NULL) {
+	if (desc->iods == NULL | desc->sgls == NULL
+		| desc->recxs == NULL | desc->iovs == NULL) {
 		return CUSTOM_ERR3;
 	}
 
@@ -724,6 +724,8 @@ allocate_simple_desc(char *descBufAddress, data_desc_simple_t *desc,
 		memcpy(&desc->eq, desc_buffer, 8);
 		/* skip event idx (2) */
 		desc_buffer += 10;
+	} else {
+		desc->event = NULL;
 	}
 	/* skip dkeylen and dkey */
 	desc_buffer += 2;
@@ -742,8 +744,8 @@ allocate_simple_desc(char *descBufAddress, data_desc_simple_t *desc,
 			sizeof(d_iov_t));
 	daos_iod_t *iod;
 
-	if (desc->iods == NULL || desc->sgls == NULL
-		|| desc->recxs == NULL || desc->iovs == NULL) {
+	if (desc->iods == NULL | desc->sgls == NULL
+		| desc->recxs == NULL | desc->iovs == NULL) {
 		return CUSTOM_ERR3;
 	}
 
@@ -861,7 +863,9 @@ update_ret_code(void *udata, daos_event_t *ev, int ret)
 	char *desc_buffer = desc->ret_buf_address;
 
 	memcpy(desc_buffer, &ret, 4);
-	ev->ev_error = 0;
+	if (ev) {
+		desc->event->status = 0;
+	}
 	return 0;
 }
 
@@ -880,7 +884,9 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 		return;
 	}
 	if (async) {
-		rc = daos_event_register_comp_cb(desc->event,
+		desc->event->status = EVENT_IN_USE;
+		desc->event->event.ev_error = 0;
+		rc = daos_event_register_comp_cb(&desc->event->event,
 			update_ret_code, desc);
 		if (rc) {
 			char *msg = "Failed to register update callback";
@@ -890,11 +896,11 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 					rc);
 			return;
 		}
-		desc->event->ev_error = EVENT_IN_USE;
 	}
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
 				desc->nbrOfRequests, desc->iods,
-				desc->sgls, async ? desc->event : NULL);
+				desc->sgls,
+				async ? &desc->event->event : NULL);
 	if (rc) {
 		throw_const_obj(env, "Failed to update DAOS object", rc);
 	}
@@ -965,8 +971,8 @@ decode_async(JNIEnv *env, jlong descBufAddress,
 			sizeof(d_iov_t));
 	daos_iod_t *iod;
 
-	if (desc->iods == NULL || desc->sgls == NULL || desc->recxs == NULL
-		|| desc->iovs == NULL) {
+	if (desc->iods == NULL | desc->sgls == NULL | desc->recxs == NULL
+		| desc->iovs == NULL) {
 		return CUSTOM_ERR3;
 	}
 	for (i = 0; i < desc->nbrOfEntries; i++) {
@@ -1009,8 +1015,8 @@ update_ret_code_async(void *udata, daos_event_t *ev, int ret)
 	char *desc_buffer = desc->ret_buf_address;
 
 	memcpy(desc_buffer, &ret, 4);
+	desc->event->status = 0;
 	release_desc_async(desc);
-	ev->ev_error = 0;
 	return 0;
 }
 
@@ -1032,7 +1038,9 @@ Java_io_daos_obj_DaosObjClient_updateObjectAsync(
 		throw_exception_const_msg_object(env, msg, rc);
 		goto fail;
 	}
-	rc = daos_event_register_comp_cb(desc->event,
+	desc->event->status = EVENT_IN_USE;
+	desc->event->event.ev_error = 0;
+	rc = daos_event_register_comp_cb(&desc->event->event,
 					 update_ret_code_async, desc);
 	if (rc) {
 		char *msg = "Failed to register update callback";
@@ -1040,10 +1048,9 @@ Java_io_daos_obj_DaosObjClient_updateObjectAsync(
 		throw_exception_const_msg_object(env, msg, rc);
 		goto fail;
 	}
-	desc->event->ev_error = EVENT_IN_USE;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
 			     desc->nbrOfEntries, desc->iods,
-			     desc->sgls, desc->event);
+			     desc->sgls, &desc->event->event);
 	if (rc) {
 		char *msg = "Failed to update DAOS object asynchronously";
 
@@ -1072,7 +1079,9 @@ update_actual_size(void *udata, daos_event_t *ev, int ret)
 		memcpy(desc_buffer, &value, 4);
 		desc_buffer += 4;
 	}
-	ev->ev_error = 0;
+	if (ev) {
+		desc->event->status = 0;
+	}
 	return 0;
 }
 
@@ -1093,7 +1102,9 @@ Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
 		return;
 	}
 	if (async) {
-		rc = daos_event_register_comp_cb(desc->event,
+		desc->event->status = EVENT_IN_USE;
+		desc->event->event.ev_error = 0;
+		rc = daos_event_register_comp_cb(&desc->event->event,
 						 update_actual_size,
 						 desc);
 		if (rc) {
@@ -1102,11 +1113,11 @@ Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
 			throw_const_obj(env, msg, rc);
 			return;
 		}
-		desc->event->ev_error = EVENT_IN_USE;
 	}
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, flags, &desc->dkey,
 			    desc->nbrOfRequests, desc->iods,
-			    desc->sgls, NULL, async ? desc->event : NULL);
+			    desc->sgls, NULL,
+			    async ? &desc->event->event : NULL);
 	if (rc) {
 		throw_const_obj(env, "Failed to fetch DAOS object",
 				rc);
@@ -1114,7 +1125,7 @@ Java_io_daos_obj_DaosObjClient_fetchObjectSimple(
 	}
 	/* actual data size */
 	if (!async) {
-		update_actual_size(desc, desc->event, 0);
+		update_actual_size(desc, NULL, 0);
 	}
 }
 
@@ -1134,7 +1145,8 @@ update_actual_size_async(void *udata, daos_event_t *ev, int ret)
 		memcpy(desc_buffer, &value, 4);
 		desc_buffer += 4;
 	}
-	ev->ev_error = 0;
+	desc->event->status = 0;
+	release_desc_async(desc);
 	return 0;
 }
 
@@ -1156,7 +1168,9 @@ Java_io_daos_obj_DaosObjClient_fetchObjectAsync(
 		throw_exception_const_msg_object(env, msg, rc);
 		goto fail;
 	}
-	rc = daos_event_register_comp_cb(desc->event,
+	desc->event->status = EVENT_IN_USE;
+	desc->event->event.ev_error = 0;
+	rc = daos_event_register_comp_cb(&desc->event->event,
 					 update_actual_size_async, desc);
 	if (rc) {
 		char *msg = "Failed to register fetch callback";
@@ -1164,10 +1178,9 @@ Java_io_daos_obj_DaosObjClient_fetchObjectAsync(
 		throw_exception_const_msg_object(env, msg, rc);
 		goto fail;
 	}
-	desc->event->ev_error = EVENT_IN_USE;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, flags, &desc->dkey,
 			    desc->nbrOfEntries, desc->iods,
-			    desc->sgls, NULL, desc->event);
+			    desc->sgls, NULL, &desc->event->event);
 	if (rc) {
 		char *msg = "Failed to fetch DAOS object asynchronously";
 

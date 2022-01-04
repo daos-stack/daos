@@ -220,14 +220,6 @@ def scons():
         AlwaysBuild([daosbin])
 
         menv = denv.Clone()
-        menv["ENV"]["LD_LIBRARY_PATH"] = menv.subst(
-            "$BUILD_DIR/src/gurt" + \
-            ":$BUILD_DIR/src/cart" + \
-            ":$BUILD_DIR/src/common" + \
-            ":$BUILD_DIR/src/utils" + \
-            ":$OFI_PREFIX/lib" + \
-            ":$BUILD_DIR/src/client/dfs" + \
-            ":$BUILD_DIR/src/client/api")
         dmg_man = install_go_manpage(menv, "dmg")
         daos_man = install_go_manpage(menv, "daos")
         AlwaysBuild([dmg_man, daos_man])

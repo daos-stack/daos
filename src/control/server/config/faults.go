@@ -95,7 +95,7 @@ var (
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigDuplicateFabric,
-		fmt.Sprintf("the fabric configuration in I/O Engine %d is a duplicate of server %d", curIdx, seenIdx),
+		fmt.Sprintf("the fabric configuration in I/O Engine %d is a duplicate of I/O Engine %d", curIdx, seenIdx),
 		"ensure that each I/O Engine has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
 	)
 }
@@ -137,7 +137,7 @@ func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uin
 
 func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(code,
-		fmt.Sprintf("the %s value in I/O Engine %d is a duplicate of server %d", name, curIdx, seenIdx),
+		fmt.Sprintf("the %s value in I/O Engine %d is a duplicate of I/O Engine %d", name, curIdx, seenIdx),
 		fmt.Sprintf("ensure that each I/O Engine has a unique %s value and restart", name),
 	)
 }

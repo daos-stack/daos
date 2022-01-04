@@ -28,8 +28,6 @@ type MgmtSvcClient interface {
 	LeaderQuery(ctx context.Context, in *LeaderQueryReq, opts ...grpc.CallOption) (*LeaderQueryResp, error)
 	// Create a DAOS pool allocated across a number of ranks
 	PoolCreate(ctx context.Context, in *PoolCreateReq, opts ...grpc.CallOption) (*PoolCreateResp, error)
-	// Resolve a user-friendly DAOS pool id to a UUID.
-	PoolResolveID(ctx context.Context, in *PoolResolveIDReq, opts ...grpc.CallOption) (*PoolResolveIDResp, error)
 	// Destroy a DAOS pool allocated across a number of ranks.
 	PoolDestroy(ctx context.Context, in *PoolDestroyReq, opts ...grpc.CallOption) (*PoolDestroyResp, error)
 	// Evict a DAOS pool's connections.
@@ -72,6 +70,8 @@ type MgmtSvcClient interface {
 	SystemStart(ctx context.Context, in *SystemStartReq, opts ...grpc.CallOption) (*SystemStartResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(ctx context.Context, in *SystemEraseReq, opts ...grpc.CallOption) (*SystemEraseResp, error)
+	// Clean up leaked resources for a given node
+	SystemCleanup(ctx context.Context, in *SystemCleanupReq, opts ...grpc.CallOption) (*SystemCleanupResp, error)
 }
 
 type mgmtSvcClient struct {
@@ -112,15 +112,6 @@ func (c *mgmtSvcClient) LeaderQuery(ctx context.Context, in *LeaderQueryReq, opt
 func (c *mgmtSvcClient) PoolCreate(ctx context.Context, in *PoolCreateReq, opts ...grpc.CallOption) (*PoolCreateResp, error) {
 	out := new(PoolCreateResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolCreate", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtSvcClient) PoolResolveID(ctx context.Context, in *PoolResolveIDReq, opts ...grpc.CallOption) (*PoolResolveIDResp, error) {
-	out := new(PoolResolveIDResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolResolveID", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -316,6 +307,15 @@ func (c *mgmtSvcClient) SystemErase(ctx context.Context, in *SystemEraseReq, opt
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemCleanup(ctx context.Context, in *SystemCleanupReq, opts ...grpc.CallOption) (*SystemCleanupResp, error) {
+	out := new(SystemCleanupResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemCleanup", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MgmtSvcServer is the server API for MgmtSvc service.
 // All implementations must embed UnimplementedMgmtSvcServer
 // for forward compatibility
@@ -329,8 +329,6 @@ type MgmtSvcServer interface {
 	LeaderQuery(context.Context, *LeaderQueryReq) (*LeaderQueryResp, error)
 	// Create a DAOS pool allocated across a number of ranks
 	PoolCreate(context.Context, *PoolCreateReq) (*PoolCreateResp, error)
-	// Resolve a user-friendly DAOS pool id to a UUID.
-	PoolResolveID(context.Context, *PoolResolveIDReq) (*PoolResolveIDResp, error)
 	// Destroy a DAOS pool allocated across a number of ranks.
 	PoolDestroy(context.Context, *PoolDestroyReq) (*PoolDestroyResp, error)
 	// Evict a DAOS pool's connections.
@@ -373,6 +371,8 @@ type MgmtSvcServer interface {
 	SystemStart(context.Context, *SystemStartReq) (*SystemStartResp, error)
 	// Erase DAOS system database prior to reformat
 	SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error)
+	// Clean up leaked resources for a given node
+	SystemCleanup(context.Context, *SystemCleanupReq) (*SystemCleanupResp, error)
 	mustEmbedUnimplementedMgmtSvcServer()
 }
 
@@ -391,9 +391,6 @@ func (UnimplementedMgmtSvcServer) LeaderQuery(context.Context, *LeaderQueryReq) 
 }
 func (UnimplementedMgmtSvcServer) PoolCreate(context.Context, *PoolCreateReq) (*PoolCreateResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolCreate not implemented")
-}
-func (UnimplementedMgmtSvcServer) PoolResolveID(context.Context, *PoolResolveIDReq) (*PoolResolveIDResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PoolResolveID not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolDestroy(context.Context, *PoolDestroyReq) (*PoolDestroyResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolDestroy not implemented")
@@ -457,6 +454,9 @@ func (UnimplementedMgmtSvcServer) SystemStart(context.Context, *SystemStartReq) 
 }
 func (UnimplementedMgmtSvcServer) SystemErase(context.Context, *SystemEraseReq) (*SystemEraseResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemErase not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemCleanup(context.Context, *SystemCleanupReq) (*SystemCleanupResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemCleanup not implemented")
 }
 func (UnimplementedMgmtSvcServer) mustEmbedUnimplementedMgmtSvcServer() {}
 
@@ -539,24 +539,6 @@ func _MgmtSvc_PoolCreate_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).PoolCreate(ctx, req.(*PoolCreateReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtSvc_PoolResolveID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PoolResolveIDReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).PoolResolveID(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/PoolResolveID",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).PoolResolveID(ctx, req.(*PoolResolveIDReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -939,6 +921,24 @@ func _MgmtSvc_SystemErase_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemCleanup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemCleanupReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemCleanup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemCleanup",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemCleanup(ctx, req.(*SystemCleanupReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MgmtSvc_ServiceDesc is the grpc.ServiceDesc for MgmtSvc service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -961,10 +961,6 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PoolCreate",
 			Handler:    _MgmtSvc_PoolCreate_Handler,
-		},
-		{
-			MethodName: "PoolResolveID",
-			Handler:    _MgmtSvc_PoolResolveID_Handler,
 		},
 		{
 			MethodName: "PoolDestroy",
@@ -1049,6 +1045,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemErase",
 			Handler:    _MgmtSvc_SystemErase_Handler,
+		},
+		{
+			MethodName: "SystemCleanup",
+			Handler:    _MgmtSvc_SystemCleanup_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

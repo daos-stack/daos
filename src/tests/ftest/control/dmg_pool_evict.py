@@ -31,7 +31,9 @@ class DmgPoolEvictTest(TestWithServers):
 
         Test Description: Test dmg pool evict.
 
-        :avocado: tags=all,small,full_regression,control,dmg_pool_evict
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=control,dmg_pool_evict
         """
         # Create 2 pools and create a container in each pool.
         self.pool = []
@@ -41,13 +43,13 @@ class DmgPoolEvictTest(TestWithServers):
             self.container.append(self.get_container(self.pool[-1]))
 
         # Call dmg pool evict on the second pool.
-        self.get_dmg_command().pool_evict(pool=self.pool[1].uuid)
+        self.pool[-1].evict()
+
+        daos_cmd = self.get_daos_command()
 
         # Call daos pool list-cont on the first pool. It should succeed.
-        daos_cmd = self.get_daos_command()
         try:
-            daos_cmd.pool_list_cont(
-                pool=self.pool[0].uuid)
+            daos_cmd.container_list(pool=self.pool[0].uuid)
             self.log.info(
                 "daos pool list-cont with first pool succeeded as expected")
         except CommandFailure:
@@ -56,8 +58,7 @@ class DmgPoolEvictTest(TestWithServers):
 
         # Call daos pool list-cont on the evicted pool. It should succeed.
         try:
-            daos_cmd.pool_list_cont(
-                pool=self.pool[1].uuid)
+            daos_cmd.container_list(pool=self.pool[1].uuid)
             self.log.info(
                 "daos pool list-cont with second pool succeeded as expected")
         except CommandFailure:
@@ -69,18 +70,16 @@ class DmgPoolEvictTest(TestWithServers):
         # Verify the other pool isn't affected by creating a new container,
         # list, and destroy.
         self.container.append(self.get_container(self.pool[0]))
-        data = daos_cmd.pool_list_cont(
-            pool=self.pool[0].uuid)
-        self.assertEqual(len(data["uuids"]), len(self.container))
+        data = daos_cmd.container_list(pool=self.pool[0].uuid)
+        self.assertEqual(len(data["response"]), len(self.container))
         self.container[0].destroy()
-        data = daos_cmd.pool_list_cont(
-            pool=self.pool[0].uuid)
+        data = daos_cmd.container_list(pool=self.pool[0].uuid)
 
         # Create list of container UUIDs and compare. Convert command output to
         # upper case since we use upper case in object.
         uuids_cmd = []
-        for uuid in data["uuids"]:
-            uuids_cmd.append(uuid.upper())
+        for uuid_label in data["response"]:
+            uuids_cmd.append(uuid_label["UUID"].upper())
         uuids_obj = []
         for cont in self.container[1:]:
             uuids_obj.append(cont.uuid)

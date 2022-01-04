@@ -19,7 +19,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -56,7 +55,7 @@ type Engine interface {
 	GetScmConfig() (*storage.TierConfig, error)
 	GetScmUsage() (*storage.ScmMountPoint, error)
 	HasBlockDevices() bool
-	ScanBdevTiers(bool) ([]storage.BdevTierScanResult, error)
+	ScanBdevTiers() ([]storage.BdevTierScanResult, error)
 	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
 	StorageFormatNVMe() commonpb.NvmeControllerResults
@@ -87,6 +86,7 @@ type EngineHarness struct {
 	rankReqTimeout   time.Duration
 	rankStartTimeout time.Duration
 	faultDomain      *system.FaultDomain
+	onDrpcFailure    []func(context.Context, error)
 }
 
 // NewEngineHarness returns an initialized *EngineHarness.
@@ -143,21 +143,49 @@ func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]Engine, error)
 }
 
 // AddInstance adds a new Engine instance to be managed.
-func (h *EngineHarness) AddInstance(ei *EngineInstance) error {
+func (h *EngineHarness) AddInstance(ei Engine) error {
 	if h.isStarted() {
 		return errors.New("can't add instance to already-started harness")
 	}
 
 	h.Lock()
 	defer h.Unlock()
-	ei.setIndex(uint32(len(h.instances)))
+	if indexSetter, ok := ei.(interface{ setIndex(uint32) }); ok {
+		indexSetter.setIndex(uint32(len(h.instances)))
+	}
 
 	h.instances = append(h.instances, ei)
 	return nil
 }
 
+// OnDrpcFailure registers callbacks to be invoked on dRPC call failure.
+func (h *EngineHarness) OnDrpcFailure(fns ...func(ctx context.Context, err error)) {
+	h.Lock()
+	defer h.Unlock()
+
+	h.onDrpcFailure = append(h.onDrpcFailure, fns...)
+}
+
 // CallDrpc calls the supplied dRPC method on a managed I/O Engine instance.
 func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
+	defer func() {
+		if err == nil {
+			return
+		}
+		// Don't trigger callbacks for these errors which can happen when
+		// things are still starting up.
+		if err == FaultHarnessNotStarted || err == errInstanceNotReady {
+			return
+		}
+
+		h.log.Debugf("invoking dRPC failure handlers for %s", err)
+		h.RLock()
+		defer h.RUnlock()
+		for _, fn := range h.onDrpcFailure {
+			fn(ctx, err)
+		}
+	}()
+
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}
@@ -167,7 +195,15 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
 		if !i.IsReady() {
-			err = errInstanceNotReady
+			if i.IsStarted() {
+				if err == nil {
+					err = errInstanceNotReady
+				}
+			} else {
+				if err == nil {
+					err = FaultDataPlaneNotStarted
+				}
+			}
 			continue
 		}
 		resp, err = i.CallDrpc(ctx, method, body)
@@ -183,11 +219,16 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 	return
 }
 
+type dbLeader interface {
+	IsLeader() bool
+	ShutdownRaft() error
+}
+
 // Start starts harness by setting up and starting dRPC before initiating
 // configured instances' processing loops.
 //
 // Run until harness is shutdown.
-func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *events.PubSub, cfg *config.Server) error {
+func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Server) error {
 	if h.isStarted() {
 		return errors.New("can't start: harness already started")
 	}
@@ -202,29 +243,32 @@ func (h *EngineHarness) Start(ctx context.Context, db *system.Database, ps *even
 	h.started.SetTrue()
 	defer h.started.SetFalse()
 
-	instances := h.Instances()
-
-	drpcSetupReq := &drpcServerSetupReq{
-		log:     h.log,
-		sockDir: cfg.SocketDir,
-		engines: instances,
-		tc:      cfg.TransportConfig,
-		sysdb:   db,
-		events:  ps,
-	}
-	// Single daos_server dRPC server to handle all engine requests
-	if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
-		return errors.WithMessage(err, "dRPC server setup")
-	}
-	defer func() {
-		if err := drpcCleanup(cfg.SocketDir); err != nil {
-			h.log.Errorf("error during dRPC cleanup: %s", err)
-		}
-	}()
-
-	for _, ei := range instances {
+	for _, ei := range h.Instances() {
 		ei.Run(ctx, cfg.RecreateSuperblocks)
 	}
+
+	h.OnDrpcFailure(func(_ context.Context, err error) {
+		if !db.IsLeader() {
+			return
+		}
+
+		switch errors.Cause(err) {
+		case errDRPCNotReady, FaultDataPlaneNotStarted:
+			break
+		default:
+			// Don't shutdown on other failures which are
+			// not related to dRPC communications.
+			return
+		}
+
+		// If we cannot service a dRPC request on this node,
+		// we should shutdown the raft service in order
+		// to force a new leader to step up and also to exclude
+		// this replica from participating in the quorum.
+		if err := db.ShutdownRaft(); err != nil {
+			h.log.Errorf("raft shutdown failed after dRPC failure: %s", err)
+		}
+	})
 
 	<-ctx.Done()
 	h.log.Debug("shutting down harness")

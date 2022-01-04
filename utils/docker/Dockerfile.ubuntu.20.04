@@ -15,56 +15,9 @@ ARG CB0
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
-RUN apt-get -y update && \
-    apt-get -y install apt-utils && \
-    apt-get -y upgrade && \
-    apt-get -y install \
-        autoconf \
-        build-essential \
-        clang \
-        cmake \
-        fuse3 \
-        git \
-        golang-go \
-        kmod \
-        libaio-dev \
-        libboost-dev \
-        libcmocka-dev \
-        libcunit1-dev \
-        libfuse3-dev \
-        libhwloc-dev \
-        libibverbs-dev \
-        libipmctl-dev \
-        libjson-c-dev \
-        liblz4-dev \
-        libnuma-dev \
-        libopenmpi-dev \
-        librdmacm-dev \
-        libssl-dev \
-        libtool-bin \
-        libunwind-dev \
-        libyaml-dev \
-        locales \
-        maven \
-        meson \
-        numactl \
-        ninja-build \
-        openjdk-8-jdk \
-        patchelf \
-        pciutils \
-        pkg-config \
-        python3-dev \
-        python3-distro \
-        python3-junit.xml \
-        python3-pyelftools \
-        python3-pyxattr \
-        python3-tabulate \
-        scons \
-        sudo \
-        uuid-dev \
-        valgrind \
-        yasm && \
-    apt-get clean all
+COPY ./utils/scripts/install-ubuntu20.sh /tmp/install.sh
+RUN chmod +x /tmp/install.sh
+RUN /tmp/install.sh
 
 # hack the default shell to bash instead of dash
 RUN rm /bin/sh && ln -s bash /bin/sh
@@ -83,7 +36,6 @@ RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
@@ -124,12 +76,12 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 
 USER root:root
 ARG CACHEBUST
-RUN apt-get update && apt-get -y upgrade && apt-get clean all
+RUN [ -z "$CACHEBUST" ] || { apt-get update && apt-get -y upgrade && apt-get clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
 # in github-actions to prune elements of the dockerfile below this point.
-LABEL DAOS=stage1
+LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -156,10 +108,6 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
-
-USER root:root
-LABEL DAOS=true
-USER daos_server:daos_server
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java

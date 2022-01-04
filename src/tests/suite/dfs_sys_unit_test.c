@@ -52,6 +52,7 @@ static void
 dfs_sys_test_mount(void **state)
 {
 	test_arg_t		*arg = *state;
+	char			str[37];
 	uuid_t			cuuid;
 	daos_cont_info_t	co_info;
 	daos_handle_t		coh;
@@ -62,11 +63,11 @@ dfs_sys_test_mount(void **state)
 		return;
 
 	/** create a DFS container with POSIX layout */
-	uuid_generate(cuuid);
-	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+	rc = dfs_cont_create(arg->pool.poh, &cuuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+	uuid_unparse(cuuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -77,7 +78,7 @@ dfs_sys_test_mount(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 }
@@ -375,7 +376,6 @@ dfs_sys_test_readlink(void **state)
 	/** readlink on non-symlink */
 	rc = dfs_sys_readlink(dfs_sys_mt, file1, buf, &buf_size);
 	assert_int_equal(rc, EINVAL);
-	assert_int_equal(buf_size, -1);
 
 	/** readlink with NULL buffer */
 	rc = dfs_sys_readlink(dfs_sys_mt, sym1, buf, &buf_size);
@@ -508,13 +508,11 @@ dfs_sys_test_read_write(void **state)
 	got_size = buf_size;
 	rc = dfs_sys_write(dfs_sys_mt, obj, write_buf, 0, &got_size, NULL);
 	assert_int_equal(rc, EINVAL);
-	assert_int_equal(got_size, -1);
 
 	/** Try to read a dir*/
 	got_size = buf_size;
 	rc = dfs_sys_read(dfs_sys_mt, obj, read_buf, 0, &got_size, NULL);
 	assert_int_equal(rc, EINVAL);
-	assert_int_equal(got_size, -1);
 
 	/** Try to punch a dir */
 	rc = dfs_sys_punch(dfs_sys_mt, dir1, 0, buf_size);
@@ -747,8 +745,7 @@ dfs_sys_setup(void **state)
 	arg = *state;
 
 	if (arg->myrank == 0) {
-		uuid_generate(co_uuid);
-		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+		rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl,
 				     NULL);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
@@ -776,7 +773,10 @@ dfs_sys_teardown(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+		char str[37];
+
+		uuid_unparse(co_uuid, str);
+		rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 		assert_rc_equal(rc, 0);
 		print_message("Destroyed DFS Container "DF_UUIDF"\n",
 			      DP_UUID(co_uuid));

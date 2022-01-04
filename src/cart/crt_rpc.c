@@ -928,7 +928,7 @@ crt_client_get_contact_rank(crt_context_t crt_ctx, crt_group_t *grp,
 		*ret_idx = -1;
 	} else {
 		/* Pick random rank from the list */
-		*ret_idx = rand() % membs->rl_nr;
+		*ret_idx = d_rand() % membs->rl_nr;
 		contact_rank = membs->rl_ranks[*ret_idx];
 
 		D_DEBUG(DB_ALL, "URI lookup rank chosen: %d\n", contact_rank);
@@ -1583,6 +1583,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	D_INIT_LIST_HEAD(&rpc_priv->crp_parent_link);
 	rpc_priv->crp_complete_cb = NULL;
 	rpc_priv->crp_arg = NULL;
+	rpc_priv->crp_completed = 0;
 	if (!srv_flag) {
 		/* avoid checksum warning */
 		crt_common_hdr_init(rpc_priv, opc);
@@ -1699,7 +1700,8 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	if (!rpc_priv->crp_opc_info->coi_no_reply)
 		rpc_priv->crp_reply_pending = 1;
 
-	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub)) {
+	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub) &&
+	    !crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc)) {
 		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
 					&rpc_priv->crp_pub,
 					crt_handle_rpc,

@@ -151,10 +151,11 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	struct pool_domain      *root;
 	daos_obj_id_t           oid;
 	int                     rc;
+	uint32_t		nr_grps;
 
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid, NULL);
+	oc_attr = daos_oclass_attr_find(oid, NULL, &nr_grps);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
@@ -176,7 +177,7 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		if (grp_max == 0)
 			grp_max = 1;
 
-		jmop->jmop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
+		jmop->jmop_grp_nr = nr_grps;
 		if (jmop->jmop_grp_nr == DAOS_OBJ_GRP_MAX)
 			jmop->jmop_grp_nr = grp_max;
 		else if (jmop->jmop_grp_nr > grp_max)
@@ -271,12 +272,13 @@ reset_dom_cur_grp(uint8_t *dom_cur_grp_used, uint8_t *dom_occupied, uint32_t dom
 	int i;
 
 	for (i = 0; i < dom_size; i++) {
-		if (isset(dom_occupied, i))
+		if (isset(dom_occupied, i)) {
 			/* if all targets used up, this dom will not be used anyway */
 			setbit(dom_cur_grp_used, i);
-		else
+		} else {
 			/* otherwise reset it */
 			clrbit(dom_cur_grp_used, i);
+		}
 	}
 }
 
@@ -349,7 +351,6 @@ retry:
 			range_set = isset_range(tgts_used, start_tgt, end_tgt);
 			if (range_set) {
 				/* Used up all targets in this domain */
-				setbit(dom_occupied, curr_dom - root_pos);
 				D_ASSERT(top != -1);
 				curr_dom = dom_stack[top--]; /* try parent */
 				continue;
@@ -374,6 +375,14 @@ retry:
 
 			setbit(tgts_used, dom_id);
 			setbit(dom_cur_grp_used, curr_dom - root_pos);
+			range_set = isset_range(tgts_used, start_tgt, end_tgt);
+			if (range_set) {
+				/* Used up all targets in this domain */
+				setbit(dom_occupied, curr_dom - root_pos);
+				D_DEBUG(DB_PL, "dom %p %d used up\n",
+					dom_occupied, (int)(curr_dom - root_pos));
+			}
+
 			/* Found target (which may be available or not) */
 			found_target = 1;
 		} else {
@@ -398,6 +407,8 @@ retry:
 					return;
 				}
 				setbit(dom_occupied, curr_dom - root_pos);
+				D_DEBUG(DB_PL, "used up dom %d\n",
+					(int)(curr_dom - root_pos));
 				setbit(dom_cur_grp_used, curr_dom - root_pos);
 				curr_dom = dom_stack[top--];
 				continue;
@@ -420,22 +431,27 @@ retry:
 				continue;
 			}
 
+			/* Check if all targets under the domain have been used, and try to reset
+			 * the used targets.
+			 */
 			range_set = isset_range(dom_used, start_dom, end_dom);
 			if (range_set) {
 				int idx;
 				bool reset_used = false;
 
-				/* Skip the domain whose targets are used up */
 				for (idx = start_dom; idx <= end_dom; ++idx) {
-					/* Only reused the domain, if there are still targets
-					 * available (not being used) within this domain, and the
-					 * domain has not being used by current group yet. so
-					 * 1. there won't be multiple shards in the same target.
-					 * 2. there won't be multiple shards within same group
-					 *    are in the same domain.
-					 */
-					if (isclr(dom_occupied, idx) &&
-					    isclr(dom_cur_grp_used, idx)) {
+					if (isset(dom_occupied, idx)) {
+						/* If all targets of the domain has been used up,
+						 * then these targets can not be reused. And also
+						 * set the group bits here to make the check easier.
+						 */
+						setbit(dom_cur_grp_used, idx);
+					} else if (isclr(dom_cur_grp_used, idx)) {
+						/* If the domain has been used for the current
+						 * group, then let's do not reset the used bits,
+						 * i.e. do not choose the domain unless all domain
+						 * are used. see above.
+						 */
 						clrbit(dom_used, idx);
 						reset_used = true;
 					}
@@ -449,9 +465,10 @@ retry:
 					D_ASSERT(top != -1);
 					curr_dom = dom_stack[top--];
 				} else {
-					/* If no used dom is being reset, then let's reset
-					 * dom_cur_grp_used and start put multiple same group
-					 * in the same domain.
+					/* If no used dom is being reset at root level, then it
+					 * means all domain has been used for the group. So let's
+					 * reset dom_cur_grp_used and start put multiple domain in
+					 * the same group.
 					 */
 					if (!reset_used)
 						reset_dom_cur_grp(dom_cur_grp_used, dom_occupied,
@@ -830,14 +847,11 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				rc = remap_alloc_one(remap_list, k, target, false, remap_grp_used);
 				if (rc)
 					D_GOTO(out, rc);
-
-				if (is_extending != NULL &&
-				    (target->ta_comp.co_status ==
-				     PO_COMP_ST_UP ||
-				     target->ta_comp.co_status ==
-				     PO_COMP_ST_DRAIN))
-					*is_extending = true;
 			}
+
+			if (is_extending != NULL && (target->ta_comp.co_status == PO_COMP_ST_UP ||
+						     target->ta_comp.co_status == PO_COMP_ST_DRAIN))
+				*is_extending = true;
 		}
 	}
 
@@ -1053,7 +1067,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	D_INIT_LIST_HEAD(&extend_list);
-	allow_status = PO_COMP_ST_UPIN;
+	allow_status = PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
 	rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status, &layout,
 				      NULL, &is_extending);
 	if (rc != 0) {
@@ -1080,11 +1094,12 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 			DP_OID(oid), md->omd_ver, is_adding_new ? "yes" : "no",
 			is_extending ? "yes" : "no");
 
+		allow_status = PO_COMP_ST_UPIN;
 		if (is_adding_new)
 			allow_status |= PO_COMP_ST_NEW;
 
 		if (is_extending)
-			allow_status |= PO_COMP_ST_UP | PO_COMP_ST_DRAIN;
+			allow_status |= PO_COMP_ST_UP;
 
 		/* Don't repeat remapping failed shards during this phase -
 		 * they have already been remapped.
@@ -1112,7 +1127,7 @@ out:
 	if (extend_layout != NULL)
 		pl_obj_layout_free(extend_layout);
 
-	if (rc < 0) {
+	if (rc != 0) {
 		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
 			DP_RC(rc));
 		if (layout != NULL)

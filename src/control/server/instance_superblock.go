@@ -75,7 +75,19 @@ func (ei *EngineInstance) setSuperblock(sb *Superblock) {
 func (ei *EngineInstance) getSuperblock() *Superblock {
 	ei.RLock()
 	defer ei.RUnlock()
-	return ei._superblock
+
+	if ei._superblock == nil {
+		return nil
+	}
+
+	// Make a read-only copy to avoid race warnings.
+	// NB: There is not currently any logic that relies
+	// on the returned Superblock being "live", i.e. the
+	// actual in-memory struct. If that changes, then the
+	// Superblock struct will probably need some locking to
+	// provide thread-safe access to its fields.
+	sbCopy := *ei._superblock
+	return &sbCopy
 }
 
 func (ei *EngineInstance) hasSuperblock() bool {
@@ -117,8 +129,6 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 		return err
 	}
 
-	ei.log.Debugf("idx %d createSuperblock()", ei.Index())
-
 	if err := ei.MountScm(); err != nil {
 		return err
 	}
@@ -151,8 +161,8 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 		}
 	}
 	ei.setSuperblock(superblock)
-	ei.log.Debugf("creating %s: (rank: %s, uuid: %s)",
-		ei.superblockPath(), superblock.Rank, superblock.UUID)
+	ei.log.Debugf("index %d: creating %s: (rank: %s, uuid: %s)",
+		ei.Index(), ei.superblockPath(), superblock.Rank, superblock.UUID)
 
 	return ei.WriteSuperblock()
 }

@@ -187,8 +187,11 @@ teardown(void **state)
 	ret = vos_pool_destroy(test_arg->fname, test_arg->pool_uuid);
 	assert_rc_equal(ret, 0);
 
-	if (vts_file_exists(test_arg->fname))
-		remove(test_arg->fname);
+	if (vts_file_exists(test_arg->fname)) {
+		ret = remove(test_arg->fname);
+		assert_rc_equal(ret, 0);
+	}
+
 	D_FREE(test_arg->fname);
 
 	D_FREE(test_arg);

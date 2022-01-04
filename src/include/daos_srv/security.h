@@ -37,8 +37,27 @@ ds_sec_alloc_default_daos_pool_acl(void);
  *
  * \return	Newly allocated struct daos_acl
  */
+
 struct daos_acl *
 ds_sec_alloc_default_daos_cont_acl(void);
+
+/**
+ * Obtain the origin name specified by the security credential.
+ *
+ * \param[in]	cred		User's security credential
+ * \param[out]  machine		Hostname of the machine that generated the credential.
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_BADPATH	Can't connect to the control plane socket at
+ *				the expected path
+ *		-DER_NOMEM	Out of memory
+ *		-DER_NOREPLY	No response from control plane
+ *		-DER_MISC	Error in control plane communications
+ *		-DER_PROTO	Unexpected or corrupt payload from control plane
+ */
+int
+ds_sec_cred_get_origin(d_iov_t *cred, char **machine);
 
 /**
  * Derive the pool security capabilities for the given user credential, using

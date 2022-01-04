@@ -103,11 +103,11 @@ test_ref_hold(struct daos_lru_cache *cache,
 int
 main(int argc, char **argv)
 {
-	int			rc, num_keys, i, j;
-	uint64_t		*keys;
+	int			rc, i, j;
+	long int		num_keys, csize;
+	uint64_t		*keys = NULL;
 	struct daos_llink	*link_ret[3] = {NULL};
 	struct daos_lru_cache	*tcache = NULL;
-	int			csize;
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -118,14 +118,30 @@ main(int argc, char **argv)
 		exit(-1);
 	}
 
-	csize	 = (int)strtol(argv[1], (char **)NULL, 10);
-	num_keys = (int)strtol(argv[2], (char **)NULL, 10);
+	csize = strtol(argv[1], (char **)NULL, 10);
+	num_keys = strtol(argv[2], (char **)NULL, 10);
+
+	if (csize < 0 || csize > INT_MAX) {
+		rc = -DER_INVAL;
+		D_ERROR("Invalid cell size\n");
+		D_GOTO(exit, rc);
+	}
 
 	rc = daos_lru_cache_create(csize, D_HASH_FT_RWLOCK,
 				   &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)
 		D_ASSERTF(0, "Error in creating lru cache\n");
+
+	/* make sure csize and num_keys can
+	 * fit into int variable, since
+	 * they used to be cast to int values
+	 */
+	if (num_keys < 0 || num_keys > INT_MAX) {
+		rc = -DER_INVAL;
+		D_ERROR("Invalid number of keys\n");
+		D_GOTO(exit, rc);
+	}
 
 	D_ALLOC_ARRAY(keys, (num_keys + 2));
 	if (keys == NULL)

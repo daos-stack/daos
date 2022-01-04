@@ -24,6 +24,13 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+var (
+	memberCmpOpts = []cmp.Option{
+		cmpopts.IgnoreUnexported(Member{}),
+		cmpopts.EquateApproxTime(time.Second),
+	}
+)
+
 func mockEvtEngineDied(t *testing.T, r uint32) *events.RASEvent {
 	t.Helper()
 	return events.NewEngineDiedEvent("foo", 0, r, common.NormalExit, 1234)
@@ -74,7 +81,9 @@ func TestSystem_Membership_Get(t *testing.T) {
 				return
 			}
 
-			AssertEqual(t, tc.expMember, m, name)
+			if diff := cmp.Diff(tc.expMember, m, memberCmpOpts...); diff != "" {
+				t.Fatalf("unexpected member (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
@@ -217,15 +226,12 @@ func TestSystem_Membership_Add(t *testing.T) {
 			}
 			AssertEqual(t, len(tc.expMembers), count, name)
 
-			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(Member{}),
-			}
 			for _, em := range tc.expMembers {
 				m, err := ms.Get(em.Rank)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if diff := cmp.Diff(em, m, cmpOpts...); diff != "" {
+				if diff := cmp.Diff(em, m, memberCmpOpts...); diff != "" {
 					t.Fatalf("unexpected member (-want, +got):\n%s\n", diff)
 				}
 			}
@@ -317,7 +323,9 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 			AssertEqual(t, tc.expRanks, rankList, "ranks")
 			AssertEqual(t, tc.expHostRanks, ms.HostRanks(rankSet), "host ranks")
 			AssertEqual(t, tc.expHosts, ms.HostList(rankSet), "hosts")
-			AssertEqual(t, tc.expMembers, ms.Members(rankSet), "members")
+			if diff := cmp.Diff(tc.expMembers, ms.Members(rankSet), memberCmpOpts...); diff != "" {
+				t.Fatalf("unexpected members (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
@@ -648,12 +656,13 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(MemberResult{}, Member{})}
+			cmpOpts := append(memberCmpOpts,
+				cmpopts.IgnoreUnexported(MemberResult{}),
+			)
 			for i, m := range ms.Members(nil) {
 				if diff := cmp.Diff(tc.expMembers[i], m, cmpOpts...); diff != "" {
-					t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+					t.Fatalf("unexpected member (-want, +got)\n%s\n", diff)
 				}
-				AssertEqual(t, tc.expMembers[i], m, m.Rank.String())
 			}
 
 			// verify result host address is updated to that of member if empty
@@ -833,10 +842,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(Member{}),
-			}
-			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, gotResp, memberCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -896,12 +902,59 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			ps.Publish(tc.event)
 
 			<-ctx.Done()
-			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(Member{}),
-			}
-			if diff := cmp.Diff(tc.expMembers, ms.Members(nil), cmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expMembers, ms.Members(nil), memberCmpOpts...); diff != "" {
 				t.Errorf("unexpected membership (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestSystem_Membership_MarkDead(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rank        Rank
+		incarnation uint64
+		expErr      error
+	}{
+		"unknown member": {
+			rank:   42,
+			expErr: &ErrMemberNotFound{byRank: NewRankPtr(42)},
+		},
+		"invalid transition ignored": {
+			rank:   2,
+			expErr: errors.New("illegal member state update"),
+		},
+		"stale event for joined member": {
+			rank:        0,
+			incarnation: 1,
+			expErr:      errors.New("incarnation"),
+		},
+		"new event for joined member": {
+			rank:        0,
+			incarnation: 2,
+		},
+		"event for stopped member": {
+			rank:        1,
+			incarnation: 2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			mock := func(rank uint32, inc uint64, state MemberState) *Member {
+				m := MockMember(t, rank, state)
+				m.Incarnation = inc
+				return m
+			}
+
+			ms := populateMembership(t, log,
+				mock(0, 2, MemberStateJoined),
+				mock(1, 2, MemberStateStopped),
+				mock(2, 2, MemberStateExcluded),
+			)
+
+			gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

@@ -141,6 +141,7 @@ struct dss_module_metrics cont_metrics = {
 	.dmm_tags = DAOS_SYS_TAG,
 	.dmm_init = ds_cont_metrics_alloc,
 	.dmm_fini = ds_cont_metrics_free,
+	.dmm_nr_metrics = ds_cont_metrics_count,
 };
 
 struct dss_module cont_module =  {

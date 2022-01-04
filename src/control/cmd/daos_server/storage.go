@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/user"
 	"strings"
 
@@ -16,13 +17,15 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 )
 
 type storageCmd struct {
-	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
+	Prepare storagePrepareCmd `command:"prepare" description:"Prepare SCM and NVMe storage attached to remote servers."`
 	Scan    storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
 }
 
@@ -30,12 +33,19 @@ type storagePrepareCmd struct {
 	scs *server.StorageControlService
 	logCmd
 	commands.StoragePrepareCmd
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
 	prepNvme, prepScm, err := cmd.Validate()
 	if err != nil {
 		return err
+	}
+
+	if cmd.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
+			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
+		}
 	}
 
 	// This is a little ugly, but allows for easier unit testing.
@@ -68,8 +78,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		if _, err := cmd.scs.NvmePrepare(storage.BdevPrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
-			PCIAllowlist:  cmd.PCIAllowList,
-			ResetOnly:     cmd.Reset,
+			PCIAllowList:  cmd.PCIAllowList,
+			PCIBlockList:  cmd.PCIBlockList,
+			Reset_:        cmd.Reset,
+			EnableVMD:     true, // vmd will be prepared if available
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}
@@ -117,12 +129,33 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 type storageScanCmd struct {
 	logCmd
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
+	if cmd.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
+			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
+		}
+	}
+
 	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
 
-	cmd.log.Info("Scanning locally-attached storage...")
+	msg := "Scanning locally-attached storage..."
+
+	// because we are running in stand-alone mode, manually detect vmd availability and set
+	// storage provider flag appropriately, in daemon/service mode this is automatic
+	vmdAddrs, err := bdev.DetectVMD()
+	if err != nil {
+		return errors.Wrap(err, "attempting to detect vmd")
+	}
+	cmd.log.Debugf("volume management devices detected: %v", vmdAddrs)
+	if !vmdAddrs.IsEmpty() {
+		msg += " (VMD enabled)"
+		svc.WithVMDEnabled()
+	}
+
+	cmd.log.Info(msg)
 
 	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)

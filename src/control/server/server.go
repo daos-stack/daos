@@ -41,7 +41,11 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 	}
 
 	lookupNetIF := func(name string) (netInterface, error) {
-		return net.InterfaceByName(name)
+		iface, err := net.InterfaceByName(name)
+		if err != nil {
+			return nil, errors.Wrapf(err, "unable to retrieve interface %q", name)
+		}
+		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
@@ -213,7 +217,10 @@ func (srv *server) initStorage() error {
 		return err
 	}
 
-	return srv.ctlSvc.Setup()
+	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
+	srv.ctlSvc.Setup()
+
+	return nil
 }
 
 func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
@@ -225,12 +232,6 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
-
-	// TODO DAOS-8040: re-enable VMD
-	// Indicate whether VMD devices have been detected and can be used.
-	// for _, bc := range cfg.Storage.BdevConfigs() {
-	//	bc.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
-	// }
 
 	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
 		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
@@ -247,11 +248,25 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
+	// Store cached NVMe device details retrieved on start-up (before
+	// engines are started) so static details can be recovered by the engine
+	// storage provider(s) during scan even if devices are in use.
+	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{})
+	if err != nil {
+		srv.log.Errorf("nvme scan failed: %s", err)
+		nvmeScanResp = &storage.BdevScanResponse{}
+	}
+	if nvmeScanResp == nil {
+		return errors.New("nil nvme scan response received")
+	}
+
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
 			return err
 		}
+
+		engine.storage.SetBdevCache(*nvmeScanResp)
 
 		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
 
@@ -315,12 +330,37 @@ func (srv *server) setupGrpc() error {
 func (srv *server) registerEvents() {
 	registerFollowerSubscriptions(srv)
 
-	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
-		srv.log.Infof("MS leader running on %s", srv.hostname)
-		srv.mgmtSvc.startJoinLoop(ctx)
-		registerLeaderSubscriptions(srv)
-		return nil
-	})
+	srv.sysdb.OnLeadershipGained(
+		func(ctx context.Context) error {
+			srv.log.Infof("MS leader running on %s", srv.hostname)
+			srv.mgmtSvc.startJoinLoop(ctx)
+			registerLeaderSubscriptions(srv)
+			srv.log.Debugf("requesting sync GroupUpdate after leader change")
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						// Wait for at least one engine to be ready to service the
+						// GroupUpdate request.
+						for _, ei := range srv.harness.Instances() {
+							if ei.IsReady() {
+								srv.mgmtSvc.reqGroupUpdate(ctx, true)
+								return
+							}
+						}
+						srv.log.Debugf("no engines ready for GroupUpdate; waiting %s", groupUpdateInterval)
+						time.Sleep(groupUpdateInterval)
+					}
+				}
+			}()
+			return nil
+		},
+		func(ctx context.Context) error {
+			return srv.mgmtSvc.checkPools(ctx)
+		},
+	)
 	srv.sysdb.OnLeadershipLost(func() error {
 		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
 		registerFollowerSubscriptions(srv)
@@ -348,7 +388,25 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 		shutdown()
 	}()
 
-	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.pubSub, srv.cfg),
+	drpcSetupReq := &drpcServerSetupReq{
+		log:     srv.log,
+		sockDir: srv.cfg.SocketDir,
+		engines: srv.harness.Instances(),
+		tc:      srv.cfg.TransportConfig,
+		sysdb:   srv.sysdb,
+		events:  srv.pubSub,
+	}
+	// Single daos_server dRPC server to handle all engine requests
+	if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
+		return errors.WithMessage(err, "dRPC server setup")
+	}
+	defer func() {
+		if err := drpcCleanup(srv.cfg.SocketDir); err != nil {
+			srv.log.Errorf("error during dRPC cleanup: %s", err)
+		}
+	}()
+
+	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.cfg),
 		"%s harness exited", build.ControlPlaneName)
 }
 

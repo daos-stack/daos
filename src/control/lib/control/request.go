@@ -59,6 +59,7 @@ type (
 	deadliner interface {
 		SetTimeout(time.Duration)
 		getDeadline() time.Time
+		getTimeout() time.Duration
 	}
 
 	// UnaryRequest defines an interface to be implemented by
@@ -78,6 +79,7 @@ var (
 // request is an embeddable struct to provide basic functionality
 // common to all request types.
 type request struct {
+	timeout  time.Duration
 	deadline time.Time
 	Sys      string // DAOS system name
 	HostList []string
@@ -107,10 +109,15 @@ func (r *request) getHostList() []string {
 	return r.HostList
 }
 
-// SetHostList sets the request's hostlist, which may override
-// the configured hostlist.
+// SetHostList sets the request's hostlist to a copy of the
+// supplied hostlist, and will override the configured hostlist.
 func (r *request) SetHostList(hl []string) {
-	r.HostList = hl
+	if len(hl) == 0 {
+		return
+	}
+
+	r.HostList = make([]string, len(hl))
+	copy(r.HostList, hl)
 }
 
 // AddHost appends the given host to the request's hostlist,
@@ -122,6 +129,7 @@ func (r *request) AddHost(hostAddr string) {
 // SetTimeout sets a deadline by which the request must have
 // completed. It is calculated from the supplied time.Duration.
 func (r *request) SetTimeout(timeout time.Duration) {
+	r.timeout = timeout
 	r.deadline = time.Now().Add(timeout)
 }
 
@@ -129,6 +137,14 @@ func (r *request) SetTimeout(timeout time.Duration) {
 // Callers should check the returned time.Time for the zero value.
 func (r *request) getDeadline() time.Time {
 	return r.deadline
+}
+
+// getTimeout returns the timeout set for the request, if any.
+// The primary use case for this method is to provide information
+// about the timeout in the event that the request's deadline
+// is exceeded.
+func (r *request) getTimeout() time.Duration {
+	return r.timeout
 }
 
 // isMSRequest implements part of the targetChooser interface,
@@ -189,6 +205,10 @@ type retryableRequest struct {
 	retryTestFn func(error, uint) bool
 	// retryFun defines a function that will run on every retry iteration.
 	retryFn func(context.Context, uint) error
+}
+
+func (r *retryableRequest) setRetryTimeout(timeout time.Duration) {
+	r.retryTimeout = timeout
 }
 
 func (r *retryableRequest) getRetryTimeout() time.Duration {

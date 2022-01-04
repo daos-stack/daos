@@ -56,9 +56,9 @@ from SCons.Errors import UserError
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess
+import subprocess #nosec
 try:
-    from subprocess import DEVNULL
+    from subprocess import DEVNULL #nosec
 except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
@@ -413,7 +413,7 @@ class WebRetriever():
             return False
 
         with open(filename, "rb") as src:
-            hexdigest = hashlib.md5(src.read()).hexdigest()
+            hexdigest = hashlib.md5(src.read()).hexdigest() #nosec
 
         if hexdigest != self.md5:
             print("Removing existing file %s: md5 %s != %s" % (filename,
@@ -599,7 +599,8 @@ class PreReqComponent():
         for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
                     "http_proxy", "https_proxy",
                     "PKG_CONFIG_PATH", "MODULEPATH",
-                    "MODULESHOME", "MODULESLOADED"]:
+                    "MODULESHOME", "MODULESLOADED",
+                    "I_MPI_ROOT"]:
             value = os.environ.get(var)
             if value:
                 real_env[var] = value
@@ -1602,11 +1603,13 @@ class _Component():
                 lib_paths.append(full_path)
                 # will adjust this to be a relative rpath later
                 env.AppendUnique(RPATH_FULL=[full_path])
+                # For binaries run during build
+                env.AppendENVPath("LD_LIBRARY_PATH", full_path)
 
             # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
             # and this allows LD_LIBRARY_PATH to override RPATH
             env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
-        if self.component_prefix == "/usr":
+        if self.component_prefix == "/usr" and self.package is None:
             #hack until we have everything installed in lib64
             env.AppendUnique(RPATH=["/usr/lib"])
             env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])

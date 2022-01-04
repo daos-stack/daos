@@ -245,6 +245,7 @@ int main(int argc, char **argv)
 	crt_group_t		*grp;
 	crt_context_t		crt_ctx[NUM_SERVER_CTX];
 	pthread_t		progress_thread[NUM_SERVER_CTX];
+	struct test_options	*opts = crtu_get_opts();
 	int			i;
 	char			*my_uri;
 	char			*env_self_rank;
@@ -270,8 +271,7 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -299,6 +299,14 @@ int main(int argc, char **argv)
 		rc = pthread_create(&progress_thread[i], 0,
 				    crtu_progress_fn, &crt_ctx[i]);
 		assert(rc == 0);
+	}
+
+	if (opts->is_swim_enabled) {
+		rc = crt_swim_init(0);
+		if (rc != 0) {
+			D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+			assert(0);
+		}
 	}
 
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
@@ -394,12 +402,6 @@ int main(int argc, char **argv)
 
 	d_rank_list_free(rank_list);
 	rank_list = NULL;
-
-	rc = crt_swim_init(0);
-	if (rc != 0) {
-		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
-		assert(0);
-	}
 
 	rc = sem_init(&sem, 0, 0);
 	if (rc != 0) {

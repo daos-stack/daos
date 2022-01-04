@@ -101,23 +101,31 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  * \return		Others are for the count of committed DTXs.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
-	       bool *rm_cos);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]);
 
 /**
  * Abort the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
+ * \param dti	[IN]	The DTX identifiers to be aborted.
  * \param epoch	[IN]	The max epoch for the DTX to be aborted.
- * \param dtis	[IN]	The array for DTX identifiers to be aborted.
- * \param count [IN]	The count of DTXs to be aborted.
  *
- * \return		Negative value if error.
- * \return		Others are for the count of aborted DTXs.
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
-	      int count);
+vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
+
+/**
+ * Set flags on the active DTXs.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dti	[IN]	The DTX identifiers to be handled.
+ * \param flags [IN]	The flags for the DTXs.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.
@@ -241,13 +249,12 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * Kill a VOS pool before destroy
  * It deletes SPDK blob of this pool and detaches it from VOS GC
  *
- * \param uuid	[IN]	Pool UUID
- * \param force [IN]	Delete blob even if it has open refcount
+ * \param uuid		[IN]	Pool UUID
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_kill(uuid_t uuid, bool force);
+vos_pool_kill(uuid_t uuid);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
@@ -273,6 +280,13 @@ vos_pool_destroy(const char *path, uuid_t uuid);
 int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
+
+/**
+ * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
+ */
+int
+vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
+		      daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -391,7 +405,6 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
- * \param csum_func  [IN]	Pointer to csum recalculation function
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
  * \param full_scan  [IN]	Full scan for snapshot deletion
@@ -400,8 +413,7 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
-	      void *yield_arg, bool full_scan);
+	      bool (*yield_func)(void *arg), void *yield_arg, bool full_scan);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -418,15 +430,20 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  * the caller.
  *
  * \param coh		[IN]	Container open handle
- * \param epr		[IN]	The epoch range to discard
- *				keys to discard
+ * \param oidp		[IN]	Optional oid for oid specific discard.  Aggregation should be
+ *				disabled before calling this function in this mode.  This simply
+ *				removes values in the specified epoch range.  It doesn't discard
+ *				any ilog entries. The expectation is the removed data will
+ *				be replaced at the same epoch (or snapshot).  If that is not the
+ *				case, any orphaned entries will be inaccessible.
+ * \param epr		[IN]	The epoch range to discard keys to discard
  * \param yield_func	[IN]	Pointer to customized yield function
  * \param yield_arg	[IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    bool (*yield_func)(void *arg), void *yield_arg);
 
 /**
@@ -505,7 +522,10 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -540,7 +560,10 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -701,6 +724,10 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -978,7 +1005,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * object. If object does not have an array value, 0 is returned in extent. User
  * has to specify what is being queried (dkey, akey, and/or recx) along with the
  * query type (max or min) in flags. If one of those is not provided the
- * function will fail. If the dkey or akey are not being queried, there value
+ * function will fail. If the dkey or akey are not being queried, their values
  * must be provided by the user.
  *
  * If searching in a particular dkey for the max akey and max offset in that
@@ -1011,6 +1038,10 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx	max or min offset in dkey/akey, and the size of the
  *			extent at the offset. If there are no visible array
  *			records, the size in the recx returned will be 0.
+ * \param[in]	cell_size cell size for EC object, used to calculated the replicated
+ *                      space address on parity shard.
+ * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
+ *                      space address on parity shard.
  * \param[in]	dth	Pointer to the DTX handle.
  *
  * \return
@@ -1022,7 +1053,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx, struct dtx_handle *dth);
+		  daos_recx_t *recx, unsigned int cell_size, uint64_t stripe_size,
+		  struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.
@@ -1057,14 +1089,6 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/**
-	 * Pause flushing the free extents in aging buffer. This is usually
-	 * called before container destroy where huge amount of extents could
-	 * be freed in a short period of time.
-	 */
-	VOS_PO_CTL_VEA_PLUG,
-	/** Pairing with PLUG, usually called after container destroy done. */
-	VOS_PO_CTL_VEA_UNPLUG,
 	/** Set pool tiering policy */
 	VOS_PO_CTL_SET_POLICY,
 };
@@ -1109,19 +1133,6 @@ vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
 		      unsigned int bulk_perm);
 int
 vos_dedup_verify(daos_handle_t ioh);
-
-/** Raise a RAS event on incompatible durable format
- *
- * \param[in] type		Type of object with layout format
- *				incompatibility (e.g. VOS pool)
- * \param[in] version		Version of the object
- * \param[in] min_version	Minimum supported version
- * \param[in] max_version	Maximum supported version
- * \param[in] pool		(Optional) associated pool uuid
- */
-void
-vos_report_layout_incompat(const char *type, int version, int min_version,
-			   int max_version, uuid_t *uuid);
 
 struct sys_db *vos_db_get(void);
 /**

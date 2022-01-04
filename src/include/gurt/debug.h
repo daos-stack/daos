@@ -63,7 +63,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  * scope.   This enables use of a variable in the macro below and is
  * just good coding practice.
  */
-#pragma GCC diagnostic warning "-Wshadow"
+#pragma GCC diagnostic error "-Wshadow"
 
 /** Internal macro for printing the message using resolved mask */
 #define _D_LOG_NOCHECK(mask, fmt, ...)				\

@@ -105,7 +105,21 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		int *tgts, int rank_nr, bool kill,
 		enum REBUILD_TEST_OP_TYPE op_type)
 {
-	int i;
+	int   i;
+	int   rc;
+
+	for (i = 0; i < args_cnt; i++) {
+		daos_pool_info_t	pool_info;
+
+		/* refresh the pool information */
+		rc = test_pool_get_info(args[i], &pool_info);
+		if (rc) {
+			print_message("get pool "DF_UUIDF" info failed: %d\n",
+				      DP_UUID(args[i]->pool.pool_uuid), rc);
+			return;
+		}
+		args[i]->rebuild_pre_pool_ver = pool_info.pi_map_ver;
+	}
 
 	for (i = 0; i < args_cnt; i++)
 		if (args[i]->rebuild_pre_cb)
@@ -151,7 +165,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		if (args[i]->rebuild_cb)
 			args[i]->rebuild_cb(args[i]);
 
-	sleep(10); /* make sure the rebuild happens after exclude/add/kill */
 	if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 		test_rebuild_wait(args, args_cnt);
 
@@ -265,15 +278,14 @@ rebuild_pool_connect_internal(void *data)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
 
-		print_message("pool connect "DF_UUIDF"\n",
-		DP_UUID(arg->pool.pool_uuid));
+		print_message("pool connect %s\n", arg->pool.pool_str);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->multi_rank)
@@ -292,7 +304,7 @@ rebuild_pool_connect_internal(void *data)
 	/** open container */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
+		rc = daos_cont_open(arg->pool.poh, arg->co_str,
 				    DAOS_COO_RW | DAOS_COO_FORCE,
 				    &arg->coh, &arg->co_info, NULL);
 		if (rc)
@@ -615,6 +627,13 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 
 	for (i = 0; i < KEY_NR; i++) {
 		req->iod_type = DAOS_IOD_ARRAY;
+
+		sprintf(key, "dkey_small_%d", index);
+		recx.rx_nr = 5;
+		recx.rx_idx = off + i * 10485760;
+		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, size, req);
+
 		sprintf(key, "dkey_%d", index);
 		recx.rx_nr = size;
 		recx.rx_idx = off + i * 10485760;
@@ -659,8 +678,18 @@ verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
 		daos_size_t	single_data_size;
 		daos_size_t	iod3_datasize = IOD3_DATA_SIZE * 3;
 		daos_size_t	datasize = size;
+		daos_size_t	small_size = 5;
 
 		req->iod_type = DAOS_IOD_ARRAY;
+
+		sprintf(key, "dkey_small_%d", index);
+		sprintf(key_buf, "a_key");
+		memset(read_data, 0, 5);
+		lookup(key, 1, &akey, &offset, &iod_size,
+		       &read_data, &small_size, DAOS_TX_NONE, req, false);
+		assert_memory_equal(read_data, verify_data, small_size);
+		assert_int_equal(iod_size, 1);
+
 		sprintf(key, "dkey_%d", index);
 		sprintf(key_buf, "a_key");
 		memset(read_data, 0, size);
@@ -787,6 +816,7 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	daos_size_t	chunk_size = 32 * 1024 * 4;
 	daos_size_t	fetch_size = 0;
 	uuid_t		co_uuid;
+	char		str[37];
 	char		filename[32];
 	d_rank_t	ranks[4] = { -1 };
 	int		idx = 0;
@@ -796,8 +826,7 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	int		i;
 	int		rc;
 
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl,
 			     &dfs_mt);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
@@ -869,7 +898,8 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 
 #if 0
@@ -951,7 +981,7 @@ ec_data_nr_get(daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL);
+	oca = daos_oclass_attr_find(oid, NULL, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_k;
 }
@@ -961,7 +991,7 @@ ec_parity_nr_get(daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL);
+	oca = daos_oclass_attr_find(oid, NULL, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_p;
 }
@@ -974,7 +1004,7 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	uint32_t		shard;
 	int			idx = 0;
 
-	oca = daos_oclass_attr_find(oid, NULL);
+	oca = daos_oclass_attr_find(oid, NULL, NULL);
 	if (oca->ca_resil == DAOS_RES_REPL) {
 		ranks[0] = get_rank_by_oid_shard(arg, oid, 0);
 		if (ranks_num)
@@ -989,12 +1019,10 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	while (parity_nr-- > 0)
 		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard--);
 
-	shard = 0;
+	shard = rand() % oca->u.ec.e_k;
 	while (data_nr-- > 0) {
 		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
-		shard = shard + 2;
-		if (shard > oca->u.ec.e_k)
-			break;
+		shard = (shard + 2) % oca->u.ec.e_k;
 	}
 
 	if (ranks_num)
@@ -1048,7 +1076,7 @@ rebuild_small_sub_setup(void **state)
 
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_SMALL_POOL_SIZE, 0, NULL);
+			REBUILD_POOL_SIZE, 0, NULL);
 	if (rc)
 		return rc;
 

@@ -4,7 +4,6 @@ name: daos_server           # sys group daos_server
 access_points: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
 provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
-socket_dir: /tmp/daos_sockets
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log
 
@@ -29,6 +28,7 @@ engines:
   first_core: 0             # offset of the first core for service threads
   nr_xs_helpers: 0          # count of I/O offload threads per engine
   fabric_iface: lo          # map to OFI_INTERFACE=lo
+  fabric_iface_port: 31316  # map to OFI_PORT=31316
   log_mask: DEBUG,RPC=ERR,MEM=ERR
   log_file: /tmp/daos_engine.0.log # map to D_LOG_FILE=/tmp/daos_engine.0.log
 

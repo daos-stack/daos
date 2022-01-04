@@ -1722,8 +1722,8 @@ crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
 int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
-typedef void
-(*crt_progress_cb) (crt_context_t ctx, void *arg);
+typedef int64_t
+(*crt_progress_cb) (crt_context_t ctx, int64_t timeout, void *arg);
 
 /**
  * Register a callback function which will be called inside crt_progress()
@@ -1760,8 +1760,18 @@ enum crt_event_type {
 	CRT_EVT_DEAD,
 };
 
+/**
+ * Event handler callback.
+ *
+ * \param[in] rank             rank this event is about
+ * \param[in] incarnation      rank incarnation if \a src is CRT_EVS_SWIM
+ * \param[in] src              event source
+ * \param[in] type             event type
+ * \param[in] arg              arg passed to crt_register_event_cb with this
+ *                             callback
+ */
 typedef void
-(*crt_event_cb) (d_rank_t rank, enum crt_event_source src,
+(*crt_event_cb) (d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		 enum crt_event_type type, void *arg);
 
 /**
@@ -1988,6 +1998,16 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  *                              on failure.
  */
 int crt_self_uri_get(int tag, char **uri);
+
+/**
+ * Retrieve incarnation of self.
+ *
+ * \param[out] incarnation      Returned incarnation
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_self_incarnation_get(uint64_t *incarnation);
 
 /**
  * Retrieve group information containing ranks and associated uris
@@ -2228,6 +2248,19 @@ void crt_swim_fini(void);
 #define crt_proc_crt_status_t		crt_proc_int32_t
 #define crt_proc_crt_group_id_t		crt_proc_d_string_t
 #define crt_proc_crt_phy_addr_t		crt_proc_d_string_t
+
+/**
+ * \a err is an error that ought to be logged at a less serious level than ERR.
+ *
+ * \param[in] err                an error
+ *
+ * \return                       true or false
+ */
+static inline bool
+crt_quiet_error(int err)
+{
+	return err == -DER_GRPVER;
+}
 
 /** @}
  */

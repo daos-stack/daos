@@ -62,7 +62,7 @@ pipeline {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
         ansiColor('xterm')
-        buildDiscarder(logRotator(artifactDaysToKeepStr: '100'))
+        buildDiscarder(logRotator(artifactDaysToKeepStr: '100', daysToKeepStr: '730'))
     }
 
     parameters {
@@ -72,6 +72,9 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: "",
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'BuildType',
+               defaultValue: "",
+               description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',
                defaultValue: "",
                description: 'Test-repeat to use for this run.  Specifies the ' +
@@ -79,6 +82,102 @@ pipeline {
                             'CAUTION: only use in combination with a reduced ' +
                             'number of tests specified with the TestTag ' +
                             'parameter.')
+        booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
+                     defaultValue: false,
+                     description: 'Only build RPM and DEB packages, Skip unit tests.')
+        string(name: 'CI_RPM_TEST_VERSION',
+               defaultValue: '',
+               description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        string(name: 'CI_HARDWARE_DISTRO',
+               defaultValue: '',
+               description: 'Distribution to use for CI Hardware Tests')
+        string(name: 'CI_CENTOS7_TARGET',
+               defaultValue: '',
+               description: 'Image to used for Centos 7 CI tests.  I.e. el7, el7.9, etc.')
+        string(name: 'CI_CENTOS8_TARGET',
+               defaultValue: '',
+               description: 'Image to used for Centos 8 CI tests.  I.e. el8, el8.3, etc.')
+        string(name: 'CI_LEAP15_TARGET',
+               defaultValue: '',
+               description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
+        string(name: 'CI_UBUNTU20.04_TARGET',
+               defaultValue: '',
+               description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
+        booleanParam(name: 'CI_RPM_el7_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build RPM packages for CentOS 7')
+        booleanParam(name: 'CI_RPM_el8_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build RPM packages for CentOS 8')
+        booleanParam(name: 'CI_RPM_leap15_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build RPM packages for Leap 15')
+        booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build DEB packages for Ubuntu 20')
+        booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
+                     defaultValue: false,
+                     description: 'Continue testing if a previous stage is Unstable')
+        booleanParam(name: 'CI_UNIT_TEST',
+                     defaultValue: true,
+                     description: 'Run the Unit CI tests')
+        booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
+                     defaultValue: true,
+                     description: 'Run the Unit Memcheck CI tests')
+        booleanParam(name: 'CI_FUNCTIONAL_el7_TEST',
+                     defaultValue: true,
+                     description: 'Run the functional CentOS 7 CI tests')
+        booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
+                     defaultValue: false,
+                     description: 'Enable more distros for functional CI tests')
+        booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
+                     defaultValue: true,
+                     description: 'Run the functional CentOS 8 CI tests' +
+                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+        booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
+                     defaultValue: true,
+                     description: 'Run the functional OpenSUSE Leap 15 CI tests' +
+                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+        booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
+                     defaultValue: false,
+                     description: 'Run the functional Ubuntu 20 CI tests' +
+                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+        booleanParam(name: 'CI_RPMS_el7_TEST',
+                     defaultValue: true,
+                     description: 'Run the CentOS 7 RPM CI tests')
+        booleanParam(name: 'CI_SCAN_RPMS_el7_TEST',
+                     defaultValue: true,
+                     description: 'Run the Malware Scan for CentOS 7 RPM CI tests')
+        booleanParam(name: 'CI_small_TEST',
+                     defaultValue: true,
+                     description: 'Run the Small Cluster CI tests')
+        booleanParam(name: 'CI_medium_TEST',
+                     defaultValue: true,
+                     description: 'Run the Medium Cluster CI tests')
+        booleanParam(name: 'CI_large_TEST',
+                     defaultValue: true,
+                     description: 'Run the Large Cluster CI tests')
+        string(name: 'CI_UNIT_VM1_LABEL',
+               defaultValue: 'ci_vm1',
+               description: 'Label to use for 1 VM node unit and RPM tests')
+        string(name: 'CI_FUNCTIONAL_VM9_LABEL',
+               defaultValue: 'ci_vm9',
+               description: 'Label to use for 9 VM functional tests')
+        string(name: 'CI_NLT_1_LABEL',
+               defaultValue: 'ci_nlt_1',
+               description: "Label to use for NLT tests")
+        string(name: 'CI_NVME_3_LABEL',
+               defaultValue: 'ci_nvme3',
+               description: 'Label to use for 3 node NVMe tests')
+        string(name: 'CI_NVME_5_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node NVMe tests')
+        string(name: 'CI_NVME_9_LABEL',
+               defaultValue: 'ci_nvme9',
+               description: 'Label to use for 9 node NVMe tests')
+        string(name: 'CI_STORAGE_PREP_LABEL',
+               defaultValue: '',
+               description: 'Label for cluster to do a DAOS Storage Preparation')
     }
 
     stages {
@@ -207,6 +306,10 @@ pipeline {
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
@@ -238,6 +341,10 @@ pipeline {
                     }
                 }
                 stage('Build RPM on CentOS 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
@@ -362,12 +469,6 @@ pipeline {
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-build.log',
-                                                    id: "analysis-gcc-centos7")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-gcc
@@ -402,143 +503,11 @@ pipeline {
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-covc-build.log',
-                                                    id: "analysis-covc-centos7")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-covc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-covc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 debug') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild(),
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-debug-build.log',
-                                                    id: "analysis-gcc-centos7-debug")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc-debug
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-debug',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 release') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild(),
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                            args '--tmpfs /mnt/daos_0'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
-                        sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos7.release --test cont_copy""",
-                            label: 'Run NLT smoke test')
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-release-build.log',
-                                                    id: "analysis-gcc-centos7-release")
-                            junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.release/',
-                                             allowEmptyArchive: true
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc-release
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 with Clang debug') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild(),
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: clang(pattern: 'centos7-clang-debug-build.log',
-                                                     id: "analysis-centos7-debug-clang")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang-debug
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-clang-debug',
                                              allowEmptyArchive: true
                         }
                     }
@@ -554,8 +523,8 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15"
-                            args '-v /opt/intel:/opt/intel'
+                                                " -t ${sanitized_JOB_NAME}-leap15" +
+                                                " --build-arg COMPILER=icc"
                         }
                     }
                     steps {
@@ -564,12 +533,6 @@ pipeline {
                                    build_deps: "no"
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: intel(pattern: 'leap15-icc-build.log',
-                                                     id: "analysis-leap15-intelc")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-leap15-intelc
@@ -593,7 +556,7 @@ pipeline {
                       expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -612,7 +575,7 @@ pipeline {
                       expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_nlt_1'
+                        label params.CI_NLT_1_LABEL
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -628,20 +591,13 @@ pipeline {
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: false,
+                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          name: "NLT server leaks",
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreFailedBuilds: false,
-                                         ignoreQualityGate: true,
-                                         name: "NLT client leaks",
-                                         tool: issues(pattern: 'nlt-client-leaks.json',
-                                           name: 'NLT client results',
-                                           id: 'NLT_client')
                         }
                     }
                 }
@@ -651,7 +607,7 @@ pipeline {
                       expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -677,7 +633,7 @@ pipeline {
                       expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
                         unitTest timeout_time: 30,
@@ -738,7 +694,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -751,13 +707,32 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
+                stage('Functional on CentOS 8 with Valgrind') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_FUNCTIONAL_VM9_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional on CentOS 8 with Valgrind')
                 stage('Functional on CentOS 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -776,7 +751,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -795,7 +770,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -814,30 +789,52 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
                         testRpm inst_repos: daosRepos(),
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
+                stage('Test CentOS 8.3.2011 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'el8.3',
+                                daos_pkg_version: daosPackagesVersion("centos8", next_version)
+                   }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Test Leap 15.2 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'leap15.2',
+                                daos_pkg_version: daosPackagesVersion(next_version)
+                   }
+                } // stage('Test Leap 15 RPMs')
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
-                        expression { ! (target_branch == 'weekly-testing' ||
-                                        skipStage(stage: 'scan-centos-rpms',
-                                                  def_val: 'false') ||
-                                        quickFunctional()) }
+                        expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm1'
+                        label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version),
-                                 inst_rpms: 'clamav clamav-devel',
-                                 test_script: 'ci/rpm/scan_daos.sh',
-                                 junit_files: 'maldetect.xml'
+                                 daos_pkg_version: daosPackagesVersion(next_version)
                     }
                     post {
                         always {
@@ -845,8 +842,102 @@ pipeline {
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
+                stage('Scan CentOS 8 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        scanRpms inst_repos: daosRepos(),
+                                 daos_pkg_version: daosPackagesVersion(next_version)
+                    }
+                    post {
+                        always {
+                            junit 'maldetect.xml'
+                        }
+                    }
+                } // stage('Scan CentOS 8 RPMs')
+                stage('Scan Leap 15 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        scanRpms inst_repos: daosRepos(),
+                                 daos_pkg_version: daosPackagesVersion(next_version)
+                    }
+                    post {
+                        always {
+                            junit 'maldetect.xml'
+                        }
+                    }
+                } // stage('Scan Leap 15 RPMs')
+                stage('Fault injection testing') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.centos.7'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true)
+                            args '--tmpfs /mnt/daos_0'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: true,
+                                   scons_exe: 'scons-3',
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
+                                   build_deps: "no"
+                        sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
+                            label: 'Fault injection testing using NLT')
+                    }
+                    post {
+                        always {
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
+                                                      scm: 'daos-stack/daos'
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: true,
+                                         ignoreQualityGate: true,
+                                         qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
+                                                        [threshold: 1, type: 'TOTAL_HIGH'],
+                                                        [threshold: 1, type: 'NEW_NORMAL', unstable: true],
+                                                        [threshold: 1, type: 'NEW_LOW', unstable: true]],
+                                         tools: [issues(pattern: 'nlt-errors.json',
+                                                        name: 'Fault injection issues',
+                                                        id: 'Fault_Injection'),
+                                                 issues(pattern: 'nlt-client-leaks.json',
+                                                        name: 'Fault injection leaks',
+                                                        id: 'NLT_client')]
+                            junit testResults: 'nlt-junit.xml'
+                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
+                        }
+                    }
+                } // stage('Fault inection testing')
             } // parallel
         } // stage('Test')
+        stage('Test Storage Prep') {
+            when {
+                beforeAgent true
+                expression { params.CI_STORAGE_PREP_LABEL != '' }
+            }
+            agent {
+                label params.CI_STORAGE_PREP_LABEL
+            }
+            steps {
+                storagePrepTest inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version)
+            }
+        } // stage('Test Storage Prep')
         stage('Test Hardware') {
             when {
                 beforeAgent true
@@ -860,7 +951,7 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme3'
+                        label params.CI_NVME_3_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -880,11 +971,10 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label 'ci_nvme5'
+                        label params.CI_NVME_5_LABEL
                     }
                     steps {
-                        functionalTest target: hwDistroTarget(),
-                                       inst_repos: daosRepos(),
+                        functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                    }
@@ -901,11 +991,10 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme9'
+                        label params.CI_NVME_9_LABEL
                     }
                     steps {
-                        functionalTest target: hwDistroTarget(),
-                                       inst_repos: daosRepos(),
+                        functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }

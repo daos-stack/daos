@@ -165,10 +165,9 @@ static void
 setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	       int chunksize, daos_oclass_id_t oclass)
 {
+	char		str[37];
 	daos_prop_t	*props = daos_prop_alloc(3);
 	int		 rc;
-
-	uuid_generate(ctx->uuid);
 
 	assert_non_null(props);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
@@ -179,11 +178,12 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	props->dpp_entries[2].dpe_val = chunksize != 0 ? chunksize : 1024*16;
 
-	rc = daos_cont_create(ctx->poh, ctx->uuid, props, NULL);
+	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	daos_prop_free(props);
 	assert_success(rc);
 
-	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_open(ctx->poh, str, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
 	assert_success(rc);
 
@@ -315,7 +315,8 @@ setup_multiple_extent_data(struct csum_test_ctx *ctx)
 static void
 cleanup_cont_obj(struct csum_test_ctx *ctx)
 {
-	int rc;
+	int	rc;
+	char	str[37];
 
 	/** close object */
 	rc = daos_obj_close(ctx->oh, NULL);
@@ -324,7 +325,8 @@ cleanup_cont_obj(struct csum_test_ctx *ctx)
 	/** Close & Destroy Container */
 	rc = daos_cont_close(ctx->coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_destroy(ctx->poh, str, true, NULL);
 	assert_rc_equal(rc, 0);
 }
 
@@ -454,7 +456,7 @@ test_server_data_corruption(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*8, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*64, oc);
 
 	/**1. Simple server data corruption after RDMA */
 	setup_multiple_extent_data(&ctx);
@@ -2202,13 +2204,11 @@ test_enum_unpack_cb(struct dss_enum_unpack_io *io, void *arg)
 			continue;
 		}
 
-		daos_csummer_alloc_iods_csums_with_packed(
-			csummer,
-			&io->ui_iods[i], 1,
-			&tmp_iov, &iod_csums);
+		rc = daos_csummer_alloc_iods_csums_with_packed(csummer, &io->ui_iods[i], 1,
+							       &tmp_iov, &iod_csums);
+		assert_success(rc);
 
-		rc = daos_csummer_verify_iod(csummer, &io->ui_iods[i],
-					     &io->ui_sgls[i], iod_csums,
+		rc = daos_csummer_verify_iod(csummer, &io->ui_iods[i], &io->ui_sgls[i], iod_csums,
 					     NULL, 0, NULL);
 
 		assert_success(rc);
@@ -2427,7 +2427,7 @@ test_enumerate_object2(void **state)
 	assert_rc_equal(0, rc);
 
 	d_sgl_init(&list_sgl, 1);
-	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 10);
+	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 64);
 	/** Sanity check that no failure still returns success */
 	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX};
 

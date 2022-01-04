@@ -157,7 +157,7 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 }
 
 // newTestEngine returns an EngineInstance configured for testing.
-func newTestEngine(log logging.Logger, isAP bool, engineCfg ...*engine.Config) *EngineInstance {
+func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, engineCfg ...*engine.Config) *EngineInstance {
 	if len(engineCfg) == 0 {
 		engineCfg = append(engineCfg, engine.NewConfig().
 			WithTargetCount(1).
@@ -171,10 +171,6 @@ func newTestEngine(log logging.Logger, isAP bool, engineCfg ...*engine.Config) *
 	rCfg := new(engine.TestRunnerConfig)
 	rCfg.Running.SetTrue()
 	r := engine.NewTestRunner(rCfg, engineCfg[0])
-
-	provider := storage.MockProvider(
-		log, 0, &engineCfg[0].Storage, nil, nil, nil,
-	)
 
 	srv := NewEngineInstance(log, provider, nil, r)
 	srv.setSuperblock(&Superblock{
@@ -198,9 +194,11 @@ func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
 // newTestMgmtSvc creates a mgmtSvc that contains an EngineInstance
 // properly set up as an MS.
 func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
-	srv := newTestEngine(log, true)
-
 	harness := NewEngineHarness(log)
+	provider := storage.MockProvider(log, 0, nil, nil, nil, nil)
+
+	srv := newTestEngine(log, true, provider)
+
 	if err := harness.AddInstance(srv); err != nil {
 		t.Fatal(err)
 	}
@@ -215,9 +213,10 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 // configured as an access point.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
 	harness := NewEngineHarness(log)
+	provider := storage.MockProvider(log, 0, nil, nil, nil, nil)
 
 	for i := 0; i < count; i++ {
-		srv := newTestEngine(log, i == 0 && isAP)
+		srv := newTestEngine(log, i == 0 && isAP, provider)
 		srv._superblock.Rank = system.NewRankPtr(uint32(i))
 
 		if err := harness.AddInstance(srv); err != nil {

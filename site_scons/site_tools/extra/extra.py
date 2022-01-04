@@ -21,7 +21,7 @@
 """SCons extra features"""
 from __future__ import print_function
 
-import subprocess
+import subprocess #nosec
 import re
 import os
 

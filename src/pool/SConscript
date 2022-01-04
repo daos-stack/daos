@@ -6,6 +6,7 @@ def scons():
     Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    env.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     denv = env.Clone()
 
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')

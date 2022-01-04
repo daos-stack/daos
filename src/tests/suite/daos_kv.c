@@ -16,7 +16,7 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
-static daos_ofeat_t feat = DAOS_OF_KV_FLAT;
+static enum daos_otype_t type = DAOS_OT_KV_HASHED;
 
 static void simple_put_get(void **state);
 
@@ -92,7 +92,7 @@ simple_put_get(void **state)
 	D_ALLOC(buf_out, buf_size);
 	assert_non_null(buf_out);
 
-	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -260,7 +260,7 @@ kv_cond_ops(void **state)
 	size_t		size;
 	int		rc;
 
-	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 
 	/** open the object */
 	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);

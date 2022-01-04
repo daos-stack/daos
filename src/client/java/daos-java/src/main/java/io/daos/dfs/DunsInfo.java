@@ -14,7 +14,6 @@ public class DunsInfo {
   private String poolId;
   private String contId;
   private String layout;
-  private String appInfo;
   private String prefix;
 
   /**
@@ -26,21 +25,14 @@ public class DunsInfo {
    * container UUID
    * @param layout
    * layout
-   * @param appInfo
-   * application specific info.
    * @param prefix
    * UNS OS path or UUID prefix in format /pooluuid/containeruuid
    */
-  public DunsInfo(String poolId, String contId, String layout, String appInfo, String prefix) {
+  public DunsInfo(String poolId, String contId, String layout, String prefix) {
     this.poolId = poolId;
     this.contId = contId;
     this.layout = layout;
-    this.appInfo = appInfo;
     this.prefix = prefix;
-  }
-
-  public String getAppInfo() {
-    return appInfo;
   }
 
   public String getContId() {

@@ -61,7 +61,7 @@ func (cmd *poolBaseCmd) PoolID() PoolID {
 	return cmd.Args.Pool
 }
 
-func (cmd *poolBaseCmd) connectPool() error {
+func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 	sysName := cmd.SysName
 	if sysName == "" {
 		sysName = build.DefaultSystemName
@@ -77,7 +77,7 @@ func (cmd *poolBaseCmd) connectPool() error {
 		defer freeString(cLabel)
 
 		cmd.log.Debugf("connecting to pool: %s", cmd.PoolID().Label)
-		rc = C.daos_pool_connect2(cLabel, cSysName, C.DAOS_PC_RW,
+		rc = C.daos_pool_connect2(cLabel, cSysName, flags,
 			&cmd.cPoolHandle, &poolInfo, nil)
 		if rc == 0 {
 			var err error
@@ -92,7 +92,7 @@ func (cmd *poolBaseCmd) connectPool() error {
 		cmd.log.Debugf("connecting to pool: %s", cmd.poolUUID)
 		cUUIDstr := C.CString(cmd.poolUUID.String())
 		defer freeString(cUUIDstr)
-		rc = C.daos_pool_connect2(cUUIDstr, cSysName, C.DAOS_PC_RW,
+		rc = C.daos_pool_connect2(cUUIDstr, cSysName, flags,
 			&cmd.cPoolHandle, nil, nil)
 	default:
 		return errors.New("no pool UUID or label supplied")
@@ -116,8 +116,8 @@ func (cmd *poolBaseCmd) disconnectPool() {
 	}
 }
 
-func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), error) {
-	if err := cmd.connectPool(); err != nil {
+func (cmd *poolBaseCmd) resolveAndConnect(flags C.uint, ap *C.struct_cmd_args_s) (func(), error) {
+	if err := cmd.connectPool(flags); err != nil {
 		return nil, errors.Wrapf(err,
 			"failed to connect to pool %s", cmd.PoolID())
 	}
@@ -127,6 +127,16 @@ func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), erro
 			return nil, err
 		}
 		ap.pool = cmd.cPoolHandle
+		switch {
+		case cmd.PoolID().HasLabel():
+			pLabel := C.CString(cmd.PoolID().Label)
+			defer freeString(pLabel)
+			C.strncpy(&ap.pool_str[0], pLabel, C.DAOS_PROP_LABEL_MAX_LEN)
+		case cmd.PoolID().HasUUID():
+			pUUIDstr := C.CString(cmd.poolUUID.String())
+			defer freeString(pUUIDstr)
+			C.strncpy(&ap.pool_str[0], pUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
+		}
 	}
 
 	return func() {
@@ -140,6 +150,7 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 
 type poolCmd struct {
 	Query     poolQueryCmd     `command:"query" description:"query pool info"`
+	ListConts containerListCmd `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
 	ListAttrs poolListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
 	GetAttr   poolGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
 	SetAttr   poolSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
@@ -227,7 +238,7 @@ const (
 )
 
 func (cmd *poolQueryCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect(nil)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
 		return err
 	}
@@ -268,7 +279,7 @@ type poolListAttrsCmd struct {
 }
 
 func (cmd *poolListAttrsCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect(nil)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
 		return err
 	}
@@ -281,7 +292,10 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attrs, nil)
+		if cmd.Verbose {
+			return cmd.outputJSON(attrs.asMap(), nil)
+		}
+		return cmd.outputJSON(attrs.asList(), nil)
 	}
 
 	var bld strings.Builder
@@ -302,7 +316,7 @@ type poolGetAttrCmd struct {
 }
 
 func (cmd *poolGetAttrCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect(nil)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
 		return err
 	}
@@ -338,7 +352,7 @@ type poolSetAttrCmd struct {
 }
 
 func (cmd *poolSetAttrCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect(nil)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RW, nil)
 	if err != nil {
 		return err
 	}
@@ -346,7 +360,7 @@ func (cmd *poolSetAttrCmd) Execute(_ []string) error {
 
 	if err := setDaosAttribute(cmd.cPoolHandle, poolAttr, &attribute{
 		Name:  cmd.Args.Name,
-		Value: cmd.Args.Value,
+		Value: []byte(cmd.Args.Value),
 	}); err != nil {
 		return errors.Wrapf(err,
 			"failed to set attribute %q on pool %s",
@@ -365,7 +379,7 @@ type poolDelAttrCmd struct {
 }
 
 func (cmd *poolDelAttrCmd) Execute(_ []string) error {
-	cleanup, err := cmd.resolveAndConnect(nil)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RW, nil)
 	if err != nil {
 		return err
 	}
@@ -382,6 +396,9 @@ func (cmd *poolDelAttrCmd) Execute(_ []string) error {
 
 type poolAutoTestCmd struct {
 	poolBaseCmd
+
+	SkipBig       C.bool `long:"skip-big" short:"S" description:"skip big tests"`
+	DeadlineLimit C.int  `long:"deadline-limit" short:"D" description:"deadline limit for test (seconds)"`
 }
 
 func (cmd *poolAutoTestCmd) Execute(_ []string) error {
@@ -391,7 +408,7 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(nil)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RW, nil)
 	if err != nil {
 		return err
 	}
@@ -408,6 +425,10 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
+
+	ap.skip_big = C.bool(cmd.SkipBig)
+
+	ap.deadline_limit = C.int(cmd.DeadlineLimit)
 
 	rc := C.pool_autotest_hdlr(ap)
 	if err := daosError(rc); err != nil {

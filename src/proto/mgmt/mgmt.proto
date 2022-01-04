@@ -32,8 +32,6 @@ service MgmtSvc {
 	rpc LeaderQuery(LeaderQueryReq) returns (LeaderQueryResp) {}
 	// Create a DAOS pool allocated across a number of ranks
 	rpc PoolCreate(PoolCreateReq) returns (PoolCreateResp) {}
-	// Resolve a user-friendly DAOS pool id to a UUID.
-	rpc PoolResolveID(PoolResolveIDReq) returns (PoolResolveIDResp) {}
 	// Destroy a DAOS pool allocated across a number of ranks.
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
 	// Evict a DAOS pool's connections.
@@ -76,4 +74,6 @@ service MgmtSvc {
 	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
 	// Erase DAOS system database prior to reformat
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
+	// Clean up leaked resources for a given node
+	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
 }

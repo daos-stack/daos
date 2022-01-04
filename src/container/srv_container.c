@@ -40,8 +40,8 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
  * if there are more failures for that domain type then allowed restrict
  * container opening.
  *
- * \param pmap  [in]    The pool map referenced by the container.
- * \param props [in]    The container properties, used to get redundancy factor
+ * \param[in] pmap      The pool map referenced by the container.
+ * \param[in] props     The container properties, used to get redundancy factor
  *                      and level.
  *
  * \return	0 if the container meets the requirements, negative error code
@@ -72,12 +72,10 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 
 	if (num_allowed_failures >= num_failed)
 		return 0;
-	else {
-		D_ERROR("Domain contains %d failed "
-			"components, allows at most %d", num_failed,
-			num_allowed_failures);
-		return -DER_INVAL;
-	}
+
+	D_ERROR("Domain contains %d failed components, allows at most %d",
+		num_failed, num_allowed_failures);
+	return -DER_INVAL;
 }
 
 static int
@@ -203,7 +201,8 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	if (rc == -DER_NONEXIST) {
 		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */,
 				     &svc->cs_pool_uuid, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
@@ -218,7 +217,8 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	if (version < DS_CONT_MD_VERSION_LOW || version > DS_CONT_MD_VERSION) {
 		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */,
 				     &svc->cs_pool_uuid, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
@@ -391,7 +391,7 @@ cont_existence_check(struct rdb_tx *tx, struct cont_svc *svc,
 	/* Label provided in request - search for it in cs_uuids KVS
 	 * and perform additional sanity checks.
 	 */
-	d_iov_set(&key, clabel, strnlen(clabel, DAOS_PROP_LABEL_MAX_LEN + 1));
+	d_iov_set(&key, clabel, strnlen(clabel, DAOS_PROP_MAX_LABEL_BUF_LEN));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &svc->cs_uuids, &key, &val);
 	if (rc != -DER_NONEXIST) {
@@ -473,10 +473,11 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 			if (entry->dpe_val_ptr != NULL) {
 				struct daos_acl *acl = entry->dpe_val_ptr;
 
-				daos_prop_entry_dup_ptr(entry_def, entry,
-							daos_acl_get_size(acl));
-				if (entry_def->dpe_val_ptr == NULL)
-					return -DER_NOMEM;
+				D_FREE(entry_def->dpe_val_ptr);
+				rc = daos_prop_entry_dup_ptr(entry_def, entry,
+							     daos_acl_get_size(acl));
+				if (rc)
+					return rc;
 			}
 			break;
 		case DAOS_PROP_CO_OWNER:
@@ -716,6 +717,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct daos_prop_entry *lbl_ent;
 	struct daos_prop_entry *def_lbl_ent;
 	d_string_t		lbl = NULL;
+	uint32_t		nsnapshots = 0;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
@@ -835,7 +837,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		/* If we have come this far (see existence check), there must
 		 * not be an entry with this label in cs_uuids. Just update.
 		 */
-		d_iov_set(&key, lbl, strnlen(lbl, DAOS_PROP_LABEL_MAX_LEN + 1));
+		d_iov_set(&key, lbl, strnlen(lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
 		d_iov_set(&value, in->cci_op.ci_uuid, sizeof(uuid_t));
 		rc = rdb_tx_update(tx, &svc->cs_uuids, &key, &value);
 		if (rc != 0) {
@@ -849,14 +851,19 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	/* Create the snapshot KVS. */
+	d_iov_set(&value, &nsnapshots, sizeof(nsnapshots));
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to update nsnapshots, "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
+	}
 	attr.dsa_class = RDB_KVS_INTEGER;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_snapshots, &attr);
 	if (rc != 0) {
-		D_ERROR(DF_CONT" failed to create container snapshots KVS: "
-			""DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cci_op.ci_uuid), DP_RC(rc));
+		D_ERROR(DF_CONT" failed to create container snapshots KVS: "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), DP_RC(rc));
 	}
 
 	/* Create the user attribute KVS. */
@@ -966,6 +973,9 @@ struct recs_buf {
 	int				rb_nrecs;
 };
 
+/* Number of recs per yield when growing a recs_buf. See close_iter_cb. */
+#define RECS_BUF_RECS_PER_YIELD 128
+
 static int
 recs_buf_init(struct recs_buf *buf)
 {
@@ -1015,11 +1025,17 @@ recs_buf_grow(struct recs_buf *buf)
 	return 0;
 }
 
+struct find_hdls_by_cont_arg {
+	struct rdb_tx	       *fha_tx;
+	struct recs_buf		fha_buf;
+};
+
 static int
-find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
+find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
-	struct recs_buf	       *buf = arg;
-	int			rc;
+	struct find_hdls_by_cont_arg   *arg = varg;
+	struct recs_buf		       *buf = &arg->fha_buf;
+	int				rc;
 
 	if (key->iov_len != sizeof(uuid_t) || val->iov_len != sizeof(char)) {
 		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
@@ -1034,6 +1050,15 @@ find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 	uuid_copy(buf->rb_recs[buf->rb_nrecs].tcr_hdl, key->iov_buf);
 	buf->rb_recs[buf->rb_nrecs].tcr_hce = 0 /* unused */;
 	buf->rb_nrecs++;
+
+	if (buf->rb_nrecs % RECS_BUF_RECS_PER_YIELD == 0) {
+		ABT_thread_yield();
+		rc = rdb_tx_revalidate(arg->fha_tx);
+		if (rc != 0) {
+			D_WARN("revalidate RDB TX: "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	}
 	return 0;
 }
 
@@ -1044,32 +1069,37 @@ static int cont_close_hdls(struct cont_svc *svc,
 static int
 evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
 {
-	struct recs_buf	buf;
-	int		rc;
+	struct find_hdls_by_cont_arg	arg;
+	int				rc;
 
-	rc = recs_buf_init(&buf);
+	arg.fha_tx = tx;
+	rc = recs_buf_init(&arg.fha_buf);
 	if (rc != 0)
 		return rc;
 
 	rc = rdb_tx_iterate(tx, &cont->c_hdls, false /* !backward */,
-			    find_hdls_by_cont_cb, &buf);
+			    find_hdls_by_cont_cb, &arg);
 	if (rc != 0)
 		goto out;
 
-	if (buf.rb_nrecs == 0)
+	if (arg.fha_buf.rb_nrecs == 0)
 		goto out;
 
 	if (!force) {
 		rc = -DER_BUSY;
+		D_WARN("Not evicting handles, "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
-	rc = cont_close_hdls(cont->c_svc, buf.rb_recs, buf.rb_nrecs, ctx);
+	rc = cont_close_hdls(cont->c_svc, arg.fha_buf.rb_recs, arg.fha_buf.rb_nrecs, ctx);
 
 out:
-	recs_buf_fini(&buf);
+	recs_buf_fini(&arg.fha_buf);
 	return rc;
 }
+
+static void
+cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid);
 
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
@@ -1121,6 +1151,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		goto out_prop;
 
+	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
+
 	/* Destroy the handle index KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_handles);
 	if (rc != 0)
@@ -1140,7 +1172,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
 	if (lbl_ent) {
 		d_iov_set(&key, lbl_ent->dpe_str,
-			  strnlen(lbl_ent->dpe_str, DAOS_PROP_LABEL_MAX_LEN + 1));
+			  strnlen(lbl_ent->dpe_str, DAOS_PROP_MAX_LABEL_BUF_LEN));
 		d_iov_set(&val, NULL, 0);
 		rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
 		if (rc != -DER_NONEXIST) {
@@ -1177,6 +1209,8 @@ cont_ec_agg_lookup(struct cont_svc *cont_svc, uuid_t cont_uuid)
 	struct cont_ec_agg *ec_agg;
 
 	d_list_for_each_entry(ec_agg, &cont_svc->cs_ec_agg_list, ea_list) {
+		if (ec_agg->ea_deleted)
+			continue;
 		if (uuid_compare(ec_agg->ea_cont_uuid, cont_uuid) == 0)
 			return ec_agg;
 	}
@@ -1227,11 +1261,18 @@ out:
 }
 
 static void
-cont_ec_agg_destroy(struct cont_ec_agg *ec_agg)
+cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid)
 {
-	d_list_del(&ec_agg->ea_list);
-	D_FREE(ec_agg->ea_server_ephs);
-	D_FREE(ec_agg);
+	struct cont_ec_agg	*ec_agg;
+
+	ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
+	if (ec_agg == NULL)
+		return;
+
+	/* Set ea_deleted flag to destroy it inside cont_agg_eph_leader_ult()
+	 * to avoid list iteration broken.
+	 */
+	ec_agg->ea_deleted = 1;
 }
 
 /**
@@ -1275,7 +1316,7 @@ retry:
 				DF_CONT"\n", rank, eph,
 				DP_CONT(pool_uuid, cont_uuid));
 			retried = true;
-			cont_ec_agg_destroy(ec_agg);
+			ec_agg->ea_deleted = 1;
 			goto retry;
 		} else {
 			D_WARN("rank %u eph "DF_U64" does not exist for "
@@ -1342,6 +1383,9 @@ cont_agg_eph_leader_ult(void *arg)
 	struct cont_ec_agg	*tmp;
 	int			rc = 0;
 
+	if (svc->cs_ec_leader_ephs_req == NULL)
+		goto out;
+
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
@@ -1353,10 +1397,16 @@ cont_agg_eph_leader_ult(void *arg)
 			goto yield;
 		}
 
-		d_list_for_each_entry(ec_agg, &svc->cs_ec_agg_list,
-				      ea_list) {
+		d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list) {
 			daos_epoch_t min_eph = DAOS_EPOCH_MAX;
 			int	     i;
+
+			if (ec_agg->ea_deleted) {
+				d_list_del(&ec_agg->ea_list);
+				D_FREE(ec_agg->ea_server_ephs);
+				D_FREE(ec_agg);
+				continue;
+			}
 
 			for (i = 0; i < ec_agg->ea_servers_num; i++) {
 				d_rank_t rank = ec_agg->ea_server_ephs[i].rank;
@@ -1396,6 +1446,17 @@ cont_agg_eph_leader_ult(void *arg)
 					 DP_CONT(svc->cs_pool_uuid,
 						 ec_agg->ea_cont_uuid),
 					DP_RC(rc));
+
+				/* If there are network error or pool map inconsistency,
+				 * let's skip the following eph sync, which will fail
+				 * anyway.
+				 */
+				if (daos_crt_network_error(rc) || rc == -DER_GRPVER) {
+					D_INFO(DF_UUID": skip refresh due to: "DF_RC"\n",
+					       DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+					break;
+				}
+
 				continue;
 			}
 			ec_agg->ea_current_eph = min_eph;
@@ -1409,44 +1470,36 @@ yield:
 		sched_req_sleep(svc->cs_ec_leader_ephs_req, EC_AGG_EPH_INTV);
 	}
 
+out:
 	D_DEBUG(DF_DSMS, DF_UUID": stop eph ult: rc %d\n",
 		DP_UUID(svc->cs_pool_uuid), rc);
 
-	d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list)
-		cont_ec_agg_destroy(ec_agg);
+	d_list_for_each_entry_safe(ec_agg, tmp, &svc->cs_ec_agg_list, ea_list) {
+		d_list_del(&ec_agg->ea_list);
+		D_FREE(ec_agg->ea_server_ephs);
+		D_FREE(ec_agg);
+	}
 }
 
 static int
 cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 {
 	struct sched_req_attr	attr;
-	ABT_thread		ec_eph_leader_ult = ABT_THREAD_NULL;
-	int			rc;
 
+	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
 	if (unlikely(ec_agg_disabled))
 		return 0;
 
-	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
-
-	rc = dss_ult_create(cont_agg_eph_leader_ult, svc, DSS_XS_SYS,
-			    0, 0, &ec_eph_leader_ult);
-	if (rc) {
-		D_ERROR(DF_UUID" Failed to create aggregation ULT. %d\n",
-			DP_UUID(svc->cs_pool_uuid), rc);
-		return rc;
-	}
-
-	D_ASSERT(ec_eph_leader_ult != ABT_THREAD_NULL);
+	D_ASSERT(svc->cs_ec_leader_ephs_req == NULL);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &svc->cs_pool_uuid);
-	svc->cs_ec_leader_ephs_req = sched_req_get(&attr, ec_eph_leader_ult);
+	svc->cs_ec_leader_ephs_req = sched_create_ult(&attr, cont_agg_eph_leader_ult, svc, 0);
 	if (svc->cs_ec_leader_ephs_req == NULL) {
-		D_ERROR(DF_UUID"Failed to get req for ec eph query ULT\n",
+		D_ERROR(DF_UUID" Failed to create EC leader eph ULT.\n",
 			DP_UUID(svc->cs_pool_uuid));
-		ABT_thread_join(ec_eph_leader_ult);
 		return -DER_NOMEM;
 	}
 
-	return rc;
+	return 0;
 }
 
 static void
@@ -1551,7 +1604,7 @@ cont_lookup_bylabel(struct rdb_tx *tx, const struct cont_svc *svc,
 	d_iov_t		val;
 	int		rc;
 
-	label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN + 1);
+	label_len = strnlen(label, DAOS_PROP_MAX_LABEL_BUF_LEN);
 	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
 		return -DER_INVAL;
 
@@ -1631,6 +1684,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	bool			cont_hdl_opened = false;
 	uint32_t		stat_pm_ver = 0;
 	uint64_t		sec_capas = 0;
+	uint32_t		snap_count;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" flags="
 		DF_X64"\n",
@@ -1741,10 +1795,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	chdl.ch_flags = in->coi_flags;
 	chdl.ch_sec_capas = sec_capas;
 
-	rc = ds_cont_epoch_init_hdl(tx, cont, in->coi_op.ci_hdl, &chdl);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
 	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -1757,6 +1807,33 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	rc = rdb_tx_update(tx, &cont->c_hdls, &key, &value);
 	if (rc != 0)
 		goto out;
+
+	/* Get nsnapshots */
+	d_iov_set(&value, &snap_count, sizeof(snap_count));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup nsnapshots, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto out;
+	}
+	out->coo_snap_count = snap_count;
+	D_DEBUG(DF_DSMS, DF_CONT": got nsnapshots=%u\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), snap_count);
+
+	/* Get latest snapshot */
+	if (snap_count > 0) {
+		d_iov_t		key_out;
+
+		rc = rdb_tx_query_key_max(tx, &cont->c_snaps, &key_out);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to query lsnapshot, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto out;
+		}
+		out->coo_lsnapshot = *(uint64_t *)key_out.iov_buf;
+		D_DEBUG(DF_DSMS, DF_CONT": got lsnapshot="DF_X64"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), out->coo_lsnapshot);
+	}
 
 out:
 	if (rc == 0) {
@@ -1839,10 +1916,6 @@ cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc,
 	if (rc != 0)
 		return rc;
 
-	rc = ds_cont_epoch_fini_hdl(tx, cont, ctx, &chdl);
-	if (rc != 0)
-		goto out;
-
 	rc = rdb_tx_delete(tx, &cont->c_hdls, &key);
 	if (rc != 0)
 		goto out;
@@ -1859,8 +1932,9 @@ static int
 cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		int nrecs, crt_context_t ctx)
 {
-	int	i;
-	int	rc;
+	struct rdb_tx	tx;
+	int		i;
+	int		rc;
 
 	D_ASSERTF(nrecs > 0, "%d\n", nrecs);
 	D_DEBUG(DF_DSMS, DF_CONT": closing %d recs: recs[0].hdl="DF_UUID
@@ -1871,34 +1945,38 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/*
-	 * Use one TX per handle to avoid calling ds_cont_epoch_fini_hdl() more
-	 * than once in a TX, in which case we would be attempting to query
-	 * uncommitted updates. This could be optimized by adding container
-	 * UUIDs into recs[i] and sorting recs[] by container UUIDs. Then we
-	 * could maintain a list of deleted LREs and a list of deleted LHEs for
-	 * each container while looping, and use the lists to update the GHCE
-	 * once for each container. This approach enables us to commit only
-	 * once (or when a TX becomes too big).
-	 */
-	for (i = 0; i < nrecs; i++) {
-		struct rdb_tx tx;
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
 
-		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term,
-				  &tx);
-		if (rc != 0)
-			break;
+	for (i = 0; i < nrecs; i++) {
 		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
-		if (rc != 0) {
-			rdb_tx_end(&tx);
-			break;
-		}
-		rc = rdb_tx_commit(&tx);
-		rdb_tx_end(&tx);
 		if (rc != 0)
-			break;
+			goto out_tx;
+
+		/*
+		 * Yield frequently, in order to cope with the slow
+		 * vos_obj_punch operations invoked by rdb_tx_commit for
+		 * deleting the handles. (If there is no other RDB replica, the
+		 * TX operations will not yield, and this loop would occupy the
+		 * xstream for too long.)
+		 */
+		if ((i + 1) % 32 == 0) {
+			rc = rdb_tx_commit(&tx);
+			if (rc != 0)
+				goto out_tx;
+			rdb_tx_end(&tx);
+			ABT_thread_yield();
+			rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+			if (rc != 0)
+				goto out;
+		}
 	}
 
+	rc = rdb_tx_commit(&tx);
+
+out_tx:
+	rdb_tx_end(&tx);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": leaving: %d\n",
 		DP_CONT(svc->cs_pool_uuid, NULL), rc);
@@ -1955,6 +2033,9 @@ out:
 	return rc;
 }
 
+/* TODO: decide if tqo_hae is needed at all; and query for more information.
+ * Currently this does not do much and is not used. Kept for future expansion.
+ */
 static int
 cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 		 const uuid_t cont_hdl, struct cont_query_out *query_out)
@@ -1992,7 +2073,7 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		D_GOTO(out_rpc, rc = -DER_IO);
 	} else {
-		query_out->cqo_hae = out->tqo_hae;
+		/* cqo_hae removed: query_out->cqo_hae = out->tqo_hae; */
 	}
 
 out_rpc:
@@ -2365,6 +2446,8 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
 	uint32_t		last_ver = 0;
+	d_iov_t			value;
+	int			snap_count;
 	int			rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
@@ -2374,10 +2457,36 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (!hdl_has_query_access(hdl, cont, in->cqi_bits))
 		return -DER_NO_PERM;
 
+	/* Get nsnapshots */
+	d_iov_set(&value, &snap_count, sizeof(snap_count));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup nsnapshots, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		return rc;
+	}
+	out->cqo_snap_count = snap_count;
+
+	/* Get latest snapshot */
+	if (snap_count > 0) {
+		d_iov_t		key_out;
+
+		rc = rdb_tx_query_key_max(tx, &cont->c_snaps, &key_out);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to query lsnapshot, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto out;
+		}
+		out->cqo_lsnapshot = *(uint64_t *)key_out.iov_buf;
+		D_DEBUG(DF_DSMS, DF_CONT": got lsnapshot="DF_X64"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), out->cqo_lsnapshot);
+	}
+
 	/* need RF to process co_status */
 	if (in->cqi_bits & DAOS_CO_QUERY_PROP_CO_STATUS)
 		in->cqi_bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 
+	/* Currently DAOS_CO_QUERY_TGT not used; code kept for future expansion. */
 	if (in->cqi_bits & DAOS_CO_QUERY_TGT) {
 		/* need RF if user query cont_info */
 		in->cqi_bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
@@ -2652,8 +2761,34 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	if (strncmp(old_lbl, in_lbl, DAOS_PROP_LABEL_MAX_LEN) == 0)
 		return 0;
 
+	/* Insert new label into cs_uuids KVS, fail if already in use */
+	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
+	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
+	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
+	if (rc != -DER_NONEXIST) {
+		if (rc != 0) {
+			D_ERROR(DF_UUID": lookup label (%s) failed: "DF_RC"\n",
+				DP_UUID(cont->c_uuid), in_lbl, DP_RC(rc));
+			return rc;	/* other lookup failure */
+		}
+		D_ERROR(DF_UUID": non-unique label (%s) matches different "
+			"container "DF_UUID"\n", DP_UUID(cont->c_uuid),
+			in_lbl, DP_UUID(match_cuuid));
+		return -DER_EXIST;
+	}
+
+	d_iov_set(&val, cont->c_uuid, sizeof(uuid_t));
+	rc = rdb_tx_update(tx, &cont->c_svc->cs_uuids, &key, &val);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": update cs_uuids failed: "DF_RC"\n",
+			DP_UUID(cont->c_uuid), DP_RC(rc));
+		return rc;
+	}
+	D_DEBUG(DB_MD, DF_UUID": inserted new label in cs_uuids KVS: %s\n",
+		DP_UUID(cont->c_uuid), in_lbl);
+
 	/* Remove old label from cs_uuids KVS, if applicable */
-	d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_LABEL_MAX_LEN + 1));
+	d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_MAX_LABEL_BUF_LEN));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
 	if (rc != -DER_NONEXIST) {
@@ -2669,34 +2804,9 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 				DP_UUID(cont->c_uuid), old_lbl, DP_RC(rc));
 			return rc;
 		}
-		D_DEBUG(DB_MD, DF_UUID": deleted label: %s\n",
+		D_DEBUG(DB_MD, DF_UUID": deleted original label in cs_uuids KVS: %s\n",
 			DP_UUID(cont->c_uuid), old_lbl);
 	}
-
-	/* Insert new label into cs_uuids KVS, fail if already in use */
-	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_LABEL_MAX_LEN + 1));
-	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
-	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
-	if (rc != -DER_NONEXIST) {
-		if (rc != 0) {
-			D_ERROR(DF_UUID": lookup label (%s) failed: "DF_RC"\n",
-				DP_UUID(cont->c_uuid), in_lbl, DP_RC(rc));
-			return rc;	/* other lookup failure */
-		}
-		D_ERROR(DF_UUID": non-unique label (%s) matches different "
-			"container "DF_UUID"\n", DP_UUID(cont->c_uuid),
-			in_lbl, DP_UUID(match_cuuid));
-		return -DER_EXIST;
-	}
-	d_iov_set(&val, cont->c_uuid, sizeof(uuid_t));
-	rc = rdb_tx_update(tx, &cont->c_svc->cs_uuids, &key, &val);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": update cs_uuids failed: "DF_RC"\n",
-			DP_UUID(cont->c_uuid), DP_RC(rc));
-		return rc;
-	}
-	D_DEBUG(DB_MD, DF_UUID": inserted label %s in cs_uuids KVS\n",
-		DP_UUID(cont->c_uuid), in_lbl);
 
 	return 0;
 }
@@ -3002,6 +3112,7 @@ cont_attr_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 }
 
 struct close_iter_arg {
+	struct rdb_tx  *cia_tx;
 	struct recs_buf	cia_buf;
 	uuid_t	       *cia_pool_hdls;
 	int		cia_n_pool_hdls;
@@ -3047,6 +3158,15 @@ close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uuid_copy(buf->rb_recs[buf->rb_nrecs].tcr_hdl, key->iov_buf);
 	buf->rb_recs[buf->rb_nrecs].tcr_hce = hdl->ch_hce;
 	buf->rb_nrecs++;
+
+	if (buf->rb_nrecs % RECS_BUF_RECS_PER_YIELD == 0) {
+		ABT_thread_yield();
+		rc = rdb_tx_revalidate(arg->cia_tx);
+		if (rc != 0) {
+			D_WARN("revalidate RDB TX: "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	}
 	return 0;
 }
 
@@ -3079,6 +3199,7 @@ ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
 
 	ABT_rwlock_wrlock(svc->cs_lock);
 
+	arg.cia_tx = &tx;
 	rc = recs_buf_init(&arg.cia_buf);
 	if (rc != 0)
 		goto out_lock;
@@ -3169,14 +3290,17 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		return rc;
 	}
 	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop);
+	cont_put(cont);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_prop_read() failed, "DF_RC"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		return rc;
 	}
 	strncpy(cinfo->pci_label, prop->dpp_entries[0].dpe_str,
 		DAOS_PROP_LABEL_MAX_LEN);
 	cinfo->pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
+	daos_prop_free(prop);
 	return 0;
 }
 
@@ -3496,36 +3620,26 @@ out:
 	out->co_rc = rc;
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
-
-	return;
 }
 
 int
-ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
-		      uint64_t num_oids, uint64_t *oid)
+ds_cont_oid_fetch_add(uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_t *oid)
 {
-	struct ds_pool_hdl	*pool_hdl;
 	struct cont_svc		*svc;
 	struct rdb_tx		tx;
 	struct cont		*cont = NULL;
-	d_iov_t		key;
-	d_iov_t		value;
-	struct container_hdl	hdl;
+	d_iov_t			value;
 	uint64_t		alloced_oid;
 	int			rc;
-
-	pool_hdl = ds_pool_hdl_lookup(poh_uuid);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
 
 	/*
 	 * TODO: How to map to the correct container service among those
 	 * running of this storage node? (Currently, there is only one, with ID
 	 * 0, colocated with the pool service.)
 	 */
-	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0, &svc, NULL);
+	rc = cont_svc_lookup_leader(po_uuid, 0, &svc, NULL);
 	if (rc != 0)
-		D_GOTO(out_pool_hdl, rc);
+		return rc;
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -3537,20 +3651,9 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	/* Look up the container handle. */
-	d_iov_set(&key, coh_uuid, sizeof(uuid_t));
-	d_iov_set(&value, &hdl, sizeof(hdl));
-	rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_hdls, &key, &value);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			rc = -DER_NO_HDL;
-		D_GOTO(out_cont, rc);
-	}
-
 	/* Read the max OID from the container metadata */
 	d_iov_set(&value, &alloced_oid, sizeof(alloced_oid));
-	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
-			   &value);
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to lookup alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -3563,8 +3666,7 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	alloced_oid += num_oids;
 
 	/* Update the max OID */
-	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
-			   &value);
+	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to update alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -3580,9 +3682,6 @@ out_lock:
 	rdb_tx_end(&tx);
 out_svc:
 	cont_svc_put_leader(svc);
-out_pool_hdl:
-	ds_pool_hdl_put(pool_hdl);
-out:
 	return rc;
 }
 

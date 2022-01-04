@@ -88,18 +88,20 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
 }
 
-/* Call internal method to increment CSUM media error. */
+/* FIXME: Should be replaced by some common csum RAS event API */
 void
-bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
+bio_log_csum_err(struct bio_xs_context *bxc)
 {
 	struct media_error_msg	*mem;
 
-	D_ALLOC_PTR(mem);
+	if (bxc->bxc_blobstore == NULL)
+		return;
+	D_ALLOC_PTR(mem); /* mem is freed in bio_media_error */
 	if (mem == NULL)
 		return;
 	mem->mem_bs		= bxc->bxc_blobstore;
 	mem->mem_err_type	= MET_CSUM;
-	mem->mem_tgt_id		= tgt_id;
+	mem->mem_tgt_id		= bxc->bxc_tgt_id;
 	spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
 }
 
@@ -254,11 +256,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	cmd.cdw10 |= SPDK_NVME_LOG_ERROR;
 	cmd.cdw11 = numdu;
 	cdata = dev_health->bdh_ctrlr_buf;
-	if (cdata->elpe >= NVME_MAX_ERROR_LOG_PAGES) {
-		D_ERROR("Device error log page size exceeds buffer size\n");
-		dev_health->bdh_inflights--;
-		goto out;
-	}
 	ep_buf_sz = ep_sz * (cdata->elpe + 1);
 
 	/*
@@ -372,7 +369,7 @@ populate_intel_smart_stats(struct bio_dev_health *bdh)
 			atb = isp->attributes[i];
 			/* divide raw value by 1024 to derive the percentage */
 			stats->media_wear_raw =
-				extend_to_uint64(atb.raw_value, 6) >> 10;
+					extend_to_uint64(atb.raw_value, 6);
 			d_tm_set_counter(bdh->bdh_media_wear_raw,
 					 stats->media_wear_raw);
 		}
@@ -593,7 +590,7 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 
 	/* Store device health info in in-memory health state log. */
-	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
+	dev_health->bdh_health_state.timestamp = daos_wallclock_secs();
 	populate_health_stats(dev_health);
 
 	/* Prep NVMe command to get SPDK Intel NVMe SSD Smart Attributes */

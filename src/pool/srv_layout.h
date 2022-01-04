@@ -26,10 +26,10 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_POOL_MD_VERSION 3
+#define DS_POOL_MD_VERSION 4
 
 /* Lowest compatible layout version */
-#define DS_POOL_MD_VERSION_LOW 2
+#define DS_POOL_MD_VERSION_LOW 4
 
 /*
  * Root KVS (RDB_KVS_GENERIC): pool properties
@@ -44,7 +44,6 @@
 extern d_iov_t ds_pool_prop_version;		/* uint32_t */
 extern d_iov_t ds_pool_prop_map_version;	/* uint32_t */
 extern d_iov_t ds_pool_prop_map_buffer;		/* pool_buf */
-extern d_iov_t ds_pool_prop_map_uuids;		/* uuid_t[] (unused now) */
 extern d_iov_t ds_pool_prop_label;		/* string */
 extern d_iov_t ds_pool_prop_acl;		/* daos_acl */
 extern d_iov_t ds_pool_prop_space_rb;		/* uint64_t */
@@ -68,6 +67,7 @@ extern d_iov_t ds_pool_prop_policy;		/* tiering policy uint32_t */
 struct pool_hdl {
 	uint64_t	ph_flags;
 	uint64_t	ph_sec_capas;
+	char		ph_machine[MAXHOSTNAMELEN+1];
 };
 
 /*

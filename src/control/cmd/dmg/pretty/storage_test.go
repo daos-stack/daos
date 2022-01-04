@@ -1385,14 +1385,28 @@ host1
 									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									State:     "NORMAL",
+									NvmeState: storage.MockNvmeStateNormal,
 								},
 								{
 									UUID:      common.MockUUID(1),
 									TrAddr:    "0000:8b:00.0",
+									TargetIDs: []int32{3, 4, 5},
+									Rank:      0,
+									NvmeState: storage.MockNvmeStateEvicted,
+								},
+								{
+									UUID:      common.MockUUID(2),
+									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
-									State:     "FAULTY",
+									NvmeState: storage.NvmeDevState(0),
+								},
+								{
+									UUID:      common.MockUUID(3),
+									TrAddr:    "0000:db:00.0",
+									TargetIDs: []int32{3, 4, 5},
+									Rank:      1,
+									NvmeState: storage.MockNvmeStateIdentify,
 								},
 							},
 						},
@@ -1407,7 +1421,11 @@ host1
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
       Targets:[0 1 2] Rank:0 State:NORMAL
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Targets:[0 1 2] Rank:1 State:FAULTY
+      Targets:[3 4 5] Rank:0 State:EVICTED
+    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
+      Targets:[0 1 2] Rank:1 State:UNPLUGGED
+    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
+      Targets:[3 4 5] Rank:1 State:IDENTIFY
 `,
 		},
 		"list-devices (none found)": {
@@ -1443,7 +1461,7 @@ host1
 									UUID:      common.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									State:     "NORMAL",
+									NvmeState: storage.MockNvmeStateNormal,
 									Health:    mockController.HealthStats,
 								},
 							},
@@ -1476,22 +1494,22 @@ host1
         Volatile Memory Backup: WARNING
       Intel Vendor SMART Attributes:
         Program Fail Count:
-           Normalized(%s):%d
+           Normalized:%d%s
            Raw:%d
         Erase Fail Count:
-           Normalized(%s):%d
+           Normalized:%d%s
            Raw:%d
         Wear Leveling Count:
-           Normalized(%s):%d
+           Normalized:%d%s
            Min:%d
            Max:%d
            Avg:%d
         End-to-End Error Detection Count:%d
         CRC Error Count:%d
-        Timed Workload, Media Wear(%s):%d
-        Timed Workload, Host Reads:%d
+        Timed Workload, Media Wear:%d
+        Timed Workload, Host Read/Write Ratio:%d
         Timed Workload, Timer:%d
-        Thermal Throttle Status(%s):%d
+        Thermal Throttle Status:%d%s
         Thermal Throttle Event Count:%d
         Retry Buffer Overflow Counter:%d
         PLL Lock Loss Count:%d
@@ -1505,14 +1523,14 @@ host1
 				time.Duration(mockController.HealthStats.PowerOnHours)*time.Hour,
 				mockController.HealthStats.UnsafeShutdowns, mockController.HealthStats.MediaErrors,
 				mockController.HealthStats.ErrorLogEntries,
-				"%%", mockController.HealthStats.ProgFailCntNorm, mockController.HealthStats.ProgFailCntRaw,
-				"%%", mockController.HealthStats.EraseFailCntNorm, mockController.HealthStats.EraseFailCntRaw,
-				"%%", mockController.HealthStats.WearLevelingCntNorm, mockController.HealthStats.WearLevelingCntMin,
+				mockController.HealthStats.ProgFailCntNorm, "%", mockController.HealthStats.ProgFailCntRaw,
+				mockController.HealthStats.EraseFailCntNorm, "%", mockController.HealthStats.EraseFailCntRaw,
+				mockController.HealthStats.WearLevelingCntNorm, "%", mockController.HealthStats.WearLevelingCntMin,
 				mockController.HealthStats.WearLevelingCntMax, mockController.HealthStats.WearLevelingCntAvg,
 				mockController.HealthStats.EndtoendErrCntRaw, mockController.HealthStats.CrcErrCntRaw,
-				"%%", mockController.HealthStats.MediaWearRaw, mockController.HealthStats.HostReadsRaw,
+				mockController.HealthStats.MediaWearRaw, mockController.HealthStats.HostReadsRaw,
 				mockController.HealthStats.WorkloadTimerRaw,
-				"%%", mockController.HealthStats.ThermalThrottleStatus, mockController.HealthStats.ThermalThrottleEventCnt,
+				mockController.HealthStats.ThermalThrottleStatus, "%", mockController.HealthStats.ThermalThrottleEventCnt,
 				mockController.HealthStats.RetryBufferOverflowCnt,
 				mockController.HealthStats.PllLockLossCnt,
 				mockController.HealthStats.NandBytesWritten, mockController.HealthStats.HostBytesWritten,

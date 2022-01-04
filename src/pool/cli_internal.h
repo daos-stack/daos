@@ -21,7 +21,6 @@ void dc_pool_hdl_link(struct dc_pool *pool);
 void dc_pool_hdl_unlink(struct dc_pool *pool);
 struct dc_pool *dc_pool_alloc(unsigned int nr);
 
-int dc_pool_map_update(struct dc_pool *pool, struct pool_map *map,
-		       unsigned int map_version, bool connect);
+int dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect);
 
 #endif /* __POOL_CLIENT_INTERNAL_H__ */

@@ -50,20 +50,12 @@ public class DaosFileMultiThreadsIT {
     Assert.assertTrue(ex);
   }
 
-  /**
-   * TODO: to be resumed after DAOS team adding "conditional update" to fix concurrency issue
-   *
-   * @throws Exception
-   */
+  @Test
   public void testCreateNewFile() throws Exception {
     operate("/zjf/xyz/abc/def/test", Op.CREATE, 50);
   }
 
-  /**
-   * TODO: to be resumed after DAOS team adding "conditional update" to fix concurrency issue
-   *
-   * @throws Exception
-   */
+  @Test
   public void testMkdir() throws Exception {
     String path = "/zjf2/xyz/abc/def/dir";
     operate(path, Op.MKDIR, 50);

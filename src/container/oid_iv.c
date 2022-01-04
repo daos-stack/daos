@@ -22,9 +22,7 @@ struct oid_iv_key {
 	/** The Key ID, being the container uuid */
 	uuid_t		key_id;
 	/** Pool uuid, needed at the root to lookup pool hdl */
-	uuid_t		poh_uuid;
-	/** Container handle uuid needed at the root to access metadata */
-	uuid_t		coh_uuid;
+	uuid_t		po_uuid;
 };
 
 /** IV cache entry will be represented by this structure on each node. */
@@ -54,8 +52,7 @@ oid_iv_key_cmp(void *key1, void *key2)
 	struct oid_iv_key *oid_key2 = key2;
 
 	if (uuid_compare(oid_key1->key_id, oid_key2->key_id) == 0 &&
-	    uuid_compare(oid_key1->poh_uuid, oid_key2->poh_uuid) == 0 &&
-	    uuid_compare(oid_key1->coh_uuid, oid_key2->coh_uuid) == 0)
+	    uuid_compare(oid_key1->po_uuid, oid_key2->po_uuid) == 0)
 		return true;
 
 	return false;
@@ -78,6 +75,12 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	struct oid_iv_entry	*entry;
 	struct oid_iv_range	*oids;
 	struct oid_iv_range	*avail;
+
+	if (src == NULL) {
+		D_DEBUG(DB_TRACE, "delete entry iv_entry %p\n", iv_entry);
+		iv_entry->iv_to_delete = 1;
+		return 0;
+	}
 
 	D_ASSERT(priv);
 	num_oids = priv->num_oids;
@@ -139,9 +142,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		struct oid_iv_key *key;
 
 		key = key2priv(&ns_entry->iv_key);
-		rc = ds_cont_oid_fetch_add(key->poh_uuid, key->key_id,
-					   key->coh_uuid, num_oids,
-					   &avail->oid);
+		rc = ds_cont_oid_fetch_add(key->po_uuid, key->key_id, num_oids, &avail->oid);
 		if (rc) {
 			D_ERROR("failed to fetch and update max_oid "DF_RC"\n",
 				DP_RC(rc));
@@ -249,8 +250,7 @@ oid_iv_ent_init(struct ds_iv_key *iv_key, void *data, struct ds_iv_entry *entry)
 	key = key2priv(iv_key);
 	ent_key = key2priv(&entry->iv_key);
 	uuid_copy(ent_key->key_id, key->key_id);
-	uuid_copy(ent_key->poh_uuid, key->poh_uuid);
-	uuid_copy(ent_key->coh_uuid, key->coh_uuid);
+	uuid_copy(ent_key->po_uuid, key->po_uuid);
 
 	entry->iv_value.sg_iovs[0].iov_buf = oid_entry;
 	entry->iv_value.sg_iovs[0].iov_buf_len = sizeof(struct oid_iv_entry);
@@ -306,24 +306,23 @@ struct ds_iv_class_ops oid_iv_ops = {
 };
 
 int
-oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
-	       uuid_t coh_uuid, uint64_t num_oids, d_sg_list_t *value)
+oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg_list_t *value)
 {
 	struct oid_iv_key	*oid_key;
 	struct ds_iv_key        key;
 	struct oid_iv_range	*oids;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, "%d: OID alloc CUUID "DF_UUIDF" num_oids %"PRIu64"\n",
-		dss_self_rank(), DP_UUID(co_uuid), num_oids);
+	D_DEBUG(DB_TRACE, "%d: OID alloc CUUID "DF_UUIDF"/"DF_UUIDF" num_oids %"
+		PRIu64"\n", dss_self_rank(), DP_UUID(po_uuid), DP_UUID(co_uuid),
+		num_oids);
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_OID;
 
 	oid_key = (struct oid_iv_key *)key.key_buf;
 	uuid_copy(oid_key->key_id, co_uuid);
-	uuid_copy(oid_key->poh_uuid, poh_uuid);
-	uuid_copy(oid_key->coh_uuid, coh_uuid);
+	uuid_copy(oid_key->po_uuid, po_uuid);
 
 	oids = value->sg_iovs[0].iov_buf;
 	oids->num_oids = num_oids;
@@ -334,6 +333,29 @@ oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
+}
+
+int
+oid_iv_invalidate(void *ns, uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	struct ds_iv_key	key = { 0 };
+	struct oid_iv_key	*oid_key;
+	int			rc;
+
+	memset(&key, 0, sizeof(key));
+	key.class_id = IV_OID;
+
+	oid_key = (struct oid_iv_key *)key.key_buf;
+	uuid_copy(oid_key->key_id, cont_uuid);
+	uuid_copy(oid_key->po_uuid, pool_uuid);
+
+	rc = ds_iv_invalidate(ns, &key, 0, CRT_IV_SYNC_NONE, 0, false);
+	if (rc)
+		D_ERROR(DF_UUID" iv invalidate failed "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
+
+	return rc;
+
 }
 
 int

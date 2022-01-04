@@ -88,6 +88,7 @@ extern int daos_event_priv_reset(void);
 /* the pool used for daos test suite */
 struct test_pool {
 	d_rank_t		ranks[TEST_RANKS_MAX_NUM];
+	char			pool_str[64];
 	uuid_t			pool_uuid;
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
@@ -129,6 +130,7 @@ typedef struct {
 	struct test_pool	pool;
 	char			*pool_label;
 	uuid_t			co_uuid;
+	char			co_str[64];
 	char			*cont_label;
 	unsigned int		uid;
 	unsigned int		gid;
@@ -168,6 +170,7 @@ typedef struct {
 	 */
 	int			(*rebuild_cb)(void *test_arg);
 	void			*rebuild_cb_arg;
+	uint32_t		rebuild_pre_pool_ver;
 	/* The callback is called after pool rebuild, used for validating IO
 	 * after rebuild
 	 */
@@ -220,6 +223,7 @@ enum {
 
 #define SMALL_POOL_SIZE		(1ULL << 30)	/* 1GB */
 #define DEFAULT_POOL_SIZE	(4ULL << 30)	/* 4GB */
+#define REBUILD_POOL_SIZE	(4ULL << 30)
 
 #define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
 #define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
@@ -261,8 +265,9 @@ int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
 static inline daos_obj_id_t
-daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
-		  daos_oclass_hints_t hints, unsigned seed)
+daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass,
+		  enum daos_otype_t type, daos_oclass_hints_t hints,
+		  unsigned int seed)
 {
 	daos_obj_id_t	oid;
 
@@ -271,9 +276,10 @@ daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
 
 	oid = dts_oid_gen(seed);
 	if (daos_handle_is_valid(coh))
-		daos_obj_generate_oid(coh, &oid, ofeats, oclass, hints, 0);
+		daos_obj_generate_oid(coh, &oid, type, oclass, hints, 0);
 	else
-		daos_obj_set_oid(&oid, ofeats, oclass, 0);
+		daos_obj_set_oid(&oid, type, oclass >> 24,
+				 oclass - (oclass >> 24), 0);
 
 	return oid;
 }
@@ -333,7 +339,7 @@ enum {
 };
 
 int run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size);
-int run_daos_pool_test(int rank, int size);
+int run_daos_pool_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size, int *tests, int test_size);
@@ -420,7 +426,7 @@ get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
-		      char *verify_data, daos_handle_t th);
+		      char *verify_data, daos_handle_t th, bool degraded);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,

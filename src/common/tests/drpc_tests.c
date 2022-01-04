@@ -65,20 +65,20 @@ teardown_drpc_mocks(void **state)
 static void
 test_drpc_connect_returns_null_if_socket_fails(void **state)
 {
-	socket_return = -1; /* < 0 indicates failure */
+	socket_return = -ENOENT; /* < 0 indicates failure */
 	struct drpc *drpc;
 
-	assert_rc_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
+	assert_rc_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_NONEXIST);
 	assert_null(drpc);
 }
 
 static void
 test_drpc_connect_returns_null_if_connect_fails(void **state)
 {
-	connect_return = -1; /* < 0 indicates failure */
+	connect_return = -ENOENT; /* < 0 indicates failure */
 	struct drpc *drpc;
 
-	assert_rc_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_MISC);
+	assert_rc_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_NONEXIST);
 	assert_null(drpc);
 
 	/* Closed the socket */
@@ -145,8 +145,7 @@ test_drpc_close_closing_socket_fails(void **state)
 	int		expected_fd = 123;
 	struct drpc	*ctx = new_drpc_with_fd(expected_fd);
 
-	close_return = -1;
-	errno = ENOMEM;
+	close_return = -ENOMEM;
 
 	/* error is logged but ignored */
 	assert_rc_equal(drpc_close(ctx), 0);
@@ -207,8 +206,7 @@ test_drpc_call_fails_if_sendmsg_fails(void **state)
 	Drpc__Response	*resp = NULL;
 	Drpc__Call	*call = new_drpc_call();
 
-	sendmsg_return = -1;
-	errno = EINVAL; /* translates to -DER_INVAL */
+	sendmsg_return = -EINVAL; /* translates to -DER_INVAL */
 
 	assert_rc_equal(drpc_call(ctx, 0, call, &resp), -DER_INVAL);
 	assert_null(resp);
@@ -317,8 +315,7 @@ test_drpc_call_with_sync_flag_fails_on_recvmsg_fail(void **state)
 	Drpc__Response	*resp = NULL;
 	Drpc__Call	*call = new_drpc_call();
 
-	recvmsg_return = -1;
-	errno = EINVAL;
+	recvmsg_return = -EINVAL;
 
 	assert_rc_equal(drpc_call(ctx, R_SYNC, call, &resp), -DER_INVAL);
 	assert_null(resp);
@@ -412,7 +409,7 @@ test_drpc_listen_fails_if_fcntl_fails(void **state)
 static void
 test_drpc_listen_fails_if_bind_fails(void **state)
 {
-	bind_return = -1;
+	bind_return = -ENOENT;
 
 	assert_null(drpc_listen(TEST_SOCK_ADDR, mock_drpc_handler));
 
@@ -535,8 +532,7 @@ assert_drpc_recv_call_fails_with_recvmsg_errno(int recvmsg_errno,
 	mock_valid_drpc_call_in_recvmsg();
 
 	recvmsg_call_count = 0;
-	recvmsg_return = -1;
-	errno = recvmsg_errno;
+	recvmsg_return = -recvmsg_errno;
 
 	assert_rc_equal(drpc_recv_call(ctx, &call), expected_retval);
 
@@ -650,8 +646,7 @@ test_drpc_send_response_sendmsg_fails(void **state)
 	struct drpc	*ctx = new_drpc_with_fd(122);
 	Drpc__Response	*resp = new_drpc_response();
 
-	sendmsg_return = -1;
-	errno = ENOMEM;
+	sendmsg_return = -ENOMEM;
 
 	assert_rc_equal(drpc_send_response(ctx, resp), -DER_NOMEM);
 

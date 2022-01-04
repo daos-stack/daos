@@ -179,6 +179,7 @@ def define_mercury(reqs):
                           check(reqs, 'openpa', '', '64') + '/libopa.a '
                           '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
                           '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
+                          '-DCMAKE_CXX_FLAGS="-std=c++11" '
                           '-DBUILD_EXAMPLES=OFF '
                           '-DMERCURY_USE_BOOST_PP=ON '
                           + MERCURY_DEBUG +
@@ -314,7 +315,7 @@ def define_components(reqs):
                 retriever=retriever,
                 commands=['./configure --prefix="$SPDK_PREFIX"'                \
                           ' --disable-tests --disable-unit-tests '             \
-                          ' --disable-examples --disable-apps --without-vhost '\
+                          ' --disable-apps --without-vhost '                   \
                           ' --without-crypto --without-pmdk --without-rbd '    \
                           ' --with-rdma --without-iscsi-initiator '            \
                           ' --without-isal --without-vtune --with-shared',

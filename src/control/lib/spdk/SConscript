@@ -18,7 +18,7 @@ def scons():
     senv.AppendUnique(OBJPREFIX='s_')
 
     # Explicitly link RTE & SPDK libs for CGO access
-    libs = ['spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
+    libs = ['spdk_log', 'spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
     libs += ['rte_mempool_ring', 'rte_bus_pci', 'nvme_control']
 
     # Other libs

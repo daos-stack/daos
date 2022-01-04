@@ -9,11 +9,14 @@
 from grp import getgrgid
 from pwd import getpwuid
 import re
-import json
 
+from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+
+class DmgJsonCommandFailure(CommandFailure):
+    """Exception raised when a dmg --json command fails."""
 
 
 def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -78,30 +81,17 @@ class DmgCommand(DmgCommandBase):
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
 
-    def _get_json_result(self, sub_command_list=None, **kwargs):
-        """Wrap the base _get_result method to force JSON output."""
-        prev_json_val = self.json.value
-        self.json.update(True)
-        prev_output_check = self.output_check
-        self.output_check = "both"
-        try:
-            self._get_result(sub_command_list, **kwargs)
-        finally:
-            self.json.update(prev_json_val)
-            self.output_check = prev_output_check
-        return json.loads(self.result.stdout)
-
     def network_scan(self, provider=None):
         """Get the result of the dmg network scan command.
 
         Args:
             provider (str): name of network provider tied to the device
 
-        Returns:
-            dict: dictionary of output in JSON format
-
         Raises:
             CommandFailure: if the dmg network scan command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
 
         """
         # Sample json output for --provider=all. Output is abbreviated.
@@ -167,11 +157,11 @@ class DmgCommand(DmgCommandBase):
         Args:
             verbose (bool, optional): create verbose output. Defaults to False.
 
-        Returns:
-            dict: dictionary of output in JSON format
-
         Raises:
             CommandFailure: if the dmg storage scan command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
 
         """
         # Sample json output. --verbose and non-verbose combined. Output is
@@ -383,7 +373,7 @@ class DmgCommand(DmgCommandBase):
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
-                    tier_ratio=None, properties=None, label=None):
+                    tier_ratio=None, properties=None, label=None, nranks=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -407,6 +397,7 @@ class DmgCommand(DmgCommandBase):
             properties (str, optional): Comma separated name:value string
                 Defaults to None
             label (str, optional): Pool label. Defaults to None.
+            nranks (str, optional): Number of ranks to use. Defaults to None
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -427,8 +418,10 @@ class DmgCommand(DmgCommandBase):
             "nsvc": svcn,
             "acl_file": acl_file,
             "properties": properties,
-            "label": label
+            "label": label,
+            "nranks": nranks
         }
+
         if target_list is not None:
             kwargs["ranks"] = ",".join([str(target) for target in target_list])
 
@@ -449,7 +442,13 @@ class DmgCommand(DmgCommandBase):
         # },
         # "error": null,
         # "status": 0
-        output = self._get_json_result(("pool", "create"), **kwargs)
+        output = self._get_json_result(("pool", "create"),
+                                       json_err=True, **kwargs)
+        if output["error"] is not None:
+            self.log.error(output["error"])
+            if self.exit_status_exception:
+                raise DmgJsonCommandFailure(output["error"])
+
         if output["response"] is None:
             return data
 
@@ -473,7 +472,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool query command fails.
 
         Returns:
-            dict: dictionary of output in JSON format.
+            dict: the dmg json command output converted to a python dictionary
 
         """
         # Sample JSON output
@@ -601,55 +600,57 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "delete-acl"), pool=pool, principal=principal)
 
-    def pool_list(self):
+    def pool_list(self, no_query=False, verbose=False):
         """List pools.
+
+        Args:
+            no_query (bool, optional): If True, do not query for pool stats.
+            verbose (bool, optional): If True, use verbose mode.
 
         Raises:
             CommandFailure: if the dmg pool pool list command fails.
 
         Returns:
-            dict: a dictionary of pool UUID keys and svc replica values
+            dict: the dmg json command output converted to a python dictionary
 
         """
-        # Sample JSON Output:
+        # Sample verbose JSON Output:
         # {
-        #    "response": {
-        #        "status": 0,
-        #        "pools": [
-        #        {
-        #            "uuid": "3dd3f313-6e37-4890-9e64-93a34d04e9f5",
-        #            "label": "foobar",
-        #            "svc_reps": [
-        #            0
-        #            ]
-        #        },
-        #        {
-        #            "uuid": "6871d543-9a12-4530-b704-d937197c131c",
-        #            "label": "foobaz",
-        #            "svc_reps": [
-        #            0
-        #            ]
-        #        },
-        #        {
-        #            "uuid": "aa503e26-e974-4634-ac5a-738ee00f0c39",
-        #            "svc_reps": [
-        #            0
-        #            ]
-        #        }
-        #        ]
-        #    },
-        #    "error": null,
-        #    "status": 0
+        #     "response": {
+        #         "status": 0,
+        #         "pools": [
+        #         {
+        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #             "label": "mkp1",
+        #             "svc_reps": [
+        #             0
+        #             ],
+        #             "targets_total": 8,
+        #             "targets_disabled": 0,
+        #             "query_error_msg": "",
+        #             "query_status_msg": "",
+        #             "usage": [
+        #             {
+        #                 "tier_name": "SCM",
+        #                 "size": 3000000000,
+        #                 "free": 2995801112,
+        #                 "imbalance": 0
+        #             },
+        #             {
+        #                 "tier_name": "NVME",
+        #                 "size": 47000000000,
+        #                 "free": 26263322624,
+        #                 "imbalance": 36
+        #             }
+        #             ]
+        #         }
+        #         ]
+        #     },
+        #     "error": null,
+        #     "status": 0
         # }
-        output = self._get_json_result(("pool", "list"))
-
-        data = {}
-        if output["response"] is None or output["response"]["pools"] is None:
-            return data
-
-        for pool in output["response"]["pools"]:
-            data[pool["uuid"]] = pool["svc_reps"]
-        return data
+        return self._get_json_result(
+            ("pool", "list"), no_query=no_query, verbose=verbose)
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.
@@ -670,6 +671,24 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(
             ("pool", "set-prop"), pool=pool, name=name, value=value)
+
+    def pool_get_prop(self, pool, name):
+        """Get the Property for a given pool.
+
+        Args:
+            pool (str): Pool for which to get the property.
+            name (str): Get the Property value based on name.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool get-prop command fails.
+
+        """
+        return self._get_json_result(
+            ("pool", "get-prop {} {}".format(pool, name)))
 
     def pool_exclude(self, pool, rank, tgt_idx=None):
         """Exclude a daos_server from the pool.
@@ -766,6 +785,43 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("cont", "set-owner"), pool=pool, cont=cont, user=user, group=group)
 
+    def system_cleanup(self, machinename=None, verbose=True):
+        """Release all resources associated with the specified machine.
+
+        Args:
+            machinename (str): Specify machine to clean up resources for.
+            verbose (bool): Retrieve list of pools cleaned up and handle counts.
+
+        Raises:
+            CommandFailure: if the dmg system cleanup command fails.
+
+        Returns:
+            dict: dictionary of output in JSON format
+        """
+        # Sample output:
+        #  "response": {
+        #    "results": [
+        #      {
+        #        "status": 0,
+        #        "msg": "",
+        #        "pool_id": "591ab37d-9efe-4b90-a102-afce50adb8cd",
+        #        "count": 6
+        #      },
+        #      {
+        #        "status": 0,
+        #        "msg": "",
+        #        "pool_id": "168824c4-0000-41e1-a93c-6013a12ae53f",
+        #        "count": 6
+        #      }
+        #    ]
+        #  },
+        #  "error": null,
+        #  "status": 0
+        #}
+
+        return self._get_json_result(
+            ("system", "cleanup"), machinename=machinename, verbose=verbose)
+
     def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
 
@@ -779,7 +835,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system query command fails.
 
         Returns:
-            dict: dictionary of output in JSON format
+            dict: the dmg json command output converted to a python dictionary
 
         """
         # Sample output:
@@ -821,7 +877,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system query command fails.
 
         Returns:
-            dict: dictionary of output in JSON format
+            dict: the dmg json command output converted to a python dictionary
 
         """
         # Example JSON output:
@@ -844,7 +900,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system erase command fails.
 
         Returns:
-            dict: dictionary of output in JSON format.
+            dict: the dmg json command output converted to a python dictionary
 
         """
         return self._get_json_result(("system", "erase"))
@@ -954,7 +1010,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system query command fails.
 
         Returns:
-            dict: dictionary of output in JSON format
+            dict: the dmg json command output converted to a python dictionary
 
         """
         return self._get_json_result(
@@ -972,7 +1028,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system query command fails.
 
         Returns:
-            dict: dictionary of output in JSON format
+            dict: the dmg json command output converted to a python dictionary
 
         """
         # Sample output (metric="process_start_time_seconds"):
@@ -998,6 +1054,85 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(
             ("telemetry", "metrics", "query"), host=host, metrics=metrics)
+
+    def _parse_pool_list(self, key=None, **kwargs):
+        """Parse the dmg pool list json output for the requested information.
+
+        Args:
+            key (str, optional): pool list json dictionary key in
+                ["response"]["pools"]. Defaults to None.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: list of all the pool items in the dmg pool list json output
+                for the requested json dictionary key. This will be an empty
+                list if the key does not exist or the json output was not in
+                the expected format.
+
+        """
+        pool_list = self.pool_list(**kwargs)
+        try:
+            if pool_list["response"]["pools"] is None:
+                return []
+            if key:
+                return [pool[key] for pool in pool_list["response"]["pools"]]
+            return pool_list["response"]["pools"]
+        except KeyError:
+            return []
+
+    def get_pool_list_all(self, **kwargs):
+        """Get a list of all the pool information from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a list of dictionaries containing information for each pool
+                from the dmg pool list json output
+
+        """
+        return self._parse_pool_list(**kwargs)
+
+    def get_pool_list_uuids(self, **kwargs):
+        """Get a list of pool UUIDs from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a sorted list of UUIDs for each pool from the dmg pool list
+                json output
+
+        """
+        return sorted(self._parse_pool_list("uuid", **kwargs))
+
+    def get_pool_list_labels(self, **kwargs):
+        """Get a list of pool labels from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a sorted list of labels for each pool from the dmg pool list
+                json output
+
+        """
+        return sorted(self._parse_pool_list("label", **kwargs))
+
+    def get_pool_list_svc_reps(self, **kwargs):
+        """Get a list of lists of pool svc_reps from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a list of lists of pool svc_reps for each pool from the dmg
+                pool list json output
+
+        """
+        return self._parse_pool_list("svc_reps", **kwargs)
 
 
 def check_system_query_status(data):
