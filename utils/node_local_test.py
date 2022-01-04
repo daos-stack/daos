@@ -490,6 +490,16 @@ class DaosServer():
         else:
             self.dfuse_cores = None
 
+        self.fuse_procs = []
+
+    def add_fuse(self, fuse):
+        """Register a new fuse instance"""
+        self.fuse_procs.append(fuse)
+
+    def remove_fuse(self, fuse):
+        """Deregister a fuse instance"""
+        self.fuse_procs.remove(fuse)
+
     def __del__(self):
         if self._agent:
             self._stop_agent()
@@ -714,6 +724,12 @@ class DaosServer():
 
     def stop(self, wf):
         """Stop a previously started DAOS server"""
+
+        for fuse in self.fuse_procs:
+            print('Stopping server with running fuse procs, cleaning up')
+            self._add_test_case('server-stop-with-running-fuse', failure=str(fuse))
+            fuse.stop()
+
         if self._agent:
             self._stop_agent()
 
@@ -1023,6 +1039,15 @@ class DFuse():
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
+    def __str__(self):
+
+        if self._sp:
+            running = 'running'
+        else:
+            running = 'not running'
+
+        return 'DFuse instance at {} ({})'.format(self.dir, running)
+
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
@@ -1102,6 +1127,8 @@ class DFuse():
             if total_time > 60:
                 raise Exception('Timeout starting dfuse')
 
+        self._daos.add_fuse(self)
+
     def _close_files(self):
         work_done = False
         for fname in os.listdir('/proc/self/fd'):
@@ -1138,7 +1165,10 @@ class DFuse():
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
-            if ret != 0:
+            if ret == 42:
+                self.conf.wf.add_test_case(str(self), failure='valgrind errors', output=ret)
+                self.conf.valgrind_errors = True
+            elif ret != 0:
                 fatal_errors = True
         except subprocess.TimeoutExpired:
             print('Timeout stopping dfuse')
@@ -1153,6 +1183,7 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
         os.rmdir(self.dir)
+        self._daos.remove_fuse(self)
         return fatal_errors
 
     def wait_for_exit(self):
@@ -1303,6 +1334,7 @@ def run_daos_cmd(conf,
     if vh.use_valgrind and rc.returncode == 42:
         print("Valgrind errors detected")
         print(rc)
+        conf.wf.add_test_case(' '.join(cmd), failure='valgrind errors', output=rc)
         conf.valgrind_errors = True
         rc.returncode = 0
     if use_json:
@@ -2318,6 +2350,8 @@ class posix_tests():
         print(os.fstat(ofd.fileno()))
 
         ofd.close()
+        if dfuse.stop():
+            self.fatal_errors = True
 
     def test_cont_ro(self):
         """Test access to a read-only container"""
@@ -2882,6 +2916,15 @@ def run_posix_tests(server, conf, test=None):
 
         for td in threads:
             td.join()
+
+    # Now check for running dfuse instances, there should be none at this point as all tests have
+    # completed.  It's not possible to do this check as each test finishes due to the fact that
+    # the tests are running in parallel.  We could revise this so there's a dfuse method on
+    # posix_tests class itself if required.
+    for fuse in server.fuse_procs:
+        conf.wf.add_test_case('fuse leak in tests',
+                              'Test leaked dfuse instance at {}'.format(fuse),
+                              test_class='test',)
 
     out_wrapper = None
     err_wrapper = None
@@ -4212,8 +4255,8 @@ def run(wf, args):
         wf.add_test_case('Errors')
 
     if conf.valgrind_errors:
+        wf.add_test_case('Errors', 'Valgrind errors encountered')
         print("Valgrind errors detected during execution")
-        fatal_errors.add_result(True)
 
     wf_server.close()
     conf.flush_bz2()
