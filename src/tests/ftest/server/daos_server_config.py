@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,7 +34,8 @@ class DaosServerConfigTest(TestWithServers):
         Test Description: Test daos_server start/stops properly.
         on the system.
 
-        :avocado: tags=all,small,control,daily_regression,server_start,basic
+        :avocado: tags=all,control,daily_regression,server_start,basic
+        :avocado: tags=hw,small
         """
         # Setup the servers
         self.add_server_manager()

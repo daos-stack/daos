@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -479,10 +479,10 @@ degrade_ec_partial_update_agg(void **state)
 			     data, EC_CELL_SIZE, &req);
 	}
 
-	/* Kill the last parity shard, which is the aggregate leader to verify
+	/* Kill one parity shard, which is the aggregate leader to verify
 	 * aggregate works in degraded mode.
 	 */
-	rank = get_rank_by_oid_shard(arg, oid, 5);
+	rank = get_rank_by_oid_shard(arg, oid, 4);
 	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
 
 	/* Trigger aggregation */

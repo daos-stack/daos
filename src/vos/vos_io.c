@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2677,17 +2677,17 @@ static int
 vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	     unsigned int sgl_nr)
 {
-	int rc, err;
+	int rc;
 
 	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
 	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		return rc;
 
-	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
-	rc = bio_iod_post(ioc->ic_biod);
+	rc = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	rc = bio_iod_post(ioc->ic_biod, rc);
 
-	return err ? err : rc;
+	return rc;
 }
 
 int

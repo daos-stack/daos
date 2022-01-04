@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,12 +25,15 @@ enum {
 };
 
 struct sched_stats {
-	uint64_t	ss_tot_time;	/* Total CPU time (ms) */
-	uint64_t	ss_relax_time;	/* CPU relax time (ms) */
-	uint64_t	ss_busy_ts;	/* Last busy timestamp (ms) */
-	uint64_t	ss_print_ts;	/* Last stats print timestamp (ms) */
-	uint64_t	ss_watchdog_ts;	/* Last watchdog print ts (ms) */
-	void		*ss_last_unit;	/* Last executed unit */
+	struct d_tm_node_t	*ss_total_time;		/* Total CPU time (ms) */
+	struct d_tm_node_t	*ss_relax_time;		/* CPU relax time (ms) */
+	struct d_tm_node_t	*ss_wq_len;		/* Wait queue length */
+	struct d_tm_node_t	*ss_sq_len;		/* Sleep queue length */
+	struct d_tm_node_t	*ss_cycle_duration;	/* Cycle duration (ms) */
+	struct d_tm_node_t	*ss_cycle_size;		/* Total ULTs in a cycle */
+	uint64_t		 ss_busy_ts;		/* Last busy timestamp (ms) */
+	uint64_t		 ss_watchdog_ts;	/* Last watchdog print ts (ms) */
+	void			*ss_last_unit;		/* Last executed unit */
 };
 
 struct sched_info {

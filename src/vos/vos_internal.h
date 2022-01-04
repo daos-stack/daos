@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1247,5 +1247,53 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 
 int
 vos_pool_settings_init(void);
+
+/** Raise a RAS event on incompatible durable format
+ *
+ * \param[in] type		Type of object with layout format
+ *				incompatibility (e.g. VOS pool)
+ * \param[in] version		Version of the object
+ * \param[in] min_version	Minimum supported version
+ * \param[in] max_version	Maximum supported version
+ * \param[in] pool		(Optional) associated pool uuid
+ */
+void
+vos_report_layout_incompat(const char *type, int version, int min_version,
+			   int max_version, uuid_t *uuid);
+
+#define VOS_NOTIFY_RAS_EVENTF(...)			\
+	do {						\
+		if (ds_notify_ras_eventf == NULL)	\
+			break;				\
+		ds_notify_ras_eventf(__VA_ARGS__);	\
+	} while (0)					\
+
+static inline int
+vos_offload_exec(int (*func)(void *), void *arg)
+{
+	if (dss_offload_exec != NULL)
+		return dss_offload_exec(func, arg);
+	else
+		return func(arg);
+}
+
+/* vos_csum_recalc.c */
+
+struct csum_recalc {
+	struct evt_extent	 cr_log_ext;
+	struct evt_extent	*cr_phy_ext;
+	struct dcs_csum_info	*cr_phy_csum;
+	daos_off_t		 cr_phy_off;
+};
+
+struct csum_recalc_args {
+	struct bio_sglist	*cra_bsgl;	/* read sgl */
+	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
+	struct csum_recalc	*cra_recalcs;   /* recalc info */
+	unsigned int		 cra_seg_cnt;   /* # of read segments */
+	int			 cra_rc;	/* return code */
+};
+
+int vos_csum_recalc_fn(void *recalc_args);
 
 #endif /* __VOS_INTERNAL_H__ */

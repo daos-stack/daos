@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -125,7 +125,7 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 		}
 
 		/* write garbage, we don't care */
-		rc = bio_iod_post(vos_ioh2desc(ioh));
+		rc = bio_iod_post(vos_ioh2desc(ioh), 0);
 		if (rc) {
 			print_error("Failed to post bio request\n");
 			return rc;

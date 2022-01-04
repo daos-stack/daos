@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -148,7 +148,7 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 			       cred->tc_sgl.sg_iovs[0].iov_len);
 		}
 
-		rc = bio_iod_post(vos_ioh2desc(ioh));
+		rc = bio_iod_post(vos_ioh2desc(ioh), 0);
 end:
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL,
@@ -469,7 +469,7 @@ pf_aggregate(struct pf_test *ts, struct pf_param *param)
 
 	TS_TIME_START(&param->pa_duration, start);
 
-	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, NULL, true);
+	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, true);
 
 	TS_TIME_END(&param->pa_duration, start);
 
@@ -845,7 +845,7 @@ main(int argc, char **argv)
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,
-			"Test :\n\t%s\n"
+			"Test :\n\tVOS storage\n"
 			"Pool :\n\t%s\n"
 			"Parameters :\n"
 			"\tpool size     : SCM: %u MB, NVMe: %u MB\n"
@@ -858,7 +858,7 @@ main(int argc, char **argv)
 			"\tstride size   : %u\n"
 			"\tzero copy     : %s\n"
 			"\tVOS file      : %s\n",
-			pf_class2name(DAOS_OC_RAW), uuid_buf,
+			uuid_buf,
 			(unsigned int)(ts_scm_size >> 20),
 			(unsigned int)(ts_nvme_size >> 20),
 			credits,

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -750,7 +750,6 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		rc = pthread_tryjoin_np(thread, &res);
 		if (rc == 0) {
 			if (canceled_thread) {
-				D_ASSERT(res == PTHREAD_CANCELED);
 				D_DEBUG(DB_MGMT,
 					DF_UUID": tgt_create thread canceled\n",
 					DP_UUID(tc_in->tc_pool_uuid));

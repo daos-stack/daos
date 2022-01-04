@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -354,7 +354,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		value->iov_len = bio_iov2len(biov);
 	}
 
-	rc = bio_iod_post(vos_ioh2desc(io));
+	rc = bio_iod_post(vos_ioh2desc(io), 0);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
 	rc = vos_fetch_end(io, NULL, 0 /* err */);
@@ -559,7 +559,7 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr, NULL, NULL, NULL, true);
+	return vos_aggregate(cont, &epr, NULL, NULL, true);
 }
 
 /* Return amount of vos pool SCM memory available accounting for

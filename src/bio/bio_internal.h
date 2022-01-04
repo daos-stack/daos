@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -417,7 +417,8 @@ struct bio_desc {
 	unsigned int		 bd_buffer_prep:1,
 				 bd_dma_issued:1,
 				 bd_retry:1,
-				 bd_rdma:1;
+				 bd_rdma:1,
+				 bd_copy_dst:1;
 	/* Cached bulk handles being used by this IOD */
 	struct bio_bulk_hdl    **bd_bulk_hdls;
 	unsigned int		 bd_bulk_max;

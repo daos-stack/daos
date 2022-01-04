@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2176,12 +2176,11 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
 	struct pl_map		*map;
 	struct pl_obj_layout	*layout = NULL;
 	struct pl_obj_shard	*shard;
-	uint32_t		 start;
+	uint32_t		 idx;
 	int			 rc;
-	int			 i;
 
-	/* Only parity shard can be EC-AGG leader. */
-	if (oid->id_shard % daos_oclass_grp_size(oca) < oca->u.ec.e_k)
+	/* Only last parity shard can be EC-AGG leader. */
+	if ((oid->id_shard % daos_oclass_grp_size(oca)) != (daos_oclass_grp_size(oca) - 1))
 		return 0;
 
 	map = pl_map_find(pool->sp_uuid, oid->id_pub);
@@ -2196,16 +2195,15 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
 	if (rc != 0)
 		goto out;
 
-	start = oid->id_shard / daos_oclass_grp_size(oca) * layout->ol_grp_size;
-	for (i = start + oca->u.ec.e_k + oca->u.ec.e_p - 1; i >= start + oca->u.ec.e_k; i--) {
-		shard = pl_obj_get_shard(layout, i);
-		if (shard->po_target != -1 && shard->po_shard != -1 && !shard->po_rebuilding)
-			/* Select the last non-rebuilding parity shard as the EC-AGG leader. */
-			D_GOTO(out, rc = (oid->id_shard == shard->po_shard ? 1 : 0));
+	idx = (oid->id_shard / daos_oclass_grp_size(oca)) * layout->ol_grp_size +
+	      daos_oclass_grp_size(oca) - 1;
+	shard = pl_obj_get_shard(layout, idx);
+	if (shard->po_target != -1 && shard->po_shard != -1 && !shard->po_rebuilding) {
+		rc = (oid->id_shard == shard->po_shard) ? 1 : 0;
+	} else {
+		/* If last parity unavailable, then skip the object via returning -DER_STALE. */
+		rc = -DER_STALE;
 	}
-
-	/* If all parity shards are unavailable, then skip the object via returning -DER_STALE. */
-	rc = -DER_STALE;
 
 out:
 	if (layout != NULL)
@@ -2252,7 +2250,9 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = agg_obj_is_leader(info->api_pool, &oca, &entry->ie_oid,
 			       info->api_pool->sp_map_version);
-	if (rc == 1 && entry->ie_oid.id_shard >= oca.u.ec.e_k) {
+	if (rc == 1) {
+		D_ASSERT((entry->ie_oid.id_shard % obj_ec_tgt_nr(&oca)) ==
+			 obj_ec_tgt_nr(&oca) - 1);
 		D_DEBUG(DB_EPC, "oid:"DF_UOID" ec agg starting\n",
 			DP_UOID(entry->ie_oid));
 

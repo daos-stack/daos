@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -241,10 +241,10 @@ daos_key2str(daos_key_t *key)
 
 		if (can_print) {
 			if (is_int)
-				snprintf(buf, DF_KEY_STR_SIZE, "%*s uint64:"DF_U64, len, akey,
+				snprintf(buf, DF_KEY_STR_SIZE, "%.*s uint64:"DF_U64, len, akey,
 					 *(uint64_t *)akey);
 			else
-				snprintf(buf, DF_KEY_STR_SIZE, "%*s", len, akey);
+				snprintf(buf, DF_KEY_STR_SIZE, "%.*s", len, akey);
 		} else if (is_int) {
 			snprintf(buf, DF_KEY_STR_SIZE, "uint64:"DF_U64, *(uint64_t *)akey);
 		} else {

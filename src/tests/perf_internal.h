@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,8 +10,6 @@
 #include <daos/common.h>
 #include <daos/dts.h>
 
-/* unused object class to identify VOS (storage only) test mode */
-#define DAOS_OC_RAW	(0xBEE)
 #define RANK_ZERO	(0)
 #define STRIDE_MIN	(4) /* Should be changed with updating NB places */
 
@@ -146,8 +144,6 @@ pf_class2name(int obj_class)
 	switch (obj_class) {
 	default:
 		return "unknown";
-	case DAOS_OC_RAW:
-		return "VOS (storage only)";
 	case DAOS_OC_ECHO_TINY_RW:
 		return "ECHO TINY (network only, non-replica)";
 	case DAOS_OC_ECHO_R2S_RW:
