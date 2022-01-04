@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       17%{?relval}%{?dist}
+Release:       18%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -277,6 +277,7 @@ This is the package needed to manage server storage firmware on DAOS servers.
 %package serialize
 Summary: DAOS serialization library that uses HDF5
 BuildRequires: hdf5-devel
+Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: hdf5
 
 %description serialize
