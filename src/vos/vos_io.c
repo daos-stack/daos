@@ -1132,11 +1132,10 @@ key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 
 	rc = vos_ilog_check(info, &epr, epr_out, true);
 out:
-	D_DEBUG(DB_TRACE, "ilog check returned "DF_RC" epr_in="DF_X64"-"DF_X64
-		" punch="DF_PUNCH" epr_out="DF_X64"-"DF_X64"\n", DP_RC(rc),
-		epr.epr_lo, epr.epr_hi, DP_PUNCH(&info->ii_prior_punch),
-		epr_out ? epr_out->epr_lo : 0,
-		epr_out ? epr_out->epr_hi : 0);
+	D_CDEBUG(rc == 0, DB_TRACE, DB_IO, "ilog check returned "DF_RC" epr_in="
+		 DF_X64"-"DF_X64" punch="DF_PUNCH" epr_out="DF_X64"-"DF_X64"\n",
+		 DP_RC(rc), epr.epr_lo, epr.epr_hi, DP_PUNCH(&info->ii_prior_punch),
+		 epr_out ? epr_out->epr_lo : 0, epr_out ? epr_out->epr_hi : 0);
 	return rc;
 }
 
@@ -1388,9 +1387,10 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 			      dkey, 0, DAOS_INTENT_DEFAULT, &krec,
 			      &toh, ioc->ic_ts_set);
-
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, true)) {
+		D_DEBUG(DB_IO, "Stop fetch "DF_UOID": "DF_RC"\n", DP_UOID(obj->obj_id),
+			DP_RC(rc));
 		if (rc == 0 && !ioc->ic_read_ts_only) {
 			for (i = 0; i < ioc->ic_iod_nr; i++)
 				iod_empty_sgl(ioc, i);
@@ -1407,6 +1407,8 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, false)) {
 		if (rc == 0 && !ioc->ic_read_ts_only) {
+			D_DEBUG(DB_IO, "Stop fetch "DF_UOID": "DF_RC"\n", DP_UOID(obj->obj_id),
+				DP_RC(rc));
 			if (has_uncertainty(ioc, &ioc->ic_dkey_info)) {
 				/** There is a value in the uncertainty range so
 				 *  we need to continue the fetch.
@@ -2675,17 +2677,17 @@ static int
 vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	     unsigned int sgl_nr)
 {
-	int rc, err;
+	int rc;
 
 	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
 	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		return rc;
 
-	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
-	rc = bio_iod_post(ioc->ic_biod);
+	rc = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	rc = bio_iod_post(ioc->ic_biod, rc);
 
-	return err ? err : rc;
+	return rc;
 }
 
 int
