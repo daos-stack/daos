@@ -216,7 +216,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 // bdev_include and bdev_exclude list filters provided in the server config file.
 func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 	sb.log.Debugf("spdk backend reset (script call): %+v", req)
-	return sb.reset(req, detectVMD)
+	return sb.reset(req, DetectVMD)
 }
 
 // Prepare will perform a lookup on the requested target user to validate existence
@@ -228,7 +228,7 @@ func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 // bdev_include and bdev_exclude list filters provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("spdk backend prepare (script call): %+v", req)
-	return sb.prepare(req, user.Lookup, detectVMD, cleanHugePages)
+	return sb.prepare(req, user.Lookup, DetectVMD, cleanHugePages)
 }
 
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
