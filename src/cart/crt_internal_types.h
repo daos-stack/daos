@@ -113,6 +113,11 @@ struct crt_gdata {
 	 * others, of type counter
 	 */
 	struct d_tm_node_t	*cg_uri_other;
+	/**
+	 * Native provider name
+	 */
+	struct d_tm_node_t	*cg_native_prov;
+
 };
 
 extern struct crt_gdata		crt_gdata;
