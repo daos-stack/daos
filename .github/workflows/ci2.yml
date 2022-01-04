@@ -68,15 +68,15 @@ jobs:
           - distro: rocky
             base: centos.8
             with: rockylinux/rockylinux:8
-            java: yes
+            java: true
           - distro: fedora
             base: centos.8
             with: fedora:35
-            java: yes
+            java: true
           - distro: leap.15
             base: leap.15
             with: leap.15
-            java: yes
+            java: true
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}

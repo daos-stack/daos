@@ -114,10 +114,10 @@ ARG BASE_DISTRO
 COPY ./utils/scripts/install-centos8.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh
 
-RUN if [[ "$BASE_DISTRO" = fedora* ]] && [[ "$DAOS_JAVA_BUILD" == "yes" ]]; then \
-	. /tmp/install.sh yes; 	\
-    else 			\
-	. /tmp/install.sh no; 	\
+RUN if [[ "$BASE_DISTRO" = fedora* ]]; then \
+	. /tmp/install.sh "$DAOS_JAVA_BUILD" true;	\
+    else 						\
+	. /tmp/install.sh "$DAOS_JAVA_BUILD" false; 	\
     fi
 
 ARG UID=1000
@@ -224,7 +224,7 @@ ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-RUN echo "DAOS_BUILD is $DAOS_BUILD"
+
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
