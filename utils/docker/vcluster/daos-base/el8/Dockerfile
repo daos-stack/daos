@@ -10,7 +10,7 @@
 #                       a random value such as the date of day shall be given.
 # - DAOS_AUTH           Enable DAOS authentication when set to "yes" (default "yes")
 # - DAOS_REPOS          Space separated list of repos needed to install DAOS (default
-#                       "https://packages.daos.io/v2.0")
+#                       "https://packages.daos.io/v2.0/CentOS8/packages/x86_64/")
 # - DAOS_GPG_KEYS       Space separated list of GPG keys associated with DAOS repos (default
 #                       "https://packages.daos.io/RPM-GPG-KEY")
 # - DAOS_REPOS_NOAUTH   Space separated list of repos to use without GPG authentication
@@ -26,8 +26,8 @@ LABEL	maintainer="daos@daos.groups.io"
 # https://markandruth.co.uk/2020/10/10/running-systemd-inside-a-centos-8-docker-container
 # XXX FIXME XXX Should be removed in production with application dedicated entry point
 VOLUME	[ "/sys/fs/cgroup" ]
-RUN	systemctl mask systemd-remount-fs.service graphical.target kdump.service &&                \
-	systemctl unmask dev-hugepages.mount &&                                                    \
+RUN	systemctl mask systemd-remount-fs.service graphical.target kdump.service                   \
+	               systemd-logind.service dev-hugepages.mount &&                               \
 	pushd /lib/systemd/system/sysinit.target.wants &&                                          \
 	for item in * ; do                                                                         \
 		[ "$item" == systemd-tmpfiles-setup.service ] || rm -f "$item" ;                   \
@@ -59,7 +59,7 @@ RUN	dnf clean all &&                                                            
 # XXX NOTE XXX to not update all rpms.  To work properly a random value such as the date of the day
 # XXX NOTE XXX should be given.
 ARG	BUST_CACHE
-ARG	DAOS_REPOS="https://packages.daos.io/v2.0"
+ARG	DAOS_REPOS="https://packages.daos.io/v2.0/CentOS8/packages/x86_64/"
 ARG	DAOS_GPG_KEYS="https://packages.daos.io/RPM-GPG-KEY"
 ARG	DAOS_REPOS_NOAUTH=""
 RUN	if [ -n "$BUST_CACHE" ] ; then                                                             \
