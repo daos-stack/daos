@@ -888,10 +888,12 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		if (!csum_iod_is_supported(iod))
 			continue;
 
-		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD","
-				 " csum_nr: %d, first data csum: "DF_CI"\n",
-			DP_C_UOID_DKEY(*uoid, dkey), i,
-			DP_C_IOD(iod), csum->ic_nr, DP_CI(*csum->ic_data));
+		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD", csum_nr: %d\n",
+			DP_C_UOID_DKEY(*uoid, dkey), i, DP_C_IOD(iod), csum->ic_nr);
+
+		if (csum->ic_nr > 0)
+			D_DEBUG(DB_CSUM, "first data csum: "DF_CI"\n", DP_CI(*csum->ic_data));
+
 		rc = daos_csummer_verify_key(csummer,
 					     &iod->iod_name,
 					     &csum->ic_akey);
@@ -1027,7 +1029,7 @@ obj_log_csum_err(void)
 		return;
 	}
 
-	bio_log_csum_err(bxc, info->dmi_tgt_id);
+	bio_log_csum_err(bxc);
 }
 
 static void
@@ -1314,7 +1316,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	daos_iod_t			*iods_dup = NULL; /* for EC deg fetch */
 	bool				 get_parity_list = false;
 	struct daos_recx_ep_list	*parity_list = NULL;
-	int				err, rc = 0;
+	int				 rc = 0;
 
 	create_map = orw->orw_flags & ORF_CREATE_MAP;
 
@@ -1647,8 +1649,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();
 post:
-	err = bio_iod_post(biod);
-	rc = rc ? : err;
+	rc = bio_iod_post(biod, rc);
 out:
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
@@ -2089,22 +2090,19 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
-		goto out;
+		goto end;
 	}
 	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk, NULL,
 			       ioh, NULL, 1, NULL);
-	if (rc) {
+	if (rc)
 		D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
-		goto out;
-	}
 
-	rc = bio_iod_post(biod);
-	if (rc) {
+	rc = bio_iod_post(biod, rc);
+	if (rc)
 		D_ERROR(DF_UOID" bio_iod_post failed: "DF_RC".\n",
 			DP_UOID(oer->er_oid), DP_RC(rc));
-		goto out;
-	}
+end:
 	rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc,
 			    &ioc.ioc_io_size, NULL);
 	if (rc) {
@@ -2173,23 +2171,19 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 		if (rc) {
 			D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
-			goto out;
+			goto end;
 		}
 		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk,
 				       NULL, ioh, NULL, 1, NULL);
-		if (rc) {
+		if (rc)
 			D_ERROR(DF_UOID" bulk transfer failed: "DF_RC".\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
-			goto out;
-		}
 
-		rc = bio_iod_post(biod);
-		if (rc) {
+		rc = bio_iod_post(biod, rc);
+		if (rc)
 			D_ERROR(DF_UOID" bio_iod_post failed: "DF_RC".\n",
 				DP_UOID(oea->ea_oid), DP_RC(rc));
-			goto out;
-		}
-
+end:
 		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc,
 				    &ioc.ioc_io_size, NULL);
 		if (rc) {
@@ -4091,7 +4085,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			goto out;
 		}
 
-		rc = bio_iod_post(biods[i]);
+		rc = bio_iod_post(biods[i], 0);
 		biods[i] = NULL;
 		if (rc != 0) {
 			D_ERROR("iod_post failed for obj "DF_UOID", DTX "DF_DTI": "DF_RC"\n",
@@ -4185,7 +4179,7 @@ out:
 		if (biods != NULL) {
 			for (i = 0; i < dcde->dcde_write_cnt; i++) {
 				if (biods[i] != NULL)
-					bio_iod_post(biods[i]);
+					bio_iod_post(biods[i], rc);
 			}
 		}
 
@@ -4437,9 +4431,8 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 }
 
 static void
-ds_obj_dtx_leader_ult(void *arg)
+ds_obj_dtx_leader(struct daos_cpd_args *dca)
 {
-	struct daos_cpd_args		*dca = arg;
 	struct dtx_leader_handle	*dlh = NULL;
 	struct ds_obj_exec_arg		 exec_arg;
 	struct obj_cpd_in		*oci = crt_req_get(dca->dca_rpc);
@@ -4454,18 +4447,6 @@ ds_obj_dtx_leader_ult(void *arg)
 	int				 req_cnt = 0;
 	int				 rc = 0;
 	bool				 need_abort = false;
-
-	/* TODO: For the daos targets in the first redundancy (modification)
-	 *	 group, they are the DTX leader candidates when DTX recovery.
-	 *	 During DTX recovery, because the server that only holds read
-	 *	 operations does not have DTX record, the new leader needs to
-	 *	 re-dispatch related read-only sub requests to such server to
-	 *	 handle the case of the old leader did not dispatch to it. So
-	 *	 the DTX leader need to dispatch all read sub requests to the
-	 *	 DTX leader candidates even if these sub requests will not be
-	 *	 executed on DTX leader candidates. The DTX leader candidates
-	 *	 will store related information the DTX entry.
-	 */
 
 	dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
 
@@ -4631,6 +4612,15 @@ out:
 
 	ds_obj_cpd_set_sub_result(oco, dca->dca_idx, rc,
 				  dcsh->dcsh_epoch.oe_value);
+}
+
+static void
+ds_obj_dtx_leader_ult(void *arg)
+{
+	struct daos_cpd_args	*dca = arg;
+	int			 rc;
+
+	ds_obj_dtx_leader(dca);
 
 	rc = ABT_future_set(dca->dca_future, NULL);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
@@ -4712,7 +4702,17 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	oco->oco_sub_rets.ca_count = tx_count;
 	oco->oco_sub_epochs.ca_count = tx_count;
 
-	/* TODO: optimize it if there is only single DTX in the CPD RPC. */
+	if (tx_count == 1) {
+		struct daos_cpd_args	dca;
+
+		dca.dca_ioc = &ioc;
+		dca.dca_rpc = rpc;
+		dca.dca_future = ABT_FUTURE_NULL;
+		dca.dca_idx = 0;
+		ds_obj_dtx_leader(&dca);
+
+		D_GOTO(reply, rc = 0);
+	}
 
 	D_ALLOC_ARRAY(dcas, tx_count);
 	if (dcas == NULL)

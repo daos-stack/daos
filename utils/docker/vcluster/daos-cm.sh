@@ -1,6 +1,5 @@
 #!/bin/bash
 
-set -e
 set -o pipefail
 
 VERSION=0.1
@@ -139,6 +138,17 @@ function start
 	info "Starting DAOS virtual cluster containers"
 	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker-compose up --detach ; then
 		fatal "DAOS virtual cluster containers could no be started"
+	fi
+
+	info "Waiting for daos-server services to be started"
+	timeout_counter=0
+	until [[ $timeout_counter -ge 5 ]] || run docker exec daos-server systemctl --quiet is-active daos_server ; do
+		info "daos-server not yet ready: waiting 1s"
+		sleep 1
+		(( timeout_counter++ ))
+	done
+	if [[ $timeout_counter -ge 5 ]] ; then
+		fatal "DAOS server could not be started"
 	fi
 
 	info "Formatting DAOS storage"
