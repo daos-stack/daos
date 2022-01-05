@@ -84,3 +84,183 @@ class TestWithTelemetry(TestWithServers):
             self.fail("\n".join(errors))
 
         self.log.info("Test PASSED")
+
+    def get_min_max_mean_stddev(self, prefix, total_targets, target_per_rank):
+        """Get four lists of min, max, mean, stddev.
+
+        Sample get_pool_metrics output.
+        {
+            'engine_io_ops_dkey_enum_latency_min': {
+                'wolf-31': {
+                    '0': {
+                        '0': 6,
+                        '1': 13,
+                        '2': 7,
+                        '3': 6,
+                        '4': 6,
+                        '5': 8,
+                        '6': 10,
+                        '7': 12
+                    }
+                },
+                'wolf-32': {
+                    '1': {
+                        '0': 10,
+                        '1': 9,
+                        '2': 7,
+                        '3': 10,
+                        '4': 18,
+                        '5': 9,
+                        '6': 6,
+                        '7': 11
+                    }
+                }
+            },
+            ...
+
+        Args:
+            prefix (str): Metrics prefix for the metric that has min, max,
+                mean, or stddev at the end.
+            total_targets (int): Total number of targets in all the ranks and
+                hosts in the output.
+            target_per_rank (int): Number of target per rank.
+
+        Returns:
+            dict: min, max, mean, stddev from each target in a dict.
+                {
+                    "min": [0, 1, 2, 3, 4, 5, 6, 7...],
+                    "max": [0, 1, 2, 3, 4, 5, 6, 7...],
+                    "mean": [0, 1, 2, 3, 4, 5, 6, 7...],
+                    "stddev": [0, 1, 2, 3, 4, 5, 6, 7...]
+                }
+                Note that all the stats should have the same rank order for the
+                verification to work.
+
+        """
+        output = {}
+
+        for stats_value in ["min", "max", "mean", "stddev"]:
+            specific_metrics = [prefix + stats_value]
+            pool_out = self.telemetry.get_pool_metrics(
+                specific_metrics=specific_metrics)
+            self.log.info("pool_out = %s", pool_out)
+
+            values = [0] * total_targets
+            offset = 0
+
+            for rank_to_dicts in pool_out[specific_metrics[0]].values():
+                for target_to_val in rank_to_dicts.values():
+                    for target, value in target_to_val.items():
+                        values[int(target) + offset * target_per_rank] = value
+
+                    offset += 1
+
+            output[stats_value] = values
+
+        self.log.info("output for %s = %s", prefix, output)
+        return output
+
+    @staticmethod
+    def verify_stats(enum_metrics, metric_suffix, test_latency):
+        """Verify the statistical correctness of the min, max, mean, stddev.
+
+        See get_min_max_mean_stddev() for sample.
+
+        This method assumes that the rank order is consistent across all the
+        stats. For example, the sample output in get_min_max_mean_stddev() has
+        rank 0 first, then rank 1, which fills up the enum_metrics from first
+        target of rank 0 to last target of rank 1. In this case, all other
+        stats should have the same rank order, which is rank 0 first then
+        rank 1, for the verification to work.
+
+        Args:
+            enum_metrics (dict): get_min_max_mean_stddev() output.
+            metric_suffix (str): Metric suffix.
+            test_latency (bool): Whether this validation is for latency.
+
+        Returns:
+            list: Errors.
+
+        """
+        errors = []
+
+        num_targets = len(enum_metrics["min"])
+
+        min_list = enum_metrics["min"]
+        max_list = enum_metrics["max"]
+        mean_list = enum_metrics["mean"]
+        stddev_list = enum_metrics["stddev"]
+
+        for tgt in range(num_targets):
+            if max_list[tgt] == 0:
+                continue
+
+            if test_latency:
+                if min_list[tgt] == 0:
+                    errors.append(
+                        "{}min is 0 at target {}!".format(metric_suffix, tgt))
+            else:
+                if min_list[tgt] != 0:
+                    errors.append(
+                        "{}min is NOT 0 at target {}!".format(
+                            metric_suffix, tgt))
+
+            if mean_list[tgt] < min_list[tgt] or max_list[tgt] < mean_list[tgt]:
+                errors.append(
+                    "{}mean is invalid at target {}!".format(
+                        metric_suffix, tgt))
+
+            if stddev_list[tgt] > max_list[tgt] - min_list[tgt]:
+                errors.append(
+                    "{}stddev is invalid at target {}!".format(
+                        metric_suffix, tgt))
+
+        return errors
+
+    @staticmethod
+    def sum_values(metric_out):
+        """Sum the metric values.
+
+        Sample metric_out.
+        {
+            'wolf-31': {
+                '0': {
+                    '0': 6,
+                    '1': 13,
+                    '2': 7,
+                    '3': 6,
+                    '4': 6,
+                    '5': 8,
+                    '6': 10,
+                    '7': 12
+                }
+            },
+            'wolf-32': {
+                '1': {
+                    '0': 10,
+                    '1': 9,
+                    '2': 7,
+                    '3': 10,
+                    '4': 18,
+                    '5': 9,
+                    '6': 6,
+                    '7': 11
+                }
+            }
+        }
+
+        Args:
+            metric_out (dict): Values to sum.
+
+        Returns:
+            int: Sum.
+
+        """
+        total = 0
+
+        for rank_to_dict in metric_out.values():
+            for target_to_val in rank_to_dict.values():
+                for value in target_to_val.values():
+                    total += value
+
+        return total

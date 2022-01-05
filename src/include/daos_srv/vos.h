@@ -101,8 +101,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  * \return		Others are for the count of committed DTXs.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
-	       bool *rm_cos);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]);
 
 /**
  * Abort the specified DTXs.
@@ -406,7 +405,6 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
- * \param csum_func  [IN]	Pointer to csum recalculation function
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
  * \param full_scan  [IN]	Full scan for snapshot deletion
@@ -415,8 +413,7 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
-	      void *yield_arg, bool full_scan);
+	      bool (*yield_func)(void *arg), void *yield_arg, bool full_scan);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -1092,14 +1089,6 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/**
-	 * Pause flushing the free extents in aging buffer. This is usually
-	 * called before container destroy where huge amount of extents could
-	 * be freed in a short period of time.
-	 */
-	VOS_PO_CTL_VEA_PLUG,
-	/** Pairing with PLUG, usually called after container destroy done. */
-	VOS_PO_CTL_VEA_UNPLUG,
 };
 
 /**
@@ -1142,27 +1131,6 @@ vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
 		      unsigned int bulk_perm);
 int
 vos_dedup_verify(daos_handle_t ioh);
-
-/** Raise a RAS event on incompatible durable format
- *
- * \param[in] type		Type of object with layout format
- *				incompatibility (e.g. VOS pool)
- * \param[in] version		Version of the object
- * \param[in] min_version	Minimum supported version
- * \param[in] max_version	Maximum supported version
- * \param[in] pool		(Optional) associated pool uuid
- */
-void
-vos_report_layout_incompat(const char *type, int version, int min_version,
-			   int max_version, uuid_t *uuid);
-
-#define VOS_NOTIFY_RAS_EVENTF(...)			\
-	do {						\
-		if (ds_notify_ras_eventf == NULL)	\
-			break;				\
-		ds_notify_ras_eventf(__VA_ARGS__);	\
-	} while (0)					\
-
 
 struct sys_db *vos_db_get(void);
 /**

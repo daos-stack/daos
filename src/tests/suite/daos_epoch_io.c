@@ -207,13 +207,13 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		if (uf_arg->snap == true) {
 			rc = daos_cont_create_snap(arg->coh, &snap_epoch, NULL,
 						   NULL);
-			*op->snap_epoch  = snap_epoch;
+			op->snap_epoch  = snap_epoch;
 		}
 	} else{
 		th_open = DAOS_TX_NONE;
 		/*Open snapshot and read the data from snapshot epoch*/
 		if (uf_arg->snap == true) {
-			rc = daos_tx_open_snap(arg->coh, *op->snap_epoch,
+			rc = daos_tx_open_snap(arg->coh, op->snap_epoch,
 					       &th_open, NULL);
 			D_ASSERT(rc == 0);
 		}
@@ -1260,8 +1260,7 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 					      shard[i]);
 			}
 			fail_val = daos_shard_fail_value(shard, argc - 2);
-			arg->fail_loc = DAOS_FAIL_SHARD_FETCH |
-					DAOS_FAIL_ALWAYS;
+			arg->fail_loc = DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS;
 			arg->fail_value = fail_val;
 		} else if (strcmp(argv[1], "clear") == 0) {
 			arg->fail_loc = 0;
@@ -1463,8 +1462,6 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 	FILE			*fp;
 	char			 cmd_line[CMD_LINE_LEN_MAX - 1] = {};
 	int			 rc = 0;
-	/*Array for snapshot epoch*/
-	daos_epoch_t		sn_epoch[DTS_MAX_EPOCH_TIMES] = {};
 
 	if (io_conf == NULL || strlen(io_conf) == 0) {
 		print_message("invalid io_conf.\n");
@@ -1501,7 +1498,6 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 		}
 
 		if (op != NULL) {
-			op->snap_epoch = &sn_epoch[op->tx];
 			print_message("will run cmd_line %s, line_nr %d\n", cmd_line, ++line_nr);
 			rc = cmd_line_run(arg, op);
 			if (rc) {

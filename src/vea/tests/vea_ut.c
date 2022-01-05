@@ -359,7 +359,7 @@ ut_free(void **state)
 	vea_dump(args->vua_vsi, false);
 
 	/* call vea_flush to trigger free extents migration */
-	vea_flush(args->vua_vsi, false);
+	vea_flush(args->vua_vsi, true);
 
 	r_list = &args->vua_alloc_list;
 	d_list_for_each_entry(ext, r_list, vre_link) {

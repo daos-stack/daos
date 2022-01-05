@@ -33,12 +33,13 @@ def get_rf(oclass):
 
 
 # pylint: disable=attribute-defined-outside-init
-class FileCountTestBase(MdtestBase, IorTestBase):
+class FileCountTestBase(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR and MDTEST to create specified number of files.
 
     :avocado: recursive
     """
+
 
     def add_containers(self, oclass=None):
         """Create a list of containers that the various jobs use for storage.
@@ -49,7 +50,7 @@ class FileCountTestBase(MdtestBase, IorTestBase):
 
         """
         # Create a container and add it to the overall list of containers
-        container = self.get_container(self.pool)
+        container = self.get_container(self.pool, create=False)
         # don't include oclass in daos cont cmd; include rf based on the class
         if oclass:
             container.oclass.update(oclass)
@@ -60,6 +61,7 @@ class FileCountTestBase(MdtestBase, IorTestBase):
         if cont_properties is not None:
             container.properties.update(cont_properties)
         container.create()
+
         return container
 
     def run_file_count(self):
@@ -68,6 +70,8 @@ class FileCountTestBase(MdtestBase, IorTestBase):
         results = []
         apis = self.params.get("api", "/run/largefilecount/*")
         object_class = self.params.get("object_class", '/run/largefilecount/*')
+        hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
+        mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
         # create pool
         self.add_pool(connect=False)
 
@@ -90,13 +94,14 @@ class FileCountTestBase(MdtestBase, IorTestBase):
                 if api == "DFS":
                     self.mdtest_cmd.test_dir.update("/")
                 # run mdtest
-                self.log.info("=======>>>Starting MDTEST with %s and %s", api, oclass)
-                self.container = self.add_containers(oclass)
-                try:
-                    self.execute_mdtest()
-                    results.append(["PASS", str(self.mdtest_cmd)])
-                except TestFail:
-                    results.append(["FAIL", str(self.mdtest_cmd)])
+                if self.mdtest_cmd.api.value in ['DFS', 'POSIX']:
+                    self.log.info("=======>>>Starting MDTEST with %s and %s", api, oclass)
+                    self.container = self.add_containers(oclass)
+                    try:
+                        self.execute_mdtest()
+                        results.append(["PASS", str(self.mdtest_cmd)])
+                    except TestFail:
+                        results.append(["FAIL", str(self.mdtest_cmd)])
                 # save the current container; to be destroyed later
                 if self.container is not None:
                     saved_containers.append(self.container)
@@ -105,7 +110,13 @@ class FileCountTestBase(MdtestBase, IorTestBase):
                 self.container = self.add_containers(oclass)
                 self.update_ior_cmd_with_pool(False)
                 try:
-                    self.run_ior_with_pool(create_pool=False)
+                    if self.ior_cmd.api.value == 'HDF5-VOL':
+                        self.ior_cmd.api.update('HDF5')
+                        self.run_ior_with_pool(create_pool=False,
+                                               plugin_path=hdf5_plugin_path,
+                                               mount_dir=mount_dir)
+                    else:
+                        self.run_ior_with_pool(create_pool=False)
                     results.append(["PASS", str(self.ior_cmd)])
                 except TestFail:
                     results.append(["FAIL", str(self.ior_cmd)])

@@ -504,6 +504,8 @@ tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_nr)
 			break;
 		}
 
+		/** Align to 4K or locking the region based on the size will fail */
+		scm_size = D_ALIGNUP(scm_size, 1ULL << 12);
 		/**
 		 * Pre-allocate blocks for vos files in order to provide
 		 * consistent performance and avoid entering into the backend
@@ -748,7 +750,6 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		rc = pthread_tryjoin_np(thread, &res);
 		if (rc == 0) {
 			if (canceled_thread) {
-				D_ASSERT(res == PTHREAD_CANCELED);
 				D_DEBUG(DB_MGMT,
 					DF_UUID": tgt_create thread canceled\n",
 					DP_UUID(tc_in->tc_pool_uuid));

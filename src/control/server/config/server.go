@@ -314,14 +314,15 @@ func DefaultServer() *Server {
 	return &Server{
 		SystemName:         build.DefaultSystemName,
 		SocketDir:          defaultRuntimeDir,
+		NrHugepages:        -1, // mapped to 4096 by default.
 		AccessPoints:       []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
 		ControlPort:        build.DefaultControlPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
 		Hyperthreads:       false,
 		Path:               defaultConfigPath,
 		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
-		validateProviderFn: netdetect.ValidateProviderStub,
-		validateNUMAFn:     netdetect.ValidateNUMAStub,
+		validateProviderFn: netdetect.ValidateProviderConfig,
+		validateNUMAFn:     netdetect.ValidateNUMAConfig,
 		GetDeviceClassFn:   netdetect.GetDeviceClass,
 		EnableVMD:          false, // disabled by default
 		EnableHotplug:      false, // disabled by default
@@ -641,7 +642,7 @@ func (cfg *Server) CheckFabric(ctx context.Context) (uint32, error) {
 	for index, engine := range cfg.Engines {
 		ndc, err := cfg.GetDeviceClassFn(engine.Fabric.Interface)
 		if err != nil {
-			return 0, err
+			return 0, errors.Wrapf(err, "unable to detect device class for %q", engine.Fabric.Interface)
 		}
 		if index == 0 {
 			netDevClass = ndc

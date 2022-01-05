@@ -19,9 +19,11 @@
 #include <daos/common.h>
 #include <daos/placement.h>
 #include <daos/pool.h>
+#include <daos/kv.h>
 
 #include "daos_hdlr.h"
 #include "math.h"
+
 /** Input arguments passed to daos utility */
 struct cmd_args_s *autotest_ap;
 
@@ -78,7 +80,7 @@ setup_progress()
 {
 	ticks = 20;
 	tick_size = total_nr / ticks;
-	fprintf(autotest_ap->outstream, "    ");
+	fprintf(autotest_ap->outstream, "     ");
 }
 
 void
@@ -88,8 +90,8 @@ increment_progress(int progress)
 		int percentage;
 
 		percentage = ceil((double) progress / (double) total_nr * 100.0);
-		fprintf(autotest_ap->outstream, "\b\b\b\b");
-		fprintf(autotest_ap->outstream, "% 4d", percentage);
+		fprintf(autotest_ap->outstream, "\b\b\b\b\b");
+		fprintf(autotest_ap->outstream, "% 4d%%", percentage);
 		fflush(autotest_ap->outstream);
 	}
 }
@@ -97,7 +99,7 @@ increment_progress(int progress)
 void
 finish_progress()
 {
-	fprintf(autotest_ap->outstream, "\b\b\b\b");
+	fprintf(autotest_ap->outstream, "\b\b\b\b\b");
 }
 
 
@@ -135,7 +137,7 @@ step_print(const char *status, const char *comment, va_list ap)
 	int	i;
 
 	end = clock();
-	fprintf(autotest_ap->outstream, "  %s    ", status);
+	fprintf(autotest_ap->outstream, "  %s  ", status);
 	sprintf(timing, "%03.3f", duration());
 	for (i = strlen(timing); i < 7; i++)
 		fprintf(autotest_ap->outstream, " ");
@@ -150,7 +152,7 @@ step_success(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;32mOK\033[0m", comment, ap);
+	step_print("\033[0;32mPASS\033[0m", comment, ap);
 	va_end(ap);
 }
 
@@ -160,7 +162,7 @@ step_fail(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;31mKO\033[0m", comment, ap);
+	step_print("\033[0;31mFAIL\033[0m", comment, ap);
 	va_end(ap);
 }
 
@@ -170,7 +172,7 @@ step_skip(const char *comment, ...)
 	va_list ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;37mSK\033[0m", comment, ap);
+	step_print("\033[0;33mSKIP\033[0m", comment, ap);
 	va_end(ap);
 }
 static inline void
@@ -188,7 +190,7 @@ static inline void
 step_init(void)
 {
 	fprintf(autotest_ap->outstream,
-		"\033[1;35mStep Operation               ");
+		"\033[1;35mStep Operation                 ");
 	fprintf(autotest_ap->outstream, "Status Time(sec) Comment\033[0m\n");
 }
 
@@ -246,6 +248,11 @@ ccreate(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
+	if (domain_nr < 2) {
+		step_skip("Group size 2 is larger than domain_nr(%d)", domain_nr);
+		return 0;
+	}
+
 	/** Create container with RF=1 */
 	daos_prop_t	*prop;
 
@@ -258,6 +265,11 @@ ccreate(void)
 	daos_prop_free(prop);
 	if (rc)
 		D_GOTO(fail, rc);
+
+	if (domain_nr < 3) {
+		step_skip("Group size 3 is larger than domain_nr(%d)", domain_nr);
+		return 0;
+	}
 
 	/** Create container with RF=2 */
 	daos_prop_t	*prop2;
@@ -290,13 +302,17 @@ copen(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
-	rc = daos_cont_open(poh, cuuid2, DAOS_COO_RW, &coh2, NULL, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 2) {
+		rc = daos_cont_open(poh, cuuid2, DAOS_COO_RW, &coh2, NULL, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
-	rc = daos_cont_open(poh, cuuid3, DAOS_COO_RW, &coh3, NULL, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 3) {
+		rc = daos_cont_open(poh, cuuid3, DAOS_COO_RW, &coh3, NULL, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
 	step_success("");
 	return 0;
@@ -374,6 +390,25 @@ oSX(void)
 	return 0;
 }
 
+static int pool_space_usage_ratio(void)
+{
+	int rc;
+	daos_pool_info_t pinfo = {0};
+	struct daos_pool_space *ps = &pinfo.pi_space;
+
+	pinfo.pi_bits = DPI_ALL;
+	rc = daos_pool_query(poh, NULL, &pinfo, NULL, NULL);
+	if (rc)
+		return rc;
+
+	if (ps->ps_space.s_total[DAOS_MEDIA_NVME] > 0)
+		return 100 - (ps->ps_space.s_free[DAOS_MEDIA_NVME] * 100 /
+			      ps->ps_space.s_total[DAOS_MEDIA_NVME]);
+
+	return 100 - (ps->ps_space.s_free[DAOS_MEDIA_SCM] * 100 /
+		      ps->ps_space.s_total[DAOS_MEDIA_SCM]);
+}
+
 static int
 kv_put(daos_handle_t oh, daos_size_t size)
 {
@@ -382,16 +417,18 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	char		key[MAX_INFLIGHT][10];
 	char		*val;
 	daos_event_t	*evp;
-	int		rc;
+	int		rc, usage_ratio1, usage_ratio2;
 	int		eq_rc;
-	double		timeout;
-	double		step_adj;
-	double		t;
+	clock_t		last_query = start, current;
 
 	deadline_count = 1;
 
-	total_nr = ticks;
+	total_nr = deadline_limit / CLOCKS_PER_SEC;
 	setup_progress();
+
+	usage_ratio1 = pool_space_usage_ratio();
+	if (usage_ratio1 < 0)
+		return usage_ratio1;
 
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
@@ -456,8 +493,25 @@ kv_put(daos_handle_t oh, daos_size_t size)
 		rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_cur, size, val_cur,
 				evp);
 
-		if (start + deadline_limit <= clock()) {
+		/*
+		 * We are limited by writing 1/10th of the
+		 * available free space or 30s.
+		 */
+		current = clock();
+		if (start + deadline_limit <= current)
 			break;
+
+		if (last_query + CLOCKS_PER_SEC < current) {
+			increment_progress((current - start) / CLOCKS_PER_SEC);
+			last_query = current;
+			usage_ratio2 = pool_space_usage_ratio();
+			if (usage_ratio2 < 0) {
+				rc = usage_ratio2;
+				break;
+			}
+			if ((usage_ratio2 - usage_ratio1) >=
+			    (100 - usage_ratio1) / 10)
+				break;
 		}
 
 		if (rc)
@@ -465,10 +519,6 @@ kv_put(daos_handle_t oh, daos_size_t size)
 
 		deadline_count++;
 
-		timeout = deadline_limit / CLOCKS_PER_SEC;
-		step_adj = ticks / timeout;
-		t = ((start + deadline_limit) - clock()) / CLOCKS_PER_SEC;
-		increment_progress((int)((timeout - t) * step_adj));
 	}
 
 	/** Wait for completion of all in-flight requests */
@@ -640,7 +690,7 @@ kv_insert128(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -695,30 +745,33 @@ kv_read128(void)
 	return 0;
 }
 
-#if 0
-/**
- * Disable since it triggers an assertion error on the client.
- * Will be enabled once problem is fixed.
- */
 static int
 kv_punch(void)
 {
-	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	daos_handle_t	kv_oh = DAOS_HDL_INVAL; /** kv object handle */
+	daos_handle_t	oh;
 	int		punch_rc;
 	int		rc;
 
-	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &kv_oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
 		return rc;
 	}
 
-	punch_rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
-	rc = daos_kv_close(oh, NULL);
+	oh = daos_kv2objhandle(kv_oh);
+	if (!daos_handle_is_valid(oh)) {
+		rc = daos_kv_close(kv_oh, NULL);
+		return -DER_INVAL;
+	}
+
+	punch_rc = daos_obj_punch(daos_kv2objhandle(kv_oh), DAOS_TX_NONE,
+				  0, NULL);
+	rc = daos_kv_close(kv_oh, NULL);
 
 	if (punch_rc) {
 		step_fail("failed to punch object: %s", d_errdesc(punch_rc));
-		return rc;
+		return punch_rc;
 	}
 
 	if (rc) {
@@ -729,7 +782,6 @@ kv_punch(void)
 	step_success("");
 	return 0;
 }
-#endif
 
 static int
 kv_insert4k(void)
@@ -739,7 +791,7 @@ kv_insert4k(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
@@ -752,7 +804,7 @@ kv_insert4k(void)
 
 	if (put_rc) {
 		step_fail("failed to insert: %s", d_errdesc(put_rc));
-		return rc;
+		return put_rc;
 	}
 
 	if (rc) {
@@ -782,7 +834,7 @@ kv_read4k(void)
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return rc;
+		return get_rc;
 	}
 
 	if (rc) {
@@ -802,7 +854,7 @@ kv_insert1m(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -845,7 +897,7 @@ kv_read1m(void)
 
 	if (get_rc) {
 		step_fail("failed to insert: %s", d_errdesc(get_rc));
-		return rc;
+		return get_rc;
 	}
 
 	if (rc) {
@@ -868,7 +920,7 @@ kv_insertrf1(void)
 		D_GOTO(skip_step, rc = -DER_INVAL);
 
 	new_oid2();
-	daos_obj_generate_oid(coh2, &oid2, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh2, &oid2, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -944,7 +996,7 @@ kv_insertrf2(void)
 		D_GOTO(skip_step, rc = -DER_INVAL);
 
 	new_oid3();
-	daos_obj_generate_oid(coh3, &oid3, DAOS_OF_KV_FLAT, 0, 0, 0);
+	daos_obj_generate_oid(coh3, &oid3, DAOS_OT_KV_HASHED, 0, 0, 0);
 
 	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -994,7 +1046,7 @@ kv_readrf2(void)
 
 	if (get_rc) {
 		step_fail("failed to read: %s", d_errdesc(get_rc));
-		return rc;
+		return get_rc;
 	}
 
 	if (rc) {
@@ -1019,13 +1071,17 @@ cclose(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
-	rc = daos_cont_close(coh2, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 2) {
+		rc = daos_cont_close(coh2, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
-	rc = daos_cont_close(coh3, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (domain_nr >= 3) {
+		rc = daos_cont_close(coh3, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
 	step_success("");
 	return 0;
@@ -1044,13 +1100,17 @@ cdestroy(void)
 	if (rc)
 		D_GOTO(fail, rc);
 
-	rc = daos_cont_destroy(poh, cuuid2, force, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (cuuid2) {
+		rc = daos_cont_destroy(poh, cuuid2, force, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
-	rc = daos_cont_destroy(poh, cuuid3, force, NULL);
-	if (rc)
-		D_GOTO(fail, rc);
+	if (cuuid3) {
+		rc = daos_cont_destroy(poh, cuuid3, force, NULL);
+		if (rc)
+			D_GOTO(fail, rc);
+	}
 
 	step_success("");
 	return 0;
@@ -1110,18 +1170,18 @@ static struct step steps[] = {
 	{ 20,	"Inserting 128B values",		kv_insert128,	96 },
 	{ 21,	"Reading 128B values back",		kv_read128,	96 },
 	/** { 22,	"Listing keys",				kv_list,	96 },
-	* { 23,	"Punching object",			kv_punch,	96 },
 	*/
+	{ 23,	"Punching object",			kv_punch,	96 },
 	{ 24,	"Inserting 4KB values",			kv_insert4k,	96 },
 	{ 25,	"Reading 4KB values back",		kv_read4k,	96 },
 	/** { 26,	"Listing keys",				kv_list,	96 },
-	* { 27,	"Punching object",			kv_punch,	96 },
 	*/
+	{ 27,	"Punching object",			kv_punch,	96 },
 	{ 28,	"Inserting 1MB values",			kv_insert1m,	96 },
 	{ 29,	"Reading 1MB values back",		kv_read1m,	96 },
 	/** { 30,	"Listing keys",				kv_list,	96 },
-	* { 31,	"Punching object",			kv_punch,	96 },
 	*/
+	{ 31,	"Punching object",			kv_punch,	96 },
 
 	/** Test aux containers */
 	{ 40,	"Inserting into RF1 cont",		kv_insertrf1,	96 },
@@ -1182,7 +1242,8 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 
 		if (rc) {
 			force = 1;
-			ret = rc;
+			if (!ret)
+				ret = rc;
 			resume = s->clean_step;
 		}
 	}

@@ -27,9 +27,7 @@
 struct vea_free_extent {
 	uint64_t	vfe_blk_off;	/* Block offset of the extent */
 	uint32_t	vfe_blk_cnt;	/* Total blocks of the extent */
-	uint32_t	vfe_flags;	/* Padding */
-	/* Monotonic timestamp for tracking last use activity */
-	uint64_t	vfe_age;
+	uint32_t	vfe_age;	/* Monotonic timestamp */
 };
 
 /* Maximum extents a non-contiguous allocation can have */
@@ -301,12 +299,15 @@ int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 	      struct vea_stat *stat);
 
 /**
- * Pause or resume flushing the free extents in aging buffer
+ * Flushing the free frags in aging buffer
  *
  * \param vsi       [IN]	In-memory compound index
- * \param plug      [IN]	Plug or unplug
+ * \param force     [IN]	Force flush all frags no matter if they are expired
+ *
+ * \return			0:	Nothing to be flushed;
+ *				1:	Some Frags need be flushed;
  */
-void vea_flush(struct vea_space_info *vsi, bool plug);
+int vea_flush(struct vea_space_info *vsi, bool force);
 
 /**
  * Free metrcis

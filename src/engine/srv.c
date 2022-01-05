@@ -30,7 +30,7 @@
 /**
  * DAOS server threading model:
  * 1) a set of "target XS (xstream) set" per engine (dss_tgt_nr)
- * There is a "-c" option of daos_server to set the number.
+ * There is a "-t" option of daos_server to set the number.
  * For DAOS pool, one target XS set per VOS target to avoid extra lock when
  * accessing VOS file.
  * With in each target XS set, there is one "main XS":
@@ -470,8 +470,13 @@ dss_srv_handler(void *arg)
 	/* wait until all xstreams are ready, otherwise it is not safe
 	 * to run lock-free dss_collective, although this race is not
 	 * realistically possible in the DAOS stack.
+	 *
+	 * The SWIM xstream, however, needs to start progressing crt quickly to
+	 * respond to incoming pings. It is out of the scope of
+	 * dss_{thread,task}_collective.
 	 */
-	ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
+	if (dx->dx_xs_id != 1 /* DSS_XS_SWIM */)
+		ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
 	signal_caller = false;
@@ -897,19 +902,11 @@ dss_xstreams_init(void)
 	if (sched_prio_disabled)
 		D_INFO("ULT prioritizing is disabled.\n");
 
-	d_getenv_int("DAOS_SCHED_STATS_INTVL", &sched_stats_intvl);
-	if (sched_stats_intvl != 0) {
-		D_INFO("Print sched stats every %u seconds\n",
-		       sched_stats_intvl);
-		/* Convert seconds to milliseconds */
-		sched_stats_intvl = sched_stats_intvl * 1000;
-	}
-
 	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
-		       sched_stats_intvl, SCHED_RELAX_INTVL_DEFAULT);
+		       sched_relax_intvl, SCHED_RELAX_INTVL_DEFAULT);
 		sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 	} else {
 		D_INFO("CPU relax interval is set to %u msecs\n",

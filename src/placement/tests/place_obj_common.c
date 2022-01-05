@@ -703,7 +703,8 @@ free_pool_and_placement_map(struct pool_map *po_map_in,
 {
 	struct pool_buf *buf;
 
-	pool_buf_extract(po_map_in, &buf);
+	if (pool_buf_extract(po_map_in, &buf))
+		return;
 	pool_map_decref(po_map_in);
 	pool_buf_free(buf);
 
@@ -761,7 +762,7 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 	char *oclass_names;
 	char oclass[64];
 	daos_oclass_id_t *oclass_id;
-	uint32_t length = 0;
+	ssize_t length = 0;
 	uint32_t num_oclass = 0;
 	uint32_t oclass_str_index = 0;
 	uint32_t i, oclass_index;
@@ -771,6 +772,8 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 		return -1;
 
 	length = daos_oclass_names_list(str_size, oclass_names);
+	if (length < 0)
+		return length;
 
 	for (i = 0; i < length; ++i) {
 		if (oclass_names[i] == ',')
@@ -829,15 +832,19 @@ extend_test_pool_map(struct pool_map *map, uint32_t nnodes, d_rank_list_t *rank_
 bool
 is_max_class_obj(daos_oclass_id_t cid)
 {
-	struct daos_oclass_attr *oc_attr;
-	daos_obj_id_t oid;
+	struct daos_oclass_attr	*oc_attr;
+	daos_obj_id_t		oid;
+	uint32_t		grp_nr;
+	int			rc;
 
 	oid.hi = 5;
 	oid.lo = rand();
-	daos_obj_set_oid(&oid, 0, cid, 0);
-	oc_attr = daos_oclass_attr_find(oid, NULL);
+	rc = daos_obj_set_oid_by_class(&oid, 0, cid, 0);
+	assert_success(rc == 0);
 
-	if (oc_attr->ca_grp_nr == DAOS_OBJ_GRP_MAX ||
+	oc_attr = daos_oclass_attr_find(oid, NULL, &grp_nr);
+
+	if (grp_nr == DAOS_OBJ_GRP_MAX ||
 	    oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
 		return true;
 	return false;

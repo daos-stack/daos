@@ -157,7 +157,7 @@ class EvictTests(TestWithServers):
         The test verifies that the other two pools were not affected
         by the evict
 
-        :avocado: tags=all,pr,daily_regression,full_regression
+        :avocado: tags=all,pr,daily_regression
         :avocado: tags=small
         :avocado: tags=pool,pool_evict,pool_evict_basic
         :avocado: tags=DAOS_5610
@@ -251,7 +251,7 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid uuid.
 
-        :avocado: tags=all,pool,pr,daily_regression,full_regression
+        :avocado: tags=all,pool,pr,daily_regression
         :avocado: tags=small
         :avocado: tags=pool_evict,pool_evict_bad_uuid,DAOS_5610
         """

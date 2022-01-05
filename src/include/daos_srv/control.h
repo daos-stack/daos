@@ -22,45 +22,11 @@
 extern const char *
 dpdk_cli_override_opts;
 
-enum {
-	/* Device is plugged */
-	NVME_DEV_FL_PLUGGED	= 0x1,
-	/* Device is used by DAOS (present in SMD) */
-	NVME_DEV_FL_INUSE	= 0x2,
-	/* Device is marked as FAULTY */
-	NVME_DEV_FL_FAULTY	= 0x4,
-};
-
-enum bio_dev_state {
-	/* fully functional and in-use */
-	BIO_DEV_NORMAL	= 0,
-	/* evicted device */
-	BIO_DEV_FAULTY,
-	/* unplugged device */
-	BIO_DEV_OUT,
-	/* new device not currently in-use */
-	BIO_DEV_NEW,
-};
-
-/*
- * Convert device state to human-readable string
- *
- * \param [IN]  state   Device state
- *
- * \return              Static string representing enum value
- */
-static inline char *
-bio_dev_state_enum_to_str(enum bio_dev_state state)
-{
-	switch (state) {
-	case BIO_DEV_NORMAL: return "NORMAL";
-	case BIO_DEV_FAULTY: return "EVICTED";
-	case BIO_DEV_OUT:    return "UNPLUGGED";
-	case BIO_DEV_NEW:    return "NEW";
-	}
-
-	return "Undefined state";
-}
+/* Device state flags */
+#define NVME_DEV_FL_PLUGGED	(1 << 0)
+#define NVME_DEV_FL_INUSE	(1 << 1) /* Used by DAOS (present in SMD) */
+#define NVME_DEV_FL_FAULTY	(1 << 2)
+#define NVME_DEV_FL_IDENTIFY	(1 << 3) /* SSD being identified by LED activity */
 
 /*
  * Current device health state (health statistics). Periodically updated in

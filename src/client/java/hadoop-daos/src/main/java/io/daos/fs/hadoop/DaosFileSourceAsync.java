@@ -64,6 +64,10 @@ public class DaosFileSourceAsync extends DaosFileSource {
 
   @Override
   protected int doWrite(long nextWritePos) throws IOException {
+    assert Thread.currentThread().getId() == eq.getThreadId() : "current thread " + Thread.currentThread().getId() +
+        "(" + Thread.currentThread().getName() + "), is not expected " + eq.getThreadId() + "(" +
+        eq.getThreadName() + ")";
+
     DaosEventQueue.Event event = eq.acquireEventBlocking(TIMEOUT_MS, completed, IODfsDesc.class, candidates);
     desc.reuse();
     desc.setEvent(event);
@@ -75,6 +79,10 @@ public class DaosFileSourceAsync extends DaosFileSource {
 
   @Override
   protected int doRead(long nextReadPos, int length) throws IOException {
+    assert Thread.currentThread().getId() == eq.getThreadId() : "current thread " + Thread.currentThread().getId() +
+        "(" + Thread.currentThread().getName() + "), is not expected " + eq.getThreadId() + "(" +
+        eq.getThreadName() + ")";
+
     DaosEventQueue.Event event = eq.acquireEventBlocking(TIMEOUT_MS, completed, IODfsDesc.class, candidates);
     desc.reuse();
     desc.setEvent(event);

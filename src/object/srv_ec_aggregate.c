@@ -2168,6 +2168,50 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 	agg_entry->ae_cur_stripe.as_offset	= 0U;
 }
 
+static int
+agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
+		  daos_unit_oid_t *oid, uint32_t version)
+{
+	struct daos_obj_md	 md = { 0 };
+	struct pl_map		*map;
+	struct pl_obj_layout	*layout = NULL;
+	struct pl_obj_shard	*shard;
+	uint32_t		 idx;
+	int			 rc;
+
+	/* Only last parity shard can be EC-AGG leader. */
+	if ((oid->id_shard % daos_oclass_grp_size(oca)) != (daos_oclass_grp_size(oca) - 1))
+		return 0;
+
+	map = pl_map_find(pool->sp_uuid, oid->id_pub);
+	if (map == NULL) {
+		D_ERROR("Failed to find pool map to check leader for "DF_UOID"\n", DP_UOID(*oid));
+		return -DER_INVAL;
+	}
+
+	md.omd_id = oid->id_pub;
+	md.omd_ver = version;
+	rc = pl_obj_place(map, &md, NULL, &layout);
+	if (rc != 0)
+		goto out;
+
+	idx = (oid->id_shard / daos_oclass_grp_size(oca)) * layout->ol_grp_size +
+	      daos_oclass_grp_size(oca) - 1;
+	shard = pl_obj_get_shard(layout, idx);
+	if (shard->po_target != -1 && shard->po_shard != -1 && !shard->po_rebuilding) {
+		rc = (oid->id_shard == shard->po_shard) ? 1 : 0;
+	} else {
+		/* If last parity unavailable, then skip the object via returning -DER_STALE. */
+		rc = -DER_STALE;
+	}
+
+out:
+	if (layout != NULL)
+		pl_obj_layout_free(layout);
+	pl_map_decref(map);
+	return rc;
+}
+
 /* Iterator pre-callback for objects. Determines if object is subject
  * to aggregation. Skips objects that are not EC, or are not led by
  * this target.
@@ -2190,7 +2234,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = dsc_obj_id2oc_attr(entry->ie_oid.id_pub, &info->api_props, &oca);
 	if (rc) {
-		D_ERROR("SKip object("DF_OID") with unknown class(%d)\n",
+		D_ERROR("SKip object("DF_OID") with unknown class(%u)\n",
 			DP_OID(entry->ie_oid.id_pub),
 			daos_obj_id2class(entry->ie_oid.id_pub));
 		*acts |= VOS_ITER_CB_SKIP;
@@ -2204,9 +2248,11 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 		goto out;
 	}
 
-	rc = ds_pool_check_dtx_leader(info->api_pool, &entry->ie_oid,
-				      info->api_pool->sp_map_version, true);
-	if (rc == 1 && entry->ie_oid.id_shard >= oca.u.ec.e_k) {
+	rc = agg_obj_is_leader(info->api_pool, &oca, &entry->ie_oid,
+			       info->api_pool->sp_map_version);
+	if (rc == 1) {
+		D_ASSERT((entry->ie_oid.id_shard % obj_ec_tgt_nr(&oca)) ==
+			 obj_ec_tgt_nr(&oca) - 1);
 		D_DEBUG(DB_EPC, "oid:"DF_UOID" ec agg starting\n",
 			DP_UOID(entry->ie_oid));
 

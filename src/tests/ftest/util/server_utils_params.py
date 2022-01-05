@@ -108,7 +108,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
-        self.nr_hugepages = BasicParameter(None, 4096)
+        self.nr_hugepages = BasicParameter(None, 0)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
@@ -155,6 +155,10 @@ class DaosServerYamlParameters(YamlParameters):
 
         for engine_params in self.engine_params:
             engine_params.get_params(test)
+
+        if self.using_nvme and self.nr_hugepages.value == 0:
+            self.log.debug("Setting hugepages when bdev class is 'nvme'")
+            self.nr_hugepages.update(4096, "nr_hugepages")
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -351,7 +355,7 @@ class DaosServerYamlParameters(YamlParameters):
                 self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
             # Use environment variables to get default parameters
-            default_interface = os.environ.get("OFI_INTERFACE", "eth0")
+            default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
             default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
 
