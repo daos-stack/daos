@@ -273,6 +273,9 @@ extern "C" {
 		Retry with other target)				\
 	ACTION(DER_NOTSUPPORTED,	(DER_ERR_DAOS_BASE + 37),	\
 	       Operation not supported)					\
+	/** Re-update again */						\
+	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 38),	\
+	       update again)						\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

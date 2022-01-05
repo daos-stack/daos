@@ -133,7 +133,7 @@ rebuild_retry_for_stale_pool(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -164,7 +164,7 @@ rebuild_drop_obj(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -230,7 +230,7 @@ rebuild_multiple_pools(void **state)
 	rebuild_io_verify(args[0], oids, OBJ_NR);
 	rebuild_io_verify(args[1], oids, OBJ_NR);
 
-	reintegrate_pools_ranks(args, 2, ranks_to_kill, 1);
+	reintegrate_pools_ranks(args, 2, ranks_to_kill, 1, false);
 	rebuild_io_verify(args[0], oids, OBJ_NR);
 	rebuild_io_verify(args[1], oids, OBJ_NR);
 
@@ -470,7 +470,7 @@ rebuild_iv_tgt_fail(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -540,7 +540,7 @@ rebuild_send_objects_fail(void **state)
 				     0, NULL);
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
 }
 
@@ -678,6 +678,9 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 	arg->rebuild_cb = NULL;
 
 	rebuild_io_verify(arg, oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -719,6 +722,9 @@ rebuild_offline(void **state)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_post_cb = NULL;
 
+	rebuild_io_verify(arg, oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -875,7 +881,7 @@ rebuild_nospace(void **state)
 	arg->rebuild_cb = NULL;
 	rebuild_io_verify(arg, oids, OBJ_NR);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -949,7 +955,6 @@ rebuild_multiple_tgts(void **state)
 	par_barrier(PAR_COMM_WORLD);
 }
 
-#if 0
 static int
 rebuild_io_cb(void *arg)
 {
@@ -973,7 +978,6 @@ rebuild_io_post_cb(void *arg)
 
 	return 0;
 }
-#endif
 
 static void
 rebuild_master_failure(void **state)
@@ -1052,7 +1056,11 @@ rebuild_master_failure(void **state)
 	print_message("svc leader changed from %d to %d, should get same "
 		      "rebuild status (memcmp result %d).\n", pinfo.pi_leader,
 		      pinfo_new.pi_leader, rc);
+
 	assert_int_equal(rc, 0);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
+	rebuild_io_verify(arg, oids, 10 * OBJ_NR);
 }
 
 static void
@@ -1077,21 +1085,20 @@ rebuild_multiple_failures(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
-#if 0
 	/* Remove this inflight IO temporarily XXX */
 	arg->rebuild_cb = rebuild_io_cb;
 	arg->rebuild_cb_arg = cb_arg_oids;
 	/* Disable data validation because of DAOS-2915. */
 	arg->rebuild_post_cb = rebuild_io_post_cb;
-#else
-	arg->rebuild_post_cb = NULL;
-#endif
+
 	arg->rebuild_post_cb_arg = cb_arg_oids;
 
 	rebuild_pools_ranks(&arg, 1, ranks_to_kill, MAX_KILLS, true);
 
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;
+
+	reintegrate_pools_ranks(&arg, 1, ranks_to_kill, MAX_KILLS, true);
 }
 
 static void
@@ -1289,6 +1296,9 @@ rebuild_kill_rank_during_rebuild(void **state)
 	sleep(2);
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
 			 arg->pool.alive_svc, ranks_to_kill[0]);
+
+	sleep(10);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
 }
 
 static void
@@ -1323,6 +1333,9 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 	}
 	sleep(2);
 	rebuild_single_pool_rank(arg, leader, true);
+
+	sleep(5);
+	reintegrate_single_pool_rank(arg, leader, true);
 }
 
 /** create a new pool/container for each test */

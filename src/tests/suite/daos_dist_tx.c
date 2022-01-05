@@ -2604,7 +2604,7 @@ dtx_36(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, kill_rank);
+	reintegrate_single_pool_rank(arg, kill_rank, false);
 
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 }
@@ -2736,7 +2736,7 @@ dtx_37(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, kill_rank);
+	reintegrate_single_pool_rank(arg, kill_rank, false);
 
 	dtx_fini_req_akey(&req, akeys, 1, DTX_NC_CNT);
 }
@@ -2909,7 +2909,7 @@ dtx_38(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, kill_ranks[0]);
+	reintegrate_single_pool_rank(arg, kill_ranks[0], false);
 
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 }
@@ -2986,7 +2986,7 @@ dtx_39(void **state)
 		ioreq_fini(&req);
 	}
 
-	reintegrate_single_pool_rank(arg, kill_rank);
+	reintegrate_single_pool_rank(arg, kill_rank, false);
 }
 
 static void

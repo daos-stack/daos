@@ -80,11 +80,11 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_int_equal(rc, 0);
 
-	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
+	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num, false);
 	if (oclass == OC_EC_2P1G1)
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, false);
 	else /* oclass OC_EC_4P2G1 */
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, false);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (write_type == PARTIAL_UPDATE)
@@ -158,7 +158,7 @@ rebuild_mixed_stripes(void **state)
 	free(verify_data);
 	ioreq_fini(&req);
 
-	reintegrate_pools_ranks(&arg, 1, &rank, 1);
+	reintegrate_pools_ranks(&arg, 1, &rank, 1, false);
 }
 
 static void
@@ -251,7 +251,7 @@ rebuild_ec_multi_stripes(void **state)
 	}
 
 	ioreq_fini(&req);
-	reintegrate_pools_ranks(&arg, 1, &rank, 1);
+	reintegrate_pools_ranks(&arg, 1, &rank, 1, false);
 }
 
 static int
@@ -868,7 +868,7 @@ rebuild_ec_parity_multi_group(void **state)
 	rank = get_rank_by_oid_shard(arg, oid, 9);
 	rebuild_single_pool_rank(arg, rank, false);
 
-	reintegrate_single_pool_rank(arg, rank);
+	reintegrate_single_pool_rank(arg, rank, false);
 	ioreq_fini(&req);
 }
 
@@ -929,7 +929,7 @@ rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 		assert_int_equal(rc, 0);
 	}
 
-	reintegrate_single_pool_rank(arg, rank);
+	reintegrate_single_pool_rank(arg, rank, false);
 	free(data);
 	free(verify_data);
 	ioreq_fini(&req);

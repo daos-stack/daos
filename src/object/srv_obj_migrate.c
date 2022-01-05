@@ -2604,7 +2604,7 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		return 0;
 	}
 
-	epr.epr_hi = tls->mpt_max_eph;
+	epr.epr_hi = cont->sc_pool->spc_rebuild_fence;
 	epr.epr_lo = 0;
 	rc = vos_discard(cont->sc_hdl, oid, &epr, NULL, NULL);
 	if (rc != 0) {
