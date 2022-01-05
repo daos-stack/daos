@@ -69,14 +69,16 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    *
    * @param oidBufferAddress
    * address of direct byte buffer with original object id's high and low. encode object id is set back to this buffer.
-   * @param feats
+   * @param contPtr
+   * container handle
+   * @param objectType
    * object feature bits
-   * @param objectTypeName
-   * object type name, see {@link DaosObjectType}
+   * @param objectClassName
+   * object type name, see {@link DaosObjectClass}
    * @param args
    * reserved
    */
-  native static void encodeObjectId(long oidBufferAddress, int feats, String objectTypeName,
+  native static void encodeObjectId(long oidBufferAddress, long contPtr, int objectType, String objectClassName,
                                            int args);
 
   /**

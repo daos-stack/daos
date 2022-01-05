@@ -20,17 +20,20 @@ parse_object_id(char *buffer, daos_obj_id_t *oid)
 
 JNIEXPORT void JNICALL
 Java_io_daos_obj_DaosObjClient_encodeObjectId(JNIEnv *env, jclass clientClass,
-		jlong oidBufferAddress, jint feats,
+		jlong oidBufferAddress, jlong contHandle, jint objectType,
 		jstring objectClass, jint args)
 {
 	daos_obj_id_t oid;
-	uint16_t type;
+	daos_handle_t coh;
+	enum daos_otype_t otype = (enum daos_otype_t)objectType;
+	uint32_t oclass;
 	const char *oclass_name = (*env)->GetStringUTFChars(env, objectClass,
 			NULL);
 	char *buffer = (char *)oidBufferAddress;
 
-	type = daos_oclass_name2id(oclass_name);
-	if (!type) {
+	memcpy(&coh, &contHandle, sizeof(coh));
+	oclass = daos_oclass_name2id(oclass_name);
+	if (!oclass) {
 		char *tmp = "unsupported object class, %s";
 		char *msg = NULL;
 
@@ -39,7 +42,7 @@ Java_io_daos_obj_DaosObjClient_encodeObjectId(JNIEnv *env, jclass clientClass,
 		goto out;
 	}
 	parse_object_id(buffer, &oid);
-	daos_obj_generate_id(&oid, feats, type, args);
+	daos_obj_generate_oid(coh, &oid, otype, oclass, NULL, args);
 	memcpy(buffer, &oid.hi, 8);
 	memcpy(buffer + 8, &oid.lo, 8);
 
