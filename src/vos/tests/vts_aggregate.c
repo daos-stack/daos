@@ -359,7 +359,7 @@ generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
 
 static void
 aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int punch_nr,
-		   daos_epoch_t punch_epoch[], daos_epoch_t punch_bound[])
+		   daos_epoch_t punch_epoch[], daos_epoch_t punch_bound[], unsigned int agg_flags)
 {
 	daos_unit_oid_t		 oid;
 	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
@@ -423,7 +423,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 	if (ds->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, agg_flags);
 	if (rc != -DER_CSUM) {
 		/* Skip delete verification for now */
 		assert_rc_equal(rc, 0);
@@ -441,7 +441,7 @@ static void
 aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		int punch_nr, daos_epoch_t punch_epoch[])
 {
-	aggregate_basic_lb(arg, ds, punch_nr, punch_epoch, NULL);
+	aggregate_basic_lb(arg, ds, punch_nr, punch_epoch, NULL, VOS_AGG_FL_FORCE_MERGE);
 }
 
 static inline int
@@ -608,7 +608,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, 0);
 	assert_rc_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1159,7 +1159,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 		if (discard)
 			rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, &epr, NULL, NULL);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 
 		assert_rc_equal(rc, 0);
 
@@ -1944,7 +1944,7 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
@@ -2134,7 +2134,7 @@ aggregate_22(void **state)
 
 	epr.epr_hi = epoch++;
 
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 	assert_rc_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,
@@ -2529,7 +2529,7 @@ removal_stress_case(struct io_test_args *arg, int recx_nr, daos_recx_t *recx_arr
 	ds.td_delete = true;
 
 	VERBOSE_MSG("Stress test recx_nr=%d, remove_nr=%d\n", recx_nr, remove_nr);
-	aggregate_basic_lb(arg, &ds, remove_nr, &remove_epochs[0], &remove_bounds[0]);
+	aggregate_basic_lb(arg, &ds, remove_nr, &remove_epochs[0], &remove_bounds[0], 0);
 }
 
 static void
@@ -2708,6 +2708,59 @@ aggregate_33(void **state)
 	cleanup();
 }
 
+/*
+ * Aggregate on single akey-EV, with or w/o 'force_merge' flag
+ */
+static void
+aggregate_34(void **state)
+{
+	struct io_test_args	*arg = *state;
+	vos_pool_info_t		 pool_info;
+	struct vos_pool_space	*vps = &pool_info.pif_space;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		*recx_arr;
+	int			 rc, i, rec_cnt = vos_agg_nvme_thresh - 1;
+
+	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
+	assert_rc_equal(rc, 0);
+
+	/* NVMe isn't enabled */
+	if (NVME_TOTAL(vps) == 0) {
+		print_message("NVMe isn't enabled, skip test\n");
+		skip();
+	}
+
+	D_ASSERT(rec_cnt > 0);
+	D_ALLOC_ARRAY(recx_arr, rec_cnt);
+	D_ASSERT(recx_arr != NULL);
+
+	for (i = 0; i < rec_cnt; i++) {
+		recx_arr[i].rx_idx = i * VOS_BLK_SZ;
+		recx_arr[i].rx_nr = VOS_BLK_SZ;
+	}
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = 1;
+	ds.td_recx_nr = rec_cnt;
+	ds.td_recx = recx_arr;
+	ds.td_expected_recs = rec_cnt;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = rec_cnt;
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = rec_cnt + 1;
+	ds.td_discard = false;
+
+	VERBOSE_MSG("Aggregate NVMe records w/o 'force_merge' flag\n");
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, 0);
+
+	VERBOSE_MSG("Aggregate NVMe records with 'force_merge' flag\n");
+	ds.td_expected_recs = 1;
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, VOS_AGG_FL_FORCE_MERGE);
+
+	D_FREE(recx_arr);
+	cleanup();
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -2774,6 +2827,8 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_32, NULL, agg_tst_teardown },
 	{ "VOS433: Many small removals",
 	  aggregate_33, NULL, agg_tst_teardown },
+	{ "VOS434: Selectively merging NVMe records",
+	  aggregate_34, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",

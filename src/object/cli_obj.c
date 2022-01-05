@@ -712,7 +712,6 @@ static int
 obj_dkey2shard(struct dc_object *obj, uint64_t hash, unsigned int map_ver,
 	       bool to_leader, struct obj_auxi_tgt_list *failed_tgt_list)
 {
-	uint64_t	time = 0;
 	int		grp_idx;
 	int		grp_size;
 	int		idx;
@@ -726,8 +725,8 @@ obj_dkey2shard(struct dc_object *obj, uint64_t hash, unsigned int map_ver,
 
 	if (!to_leader && obj->cob_time_fetch_leader != NULL &&
 	    obj->cob_time_fetch_leader[grp_idx] != 0 &&
-	    daos_gettime_coarse(&time) == 0 && OBJ_FETCH_LEADER_INTERVAL >=
-	    time - obj->cob_time_fetch_leader[grp_idx])
+	    OBJ_FETCH_LEADER_INTERVAL >=
+	    daos_gettime_coarse() - obj->cob_time_fetch_leader[grp_idx])
 		to_leader = true;
 
 	/* For EC object, read from DTX leader is meaningless, because the leader shard may
@@ -3890,8 +3889,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 		idx = obj_auxi->req_tgts.ort_shard_tgts->st_shard /
 			obj_get_grp_size(obj);
-		rc = daos_gettime_coarse(&obj->cob_time_fetch_leader[idx]);
-		D_ASSERT(rc == 0);
+		obj->cob_time_fetch_leader[idx] = daos_gettime_coarse();
 	}
 
 	/* Check if the pool map needs to refresh */

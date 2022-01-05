@@ -1113,8 +1113,7 @@ rebuild_task_ult(void *arg)
 	uint64_t				cur_ts = 0;
 	int					rc;
 
-	rc = daos_gettime_coarse(&cur_ts);
-	D_ASSERT(rc == 0);
+	cur_ts = daos_gettime_coarse();
 	if (cur_ts < task->dst_schedule_time) {
 		D_DEBUG(DB_REBUILD, "rebuild task sleep "DF_U64" second\n",
 			task->dst_schedule_time - cur_ts);
@@ -1125,7 +1124,7 @@ rebuild_task_ult(void *arg)
 	if (pool == NULL) {
 		D_ERROR(DF_UUID": failed to look up pool\n",
 			DP_UUID(task->dst_pool_uuid));
-		D_GOTO(out_task, rc);
+		D_GOTO(out_task, rc = -DER_NONEXIST);
 	}
 
 	rc = rebuild_notify_ras_start(&task->dst_pool_uuid, task->dst_map_ver,
@@ -1563,8 +1562,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 	if (new_task == NULL)
 		return -DER_NOMEM;
 
-	rc = daos_gettime_coarse(&cur_ts);
-	D_ASSERT(rc == 0);
+	cur_ts = daos_gettime_coarse();
 
 	new_task->dst_schedule_time = cur_ts + delay_sec;
 	new_task->dst_map_ver = map_ver;
