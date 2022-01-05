@@ -1,10 +1,13 @@
-name: Test landings and prepare docker images.
+name: Landings
 
 on:
   push:
     branches:
       - master
       - release/*
+  pull_request:
+    paths:
+      - .github/workflows/landing-builds.yml
 
 jobs:
 
