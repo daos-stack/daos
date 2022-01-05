@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Usage: archive.sh <name> <version> <file_dir> <file_extension>
+# Usage: archive.sh <project_name> <project_version> <file_dir> <file_extension>
 #
 # Create an archive of the HEAD commit of a local Git repository, including
 # submodules.
@@ -21,8 +21,8 @@
 set -e
 
 # Parse the arguments.
-name=$1
-version=$2
+proj_name=$1
+proj_version=$2
 file_dir=$3
 file_ext=$4
 
@@ -32,16 +32,20 @@ tmp=$(cd "$tmp" && pwd)
 trap 'rm -r "$tmp"' EXIT
 
 # Create the main archive, which does not include any submodule at this point.
-file_name=$name-$version
+file_name=$proj_name-$proj_version
 file=$file_name.$file_ext
-git archive --prefix "$name-$version/" -o "$tmp/$file" HEAD
+git archive --prefix "$proj_name-$proj_version/" -o "$tmp/$file" HEAD
 
 # Create one archive for each submodule.
 sm_file_name_prefix=$file_name-submodule
-git submodule --quiet foreach "git archive --prefix \"$name-$version/\$sm_path/\" -o \"$tmp/$sm_file_name_prefix-\$name.$file_ext\" \$sha1"
+git submodule --quiet foreach \
+	"git archive --prefix \"$proj_name-$proj_version/\$sm_path/\" \
+		     --output \"$tmp/$sm_file_name_prefix-\$name.$file_ext\" \
+		     \$sha1"
 
 # Append all submodule archives to the main archive.
-tar -Af "$tmp/$file" "$tmp/$sm_file_name_prefix-"*".$file_ext"
+git submodule --quiet foreach \
+	"tar -Af \"$tmp/$file\" \"$tmp/$sm_file_name_prefix-\$name.$file_ext\""
 
 # Publish the main archive.
 mv "$tmp/$file" "$file_dir/$file"
