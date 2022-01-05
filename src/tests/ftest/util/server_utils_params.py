@@ -332,7 +332,7 @@ class DaosServerYamlParameters(YamlParameters):
                 "COVFILE=/tmp/test.cov"],
             "ofi+tcp": [
                 "CRT_SWIM_RPC_TIMEOUT=10"],
-            "ofi_rxm": [
+            "ofi+verbs": [
                 "FI_OFI_RXM_USE_SRX=1"],
         }
 
