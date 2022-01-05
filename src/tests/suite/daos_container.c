@@ -2451,7 +2451,7 @@ co_api_compat(void **state)
 	uuid_clear(uuid2);
 
 	print_message("creating container with uuid specified ... ");
-	rc = daos_cont_create(arg->pool.poh, uuid1, NULL, NULL);
+	rc = daos_cont_create(arg->pool.poh, &uuid1, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 

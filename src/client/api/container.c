@@ -22,59 +22,12 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 	return dc_cont_global2local(poh, glob, coh);
 }
 
-/** Disable backward compat code */
-#undef daos_cont_create
-
-/**
- * Kept for backward ABI compatibility when a UUID is provided by the caller
- */
-int
-daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	daos_cont_create_t	*args;
-	tse_task_t		*task;
-	const unsigned char	*uuid = (const unsigned char *) cuuid;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, true)) {
-		D_ERROR("Invalid container properties.\n");
-		return -DER_INVAL;
-	}
-
-	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->poh	= poh;
-	uuid_copy((unsigned char *)args->uuid, uuid);
-	args->prop	= cont_prop;
-	args->cuuid	= NULL;
-
-	return dc_task_schedule(task, true);
-}
-
-/**
- * Create version that requires uuid to be passed in
- */
-int
-daos_cont_create1(daos_handle_t poh, const uuid_t cuuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	uuid_t *u = (uuid_t *)((unsigned char *)cuuid);
-
-	return daos_cont_create(poh, u, cont_prop, ev);
-}
-
-/**
+/** 
  * Real latest & greatest implementation of container create.
  * Used by anyone including the daos_cont.h header file.
  */
 int
-daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
+daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		  daos_event_t *ev)
 {
 	daos_cont_create_t	*args;
@@ -82,6 +35,11 @@ daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
+
+	if (cuuid == NULL) {
+		D_ERROR("NULL pointer for cuuid in daos_cont_create().\n");
+		return -DER_INVAL;
+	}
 
 	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, true)) {
 		D_ERROR("Invalid container properties.\n");
@@ -129,7 +87,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 		}
 	}
 
-	rc = daos_cont_create2(poh, uuid, merged_props ? merged_props : label_prop, ev);
+	rc = daos_cont_create(poh, uuid, merged_props ? merged_props : label_prop, ev);
 	if (rc != 0) {
 		D_ERROR("daos_cont_create label=%s failed, "DF_RC"\n", label, DP_RC(rc));
 		goto out_merged_props;

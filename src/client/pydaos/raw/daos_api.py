@@ -1456,16 +1456,10 @@ class DaosContainer():
         return conversion.c_uuid_to_str(self.uuid)
 
     # pylint: disable=too-many-branches
-    def create(self, poh, con_uuid=None, con_prop=None, cb_func=None):
+    def create(self, poh, con_prop=None, cb_func=None):
         """Send a container creation request to the daos server group."""
         # create a random uuid if none is provided
         self.uuid = (ctypes.c_ubyte * 16)()
-        if con_uuid is None:
-            conversion.c_uuid(uuid.uuid4(), self.uuid)
-        elif con_uuid == "NULLPTR":
-            self.uuid = None
-        else:
-            conversion.c_uuid(con_uuid, self.uuid)
         self.poh = poh
         if con_prop is not None:
             self.cont_input_values = con_prop
@@ -1570,13 +1564,13 @@ class DaosContainer():
                                             self))
             thread.start()
 
-    def destroy(self, force=1, poh=None, con_uuid=None, cb_func=None):
+    def destroy(self, force=1, poh=None, cb_func=None):
         """Send a container destroy request to the daos server group."""
         # caller can override pool handle and uuid
         if poh is not None:
             self.poh = poh
-        if con_uuid is not None:
-            conversion.c_uuid(con_uuid, self.uuid)
+        if self.uuid is None:
+            raise DaosApiError("Fail to destroy a container with uuid as none.")
 
         c_force = ctypes.c_uint(force)
 
@@ -2287,7 +2281,7 @@ class DaosContext():
             'convert-clocal':  self.libdaos.daos_cont_local2global,
             'convert-pglobal': self.libdaos.daos_pool_global2local,
             'convert-plocal':  self.libdaos.daos_pool_local2global,
-            'create-cont':     self.libdaos.daos_cont_create,
+            'create-cont':     self.libdaos.daos_cont_create2,
             'create-eq':       self.libdaos.daos_eq_create,
             'create-snap':     self.libdaos.daos_cont_create_snap,
             'd_log':           self.libtest.dts_log,

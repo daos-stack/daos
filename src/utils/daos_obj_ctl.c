@@ -362,7 +362,7 @@ cont_init(struct credit_context *tsc)
 	daos_handle_t	coh = DAOS_HDL_INVAL;
 	int		rc;
 
-	rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL,
+	rc = daos_cont_create(tsc->tsc_poh, &(tsc->tsc_cont_uuid), NULL,
 			      NULL);
 	if (rc != 0)
 		goto out;

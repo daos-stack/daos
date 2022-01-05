@@ -1336,10 +1336,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
 
-	if (uuid_is_set)
-		rc = daos_cont_create(poh, in_uuid, prop, NULL);
-	else
-		rc = daos_cont_create(poh, cuuid, prop, NULL);
+	rc = daos_cont_create(poh, cuuid, prop, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_create() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));

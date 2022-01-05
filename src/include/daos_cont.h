@@ -12,6 +12,8 @@
 #ifndef __DAOS_CONT_H__
 #define __DAOS_CONT_H__
 
+#define daos_cont_create daos_cont_create2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -671,14 +673,6 @@ daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags, daos_ha
 int
 daos_cont_destroy2(daos_handle_t poh, const char *cont, int force, daos_event_t *ev);
 
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
-daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
-int
-daos_cont_create1(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }
@@ -717,18 +711,6 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 	return daos_cont_destroy2(poh, str, force, ev);
 }
 
-#define daos_cont_create daos_cont_create_cpp
-static inline int
-daos_cont_create_cpp(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	return daos_cont_create2(poh, uuid, cont_prop, ev);
-}
-
-static inline int
-daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	return daos_cont_create1(poh, uuid, cont_prop, ev);
-}
 #else
 /**
  * for backward compatility, support old api where a const uuid_t was used instead of a string to
@@ -765,26 +747,6 @@ daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_pro
 			__str = _str;					\
 		}							\
 		_ret = daos_cont_destroy2((poh), __str, __VA_ARGS__);	\
-		_ret;							\
-	})
-
-/**
- * for backward compatility, support old api where a const uuid_t was required to be passed in for
- * the container to be created.
- */
-#define daos_cont_create(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		uuid_t *_u;						\
-		if (d_is_uuid(co)) {					\
-			_u = (uuid_t *)((unsigned char *)(co));		\
-			_ret = daos_cont_create((poh), _u,		\
-						__VA_ARGS__);		\
-		} else {						\
-			_u = (uuid_t *)(co);				\
-			_ret = daos_cont_create2((poh), _u,		\
-						 __VA_ARGS__);		\
-		}							\
 		_ret;							\
 	})
 

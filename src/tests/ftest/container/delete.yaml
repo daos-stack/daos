@@ -15,12 +15,8 @@ createtests:
   ContainerUUIDS: !mux
     gooduid:
       uuid:
-        - 0cf3086e-daa3-44a7-a5d4-cba9d639bf19
+        - VALID
         - PASS
-    nonexistingUUID:
-      uuid:
-        - INVALID
-        - FAIL
   ConnectionOpened: !mux
     # opened=TRUE and force=0 should FAIL (noForce below causes FAIL)
     CTopened:

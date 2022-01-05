@@ -1169,10 +1169,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		if (rc)
 			rc = daos_errno2der(rc);
 	} else {
-		if (uuid_is_null(ap->c_uuid))
-			rc = daos_cont_create(ap->pool, &ap->c_uuid, ap->props, NULL);
-		else
-			rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
+		rc = daos_cont_create(ap->pool, &ap->c_uuid, ap->props, NULL);
 	}
 
 	if (rc != 0) {
@@ -2476,7 +2473,7 @@ dm_connect(struct cmd_args_s *ap,
 				if (dst_cont_passed) {
 					rc = uuid_parse(ca->dst_cont, cuuid);
 					if (rc == 0)
-						rc = daos_cont_create(ca->dst_poh, cuuid, props,
+						rc = daos_cont_create(ca->dst_poh, &cuuid, props,
 								      NULL);
 					else
 						rc = daos_cont_create_with_label(ca->dst_poh,

@@ -25,10 +25,6 @@ class DeleteContainerTest(TestWithServers):
         :avocado: tags=all,container,tiny,smoke,full_regression,contdelete
         """
         expected_for_param = []
-        uuidlist = self.params.get("uuid",
-                                   '/run/createtests/ContainerUUIDS/*/')
-        cont_uuid = uuidlist[0]
-        expected_for_param.append(uuidlist[1])
 
         pohlist = self.params.get("poh", '/run/createtests/PoolHandles/*/')
         poh = pohlist[0]
@@ -67,13 +63,7 @@ class DeleteContainerTest(TestWithServers):
             self.container = DaosContainer(self.context)
 
             # create should always work (testing destroy)
-            if not cont_uuid == 'INVALID':
-                cont_uuid = uuid.UUID(uuidlist[0])
-                save_cont_uuid = cont_uuid
-                self.container.create(self.pool.pool.handle, cont_uuid)
-            else:
-                self.container.create(self.pool.pool.handle)
-                save_cont_uuid = uuid.UUID(self.container.get_uuid_str())
+            self.container.create(self.pool.pool.handle)
 
             # Opens the container if required
             if opened:
@@ -84,17 +74,13 @@ class DeleteContainerTest(TestWithServers):
             if poh == 'VALID':
                 poh = self.pool.pool.handle
 
-            # if container is INVALID, overwrite with non existing UUID
-            if cont_uuid == 'INVALID':
-                cont_uuid = uuid.uuid4()
-
-            self.container.destroy(force=force, poh=poh, con_uuid=cont_uuid)
+            self.container.destroy(force=force, poh=poh)
 
             passed = True
 
         except DaosApiError as excep:
             self.log.info(excep, traceback.format_exc())
-            self.container.destroy(force=1, poh=self.pool.pool.handle, con_uuid=save_cont_uuid)
+            self.container.destroy(force=1, poh=self.pool.pool.handle)
 
         finally:
             # close container handle, release a reference on pool in client lib

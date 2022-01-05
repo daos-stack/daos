@@ -93,7 +93,7 @@ int main(int argc, char **argv)
 
 	FOREACH_ALL(RUN_ACTION, poh, coh);
 
-	daos_cont_create(poh, uuid1, NULL, NULL);
+	daos_cont_create(poh, &uuid1, NULL, NULL);
 	daos_cont_create(poh, &uuid2, NULL, NULL);
 	dfs_cont_create(poh, uuid1, NULL, NULL, NULL);
 	dfs_cont_create(poh, &uuid2, NULL, NULL, NULL);
