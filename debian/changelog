@@ -1,3 +1,9 @@
+daos (2.1.100-17) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to mercury v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Thu, 23 Dec 2021 10:00:01 -0100
+
 daos (2.1.100-16) unstable; urgency=medium
   [ Brian J. Murrell ]
   * NOOP change to keep in parity with RPM version

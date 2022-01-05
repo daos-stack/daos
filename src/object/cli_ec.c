@@ -1931,6 +1931,7 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		parity_lists = reasb_req->orr_parity_lists;
 		if (parity_lists == NULL)
 			rc = -DER_NOMEM;
+		daos_recx_ep_lists_merge(parity_lists, nr);
 		goto out;
 	}
 
@@ -1938,6 +1939,7 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		rc = -DER_FETCH_AGAIN;
 		D_ERROR("simulate parity list mismatch, "DF_RC"\n", DP_RC(rc));
 	} else {
+		daos_recx_ep_lists_merge(recx_lists, nr);
 		rc = obj_ec_parity_lists_match(parity_lists, recx_lists, nr);
 		if (rc) {
 			D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));

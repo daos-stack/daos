@@ -176,11 +176,20 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 	}
 
 	hasBdevs := cfgHasBdevs(srv.cfg)
+	// Use default value
+	if srv.cfg.NrHugepages < 0 {
+		srv.cfg.NrHugepages = 4096
+	}
+	// The config value is intended to be per-engine, so we need to adjust
+	// based on the number of engines.
+	if srv.cfg.NrHugepages > 0 {
+		if len(srv.cfg.Engines) == 0 {
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		} else {
+			prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
+		}
+	}
 	if hasBdevs {
-		// The config value is intended to be per-engine, so we need to adjust
-		// based on the number of engines.
-		prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
-
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
 		if srv.runningUser != "root" {
@@ -213,24 +222,22 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	if hasBdevs {
-		// Double-check that we got the requested number of huge pages after prepare.
-		if hugePages.Free < prepReq.HugePageCount {
-			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
-		}
+	// Double-check that we got the requested number of huge pages after prepare.
+	if srv.cfg.NrHugepages > 0 && hugePages.Free < prepReq.HugePageCount {
+		return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
 	}
 
 	for _, engineCfg := range srv.cfg.Engines {
 		// Calculate mem_size per I/O engine (in MB)
 		PageSizeMb := hugePages.PageSizeKb >> 10
-		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
+		engineCfg.MemSize = srv.cfg.NrHugepages
 		engineCfg.MemSize *= PageSizeMb
 		// Pass hugepage size, do not assume 2MB is used
 		engineCfg.HugePageSz = PageSizeMb
 		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
 		// Warn if hugepages are not enough to sustain average
-		// I/O workload (~1GB), ignore warning if only using SCM backend
-		if !hasBdevs {
+		// I/O workload (~1GB), ignore warning if using SCM backend with 0 hugepages
+		if !hasBdevs && engineCfg.MemSize == 0 {
 			continue
 		}
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
