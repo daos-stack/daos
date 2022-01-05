@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -1114,6 +1115,311 @@ func TestControl_ListPools(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_GetMaxPoolSize(testRunner *testing.T) {
+	type ExpectedOutput struct {
+		ScmBytes  uint64
+		NvmeBytes uint64
+	}
+
+	for testName, testData := range map[string]struct {
+		HostsConfigArray []MockHostStorageConfig
+		ExpectedOutput   ExpectedOutput
+	}{
+		"single server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100)*uint64(humanize.GByte) - PoolMetadataBytes,
+				NvmeBytes: uint64(1) * uint64(humanize.TByte),
+			},
+		},
+		"double server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+				{
+					HostName: "bar[1,3]",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+						},
+						{ // Check if not mounted SCM is well managed
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(0),
+								AvailBytes: uint64(0),
+							},
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(50) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(400) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(300) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(3) * uint64(humanize.TByte),
+								AvailBytes: uint64(2) * uint64(humanize.TByte),
+							},
+							Rank: 3,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(50)*uint64(humanize.GByte) - PoolMetadataBytes,
+				NvmeBytes: uint64(700) * uint64(humanize.GByte),
+			},
+		},
+		"No NVME": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100)*uint64(humanize.GByte) - PoolMetadataBytes,
+				NvmeBytes: uint64(0),
+			},
+		},
+		"SCM:NVME ratio": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.TByte),
+								AvailBytes: uint64(100) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100)*uint64(humanize.GByte) - PoolMetadataBytes,
+				NvmeBytes: uint64(100) * uint64(humanize.TByte),
+			},
+		},
+	} {
+		testRunner.Run(testName, func(testRunner *testing.T) {
+			log, buf := logging.NewTestLogger(testRunner.Name())
+			defer common.ShowBufferOnFailure(testRunner, buf)
+
+			mockInvokerConfig := &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{},
+				},
+			}
+			for _, hostStorageConfig := range testData.HostsConfigArray {
+				storageScanResp := MockStorageScanResp(testRunner,
+					hostStorageConfig.ScmConfig,
+					hostStorageConfig.NvmeConfig)
+				hostResponse := &HostResponse{
+					Addr:    hostStorageConfig.HostName,
+					Message: storageScanResp,
+				}
+				mockInvokerConfig.UnaryResponse.Responses = append(mockInvokerConfig.UnaryResponse.Responses,
+					hostResponse)
+			}
+			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
+
+			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), mockInvoker)
+
+			common.AssertTrue(testRunner, err == nil, "Expected no error")
+			common.AssertEqual(testRunner,
+				testData.ExpectedOutput.ScmBytes,
+				scmBytes,
+				fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
+					testData.ExpectedOutput.ScmBytes,
+					scmBytes))
+
+			common.AssertEqual(testRunner,
+				testData.ExpectedOutput.NvmeBytes,
+				nvmeBytes,
+				fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
+					testData.ExpectedOutput.NvmeBytes,
+					nvmeBytes))
+		})
+	}
+}
+
+func TestControl_GetMaxPoolSize_Errors(testRunner *testing.T) {
+	testRunner.Run("Response Message Invalid", func(testRunner *testing.T) {
+		log, buf := logging.NewTestLogger(testRunner.Name())
+		defer common.ShowBufferOnFailure(testRunner, buf)
+
+		mockInvokerConfig := &MockInvokerConfig{
+			UnaryResponse: &UnaryResponse{
+				Responses: []*HostResponse{},
+			},
+		}
+		hostResponse := new(HostResponse)
+		mockInvokerConfig.UnaryResponse.Responses = append(mockInvokerConfig.UnaryResponse.Responses,
+			hostResponse)
+		mockInvoker := NewMockInvoker(log, mockInvokerConfig)
+
+		_, _, err := GetMaxPoolSize(context.TODO(), mockInvoker)
+		common.AssertTrue(testRunner, err != nil, "Expected error")
+		common.CmpErr(testRunner,
+			errors.New("unable to unpack message"),
+			err)
+	})
+
+	for testName, testData := range map[string]struct {
+		HostsConfigArray []MockHostStorageConfig
+		ExpectedError    error
+	}{
+		"No DAOS server": {
+			HostsConfigArray: []MockHostStorageConfig{},
+			ExpectedError:    errors.New("No DAOS server available"),
+		},
+		"No SCM storage": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{},
+					NvmeConfig: []MockNvmeConfig{},
+				},
+			},
+			ExpectedError: errors.New("Host without SCM storage"),
+		},
+		"SCM storage too small": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: PoolMetadataBytes / uint64(2),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{},
+				},
+			},
+			ExpectedError: errors.New("Not enough SCM storage available with the SCM namespace"),
+		},
+	} {
+		testRunner.Run(testName, func(testRunner *testing.T) {
+			log, buf := logging.NewTestLogger(testRunner.Name())
+			defer common.ShowBufferOnFailure(testRunner, buf)
+
+			mockInvokerConfig := &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{},
+				},
+			}
+			for _, hostStorageConfig := range testData.HostsConfigArray {
+				scmConfig := hostStorageConfig.ScmConfig
+				nvmeConfig := hostStorageConfig.NvmeConfig
+				storageScanResp := MockStorageScanResp(testRunner,
+					scmConfig,
+					nvmeConfig)
+				hostResponse := &HostResponse{
+					Addr:    hostStorageConfig.HostName,
+					Message: storageScanResp,
+				}
+				mockInvokerConfig.UnaryResponse.Responses = append(mockInvokerConfig.UnaryResponse.Responses,
+					hostResponse)
+			}
+			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
+
+			_, _, err := GetMaxPoolSize(context.TODO(), mockInvoker)
+			common.CmpErr(testRunner, testData.ExpectedError, err)
+
 		})
 	}
 }

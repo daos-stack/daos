@@ -560,6 +560,12 @@ type (
 		MockStorageConfig
 		Rank system.Rank
 	}
+
+	MockHostStorageConfig struct {
+		HostName   string
+		ScmConfig  []MockScmConfig
+		NvmeConfig []MockNvmeConfig
+	}
 )
 
 func MockStorageScanResp(testRunner *testing.T,

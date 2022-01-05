@@ -10,10 +10,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -958,4 +960,91 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	}
 
 	return resp, nil
+}
+
+// PoolMetadataBytes defines the amount of storage reserved for pool metadata.
+//
+// XXX DAOS-9196 Some extra bytes are needed for the metadata of the pool: at least 135 MB
+// are needed.  The extraByes is a little bigger than this limit, because the size of the
+// metadata will eventually grow along the life of the pool.
+const PoolMetadataBytes uint64 = uint64(200) * uint64(humanize.MiByte)
+
+// Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
+func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64, error) {
+	storageScanReq := &StorageScanReq{Usage: true}
+	resp, err := StorageScan(ctx, rpcClient, storageScanReq)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if len(resp.HostStorage) <= 0 {
+		return 0, 0, errors.New("No DAOS server available")
+	}
+
+	hostStorageMap := resp.HostStorage
+	var scmBytes uint64 = math.MaxUint64
+	var nvmeBytes uint64 = math.MaxUint64
+	for _, key := range hostStorageMap.Keys() {
+		hostStorageSet := hostStorageMap[key]
+		hostStorage := hostStorageSet.HostStorage
+
+		if hostStorage.ScmNamespaces.Free() == uint64(0) {
+			msg := fmt.Sprintf("Host without SCM storage: hostname=%s",
+				hostStorageSet.HostSet.String())
+			return 0, 0, errors.New(msg)
+		}
+
+		// FIXME DAOS-9196 At this time the rank associated to one namespace is not defined
+		// in the StorageScanResp.  Thus we rely on the hypothesis that each SCM namespace
+		// is associated to one and only one rank. Eventually, the protocol should be
+		// changed to define if a SCM namespace is associated with one rank or not. If yes,
+		// it should define with which rank the SCM namespace is associated.
+		for _, scmNamespace := range hostStorage.ScmNamespaces {
+			if scmNamespace.Mount == nil {
+				continue
+			}
+			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
+
+			if scmNamespaceFreeBytes < PoolMetadataBytes {
+				missingBytes := PoolMetadataBytes - scmNamespaceFreeBytes
+				msg := "Not enough SCM storage available with the SCM namespace " +
+					"\"%s\" of the the host %s: " +
+					"at least %s of SCM storage (%s missing) is needed"
+				msg = fmt.Sprintf(msg,
+					scmNamespace.Mount.Path,
+					hostStorageSet.HostSet.String(),
+					humanize.Bytes(PoolMetadataBytes),
+					humanize.Bytes(missingBytes))
+				return 0, 0, errors.New(msg)
+			}
+
+			if scmBytes > scmNamespaceFreeBytes {
+				scmBytes = scmNamespaceFreeBytes
+			}
+		}
+
+		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
+		for _, nvmeController := range hostStorage.NvmeDevices {
+			for _, smdDevice := range nvmeController.SmdDevices {
+				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
+			}
+		}
+		for _, nvmeRankBytes := range nvmeRanksBytes {
+			if nvmeBytes > nvmeRankBytes {
+				nvmeBytes = nvmeRankBytes
+			}
+		}
+	}
+
+	// Extra storage space needed for metada such as the VOS file
+	scmBytes -= PoolMetadataBytes
+
+	if nvmeBytes == math.MaxUint64 {
+		nvmeBytes = 0
+	}
+
+	// TODO DAOS-9196 Check if there is no ranks (i.e. rank with SCM available) with some NVMe
+	// storage and other without
+
+	return scmBytes, nvmeBytes, nil
 }
