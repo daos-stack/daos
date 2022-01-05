@@ -105,20 +105,11 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         dnf repolist; \
         dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
-# For conditional build DAOS and Java
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-ARG BASE_DISTRO
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-centos8.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh
-
-RUN if [[ "$BASE_DISTRO" = fedora* ]]; then \
-	. /tmp/install.sh "$DAOS_JAVA_BUILD" true;	\
-    else 						\
-	. /tmp/install.sh "$DAOS_JAVA_BUILD" false; 	\
-    fi
+RUN /tmp/install.sh
 
 ARG UID=1000
 
@@ -250,6 +241,17 @@ RUN echo -e "<settings>\n\
                 </mirror>\n\
         </mirrors>\n\
 </settings>" > /home/daos/.m2/settings.xml
+
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
+ARG BASE_DISTRO
+
+RUN if [[ "$DAOS_JAVA_BUILD" == "yes" ]]; then				\
+	cp /home/daos/daos/utils/scripts/install-centos8-java.sh	\
+		/tmp/install-centos8-java.sh;				\
+	chmod +x /tmp/install-centos8-java.sh;				\
+        . /tmp/install-centos8-java.sh  [[ "$BASE_DISTRO" = fedora* ]]	\
+		&& echo "true" || echo "false";	 			\
+    fi
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos

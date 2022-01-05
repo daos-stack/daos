@@ -10,9 +10,6 @@
 
 set -e
 
-java=$1
-fedora=$2
-
 dnf upgrade
 dnf install \
     boost-python3-devel \
@@ -34,7 +31,6 @@ dnf install \
     help2man \
     hwloc-devel \
     ipmctl \
-    java-1.8.0-openjdk \
     json-c-devel \
     libaio-devel \
     libcmocka-devel \
@@ -71,21 +67,4 @@ dnf install \
     valgrind-devel \
     which \
     yasm
-
-if ! "$java"; then
-	:
-elif "$fedora"; then
-        # Java-11 is installed along with maven if we install maven from
-        # fedora repo. But we need java-8 (1.8). The 'devel' package also
-        # needs to be installed specifically in fedora.
-	dnf install java-1.8.0-openjdk java-1.8.0-openjdk-devel
-	curl --output ./apache-maven-3.6.3-bin.tar.gz \
-https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz \
-&& tar -xf apache-maven-3.6.3-bin.tar.gz \
-&& find ./ -name "mvn" | \
-{ read -r d; f="$(dirname "$d")"; cp -r "$(readlink -f "$f")"/../* /usr/local; }
-else
-	dnf install java-1.8.0-openjdk maven
-fi
-
 dnf clean all
