@@ -245,6 +245,7 @@ RUN echo -e "<settings>\n\
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 ARG BASE_DISTRO
 
+USER root:root
 RUN if [[ "$DAOS_JAVA_BUILD" == "yes" ]]; then				\
 	cp /home/daos/daos/utils/scripts/install-centos8-java.sh	\
 		/tmp/install-centos8-java.sh;				\
@@ -253,6 +254,7 @@ RUN if [[ "$DAOS_JAVA_BUILD" == "yes" ]]; then				\
 "false") | { read -r b; /tmp/install-centos8-java.sh "$b"; }		\
     fi
 
+USER daos_server:daos_server
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
