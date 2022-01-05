@@ -2249,6 +2249,19 @@ void crt_swim_fini(void);
 #define crt_proc_crt_group_id_t		crt_proc_d_string_t
 #define crt_proc_crt_phy_addr_t		crt_proc_d_string_t
 
+/**
+ * \a err is an error that ought to be logged at a less serious level than ERR.
+ *
+ * \param[in] err                an error
+ *
+ * \return                       true or false
+ */
+static inline bool
+crt_quiet_error(int err)
+{
+	return err == -DER_GRPVER;
+}
+
 /** @}
  */
 

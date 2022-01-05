@@ -259,7 +259,7 @@ dtx_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 static int
 dtx_act_ent_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		  d_iov_t *val_iov, struct btr_record *rec)
+		  d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct vos_dtx_act_ent	*dae = val_iov->iov_buf;
 
@@ -309,7 +309,7 @@ dtx_act_ent_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
-		   d_iov_t *key, d_iov_t *val)
+		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct vos_container	*cont = tins->ti_priv;
 	struct vos_dtx_act_ent	*dae_new = val->iov_buf;
@@ -342,7 +342,7 @@ static btr_ops_t dtx_active_btr_ops = {
 
 static int
 dtx_cmt_ent_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		  d_iov_t *val_iov, struct btr_record *rec)
+		  d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct vos_tls		*tls = vos_tls_get();
 	struct vos_container	*cont = tins->ti_priv;
@@ -392,7 +392,7 @@ dtx_cmt_ent_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
-		   d_iov_t *key, d_iov_t *val)
+		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct vos_dtx_cmt_ent	*dce_new = val->iov_buf;
 	struct vos_dtx_cmt_ent	*dce_old;
@@ -841,7 +841,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 	d_iov_set(&riov, dce, sizeof(*dce));
 	rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov);
+			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 	if (rc != 0)
 		goto out;
 
@@ -1012,7 +1012,7 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
 	d_iov_set(&riov, dae, sizeof(*dae));
 	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov);
+			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 	if (rc == 0) {
 		dae->dae_start_time = crt_hlc_get();
 		d_list_add_tail(&dae->dae_link, &cont->vc_dtx_act_list);
@@ -1828,11 +1828,9 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 }
 
 int
-vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count, daos_epoch_t epoch,
-			bool resent, bool *rm_cos,
-			struct vos_dtx_act_ent **daes,
-			struct vos_dtx_cmt_ent **dces)
+vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
+			int count, daos_epoch_t epoch, bool resent, bool rm_cos[],
+			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces)
 {
 	struct vos_cont_df		*cont_df = cont->vc_cont_df;
 	struct umem_instance		*umm = vos_cont2umm(cont);
@@ -2023,7 +2021,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 }
 
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count, bool *rm_cos)
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[])
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
@@ -2506,7 +2504,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			d_iov_set(&riov, dae, sizeof(*dae));
 			rc = dbtree_upsert(cont->vc_dtx_active_hdl,
 					   BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
-					   &kiov, &riov);
+					   &kiov, &riov, NULL);
 			if (rc != 0) {
 				D_FREE(dae->dae_records);
 				dtx_evict_lid(cont, dae);
@@ -2575,7 +2573,7 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
 		d_iov_set(&riov, dce, sizeof(*dce));
 		rc = dbtree_upsert(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-				   DAOS_INTENT_UPDATE, &kiov, &riov);
+				   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 		if (rc != 0) {
 			D_FREE(dce);
 			goto out;

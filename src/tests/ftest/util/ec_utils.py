@@ -104,10 +104,14 @@ class ErasureCodeIor(ServerFillUp):
         self.ec_container = TestContainer(self.pool, daos_command=DaosCommand(self.bin))
         self.ec_container.get_params(self)
         self.ec_container.oclass.update(oclass)
+
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
-        self.ec_container.properties.update("rf:{}".format(ec_object['parity']))
-
+        rf = "rf:{}".format(ec_object['parity'])
+        if self.container.properties.value is None:
+            self.ec_container.properties.update(rf)
+        else:
+            self.ec_container.properties.update("{},{}".format(self.container.properties.value, rf))
         # create container
         self.ec_container.create()
 

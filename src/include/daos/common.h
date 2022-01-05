@@ -153,10 +153,10 @@ char *DP_UUID(const void *uuid);
 #define DP_KEY(key)		(int)((key)->iov_len)
 #else
 char *daos_key2str(daos_key_t *key);
+#define DF_KEY_STR_SIZE		64
 
-#define DF_KEY			"[%d] '%.*s'"
+#define DF_KEY			"[%d] '%s'"
 #define DP_KEY(key)		(int)(key)->iov_len,	\
-				(int)(key)->iov_len,	\
 				daos_key2str(key)
 #endif
 
@@ -606,6 +606,13 @@ daos_crt_network_error(int err)
 	       err == -DER_PMIX || err == -DER_UNREG ||
 	       err == -DER_UNREACH || err == -DER_CANCELED ||
 	       err == -DER_NOREPLY || err == -DER_OOG;
+}
+
+/** See crt_quiet_error. */
+static inline bool
+daos_quiet_error(int err)
+{
+	return crt_quiet_error(err);
 }
 
 #define daos_rank_list_dup		d_rank_list_dup
