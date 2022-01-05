@@ -16,6 +16,7 @@ from avocado import skip, TestFail, fail_on
 from avocado.utils.distro import detect
 from avocado.core import exceptions
 from ast import literal_eval
+from ClusterShell.NodeSet import NodeSet
 
 from fault_config_utils import FaultInjection
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
@@ -27,7 +28,7 @@ from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing
+    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
 from logger_utils import TestLogger
 from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
@@ -36,22 +37,9 @@ from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
 
-def skipForTicket(ticket): # pylint: disable=invalid-name
+def skipForTicket(ticket):  # pylint: disable=invalid-name
     """Skip a test with a comment about a ticket."""
     return skip("Skipping until {} is fixed.".format(ticket))
-
-
-def get_log_file(name):
-    """Get the full log file name and path.
-
-    Args:
-        name (str): log file name
-
-    Returns:
-        str: full log file name including path
-
-    """
-    return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)
 
 
 class Test(avocadoTest):
@@ -77,7 +65,11 @@ class Test(avocadoTest):
         # Define a test ID using the test_* method name
         self.test_id = self.get_test_name()
 
-        self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
+        # Define a test unique temporary directory
+        self.base_test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
+        self.test_dir = os.path.join(self.base_test_dir, self.test_id)
+        if not os.path.exists(self.test_dir):
+            os.makedirs(self.test_dir)
 
         # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
         # Any unit combination may be used, but they must be specified in
@@ -182,7 +174,7 @@ class Test(avocadoTest):
         try:
             with open(self.cancel_file) as skip_handle:
                 skip_list = skip_handle.readlines()
-        except Exception as excpt: # pylint: disable=broad-except
+        except Exception as excpt:  # pylint: disable=broad-except
             skip_process_error("Unable to read skip list: {}".format(excpt))
             skip_list = []
 
@@ -204,9 +196,9 @@ class Test(avocadoTest):
                                           "PR.  Test will not be "
                                           "skipped", ticket)
                             return
-                except exceptions.TestCancel: # pylint: disable=try-except-raise
+                except exceptions.TestCancel:   # pylint: disable=try-except-raise
                     raise
-                except Exception as excpt: # pylint: disable=broad-except
+                except Exception as excpt:      # pylint: disable=broad-except
                     skip_process_error("Unable to read commit title: "
                                        "{}".format(excpt))
                 # Nope, but there is a commit that fixes it
@@ -216,7 +208,7 @@ class Test(avocadoTest):
                         with open(os.path.join(os.sep, 'tmp',
                                                'commit_list')) as commit_handle:
                             commits = commit_handle.readlines()
-                    except Exception as excpt: # pylint: disable=broad-except
+                    except Exception as excpt:  # pylint: disable=broad-except
                         skip_process_error("Unable to read commit list: "
                                            "{}".format(excpt))
                         return
@@ -362,10 +354,28 @@ class Test(avocadoTest):
         # Disable reporting the timeout upon subsequent inherited calls
         self._timeout_reported = True
 
+    def remove_temp_test_dir(self):
+        """Remove the test-specific temporary directory and its contents.
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        errors = []
+        self.log.info("Removing temporary test files in %s", self.test_dir)
+        try:
+            run_command("rm -fr {}".format(self.test_dir))
+        except DaosTestError as error:
+            errors.append("Error removing temporary test files: {}".format(error))
+        return errors
+
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
         super().tearDown()
+
+        # Clean up any temporary files
+        self._teardown_errors.extend(self.remove_temp_test_dir())
 
         # Fail the test if any errors occurred during tear down
         if self._teardown_errors:
@@ -706,6 +716,7 @@ class TestWithServers(TestWithoutServers):
             self.job_manager = get_job_manager_class(
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
             self.set_job_manager_timeout()
+            self.job_manager.tmpdir_base.update(self.test_dir, "tmpdir_base")
 
         # Mark the end of setup
         self.log.info("=" * 100)
@@ -804,6 +815,45 @@ class TestWithServers(TestWithoutServers):
         if self.server_managers:
             force_agent_start = self.start_server_managers(force)
         return force_agent_start
+
+    def restart_servers(self):
+        """Stop and start the servers without reformatting the storage.
+
+        Returns:
+            list: a list of strings identifying an errors found restarting the servers.
+
+        """
+        self.log.info("-" * 100)
+        self.log.info("--- STOPPING SERVERS ---")
+        errors = []
+        status = self.check_running("servers", self.server_managers)
+        if status["restart"] and not status["expected"]:
+            errors.append(
+                "ERROR: At least one multi-variant server was not found in its expected state "
+                "prior to stopping all servers")
+        self.test_log.info("Stopping %s group(s) of servers", len(self.server_managers))
+        errors.extend(self._stop_managers(self.server_managers, "servers"))
+
+        self.log.info("-" * 100)
+        self.log.debug("--- RESTARTING SERVERS ---")
+        # self._start_manager_list("server", self.server_managers)
+        for manager in self.server_managers:
+            self.log.info(
+                "Starting server: group=%s, hosts=%s, config=%s",
+                manager.get_config_value("name"), manager.hosts,
+                manager.get_config_value("filename"))
+            try:
+                manager.manager.run()
+            except CommandFailure as error:
+                manager.manager.kill()
+                errors.append("Failed to restart servers: {}".format(error))
+        status = self.check_running("servers", self.server_managers)
+        if status["restart"] and not status["expected"]:
+            errors.append(
+                "ERROR: At least one multi-variant server was not found in its expected state "
+                "after restarting all servers")
+        self.log.info("-" * 100)
+        return errors
 
     def setup_agents(self, agent_groups=None):
         """Start the daos_agent processes.
@@ -1167,6 +1217,26 @@ class TestWithServers(TestWithoutServers):
                 name, manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
             manager.start()
+
+    def remove_temp_test_dir(self):
+        """Remove the test-specific temporary directory and its contents on all hosts.
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        errors = []
+        hosts = list(self.hostlist_servers)
+        if self.hostlist_clients:
+            hosts.extend(self.hostlist_clients)
+        all_hosts = include_local_host(hosts)
+        self.log.info(
+            "Removing temporary test files in %s from %s",
+            self.test_dir, str(NodeSet.fromlist(all_hosts)))
+        results = pcmd(all_hosts, "rm -fr {}".format(self.test_dir))
+        if 0 not in results or len(results) > 1:
+            errors.append("Error removing temporary test files")
+        return errors
 
     def tearDown(self):
         """Tear down after each test case."""

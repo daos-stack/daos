@@ -312,6 +312,9 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	ssize_t			 size = bio_iov2req_len(biov);
 	uint16_t		 media = bio_iov2media(biov);
 
+	if (bio_iov2req_len(biov) == 0)
+		return 0;
+
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	D_ASSERT(arg->ca_sgl_idx < arg->ca_sgl_cnt);
 	sgl = &arg->ca_sgls[arg->ca_sgl_idx];
@@ -410,9 +413,6 @@ iterate_biov(struct bio_desc *biod,
 
 		for (j = 0; j < bsgl->bs_nr_out; j++) {
 			struct bio_iov *biov = &bsgl->bs_iovs[j];
-
-			if (bio_iov2req_len(biov) == 0)
-				continue;
 
 			rc = cb_fn(biod, biov, data);
 			if (rc)
@@ -682,10 +682,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	int rc;
 
 	D_ASSERT(arg == NULL);
-	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
+	D_ASSERT(biov);
 	D_ASSERT(biod && biod->bd_chk_type < BIO_CHK_TYPE_MAX);
 
-	if (bio_addr_is_hole(&biov->bi_addr)) {
+	if ((bio_iov2raw_len(biov) == 0) || bio_addr_is_hole(&biov->bi_addr)) {
 		bio_iov_set_raw_buf(biov, NULL);
 		return 0;
 	}
@@ -1053,7 +1053,8 @@ bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 		return -DER_INVAL;
 
 	biod->bd_chk_type = type;
-	biod->bd_rdma = (bulk_ctxt != NULL);
+	/* For rebuild pull, the DMA buffer will be used as RDMA client */
+	biod->bd_rdma = (bulk_ctxt != NULL) || (type == BIO_CHK_TYPE_REBUILD);
 
 	if (bulk_ctxt != NULL && !(daos_io_bypass & IOBP_SRV_BULK_CACHE)) {
 		bulk_arg.ba_bulk_ctxt = bulk_ctxt;
@@ -1180,6 +1181,9 @@ flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	D_ASSERT(arg == NULL);
 	D_ASSERT(biov);
 
+	if (bio_iov2req_len(biov) == 0)
+		return 0;
+
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return 0;
 
@@ -1187,7 +1191,6 @@ flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		return 0;
 
 	D_ASSERT(bio_iov2raw_buf(biov) != NULL);
-	D_ASSERT(bio_iov2req_len(biov) != 0);
 	pmemobj_flush(umem->umm_pool, bio_iov2req_buf(biov),
 		      bio_iov2req_len(biov));
 	return 0;

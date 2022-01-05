@@ -2567,8 +2567,13 @@ ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver)
 	ABT_mutex_lock(tls->mpt_inflight_mutex);
 	ABT_cond_broadcast(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
+
 	migrate_pool_tls_put(tls); /* lookup */
+	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+
 	migrate_pool_tls_put(tls); /* destroy */
+
+	D_DEBUG(DB_TRACE, "migrate fini one ult "DF_UUID"\n", DP_UUID(pool_uuid));
 }
 
 struct migrate_abort_arg {
@@ -2580,23 +2585,9 @@ int
 migrate_fini_one_ult(void *data)
 {
 	struct migrate_abort_arg *arg = data;
-	struct migrate_pool_tls	*tls;
 
-	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
-	if (tls == NULL)
-		return 0;
+	ds_migrate_fini_one(arg->pool_uuid, arg->version);
 
-	D_ASSERT(tls->mpt_refcount > 1);
-	tls->mpt_fini = 1;
-
-	ABT_mutex_lock(tls->mpt_inflight_mutex);
-	ABT_cond_broadcast(tls->mpt_inflight_cond);
-	ABT_mutex_unlock(tls->mpt_inflight_mutex);
-
-	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
-	migrate_pool_tls_put(tls); /* destroy */
-
-	D_DEBUG(DB_TRACE, "abort one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
 	return 0;
 }
 
@@ -2651,7 +2642,8 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 	}
 
 	/* Wait until container aggregation are stopped */
-	while (cont->sc_vos_agg_active && !tls->mpt_fini && !cont->sc_stopping) {
+	while ((cont->sc_ec_agg_active || cont->sc_vos_agg_active) &&
+	       !tls->mpt_fini && !cont->sc_stopping) {
 		D_DEBUG(DB_REBUILD, "wait for "DF_UUID"/"DF_UUID"/%u vos aggregation"
 			" to be inactive\n", DP_UUID(tls->mpt_pool_uuid),
 			DP_UUID(cont_uuid), tls->mpt_version);

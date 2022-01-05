@@ -489,7 +489,6 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 	req.SetUUID(uuid)
 
-	ds := drpc.DaosSuccess
 	resp := &mgmtpb.PoolDestroyResp{}
 	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
@@ -514,7 +513,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 			svc.log.Debugf("svc.PoolEvict failed\n")
 			return nil, err
 		}
-		ds = drpc.DaosStatus(evresp.Status)
+		ds := drpc.DaosStatus(evresp.Status)
 		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
 
 		// Transition pool state (unless evict returned busy, and not force destroying).
@@ -551,7 +550,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
-	ds = drpc.DaosStatus(resp.Status)
+	ds := drpc.DaosStatus(resp.Status)
 	switch ds {
 	case drpc.DaosSuccess, drpc.DaosNotLeader, drpc.DaosNotReplica:
 		if ds == drpc.DaosNotLeader || ds == drpc.DaosNotReplica {
