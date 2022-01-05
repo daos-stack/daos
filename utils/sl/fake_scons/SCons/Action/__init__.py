@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2021 Intel Corporation
+# Copyright (c) 2021 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -17,12 +17,15 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""Fake SCons"""
+"""Fake Action class"""
 
-__all__ = ['Script',
-           'Action',
-           'Variables',
-           'Builder',
-           'Errors',
-           'Subst',
-           'Warnings']
+# pylint: disable=too-few-public-methods
+class Action():
+    """Fake Action"""
+
+    def __init__(self, *args, **kw):
+        pass
+
+ARGUMENTS = {}
+
+__all__ = ['Action']
