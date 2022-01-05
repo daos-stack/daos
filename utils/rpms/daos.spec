@@ -539,7 +539,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Jan 4 2021 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-18
+* Tue Jan 4 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-18
 - Move libdaos_common.so from daos-client to daos package
 * Thu Dec 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-17
 - Update to v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage

@@ -94,6 +94,8 @@ daos_policy_try_parse(const char *policy_str, struct policy_desc_t *out_pd)
 
 	len = strlen(policy_str);
 	D_STRNDUP(str, policy_str, len); /* for strtok_r */
+	if (str == NULL)
+		return ret_val;
 	orig_str = str;	/* save the dup'd string ptr to free it later */
 
 	/* tokenize input to "name=value" format */
