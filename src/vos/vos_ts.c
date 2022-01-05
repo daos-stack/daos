@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -300,40 +300,6 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 	return 0;
 }
 
-void
-vos_ts_set_upgrade(struct vos_ts_set *ts_set)
-{
-	struct vos_ts_set_entry	*set_entry;
-	struct vos_ts_entry	*entry;
-	struct vos_ts_table	*ts_table;
-	struct vos_ts_info	*info;
-	uint32_t		 hash_idx;
-	int			 i;
-
-	if (!vos_ts_in_tx(ts_set))
-		return;
-
-	ts_table = vos_ts_table_get();
-
-	for (i = 0; i < ts_set->ts_init_count; i++) {
-		set_entry = &ts_set->ts_entries[i];
-		entry = set_entry->se_entry;
-		info = entry->te_info;
-
-		D_ASSERT(entry != NULL);
-		if (entry->te_negative != NULL || info->ti_misses == NULL)
-			continue;
-
-		D_ASSERT(i != 0); /** no negative lookup on container */
-		D_ASSERT(set_entry->se_create_idx != NULL);
-
-		hash_idx = entry - info->ti_misses;
-		vos_ts_evict_lru(ts_table, &entry, set_entry->se_create_idx,
-				 hash_idx, info->ti_type);
-		set_entry->se_entry = entry;
-	}
-}
-
 static inline bool
 vos_ts_check_conflict(daos_epoch_t read_time, const struct dtx_id *read_id,
 		      daos_epoch_t write_time, const struct dtx_id *write_id)
@@ -383,4 +349,44 @@ vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
 	return vos_ts_check_conflict(entry->te_ts.tp_ts_rh,
 				     &entry->te_ts.tp_tx_rh,
 				     write_time, &ts_set->ts_tx_id);
+}
+
+int
+vos_ts_set_upgrade(struct vos_ts_set *ts_set, daos_epoch_t epoch)
+{
+	struct vos_ts_set_entry	*set_entry;
+	struct vos_ts_entry	*entry;
+	struct vos_ts_table	*ts_table;
+	struct vos_ts_info	*info;
+	uint32_t		 hash_idx;
+	int			 i;
+
+	if (!vos_ts_in_tx(ts_set))
+		return 0;
+
+	ts_table = vos_ts_table_get();
+
+	for (i = 0; i < ts_set->ts_init_count; i++) {
+		set_entry = &ts_set->ts_entries[i];
+		entry = set_entry->se_entry;
+		info = entry->te_info;
+
+		D_ASSERT(entry != NULL);
+		if (entry->te_negative != NULL || info->ti_misses == NULL)
+			continue;
+
+		D_ASSERT(i != 0); /** no negative lookup on container */
+		D_ASSERT(set_entry->se_create_idx != NULL);
+
+		hash_idx = entry - info->ti_misses;
+		vos_ts_evict_lru(ts_table, &entry, set_entry->se_create_idx,
+				 hash_idx, info->ti_type);
+		set_entry->se_entry = entry;
+
+		/** If there is a conflict on the positive entry, reject the write */
+		if (vos_ts_check_read_conflict(ts_set, i, epoch))
+			return -DER_TX_RESTART;
+	}
+
+	return 0;
 }

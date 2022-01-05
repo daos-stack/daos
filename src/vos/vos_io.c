@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2319,10 +2319,12 @@ abort:
 		}
 	}
 
+	if (err == 0)
+		err = vos_ts_set_upgrade(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
+
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);
 	if (err == 0) {
-		vos_ts_set_upgrade(ioc->ic_ts_set);
 		if (daes != NULL) {
 			vos_dtx_post_handle(ioc->ic_cont, daes, dces,
 					    dth->dth_dti_cos_count,

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -633,9 +633,13 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
  *  update/punch has committed
  *
  *  \param[in]	ts_set	Pointer to set
+ *  \param[in]	epoch	Write epoch
+ *
+ *  \return	0		on success
+ *		-DER_TX_RESTART	on timestamp conflict
  */
-void
-vos_ts_set_upgrade(struct vos_ts_set *ts_set);
+int
+vos_ts_set_upgrade(struct vos_ts_set *ts_set, daos_epoch_t epoch);
 
 /** Free an allocated timestamp set
  *
