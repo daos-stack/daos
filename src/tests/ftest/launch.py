@@ -1834,7 +1834,7 @@ def install_debuginfos():
                     "install_debuginfos(): Unsupported distro: {}".format(
                         distro_info))
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
-        rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"])
+        rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
         cmds.append(
             ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args +
             ["daos-client-" + rpm_version,
@@ -1917,7 +1917,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     # Create a subdirectory in the avocado logs directory for this test
     print("-" * 80)
     print("Processing cores from {} in {}".format(host_list, daos_cores_dir))
-    get_output(["mkdir", daos_cores_dir])
+    get_output(["mkdir", daos_cores_dir], check=False)
 
     # Copy any core files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Attempt all of the commands and
@@ -2006,7 +2006,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
                 daos_cores_dir, "{}.stacktrace".format(corefile))
             try:
                 with open(stack_trace_file, "w") as stack_trace:
-                    stack_trace.writelines(get_output(cmd))
+                    stack_trace.writelines(get_output(cmd, check=False))
             except IOError as error:
                 print("Error writing {}: {}".format(stack_trace_file, error))
                 return_status = False
