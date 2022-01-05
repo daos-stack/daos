@@ -110,12 +110,12 @@ ioil_shrink_pool(struct ioil_pool *pool)
 }
 
 static int
-ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool)
+ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 {
 	struct ioil_pool	*pool;
 	int			rc;
 
-	if (cont->ioc_open_count != 0)
+	if (cont->ioc_open_count != 0 && !force)
 		return 0;
 
 	if (cont->ioc_dfs != NULL) {
@@ -168,7 +168,7 @@ entry_array_close(void *arg) {
 
 	/* Do not close container/pool handles at this point
 	 * to allow for re-use.
-	 * ioil_shrink_cont(entry->fd_cont, true);
+	 * ioil_shrink_cont(entry->fd_cont, true, true);
 	*/
 }
 
@@ -371,9 +371,9 @@ ioil_fini(void)
 			 * is tried later, and if the container close succeeds but pool close
 			 * fails the cont may not be valid afterwards.
 			 */
-			rc = ioil_shrink_cont(cont, false);
+			rc = ioil_shrink_cont(cont, false, true);
 			if (rc == -DER_NOMEM)
-				ioil_shrink_cont(cont, false);
+				ioil_shrink_cont(cont, false, true);
 		}
 		rc = ioil_shrink_pool(pool);
 		if (rc == -DER_NOMEM)
@@ -645,29 +645,31 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 }
 
 static bool
-ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply,
-		       struct ioil_cont *cont)
+ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont *cont)
 {
 	int			rc;
 	struct ioil_pool       *pool = cont->ioc_pool;
 	char			uuid_str[37];
+	int			dfs_flags = O_RDWR;
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
 		uuid_unparse(il_reply->fir_pool, uuid_str);
-		rc = daos_pool_connect(uuid_str, NULL,
-				       DAOS_PC_RW, &pool->iop_poh, NULL, NULL);
+		rc = daos_pool_connect(uuid_str, NULL, DAOS_PC_RO, &pool->iop_poh, NULL, NULL);
 		if (rc)
 			return false;
 	}
 
 	uuid_unparse(il_reply->fir_cont, uuid_str);
-	rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW,
-			    &cont->ioc_coh, NULL, NULL);
+	rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW, &cont->ioc_coh, NULL, NULL);
+	if (rc == -DER_NO_PERM) {
+		dfs_flags = O_RDONLY;
+		rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RO, &cont->ioc_coh, NULL,
+				    NULL);
+	}
 	if (rc)
 		return false;
 
-	rc = dfs_mount(pool->iop_poh, cont->ioc_coh, O_RDWR,
-		       &cont->ioc_dfs);
+	rc = dfs_mount(pool->iop_poh, cont->ioc_coh, dfs_flags, &cont->ioc_dfs);
 	if (rc)
 		return false;
 
@@ -817,7 +819,7 @@ obj_close:
 	dfs_release(entry->fd_dfsoh);
 
 shrink:
-	ioil_shrink_cont(cont, true);
+	ioil_shrink_cont(cont, true, false);
 
 err:
 	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);

@@ -41,7 +41,11 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 	}
 
 	lookupNetIF := func(name string) (netInterface, error) {
-		return net.InterfaceByName(name)
+		iface, err := net.InterfaceByName(name)
+		if err != nil {
+			return nil, errors.Wrapf(err, "unable to retrieve interface %q", name)
+		}
+		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {

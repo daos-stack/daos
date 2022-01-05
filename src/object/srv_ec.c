@@ -83,7 +83,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		 oiods[0].oiod_nr >= 2);
 
 	if (oca == NULL)
-		oca = daos_oclass_attr_find(oid.id_pub, NULL);
+		oca = daos_oclass_attr_find(oid.id_pub, NULL, NULL);
 	D_ASSERT(oca != NULL);
 
 	if (tgt_map != NULL)

@@ -81,9 +81,9 @@ extern struct dss_module_key vos_module_key;
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
 
-/** Up to 1 million lid entries split into 16 expansion slots */
+/** Up to 1 million lid entries split into 2048 expansion slots */
 #define DTX_ARRAY_LEN		(1 << 20) /* Total array slots for DTX lid */
-#define DTX_ARRAY_NR		(1 << 4)  /* Number of expansion arrays */
+#define DTX_ARRAY_NR		(1 << 11)  /* Number of expansion arrays */
 
 enum {
 	/** Used for marking an in-tree record committed */
@@ -787,6 +787,7 @@ struct vos_iterator {
 				 it_for_discard:1,
 				 it_for_migration:1,
 				 it_cleanup_stale_dtx:1,
+				 it_show_uncommitted:1,
 				 it_ignore_uncommitted:1;
 };
 
@@ -980,7 +981,7 @@ key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
-	       uint64_t flags, struct vos_ts_set *ts_set,
+	       uint64_t flags, struct vos_ts_set *ts_set, umem_off_t *known_key,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
@@ -1116,15 +1117,16 @@ D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
  *  \param toh[IN]			Open key tree handle
  *  \param type[IN]			Iterator type (VOS_ITER_AKEY/DKEY only)
  *  \param epr[IN]			Valid epoch range for iteration
- *  \param ignore_inprogress[IN]	Fail if there are uncommitted entries
+ *  \param show_uncommitted[IN]		Return uncommitted entries marked as instead of failing
  *  \param cb[IN]			Callback for key
  *  \param arg[IN]			argument to pass to callback
  *  \param dth[IN]			dtx handle
+ *  \param anchor[IN]			Option anchor from where to start iterator
  */
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
-		const daos_epoch_range_t *epr, bool ignore_inprogress,
-		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth);
+		const daos_epoch_range_t *epr, bool show_uncommitted,
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth, daos_anchor_t *anchor);
 
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
@@ -1245,5 +1247,53 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 
 int
 vos_pool_settings_init(void);
+
+/** Raise a RAS event on incompatible durable format
+ *
+ * \param[in] type		Type of object with layout format
+ *				incompatibility (e.g. VOS pool)
+ * \param[in] version		Version of the object
+ * \param[in] min_version	Minimum supported version
+ * \param[in] max_version	Maximum supported version
+ * \param[in] pool		(Optional) associated pool uuid
+ */
+void
+vos_report_layout_incompat(const char *type, int version, int min_version,
+			   int max_version, uuid_t *uuid);
+
+#define VOS_NOTIFY_RAS_EVENTF(...)			\
+	do {						\
+		if (ds_notify_ras_eventf == NULL)	\
+			break;				\
+		ds_notify_ras_eventf(__VA_ARGS__);	\
+	} while (0)					\
+
+static inline int
+vos_offload_exec(int (*func)(void *), void *arg)
+{
+	if (dss_offload_exec != NULL)
+		return dss_offload_exec(func, arg);
+	else
+		return func(arg);
+}
+
+/* vos_csum_recalc.c */
+
+struct csum_recalc {
+	struct evt_extent	 cr_log_ext;
+	struct evt_extent	*cr_phy_ext;
+	struct dcs_csum_info	*cr_phy_csum;
+	daos_off_t		 cr_phy_off;
+};
+
+struct csum_recalc_args {
+	struct bio_sglist	*cra_bsgl;	/* read sgl */
+	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
+	struct csum_recalc	*cra_recalcs;   /* recalc info */
+	unsigned int		 cra_seg_cnt;   /* # of read segments */
+	int			 cra_rc;	/* return code */
+};
+
+int vos_csum_recalc_fn(void *recalc_args);
 
 #endif /* __VOS_INTERNAL_H__ */

@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package bdev
 
 import (
@@ -37,6 +38,7 @@ func defCmpOpts() []cmp.Option {
 	return []cmp.Option{
 		// ignore these fields on most tests, as they are intentionally not stable
 		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
+		cmp.AllowUnexported(common.PCIAddressSet{}),
 	}
 }
 
@@ -96,46 +98,37 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 	ctrlr3 := storage.MockNvmeController(3)
 
 	for name, tc := range map[string]struct {
-		scanReq   storage.BdevScanRequest
-		inCtrlrs  storage.NvmeControllers
-		expCtrlrs storage.NvmeControllers
-		expErr    error
+		reqAddrList []string
+		vmdEnabled  bool
+		inCtrlrs    storage.NvmeControllers
+		expCtrlrs   storage.NvmeControllers
+		expErr      error
 	}{
-		"no controllers; no filter": {
-			scanReq: storage.BdevScanRequest{},
-		},
+		"no controllers; no filter": {},
 		"no filter": {
 			inCtrlrs:  storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
 			expCtrlrs: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
 		},
 		"filtered": {
-			scanReq: storage.BdevScanRequest{
-				DeviceList: []string{ctrlr1.PciAddr, ctrlr3.PciAddr},
-			},
-			inCtrlrs:  storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
-			expCtrlrs: storage.NvmeControllers{ctrlr1, ctrlr3},
+			reqAddrList: []string{ctrlr1.PciAddr, ctrlr3.PciAddr},
+			inCtrlrs:    storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			expCtrlrs:   storage.NvmeControllers{ctrlr1, ctrlr3},
 		},
 		"missing": {
-			scanReq: storage.BdevScanRequest{
-				DeviceList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
-			},
-			inCtrlrs: storage.NvmeControllers{ctrlr1, ctrlr3},
-			expErr:   FaultBdevNotFound(ctrlr2.PciAddr),
+			reqAddrList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
+			inCtrlrs:    storage.NvmeControllers{ctrlr1, ctrlr3},
+			expErr:      FaultBdevNotFound(ctrlr2.PciAddr),
 		},
 		"vmd devices; vmd not enabled": {
-			scanReq: storage.BdevScanRequest{
-				DeviceList: []string{"0000:85:05.5"},
-			},
+			reqAddrList: []string{"0000:85:05.5"},
 			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
 				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
 				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
 			expErr: FaultBdevNotFound("0000:85:05.5"),
 		},
 		"vmd devices; vmd enabled": {
-			scanReq: storage.BdevScanRequest{
-				VMDEnabled: true,
-				DeviceList: []string{"0000:85:05.5"},
-			},
+			vmdEnabled:  true,
+			reqAddrList: []string{"0000:85:05.5"},
 			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
 				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
 				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
@@ -145,7 +138,12 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotCtrlrs, gotErr := groomDiscoveredBdevs(tc.scanReq, tc.inCtrlrs)
+			reqAddrs, err := common.NewPCIAddressSet(tc.reqAddrList...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotCtrlrs, gotErr := groomDiscoveredBdevs(reqAddrs, tc.inCtrlrs, tc.vmdEnabled)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
@@ -214,6 +212,17 @@ func TestBackend_Format(t *testing.T) {
 
 	testDir, clean := common.CreateTestDir(t)
 	defer clean()
+
+	addrList := func(t *testing.T, in ...string) *common.PCIAddressSet {
+		t.Helper()
+
+		addrs, err := common.NewPCIAddressSet(in...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return addrs
+	}
 
 	for name, tc := range map[string]struct {
 		req         storage.BdevFormatRequest
@@ -314,7 +323,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1}},
+				{PCIAllowList: addrList(t, pci1)},
 			},
 		},
 		"multiple ssd and namespace success": {
@@ -348,7 +357,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1, pci2, pci3}},
+				{PCIAllowList: addrList(t, pci1, pci2, pci3)},
 			},
 		},
 		"two success and one failure": {
@@ -389,7 +398,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1, pci2, pci3}},
+				{PCIAllowList: addrList(t, pci1, pci2, pci3)},
 			},
 		},
 		"multiple namespaces on single controller success": {
@@ -415,7 +424,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1}},
+				{PCIAllowList: addrList(t, pci1)},
 			},
 		},
 		"multiple namespaces on single controller failure": {
@@ -457,7 +466,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1}},
+				{PCIAllowList: addrList(t, pci1)},
 			},
 		},
 		"binding format success; vmd enabled": {
@@ -485,7 +494,7 @@ func TestBackend_Format(t *testing.T) {
 			},
 			expInitOpts: []*spdk.EnvOptions{
 				{
-					PCIAllowList: []string{vmdBackingAddr1, vmdBackingAddr2},
+					PCIAllowList: addrList(t, vmdBackingAddr1, vmdBackingAddr2),
 					EnableVMD:    true,
 				},
 			},
@@ -858,11 +867,21 @@ func TestBackend_Prepare(t *testing.T) {
 		nonexistentTargetUser = "nonexistentTargetUser"
 		username              = "bob"
 	)
-	var (
-		testPCIAllowList = fmt.Sprintf("%s %s %s", common.MockPCIAddr(1), common.MockPCIAddr(2),
-			common.MockPCIAddr(3))
-		testPCIBlockList = fmt.Sprintf("%s %s", common.MockPCIAddr(4), common.MockPCIAddr(3))
-	)
+
+	mockAddrList := func(t *testing.T, idxs ...int) *common.PCIAddressSet {
+		var addrs common.PCIAddressSet
+
+		for _, idx := range idxs {
+			if err := addrs.AddStrings(common.MockPCIAddr(int32(idx))); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		return &addrs
+	}
+
+	testPCIAllowList := mockAddrList(t, 1, 2, 3).String()
+	testPCIBlockList := mockAddrList(t, 4, 3).String()
 
 	for name, tc := range map[string]struct {
 		reset          bool
@@ -870,7 +889,7 @@ func TestBackend_Prepare(t *testing.T) {
 		mbc            *MockBackendConfig
 		userLookupRet  *user.User
 		userLookupErr  error
-		vmdDetectRet   []string
+		vmdDetectRet   *common.PCIAddressSet
 		vmdDetectErr   error
 		hpCleanErr     error
 		expScriptCalls *[]scriptCall
@@ -915,6 +934,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
+				HugePageCount:         -1,
 				TargetUser:            username,
 				EnableVMD:             false,
 				DisableCleanHugePages: true,
@@ -1008,7 +1028,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			vmdDetectRet: mockAddrList(t, 1, 2),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1035,7 +1055,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			vmdDetectRet: mockAddrList(t, 1, 2),
 			vmdDetectErr: errors.New("vmd detect failed"),
 			expScriptCalls: &[]scriptCall{
 				{
@@ -1055,7 +1075,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{},
+			vmdDetectRet: mockAddrList(t),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1074,7 +1094,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
+			vmdDetectRet: mockAddrList(t, 3, 4),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1102,7 +1122,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(5)},
+			vmdDetectRet: mockAddrList(t, 3, 5),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1130,7 +1150,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
+			vmdDetectRet: mockAddrList(t, 3, 4),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1151,7 +1171,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(2)},
+			vmdDetectRet: mockAddrList(t, 3, 2),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1228,7 +1248,7 @@ func TestBackend_Prepare(t *testing.T) {
 			mockUserLookup := func(string) (*user.User, error) {
 				return tc.userLookupRet, tc.userLookupErr
 			}
-			mockVmdDetect := func() ([]string, error) {
+			mockVmdDetect := func() (*common.PCIAddressSet, error) {
 				return tc.vmdDetectRet, tc.vmdDetectErr
 			}
 			mockHpClean := func(string, string, string) error {

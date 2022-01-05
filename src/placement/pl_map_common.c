@@ -130,7 +130,7 @@ op_get_grp_size(unsigned int domain_nr, unsigned int *grp_size,
 {
 	struct daos_oclass_attr *oc_attr;
 
-	oc_attr = daos_oclass_attr_find(oid, NULL);
+	oc_attr = daos_oclass_attr_find(oid, NULL, NULL);
 
 	*grp_size = daos_oclass_grp_size(oc_attr);
 	D_ASSERT(*grp_size != 0);

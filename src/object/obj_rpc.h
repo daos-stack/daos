@@ -153,7 +153,7 @@ enum obj_rpc_flags {
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
 	/* For data migration. */
 	ORF_FOR_MIGRATION	= (1 << 14),
-	/* Force DTX refresh if hit non-committed DTX on non-leader. */
+	/* Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
 	ORF_DTX_REFRESH		= (1 << 15),
 	/* for EC aggregate (to bypass read perm check related with RF) */
 	ORF_FOR_EC_AGG		= (1 << 16),
@@ -163,6 +163,8 @@ enum obj_rpc_flags {
 	ORF_EC_RECOV_SNAP	= (1 << 18),
 	/* EC data recovery from parity */
 	ORF_EC_RECOV_FROM_PARITY = (1 << 19),
+	/* The forward targets array contains leader information. */
+	ORF_CONTAIN_LEADER	= (1 << 20),
 };
 
 /* common for update/fetch */

@@ -376,7 +376,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 		punch_or_delete = TF_DELETE;
 
 	if (daos_unit_oid_is_null(ds->td_oid))
-		oid = dts_unit_oid_gen(0, 0, 0);
+		oid = dts_unit_oid_gen(0, 0);
 	else
 		oid = ds->td_oid;
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
@@ -423,8 +423,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 	if (ds->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
-				   ds_csum_agg_recalc, NULL, NULL, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, false);
 	if (rc != -DER_CSUM) {
 		/* Skip delete verification for now */
 		assert_rc_equal(rc, 0);
@@ -523,7 +522,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	epr_a = &ds_sample->td_agg_epr;
 
 	for (i = 0; i < AT_OBJ_KEY_NR; i++) {
-		oids[i] = dts_unit_oid_gen(0, 0, 0);
+		oids[i] = dts_unit_oid_gen(0, 0);
 		dts_key_gen(dkeys[i], UPDATE_DKEY_SIZE, UPDATE_DKEY);
 		dts_key_gen(akeys[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
 	}
@@ -609,8 +608,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL,
-				   false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, false);
 	assert_rc_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1030,7 +1028,7 @@ discard_13(void **state)
 	daos_recx_t		 recx_tot;
 	int			 i;
 
-	ds.td_oid = dts_unit_oid_gen(0, 0, 0);
+	ds.td_oid = dts_unit_oid_gen(0, 0);
 	/*
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
@@ -1119,7 +1117,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 	int			 old_flags = arg->ta_flags;
 	daos_recx_t		 recx = {0, 1};
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	arg->ta_flags = TF_USE_VAL;
 
@@ -1161,8 +1159,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 		if (discard)
 			rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, &epr, NULL, NULL);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
-					   NULL, NULL, false);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
 
 		assert_rc_equal(rc, 0);
 
@@ -1280,7 +1277,7 @@ discard_obj_test(void **state, bool empty)
 	int			 old_flags = arg->ta_flags;
 	daos_recx_t		 recx = {0, 1};
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	arg->ta_flags = TF_USE_VAL;
 
@@ -1926,7 +1923,7 @@ aggregate_14(void **state)
 	}
 	fill_size = fill_size / 3;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 
@@ -1947,8 +1944,7 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL,
-				   false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
@@ -2093,7 +2089,7 @@ aggregate_22(void **state)
 	char			 buf_u[16];
 	int			 rc;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
@@ -2138,7 +2134,7 @@ aggregate_22(void **state)
 
 	epr.epr_hi = epoch++;
 
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL, false);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
 	assert_rc_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,

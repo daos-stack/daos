@@ -22,7 +22,7 @@ hosts:
   test_clients:
     - client-A
     - client-B
-timeout: 2500
+timeout: 1000
 setup:
   start_agents_once: False
   start_servers_once: False
@@ -76,10 +76,10 @@ ior:
      # [ChunkSize, BlocksSize, TransferSize]
      Full_Striped:
        chunk_block_transfer_sizes:
-        - [32M, 128M, 8M]
+        - [32M, 8G, 8M]
      Partial_Striped:
        chunk_block_transfer_sizes:
-        - [32M, 128M, 2K]
+        - [32M, 512M, 2K]
   objectclass:
    dfs_oclass_list:
     #- [EC_Object_Class, Minimum number of servers]

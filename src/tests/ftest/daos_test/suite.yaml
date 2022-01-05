@@ -33,8 +33,7 @@ timeouts:
     test_daos_checksum: 500
     test_daos_rebuild_ec: 1800
     test_daos_aggregate_ec: 200
-    test_daos_degraded_ec_0to6: 900
-    test_daos_degraded_ec_8to23: 950
+    test_daos_degraded_ec: 1800
     test_daos_dedup: 220
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.
@@ -108,8 +107,7 @@ daos_tests:
     test_daos_checksum: 1
     test_daos_rebuild_ec: 1
     test_daos_aggregate_ec: 1
-    test_daos_degraded_ec_0to6: 1
-    test_daos_degraded_ec_8to23: 1
+    test_daos_degraded_ec: 1
     test_daos_dedup: 1
   test_name:
     test_daos_degraded_mode: DAOS_Degraded_Mode
@@ -135,8 +133,7 @@ daos_tests:
     test_daos_checksum: DAOS_Checksum
     test_daos_rebuild_ec: DAOS_Rebuild_EC
     test_daos_aggregate_ec: DAOS_Aggregate_EC
-    test_daos_degraded_ec_0to6: DAOS_Degraded_EC_0to6
-    test_daos_degraded_ec_8to23: DAOS_Degraded_EC_8to23
+    test_daos_degraded_ec: DAOS_Degraded_EC
     test_daos_dedup: DAOS_Dedup
     test_daos_extend_simple: DAOS_Extend_Simple
   daos_test:
@@ -164,12 +161,9 @@ daos_tests:
     test_daos_checksum: z
     test_daos_rebuild_ec: S
     test_daos_aggregate_ec: Z
-    test_daos_degraded_ec_0to6: X
-    test_daos_degraded_ec_8to23: X
+    test_daos_degraded_ec: X
     test_daos_dedup: U
   args:
-    test_daos_degraded_ec_0to6: -u subtests="0-6" --csum_type=crc64
-    test_daos_degraded_ec_8to23: -u subtests="8-23" --csum_type=crc64
     test_daos_ec_io: -l"EC_4P2G1"
     test_daos_rebuild_ec: -s5
   scalable_endpoint:

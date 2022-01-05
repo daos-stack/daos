@@ -41,6 +41,11 @@
 #  key: /etc/daos/certs/agent.key
 
 # Use the given directory for creating unix domain sockets
+#
+# NOTE: Do not change this when running under systemd control. If it needs to
+#       be changed, then make sure that it matches the RuntimeDirectory setting
+#       in /usr/lib/systemd/system/daos_agent.service
+#
 # default: /var/run/daos_agent
 #runtime_dir: /var/run/daos_agent
 
@@ -52,20 +57,23 @@
 # organized by NUMA node.
 # If not defined, the agent will automatically detect all fabric interfaces and
 # select appropriate ones based on the server preferences.
+# 
 #fabric_ifaces:
-#  - numa_node: 0
-#    devices:
-#    -
-#      - iface: ib0
-#      - domain: mlx5_0
-#    -
-#      - iface: ib1
-#      - domain: mlx5_1
-#  - numa_node: 1
-#    devices:
-#    -
-#      - iface: ib2
-#      - domain: mlx5_2
-#    -
-#      - iface: ib3
-#      - domain: mlx5_3
+#-
+#  numa_node: 0
+#  devices:
+#  -
+#    iface: ib0
+#    domain: mlx5_0
+#  -
+#    iface: ib1
+#    domain: mlx5_1
+#-
+#  numa_node: 1
+#  devices:
+#  -
+#    iface: ib2
+#    domain: mlx5_2
+#  -
+#    iface: ib3
+#    domain: mlx5_3
