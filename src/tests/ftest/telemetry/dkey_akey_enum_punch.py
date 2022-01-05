@@ -14,7 +14,7 @@ from general_utils import create_string_buffer
 class DkeyAkeyEnumPunch(TestWithTelemetry):
     """
     Test Class Description:
-    Pass an assortment of bad parameters to the daos_obj_update function.
+    Verify enum and punch values for dkey and akey.
     :avocado: recursive
     """
 
@@ -318,7 +318,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
     def test_pool_tgt_dkey_akey_punch(self):
         """Test punch count for tgt values.
 
-        tgt is related to replication, so the test step is similarto  above,
+        tgt is related to replication, so the test step is similar to above,
         but we use the replication object class OC_RP_2G1.
 
         Test Steps:
