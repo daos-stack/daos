@@ -521,6 +521,16 @@ class DaosServer():
         else:
             self.dfuse_cores = None
 
+        self.fuse_procs = []
+
+    def add_fuse(self, fuse):
+        """Register a new fuse instance"""
+        self.fuse_procs.append(fuse)
+
+    def remove_fuse(self, fuse):
+        """Deregister a fuse instance"""
+        self.fuse_procs.remove(fuse)
+
     def __del__(self):
         if self._agent:
             self._stop_agent()
@@ -744,6 +754,12 @@ class DaosServer():
 
     def stop(self, wf):
         """Stop a previously started DAOS server"""
+
+        for fuse in self.fuse_procs:
+            print('Stopping server with running fuse procs, cleaning up')
+            self._add_test_case('server-stop-with-running-fuse', failure=str(fuse))
+            fuse.stop()
+
         if self._agent:
             self._stop_agent()
 
@@ -1068,6 +1084,15 @@ class DFuse():
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
+    def __str__(self):
+
+        if self._sp:
+            running = 'running'
+        else:
+            running = 'not running'
+
+        return 'DFuse instance at {} ({})'.format(self.dir, running)
+
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
@@ -1150,6 +1175,8 @@ class DFuse():
             if total_time > 60:
                 raise Exception('Timeout starting dfuse')
 
+        self._daos.add_fuse(self)
+
     def _close_files(self):
         work_done = False
         for fname in os.listdir('/proc/self/fd'):
@@ -1186,7 +1213,10 @@ class DFuse():
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
-            if ret != 0:
+            if ret == 42:
+                self.conf.wf.add_test_case(str(self), failure='valgrind errors', output=ret)
+                self.conf.valgrind_errors = True
+            elif ret != 0:
                 fatal_errors = True
         except subprocess.TimeoutExpired:
             print('Timeout stopping dfuse')
@@ -1201,6 +1231,7 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
         os.rmdir(self.dir)
+        self._daos.remove_fuse(self)
         return fatal_errors
 
     def wait_for_exit(self):
@@ -1352,6 +1383,7 @@ def run_daos_cmd(conf,
     if vh.use_valgrind and rc.returncode == 42:
         print("Valgrind errors detected")
         print(rc)
+        conf.wf.add_test_case(' '.join(cmd), failure='valgrind errors', output=rc)
         conf.valgrind_errors = True
         rc.returncode = 0
     if use_json:
@@ -1522,6 +1554,38 @@ def needs_dfuse_no_cache(method):
                 self.fatal_errors = True
         return rc
     return _helper
+
+class print_stat():
+    """Class for nicely showing file 'stat' data, similar to ls -l"""
+
+    headers = ['uid', 'gid', 'size', 'mode', 'filename']
+
+    def __init__(self, filename=None):
+        # Setup the object, and maybe add some data to it.
+        self._stats = []
+        if filename:
+            self.add(filename)
+
+    def add(self, filename, attr=None, show_dir=False):
+        """Add an entry to be displayed"""
+
+        if attr is None:
+            attr = os.stat(filename)
+
+        self._stats.append([attr.st_uid,
+                            attr.st_gid,
+                            attr.st_size,
+                            stat.filemode(attr.st_mode),
+                            filename])
+
+        if show_dir:
+            tab = '.' * len(filename)
+            for fname in os.listdir(filename):
+                self.add(os.path.join(tab, fname),
+                         attr=os.stat(os.path.join(filename, fname)))
+
+    def __str__(self):
+        return tabulate.tabulate(self._stats, self.headers)
 
 # This is test code where methods are tests, so we want to have lots of them.
 # pylint: disable=too-many-public-methods
@@ -2213,6 +2277,86 @@ class posix_tests():
         for fd in fds:
             fd.close()
 
+    def test_cont_rw(self):
+        """Test write access to another users container"""
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+
+        dfuse.start(v_hint='cont_rw_1')
+
+        ps = print_stat(dfuse.dir)
+        testfile = os.path.join(dfuse.dir, 'testfile')
+        with open(testfile, 'w') as fd:
+            ps.add(testfile, attr=os.fstat(fd.fileno()))
+
+        dirname = os.path.join(dfuse.dir, 'rw_dir')
+        os.mkdir(dirname)
+
+        ps.add(dirname)
+
+        dir_perms = os.stat(dirname).st_mode
+        base_perms = stat.S_IMODE(dir_perms)
+
+        os.chmod(dirname, base_perms | stat.S_IWGRP | stat.S_IXGRP | stat.S_IXOTH | stat.S_IWOTH)
+        ps.add(dirname)
+        print(ps)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+            # Update container ACLs so current user has rw permissions only, the minimum required.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'update-acl',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--entry',
+                                      'A::{}@:rwta'.format(os.getlogin())])
+        print(rc)
+
+        # Assign the container to someone else.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'set-owner',
+                                      self.pool.id(),
+                                      self.container,
+                                      '--user',
+                                      'root@',
+                                      '--group',
+                                      'root@'])
+        print(rc)
+
+        # Now start dfuse and access the container, see who the file is owned by.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='cont_rw_2')
+
+        ps = print_stat()
+        ps.add(dfuse.dir, show_dir=True)
+
+        with open(os.path.join(dfuse.dir, 'testfile'), 'r') as fd:
+            ps.add(os.path.join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
+
+        dirname = os.path.join(dfuse.dir, 'rw_dir')
+        testfile = os.path.join(dirname, 'new_file')
+        fd = os.open(testfile, os.O_RDWR | os.O_CREAT, mode=int('600', base=8))
+        os.write(fd, b'read-only-data')
+        ps.add(testfile, attr=os.fstat(fd))
+        os.close(fd)
+        print(ps)
+
+        with open(os.path.join(dfuse.dir, 'rw_dir', 'new_file'), 'r') as fd:
+            data = fd.read()
+            print(data)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
     @needs_dfuse
     def test_complex_rename(self):
         """Test for rename semantics, and that rename is correctly updating the dfuse data for
@@ -2255,6 +2399,8 @@ class posix_tests():
         print(os.fstat(ofd.fileno()))
 
         ofd.close()
+        if dfuse.stop():
+            self.fatal_errors = True
 
     def test_cont_ro(self):
         """Test access to a read-only container"""
@@ -2819,6 +2965,15 @@ def run_posix_tests(server, conf, test=None):
 
         for td in threads:
             td.join()
+
+    # Now check for running dfuse instances, there should be none at this point as all tests have
+    # completed.  It's not possible to do this check as each test finishes due to the fact that
+    # the tests are running in parallel.  We could revise this so there's a dfuse method on
+    # posix_tests class itself if required.
+    for fuse in server.fuse_procs:
+        conf.wf.add_test_case('fuse leak in tests',
+                              'Test leaked dfuse instance at {}'.format(fuse),
+                              test_class='test',)
 
     out_wrapper = None
     err_wrapper = None
@@ -4164,8 +4319,8 @@ def run(wf, args):
         wf.add_test_case('Errors')
 
     if conf.valgrind_errors:
+        wf.add_test_case('Errors', 'Valgrind errors encountered')
         print("Valgrind errors detected during execution")
-        fatal_errors.add_result(True)
 
     wf_server.close()
     conf.flush_bz2()

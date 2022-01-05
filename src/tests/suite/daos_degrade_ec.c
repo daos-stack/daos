@@ -457,6 +457,8 @@ degrade_ec_partial_update_agg(void **state)
 	char		*data;
 	char		*verify_data;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 6))
 		return;
 
@@ -477,10 +479,10 @@ degrade_ec_partial_update_agg(void **state)
 			     data, EC_CELL_SIZE, &req);
 	}
 
-	/* Kill the last parity shard, which is the aggregate leader to verify
+	/* Kill one parity shard, which is the aggregate leader to verify
 	 * aggregate works in degraded mode.
 	 */
-	rank = get_rank_by_oid_shard(arg, oid, 5);
+	rank = get_rank_by_oid_shard(arg, oid, 4);
 	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
 
 	/* Trigger aggregation */
