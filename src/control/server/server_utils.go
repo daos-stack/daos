@@ -178,7 +178,11 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 	hasBdevs := cfgHasBdevs(srv.cfg)
 	// Use default value
 	if srv.cfg.NrHugepages < 0 {
-		srv.cfg.NrHugepages = 4096
+		if hasBdevs {
+			srv.cfg.NrHugepages = 4096
+		} else {
+			srv.cfg.NrHugepages = 0
+		}
 	}
 	// The config value is intended to be per-engine, so we need to adjust
 	// based on the number of engines.
