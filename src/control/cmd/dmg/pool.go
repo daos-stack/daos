@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -54,7 +55,7 @@ type PoolCreateCmd struct {
 	Properties    PoolSetPropsFlag `short:"P" long:"properties" description:"Pool properties to be set"`
 	ACLFile       string           `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	Size          string           `short:"z" long:"size" description:"Total size of DAOS pool (auto)"`
-	All           bool             `short:"A" long:"all" description:"Use all remaining capacity"`
+	All           string           `short:"A" long:"all-ratio" optional:"true" optional-value:"100" description:"Use ratio of all remaining capacity (auto) (default: 100)"`
 	TierRatio     string           `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
 	NumRanks      uint32           `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps    uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
@@ -72,7 +73,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	flagSizeState := [...]bool{
 		cmd.Size != "",
 		cmd.ScmSize != "" || cmd.NVMeSize != "",
-		cmd.All,
+		cmd.All != "",
 	}
 	var seenSizeFlags int
 	for _, value := range flagSizeState {
@@ -123,7 +124,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	}
 
 	switch {
-	case cmd.All:
+	case cmd.All != "":
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("all", "num-ranks")
 		}
@@ -136,6 +137,18 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errIncompatFlags("all", "ranks")
 		}
 
+		storageRatio, err := strconv.ParseInt(cmd.All, 10, 32)
+		if err != nil {
+			return errors.Wrapf(err,
+				"Creating DAOS pool with invalid full size ratio %q",
+				cmd.All)
+		}
+		if storageRatio <= 0 || storageRatio > 100 {
+			msg := "Creating DAOS pool with invalid full size ratio %d%%:"
+			msg += " allowed range 0 < ratio <= 100"
+			return errors.Errorf(msg, storageRatio)
+		}
+
 		// DAOS-9196 TODO Update the protocol with a new message allowing to perform the
 		// queries of storage request and the pool creation from the management server
 		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(),
@@ -143,6 +156,23 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		if err != nil {
 			return err
 		}
+
+		if storageRatio != 100 {
+			scmBytes = uint64(storageRatio) * scmBytes / uint64(100)
+			nvmeBytes = uint64(storageRatio) * nvmeBytes / uint64(100)
+		}
+
+		// Extra storage space needed for metada such as the VOS file
+		if scmBytes < control.PoolMetadataBytes {
+			missingBytes := control.PoolMetadataBytes - scmBytes
+			msg := "Not enough SMC storage available with ratio %s%%:"
+			msg += " at least %s of SCM storage (%s missing) is needed"
+			return errors.Errorf(msg,
+				cmd.All,
+				humanize.Bytes(control.PoolMetadataBytes),
+				humanize.Bytes(missingBytes))
+		}
+		scmBytes -= control.PoolMetadataBytes
 
 		if nvmeBytes == 0 {
 			cmd.log.Info("Creating DAOS pool without NVME storage")
@@ -161,7 +191,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		req.TotalBytes = 0
 		req.TierRatio = nil
 
-		cmd.log.Infof("Creating DAOS pool with full automatic storage allocation")
+		cmd.log.Infof("Creating DAOS pool with %d%% of all storage", storageRatio)
 	case cmd.Size != "":
 		// auto-selection of storage values
 		req.TotalBytes, err = humanize.ParseBytes(cmd.Size)

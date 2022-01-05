@@ -1153,7 +1153,7 @@ func TestControl_GetMaxPoolSize(testRunner *testing.T) {
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  uint64(100)*uint64(humanize.GByte) - PoolMetadataBytes,
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
 				NvmeBytes: uint64(1) * uint64(humanize.TByte),
 			},
 		},
@@ -1240,7 +1240,7 @@ func TestControl_GetMaxPoolSize(testRunner *testing.T) {
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  uint64(50)*uint64(humanize.GByte) - PoolMetadataBytes,
+				ScmBytes:  uint64(50) * uint64(humanize.GByte),
 				NvmeBytes: uint64(700) * uint64(humanize.GByte),
 			},
 		},
@@ -1260,7 +1260,7 @@ func TestControl_GetMaxPoolSize(testRunner *testing.T) {
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  uint64(100)*uint64(humanize.GByte) - PoolMetadataBytes,
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
 				NvmeBytes: uint64(0),
 			},
 		},
@@ -1288,7 +1288,7 @@ func TestControl_GetMaxPoolSize(testRunner *testing.T) {
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  uint64(100)*uint64(humanize.GByte) - PoolMetadataBytes,
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
 				NvmeBytes: uint64(100) * uint64(humanize.TByte),
 			},
 		},

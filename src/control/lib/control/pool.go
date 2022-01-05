@@ -970,6 +970,8 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 const PoolMetadataBytes uint64 = uint64(200) * uint64(humanize.MiByte)
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
+//
+// TODO DAOS-9196 This function should takes an extra parameter to filter the engine ranks to use.
 func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64, error) {
 	storageScanReq := &StorageScanReq{Usage: true}
 	resp, err := StorageScan(ctx, rpcClient, storageScanReq)
@@ -1035,9 +1037,6 @@ func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64
 			}
 		}
 	}
-
-	// Extra storage space needed for metada such as the VOS file
-	scmBytes -= PoolMetadataBytes
 
 	if nvmeBytes == math.MaxUint64 {
 		nvmeBytes = 0

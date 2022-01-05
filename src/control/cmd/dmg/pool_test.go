@@ -186,39 +186,57 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with incompatible arguments (all size)",
-			fmt.Sprintf("pool create --size %s --all", testSizeStr),
+			fmt.Sprintf("pool create --size %s --all-ratio", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible arguments (all nvme-size)",
-			fmt.Sprintf("pool create --all --nvme-size %s", testSizeStr),
+			fmt.Sprintf("pool create --all-ratio --nvme-size %s", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible arguments (all scm-size)",
-			fmt.Sprintf("pool create --all --scm-size %s", testSizeStr),
+			fmt.Sprintf("pool create --all-ratio --scm-size %s", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible arguments (size all nvme-size)",
-			fmt.Sprintf("pool create --size %s --all --nvme-size %s", testSizeStr, testSizeStr),
+			fmt.Sprintf("pool create --size %s --all-ratio --nvme-size %s", testSizeStr, testSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible arguments (all nranks)",
-			fmt.Sprintf("pool create --all --nranks 16"),
+			fmt.Sprintf("pool create --all-ratio --nranks 16"),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible arguments (all ranks)",
-			fmt.Sprintf("pool create --all --ranks 1,2,3"),
+			fmt.Sprintf("pool create --all-ratio --ranks 1,2,3"),
 			"",
 			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with invalid arguments (invalid all ratio)",
+			fmt.Sprintf("pool create --all-ratio=foo"),
+			"",
+			errors.New("Creating DAOS pool with invalid full size ratio"),
+		},
+		{
+			"Create pool with invalid arguments (too small ratio)",
+			fmt.Sprintf("pool create --all-ratio=0"),
+			"",
+			errors.New("Creating DAOS pool with invalid full size ratio"),
+		},
+		{
+			"Create pool with invalid arguments (too big ratio)",
+			fmt.Sprintf("pool create --all-ratio=101"),
+			"",
+			errors.New("Creating DAOS pool with invalid full size ratio"),
 		},
 		{
 			"Create pool with incompatible rank arguments (auto)",
@@ -914,13 +932,16 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 	type ExpectedOutput struct {
 		PoolConfig control.MockPoolRespConfig
 		WarningMsg string
+		Error      error
 	}
 
 	for testName, testData := range map[string]struct {
+		StorageRatio     string
 		HostsConfigArray []control.MockHostStorageConfig
 		ExpectedOutput   ExpectedOutput
 	}{
 		"single server": {
+			StorageRatio: "100",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -952,7 +973,41 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 				},
 			},
 		},
+		"single server 30%": {
+			StorageRatio: "30",
+			HostsConfigArray: []control.MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				PoolConfig: control.MockPoolRespConfig{
+					HostName:  "foo",
+					Ranks:     "0",
+					ScmBytes:  uint64(30)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					NvmeBytes: uint64(300) * uint64(humanize.GByte),
+				},
+			},
+		},
 		"double server": {
+			StorageRatio: "100",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1044,6 +1099,7 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 			},
 		},
 		"No NVME": {
+			StorageRatio: "100",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1069,6 +1125,7 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 			},
 		},
 		"SCM:NVME ratio": {
+			StorageRatio: "100",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1101,6 +1158,34 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 				WarningMsg: "SCM:NVMe ratio is less than",
 			},
 		},
+		"single server error 1%": {
+			StorageRatio: "1",
+			HostsConfigArray: []control.MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(1) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				Error: errors.New("Not enough SMC storage available with ratio 1%"),
+			},
+		},
 	} {
 		testRunner.Run(testName, func(testRunner *testing.T) {
 			log, buf := logging.NewTestLogger(testRunner.Name())
@@ -1121,14 +1206,16 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 			}
 			mockInvokerConfig.UnaryResponseSet = append(mockInvokerConfig.UnaryResponseSet, unaryResponse)
 
-			poolCreateResp := control.MockPoolCreateResp(testRunner, &testData.ExpectedOutput.PoolConfig)
-			hostResponse := &control.HostResponse{
-				Addr:    testData.ExpectedOutput.PoolConfig.HostName,
-				Message: poolCreateResp,
+			if testData.ExpectedOutput.PoolConfig.Ranks != "" {
+				poolCreateResp := control.MockPoolCreateResp(testRunner, &testData.ExpectedOutput.PoolConfig)
+				hostResponse := &control.HostResponse{
+					Addr:    testData.ExpectedOutput.PoolConfig.HostName,
+					Message: poolCreateResp,
+				}
+				unaryResponse = new(control.UnaryResponse)
+				unaryResponse.Responses = append(unaryResponse.Responses, hostResponse)
+				mockInvokerConfig.UnaryResponseSet = append(mockInvokerConfig.UnaryResponseSet, unaryResponse)
 			}
-			unaryResponse = new(control.UnaryResponse)
-			unaryResponse.Responses = append(unaryResponse.Responses, hostResponse)
-			mockInvokerConfig.UnaryResponseSet = append(mockInvokerConfig.UnaryResponseSet, unaryResponse)
 
 			mockInvoker := &MockRequestsRecorderInvoker{
 				MockInvoker: *control.NewMockInvoker(log, mockInvokerConfig),
@@ -1138,46 +1225,49 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 			poolCreateCmd := new(PoolCreateCmd)
 			poolCreateCmd.setInvoker(mockInvoker)
 			poolCreateCmd.setLog(log)
-			poolCreateCmd.All = true
+			poolCreateCmd.All = testData.StorageRatio
 
 			err := poolCreateCmd.Execute(nil)
 
-			common.AssertTrue(testRunner, err == nil, "Expected no error")
-			common.AssertEqual(testRunner, len(mockInvoker.Requests), 2, "Invalid number of request sent")
-			common.AssertTrue(testRunner,
-				reflect.TypeOf(mockInvoker.Requests[0]) == reflect.TypeOf(&control.StorageScanReq{}),
-				"Invalid request type: wanted="+reflect.TypeOf(&control.StorageScanReq{}).String()+
-					" got="+reflect.TypeOf(mockInvoker.Requests[0]).String())
-			common.AssertTrue(testRunner,
-				reflect.TypeOf(mockInvoker.Requests[1]) == reflect.TypeOf(&control.PoolCreateReq{}),
-				"Invalid request type: wanted="+reflect.TypeOf(&control.PoolCreateReq{}).String()+
-					" got="+reflect.TypeOf(mockInvoker.Requests[1]).String())
-			poolCreateRequest := mockInvoker.Requests[1].(*control.PoolCreateReq)
-			common.AssertEqual(testRunner,
-				poolCreateRequest.TierBytes[0],
-				testData.ExpectedOutput.PoolConfig.ScmBytes,
-				"Invalid size of allocated SCM")
-			common.AssertEqual(testRunner,
-				poolCreateRequest.TierBytes[1],
-				testData.ExpectedOutput.PoolConfig.NvmeBytes,
-				"Invalid size of allocated NVME")
-			common.AssertEqual(testRunner,
-				poolCreateRequest.TotalBytes,
-				uint64(0),
-				"Invalid size of TotalBytes attribute: disabled with manual allocation")
-			common.AssertTrue(testRunner,
-				poolCreateRequest.TierRatio == nil,
-				"Invalid size of TierRatio attribute: disabled with manual allocation")
-			common.AssertTrue(testRunner,
-				strings.Contains(buf.String(),
-					"Creating DAOS pool with full automatic storage allocation"),
-				"missing success message: Creating DAOS pool with full automatic storage allocation")
-			if testData.ExpectedOutput.WarningMsg != "" {
+			if testData.ExpectedOutput.Error != nil {
+				testExpectedError(testRunner, testData.ExpectedOutput.Error, err)
+			} else {
+				common.AssertTrue(testRunner, err == nil, "Expected no error")
+				common.AssertEqual(testRunner, len(mockInvoker.Requests), 2, "Invalid number of request sent")
 				common.AssertTrue(testRunner,
-					strings.Contains(buf.String(), testData.ExpectedOutput.WarningMsg),
-					"missing warning message: "+testData.ExpectedOutput.WarningMsg)
+					reflect.TypeOf(mockInvoker.Requests[0]) == reflect.TypeOf(&control.StorageScanReq{}),
+					"Invalid request type: wanted="+reflect.TypeOf(&control.StorageScanReq{}).String()+
+						" got="+reflect.TypeOf(mockInvoker.Requests[0]).String())
+				common.AssertTrue(testRunner,
+					reflect.TypeOf(mockInvoker.Requests[1]) == reflect.TypeOf(&control.PoolCreateReq{}),
+					"Invalid request type: wanted="+reflect.TypeOf(&control.PoolCreateReq{}).String()+
+						" got="+reflect.TypeOf(mockInvoker.Requests[1]).String())
+				poolCreateRequest := mockInvoker.Requests[1].(*control.PoolCreateReq)
+				common.AssertEqual(testRunner,
+					poolCreateRequest.TierBytes[0],
+					testData.ExpectedOutput.PoolConfig.ScmBytes,
+					"Invalid size of allocated SCM")
+				common.AssertEqual(testRunner,
+					poolCreateRequest.TierBytes[1],
+					testData.ExpectedOutput.PoolConfig.NvmeBytes,
+					"Invalid size of allocated NVME")
+				common.AssertEqual(testRunner,
+					poolCreateRequest.TotalBytes,
+					uint64(0),
+					"Invalid size of TotalBytes attribute: disabled with manual allocation")
+				common.AssertTrue(testRunner,
+					poolCreateRequest.TierRatio == nil,
+					"Invalid size of TierRatio attribute: disabled with manual allocation")
+				msg := fmt.Sprintf("Creating DAOS pool with %s%% of all storage", testData.StorageRatio)
+				common.AssertTrue(testRunner,
+					strings.Contains(buf.String(), msg),
+					"missing success message: Creating DAOS pool with with <ratio>% of all storage")
+				if testData.ExpectedOutput.WarningMsg != "" {
+					common.AssertTrue(testRunner,
+						strings.Contains(buf.String(), testData.ExpectedOutput.WarningMsg),
+						"missing warning message: "+testData.ExpectedOutput.WarningMsg)
+				}
 			}
-
 		})
 	}
 }
