@@ -10,10 +10,9 @@ the client with fault injection of D_ALLOC() usage.
 """
 
 # pylint: disable=too-many-lines
-# pylint: disable=too-few-public-methods
-# pylint: disable=protected-access
 
 import os
+from os.path import join
 import sys
 import time
 import uuid
@@ -85,10 +84,10 @@ class NLTConf():
                                                  prefix='dnt_dfuse_')
         self.tmp_dir = None
         if args.class_name:
-            self.tmp_dir = os.path.join('nlt_logs', args.class_name)
+            self.tmp_dir = join('nlt_logs', args.class_name)
             if os.path.exists(self.tmp_dir):
                 for old_file in os.listdir(self.tmp_dir):
-                    os.unlink(os.path.join(self.tmp_dir, old_file))
+                    os.unlink(join(self.tmp_dir, old_file))
                 os.rmdir(self.tmp_dir)
             os.makedirs(self.tmp_dir)
 
@@ -189,6 +188,7 @@ class WarningsFactory():
                  post=False,
                  post_error=False,
                  check=None):
+        # pylint: disable=consider-using-with
         self._fd = open(filename, 'w')
         self.filename = filename
         self.post = post
@@ -390,16 +390,15 @@ def load_conf(args):
     file_self = os.path.dirname(os.path.abspath(__file__))
     json_file = None
     while True:
-        new_file = os.path.join(file_self, '.build_vars.json')
+        new_file = join(file_self, '.build_vars.json')
         if os.path.exists(new_file):
             json_file = new_file
             break
         file_self = os.path.dirname(file_self)
         if file_self == '/':
             raise Exception('build file not found')
-    ofh = open(json_file, 'r')
-    conf = json.load(ofh)
-    ofh.close()
+    with open(json_file, 'r') as ofh:
+        conf = json.load(ofh)
     return NLTConf(conf, args)
 
 def get_base_env(clean=False):
@@ -454,6 +453,7 @@ class DaosServer():
         self.valgrind = valgrind
         self._agent = None
         self.engines = conf.args.engine_count
+        # pylint: disable=consider-using-with
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
                                                        dir=conf.tmp_dir,
@@ -519,7 +519,7 @@ class DaosServer():
                 self.stop(None)
         except NLTestTimeout:
             print('Ignoring timeout on stop')
-        server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
+        server_file = join(self.agent_dir, '.daos_server.active.yml')
         if os.path.exists(server_file):
             os.unlink(server_file)
         for log in self.server_logs:
@@ -544,7 +544,6 @@ class DaosServer():
                                    duration=duration,
                                    test_class=self._test_class)
 
-    # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
         elapsed = time.time() - start
         if elapsed > max_time:
@@ -582,6 +581,7 @@ class DaosServer():
     def start(self):
         """Start a DAOS server"""
 
+        # pylint: disable=consider-using-with
         server_env = get_base_env(clean=True)
 
         if self.valgrind:
@@ -594,23 +594,22 @@ class DaosServer():
                              '--undef-value-errors=no']
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
-            fd = open(os.path.join(self._io_server_dir.name,
-                                   'daos_engine'), 'w')
+            fd = open(join(self._io_server_dir.name, 'daos_engine'), 'w')
             fd.write('#!/bin/sh\n')
             fd.write('export PATH=$REAL_PATH\n')
             fd.write('exec valgrind {} daos_engine "$@"\n'.format(
                 ' '.join(valgrind_args)))
             fd.close()
 
-            os.chmod(os.path.join(self._io_server_dir.name, 'daos_engine'),
+            os.chmod(join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
 
             server_env['REAL_PATH'] = '{}:{}'.format(
-                os.path.join(self.conf['PREFIX'], 'bin'), server_env['PATH'])
+                join(self.conf['PREFIX'], 'bin'), server_env['PATH'])
             server_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
                                                 server_env['PATH'])
 
-        daos_server = os.path.join(self.conf['PREFIX'], 'bin', 'daos_server')
+        daos_server = join(self.conf['PREFIX'], 'bin', 'daos_server')
 
         self_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -618,7 +617,7 @@ class DaosServer():
         # nlt_server.yaml file in the current directory, but overwrite
         # the server log file with a temporary file so that multiple
         # server runs do not overwrite each other.
-        scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
+        scfd = open(join(self_dir, 'nlt_server.yaml'), 'r')
 
         scyaml = yaml.safe_load(scfd)
         if self.conf.args.server_debug:
@@ -663,9 +662,9 @@ class DaosServer():
 
         self._sp = subprocess.Popen(cmd)
 
-        agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
+        agent_config = join(self_dir, 'nlt_agent.yaml')
 
-        agent_bin = os.path.join(self.conf['PREFIX'], 'bin', 'daos_agent')
+        agent_bin = join(self.conf['PREFIX'], 'bin', 'daos_agent')
 
         agent_cmd = [agent_bin,
                      '--config-path', agent_config,
@@ -758,20 +757,20 @@ class DaosServer():
             status_file = '/proc/{}/status'.format(proc_id)
             if not os.path.exists(status_file):
                 continue
-            fd = open(status_file, 'r')
-            for line in fd.readlines():
-                try:
-                    key, v = line.split(':', maxsplit=2)
-                except ValueError:
-                    continue
-                value = v.strip()
-                if key == 'Name' and value != self.__process_name:
-                    break
-                if key != 'PPid':
-                    continue
-                if int(value) == parent_pid:
-                    procs.append(proc_id)
-                    break
+            with open(status_file, 'r') as fd:
+                for line in fd.readlines():
+                    try:
+                        key, v = line.split(':', maxsplit=2)
+                    except ValueError:
+                        continue
+                    value = v.strip()
+                    if key == 'Name' and value != self.__process_name:
+                        break
+                    if key != 'PPid':
+                        continue
+                    if int(value) == parent_pid:
+                        procs.append(proc_id)
+                        break
 
         if len(procs) != self.engines:
             # Mark this as a warning, but not a failure.  This is currently
@@ -829,7 +828,7 @@ class DaosServer():
     def run_dmg(self, cmd):
         """Run the specified dmg command"""
 
-        exe_cmd = [os.path.join(self.conf['PREFIX'], 'bin', 'dmg')]
+        exe_cmd = [join(self.conf['PREFIX'], 'bin', 'dmg')]
         exe_cmd.append('--insecure')
         exe_cmd.extend(cmd)
 
@@ -923,7 +922,8 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
         log_name = log_file.name
     my_env['D_LOG_FILE'] = log_name
-    my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'], 'lib64', 'libioil.so')
+    my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libioil.so')
+    # pylint: disable=protected-access
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     my_env['D_IL_REPORT'] = '2'
     ret = subprocess.run(cmd, env=my_env, check=False)
@@ -986,22 +986,16 @@ class ValgrindHelper():
 
         cmd.append('--gen-suppressions=all')
 
-        src_suppression_file = os.path.join('src',
-                                            'cart',
-                                            'utils',
-                                            'memcheck-cart.supp')
+        src_suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
         if os.path.exists(src_suppression_file):
             cmd.append('--suppressions={}'.format(src_suppression_file))
         else:
             cmd.append('--suppressions={}'.format(
-                os.path.join(self.conf['PREFIX'],
-                             'etc',
-                             'memcheck-cart.supp')))
+                join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')))
 
         cmd.append('--error-exitcode=42')
 
-        cmd.extend(['--xml=yes',
-                    '--xml-file={}'.format(self._xml_file)])
+        cmd.extend(['--xml=yes', '--xml-file={}'.format(self._xml_file)])
         return cmd
 
     def convert_xml(self):
@@ -1009,13 +1003,13 @@ class ValgrindHelper():
 
         if not self.use_valgrind:
             return
-        fd = open(self._xml_file, 'r')
-        ofd = open('{}.xml'.format(self._xml_file), 'w')
-        for line in fd:
-            if self.src_dir in line:
-                ofd.write(line.replace(self.src_dir, ''))
-            else:
-                ofd.write(line)
+        with open(self._xml_file, 'r') as fd:
+            with open('{}.xml'.format(self._xml_file), 'w') as ofd:
+                for line in fd:
+                    if self.src_dir in line:
+                        ofd.write(line.replace(self.src_dir, ''))
+                    else:
+                        ofd.write(line)
         os.unlink(self._xml_file)
 
 class DFuse():
@@ -1062,7 +1056,9 @@ class DFuse():
 
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
-        dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
+
+        # pylint: disable=consider-using-with
+        dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
 
         pre_inode = os.stat(self.dir).st_ino
 
@@ -1145,7 +1141,7 @@ class DFuse():
         work_done = False
         for fname in os.listdir('/proc/self/fd'):
             try:
-                tfile = os.readlink(os.path.join('/proc/self/fd', fname))
+                tfile = os.readlink(join('/proc/self/fd', fname))
             except FileNotFoundError:
                 continue
             if tfile.startswith(self.dir):
@@ -1224,10 +1220,7 @@ def import_daos(server, conf):
 
     pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
 
-    sys.path.append(os.path.join(conf['PREFIX'],
-                                 'lib64',
-                                 pydir,
-                                 'site-packages'))
+    sys.path.append(join(conf['PREFIX'], 'lib64', pydir, 'site-packages'))
 
     os.environ['DD_MASK'] = 'all'
     os.environ['DD_SUBSYS'] = 'all'
@@ -1295,7 +1288,7 @@ def run_daos_cmd(conf,
 
     exec_cmd = vh.get_cmd_prefix()
     dcr.valgrind = list(exec_cmd)
-    daos_cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos')]
+    daos_cmd = [join(conf['PREFIX'], 'bin', 'daos')]
     if use_json:
         daos_cmd.append('--json')
     daos_cmd.extend(cmd)
@@ -1442,11 +1435,11 @@ def needs_dfuse(method):
     @functools.wraps(method)
     def _helper(self):
         if self.call_index == 0:
-            caching=True
+            caching = True
             self.needs_more = True
             self.test_name = '{}_with_caching'.format(method.__name__)
         else:
-            caching=False
+            caching = False
 
         self.dfuse = DFuse(self.server,
                            self.conf,
@@ -1544,17 +1537,17 @@ class print_stat():
         if show_dir:
             tab = '.' * len(filename)
             for fname in os.listdir(filename):
-                self.add(os.path.join(tab, fname),
-                         attr=os.stat(os.path.join(filename, fname)))
+                self.add(join(tab, fname), attr=os.stat(join(filename, fname)))
 
     def __str__(self):
         return tabulate.tabulate(self._stats, self.headers)
 
 # This is test code where methods are tests, so we want to have lots of them.
-# pylint: disable=too-many-public-methods
+
 class posix_tests():
     """Class for adding standalone unit tests"""
 
+    # pylint: disable=too-many-public-methods
     def __init__(self, server, conf, pool=None):
         self.server = server
         self.conf = conf
@@ -1657,13 +1650,13 @@ class posix_tests():
     def test_truncate(self):
         """Test file read after truncate"""
 
-        filename = os.path.join(self.dfuse.dir, 'myfile')
+        filename = join(self.dfuse.dir, 'myfile')
 
         with open(filename, 'w') as fd:
             fd.write('hello')
 
         os.truncate(filename, 1024*1024*4)
-        with  open(filename, 'r') as fd:
+        with open(filename, 'r') as fd:
             data = fd.read(5)
             print('_{}_'.format(data))
             assert data == 'hello'
@@ -1684,7 +1677,7 @@ class posix_tests():
             print(rc)
             assert rc.returncode == 0, rc
 
-        child_path = os.path.join(self.dfuse.dir, 'new_cont')
+        child_path = join(self.dfuse.dir, 'new_cont')
         new_cont = create_cont(self.conf, self.pool.uuid, path=child_path)
         print(new_cont)
         _check_cmd(child_path)
@@ -1711,21 +1704,17 @@ class posix_tests():
                        container=self.container)
         dfuse1.start(v_hint='two_1')
 
-        file0 = os.path.join(dfuse0.dir, 'file')
-        fd = open(file0, 'w')
-        fd.write('test')
-        fd.close()
+        file0 = join(dfuse0.dir, 'file')
+        with open(file0, 'w') as fd:
+            fd.write('test')
 
-        file1 = os.path.join(dfuse1.dir, 'file')
-        fd = open(file1, 'r')
-        data = fd.read()
-        fd.close()
+        with open(join(dfuse1.dir, 'file'), 'r') as fd:
+            data = fd.read()
         print(data)
         assert data == 'test'
 
-        fd = open(file0, 'w')
-        fd.write('test')
-        fd.close()
+        with open(file0, 'w') as fd:
+            fd.write('test')
 
         if dfuse0.stop():
             self.fatal_errors = True
@@ -1752,8 +1741,8 @@ class posix_tests():
             return
         start = time.time()
         for idx in range(count):
-            fd = open(os.path.join(wide_dir, str(idx)), 'w')
-            fd.close()
+            with open(join(wide_dir, str(idx)), 'w'):
+                pass
             if test_all:
                 files = os.listdir(wide_dir)
                 assert len(files) == idx + 1
@@ -1782,48 +1771,45 @@ class posix_tests():
     @needs_dfuse
     def test_open_replaced(self):
         """Test that fstat works on file clobbered by rename"""
-        fname = os.path.join(self.dfuse.dir, 'unlinked')
-        newfile = os.path.join(self.dfuse.dir, 'unlinked2')
-        ofd = open(fname, 'w')
-        nfd = open(newfile, 'w')
-        nfd.write('hello')
-        nfd.close()
-        print(os.fstat(ofd.fileno()))
-        os.rename(newfile, fname)
-        print(os.fstat(ofd.fileno()))
-        ofd.close()
+        fname = join(self.dfuse.dir, 'unlinked')
+        newfile = join(self.dfuse.dir, 'unlinked2')
+        with open(fname, 'w') as ofd:
+            with open(newfile, 'w') as nfd:
+                nfd.write('hello')
+            print(os.fstat(ofd.fileno()))
+            os.rename(newfile, fname)
+            print(os.fstat(ofd.fileno()))
+            ofd.close()
 
     @needs_dfuse
     def test_open_rename(self):
         """Check that fstat() on renamed files works as expected"""
-        fname = os.path.join(self.dfuse.dir, 'unlinked')
-        newfile = os.path.join(self.dfuse.dir, 'unlinked2')
-        ofd = open(fname, 'w')
-        pre = os.fstat(ofd.fileno())
-        print(pre)
-        os.rename(fname, newfile)
-        print(os.fstat(ofd.fileno()))
-        os.stat(newfile)
-        post = os.fstat(ofd.fileno())
-        print(post)
-        assert pre.st_ino == post.st_ino
-        ofd.close()
+        fname = join(self.dfuse.dir, 'unlinked')
+        newfile = join(self.dfuse.dir, 'unlinked2')
+        with open(fname, 'w') as ofd:
+            pre = os.fstat(ofd.fileno())
+            print(pre)
+            os.rename(fname, newfile)
+            print(os.fstat(ofd.fileno()))
+            os.stat(newfile)
+            post = os.fstat(ofd.fileno())
+            print(post)
+            assert pre.st_ino == post.st_ino
 
     @needs_dfuse
     def test_open_unlinked(self):
         """Test that fstat works on unlinked file"""
-        fname = os.path.join(self.dfuse.dir, 'unlinked')
-        ofd = open(fname, 'w')
-        print(os.fstat(ofd.fileno()))
-        os.unlink(fname)
-        print(os.fstat(ofd.fileno()))
-        ofd.close()
+        fname = join(self.dfuse.dir, 'unlinked')
+        with open(fname, 'w') as ofd:
+            print(os.fstat(ofd.fileno()))
+            os.unlink(fname)
+            print(os.fstat(ofd.fileno()))
 
     @needs_dfuse
     def test_chown_self(self):
         """Test that a file can be chowned to the current user, but not to other users"""
 
-        fname = os.path.join(self.dfuse.dir, 'new_file')
+        fname = join(self.dfuse.dir, 'new_file')
         with open(fname, 'w') as fd:
             os.chown(fd.fileno(), os.getuid(), -1)
             os.chown(fd.fileno(), -1, os.getgid())
@@ -1853,7 +1839,7 @@ class posix_tests():
     def test_symlink_broken(self):
         """Check that broken symlinks work"""
 
-        src_link = os.path.join(self.dfuse.dir, 'source')
+        src_link = join(self.dfuse.dir, 'source')
 
         os.symlink('target', src_link)
         entry = os.listdir(self.dfuse.dir)
@@ -1872,7 +1858,7 @@ class posix_tests():
     def test_symlink_rel(self):
         """Check that relative symlinks work"""
 
-        src_link = os.path.join(self.dfuse.dir, 'source')
+        src_link = join(self.dfuse.dir, 'source')
 
         os.symlink('../target', src_link)
         entry = os.listdir(self.dfuse.dir)
@@ -1891,9 +1877,9 @@ class posix_tests():
     def test_il_cat(self):
         """Quick check for the interception library"""
 
-        fname = os.path.join(self.dfuse.dir, 'file')
-        ofd = open(fname, 'w')
-        ofd.close()
+        fname = join(self.dfuse.dir, 'file')
+        with open(fname, 'w'):
+            pass
 
         check_fstat = True
         if self.dfuse.caching:
@@ -1911,11 +1897,11 @@ class posix_tests():
 
         create_and_read_via_il(self.dfuse, self.dfuse.dir)
 
-        sub_cont_dir = os.path.join(self.dfuse.dir, 'child')
+        sub_cont_dir = join(self.dfuse.dir, 'child')
         create_cont(self.conf, path=sub_cont_dir)
 
         # Create a file natively.
-        f = os.path.join(self.dfuse.dir, 'file')
+        f = join(self.dfuse.dir, 'file')
         with open(f, 'w') as fd:
             fd.write('Hello')
         # Copy it across containers.
@@ -1923,7 +1909,7 @@ class posix_tests():
         assert ret.returncode == 0
 
         # Copy it within the container.
-        child_dir = os.path.join(self.dfuse.dir, 'new_dir')
+        child_dir = join(self.dfuse.dir, 'new_dir')
         os.mkdir(child_dir)
         il_cmd(self.dfuse, ['cp', f, child_dir])
         assert ret.returncode == 0
@@ -1932,15 +1918,12 @@ class posix_tests():
         ret = il_cmd(self.dfuse, ['cp', '/bin/bash', sub_cont_dir], check_read=False)
         assert ret.returncode == 0
         # Read it from within a container
-        # TODO:                              # pylint: disable=W0511
-        # change this to something else, md5sum uses fread which isn't
-        # intercepted.
-        ret = il_cmd(self.dfuse, ['md5sum', os.path.join(sub_cont_dir, 'bash')],
+        ret = il_cmd(self.dfuse, ['md5sum', join(sub_cont_dir, 'bash')],
                      check_read=False, check_write=False, check_fstat=False)
         assert ret.returncode == 0
         ret = il_cmd(self.dfuse, ['dd',
-                                  'if={}'.format(os.path.join(sub_cont_dir, 'bash')),
-                                  'of={}'.format(os.path.join(sub_cont_dir, 'bash_copy')),
+                                  'if={}'.format(join(sub_cont_dir, 'bash')),
+                                  'of={}'.format(join(sub_cont_dir, 'bash_copy')),
                                   'iflag=direct',
                                   'oflag=direct',
                                   'bs=128k'],
@@ -1951,34 +1934,33 @@ class posix_tests():
     def test_xattr(self):
         """Perform basic tests with extended attributes"""
 
-        new_file = os.path.join(self.dfuse.dir, 'attr_file')
-        fd = open(new_file, 'w')
+        new_file = join(self.dfuse.dir, 'attr_file')
+        with open(new_file, 'w') as fd:
 
-        xattr.set(fd, 'user.mine', 'init_value')
-        # This should fail as a security test.
-        try:
-            xattr.set(fd, 'user.dfuse.ids', b'other_value')
-            assert False
-        except PermissionError:
-            pass
+            xattr.set(fd, 'user.mine', 'init_value')
+            # This should fail as a security test.
+            try:
+                xattr.set(fd, 'user.dfuse.ids', b'other_value')
+                assert False
+            except PermissionError:
+                pass
 
-        try:
-            xattr.set(fd, 'user.dfuse', b'other_value')
-            assert False
-        except PermissionError:
-            pass
+            try:
+                xattr.set(fd, 'user.dfuse', b'other_value')
+                assert False
+            except PermissionError:
+                pass
 
-        xattr.set(fd, 'user.Xfuse.ids', b'other_value')
-        for (key, value) in xattr.get_all(fd):
-            print('xattr is {}:{}'.format(key, value))
-        fd.close()
+            xattr.set(fd, 'user.Xfuse.ids', b'other_value')
+            for (key, value) in xattr.get_all(fd):
+                print('xattr is {}:{}'.format(key, value))
 
     @needs_dfuse
     def test_chmod(self):
         """Test that chmod works on file"""
-        fname = os.path.join(self.dfuse.dir, 'testfile')
-        ofd = open(fname, 'w')
-        ofd.close()
+        fname = join(self.dfuse.dir, 'testfile')
+        with open(fname, 'w'):
+            pass
 
         modes = [stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
                  stat.S_IRUSR]
@@ -1991,35 +1973,33 @@ class posix_tests():
     @needs_dfuse
     def test_fchmod_replaced(self):
         """Test that fchmod works on file clobbered by rename"""
-        fname = os.path.join(self.dfuse.dir, 'unlinked')
-        newfile = os.path.join(self.dfuse.dir, 'unlinked2')
+        fname = join(self.dfuse.dir, 'unlinked')
+        newfile = join(self.dfuse.dir, 'unlinked2')
         e_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
-        ofd = open(fname, 'w')
-        nfd = open(newfile, 'w')
-        nfd.write('hello')
-        nfd.close()
-        print(os.stat(fname))
-        print(os.stat(newfile))
-        os.chmod(fname, stat.S_IRUSR | stat.S_IWUSR)
-        os.chmod(newfile, e_mode)
-        print(os.stat(fname))
-        print(os.stat(newfile))
-        os.rename(newfile, fname)
-        # This should fail, because the file has been deleted.
-        try:
-            os.fchmod(ofd.fileno(), stat.S_IRUSR)
-            print(os.fstat(ofd.fileno()))
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fchmod() replaced file')
-        ofd.close()
+        with open(fname, 'w') as ofd:
+            with open(newfile, 'w') as nfd:
+                nfd.write('hello')
+            print(os.stat(fname))
+            print(os.stat(newfile))
+            os.chmod(fname, stat.S_IRUSR | stat.S_IWUSR)
+            os.chmod(newfile, e_mode)
+            print(os.stat(fname))
+            print(os.stat(newfile))
+            os.rename(newfile, fname)
+            # This should fail, because the file has been deleted.
+            try:
+                os.fchmod(ofd.fileno(), stat.S_IRUSR)
+                print(os.fstat(ofd.fileno()))
+                self.fail()
+            except FileNotFoundError:
+                print('Failed to fchmod() replaced file')
         nf = os.stat(fname)
         assert stat.S_IMODE(nf.st_mode) == e_mode
 
     @needs_dfuse
     def test_uns_create(self):
         """Simple test to create a container using a path in dfuse"""
-        path = os.path.join(self.dfuse.dir, 'mycont')
+        path = join(self.dfuse.dir, 'mycont')
         create_cont(self.conf, path=path)
         stbuf = os.stat(path)
         print(stbuf)
@@ -2047,9 +2027,8 @@ class posix_tests():
 
         # Create all three files in the dfuse instance we're checking.
         for index in range(3):
-            fd = open(os.path.join(self.dfuse.dir, 'file.{}'.format(index)), 'w')
-            fd.write('test')
-            fd.close()
+            with open(join(self.dfuse.dir, 'file.{}'.format(index)), 'w') as fd:
+                fd.write('test')
 
         # Start another dfuse instance to move the files around without the kernel knowing.
         dfuse = DFuse(self.server,
@@ -2063,13 +2042,13 @@ class posix_tests():
         print(os.listdir(dfuse.dir))
 
         # Rename file 1 to file 2 in the background, this will remove file 2
-        os.rename(os.path.join(dfuse.dir, 'file.1') ,os.path.join(dfuse.dir, 'file.2'))
+        os.rename(join(dfuse.dir, 'file.1'), join(dfuse.dir, 'file.2'))
 
         # Rename file 0 to file 2 in the test dfuse.  Here the kernel thinks it's clobbering
         # file 2 but it's really clobbering file 1, although it will stat() file 2 before the
         # operation so may have the correct data.
         # Dfuse should return file 1 for the details of what has been deleted.
-        os.rename(os.path.join(self.dfuse.dir, 'file.0') ,os.path.join(self.dfuse.dir, 'file.2'))
+        os.rename(join(self.dfuse.dir, 'file.0'), join(self.dfuse.dir, 'file.2'))
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -2080,15 +2059,15 @@ class posix_tests():
 
         def _go(root):
             dfd = os.open(root, os.O_RDONLY)
-            try:
 
+            try:
                 # Test renaming a file into a directory.
-                pre_fname = os.path.join(root, 'file')
+                pre_fname = join(root, 'file')
                 with open(pre_fname, 'w') as fd:
                     fd.write('test')
-                dname = os.path.join(root, 'dir')
+                dname = join(root, 'dir')
                 os.mkdir(dname)
-                post_fname = os.path.join(dname, 'file')
+                post_fname = join(dname, 'file')
                 # os.rename and 'mv' have different semantics, use mv here which will put the file
                 # in the directory.
                 subprocess.run(['mv', pre_fname, dname], check=True)
@@ -2098,12 +2077,12 @@ class posix_tests():
                 os.rmdir('dir', dir_fd=dfd)
 
                 # Test renaming a file over a directory.
-                pre_fname = os.path.join(root, 'file')
+                pre_fname = join(root, 'file')
                 with open(pre_fname, 'w') as fd:
                     fd.write('test')
-                dname = os.path.join(root, 'dir')
+                dname = join(root, 'dir')
                 os.mkdir(dname)
-                post_fname = os.path.join(dname, 'file')
+                post_fname = join(dname, 'file')
                 # Try os.rename here, which we expect to fail.
                 try:
                     os.rename(pre_fname, dname)
@@ -2115,7 +2094,7 @@ class posix_tests():
 
                 # Check renaming a file over a file.
                 for index in range(2):
-                    with open(os.path.join(root, 'file.{}'.format(index)), 'w') as fd:
+                    with open(join(root, 'file.{}'.format(index)), 'w') as fd:
                         fd.write('test')
 
                 print(os.listdir(dfd))
@@ -2125,9 +2104,9 @@ class posix_tests():
                 os.unlink('file.1', dir_fd=dfd)
 
                 # dir onto file.
-                dname = os.path.join(root, 'dir')
+                dname = join(root, 'dir')
                 os.mkdir(dname)
-                fname = os.path.join(root, 'file')
+                fname = join(root, 'file')
                 with open(fname, 'w') as fd:
                     fd.write('test')
                 try:
@@ -2139,34 +2118,34 @@ class posix_tests():
                 os.rmdir('dir', dir_fd=dfd)
 
                 # Now check for dir rename into other dir though mv.
-                src_dir = os.path.join(root, 'src')
-                dst_dir = os.path.join(root, 'dst')
+                src_dir = join(root, 'src')
+                dst_dir = join(root, 'dst')
                 os.mkdir(src_dir)
                 os.mkdir(dst_dir)
                 subprocess.run(['mv', src_dir, dst_dir], check=True)
                 self._check_dirs_equal(['dst'], root)
-                self._check_dirs_equal(['src'], os.path.join(root, 'dst'))
-                os.rmdir(os.path.join(dst_dir, 'src'))
+                self._check_dirs_equal(['src'], join(root, 'dst'))
+                os.rmdir(join(dst_dir, 'src'))
                 os.rmdir(dst_dir)
 
                 # Check for dir rename over other dir though python, in this case it should clobber
                 # the target directory.
                 for index in range(2):
-                    os.mkdir(os.path.join(root, 'dir.{}'.format(index)))
+                    os.mkdir(join(root, 'dir.{}'.format(index)))
                 os.rename('dir.0', 'dir.1', src_dir_fd=dfd, dst_dir_fd=dfd)
                 self._check_dirs_equal(['dir.1'], root)
-                self._check_dirs_equal([], os.path.join(root, 'dir.1'))
-                os.rmdir(os.path.join(root, 'dir.1'))
+                self._check_dirs_equal([], join(root, 'dir.1'))
+                os.rmdir(join(root, 'dir.1'))
                 for index in range(2):
-                    with open(os.path.join(root, 'file.{}'.format(index)), 'w') as fd:
+                    with open(join(root, 'file.{}'.format(index)), 'w') as fd:
                         fd.write('test')
                 os.rename('file.0', 'file.1', src_dir_fd=dfd, dst_dir_fd=dfd)
                 self._check_dirs_equal(['file.1'], root)
                 os.unlink('file.1', dir_fd=dfd)
 
                 # Rename a dir over another, where the target is not empty.
-                dst_dir = os.path.join(root, 'ddir')
-                dst_file = os.path.join(dst_dir, 'file')
+                dst_dir = join(root, 'ddir')
+                dst_file = join(dst_dir, 'file')
                 os.mkdir('sdir', dir_fd=dfd)
                 os.mkdir(dst_dir)
                 with open(dst_file, 'w') as fd:
@@ -2183,7 +2162,6 @@ class posix_tests():
                 os.rmdir('sdir', dir_fd=dfd)
                 os.unlink(dst_file)
                 os.rmdir(dst_dir)
-
 
             finally:
                 os.close(dfd)
@@ -2203,12 +2181,14 @@ class posix_tests():
         The kernel will be unlinking what it thinks is file 1 but it will actually be file 0.
         """
 
+        # pylint: disable=consider-using-with
+
         fds = []
 
         # Create both files in the dfuse instance we're checking.  These files are created in
         # binary mode with buffering off so the writes are sent direct to the kernel.
         for index in range(2):
-            fd = open(os.path.join(self.dfuse.dir, 'file.{}'.format(index)), 'wb', buffering=0)
+            fd = open(join(self.dfuse.dir, 'file.{}'.format(index)), 'wb', buffering=0)
             fd.write(b'test')
             fds.append(fd)
 
@@ -2224,10 +2204,10 @@ class posix_tests():
         print(os.listdir(dfuse.dir))
 
         # Rename file 0 to file 0 in the background, this will remove file 1
-        os.rename(os.path.join(dfuse.dir, 'file.0') ,os.path.join(dfuse.dir, 'file.1'))
+        os.rename(join(dfuse.dir, 'file.0'), join(dfuse.dir, 'file.1'))
 
         # Perform the unlink, this will unlink the other file.
-        os.unlink(os.path.join(self.dfuse.dir, 'file.1'))
+        os.unlink(join(self.dfuse.dir, 'file.1'))
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -2252,11 +2232,11 @@ class posix_tests():
         dfuse.start(v_hint='cont_rw_1')
 
         ps = print_stat(dfuse.dir)
-        testfile = os.path.join(dfuse.dir, 'testfile')
+        testfile = join(dfuse.dir, 'testfile')
         with open(testfile, 'w') as fd:
             ps.add(testfile, attr=os.fstat(fd.fileno()))
 
-        dirname = os.path.join(dfuse.dir, 'rw_dir')
+        dirname = join(dfuse.dir, 'rw_dir')
         os.mkdir(dirname)
 
         ps.add(dirname)
@@ -2302,18 +2282,18 @@ class posix_tests():
         ps = print_stat()
         ps.add(dfuse.dir, show_dir=True)
 
-        with open(os.path.join(dfuse.dir, 'testfile'), 'r') as fd:
-            ps.add(os.path.join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
+        with open(join(dfuse.dir, 'testfile'), 'r') as fd:
+            ps.add(join(dfuse.dir, 'testfile'), os.fstat(fd.fileno()))
 
-        dirname = os.path.join(dfuse.dir, 'rw_dir')
-        testfile = os.path.join(dirname, 'new_file')
+        dirname = join(dfuse.dir, 'rw_dir')
+        testfile = join(dirname, 'new_file')
         fd = os.open(testfile, os.O_RDWR | os.O_CREAT, mode=int('600', base=8))
         os.write(fd, b'read-only-data')
         ps.add(testfile, attr=os.fstat(fd))
         os.close(fd)
         print(ps)
 
-        with open(os.path.join(dfuse.dir, 'rw_dir', 'new_file'), 'r') as fd:
+        with open(join(dfuse.dir, 'rw_dir', 'new_file'), 'r') as fd:
             data = fd.read()
             print(data)
 
@@ -2334,34 +2314,33 @@ class posix_tests():
         # check fstat works.
         """
 
-        fname = os.path.join(self.dfuse.dir, 'file')
-        ofd = open(fname, 'w')
-        print(os.fstat(ofd.fileno()))
-
-        dfuse = DFuse(self.server,
-                      self.conf,
-                      pool=self.pool.id(),
-                      container=self.container,
-                      caching=False)
-        dfuse.start(v_hint='rename')
-
-        os.mkdir(os.path.join(dfuse.dir, 'step_dir'))
-        os.mkdir(os.path.join(dfuse.dir, 'new_dir'))
-        os.rename(os.path.join(dfuse.dir, 'file'), os.path.join(dfuse.dir, 'step_dir', 'file-new'))
-
-        # This should fail, because the file has been deleted.
-        try:
+        fname = join(self.dfuse.dir, 'file')
+        with open(fname, 'w') as ofd:
             print(os.fstat(ofd.fileno()))
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() replaced file')
 
-        os.rename(os.path.join(self.dfuse.dir, 'step_dir', 'file-new'),
-                  os.path.join(self.dfuse.dir, 'new_dir', 'my-file'))
+            dfuse = DFuse(self.server,
+                          self.conf,
+                          pool=self.pool.id(),
+                          container=self.container,
+                          caching=False)
+            dfuse.start(v_hint='rename')
 
-        print(os.fstat(ofd.fileno()))
+            os.mkdir(join(dfuse.dir, 'step_dir'))
+            os.mkdir(join(dfuse.dir, 'new_dir'))
+            os.rename(join(dfuse.dir, 'file'), join(dfuse.dir, 'step_dir', 'file-new'))
 
-        ofd.close()
+            # This should fail, because the file has been deleted.
+            try:
+                print(os.fstat(ofd.fileno()))
+                self.fail()
+            except FileNotFoundError:
+                print('Failed to fstat() replaced file')
+
+            os.rename(join(self.dfuse.dir, 'step_dir', 'file-new'),
+                      join(self.dfuse.dir, 'new_dir', 'my-file'))
+
+            print(os.fstat(ofd.fileno()))
+
         if dfuse.stop():
             self.fatal_errors = True
 
@@ -2398,7 +2377,7 @@ class posix_tests():
         print(os.listdir(dfuse.dir))
 
         try:
-            with open(os.path.join(dfuse.dir, 'testfile'), 'w') as fd:
+            with open(join(dfuse.dir, 'testfile'), 'w') as fd:
                 print(fd)
             assert False
         except PermissionError:
@@ -2414,7 +2393,7 @@ class posix_tests():
         DAOS-6238"""
 
         path = self.dfuse.dir
-        fname = os.path.join(path, 'test_file1')
+        fname = join(path, 'test_file1')
         ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
         ns = os.stat(fname)
         print(ns)
@@ -2424,7 +2403,7 @@ class posix_tests():
         print(ns)
         assert stat.S_IMODE(ns.st_mode) == stat.S_IRUSR
 
-        fname = os.path.join(path, 'test_file2')
+        fname = join(path, 'test_file2')
         ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
         ns = os.stat(fname)
         print(ns)
@@ -2439,7 +2418,7 @@ class posix_tests():
 
         tmp_dir = tempfile.mkdtemp()
 
-        cont_path = os.path.join(tmp_dir, 'my-cont')
+        cont_path = join(tmp_dir, 'my-cont')
         create_cont(self.conf, self.pool.uuid, path=cont_path)
 
         dfuse = DFuse(self.server,
@@ -2450,10 +2429,9 @@ class posix_tests():
 
         # Simply write a file.  This will fail if dfuse isn't backed via
         # a container.
-        file = os.path.join(dfuse.dir, 'file')
-        fd = open(file, 'w')
-        fd.write('test')
-        fd.close()
+        file = join(dfuse.dir, 'file')
+        with open(file, 'w') as fd:
+            fd.write('test')
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -2472,7 +2450,7 @@ class posix_tests():
         dfuse.start('uns-0')
 
         # Create a new container within it using UNS
-        uns_path = os.path.join(dfuse.dir, 'ep0')
+        uns_path = join(dfuse.dir, 'ep0')
         uns_container = str(uuid.uuid4())
         print('Inserting entry point')
         create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
@@ -2483,7 +2461,7 @@ class posix_tests():
         run_container_query(conf, uns_path)
 
         # Make a directory in the new container itself, and query that.
-        child_path = os.path.join(uns_path, 'child')
+        child_path = join(uns_path, 'child')
         os.mkdir(child_path)
         run_container_query(conf, child_path)
         if dfuse.stop():
@@ -2494,11 +2472,11 @@ class posix_tests():
         dfuse.start('uns-1')
 
         # List the root container.
-        print(os.listdir(os.path.join(dfuse.dir, pool, container)))
+        print(os.listdir(join(dfuse.dir, pool, container)))
 
         # Now create a UNS link from the 2nd container to a 3rd one.
-        uns_path = os.path.join(dfuse.dir, pool, container, 'ep0', 'ep')
-        second_path = os.path.join(dfuse.dir, pool, uns_container)
+        uns_path = join(dfuse.dir, pool, container, 'ep0', 'ep')
+        second_path = join(dfuse.dir, pool, uns_container)
 
         uns_container_2 = str(uuid.uuid4())
 
@@ -2507,20 +2485,20 @@ class posix_tests():
         create_cont(conf, pool=pool, cont=uns_container_2, path=uns_path)
 
         # List the root container again.
-        print(os.listdir(os.path.join(dfuse.dir, pool, container)))
+        print(os.listdir(join(dfuse.dir, pool, container)))
 
         # List the 2nd container.
         files = os.listdir(second_path)
         print(files)
         # List the target container through UNS.
         print(os.listdir(uns_path))
-        direct_stat = os.stat(os.path.join(second_path, 'ep'))
+        direct_stat = os.stat(join(second_path, 'ep'))
         uns_stat = os.stat(uns_path)
         print(direct_stat)
         print(uns_stat)
         assert uns_stat.st_ino == direct_stat.st_ino
 
-        third_path = os.path.join(dfuse.dir, pool, uns_container_2)
+        third_path = join(dfuse.dir, pool, uns_container_2)
         third_stat = os.stat(third_path)
         print(third_stat)
         assert third_stat.st_ino == direct_stat.st_ino
@@ -2531,13 +2509,13 @@ class posix_tests():
         dfuse = DFuse(server, conf, caching=False)
         dfuse.start('uns-3')
 
-        second_path = os.path.join(dfuse.dir, pool, uns_container)
-        uns_path = os.path.join(dfuse.dir, pool, container, 'ep0', 'ep')
+        second_path = join(dfuse.dir, pool, uns_container)
+        uns_path = join(dfuse.dir, pool, container, 'ep0', 'ep')
         files = os.listdir(second_path)
         print(files)
         print(os.listdir(uns_path))
 
-        direct_stat = os.stat(os.path.join(second_path, 'ep'))
+        direct_stat = os.stat(join(second_path, 'ep'))
         uns_stat = os.stat(uns_path)
         print(direct_stat)
         print(uns_stat)
@@ -2564,10 +2542,9 @@ class posix_tests():
 
         print(os.listdir(dfuse.dir))
 
-        fname = os.path.join(dfuse.dir, 'test_file3')
-        ofd = open(fname, 'w')
-        ofd.write('hello')
-        ofd.close()
+        fname = join(dfuse.dir, 'test_file3')
+        with open(fname, 'w') as ofd:
+            ofd.write('hello')
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -2581,7 +2558,7 @@ class posix_tests():
         conf = self.conf
 
         # Create a new container within it using UNS
-        uns_path = os.path.join(dfuse.dir, 'ep1')
+        uns_path = join(dfuse.dir, 'ep1')
         uns_container = str(uuid.uuid4())
         print('Inserting entry point')
         create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
@@ -2593,14 +2570,14 @@ class posix_tests():
         run_container_query(conf, uns_path)
 
         # Make a directory in the new container itself, and query that.
-        dir1 = os.path.join(uns_path, 'd1')
+        dir1 = join(uns_path, 'd1')
         os.mkdir(dir1)
         run_container_query(conf, dir1)
 
         # Create a file in dir1
-        file1 = os.path.join(dir1, 'f1')
-        ofd = open(file1, 'w')
-        ofd.close()
+        file1 = join(dir1, 'f1')
+        with open(file1, 'w'):
+            pass
 
         # Run a command to get attr of new dir and file
         cmd = ['fs', 'get-attr', '--path', dir1]
@@ -2656,7 +2633,7 @@ class posix_tests():
         assert rc.returncode != 0
 
         # Run a command to create new file with set-attr
-        file2 = os.path.join(dir1, 'f2')
+        file2 = join(dir1, 'f2')
         cmd = ['fs', 'set-attr', '--path', file2, '--oclass', 'S1']
         print('set-attr of f2')
         rc = run_daos_cmd(conf, cmd)
@@ -2683,13 +2660,14 @@ class posix_tests():
     def test_cont_copy(self):
         """Verify that copying into a container works"""
 
+        # pylint: disable=consider-using-with
+
         # Create a temporary directory, with one file into it and copy it into
         # the container.  Check the returncode only, do not verify the data.
         # tempfile() will remove the directory on completion.
         src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
-        ofd = open(os.path.join(src_dir.name, 'file'), 'w')
-        ofd.write('hello')
-        ofd.close()
+        with open(join(src_dir.name, 'file'), 'w') as ofd:
+            ofd.write('hello')
 
         cmd = ['filesystem',
                'copy',
@@ -2707,13 +2685,14 @@ class posix_tests():
         This extends cont_copy, to also clone it afterwards.
         """
 
+        # pylint: disable=consider-using-with
+
         # Create a temporary directory, with one file into it and copy it into
         # the container.  Check the returncode only, do not verify the data.
         # tempfile() will remove the directory on completion.
         src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
-        ofd = open(os.path.join(src_dir.name, 'file'), 'w')
-        ofd.write('hello')
-        ofd.close()
+        with open(join(src_dir.name, 'file'), 'w') as ofd:
+            ofd.write('hello')
 
         cmd = ['filesystem',
                'copy',
@@ -2738,7 +2717,6 @@ class posix_tests():
         print(rc)
         assert rc.returncode == 0
         destroy_container(self.conf, self.pool.id(), container)
-# pylint: enable=too-many-public-methods
 
 class nlt_stdout_wrapper():
     """Class for capturing stdout from threads"""
@@ -2856,19 +2834,19 @@ def run_posix_tests(server, conf, test=None):
                 out_wrapper.sprint('{} Failed'.format(function))
                 conf.wf.add_test_case(ptl.test_name,
                                       repr(inst),
-                                      stdout = out_wrapper.get_thread_output(),
-                                      stderr = err_wrapper.get_thread_err(),
-                                      output = trace,
+                                      stdout=out_wrapper.get_thread_output(),
+                                      stderr=err_wrapper.get_thread_err(),
+                                      output=trace,
                                       test_class='test',
-                                      duration = duration)
+                                      duration=duration)
                 raise
             duration = time.time() - start
             out_wrapper.sprint('Test {} took {:.1f} seconds'.format(function, duration))
             conf.wf.add_test_case(ptl.test_name,
-                                  stdout = out_wrapper.get_thread_output(),
-                                  stderr = err_wrapper.get_thread_err(),
+                                  stdout=out_wrapper.get_thread_output(),
+                                  stderr=err_wrapper.get_thread_err(),
                                   test_class='test',
-                                  duration = duration)
+                                  duration=duration)
             if not ptl.needs_more:
                 break
             ptl.call_index = ptl.call_index + 1
@@ -2945,12 +2923,14 @@ def run_posix_tests(server, conf, test=None):
 
 def run_tests(dfuse):
     """Run some tests"""
+
+    # pylint: disable=consider-using-with
     path = dfuse.dir
 
-    fname = os.path.join(path, 'test_file3')
+    fname = join(path, 'test_file3')
 
     rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64', # nosec
-                         'of={}'.format(os.path.join(path, 'dd_file'))],
+                         'of={}'.format(join(path, 'dd_file'))],
                         check=True)
     print(rc)
     ofd = open(fname, 'w')
@@ -2975,7 +2955,7 @@ def run_tests(dfuse):
     ofd = os.open(fname, os.O_TRUNC)
     assert_file_size_fd(ofd, 0)
     os.close(ofd)
-    symlink_name = os.path.join(path, 'symlink_src')
+    symlink_name = join(path, 'symlink_src')
     symlink_dest = 'missing_dest'
     os.symlink(symlink_dest, symlink_name)
     assert symlink_dest == os.readlink(symlink_name)
@@ -2983,7 +2963,7 @@ def run_tests(dfuse):
     # Note that this doesn't test dfs because fuse will do a
     # lookup to check if the file exists rather than just trying
     # to create it.
-    fname = os.path.join(path, 'test_file5')
+    fname = join(path, 'test_file5')
     fd = os.open(fname, os.O_CREAT | os.O_EXCL)
     os.close(fd)
     try:
@@ -3005,7 +2985,7 @@ def stat_and_check(dfuse, pre_stat):
 def check_no_file(dfuse):
     """Check that a non-existent file doesn't exist"""
     try:
-        os.stat(os.path.join(dfuse.dir, 'no-file'))
+        os.stat(join(dfuse.dir, 'no-file'))
         raise NLTestFail('file exists')
     except FileNotFoundError:
         pass
@@ -3018,15 +2998,13 @@ def setup_log_test(conf):
 
     # Try and pick this up from the src tree if possible.
     file_self = os.path.dirname(os.path.abspath(__file__))
-    logparse_dir = os.path.join(file_self,
-                                '../src/tests/ftest/cart/util')
+    logparse_dir = join(file_self, '../src/tests/ftest/cart/util')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
 
     # Or back off to the install dir if not.
-    logparse_dir = os.path.join(conf['PREFIX'],
-                                'lib/daos/TESTING/ftest/cart')
+    logparse_dir = join(conf['PREFIX'], 'lib/daos/TESTING/ftest/cart')
     crt_mod_dir = os.path.realpath(logparse_dir)
     if crt_mod_dir not in sys.path:
         sys.path.append(crt_mod_dir)
@@ -3135,6 +3113,8 @@ def log_test(conf,
 def set_server_fi(server):
     """Run the client code to set server params"""
 
+    # pylint: disable=consider-using-with
+
     cmd_env = get_base_env()
 
     cmd_env['OFI_INTERFACE'] = 'eth0'
@@ -3148,11 +3128,10 @@ def set_server_fi(server):
 
     exec_cmd = vh.get_cmd_prefix()
 
-    agent_bin = os.path.join(server.conf['PREFIX'], 'bin', 'daos_agent')
+    agent_bin = join(server.conf['PREFIX'], 'bin', 'daos_agent')
 
     addr_dir = tempfile.TemporaryDirectory(prefix='dnt_addr_',)
-    addr_file = os.path.join(addr_dir.name,
-                             '{}.attach_info_tmp'.format(system_name))
+    addr_file = join(addr_dir.name, '{}.attach_info_tmp'.format(system_name))
 
     agent_cmd = [agent_bin,
                  '-i',
@@ -3175,7 +3154,7 @@ def set_server_fi(server):
            '--attr',
            '0,0,0,0,0']
 
-    exec_cmd.append(os.path.join(server.conf['PREFIX'], 'bin', 'cart_ctl'))
+    exec_cmd.append(join(server.conf['PREFIX'], 'bin', 'cart_ctl'))
     exec_cmd.extend(cmd)
 
     prefix = 'dnt_crt_ctl_{}_'.format(get_inc_id())
@@ -3201,14 +3180,13 @@ def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and read
     through the interception library"""
 
-    fname = os.path.join(path, 'test_file')
-    ofd = open(fname, 'w')
-    ofd.write('hello ')
-    ofd.write('world\n')
-    ofd.flush()
-    assert_file_size(ofd, 12)
-    print(os.fstat(ofd.fileno()))
-    ofd.close()
+    fname = join(path, 'test_file')
+    with open(fname, 'w') as ofd:
+        ofd.write('hello ')
+        ofd.write('world\n')
+        ofd.flush()
+        assert_file_size(ofd, 12)
+        print(os.fstat(ofd.fileno()))
     ret = il_cmd(dfuse, ['cat', fname], check_write=False)
     assert ret.returncode == 0
 
@@ -3233,12 +3211,14 @@ def run_duns_overlay_test(server, conf):
     and expose the container.
     """
 
+    # pylint: disable=consider-using-with
+
     pool = server.get_test_pool()
 
     parent_dir = tempfile.TemporaryDirectory(dir=conf.dfuse_parent_dir,
                                              prefix='dnt_uns_')
 
-    uns_dir = os.path.join(parent_dir.name, 'uns_ep')
+    uns_dir = join(parent_dir.name, 'uns_ep')
 
     create_cont(conf, pool=pool, path=uns_dir)
 
@@ -3274,11 +3254,11 @@ def run_dfuse(server, conf):
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
 
-    pool_stat = os.stat(os.path.join(dfuse.dir, pool))
+    pool_stat = os.stat(join(dfuse.dir, pool))
     print('stat for {}'.format(pool))
     print(pool_stat)
     container = create_cont(server.conf, pool, ctype="POSIX")
-    cdir = os.path.join(dfuse.dir, pool, container)
+    cdir = join(dfuse.dir, pool, container)
     #create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
 
@@ -3289,9 +3269,9 @@ def run_dfuse(server, conf):
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
     container2 = create_cont(server.conf, pool, ctype="POSIX")
-    cpath = os.path.join(dfuse.dir, container2)
+    cpath = join(dfuse.dir, container2)
     print(os.listdir(cpath))
-    cdir = os.path.join(dfuse.dir, container)
+    cdir = join(dfuse.dir, container)
     create_and_read_via_il(dfuse, cdir)
 
     fatal_errors.add_result(dfuse.stop())
@@ -3335,7 +3315,7 @@ def run_in_fg(server, conf):
                   '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
                  show_stdout=True)
 
-    t_dir = os.path.join(dfuse.dir, container)
+    t_dir = join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
     print('daos container create --type POSIX ' \
@@ -3372,14 +3352,10 @@ def check_readdir_perf(server, conf):
     def make_dirs(parent, count):
         """Populate the test directory"""
         print('Populating to {}'.format(count))
-        dir_dir = os.path.join(parent,
-                               'dirs.{}.in'.format(count))
-        t_dir = os.path.join(parent,
-                             'dirs.{}'.format(count))
-        file_dir = os.path.join(parent,
-                                'files.{}.in'.format(count))
-        t_file = os.path.join(parent,
-                              'files.{}'.format(count))
+        dir_dir = join(parent, 'dirs.{}.in'.format(count))
+        t_dir = join(parent, 'dirs.{}'.format(count))
+        file_dir = join(parent, 'files.{}.in'.format(count))
+        t_file = join(parent, 'files.{}'.format(count))
 
         start_all = time.time()
         if not os.path.exists(t_dir):
@@ -3389,12 +3365,11 @@ def check_readdir_perf(server, conf):
                 pass
             for i in range(count):
                 try:
-                    os.mkdir(os.path.join(dir_dir, str(i)))
+                    os.mkdir(join(dir_dir, str(i)))
                 except FileExistsError:
                     pass
             dir_time = time.time() - start_all
-            print('Creating {} dirs took {:.2f}'.format(count,
-                                                        dir_time))
+            print('Creating {} dirs took {:.2f}'.format(count, dir_time))
             os.rename(dir_dir, t_dir)
 
         if not os.path.exists(t_file):
@@ -3404,11 +3379,10 @@ def check_readdir_perf(server, conf):
                 pass
             start = time.time()
             for i in range(count):
-                f = open(os.path.join(file_dir, str(i)), 'w')
-                f.close()
+                with open(join(file_dir, str(i)), 'w'):
+                    pass
             file_time = time.time() - start
-            print('Creating {} files took {:.2f}'.format(count,
-                                                         file_time))
+            print('Creating {} files took {:.2f}'.format(count, file_time))
             os.rename(file_dir, t_file)
 
         return [dir_time, file_time]
@@ -3429,7 +3403,7 @@ def check_readdir_perf(server, conf):
     print('Creating container and populating')
     count = 1024
     dfuse.start()
-    parent = os.path.join(dfuse.dir, container)
+    parent = join(dfuse.dir, container)
     try:
         os.mkdir(parent)
     except FileExistsError:
@@ -3445,10 +3419,8 @@ def check_readdir_perf(server, conf):
         row.extend(create_times)
         dfuse = DFuse(server, conf, pool=pool, container=container,
                       caching=False)
-        dir_dir = os.path.join(dfuse.dir,
-                               'dirs.{}'.format(count))
-        file_dir = os.path.join(dfuse.dir,
-                                'files.{}'.format(count))
+        dir_dir = join(dfuse.dir, 'dirs.{}'.format(count))
+        file_dir = join(dfuse.dir, 'files.{}'.format(count))
         dfuse.start()
         start = time.time()
         subprocess.run(['/bin/ls', dir_dir], stdout=subprocess.PIPE, check=True)
@@ -3538,6 +3510,8 @@ def check_readdir_perf(server, conf):
 def test_pydaos_kv(server, conf):
     """Test the KV interface"""
 
+    # pylint: disable=consider-using-with
+
     pydaos_log_file = tempfile.NamedTemporaryFile(prefix='dnt_pydaos_',
                                                   suffix='.log',
                                                   delete=False)
@@ -3594,6 +3568,7 @@ def test_pydaos_kv(server, conf):
     kv = container.get('my_test_kv')
     kv = None
     container = None
+    # pylint: disable=protected-access
     daos._cleanup()
     log_test(conf, pydaos_log_file.name)
 
@@ -3620,6 +3595,8 @@ class AllocFailTestRun():
     """Class to run a fault injection command with a single fault"""
 
     def __init__(self, aft, cmd, env, loc):
+
+        # pylint: disable=consider-using-with
 
         # The subprocess handle
         self._sp = None
@@ -3839,6 +3816,7 @@ class AllocFailTestRun():
         _explain()
 
 class AllocFailTest():
+    # pylint: disable=too-few-public-methods
     """Class to describe fault injection command"""
 
     def __init__(self, conf, desc, cmd):
@@ -3947,8 +3925,7 @@ class AllocFailTest():
         # del cmd_env['DD_SUBSYS']
 
         if self.use_il:
-            cmd_env['LD_PRELOAD'] = os.path.join(self.conf['PREFIX'],
-                                                 'lib64', 'libioil.so')
+            cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libioil.so')
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
@@ -3980,11 +3957,11 @@ def test_dfuse_start(server, conf, wf):
 
     container = create_cont(conf, pool, ctype='POSIX')
 
-    mount_point = os.path.join(conf.dfuse_parent_dir, 'fi-mount')
+    mount_point = join(conf.dfuse_parent_dir, 'fi-mount')
 
     os.mkdir(mount_point)
 
-    cmd = [os.path.join(conf['PREFIX'], 'bin', 'dfuse'),
+    cmd = [join(conf['PREFIX'], 'bin', 'dfuse'),
            '--mountpoint', mount_point,
            '--pool', pool, '--cont', container, '--foreground', '--singlethread']
 
@@ -4008,16 +3985,16 @@ def test_alloc_fail_copy(server, conf, wf):
     are not yet checked for.
     """
 
-    pool = server.get_test_pool()
+    # pylint: disable=consider-using-with
 
+    pool = server.get_test_pool()
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
-    ofd = open(os.path.join(src_dir.name, 'file'), 'w')
-    ofd.write('hello')
-    ofd.close()
+    with open(join(src_dir.name, 'file'), 'w') as ofd:
+        ofd.write('hello')
 
     def get_cmd():
         container = str(uuid.uuid4())
-        cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+        cmd = [join(conf['PREFIX'], 'bin', 'daos'),
                'filesystem',
                'copy',
                '--src',
@@ -4050,7 +4027,7 @@ def test_alloc_fail_cat(server, conf):
     dfuse.use_valgrind = False
     dfuse.start()
 
-    target_file = os.path.join(dfuse.dir, 'test_file')
+    target_file = join(dfuse.dir, 'test_file')
 
     with open(target_file, 'w') as fd:
         fd.write('Hello there')
@@ -4081,7 +4058,7 @@ def test_fi_list_attr(server, conf, wf):
                   pool, container,
                   '--attr', 'my-test-attr-2', '--value', 'some-other-value'])
 
-    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
            'list-attrs',
            pool,
@@ -4108,7 +4085,7 @@ def test_fi_get_attr(server, conf, wf):
                   pool, container,
                   '--attr', attr_name, '--value', 'value'])
 
-    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
            'get-attr',
            pool,
@@ -4131,7 +4108,7 @@ def test_alloc_fail(server, conf):
 
     pool = server.get_test_pool()
 
-    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'cont',
            'list',
            pool]
