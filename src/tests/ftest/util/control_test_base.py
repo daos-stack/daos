@@ -79,19 +79,6 @@ class ControlTestBase(TestWithServers):
                 self.get_dmg_output("storage_query_list_devices", **kwargs))
         return info
 
-    def get_max_devices(self, rank=None):
-        """Get the max number of devices for all/specified ranks.
-
-        Args:
-            rank (int, optional): Limit response to devices on this rank.
-                Defaults to None.
-
-        Returns:
-            int: max number of devices.
-
-        """
-        return max([len(devices) for devices in self.get_device_info(rank).items()])
-
     def get_pool_info(self, uuid=None, rank=None, verbose=False):
         """Query pool information.
 

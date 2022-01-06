@@ -5,10 +5,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from control_test_base import ControlTestBase
+from apricot import TestWithServers
 
 
-class DmgStorageFormatPerfTest(ControlTestBase):
+class DmgStorageFormatPerfTest(TestWithServers):
     # pylint: disable=too-many-ancestors
     """Test Class Description:
     Verify storage format performance
@@ -19,7 +19,8 @@ class DmgStorageFormatPerfTest(ControlTestBase):
     def __init__(self, *args, **kwargs):
         """Initialize a DmgStorageFormatPerfTest object."""
         super().__init__(*args, **kwargs)
-        self.setup_start_agents = False
+        self.setup_start_servers = False # Handled manually
+        self.setup_start_agents = False # Not needed
 
     def test_dmg_storage_format_perf(self):
         """JIRA ID: DAOS-4842
@@ -33,27 +34,15 @@ class DmgStorageFormatPerfTest(ControlTestBase):
         :avocado: tags=control,dmg
         :avocado: tags=dmg_storage_format_perf
         """
-        max_devices = self.get_max_devices()
         max_s_per_device = self.params.get("max_s_per_device", "/run/dmg_storage_format_perf/*")
-        max_format_time = max_s_per_device * max_devices
-        dmg = self.server_managers[0].dmg
 
-        self.log.info("Stopping and erasing system before format")
-        dmg.system_stop(force=True)
-        if dmg.result.exit_status != 0:
-            self.fail("Failed to stop system")
+        # Setup, but don't start, the servers
+        self.setup_servers()
 
-        dmg.system_erase()
-        if dmg.result.exit_status != 0:
-            self.fail("Failed to erase system")
+        # Constrain the format time to expected performance
+        num_devices = len(self.server_managers[0].get_config_value("bdev_list"))
+        max_format_time = max_s_per_device * num_devices
+        self.server_managers[0].dmg_storage_format_timeout = max_format_time
 
-        self.server_managers[0].detect_format_ready(reformat=True)
-
-        self.log.info("Formatting storage with a timeout of %ss per device", str(max_s_per_device))
-        
-        dmg.storage_format(reformat=True, timeout=max_format_time)
-        if dmg.result.exit_status != 0:
-            self.fail("Failed to format system")
-
-        # Make sure servers restart
-        self.server_managers[0].detect_engine_start()
+        # Start the servers, which will also format
+        self.start_server_managers()

@@ -125,6 +125,11 @@ class DaosServerManager(SubprocessManager):
         # Flag used to determine which method is used to detect that the server has started
         self.detect_start_via_dmg = False
 
+        # Timeout for dmg storage format
+        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
+        # be further investigated.
+        self.dmg_storage_format_timeout = 40
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -536,9 +541,7 @@ class DaosServerManager(SubprocessManager):
         # Format storage and wait for server to change ownership
         self.log.info(
             "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
-        # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
-        # be further investigated.
-        self.dmg.storage_format(timeout=40)
+        self.dmg.storage_format(timeout=self.dmg_storage_format_timeout)
 
         # Wait for all the engines to start
         self.detect_engine_start()
