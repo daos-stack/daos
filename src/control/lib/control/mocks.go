@@ -448,6 +448,13 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
 			Error:  "nvme scan failed",
 		}
+	case "noNvmeOnNuma1":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		if err := convert.Types(ctrlrs(0, 2), &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
