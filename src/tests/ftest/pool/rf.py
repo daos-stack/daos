@@ -21,7 +21,7 @@ class PoolRedunFacProperty(IorTestBase):
         Verify the container rf property.
 
         Args:
-            expected_size (int): expected container rf value
+            expected_value (int): expected container rf value
         """
         daos_cmd = self.get_daos_command()
         cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
@@ -62,7 +62,6 @@ class PoolRedunFacProperty(IorTestBase):
         self.assertEqual(pool_prop_expected,
                          self.pool.get_property("rf"))
 
-        # Run IOR for different Transfer size and container cell size.
         for cont_rf in cont_rfs:
             # Initial container
             self.add_container(self.pool, create=False)
@@ -76,7 +75,7 @@ class PoolRedunFacProperty(IorTestBase):
             self.container.create()
             self.container.open()
 
-            # Verify container EC cell size property
+            # Verify container redundancy factor property
             self.verify_cont_rf(cont_rf)
 
             # Destroy the container.

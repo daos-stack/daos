@@ -220,6 +220,7 @@ enum daos_cont_props {
 
 /** first citizen objects of a container, stored as container property */
 struct daos_prop_co_roots {
+	/** array that stores root, SB OIDs */
 	daos_obj_id_t	cr_oids[4];
 };
 
@@ -326,6 +327,7 @@ enum {
 
 /** clear the UNCLEAN status */
 #define DAOS_PROP_CO_CLEAR	(0x1)
+/** daos container status */
 struct daos_co_status {
 	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
 	uint16_t	dcs_status;
@@ -356,6 +358,7 @@ daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
 }
 
+/** daos property entry */
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
 	uint32_t		 dpe_type;

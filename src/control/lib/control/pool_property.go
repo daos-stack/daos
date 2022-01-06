@@ -122,14 +122,14 @@ func PoolProperties() PoolPropertyMap {
 				Description: "Pool redundancy factor",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid redun fac value %s (valid values: 0-4)", s)
-					rsPct, err := strconv.ParseUint(s, 10, 64)
+					rfVal, err := strconv.ParseUint(s, 10, 64)
 					if err != nil {
 						return nil, rbErr
 					}
-					if rsPct > 4 {
+					if rfVal > 4 {
 						return nil, rbErr
 					}
-					return &PoolPropertyValue{rsPct}, nil
+					return &PoolPropertyValue{rfVal}, nil
 				},
 				valueStringer: func(v *PoolPropertyValue) string {
 					n, err := v.GetNumber()
