@@ -980,7 +980,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	daos_off_t		 phy_lo = 0;
 	unsigned int		 i, seg_count, biov_idx = 0;
 	struct bio_copy_desc	*copy_desc;
-	int			 rc, err;
+	int			 rc;
 
 	D_ASSERT(obj != NULL);
 	D_ASSERT(mw->mw_rsize > 0);
@@ -1099,13 +1099,10 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		D_ERROR("Copy to "DF_RECT" error "DF_RC"\n",
 			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 post:
-	err = bio_copy_post(copy_desc);
-	if (err) {
+	rc = bio_copy_post(copy_desc, rc);
+	if (rc)
 		D_ERROR("Write to "DF_RECT" error "DF_RC"\n",
-			DP_RECT(&ent_in->ei_rect), DP_RC(err));
-		if (rc == 0)
-			rc = err;
-	}
+			DP_RECT(&ent_in->ei_rect), DP_RC(rc));
 out:
 	bio_sgl_fini(&bsgl);
 	bio_sgl_fini(&bsgl_dst);

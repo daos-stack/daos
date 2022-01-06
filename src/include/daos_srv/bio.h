@@ -626,9 +626,10 @@ enum bio_chunk_type {
 /**
  * Prepare all the SG lists of an io descriptor.
  *
- * For SCM IOV, it needs only to convert the PMDK pmemobj offset into direct
- * memory address; For NVMe IOV, it maps the SPDK blob page offset to an
- * internally maintained DMA buffer, it also needs fill the buffer for fetch
+ * For direct accessed SCM IOV, it needs only to convert the PMDK pmemobj
+ * offset into direct memory address; For NVMe IOV (or SCM IOV being accessed
+ * through DMA buffer, it maps the SPDK blob page offset (or SCM address) to
+ * an internally maintained DMA buffer, it also needs fill the buffer for fetch
  * operation.
  *
  * \param biod       [IN]	io descriptor
@@ -645,15 +646,17 @@ int bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
  * Post operation after the RDMA transfer or local copy done for the io
  * descriptor.
  *
- * For SCM IOV, it's a noop operation; For NVMe IOV, it releases the DMA buffer
- * held in bio_iod_prep(), it also needs to write back the data from DMA buffer
- * to the NVMe device for update operation.
+ * For direct accessed SCM IOV, it's a noop operation; For NVMe IOV (or SCM IOV
+ * being accessed through DMA buffer), it releases the DMA buffer held in
+ * bio_iod_prep(), it also needs to write back the data from DMA buffer to the
+ * NVMe device (or SCM) for update operation.
  *
  * \param biod       [IN]	io descriptor
+ * \param err        [IN]	Error code of prior data transfer operation
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_post(struct bio_desc *biod);
+int bio_iod_post(struct bio_desc *biod, int err);
 
 /*
  * Helper function to copy data between SG lists of io descriptor and user
@@ -861,10 +864,11 @@ int bio_copy_run(struct bio_copy_desc *copy_desc, unsigned int copy_size,
  * copy target is located on NVMe.
  *
  * \param copy_desc	[IN]	Copy descriptor created by bio_copy_prep()
+ * \param err		[IN]	Error code of prior copy operation
  *
  * \return			0 on success, negative value on error
  */
-int bio_copy_post(struct bio_copy_desc *copy_desc);
+int bio_copy_post(struct bio_copy_desc *copy_desc, int err);
 
 /*
  * Get the prepared source or target BIO SGL from a copy descriptor.

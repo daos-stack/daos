@@ -413,8 +413,13 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 	ABT_thread_attr		 attr;
 	struct dss_xstream	*dx;
 	int			 rc, rc1;
+	int			 stream_id;
 
-	dx = dss_get_xstream(sched_ult2xs(xs_type, tgt_idx));
+	stream_id = sched_ult2xs(xs_type, tgt_idx);
+	if (stream_id == -DER_INVAL)
+		return stream_id;
+
+	dx = dss_get_xstream(stream_id);
 	if (dx == NULL)
 		return -DER_NONEXIST;
 
