@@ -346,11 +346,11 @@ def run_command(cmd):
     """
     print("Running {}".format(" ".join(cmd)))
     try:
-        process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            universal_newlines=True)
-        stdout, _ = process.communicate()
-        retcode = process.poll()
+        with subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                universal_newlines=True) as process:
+            stdout, _ = process.communicate()
+            retcode = process.poll()
     except Exception as error:
         raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
     if retcode:
@@ -441,7 +441,7 @@ def check_remote_output(task, command):
 
     """
     # Create a dictionary of hosts for each unique return code
-    results = {code: hosts for code, hosts in task.iter_retcodes()}
+    results = dict(task.iter_retcodes())
 
     # Determine if the command completed successfully across all the hosts
     status = len(results) == 1 and 0 in results
@@ -1104,6 +1104,7 @@ def generate_certs():
 
 
 def run_tests(test_files, tag_filter, args):
+    # pylint: disable=too-many-branches
     """Run or display the test commands.
 
     Args:
@@ -2153,9 +2154,9 @@ def get_service_status(host_list, service):
         output_lines = [line.decode("utf-8") for line in output]
         nodeset = NodeSet.fromlist(nodelist)
         print(" {}: {}".format(nodeset, "\n".join(output_lines)))
-        for key in status_states:
+        for key, state_list in status_states.items():
             for line in output_lines:
-                if line in status_states[key]:
+                if line in state_list:
                     status[key].add(nodeset)
                     break
     if task.num_timeout() > 0:
@@ -2377,8 +2378,8 @@ def main():
 
     # Create a temporary directory
     if args.yaml_directory is None:
-        temp_dir = TemporaryDirectory()
-        yaml_dir = temp_dir.name
+        with TemporaryDirectory() as temp_dir:
+            yaml_dir = temp_dir.name
     else:
         yaml_dir = args.yaml_directory
         if not os.path.exists(yaml_dir):
