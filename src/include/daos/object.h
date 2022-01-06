@@ -206,8 +206,9 @@ struct pl_obj_layout;
 
 int obj_class_init(void);
 void obj_class_fini(void);
-struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv,
+struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid,
 					       uint32_t *nr_grps);
+int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca);
 int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 			      daos_oclass_id_t cid, uint32_t args);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);

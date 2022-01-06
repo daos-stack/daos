@@ -989,7 +989,7 @@ ec_data_nr_get(daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_k;
 }
@@ -999,7 +999,7 @@ ec_parity_nr_get(daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_p;
 }
@@ -1012,7 +1012,7 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	uint32_t		shard;
 	int			idx = 0;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	if (oca->ca_resil == DAOS_RES_REPL) {
 		ranks[0] = get_rank_by_oid_shard(arg, oid, 0);
 		if (ranks_num)

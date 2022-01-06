@@ -1987,7 +1987,7 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 	struct daos_oclass_attr *oca;
 	uint32_t                 nr_grps;
 
-	oca = daos_oclass_attr_find(oid, NULL, &nr_grps);
+	oca = daos_oclass_attr_find(oid, &nr_grps);
 	if (!oca)
 		return -DER_INVAL;
 

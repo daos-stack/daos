@@ -28,7 +28,7 @@ static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
  * Find the object class attributes for the provided @oid.
  */
 struct daos_oclass_attr *
-daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv, uint32_t *nr_grps)
+daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps)
 {
 	struct daos_obj_class	*oc;
 
@@ -41,9 +41,38 @@ daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv, uint32_t *nr_grps)
 	}
 	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
 		oc->oc_name, DP_OID(oid));
-	if (is_priv)
-		*is_priv = oc->oc_private;
+
 	return &oc->oc_attr;
+}
+
+int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca)
+{
+	struct dc_object *dc_object;
+	struct daos_oclass_attr *tmp;
+	uint32_t nr_grps;
+	struct cont_props prop;
+	daos_handle_t coh = dc_obj_hdl2cont_hdl(oh);
+
+	if (daos_handle_is_inval(coh))
+		return -DER_NO_HDL;
+
+	dc_object = obj_hdl2ptr(oh);
+	if (dc_object == NULL)
+		return -DER_NO_HDL;
+
+	tmp = daos_oclass_attr_find(dc_object->cob_md.omd_id, &nr_grps);
+	if (!tmp)
+		return -DER_NOSCHEMA;
+
+	*oca = *tmp;
+	oca->ca_grp_nr = nr_grps;
+	if (daos_oclass_is_ec(oca)) {
+		prop = dc_cont_hdl2props(coh);
+		D_ASSERT(prop.dcp_ec_cell_sz > 0);
+		oca->u.ec.e_len = prop.dcp_ec_cell_sz;
+	}
+
+	return 0;
 }
 
 int

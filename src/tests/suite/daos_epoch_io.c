@@ -19,8 +19,6 @@ char *test_io_dir;
 static char *test_io_work_dir;
 /* the temporary IO fail dir, used to store the failed IO conf files */
 static char *test_io_fail_dir;
-static daos_handle_t coh;
-static uuid_t uuid;
 
 /* the IO conf file */
 const char *test_io_conf;
@@ -132,14 +130,14 @@ daos_test_cb_punch(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 	struct test_punch_arg		*pu_arg = &op->pu_arg;
 
 	if (pu_arg->pa_singv) {
-		ioreq_init(&req, coh, eio_arg->op_oid, DAOS_IOD_SINGLE,
+		ioreq_init(&req, arg->coh, eio_arg->op_oid, DAOS_IOD_SINGLE,
 			   arg);
 		punch_single(key_rec->or_dkey, key_rec->or_akey, 0,
 			     DAOS_TX_NONE, &req);
 		goto fini;
 	}
 
-	ioreq_init(&req, coh, eio_arg->op_oid, DAOS_IOD_ARRAY, arg);
+	ioreq_init(&req, arg->coh, eio_arg->op_oid, DAOS_IOD_ARRAY, arg);
 	if (pu_arg->pa_recxs_num == 0)
 		punch_akey(key_rec->or_dkey, key_rec->or_akey,
 			   DAOS_TX_NONE, &req);
@@ -178,7 +176,7 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		D_ASSERT(uf_arg->ua_recxs == NULL);
 
 	iod_type = array ? DAOS_IOD_ARRAY : DAOS_IOD_SINGLE;
-	ioreq_init(&req, coh, eio_arg->op_oid, iod_type, arg);
+	ioreq_init(&req, arg->coh, eio_arg->op_oid, iod_type, arg);
 	buf_size = test_recx_size(uf_arg->ua_recxs, uf_arg->ua_recx_num,
 				  iod_size);
 	D_ALLOC(buf, buf_size);
@@ -207,7 +205,7 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 				      DAOS_TX_NONE, &req);
 		/*Take the snapshot*/
 		if (uf_arg->snap == true) {
-			rc = daos_cont_create_snap(coh, &snap_epoch, NULL,
+			rc = daos_cont_create_snap(arg->coh, &snap_epoch, NULL,
 						   NULL);
 			op->snap_epoch = snap_epoch;
 		}
@@ -215,7 +213,7 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		th_open = DAOS_TX_NONE;
 		/*Open snapshot and read the data from snapshot epoch*/
 		if (uf_arg->snap == true) {
-			rc = daos_tx_open_snap(coh, op->snap_epoch,
+			rc = daos_tx_open_snap(arg->coh, op->snap_epoch,
 					       &th_open, NULL);
 			D_ASSERT(rc == 0);
 		}
@@ -368,7 +366,7 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 	}
 
 	test_rebuild_wait(&arg, 1);
-	daos_cont_status_clear(coh, NULL);
+	daos_cont_status_clear(arg->coh, NULL);
 	return 0;
 }
 
@@ -1057,7 +1055,7 @@ cmd_parse_oid(test_arg_t *arg, int argc, char **argv)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	type = daos_oclass_name2id(obj_class);
-	eio_arg->op_oid = daos_test_oid_gen(coh, type, 0, 0, arg->myrank);
+	eio_arg->op_oid = daos_test_oid_gen(arg->coh, type, 0, 0, arg->myrank);
 	if (type == DAOS_OC_R2S_SPEC_RANK || type == DAOS_OC_R3S_SPEC_RANK ||
 	    type == DAOS_OC_R1S_SPEC_RANK) {
 		if (rank == -1) {
@@ -1231,12 +1229,12 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 				print_message("bad parameter");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
-			arg->eio_args.op_oid = daos_test_oid_gen(coh,
+			arg->eio_args.op_oid = daos_test_oid_gen(arg->coh,
 							   dts_ec_obj_class,
 							   0, 0, arg->myrank);
 		} else if (strcmp(argv[1], "replica") == 0) {
 			arg->eio_args.op_ec = 0;
-			arg->eio_args.op_oid = daos_test_oid_gen(coh,
+			arg->eio_args.op_oid = daos_test_oid_gen(arg->coh,
 							   dts_obj_class, 0,
 							   0, arg->myrank);
 			print_message("the test is for replica object.\n");
@@ -1559,31 +1557,19 @@ epoch_io_setup(void **state)
 	struct epoch_io_args	*eio_arg;
 	char			*tmp_str;
 	int			 rc;
-	char			str[37];
+	unsigned int		 orig_dt_cell_size;
 
-	daos_prop_t *prop;
-
-	prop = daos_prop_alloc(1);
-	assert_non_null(prop);
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
-	prop->dpp_entries[0].dpe_val = 1 << 15;
-
+	orig_dt_cell_size = dt_cell_size;
+	dt_cell_size = 1 << 15;
 	obj_setup(state);
+	dt_cell_size = orig_dt_cell_size;
 	arg = *state;
-	rc = daos_cont_create(arg->pool.poh, &uuid, prop, NULL);
-	daos_prop_free(prop);
-	assert_success(rc);
-
-	uuid_unparse(uuid, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW,
-			    &coh, NULL, NULL);
-	assert_success(rc);
 
 	eio_arg = &arg->eio_args;
 	D_INIT_LIST_HEAD(&eio_arg->op_list);
 	eio_arg->op_lvl = TEST_LVL_DAOS;
 	eio_arg->op_iod_size = 1;
-	eio_arg->op_oid = daos_test_oid_gen(coh, dts_obj_class, 0, 0,
+	eio_arg->op_oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0,
 					    arg->myrank);
 
 	/* generate the temporary IO dir for epoch IO test */
@@ -1638,8 +1624,6 @@ epoch_io_teardown(void **state)
 {
 	test_arg_t		*arg = *state;
 	struct epoch_io_args	*eio_arg = &arg->eio_args;
-	int			rc;
-	char			str[37];
 
 	test_eio_arg_oplist_free(arg);
 
@@ -1647,14 +1631,6 @@ epoch_io_teardown(void **state)
 	D_FREE(eio_arg->op_akey);
 	D_FREE(test_io_fail_dir);
 	D_FREE(test_io_work_dir);
-
-	/* Close & Destroy Container */
-	rc = daos_cont_close(coh, NULL);
-	assert_rc_equal(rc, 0);
-	uuid_unparse(uuid, str);
-	rc = daos_cont_destroy(arg->pool.poh,
-			       uuid, true, NULL);
-	assert_rc_equal(rc, 0);
 
 	return test_teardown(state);
 }

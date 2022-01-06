@@ -456,7 +456,7 @@ obj_init_oca(struct dc_object *obj)
 	uint32_t		nr_grps;
 	struct cont_props	props;
 
-	oca = daos_oclass_attr_find(obj->cob_md.omd_id, NULL, &nr_grps);
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id, &nr_grps);
 	if (!oca)
 		return -DER_INVAL;
 

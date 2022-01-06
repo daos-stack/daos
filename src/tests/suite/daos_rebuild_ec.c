@@ -871,7 +871,6 @@ rebuild_ec_parity_multi_group(void **state)
 }
 
 #define SNAP_CNT	20
-#define EC_CELL_SIZE	DAOS_EC_CELL_DEF
 static void
 rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 {
@@ -892,7 +891,7 @@ rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	data_size = ec_data_nr_get(oid) * (uint64_t)EC_CELL_SIZE + 1000;
+	data_size = ec_data_nr_get(oid) * (uint64_t)CELL_SIZE + 1000;
 	data = (char *)malloc(data_size);
 	assert_true(data != NULL);
 	verify_data = (char *)malloc(data_size);
