@@ -168,10 +168,10 @@ struct bio_dma_buffer {
 	  "minutes", D_TM_COUNTER)					\
 	X(bdh_avail_spare, "reliability/avail_spare",			\
 	  "Percentage of remaining spare capacity available",		\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	X(bdh_avail_spare_thres, "reliability/avail_spare_threshold",	\
 	  "Threshold for available spare value",			\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	X(bdh_avail_spare_warn, "reliability/avail_spare_warn",		\
 	  "Set to 1 when available spare has fallen below threshold",	\
 	  "", D_TM_GAUGE)						\
@@ -201,16 +201,16 @@ struct bio_dma_buffer {
 	  "", D_TM_COUNTER)						\
 	Y(bdh_wear_leveling_cnt_norm, "vendor/wear_leveling_cnt_norm",	\
 	  "Wear leveling count remaining, decrements from 100 to 0",	\
-	  "", D_TM_COUNTER)						\
+	  "", D_TM_GAUGE)						\
 	Y(bdh_wear_leveling_cnt_min, "vendor/wear_leveling_cnt_min",	\
 	  "Wear leveling minimum erase cycle",				\
-	  "", D_TM_COUNTER)						\
+	  "", D_TM_GAUGE)						\
 	Y(bdh_wear_leveling_cnt_max, "vendor/wear_leveling_cnt_max",    \
 	  "Wear leveling maximum erase cycle",                          \
-	  "", D_TM_COUNTER)                                             \
+	  "", D_TM_GAUGE)                                             \
 	Y(bdh_wear_leveling_cnt_avg, "vendor/wear_leveling_cnt_avg",    \
 	  "Wear leveling average erase cycle",                          \
-	  "", D_TM_COUNTER)						\
+	  "", D_TM_GAUGE)						\
 	Y(bdh_endtoend_err_cnt_raw, "vendor/endtoend_err_cnt_raw",	\
 	  "End-to-End detected and corrected errors by hardware",	\
 	  "", D_TM_COUNTER)						\
@@ -219,16 +219,16 @@ struct bio_dma_buffer {
 	  "", D_TM_COUNTER)						\
 	Y(bdh_media_wear_raw, "vendor/media_wear_raw",			\
 	  "Wear seen by the SSD as a percentage of the maximum rated cycles", \
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	Y(bdh_host_reads_raw, "vendor/host_reads_raw",			\
 	  "Percentage of I/O operations that are a read operation",	\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	Y(bdh_workload_timer_raw, "vendor/crc_workload_timer_raw",	\
 	  "The elapsed time since starting the workload timer",		\
 	  "minutes", D_TM_COUNTER)					\
 	Y(bdh_thermal_throttle_status, "vendor/thermal_throttle_status_raw", \
 	  "Thermal throttle status",					\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	Y(bdh_thermal_throttle_event_cnt, "vendor/thermal_throttle_event_cnt", \
 	  "Thermal throttling event count",				\
 	  "", D_TM_COUNTER)						\
@@ -417,7 +417,8 @@ struct bio_desc {
 	unsigned int		 bd_buffer_prep:1,
 				 bd_dma_issued:1,
 				 bd_retry:1,
-				 bd_rdma:1;
+				 bd_rdma:1,
+				 bd_copy_dst:1;
 	/* Cached bulk handles being used by this IOD */
 	struct bio_bulk_hdl    **bd_bulk_hdls;
 	unsigned int		 bd_bulk_max;
@@ -487,6 +488,7 @@ struct media_error_msg {
 
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
+extern bool		bio_spdk_inited;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,

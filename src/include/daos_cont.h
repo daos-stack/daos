@@ -18,22 +18,18 @@ extern "C" {
 
 #include <daos_security.h>
 
-/**
- * DAOS_COO_RO opens the container for reading only. This flag conflicts with
- * DAOS_COO_RW.
- *
- * DAOS_COO_RW opens the container for reading and writing. This flag conflicts
- * with DAOS_COO_RO.
- *
- * DAOS_COO_NOSLIP disables the automatic epoch slip at epoch commit time. See
- * daos_epoch_commit().
- *
- * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
- * factor/level requirements of the container.
- */
+/** Opens the container for reading only. This flag conflicts with DAOS_COO_RW. */
 #define DAOS_COO_RO		(1U << 0)
+
+/** Opens the container for reading and writing. This flag conflicts with DAOS_COO_RO. */
 #define DAOS_COO_RW		(1U << 1)
+
+/** Disables the automatic epoch slip at epoch commit time. See daos_epoch_commit(). */
 #define DAOS_COO_NOSLIP		(1U << 2)
+
+/** Skips the check to see if the pool meets the redundancy factor/level requirements of the
+ * container.
+ */
 #define DAOS_COO_FORCE		(1U << 3)
 
 #define DAOS_COO_NBITS	(4)
@@ -52,7 +48,6 @@ typedef struct {
 	uint64_t		ci_pad[2];
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
-
 
 /**
  * Generate a rank list from a string with a separator argument. This is a
@@ -188,7 +183,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
- *			-DER_RF		#failures exceed RF, data possibly lost
+ *			-DER_RF		Number of failures exceed RF, data possibly lost
  */
 int
 daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
@@ -270,7 +265,7 @@ daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *
  *			-DER_NO_HDL	Invalid container handle
  */
 int
-daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
+daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 		daos_prop_t *cont_prop, daos_event_t *ev);
 
 /**
@@ -293,8 +288,8 @@ daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
  *			-DER_NO_HDL	Invalid container handle
  */
 int
-daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
-		  daos_event_t *ev);
+daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev);
+
 /**
  * Sets the container properties.
  *
@@ -313,7 +308,6 @@ daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
  */
 int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
-
 
 /**
  * Clear container status, to clear container's DAOS_PROP_CO_STATUS property

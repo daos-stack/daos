@@ -1,38 +1,56 @@
 # Run IOR & mdtest
 
-Use IOR to generate an HPC type POSIX I/O load to the POSIX container
-and mdtest to create substantial directory structure.
+The `ior` benchmarking tool can be used to generate an HPC type I/O load.
+This is an MPI-parallel tool that requires MPI to start and control the
+IOR processes on the client nodes. For this purpose, any MPI implementation
+can be used. IOR also has an MPI-IO backend, and in order to use this
+MPI-IO backend with DAOS, an MPI stack that includes the DAOS ROMIO backend
+has to be used to build and run IOR.
+Refer to [MPI-IO Support](https://docs.daos.io/v2.0/user/mpi-io/) for details.
 
-## Build ior
+In addition to the default POSIX API, IOR also natively supports the
+DFS backend that directly uses DAOS File System (DFS) I/O calls instead
+of POSIX I/O calls. Details on the DAOS DFS backend for IOR can be found in the
+[README\_DAOS](https://github.com/hpc/ior/blob/main/README_DAOS)
+at the IOR github repository.
+
+The `mdtest` tool to benchmark metadata performance is included in the
+same repository as the IOR tool.
+Like `IOR`, it is also an MPI-parallel application.
+
+The [Performance Tuning](https://docs.daos.io/v2.0/admin/performance_tuning/#benchmarking-daos)
+section of the Administration Guide contains further information on IOR and mdtest.
+
+## Build ior and mdtest
 
 ```sh
+$ module load mpi/mpich-x86_64 # or any other MPI stack
 $ git clone https://github.com/hpc/ior.git
 $ cd ior
 $ ./bootstrap
 $ mkdir build;cd build
-$ ../configure --with-daos=/usr --prefix=<your dir>
+$ ../configure --with-daos=/usr --prefix=<your_dir>
 $ make
 $ make install
 ```
 
-Add `<your dir>/lib to LD_LIBRARY_PATh and <your dir>/bin` to PATH
-
 ## Run ior
 
-Use ior to write and read around 150G of data
+This example uses the default IOR `API=POSIX`, and requires that the DAOS POSIX container
+is dfuse-mounted at `/tmp/daos_dfuse` on all client nodes. The per-task performance over a dfuse
+mount is limited. To obtain better performance, the POSIX API can be used in conjunction with the
+[IOIL](https://docs.daos.io/v2.0/user/filesystem/#interception-library) interception library.
+For best performance IOR can be run with `API=DFS`, passing in the DAOS pool and container
+information (`ior -a DFS --dfs.pool=$DAOS_POOL --daos.cont=$DAOS_CONT ...`).
 
 ```sh
-# load mpich module or set it's path in your environment
-$ module load mpi/mpich-x86_64
-or
-$ export LD_LIBRARY_PATH=<mpich lib path>:$LD_LIBRARY_PATH
-$ export PATH=<mpich bin path>:$PATH
+$ module load mpi/mpich-x86_64 # or any other MPI stack
 
-$ mpirun -hostfile /path/to/hostfile_clients -np 30 ior -a POSIX -b 5G -t 1M -v -W -w -r -R -i 1 -k -o /tmp/daos_dfuse/testfile
+$ mpirun -hostfile /path/to/hostfile_clients -np 30 <your_dir>/bin/ior -a POSIX -b 5G -t 1M -v -W -w -r -R -i 1 -o /tmp/daos_dfuse/testfile
 
 IOR-3.4.0+dev: MPI Coordinated Test of Parallel I/O
 Began               : Thu Apr 29 23:23:09 2021
-Command line        : ior -a POSIX -b 5G -t 1M -v -W -w -r -R -i 1 -k -o /tmp/daos_dfuse/testfile
+Command line        : ior -a POSIX -b 5G -t 1M -v -W -w -r -R -i 1 -o /tmp/daos_dfuse/testfile
 Machine             : Linux wolf-86.wolf.hpdd.intel.com
 Start time skew across all tasks: 0.00 sec
 TestID              : 0
@@ -83,10 +101,10 @@ Finished            : Thu Apr 29 23:26:03 2021
 
 ## Run mdtest
 
-Use mdtest to create 30K files:
+Use mdtest to create 30K files using `API=POSIX` (as for IOR, using `-a DFS` will provide much better performance):
 
 ```sh
-$ mpirun -hostfile /path/to/hostfile_clients -np 10 mdtest -a POSIX -z 0 -F -C -i 1 -n 3334 -e 4096 -d /tmp/daos_dfuse/ -w 4096
+$ mpirun -hostfile /path/to/hostfile_clients -np 10 <your_dir>/bin/mdtest -a POSIX -z 0 -F -C -i 1 -n 3334 -e 4096 -d /tmp/daos_dfuse/ -w 4096
 
 -- started at 04/29/2021 23:28:11 --
 
