@@ -939,8 +939,8 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 		newFabricInterfaceBuilder(nil,
 			&MockFabricInterfaceProvider{},
 			&MockFabricInterfaceProvider{}),
-		newNetDevClassBuilder(nil, &MockNetDevClassProvider{}),
 		newOSDeviceBuilder(nil, &Topology{}),
+		newNetDevClassBuilder(nil, &MockNetDevClassProvider{}),
 		newNUMAAffinityBuilder(nil, &Topology{}),
 	}
 
@@ -1201,7 +1201,7 @@ func TestHardware_OSDeviceBuilder_BuildPart(t *testing.T) {
 				},
 			),
 		},
-		"loopback": {
+		"loopback class": {
 			builder: newOSDeviceBuilder(nil, testTopo),
 			set: NewFabricInterfaceSet(
 				&FabricInterface{
@@ -1214,6 +1214,20 @@ func TestHardware_OSDeviceBuilder_BuildPart(t *testing.T) {
 					Name:        "lo",
 					OSDevice:    "lo",
 					DeviceClass: Loopback,
+				},
+			),
+		},
+		"loopback name only": {
+			builder: newOSDeviceBuilder(nil, testTopo),
+			set: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name: "lo",
+				},
+			),
+			expResult: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:     "lo",
+					OSDevice: "lo",
 				},
 			),
 		},

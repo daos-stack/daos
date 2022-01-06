@@ -403,7 +403,7 @@ func (o *OSDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet
 			continue
 		}
 
-		if fi.DeviceClass == Loopback {
+		if fi.DeviceClass == Loopback || fi.Name == "lo" {
 			// Loopback is not a hardware device
 			fi.OSDevice = name
 			fis.Update(fi)
@@ -553,8 +553,8 @@ type FabricInterfaceSetBuilderConfig struct {
 func defaultFabricInterfaceSetBuilders(log logging.Logger, config *FabricInterfaceSetBuilderConfig) []FabricInterfaceSetBuilder {
 	return []FabricInterfaceSetBuilder{
 		newFabricInterfaceBuilder(log, config.FabricInterfaceProviders...),
-		newNetDevClassBuilder(log, config.NetDevClassProvider),
 		newOSDeviceBuilder(log, config.Topology),
+		newNetDevClassBuilder(log, config.NetDevClassProvider),
 		newNUMAAffinityBuilder(log, config.Topology),
 	}
 }
