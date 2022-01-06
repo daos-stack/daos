@@ -44,22 +44,9 @@ server_config:
           scm_class: dcpm
           scm_list: ["/dev/pmem1"]
           scm_mount: /mnt/daos1
-# hosts:
-#   test_servers:
-#     - server-A
-#   test_clients:
-#     - client-A
-# timeout: 300
-# server_config:
-#   name: daos_server
-#   servers:
-#     0:
-#       scm_class: ram
-#       scm_mount: /mnt/daos
 pool:
   mode: 146
   name: daos_server
-  # scm_size: 50G
   scm_size: 95%
   nvme_size: 90%
   control_method: dmg

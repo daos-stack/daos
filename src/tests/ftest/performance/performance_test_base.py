@@ -238,7 +238,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.display_pool_space()
         self.dmg_cmd.system_query()
 
-
     def verify_oclass_server_count(self, oclass):
         """Verify an object class is compatible with the number of servers.
 
@@ -308,7 +307,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
         Args:
             namespace (str, optional): namespace for IOR parameters in the yaml.
-                Defaulits to None, which uses default IOR namespace.
+                Defaults to None, which uses default IOR namespace.
             use_intercept (bool, optional): whether to use the interception library with dfuse.
                 Defaults to True.
             stop_delay_write (float, optional): fraction of stonewall time after which to stop a
