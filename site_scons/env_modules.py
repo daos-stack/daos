@@ -39,14 +39,11 @@ class _env_module(): # pylint: disable=invalid-name
         """Load Modules for initializing envirables"""
         # Leap 15's lmod-lua doesn't include the usual module path
         # in it's MODULEPATH, for some unknown reason
-        os.environ["MODULEPATH"] = ":".join([os.path.sep +
-                                             os.path.join("usr", "share",
-                                                          "modules"),
-                                             os.path.sep +
-                                             os.path.join("etc",
-                                                          "modulefiles")] +
-                                            os.environ.get("MODULEPATH",
-                                                           "").split(":"))
+        os.environ["MODULEPATH"] = ":".join(
+            [os.path.sep + os.path.join("usr", "share", "modules"),
+             os.path.sep + os.path.join("usr", "share", "modulefiles"),
+             os.path.sep + os.path.join("etc", "modulefiles")] +
+            os.environ.get("MODULEPATH", "").split(":"))
         self._module_load = self._init_mpi_module()
 
     def _module_func(self, command, *arguments): # pylint: disable=no-self-use
@@ -61,6 +58,8 @@ class _env_module(): # pylint: disable=invalid-name
             proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
         except OSError as error:
             if error.errno == errno.ENOENT:
+                print("%s not present.  Install Lmod, or lua-lmod package "
+                      "on CentOS or Leap, respectively")
                 return None, None
 
         stdout, stderr = proc.communicate()
@@ -94,8 +93,11 @@ class _env_module(): # pylint: disable=invalid-name
                 unload += value
 
         for to_load in load:
+            print("Trying to load {}".format(to_load))
             if self._module_func('is-loaded', to_load)[0]:
+                print("is-loaded")
                 return True
+            print("not is-loaded")
 
         for to_unload in unload:
             if self._module_func('is-loaded', to_unload)[0]:
@@ -106,6 +108,7 @@ class _env_module(): # pylint: disable=invalid-name
                self._module_func('load', to_load)[0]:
                 print("Loaded %s" % to_load)
                 return True
+            print("is-avail: %s" % self._module_func('is-avail', to_load)[0])
 
         return False
 
@@ -145,6 +148,9 @@ class _env_module(): # pylint: disable=invalid-name
         """Invoke the mpi loader"""
         if not self._module_load(mpi):
             print("No %s found\n" % mpi)
+            print("Available modules in %s:\n" %
+                  os.environ.get("MODULEPATH", ""))
+            print(self._module_func('avail'))
             return False
         exe_path = shutil.which('mpirun')
         if not exe_path:

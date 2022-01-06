@@ -2,17 +2,23 @@
 
 REPOS_DIR=/etc/dnf/repos.d
 DISTRO_NAME=leap15
+DISTRO_VER=$(lsb_release -sr)
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 
 bootstrap_dnf() {
     rm -rf "$REPOS_DIR"
     ln -s ../zypp/repos.d "$REPOS_DIR"
+
+    # add some missing repos
+    for repo in {backports,sle}{,-debug}; do
+        dnf -y config-manager --add-repo="${REPOSITORY_URL}/repository/opensuse-${DISTRO_VER}-repo-${repo}-update-proxy"
+    done
 }
 
 group_repo_post() {
     if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
         rpm --import \
-            "${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"
+            "${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO%/*}/opensuse-${DISTRO_VER}-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"
     fi
 }
 
@@ -71,7 +77,7 @@ post_provision_config_nodes() {
                 fi
             fi
             local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
-            dnf config-manager --add-repo="${repo_url}"
+            dnf -y config-manager --add-repo="${repo_url}"
             disable_gpg_check "$repo_url"
         done
     fi
