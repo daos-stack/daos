@@ -441,12 +441,12 @@ sched_metrics_init(struct dss_xstream *dx)
 	if (rc)
 		D_WARN("Failed to create relax_time telemetry: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&stats->ss_wq_len, D_TM_COUNTER, "Wait queue length", "req",
+	rc = d_tm_add_metric(&stats->ss_wq_len, D_TM_GAUGE, "Wait queue length", "req",
 			     "sched/wait_queue/xs_%u", dx->dx_xs_id);
 	if (rc)
 		D_WARN("Failed to create wait_queue telemetry: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&stats->ss_sq_len, D_TM_COUNTER, "Sleep queue length", "req",
+	rc = d_tm_add_metric(&stats->ss_sq_len, D_TM_GAUGE, "Sleep queue length", "req",
 			     "sched/sleep_queue/xs_%u", dx->dx_xs_id);
 	if (rc)
 		D_WARN("Failed to create sleep_queue telemetry: "DF_RC"\n", DP_RC(rc));
@@ -1671,8 +1671,8 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 		sched_try_relax(dx, pools, cycle->sc_ults_tot);
 
 	d_tm_inc_counter(info->si_stats.ss_total_time, duration);
-	d_tm_set_counter(info->si_stats.ss_wq_len, info->si_req_cnt);
-	d_tm_set_counter(info->si_stats.ss_sq_len, info->si_sleep_cnt);
+	d_tm_set_gauge(info->si_stats.ss_wq_len, info->si_req_cnt);
+	d_tm_set_gauge(info->si_stats.ss_sq_len, info->si_sleep_cnt);
 	if (cycle->sc_ults_tot) {
 		d_tm_set_gauge(info->si_stats.ss_cycle_duration, duration);
 		d_tm_set_gauge(info->si_stats.ss_cycle_size, cycle->sc_ults_tot);

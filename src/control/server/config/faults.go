@@ -126,6 +126,33 @@ func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
+func FaultConfigBdevCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigBdevCountMismatch,
+		fmt.Sprintf("the total number of bdev_list entries in all tiers is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal number of total bdev_list entries and restart",
+	)
+}
+
+func FaultConfigTargetCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigTargetCountMismatch,
+		fmt.Sprintf("the target count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for targets parameter and restart",
+	)
+}
+
+func FaultConfigHelperStreamCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigHelperStreamCountMismatch,
+		fmt.Sprintf("the helper stream count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for nr_xs_helpers parameter and restart",
+	)
+}
+
 func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigInvalidNetDevClass,
