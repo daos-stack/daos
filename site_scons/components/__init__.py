@@ -326,8 +326,10 @@ def define_components(reqs):
                           '"$SPDK_PREFIX/include/dpdk"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"',
-                          'cp build/examples/{lsvmd,nvme_manage,identify,perf}'\
-                          ' "$SPDK_PREFIX/bin"'],
+                          'cp build/examples/lsvmd "$SPDK_PREFIX/bin"',
+                          'cp build/examples/nvme_manage "$SPDK_PREFIX/bin"',
+                          'cp build/examples/identify "$SPDK_PREFIX/bin"',
+                          'cp build/examples/perf "$SPDK_PREFIX/bin"'],
                 headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
                 extra_include_path=['/usr/include/dpdk',
                                     '$SPDK_PREFIX/include/dpdk',
