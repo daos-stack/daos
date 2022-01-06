@@ -1119,13 +1119,13 @@ func TestControl_ListPools(t *testing.T) {
 	}
 }
 
-func TestControl_GetMaxPoolSize(testRunner *testing.T) {
+func TestControl_GetMaxPoolSize(t *testing.T) {
 	type ExpectedOutput struct {
 		ScmBytes  uint64
 		NvmeBytes uint64
 	}
 
-	for testName, testData := range map[string]struct {
+	for name, tc := range map[string]struct {
 		HostsConfigArray []MockHostStorageConfig
 		ExpectedOutput   ExpectedOutput
 	}{
@@ -1293,17 +1293,17 @@ func TestControl_GetMaxPoolSize(testRunner *testing.T) {
 			},
 		},
 	} {
-		testRunner.Run(testName, func(testRunner *testing.T) {
-			log, buf := logging.NewTestLogger(testRunner.Name())
-			defer common.ShowBufferOnFailure(testRunner, buf)
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
 			mockInvokerConfig := &MockInvokerConfig{
 				UnaryResponse: &UnaryResponse{
 					Responses: []*HostResponse{},
 				},
 			}
-			for _, hostStorageConfig := range testData.HostsConfigArray {
-				storageScanResp := MockStorageScanResp(testRunner,
+			for _, hostStorageConfig := range tc.HostsConfigArray {
+				storageScanResp := MockStorageScanResp(t,
 					hostStorageConfig.ScmConfig,
 					hostStorageConfig.NvmeConfig)
 				hostResponse := &HostResponse{
@@ -1317,50 +1317,33 @@ func TestControl_GetMaxPoolSize(testRunner *testing.T) {
 
 			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), mockInvoker)
 
-			common.AssertTrue(testRunner, err == nil, "Expected no error")
-			common.AssertEqual(testRunner,
-				testData.ExpectedOutput.ScmBytes,
+			common.AssertTrue(t, err == nil, "Expected no error")
+			common.AssertEqual(t,
+				tc.ExpectedOutput.ScmBytes,
 				scmBytes,
 				fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
-					testData.ExpectedOutput.ScmBytes,
+					tc.ExpectedOutput.ScmBytes,
 					scmBytes))
 
-			common.AssertEqual(testRunner,
-				testData.ExpectedOutput.NvmeBytes,
+			common.AssertEqual(t,
+				tc.ExpectedOutput.NvmeBytes,
 				nvmeBytes,
 				fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
-					testData.ExpectedOutput.NvmeBytes,
+					tc.ExpectedOutput.NvmeBytes,
 					nvmeBytes))
 		})
 	}
 }
 
-func TestControl_GetMaxPoolSize_Errors(testRunner *testing.T) {
-	testRunner.Run("Response Message Invalid", func(testRunner *testing.T) {
-		log, buf := logging.NewTestLogger(testRunner.Name())
-		defer common.ShowBufferOnFailure(testRunner, buf)
-
-		mockInvokerConfig := &MockInvokerConfig{
-			UnaryResponse: &UnaryResponse{
-				Responses: []*HostResponse{},
-			},
-		}
-		hostResponse := new(HostResponse)
-		mockInvokerConfig.UnaryResponse.Responses = append(mockInvokerConfig.UnaryResponse.Responses,
-			hostResponse)
-		mockInvoker := NewMockInvoker(log, mockInvokerConfig)
-
-		_, _, err := GetMaxPoolSize(context.TODO(), mockInvoker)
-		common.AssertTrue(testRunner, err != nil, "Expected error")
-		common.CmpErr(testRunner,
-			errors.New("unable to unpack message"),
-			err)
-	})
-
-	for testName, testData := range map[string]struct {
+func TestControl_GetMaxPoolSize_Errors(t *testing.T) {
+	for name, tc := range map[string]struct {
 		HostsConfigArray []MockHostStorageConfig
 		ExpectedError    error
 	}{
+		"Invalid response message": {
+			HostsConfigArray: []MockHostStorageConfig{{}},
+			ExpectedError:    errors.New("unable to unpack message"),
+		},
 		"No DAOS server": {
 			HostsConfigArray: []MockHostStorageConfig{},
 			ExpectedError:    errors.New("No DAOS server available"),
@@ -1393,24 +1376,29 @@ func TestControl_GetMaxPoolSize_Errors(testRunner *testing.T) {
 			ExpectedError: errors.New("Not enough SCM storage available with the SCM namespace"),
 		},
 	} {
-		testRunner.Run(testName, func(testRunner *testing.T) {
-			log, buf := logging.NewTestLogger(testRunner.Name())
-			defer common.ShowBufferOnFailure(testRunner, buf)
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
 			mockInvokerConfig := &MockInvokerConfig{
 				UnaryResponse: &UnaryResponse{
 					Responses: []*HostResponse{},
 				},
 			}
-			for _, hostStorageConfig := range testData.HostsConfigArray {
-				scmConfig := hostStorageConfig.ScmConfig
-				nvmeConfig := hostStorageConfig.NvmeConfig
-				storageScanResp := MockStorageScanResp(testRunner,
-					scmConfig,
-					nvmeConfig)
-				hostResponse := &HostResponse{
-					Addr:    hostStorageConfig.HostName,
-					Message: storageScanResp,
+			for _, hostStorageConfig := range tc.HostsConfigArray {
+				var hostResponse *HostResponse
+				if hostStorageConfig.HostName == "" {
+					hostResponse = new(HostResponse)
+				} else {
+					scmConfig := hostStorageConfig.ScmConfig
+					nvmeConfig := hostStorageConfig.NvmeConfig
+					storageScanResp := MockStorageScanResp(t,
+						scmConfig,
+						nvmeConfig)
+					hostResponse = &HostResponse{
+						Addr:    hostStorageConfig.HostName,
+						Message: storageScanResp,
+					}
 				}
 				mockInvokerConfig.UnaryResponse.Responses = append(mockInvokerConfig.UnaryResponse.Responses,
 					hostResponse)
@@ -1418,7 +1406,8 @@ func TestControl_GetMaxPoolSize_Errors(testRunner *testing.T) {
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 
 			_, _, err := GetMaxPoolSize(context.TODO(), mockInvoker)
-			common.CmpErr(testRunner, testData.ExpectedError, err)
+			common.AssertTrue(t, err != nil, "Expected error")
+			common.CmpErr(t, tc.ExpectedError, err)
 
 		})
 	}

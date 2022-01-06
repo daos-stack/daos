@@ -568,7 +568,7 @@ type (
 	}
 )
 
-func MockStorageScanResp(testRunner *testing.T,
+func MockStorageScanResp(t *testing.T,
 	mockScmConfigArray []MockScmConfig,
 	mockNvmeConfigArray []MockNvmeConfig) *ctlpb.StorageScanResp {
 	serverScanResponse := &ctlpb.StorageScanResp{
@@ -597,7 +597,7 @@ func MockStorageScanResp(testRunner *testing.T,
 		scmNamespaces = append(scmNamespaces, scmNamespace)
 	}
 	if err := convert.Types(scmNamespaces, &serverScanResponse.Scm.Namespaces); err != nil {
-		testRunner.Fatal(err)
+		t.Fatal(err)
 	}
 
 	nvmeControllers := make(storage.NvmeControllers, 0, len(mockNvmeConfigArray))
@@ -610,7 +610,7 @@ func MockStorageScanResp(testRunner *testing.T,
 		nvmeControllers = append(nvmeControllers, nvmeController)
 	}
 	if err := convert.Types(nvmeControllers, &serverScanResponse.Nvme.Ctrlrs); err != nil {
-		testRunner.Fatal(err)
+		t.Fatal(err)
 	}
 
 	return serverScanResponse
@@ -634,7 +634,7 @@ type MockPoolRespConfig struct {
 	NvmeBytes uint64
 }
 
-func MockPoolCreateResp(testRunner *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCreateResp {
+func MockPoolCreateResp(t *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCreateResp {
 	poolCreateResp := &PoolCreateResp{
 		UUID:      common.MockUUID(),
 		SvcReps:   mockRanks(config.Ranks),
@@ -644,7 +644,7 @@ func MockPoolCreateResp(testRunner *testing.T, config *MockPoolRespConfig) *mgmt
 
 	poolCreateRespMsg := new(mgmtpb.PoolCreateResp)
 	if err := convert.Types(poolCreateResp, poolCreateRespMsg); err != nil {
-		testRunner.Fatal(err)
+		t.Fatal(err)
 	}
 
 	return poolCreateRespMsg

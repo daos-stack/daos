@@ -928,14 +928,14 @@ func (invoker *MockRequestsRecorderInvoker) InvokeUnaryRPC(context context.Conte
 	return invoker.MockInvoker.InvokeUnaryRPC(context, request)
 }
 
-func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
+func TestDmg_PoolCreateAllCmd(t *testing.T) {
 	type ExpectedOutput struct {
 		PoolConfig control.MockPoolRespConfig
 		WarningMsg string
 		Error      error
 	}
 
-	for testName, testData := range map[string]struct {
+	for name, tc := range map[string]struct {
 		StorageRatio     string
 		HostsConfigArray []control.MockHostStorageConfig
 		ExpectedOutput   ExpectedOutput
@@ -1187,15 +1187,15 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 			},
 		},
 	} {
-		testRunner.Run(testName, func(testRunner *testing.T) {
-			log, buf := logging.NewTestLogger(testRunner.Name())
-			defer common.ShowBufferOnFailure(testRunner, buf)
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
 			mockInvokerConfig := new(control.MockInvokerConfig)
 
 			unaryResponse := new(control.UnaryResponse)
-			for _, hostStorageConfig := range testData.HostsConfigArray {
-				storageScanResp := control.MockStorageScanResp(testRunner,
+			for _, hostStorageConfig := range tc.HostsConfigArray {
+				storageScanResp := control.MockStorageScanResp(t,
 					hostStorageConfig.ScmConfig,
 					hostStorageConfig.NvmeConfig)
 				hostResponse := &control.HostResponse{
@@ -1206,10 +1206,10 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 			}
 			mockInvokerConfig.UnaryResponseSet = append(mockInvokerConfig.UnaryResponseSet, unaryResponse)
 
-			if testData.ExpectedOutput.PoolConfig.Ranks != "" {
-				poolCreateResp := control.MockPoolCreateResp(testRunner, &testData.ExpectedOutput.PoolConfig)
+			if tc.ExpectedOutput.PoolConfig.Ranks != "" {
+				poolCreateResp := control.MockPoolCreateResp(t, &tc.ExpectedOutput.PoolConfig)
 				hostResponse := &control.HostResponse{
-					Addr:    testData.ExpectedOutput.PoolConfig.HostName,
+					Addr:    tc.ExpectedOutput.PoolConfig.HostName,
 					Message: poolCreateResp,
 				}
 				unaryResponse = new(control.UnaryResponse)
@@ -1225,47 +1225,47 @@ func TestDmg_PoolCreateAllCmd(testRunner *testing.T) {
 			poolCreateCmd := new(PoolCreateCmd)
 			poolCreateCmd.setInvoker(mockInvoker)
 			poolCreateCmd.setLog(log)
-			poolCreateCmd.All = testData.StorageRatio
+			poolCreateCmd.All = tc.StorageRatio
 
 			err := poolCreateCmd.Execute(nil)
 
-			if testData.ExpectedOutput.Error != nil {
-				testExpectedError(testRunner, testData.ExpectedOutput.Error, err)
+			if tc.ExpectedOutput.Error != nil {
+				testExpectedError(t, tc.ExpectedOutput.Error, err)
 			} else {
-				common.AssertTrue(testRunner, err == nil, "Expected no error")
-				common.AssertEqual(testRunner, len(mockInvoker.Requests), 2, "Invalid number of request sent")
-				common.AssertTrue(testRunner,
+				common.AssertTrue(t, err == nil, "Expected no error")
+				common.AssertEqual(t, len(mockInvoker.Requests), 2, "Invalid number of request sent")
+				common.AssertTrue(t,
 					reflect.TypeOf(mockInvoker.Requests[0]) == reflect.TypeOf(&control.StorageScanReq{}),
 					"Invalid request type: wanted="+reflect.TypeOf(&control.StorageScanReq{}).String()+
 						" got="+reflect.TypeOf(mockInvoker.Requests[0]).String())
-				common.AssertTrue(testRunner,
+				common.AssertTrue(t,
 					reflect.TypeOf(mockInvoker.Requests[1]) == reflect.TypeOf(&control.PoolCreateReq{}),
 					"Invalid request type: wanted="+reflect.TypeOf(&control.PoolCreateReq{}).String()+
 						" got="+reflect.TypeOf(mockInvoker.Requests[1]).String())
 				poolCreateRequest := mockInvoker.Requests[1].(*control.PoolCreateReq)
-				common.AssertEqual(testRunner,
+				common.AssertEqual(t,
 					poolCreateRequest.TierBytes[0],
-					testData.ExpectedOutput.PoolConfig.ScmBytes,
+					tc.ExpectedOutput.PoolConfig.ScmBytes,
 					"Invalid size of allocated SCM")
-				common.AssertEqual(testRunner,
+				common.AssertEqual(t,
 					poolCreateRequest.TierBytes[1],
-					testData.ExpectedOutput.PoolConfig.NvmeBytes,
+					tc.ExpectedOutput.PoolConfig.NvmeBytes,
 					"Invalid size of allocated NVME")
-				common.AssertEqual(testRunner,
+				common.AssertEqual(t,
 					poolCreateRequest.TotalBytes,
 					uint64(0),
 					"Invalid size of TotalBytes attribute: disabled with manual allocation")
-				common.AssertTrue(testRunner,
+				common.AssertTrue(t,
 					poolCreateRequest.TierRatio == nil,
 					"Invalid size of TierRatio attribute: disabled with manual allocation")
-				msg := fmt.Sprintf("Creating DAOS pool with %s%% of all storage", testData.StorageRatio)
-				common.AssertTrue(testRunner,
+				msg := fmt.Sprintf("Creating DAOS pool with %s%% of all storage", tc.StorageRatio)
+				common.AssertTrue(t,
 					strings.Contains(buf.String(), msg),
 					"missing success message: Creating DAOS pool with with <ratio>% of all storage")
-				if testData.ExpectedOutput.WarningMsg != "" {
-					common.AssertTrue(testRunner,
-						strings.Contains(buf.String(), testData.ExpectedOutput.WarningMsg),
-						"missing warning message: "+testData.ExpectedOutput.WarningMsg)
+				if tc.ExpectedOutput.WarningMsg != "" {
+					common.AssertTrue(t,
+						strings.Contains(buf.String(), tc.ExpectedOutput.WarningMsg),
+						"missing warning message: "+tc.ExpectedOutput.WarningMsg)
 				}
 			}
 		})

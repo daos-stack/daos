@@ -129,7 +129,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errIncompatFlags("all", "num-ranks")
 		}
 
-		// DAOS-9196 TODO Update the protocol to allow filtering on ranks to use.  To
+		// TODO (DAOS-9557) Update the protocol to allow filtering on ranks to use.  To
 		// implement this feature the procotol should be changed to define if a SCM
 		// namespace is associated with one rank or not. If yes, it should define with which
 		// rank the SCM namespace is associated.
@@ -149,7 +149,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errors.Errorf(msg, storageRatio)
 		}
 
-		// DAOS-9196 TODO Update the protocol with a new message allowing to perform the
+		// TODO (DAOS-9556) Update the protocol with a new message allowing to perform the
 		// queries of storage request and the pool creation from the management server
 		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(),
 			cmd.ctlInvoker)
@@ -162,7 +162,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			nvmeBytes = uint64(storageRatio) * nvmeBytes / uint64(100)
 		}
 
-		// Extra storage space needed for metada such as the VOS file
+		// Extra storage space needed for metadata such as the VOS file
 		if scmBytes < control.PoolMetadataBytes {
 			missingBytes := control.PoolMetadataBytes - scmBytes
 			msg := "Not enough SMC storage available with ratio %s%%:"
@@ -174,22 +174,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 		scmBytes -= control.PoolMetadataBytes
 
-		if nvmeBytes == 0 {
-			cmd.log.Info("Creating DAOS pool without NVME storage")
-		}
-
-		scmRatio := 1.0
-		if nvmeBytes > 0 {
-			scmRatio = float64(scmBytes) / float64(nvmeBytes)
-		}
-		if scmRatio < storage.MinScmToNVMeRatio {
-			msg := "SCM:NVMe ratio is less than %0.2f%%, DAOS performance will suffer"
-			cmd.log.Infof(msg, storage.MinScmToNVMeRatio*100)
-		}
-
-		req.TierBytes = []uint64{scmBytes, nvmeBytes}
-		req.TotalBytes = 0
-		req.TierRatio = nil
+		cmd.updateRequest(req, scmBytes, nvmeBytes)
 
 		cmd.log.Infof("Creating DAOS pool with %d%% of all storage", storageRatio)
 	case cmd.Size != "":
@@ -236,35 +221,26 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errIncompatFlags("nranks", "scm-size")
 		}
 
-		ScmBytes, err := humanize.ParseBytes(cmd.ScmSize)
+		scmBytes, err := humanize.ParseBytes(cmd.ScmSize)
 		if err != nil {
 			return errors.Wrap(err, "failed to parse pool SCM size")
 		}
 
-		var NvmeBytes uint64
+		var nvmeBytes uint64
 		if cmd.NVMeSize != "" {
-			NvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
+			nvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
 			if err != nil {
 				return errors.Wrap(err, "failed to parse pool NVMe size")
 			}
 		}
 
-		req.TierBytes = []uint64{ScmBytes, NvmeBytes}
-		req.TotalBytes = 0
-		req.TierRatio = nil
+		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		scmRatio := 1.0
-		if NvmeBytes > 0 {
-			scmRatio = float64(ScmBytes) / float64(NvmeBytes)
-		}
-
-		if scmRatio < storage.MinScmToNVMeRatio {
-			cmd.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
-				"performance will suffer!\n", storage.MinScmToNVMeRatio*100)
-		}
 		cmd.log.Infof("Creating DAOS pool with manual per-server storage allocation: "+
-			"%s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(ScmBytes),
-			humanize.Bytes(NvmeBytes), scmRatio*100)
+			"%s SCM, %s NVMe (%0.2f%% ratio)",
+			humanize.Bytes(scmBytes),
+			humanize.Bytes(nvmeBytes),
+			scmRatio*100)
 	}
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)
@@ -284,6 +260,30 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	cmd.log.Info(bld.String())
 
 	return nil
+}
+
+func (cmd *PoolCreateCmd) updateRequest(req *control.PoolCreateReq,
+	scmBytes uint64,
+	nvmeBytes uint64) float64 {
+	if nvmeBytes == 0 {
+		cmd.log.Info("Creating DAOS pool without NVME storage")
+	}
+
+	scmRatio := 1.0
+	if nvmeBytes > 0 {
+		scmRatio = float64(scmBytes) / float64(nvmeBytes)
+	}
+
+	if scmRatio < storage.MinScmToNVMeRatio {
+		cmd.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
+			"performance will suffer!\n", storage.MinScmToNVMeRatio*100)
+	}
+
+	req.TierBytes = []uint64{scmBytes, nvmeBytes}
+	req.TotalBytes = 0
+	req.TierRatio = nil
+
+	return scmRatio
 }
 
 // PoolListCmd represents the command to fetch a list of all DAOS pools in the system.
