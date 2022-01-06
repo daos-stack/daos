@@ -10,10 +10,12 @@
 
 dnf --nodocs install \
     boost-python3-devel \
+    bzip2 \
     clang \
     clang-tools-extra \
     cmake \
     CUnit-devel \
+    diffutils \
     e2fsprogs \
     file \
     flex \
