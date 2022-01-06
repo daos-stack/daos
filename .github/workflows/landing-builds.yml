@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/landing-builds.yml
+      - utils/docker/Dockerfile.*
 
 jobs:
 
