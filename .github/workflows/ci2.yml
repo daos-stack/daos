@@ -79,7 +79,6 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
-      DAOS_JAVA_BUILD: yes
     steps:
     - name: Checkout code
       uses: actions/checkout@v2

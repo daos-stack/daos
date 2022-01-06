@@ -243,7 +243,6 @@ RUN echo -e "<settings>\n\
 </settings>" > /home/daos/.m2/settings.xml
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-ARG BASE_DISTRO
 
 USER root:root
 RUN if [[ "$DAOS_JAVA_BUILD" == "yes" ]]; then				\
@@ -256,7 +255,7 @@ RUN if [[ "$DAOS_JAVA_BUILD" == "yes" ]]; then				\
 
 USER daos_server:daos_server
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+    mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no

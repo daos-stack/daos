@@ -226,7 +226,7 @@ RUN echo -e "<settings>\n\
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+    mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no

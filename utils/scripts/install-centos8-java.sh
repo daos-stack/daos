@@ -1,11 +1,9 @@
-#!/bin/sh
+#!/bin/sh -e
 
 # For fedora, java-11 is installed along with maven if we install maven from
 # repo. But we need java-8 (1.8). The 'devel' package also needs to be
 # installed specifically.
 # For centos, we can install both java-8 and maven from repo.
-
-set -e
 
 fedora=$1
 
