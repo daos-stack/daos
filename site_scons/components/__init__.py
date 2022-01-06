@@ -24,7 +24,6 @@
 import sys
 import os
 import platform
-import distro
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 from prereq_tools import ProgramBinary
@@ -312,24 +311,6 @@ def define_components(reqs):
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
 
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
-
-    # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
-    # are relocating binaries across systems, for example in CI under github actions etc.  There
-    # isn't a minimum value needed here, but getting this wrong will cause daos server to exit
-    # prematurely with SIGILL (-4).
-    # https://docs.microsoft.com/en-us/azure/virtual-machines/dv2-dsv2-series#dsv2-series says
-    # that GHA can schedule on any of Skylake, Broadwell or Haswell CPUs.
-    # Ubuntu systems seem to fail more often, there may be something different going on here,
-    # it has also failed with sandybridge.
-    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
-    dist = distro.linux_distribution()
-    if dist[0] == 'CentOS Linux' and dist[1] == '7':
-        spdk_arch='native'
-    elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
-        spdk_arch = 'nehalem'
-    else:
-        spdk_arch = 'haswell'
-
     reqs.define('spdk',
                 retriever=retriever,
                 commands=['./configure --prefix="$SPDK_PREFIX"'                \
@@ -338,8 +319,7 @@ def define_components(reqs):
                           ' --without-crypto --without-pmdk --without-rbd '    \
                           ' --with-rdma --without-iscsi-initiator '            \
                           ' --without-isal --without-vtune --with-shared',
-                          'make CONFIG_ARCH={} $JOBS_OPT'.format(spdk_arch),
-                          'make install',
+                          'make $JOBS_OPT', 'make install',
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/include/dpdk"',
                           'cp -r -P dpdk/build/include/* '                     \

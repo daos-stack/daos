@@ -14,7 +14,6 @@ zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref
 zypper --non-interactive update
 zypper --non-interactive install \
     boost-devel \
-    bzip2 \
     curl \
     clang \
     cmake \

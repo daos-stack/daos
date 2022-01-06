@@ -11,14 +11,12 @@ then
     SCONS=scons-3
 fi
 
-# Probably not needed now, but leave on PRs until we have confidence of landings builds.
 echo ::group::Rebuild spdk
 rm -rf /opt/daos/prereq/release/spdk
 $SCONS --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=yes --deps-only
 echo ::endgroup::
 
 echo "::group::Stack analyzer output (post build)"
-# $SCONS --jobs "$DEPS_JOBS" PREFIX=/opt/daos --analyze-stack="-x tests -c 128" server
 $SCONS --jobs "$DEPS_JOBS" --analyze-stack="-x tests -c 128" server
 echo ::endgroup::
 
