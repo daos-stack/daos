@@ -148,7 +148,7 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 			       cred->tc_sgl.sg_iovs[0].iov_len);
 		}
 
-		rc = bio_iod_post(vos_ioh2desc(ioh));
+		rc = bio_iod_post(vos_ioh2desc(ioh), 0);
 end:
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_end(ioh, 0, &cred->tc_dkey, rc, NULL,

@@ -32,9 +32,10 @@ const (
 
 	parseFsUnformatted = "data"
 
-	fsTypeNone  = "none"
-	fsTypeExt4  = "ext4"
-	fsTypeTmpfs = "tmpfs"
+	fsTypeNone    = "none"
+	fsTypeExt4    = "ext4"
+	fsTypeTmpfs   = "tmpfs"
+	fsTypeUnknown = "unknown"
 
 	dcpmFsType    = fsTypeExt4
 	dcpmMountOpts = "dax,nodelalloc"
@@ -233,7 +234,7 @@ func (dsp *defaultSystemProvider) Getfs(device string) (string, error) {
 		}
 	}
 
-	return parseFsType(string(out))
+	return parseFsType(string(out)), nil
 }
 
 // Stat probes the specified path and returns os level file info.
@@ -241,18 +242,18 @@ func (dsp *defaultSystemProvider) Stat(path string) (os.FileInfo, error) {
 	return os.Stat(path)
 }
 
-func parseFsType(input string) (string, error) {
+func parseFsType(input string) string {
 	// /dev/pmem0: Linux rev 1.0 ext4 filesystem data, UUID=09619a0d-0c9e-46b4-add5-faf575dd293d
 	// /dev/pmem1: data
 	fields := strings.Fields(input)
 	switch {
 	case len(fields) == 2 && fields[1] == parseFsUnformatted:
-		return fsTypeNone, nil
+		return fsTypeNone
 	case len(fields) >= 5:
-		return fields[4], nil
+		return fields[4]
+	default:
+		return fsTypeUnknown
 	}
-
-	return fsTypeNone, errors.Errorf("unable to determine fs type from %q", input)
 }
 
 // DefaultProvider returns an initialized *Provider suitable for use with production code.
@@ -472,6 +473,12 @@ func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormat
 		res.Mountable = true
 	case fsTypeNone:
 		res.Formatted = false
+	case fsTypeUnknown:
+		// formatted but not mountable
+		p.log.Debugf("unexpected format of output from 'file -s %s'", req.Dcpm.Device)
+	default:
+		// formatted but not mountable
+		p.log.Debugf("%q fs type is unexpected", fsType)
 	}
 
 	return res, nil
