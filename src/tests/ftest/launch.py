@@ -2378,8 +2378,9 @@ def main():
 
     # Create a temporary directory
     if args.yaml_directory is None:
-        with TemporaryDirectory() as temp_dir:
-            yaml_dir = temp_dir.name
+        # pylint: disable=consider-using-with
+        temp_dir = TemporaryDirectory()
+        yaml_dir = temp_dir.name
     else:
         yaml_dir = args.yaml_directory
         if not os.path.exists(yaml_dir):
