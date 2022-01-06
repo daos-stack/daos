@@ -21,7 +21,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -254,7 +253,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithScmRamdiskSize(16),
 				storage.NewTierConfig().
 					WithBdevClass("nvme").
-					WithBdevDeviceList("0000:81:00.0"),
+					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0"),
 			).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
@@ -448,6 +447,34 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadTelemetryPort,
 		},
+		"different number of ssds": {
+			extraConfig: func(c *Server) *Server {
+				// add multiple bdevs for engine 0 to create mismatch
+				c.Engines[0].Storage.Tiers.BdevConfigs()[0].
+					WithBdevDeviceList("0000:10:00.0", "0000:11:00.0", "0000:12:00.0")
+
+				return c
+			},
+			expErr: FaultConfigBdevCountMismatch(1, 2, 0, 3),
+		},
+		"different number of targets": {
+			extraConfig: func(c *Server) *Server {
+				// change engine 0 number of targets to create mismatch
+				c.Engines[0].WithTargetCount(1)
+
+				return c
+			},
+			expErr: FaultConfigTargetCountMismatch(1, 16, 0, 1),
+		},
+		"different number of helper streams": {
+			extraConfig: func(c *Server) *Server {
+				// change engine 0 number of targets to create mismatch
+				c.Engines[0].WithHelperStreamCount(9)
+
+				return c
+			},
+			expErr: FaultConfigHelperStreamCountMismatch(1, 4, 0, 9),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -565,7 +592,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 
 		lcp := strings.Split(legacyConfig, "/")
 		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
-		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
+		if err := CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
 			return nil, err
 		}
 
@@ -1019,7 +1046,7 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 
 			cfg.SaveActiveConfig(log)
 
-			common.AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
+			AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
 				fmt.Sprintf("expected %q in %q", tc.expLogOut, buf.String()))
 		})
 	}
