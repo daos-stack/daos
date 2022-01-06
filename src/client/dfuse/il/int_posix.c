@@ -110,12 +110,12 @@ ioil_shrink_pool(struct ioil_pool *pool)
 }
 
 static int
-ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool)
+ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 {
 	struct ioil_pool	*pool;
 	int			rc;
 
-	if (cont->ioc_open_count != 0)
+	if (cont->ioc_open_count != 0 && !force)
 		return 0;
 
 	if (cont->ioc_dfs != NULL) {
@@ -168,7 +168,7 @@ entry_array_close(void *arg) {
 
 	/* Do not close container/pool handles at this point
 	 * to allow for re-use.
-	 * ioil_shrink_cont(entry->fd_cont, true);
+	 * ioil_shrink_cont(entry->fd_cont, true, true);
 	*/
 }
 
@@ -371,9 +371,9 @@ ioil_fini(void)
 			 * is tried later, and if the container close succeeds but pool close
 			 * fails the cont may not be valid afterwards.
 			 */
-			rc = ioil_shrink_cont(cont, false);
+			rc = ioil_shrink_cont(cont, false, true);
 			if (rc == -DER_NOMEM)
-				ioil_shrink_cont(cont, false);
+				ioil_shrink_cont(cont, false, true);
 		}
 		rc = ioil_shrink_pool(pool);
 		if (rc == -DER_NOMEM)
@@ -822,7 +822,7 @@ obj_close:
 	dfs_release(entry->fd_dfsoh);
 
 shrink:
-	ioil_shrink_cont(cont, true);
+	ioil_shrink_cont(cont, true, false);
 
 err:
 	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);
