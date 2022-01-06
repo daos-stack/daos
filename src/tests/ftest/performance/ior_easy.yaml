@@ -9,12 +9,12 @@ hosts:
     - client-E
     - client-F
     - client-G
-timeout: 210 # Additional 90s timeout for each rank stopped
+timeout: 210 # Additional 180s timeout for each rank stopped
 timeouts:
-  test_performance_ior_easy_dfs_ec_4p2gx_stop_write: 300
-  test_performance_ior_easy_dfs_ec_4p2gx_stop_read: 300
-  test_performance_ior_easy_dfs_ec_16p2gx_stop_write: 300
-  test_performance_ior_easy_dfs_ec_16p2gx_stop_read: 300
+  test_performance_ior_easy_dfs_ec_4p2gx_stop_write: 390
+  test_performance_ior_easy_dfs_ec_4p2gx_stop_read: 390
+  test_performance_ior_easy_dfs_ec_16p2gx_stop_write: 390
+  test_performance_ior_easy_dfs_ec_16p2gx_stop_read: 390
 server_config:
     name: daos_server
     control_log_mask: INFO
