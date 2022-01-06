@@ -12,10 +12,6 @@ pool:
     scm_size: 1G
     rf: !mux
       rf1:
-        properties: rf:0
-        properties: rf:1
-        properties: rf:2
-        properties: rf:3
         properties: rf:4
 container:
     type: POSIX

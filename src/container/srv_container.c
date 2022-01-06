@@ -436,6 +436,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	struct daos_prop_entry	*entry_def;
 	int			 i;
 	int			 rc;
+	bool			 inherit_redunc_fac = true;
 
 	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
 		return 0;
@@ -458,7 +459,6 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_CSUM:
 		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
-		case DAOS_PROP_CO_REDUN_FAC:
 		case DAOS_PROP_CO_REDUN_LVL:
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_COMPRESS:
@@ -467,6 +467,10 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_EC_CELL_SZ:
 		case DAOS_PROP_CO_ALLOCED_OID:
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
+			entry_def->dpe_val = entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_REDUN_FAC:
+			inherit_redunc_fac = false;
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_CO_ACL:
@@ -510,11 +514,12 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_ec_cell_sz;
 	}
 
-	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_REDUN_FAC);
-	D_ASSERT(entry_def != NULL);
-	if (entry_def->dpe_val == 0)
+	if (inherit_redunc_fac) {
+		entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_REDUN_FAC);
+		D_ASSERT(entry_def != NULL);
 		/* No specified redun fac from container, inherit from pool */
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_redun_fac;
+	}
 
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
