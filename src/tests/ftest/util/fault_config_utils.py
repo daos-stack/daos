@@ -30,6 +30,12 @@ FAULTS = {
         'probability_y': '100',
         'interval': '1',
         'max_faults': '1'},
+    'DAOS_CSUM_CORRUPT_FETCH': {
+        'id': '65569',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '5',
+        'max_faults': '1'},
     'DAOS_DTX_LOST_RPC_REQUEST': {
         'id': '65587',
         'probability_x': '100',
@@ -216,7 +222,12 @@ FAULTS = {
         'probability_y': '20',
         'interval': '1',
         'max_faults': '10'},
-
+    'DAOS_SHARD_OBJ_RW_DROP_REPLY': {
+        'id': '131200',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '1',
+        'max_faults': '1'},
 }
 
 

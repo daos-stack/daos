@@ -92,6 +92,9 @@ extern uint32_t dtx_agg_thd_cnt_lo;
 #define DTX_AGG_THD_AGE_MIN	210
 #define DTX_AGG_THD_AGE_DEF	630
 
+/* The threshold for yield CPU when handle DTX RPC. */
+#define DTX_RPC_YIELD_THD	64
+
 /* The time threshold for triggerring DTX aggregation. If the oldest
  * DTX in the DTX table exceeds such threshold, it will trigger DTX
  * aggregation locally.
@@ -150,7 +153,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count, bool helper);
+	       struct dtx_cos_key *dcks, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 

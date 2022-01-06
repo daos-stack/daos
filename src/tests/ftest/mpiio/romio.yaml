@@ -8,10 +8,16 @@ timeout: 150
 # romio test suite directory in CI nodes when available.
 server_config:
     name: daos_server
+    servers:
+        bdev_class: nvme
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
     mode: 146
     name: daos_server
-    scm_size: 1000000000
+    scm_size: 30G
+    nvme_size: 40G
     svcn: 1
     control_method: dmg
 container:
