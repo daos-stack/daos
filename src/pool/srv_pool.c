@@ -4396,7 +4396,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool				updated;
 	int				rc;
 	char				*env;
-	uint64_t			delay = 0;
+	uint64_t			delay = 2;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, &target_list,
 					  list, hint, &updated, map_version,
@@ -4588,7 +4588,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 
 	/* Schedule an extension rebuild for those targets */
 	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, &tgts,
-				 RB_OP_EXTEND, 0);
+				 RB_OP_EXTEND, 2);
 	if (rc != 0) {
 		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_lock, rc);
