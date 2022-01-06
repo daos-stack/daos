@@ -41,10 +41,27 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		return nil, err
 	}
 
+	resp := c.fabricInterfaceSetToNetworkScanResp(result, provider)
+
+	topo, err := hwprov.DefaultTopologyProvider(c.log).GetTopology(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resp.Numacount = int32(topo.NumNUMANodes())
+	resp.Corespernuma = int32(topo.NumCoresPerNUMA())
+
+	c.log.Debugf("NetworkScanResp: %d NUMA nodes with %d cores each",
+		resp.GetNumacount(), resp.GetCorespernuma())
+
+	return resp, nil
+}
+
+func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.FabricInterfaceSet, provider string) *ctlpb.NetworkScanResp {
 	resp := new(ctlpb.NetworkScanResp)
-	resp.Interfaces = make([]*ctlpb.FabricInterface, 0, result.NumOSDevices())
-	for _, name := range result.Names() {
-		fi, err := result.GetInterface(name)
+	resp.Interfaces = make([]*ctlpb.FabricInterface, 0, fis.NumOSDevices())
+	for _, name := range fis.Names() {
+		fi, err := fis.GetInterface(name)
 		if err != nil {
 			c.log.Errorf("unexpected error getting IF %q: %s", name, err.Error())
 			continue
@@ -66,16 +83,5 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		}
 	}
 
-	topo, err := hwprov.DefaultTopologyProvider(c.log).GetTopology(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	resp.Numacount = int32(topo.NumNUMANodes())
-	resp.Corespernuma = int32(topo.NumCoresPerNUMA())
-
-	c.log.Debugf("NetworkScanResp: %d NUMA nodes with %d cores each",
-		resp.GetNumacount(), resp.GetCorespernuma())
-
-	return resp, nil
+	return resp
 }

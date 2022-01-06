@@ -958,34 +958,34 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer ShowBufferOnFailure(t, buf)
 
 			fis := hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
 					Name:        "eth0",
 					OSDevice:    "eth0",
 					DeviceClass: hardware.Ether,
-					Providers:   common.NewStringSet("test"),
+					Providers:   NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
 					Name:        "eth1",
 					OSDevice:    "eth1",
 					DeviceClass: hardware.Ether,
 					NUMANode:    1,
-					Providers:   common.NewStringSet("test"),
+					Providers:   NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
 					Name:        "ib0",
 					OSDevice:    "ib0",
 					DeviceClass: hardware.Infiniband,
-					Providers:   common.NewStringSet("test"),
+					Providers:   NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
 					Name:        "ib1",
 					OSDevice:    "ib1",
 					DeviceClass: hardware.Infiniband,
 					NUMANode:    1,
-					Providers:   common.NewStringSet("test"),
+					Providers:   NewStringSet("test"),
 				},
 			)
 
