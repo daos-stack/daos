@@ -2,4 +2,4 @@ hosts:
   test_servers:
     - server-A
     - server-B
-timeout: 150
+timeout: 120
