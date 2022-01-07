@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -685,14 +686,18 @@ func TestControl_AutoConfig_getCPUDetails(t *testing.T) {
 	}
 }
 
+func mockEngineCfg(idx int) *engine.Config {
+	return engine.MockConfig().
+		WithTargetCount(defaultTargetCount).
+		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
+}
+
 func TestControl_AutoConfig_genConfig(t *testing.T) {
 	baseConfig := func(provider string) *config.Server {
 		return config.DefaultServer().
 			WithControlLogFile(defaultControlLogFile).
 			WithFabricProvider(provider)
 	}
-	numa0 := uint(0)
-	numa1 := uint(1)
 
 	for name, tc := range map[string]struct {
 		engineCount    int               // number of engines to provide in config
@@ -717,10 +722,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10001").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
+					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa0).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -739,10 +744,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
+					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa0).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -769,10 +774,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("192.168.1.1:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
+					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa0).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -800,10 +805,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
+					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa0).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -821,10 +826,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
+					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa0).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -851,10 +856,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(7680).WithEngines(
 				defaultEngineCfg(0).
+					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa0).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -869,11 +874,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithTargetCount(15).
 					WithHelperStreamCount(6),
 				defaultEngineCfg(1).
+					WithPinnedNumaNode(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
 						int(defaultFiPort+defaultFiPortInterval)).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa1).
+					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -885,6 +891,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					).
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
+					WithStorageNumaNodeIndex(1).
 					WithTargetCount(15).
 					WithHelperStreamCount(6)),
 		},
@@ -897,10 +904,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{8, 2}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(4096).WithEngines(
 				defaultEngineCfg(0).
+					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa0).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -928,10 +935,10 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(3072).WithEngines(
 				defaultEngineCfg(0).
+					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa0).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -946,11 +953,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithTargetCount(6).
 					WithHelperStreamCount(0),
 				defaultEngineCfg(1).
+					WithPinnedNumaNode(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
 						int(defaultFiPort+defaultFiPortInterval)).
 					WithFabricProvider("ofi+psm2").
-					WithPinnedNumaNode(&numa1).
+					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmClass(storage.ClassDcpm.String()).
@@ -962,6 +970,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					).
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
+					WithStorageNumaNodeIndex(1).
 					WithTargetCount(6).
 					WithHelperStreamCount(0)),
 		},
@@ -979,7 +988,9 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				numaSSDs:  tc.numaSSDs,
 			}
 
-			gotCfg, gotErr := genConfig(log, tc.accessPoints, nd, sd, tc.numaCoreCounts)
+			gotCfg, gotErr := genConfig(context.TODO(), log, mockEngineCfg,
+				tc.accessPoints, nd, sd, tc.numaCoreCounts)
+
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

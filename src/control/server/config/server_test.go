@@ -37,15 +37,12 @@ const (
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
 
-var (
-	defConfigCmpOpts = []cmp.Option{
-		cmpopts.IgnoreUnexported(
-			Server{},
-			security.CertificateConfig{},
-		),
-		cmpopts.IgnoreFields(Server{}, "Path"),
-	}
-)
+var defConfigCmpOpts = []cmp.Option{
+	cmpopts.IgnoreUnexported(
+		security.CertificateConfig{},
+	),
+	cmpopts.IgnoreFields(Server{}, "Path"),
+}
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
 // lines in order to verify parsing of all available params.
@@ -137,7 +134,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log)
+				err = configA.Validate(context.TODO(), log)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -156,7 +153,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log)
+				err = configB.Validate(context.TODO(), log)
 			}
 
 			if err != nil {
@@ -182,8 +179,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 		t.Fatalf("failed to load %s: %s", testFile, err)
 	}
 
-	var numaNode0 uint = 0
-	var numaNode1 uint = 1
 	var bypass = true
 
 	// Next, construct a config to compare against the first one. It should be
@@ -212,7 +207,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 
 	// add engines explicitly to test functionality applied in WithEngines()
 	constructed.Engines = []*engine.Config{
-		engine.NewConfig().
+		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
 			WithRank(0).
@@ -226,20 +221,21 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithScmRamdiskSize(16),
 				storage.NewTierConfig().
 					WithBdevClass("nvme").
-					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0"),
+					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+					WithBdevBusidRange("0x80-0x8f"),
 			).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
-			WithPinnedNumaNode(&numaNode0).
+			WithPinnedNumaNode(0).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=30").
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("WARN").
 			WithStorageEnableHotplug(true),
-		engine.NewConfig().
+		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
 			WithRank(1).
@@ -256,12 +252,13 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
 					WithBdevFileSize(16),
 			).
+			WithPinnedNumaNode(1).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
-			WithPinnedNumaNode(&numaNode1).
+			WithPinnedNumaNode(1).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
@@ -471,7 +468,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			config = tt.extraConfig(config)
 
-			CmpErr(t, tt.expErr, config.Validate(log))
+			CmpErr(t, tt.expErr, config.Validate(context.TODO(), log))
 		})
 	}
 }
@@ -539,18 +536,25 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 func TestServerConfig_Parsing(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
 
-	cfgFromFile := func(t *testing.T, testFile, matchText, replaceText string) (*Server, error) {
+	cfgFromFile := func(t *testing.T, testFile string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
-		if matchText != "" {
-			replaceFile(t, testFile, matchText, replaceText)
+		if len(matchText) != len(replaceText) {
+			return nil, errors.New("number of text matches and replacements must be equal")
+		}
+
+		for i, m := range matchText {
+			if m == "" {
+				continue
+			}
+			replaceFile(t, testFile, m, replaceText[i])
 		}
 
 		return mockConfigFromFile(t, testFile)
 	}
 
 	// load a config based on the server config with all options uncommented.
-	loadFromDefaultFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+	loadFromDefaultFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		defaultConfigFile := filepath.Join(testDir, sConfigUncomment)
@@ -560,7 +564,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 	}
 
 	// load a config file with a legacy storage config
-	loadFromLegacyFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+	loadFromLegacyFile := func(t *testing.T, testDir string, matchText, replaceText []string) (*Server, error) {
 		t.Helper()
 
 		lcp := strings.Split(legacyConfig, "/")
@@ -572,7 +576,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 		return cfgFromFile(t, testLegacyConfigFile, matchText, replaceText)
 	}
 
-	loadFromFile := func(t *testing.T, testDir, matchText, replaceText string, legacy bool) (*Server, error) {
+	loadFromFile := func(t *testing.T, testDir string, matchText, replaceText []string, legacy bool) (*Server, error) {
 		if legacy {
 			return loadFromLegacyFile(t, testDir, matchText, replaceText)
 		}
@@ -583,6 +587,8 @@ func TestServerConfig_Parsing(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inTxt          string
 		outTxt         string
+		inTxtList      []string
+		outTxtList     []string
 		legacyStorage  bool
 		extraConfig    func(c *Server) *Server
 		expParseErr    error
@@ -611,7 +617,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 		"duplicates in bdev_list from config": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
-					engine.NewConfig().
+					engine.MockConfig().
 						WithFabricInterface("ib0").
 						WithFabricInterfacePort(20000).
 						WithStorage(
@@ -625,6 +631,12 @@ func TestServerConfig_Parsing(t *testing.T) {
 						))
 			},
 			expValidateErr: errors.New("bdev_list contains duplicate pci"),
+		},
+		"bad busid range": {
+			// fail first engine storage
+			inTxt:          "    bdev_busid_range: 0x80-0x8f",
+			outTxt:         "    bdev_busid_range: 0x80-0x8g",
+			expValidateErr: errors.New("\"0x8g\": invalid syntax"),
 		},
 		"legacy storage; empty bdev_list": {
 			legacyStorage: true,
@@ -672,6 +684,29 @@ func TestServerConfig_Parsing(t *testing.T) {
 				return nil
 			},
 		},
+		"legacy storage; non-empty bdev_busid_range": {
+			legacyStorage: true,
+			inTxtList: []string{
+				"  bdev_list: []", "  bdev_busid_range: \"\"",
+			},
+			outTxtList: []string{
+				"  bdev_list: [0000:80:00.0]", "  bdev_busid_range: \"0x00-0x80\"",
+			},
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 2 {
+					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+				}
+
+				want := "0x00-0x80"
+				got := c.Engines[0].Storage.Tiers.BdevConfigs()[0].Bdev.BusidRange
+				if want != got {
+					return errors.Errorf("want %s bus-id range, got %s", want, got)
+				}
+
+				return nil
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -684,15 +719,29 @@ func TestServerConfig_Parsing(t *testing.T) {
 				tt.extraConfig = noopExtra
 			}
 
-			config, errParse := loadFromFile(t, testDir, tt.inTxt, tt.outTxt, tt.legacyStorage)
+			if tt.inTxtList != nil {
+				if tt.inTxt != "" {
+					t.Fatal("bad test params")
+				}
+			} else {
+				tt.inTxtList = []string{tt.inTxt}
+			}
+			if tt.outTxtList != nil {
+				if tt.outTxt != "" {
+					t.Fatal("bad test params")
+				}
+			} else {
+				tt.outTxtList = []string{tt.outTxt}
+			}
+
+			config, errParse := loadFromFile(t, testDir, tt.inTxtList, tt.outTxtList, tt.legacyStorage)
 			CmpErr(t, tt.expParseErr, errParse)
 			if tt.expParseErr != nil {
 				return
 			}
 			config = tt.extraConfig(config)
-			log.Debugf("%+v", config)
 
-			CmpErr(t, tt.expValidateErr, config.Validate(log))
+			CmpErr(t, tt.expValidateErr, config.Validate(context.TODO(), log))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -759,7 +808,7 @@ func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 	testSystemName := "test-system"
 	testSocketDir := "test-sockets"
 
-	wantCfg := engine.NewConfig().
+	wantCfg := engine.MockConfig().
 		WithFabricProvider(testFabric).
 		WithModules(testModules).
 		WithSocketDir(testSocketDir).
@@ -770,18 +819,18 @@ func TestServerConfig_WithEnginesInheritsMain(t *testing.T) {
 		WithModules(testModules).
 		WithSocketDir(testSocketDir).
 		WithSystemName(testSystemName).
-		WithEngines(engine.NewConfig())
+		WithEngines(engine.MockConfig())
 
-	if diff := cmp.Diff(wantCfg, config.Engines[0]); diff != "" {
+	if diff := cmp.Diff(wantCfg, config.Engines[0], defConfigCmpOpts...); diff != "" {
 		t.Fatalf("unexpected server config (-want, +got):\n%s\n", diff)
 	}
 }
 
 func TestServerConfig_DuplicateValues(t *testing.T) {
 	configA := func() *engine.Config {
-		return engine.NewConfig().
+		return engine.MockConfig().
 			WithLogFile("a").
-			WithFabricInterface("a").
+			WithFabricInterface("ib0").
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
@@ -791,9 +840,9 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			)
 	}
 	configB := func() *engine.Config {
-		return engine.NewConfig().
+		return engine.MockConfig().
 			WithLogFile("b").
-			WithFabricInterface("b").
+			WithFabricInterface("ib1").
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
@@ -891,7 +940,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log)
+			gotErr := conf.Validate(context.TODO(), log)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}
@@ -899,7 +948,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 
 func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	configA := func() *engine.Config {
-		return engine.NewConfig().
+		return engine.MockConfig().
 			WithLogFile("a").
 			WithStorage(
 				storage.NewTierConfig().
@@ -910,7 +959,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 			WithFabricInterfacePort(42)
 	}
 	configB := func() *engine.Config {
-		return engine.NewConfig().
+		return engine.MockConfig().
 			WithLogFile("b").
 			WithStorage(
 				storage.NewTierConfig().

@@ -39,7 +39,7 @@ func genMinimalConfig() *config.Server {
 	cfg := config.DefaultServer().
 		WithFabricProvider("foo").
 		WithEngines(
-			engine.NewConfig().
+			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
 						WithScmClass("ram").
@@ -56,7 +56,7 @@ func genMinimalConfig() *config.Server {
 func genDefaultExpected() *config.Server {
 	return genMinimalConfig().
 		WithEngines(
-			engine.NewConfig().
+			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
 						WithScmClass("ram").
@@ -259,10 +259,11 @@ func TestStartOptions(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(
-					config.Server{},
 					security.CertificateConfig{},
 				),
 				cmpopts.SortSlices(func(a, b string) bool { return a < b }),
+				cmpopts.IgnoreFields(engine.Config{}, "GetNetDevCls", "ValidateProvider",
+					"GetIfaceNumaNode"),
 			}
 			if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts...); diff != "" {
 				t.Fatalf("(-want +got):\n%s", diff)

@@ -113,7 +113,7 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	cfg, err := genConfig(req.Log, req.AccessPoints, nd, sd, ccs)
+	cfg, err := genConfig(ctx, req.Log, defaultEngineCfg, req.AccessPoints, nd, sd, ccs)
 	if err != nil {
 		return nil, err
 	}
@@ -545,15 +545,17 @@ func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (
 	return numaCoreCounts, nil
 }
 
+type newEngineCfgFn func(int) *engine.Config
+
 func defaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
 }
 
-// genConfig generates server config file from details of available network,
-// storage and CPU hardware after performing some basic sanity checks.
-func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
+// genConfig generates server config file from details of network, storage and CPU hardware after
+// performing some basic sanity checks.
+func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
 	}
@@ -593,7 +595,7 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 
 	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
-		engineCfg := defaultEngineCfg(nn).
+		engineCfg := newEngineCfg(nn).
 			WithTargetCount(nrTgts).
 			WithHelperStreamCount(nrHlprs)
 		if len(sd.numaPMems) > 0 {
@@ -613,11 +615,11 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		}
 
 		pnn := uint(nn)
+		engineCfg.PinnedNumaNode = &pnn
 		engineCfg.Fabric = engine.FabricConfig{
-			Provider:       nd.numaIfaces[nn].Provider,
-			Interface:      nd.numaIfaces[nn].Device,
-			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
-			PinnedNumaNode: &pnn,
+			Provider:      nd.numaIfaces[nn].Provider,
+			Interface:     nd.numaIfaces[nn].Device,
+			InterfacePort: int(defaultFiPort + (nn * defaultFiPortInterval)),
 		}
 
 		engines = append(engines, engineCfg)
@@ -641,5 +643,5 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		WithControlLogFile(defaultControlLogFile).
 		WithNrHugePages(nr_hugepages)
 
-	return cfg, cfg.Validate(log)
+	return cfg, cfg.Validate(ctx, log)
 }

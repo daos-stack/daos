@@ -392,7 +392,7 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger) (err error) {
+func (cfg *Server) Validate(ctx context.Context, log logging.Logger) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -442,7 +442,8 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
 						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
 						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
-						WithBdevFileSize(ec.LegacyStorage.FileSize),
+						WithBdevFileSize(ec.LegacyStorage.FileSize).
+						WithBdevBusidRange(ec.LegacyStorage.BdevConfig.BusidRange),
 				)
 			}
 			ec.WithStorage(tierCfgs...)
@@ -493,9 +494,13 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 
 	for i, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
-		if err := engine.Validate(); err != nil {
+
+		if err := engine.Validate(ctx, log); err != nil {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", i)
 		}
+
+		log.Debugf("engine %d fabric numa %d, storage numa %d", i,
+			engine.Fabric.NumaNodeIndex, engine.Storage.NumaNodeIndex)
 	}
 
 	if len(cfg.Engines) > 1 {
@@ -503,6 +508,9 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 			return err
 		}
 	}
+
+	log.Debugf("hotplug=%v vfio=%v vmd=%v requested in config", cfg.EnableHotplug,
+		!cfg.DisableVFIO, cfg.EnableVMD)
 
 	return nil
 }
@@ -595,35 +603,6 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	return nil
 }
 
-// validateEngineFabric ensures engine configuration parameters are valid.
-func (cfg *Server) validateEngineFabric(ctx context.Context, cfgEngine *engine.Config, fis *hardware.FabricInterfaceSet) error {
-	fi, err := fis.GetInterfaceOnOSDevice(cfgEngine.Fabric.Interface, cfgEngine.Fabric.Provider)
-	if err != nil {
-		return errors.Wrapf(err, "Network device %s does not support provider %s. "+
-			"The configuration is invalid.", cfgEngine.Fabric.Interface,
-			cfgEngine.Fabric.Provider)
-	}
-
-	// check to see if pinned numa node was provided in the engine config
-	numaNode, err := cfgEngine.Fabric.GetNumaNode()
-	if err != nil {
-		// as pinned_numa_node is an optional config file parameter,
-		// error is considered non-fatal
-		if err == engine.ErrNoPinnedNumaNode {
-			return nil
-		}
-		return err
-	}
-
-	// validate that numa node is correct for the given device
-	if fi.NUMANode != numaNode {
-		return errors.Wrapf(err, "Network device %s on NUMA node %d is an "+
-			"invalid configuration.", cfgEngine.Fabric.Interface, numaNode)
-	}
-
-	return nil
-}
-
 // CheckFabric ensures engines in configuration have compatible parameter
 // values and returns fabric network device class for the configuration.
 func (cfg *Server) CheckFabric(ctx context.Context, log logging.Logger, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
@@ -637,9 +616,6 @@ func (cfg *Server) CheckFabric(ctx context.Context, log logging.Logger, fis *har
 		ndc := fi.DeviceClass
 		if index == 0 {
 			netDevClass = ndc
-			if err := cfg.validateEngineFabric(ctx, engine, fis); err != nil {
-				return 0, err
-			}
 			continue
 		}
 		if ndc != netDevClass {
