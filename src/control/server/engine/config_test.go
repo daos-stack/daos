@@ -7,6 +7,7 @@
 package engine
 
 import (
+	"context"
 	"flag"
 	"os"
 	"path/filepath"
@@ -19,15 +20,15 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var update = flag.Bool("update", false, "update .golden files")
 
-func cmpOpts() []cmp.Option {
-	return []cmp.Option{
-		cmpopts.SortSlices(func(a, b string) bool { return a < b }),
-	}
+var defConfigCmpOpts = []cmp.Option{
+	cmpopts.SortSlices(func(a, b string) bool { return a < b }),
+	cmpopts.IgnoreFields(Config{}, "GetNetDevCls", "ValidateProvider", "GetIfaceNumaNode"),
 }
 
 func TestConfig_MergeEnvVars(t *testing.T) {
@@ -74,7 +75,7 @@ func TestConfig_MergeEnvVars(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotVars := mergeEnvVars(tc.baseVars, tc.mergeVars)
-			if diff := cmp.Diff(tc.wantVars, gotVars, cmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.wantVars, gotVars, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}
 		})
@@ -107,14 +108,14 @@ func TestConfig_HasEnvVar(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			cfg := NewConfig().
+			cfg := MockConfig().
 				WithEnvVars(tc.startVars...)
 
 			if !cfg.HasEnvVar(tc.addVar) {
 				cfg.WithEnvVars(tc.addVar + "=" + tc.addVal)
 			}
 
-			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, cmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("unexpected env vars:\n%s\n", diff)
 			}
 		})
@@ -122,14 +123,13 @@ func TestConfig_HasEnvVar(t *testing.T) {
 }
 
 func TestConstructedConfig(t *testing.T) {
-	var numaNode uint = 8
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity
-	constructed := NewConfig().
+	constructed := MockConfig().
 		WithRank(37).
 		WithFabricProvider("foo+bar").
-		WithFabricInterface("qib42").
+		WithFabricInterface("qib42"). // qib42 recognized by mock validator
 		WithFabricInterfacePort(100).
 		WithModules("foo,bar,baz").
 		WithStorage(
@@ -150,7 +150,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithServiceThreadCore(8).
 		WithTargetCount(12).
 		WithHelperStreamCount(1).
-		WithPinnedNumaNode(&numaNode).
+		WithPinnedNumaNode(8).
 		WithBypassHealthChk(nil)
 
 	if *update {
@@ -175,16 +175,16 @@ func TestConstructedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(fromDisk, constructed, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(fromDisk, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }
 
 func TestConfig_ScmValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
-		return NewConfig().
+		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
-			WithFabricInterface("test").
+			WithFabricInterface("ib0"). // ib0 recognized by mock validator
 			WithFabricInterfacePort(42)
 	}
 
@@ -288,16 +288,19 @@ func TestConfig_ScmValidation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
 		})
 	}
 }
 
 func TestConfig_BdevValidation(t *testing.T) {
 	baseValidConfig := func() *Config {
-		return NewConfig().
+		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
-			WithFabricInterface("test").
+			WithFabricInterface("ib0"). // ib0 recognized by mock validator
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
@@ -413,7 +416,10 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
 			if tc.expErr != nil {
 				return
 			}
@@ -437,15 +443,18 @@ func TestConfig_BdevValidation(t *testing.T) {
 }
 
 func TestConfig_Validation(t *testing.T) {
-	bad := NewConfig()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
 
-	if err := bad.Validate(); err == nil {
+	bad := MockConfig()
+
+	if err := bad.Validate(context.TODO(), log); err == nil {
 		t.Fatal("expected empty config to fail validation")
 	}
 
 	// create a minimally-valid config
-	good := NewConfig().WithFabricProvider("foo").
-		WithFabricInterface("qib0").
+	good := MockConfig().WithFabricProvider("foo").
+		WithFabricInterface("ib0"). // ib0 recognized by mock validator
 		WithFabricInterfacePort(42).
 		WithStorage(
 			storage.NewTierConfig().
@@ -454,7 +463,7 @@ func TestConfig_Validation(t *testing.T) {
 				WithScmMountPoint("/foo/bar"),
 		)
 
-	if err := good.Validate(); err != nil {
+	if err := good.Validate(context.TODO(), log); err != nil {
 		t.Fatalf("expected %#v to validate; got %s", good, err)
 	}
 }
@@ -505,7 +514,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	var (
 		mountPoint      = "/mnt/test"
 		provider        = "test+foo"
-		interfaceName   = "qib0"
+		interfaceName   = "ib0"
 		modules         = "foo,bar,baz"
 		systemName      = "test-system"
 		socketDir       = "/var/run/foo"
@@ -524,7 +533,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		memSize         = 8192
 		hugepageSz      = 2
 	)
-	cfg := NewConfig().
+	cfg := MockConfig().
 		WithStorage(
 			storage.NewTierConfig().
 				WithScmMountPoint(mountPoint),
@@ -536,7 +545,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithFabricProvider(provider).
 		WithFabricInterface(interfaceName).
 		WithFabricInterfacePort(interfacePort).
-		WithPinnedNumaNode(&pinnedNumaNode).
+		WithPinnedNumaNode(pinnedNumaNode).
 		WithBypassHealthChk(&bypass).
 		WithModules(modules).
 		WithSocketDir(socketDir).
@@ -581,7 +590,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(wantArgs, gotArgs, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantArgs, gotArgs, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 
@@ -589,7 +598,56 @@ func TestConfig_ToCmdVals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(wantEnv, gotEnv, cmpOpts()...); diff != "" {
+	if diff := cmp.Diff(wantEnv, gotEnv, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got):\n%s", diff)
+	}
+}
+
+func TestConfig_setAffinity(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg     *Config
+		expErr  error
+		expNuma uint
+	}{
+		"numa pinned; matching iface": {
+			cfg: MockConfig().
+				WithPinnedNumaNode(1).
+				WithFabricInterface("ib1"),
+			expNuma: 1,
+		},
+		// NOTE: this currently logs an error but could instead return one
+		//       but there might be legitimate use cases e.g. sharing interface
+		//"numa pinned; not matching iface": {
+		//	cfg: MockConfig().
+		//		WithPinnedNumaNode(1).
+		//		WithFabricInterface("ib0"),
+		//	expErr:  errors.New("misconfiguration"),
+		//	expNuma: 1,
+		//},
+		"numa not pinned": {
+			cfg: MockConfig().
+				WithFabricInterface("ib1"),
+			expNuma: 1,
+		},
+		"missing iface": {
+			cfg: MockConfig().
+				WithFabricInterface("foo"),
+			expErr: errors.New("unknown fabric interface"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			common.CmpErr(t, tc.expErr, tc.cfg.setAffinity(context.TODO(), log))
+			if tc.expErr != nil {
+				return
+			}
+
+			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
+				"unexpected storage numa node id")
+			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
+				"unexpected fabric numa node id")
+		})
 	}
 }
