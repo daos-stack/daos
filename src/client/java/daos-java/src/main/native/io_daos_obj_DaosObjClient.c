@@ -772,6 +772,65 @@ allocate_simple_desc(char *descBufAddress, data_desc_simple_t *desc,
 	return 0;
 }
 
+static int
+allocate_desc_update_async(char *descBuf, data_desc_upd_async_t *desc,
+			   int reuse)
+{
+	char *desc_buffer = descBuf;
+	uint16_t value16 = 0;
+
+	desc->maxKeyLen = 0;
+	if (reuse) {
+		/* set max key len */
+		memcpy(&desc->maxKeyLen, desc_buffer, 2);
+		desc_buffer += 2;
+	}
+	desc->event = NULL;
+	/* set dkey address */
+	if (!reuse) {
+		memcpy(&value16, desc_buffer, 2);
+	}
+	desc_buffer += 2;
+	d_iov_set(&desc->dkey, desc_buffer, value16);
+	desc_buffer += (desc->maxKeyLen == 0 ? value16 : desc->maxKeyLen);
+	/* entries */
+	desc->iods = (daos_iod_t *)calloc(1, sizeof(daos_iod_t));
+	desc->sgls = (d_sg_list_t *)calloc(1, sizeof(d_sg_list_t));
+	desc->recxs = (daos_recx_t *)calloc(1, sizeof(daos_recx_t));
+	desc->iovs = (d_iov_t *)calloc(1, sizeof(d_iov_t));
+	daos_iod_t *iod;
+
+	if (desc->iods == NULL || desc->sgls == NULL
+		|| desc->recxs == NULL || desc->iovs == NULL) {
+		return CUSTOM_ERR3;
+	}
+
+	/* iod */
+	/* akey */
+	iod = &desc->iods[0];
+	if (!reuse) {
+		memcpy(&value16, desc_buffer, 2);
+	}
+	desc_buffer += 2;
+	d_iov_set(&iod->iod_name, desc_buffer, value16);
+	desc_buffer += (desc->maxKeyLen == 0 ? value16 : desc->maxKeyLen);
+	iod->iod_type = DAOS_IOD_ARRAY;
+	iod->iod_size = 1;
+	iod->iod_nr = 1;
+	iod->iod_recxs = &desc->recxs[0];
+	/* sgl */
+	d_iov_set(&desc->iovs[0], 0, 0);
+	desc->sgls[0].sg_iovs = &desc->iovs[0];
+	desc->sgls[0].sg_nr = 1;
+	desc->sgls[0].sg_nr_out = 0;
+	desc->ret_buf_address = desc_buffer;
+	/* put address to the start of desc buffer */
+	if (reuse) {
+		memcpy(descBuf - 8, &desc, 8);
+	}
+	return 0;
+}
+
 JNIEXPORT jlong JNICALL
 Java_io_daos_obj_DaosObjClient_allocateSimDescGroup(
 		JNIEnv *env, jclass clientClass, jlong memAddress, jint nbr)
@@ -815,6 +874,30 @@ Java_io_daos_obj_DaosObjClient_allocateSimDescGroup(
 	return *(jlong *)&grp;
 }
 
+JNIEXPORT void JNICALL
+Java_io_daos_obj_DaosObjClient_allocateDescUpdAsync(
+		JNIEnv *env, jclass clientClass,
+		jlong memAddress)
+{
+	char *buffer = (char *)memAddress;
+	char *msg = "memory allocation failed";
+	int rc;
+	data_desc_upd_async_t *desc = (data_desc_upd_async_t *)malloc(
+		sizeof(data_desc_upd_async_t));
+
+	if (desc == NULL) {
+		throw_const_obj(env, msg, CUSTOM_ERR3);
+		return;
+	}
+	/* skip native desc hdl */
+	buffer += 8;
+	rc = allocate_desc_update_async(buffer, desc, 1);
+	if (rc) {
+		throw_const_obj(env, "allocation failed",
+				rc);
+	}
+}
+
 JNIEXPORT jlong JNICALL
 Java_io_daos_obj_DaosObjClient_releaseSimDescGroup(
 		JNIEnv *env, jclass clientClass, jlong grpHdl)
@@ -827,6 +910,32 @@ Java_io_daos_obj_DaosObjClient_releaseSimDescGroup(
 	}
 	free(grp->descs);
 	free(grp);
+}
+
+static void
+release_desc_upd_async(data_desc_upd_async_t *desc) {
+	if (desc->iods) {
+		free(desc->iods);
+	}
+	if (desc->sgls) {
+		free(desc->sgls);
+	}
+	if (desc->recxs) {
+		free(desc->recxs);
+	}
+	if (desc->iovs) {
+		free(desc->iovs);
+	}
+	free(desc);
+}
+
+JNIEXPORT void JNICALL
+Java_io_daos_obj_DaosObjClient_releaseDescUpdAsync(
+		JNIEnv *env, jclass clientClass, jlong descPtr)
+{
+	data_desc_upd_async_t *desc = *(data_desc_upd_async_t **)&descPtr;
+
+	release_desc_upd_async(desc);
 }
 
 JNIEXPORT void JNICALL
@@ -897,6 +1006,114 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 				async ? &desc->event->event : NULL);
 	if (rc) {
 		throw_const_obj(env, "Failed to update DAOS object", rc);
+	}
+}
+
+static int
+update_ret_code_no_decode(void *udata, daos_event_t *ev, int ret)
+{
+	data_desc_upd_async_t *desc = (data_desc_upd_async_t *)udata;
+	char *desc_buffer = desc->ret_buf_address;
+
+	memcpy(desc_buffer, &ret, 4);
+	if (ev) {
+		ev->ev_error = 0;
+	}
+	/* free native desc if not reuse */
+	if (desc->maxKeyLen == -1) {
+		release_desc_upd_async(desc);
+	}
+	return 0;
+}
+
+JNIEXPORT void JNICALL
+Java_io_daos_obj_DaosObjClient_updateObjNoDecode(JNIEnv *env,
+		jobject clientObj, jlong objPtr,
+		jlong descBufAddress, jlong eqWrapHdl,
+		jshort eqId, jlong offset, jint len,
+		jlong dataBufAddress)
+{
+	daos_handle_t oh;
+	char *desc_buf = (char *)descBufAddress;
+	char *data_buf = (char *)dataBufAddress;
+	data_desc_upd_async_t *desc = NULL;
+	uint64_t descPtr;
+	uint16_t value16;
+	daos_iod_t *iod;
+	int rc;
+
+	memcpy(&oh, &objPtr, 8);
+	memcpy(&descPtr, desc_buf, 8);
+	desc_buf += 8;
+	if (descPtr != 0L) { /* reusable */
+		/* skip maxlen */
+		desc_buf += 2;
+		desc = *(data_desc_upd_async_t **)&descPtr;
+		/* dkey */
+		memcpy(&value16, desc_buf, 2);
+		desc_buf += 2;
+		desc->dkey.iov_len = desc->dkey.iov_buf_len
+				= value16;
+		desc_buf += desc->maxKeyLen;
+		/* akey */
+		memcpy(&value16, desc_buf, 2);
+		desc_buf += 2;
+		iod = &desc->iods[0];
+		iod->iod_name.iov_len =
+			iod->iod_name.iov_buf_len = value16;
+		desc_buf += desc->maxKeyLen;
+	} else { /* not reusable */
+		char *msg = "memory allocation failed";
+
+		desc =	(data_desc_upd_async_t *)malloc(
+			sizeof(data_desc_upd_async_t));
+
+		if (desc == NULL) {
+			throw_const_obj(env,
+			msg,
+			CUSTOM_ERR3);
+			return;
+		}
+		rc = allocate_desc_update_async(desc_buf, desc, 0);
+		if (rc) {
+			throw_const_obj(env, "allocation failed",
+					rc);
+			return;
+		}
+
+	}
+	/* event */
+	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)
+				&eqWrapHdl;
+
+	desc->event = eq->events[eqId];
+	/* offset */
+	desc->recxs[0].rx_idx = offset;
+	/* length */
+	desc->recxs[0].rx_nr = (uint64_t)len;
+	/* sgl */
+	d_iov_set(&desc->iovs[0], data_buf, (uint64_t)len);
+	desc->sgls[0].sg_nr_out = 0;
+	rc = daos_event_register_comp_cb(&desc->event->event,
+		update_ret_code_no_decode,
+		desc);
+	if (rc) {
+		char *msg = "Failed to register update callback";
+
+		throw_const_obj(env,
+				msg,
+				rc);
+		return;
+	}
+	desc->event->status = EVENT_IN_USE;
+	desc->event->event.ev_error = 0;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0L, &desc->dkey,
+			1, desc->iods,
+			desc->sgls, &desc->event->event);
+	if (rc) {
+		throw_const_obj(env,
+				"Failed to update DAOS object",
+				rc);
 	}
 }
 
