@@ -41,7 +41,7 @@ of the MPI-parallel job, for example with
 
 When planning the upgrade to DAOS Version 2.0, please also verify the supported
 operating system levels as outlined in the
-[DAOS Version 2.0 Support](./support_matrix_v2_0.md) document.
+[DAOS Version 2.0 Support](./support_matrix.md) document.
 If an OS upgrade is required, this should be performed prior to upgrading DAOS.
 
 !!! note
