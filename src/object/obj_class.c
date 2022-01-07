@@ -48,9 +48,6 @@ daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps)
 int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca)
 {
 	struct dc_object *dc_object;
-	struct daos_oclass_attr *tmp;
-	uint32_t nr_grps;
-	struct cont_props prop;
 	daos_handle_t coh = dc_obj_hdl2cont_hdl(oh);
 
 	if (daos_handle_is_inval(coh))
@@ -60,17 +57,8 @@ int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca)
 	if (dc_object == NULL)
 		return -DER_NO_HDL;
 
-	tmp = daos_oclass_attr_find(dc_object->cob_md.omd_id, &nr_grps);
-	if (!tmp)
-		return -DER_NOSCHEMA;
-
-	*oca = *tmp;
-	oca->ca_grp_nr = nr_grps;
-	if (daos_oclass_is_ec(oca)) {
-		prop = dc_cont_hdl2props(coh);
-		D_ASSERT(prop.dcp_ec_cell_sz > 0);
-		oca->u.ec.e_len = prop.dcp_ec_cell_sz;
-	}
+	*oca = *obj_get_oca(dc_object);
+	obj_decref(dc_object);
 
 	return 0;
 }
