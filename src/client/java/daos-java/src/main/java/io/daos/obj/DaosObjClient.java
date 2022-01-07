@@ -75,11 +75,13 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    * object feature bits
    * @param objectClassName
    * object type name, see {@link DaosObjectClass}
+   * @param objClassHint
+   * object class hint
    * @param args
    * reserved
    */
   native static void encodeObjectId(long oidBufferAddress, long contPtr, int objectType, String objectClassName,
-                                           int args);
+                                           int objClassHint, int args);
 
   /**
    * open object denoted by object id stored in <code>buffer</code>.

@@ -7,6 +7,7 @@
 package io.daos.obj;
 
 import io.daos.BufferAllocator;
+import io.daos.DaosObjClassHint;
 import io.daos.DaosObjectClass;
 import io.daos.DaosObjectType;
 import io.netty.buffer.ByteBuf;
@@ -46,9 +47,11 @@ public class DaosObjectId {
    *
    * @param objectType  object type for dkey/akey
    * @param objectClass object class
+   * @param hint        object class hint
    * @param args        reserved
    */
-  public void encode(long contPtr, DaosObjectType objectType, DaosObjectClass objectClass, int args) {
+  public void encode(long contPtr, DaosObjectType objectType, DaosObjectClass objectClass, DaosObjClassHint hint,
+                     int args) {
     if (encoded) {
       throw new IllegalStateException("already encoded");
     }
@@ -56,7 +59,7 @@ public class DaosObjectId {
     buffer.writeLong(high).writeLong(low);
     try {
       DaosObjClient.encodeObjectId(buffer.memoryAddress(), contPtr, objectType.getId(),
-          objectClass.nameWithoutOc(), args);
+          objectClass.nameWithoutOc(), hint.getId(), args);
     } catch (RuntimeException e) {
       buffer.release();
       buffer = null;
@@ -76,10 +79,11 @@ public class DaosObjectId {
    * @param contPtr
    * container handle
    * <p>
-   * see {@link #encode(long, DaosObjectType, DaosObjectClass, int)}
+   * see {@link #encode(long, DaosObjectType, DaosObjectClass, DaosObjClassHint, int)}
    */
   public void encode(long contPtr) {
-    encode(contPtr, DaosObjectType.DAOS_OT_MULTI_HASHED, DaosObjectClass.OC_SX, 0);
+    encode(contPtr, DaosObjectType.DAOS_OT_MULTI_HASHED, DaosObjectClass.OC_SX,
+        DaosObjClassHint.DAOS_OCH_RDD_DEF, 0);
   }
 
   public long getHigh() {

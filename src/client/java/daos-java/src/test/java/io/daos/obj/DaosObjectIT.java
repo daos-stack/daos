@@ -28,6 +28,22 @@ public class DaosObjectIT {
   }
 
   @Test
+  public void testEncodeEmptyObjectId() throws Exception {
+    DaosObjectId id = new DaosObjectId();
+    id.encode(0, DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_SX, DaosObjClassHint.DAOS_OCH_RDD_DEF,
+        0);
+    Assert.assertTrue(id.getLow() == 0);
+  }
+
+  @Test
+  public void testEncodeObjectId() throws Exception {
+    DaosObjectId id = new DaosObjectId(345, 1024);
+    id.encode(0, DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_UNKNOWN,
+        DaosObjClassHint.DAOS_OCH_RDD_DEF, 0);
+    Assert.assertTrue(id.getLow() != 0);
+  }
+
+  @Test
   public void testObjectOpen() throws IOException {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
     id.encode(client.getContPtr());
@@ -152,11 +168,8 @@ public class DaosObjectIT {
     }
   }
 
-  @Test
-  public void testObjectFetchSimple() throws IOException {
-    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode(client.getContPtr());
-    DaosObject object = client.getObject(id);
+  private void fetchObjectSimple(DaosObjectId oid) throws IOException {
+    DaosObject object = client.getObject(oid);
     try {
       object.open();
       object.punch();
@@ -208,6 +221,29 @@ public class DaosObjectIT {
       }
       object.close();
     }
+  }
+
+  @Test
+  public void testObjectFetchSimple() throws IOException {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode(client.getContPtr());
+    fetchObjectSimple(id);
+  }
+
+  @Test
+  public void testObjectFetchSimpleWithNoObjectClass() throws IOException {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode(client.getContPtr(), DaosObjectType.DAOS_OT_MULTI_HASHED, DaosObjectClass.OC_UNKNOWN,
+        DaosObjClassHint.DAOS_OCH_RDD_DEF, 0);
+    fetchObjectSimple(id);
+  }
+
+  @Test
+  public void testObjectFetchSimpleWithObjectHintMax() throws IOException {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode(client.getContPtr(), DaosObjectType.DAOS_OT_MULTI_HASHED, DaosObjectClass.OC_SX,
+        DaosObjClassHint.DAOS_OCH_SHD_MAX, 0);
+    fetchObjectSimple(id);
   }
 
   @Test
