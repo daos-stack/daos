@@ -1243,9 +1243,13 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 	return 0;
 }
 
-static int
-dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t in_uuid,
-		    dfs_attr_t *attr, daos_handle_t *_coh, dfs_t **_dfs)
+/**
+ * Real latest & greatest implementation of container create. Used by anyone including the
+ * daos_fs.h header file.
+ */
+int
+dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
+		    daos_handle_t *_coh, dfs_t **_dfs)
 {
 	daos_handle_t		coh, super_oh;
 	struct dfs_entry	entry = {0};
@@ -1420,44 +1424,6 @@ err_prop:
 	return rc;
 }
 
-/** Disable backward compat code */
-#undef dfs_cont_create
-
-/** Kept for backward ABI compatibility when a UUID is provided by the caller */
-int
-dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs)
-{
-	const unsigned char     *uuid = (const unsigned char *)cuuid;
-	uuid_t			co_uuid;
-
-	if (!daos_uuid_valid(uuid))
-		return EINVAL;
-
-	uuid_copy(co_uuid, uuid);
-	return dfs_cont_create_int(poh, cuuid, true, co_uuid, attr, coh, dfs);
-}
-
-/** API version for when the uuid is required to be passed in. */
-int
-dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs)
-{
-	uuid_t *u = (uuid_t *)((unsigned char *)cuuid);
-
-	return dfs_cont_create(poh, u, attr, coh, dfs);
-}
-
-/*
- * Real latest & greatest implementation of container create. Used by anyone including the
- * daos_fs.h header file.
- */
-int
-dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs)
-{
-	return dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
-}
-
 int
 dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
 			   uuid_t *cuuid, daos_handle_t *coh, dfs_t **dfs)
@@ -1493,9 +1459,9 @@ dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *att
 	if (cuuid == NULL) {
 		uuid_t u;
 
-		rc = dfs_cont_create_int(poh, &u, false, NULL, attr, coh, dfs);
+		rc = dfs_cont_create(poh, &u, attr, coh, dfs);
 	} else {
-		rc = dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
+		rc = dfs_cont_create(poh, cuuid, attr, coh, dfs);
 	}
 	attr->da_props = orig;
 	daos_prop_free(merged_props);

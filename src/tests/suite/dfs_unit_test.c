@@ -988,39 +988,21 @@ static void
 dfs_test_compat(void **state)
 {
 	test_arg_t	*arg = *state;
-	uuid_t		uuid1;
-	uuid_t		uuid2;
+	uuid_t		uuid;
 	daos_handle_t	coh;
 	dfs_t		*dfs;
 	int		rc;
 
-	uuid_generate(uuid1);
-	uuid_clear(uuid2);
+	uuid_clear(uuid);
 
 	if (arg->myrank != 0)
 		return;
 
-	print_message("creating DFS container with set uuid "DF_UUIDF" ...\n", DP_UUID(uuid1));
-	rc = dfs_cont_create(arg->pool.poh, uuid1, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
-	rc = daos_cont_open(arg->pool.poh, uuid1, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_rc_equal(rc, 0);
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
-	assert_int_equal(rc, 0);
-	rc = dfs_umount(dfs);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
-	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid1, 1, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
-
 	print_message("creating DFS container with a uuid pointer (not set by caller) ...\n");
-	rc = dfs_cont_create(arg->pool.poh, &uuid2, NULL, NULL, NULL);
+	rc = dfs_cont_create(arg->pool.poh, &uuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
-	rc = daos_cont_open(arg->pool.poh, uuid2, DAOS_COO_RW, &coh, NULL, NULL);
+	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid));
+	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
@@ -1028,9 +1010,9 @@ dfs_test_compat(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid2, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, uuid, 1, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid));
 
 	print_message("creating DFS container with a NULL pointer, should fail ...\n");
 	rc = dfs_cont_create(arg->pool.poh, NULL, NULL, &coh, &dfs);

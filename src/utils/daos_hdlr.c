@@ -1162,10 +1162,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
 
-		if (uuid_is_null(ap->c_uuid))
-			rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
-		else
-			rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+		rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
 		if (rc)
 			rc = daos_errno2der(rc);
 	} else {
@@ -2457,7 +2454,7 @@ dm_connect(struct cmd_args_s *ap,
 					rc = uuid_parse(ca->dst_cont, cuuid);
 					if (rc)
 						D_GOTO(err, rc);
-					rc = dfs_cont_create(ca->dst_poh, cuuid, &attr, NULL, NULL);
+					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr, NULL, NULL);
 				} else {
 					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr,
 							     NULL, NULL);
