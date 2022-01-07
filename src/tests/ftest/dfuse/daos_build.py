@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -58,8 +58,7 @@ class BuildDaos(DfuseTestBase):
         cmds = ['git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
-                'sudo yum -y install meson',
-                'python3 -m pip --disable-pip-version-check install --user pyelftools',
+                'sudo yum -y install meson python3-pyelftools',
                 'scons-3 -C {} --jobs 50 build --build-deps=yes'.format(build_dir)]
         for cmd in cmds:
             try:
