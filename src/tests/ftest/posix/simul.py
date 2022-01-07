@@ -102,16 +102,19 @@ class PosixSimul(DfuseTestBase):
             # The use of MPI here is to run in parallel all simul tests
             # on a single host.
             load_mpi(mpi)
-            if include:
+            if include and not exclude:
                 cmd = "{0} -vv -d {1} -i {2}".format(
                     simul,
                     dfuse_mount_dir,
                     include)
-            else:
+            elif exclude and not include:
                 cmd = "{0} -vv -d {1} -e {2}".format(
                     simul,
                     dfuse_mount_dir,
                     exclude)
+            else:
+                self.fail("##Both include and exclude tests are selected",
+                          " both or empty.")
             try:
                 run_command(cmd)
             except DaosTestError as exception:
@@ -144,6 +147,7 @@ class PosixSimul(DfuseTestBase):
             except TestFail as exception:
                 # Only catch expected message, otherwise fail
                 if "Simul failed" in exception.args[0]:
-                    self.log.info("Expected failure")
+                    self.log.info("Test passed, %s, expected failure: %s.",
+                                  test, exception.args[0])
                 else:
                     raise exception
