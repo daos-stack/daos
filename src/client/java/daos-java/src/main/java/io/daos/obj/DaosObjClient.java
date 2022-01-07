@@ -398,7 +398,7 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
 
   public static native void releaseDescSimple(long nativeDescPtr);
 
-  protected long getContPtr() {
+  public long getContPtr() {
     return contPtr;
   }
 

@@ -7,7 +7,7 @@
 package io.daos;
 
 /**
- * Type of DAOS object.
+ * Class of DAOS object.
  */
 public enum DaosObjectClass {
   OC_UNKNOWN,
