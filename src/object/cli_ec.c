@@ -826,7 +826,8 @@ ec_data_seg_add(daos_recx_t *recx, daos_size_t iod_size, d_sg_list_t *sgl,
 		iov_off = *off;
 		daos_sgl_consume(sgl, iov_idx, iov_off, recx_size, iovs,
 				 iov_nr);
-		D_ASSERT(iov_nr <= iov_capa);
+		D_ASSERTF(iov_nr <= iov_capa, "%d > %d, iod_size "DF_U64"\n",
+			  iov_nr, iov_capa, iod_size);
 		for (i = 0; i < obj_ec_parity_tgt_nr(oca); i++)
 			obj_ec_seg_insert(sorter, obj_ec_data_tgt_nr(oca) + i,
 					  iovs, iov_nr);
@@ -841,7 +842,8 @@ ec_data_seg_add(daos_recx_t *recx, daos_size_t iod_size, d_sg_list_t *sgl,
 	recx_size = recx_nr * iod_size;
 	tgt = obj_ec_tgt_of_recx_idx(recx_idx, stripe_rec_nr, cell_rec_nr);
 	daos_sgl_consume(sgl, iov_idx, iov_off, recx_size, iovs, iov_nr);
-	D_ASSERT(iov_nr <= iov_capa);
+	D_ASSERTF(iov_nr <= iov_capa, "%d > %d, iod_size "DF_U64"\n",
+		  iov_nr, iov_capa, iod_size);
 	obj_ec_seg_insert(sorter, tgt, iovs, iov_nr);
 	/* add remaining recxs */
 	recx_idx = roundup(recx_idx + 1, cell_rec_nr);
@@ -1931,6 +1933,7 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		parity_lists = reasb_req->orr_parity_lists;
 		if (parity_lists == NULL)
 			rc = -DER_NOMEM;
+		daos_recx_ep_lists_merge(parity_lists, nr);
 		goto out;
 	}
 
@@ -1938,6 +1941,7 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		rc = -DER_FETCH_AGAIN;
 		D_ERROR("simulate parity list mismatch, "DF_RC"\n", DP_RC(rc));
 	} else {
+		daos_recx_ep_lists_merge(recx_lists, nr);
 		rc = obj_ec_parity_lists_match(parity_lists, recx_lists, nr);
 		if (rc) {
 			D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));

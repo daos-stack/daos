@@ -20,7 +20,7 @@ In this release we have added the following changes to the DAOS support matrix:
 - CentOS Linux 8 and openSUSE Leap 15.3  support is added
 
 For a complete list of supported hardware and software, refer to the
- [Support Matrix](https://docs.daos.io/v2.0/release/support_matrix_v2_0/).
+ [Support Matrix](https://docs.daos.io/v2.0/release/support_matrix/).
 
 ## Key features and improvements
 
