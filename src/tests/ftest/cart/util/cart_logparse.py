@@ -52,10 +52,8 @@ import re
 class InvalidPid(Exception):
     """Exception to be raised when invalid pid is requested."""
 
-
 class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed."""
-
 
 LOG_LEVELS = {
     'EMIT': 1,
@@ -90,7 +88,6 @@ class LogRaw():
         LogLine
         """
         return self.line
-
 
 # pylint: disable=too-many-instance-attributes
 class LogLine():
@@ -480,7 +477,6 @@ class StateIter():
 
 # pylint: disable=too-few-public-methods
 
-
 class LogIter():
     """Class for parsing CaRT log files
 
@@ -570,7 +566,6 @@ class LogIter():
         for line in self._fd:
             fields = line.split(None, 8)
             index += 1
-            l_pid = None
             if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 self._data.append(LogRaw(line))
             else:
@@ -595,8 +590,7 @@ class LogIter():
         for line in self._fd:
             fields = line.split(None, 8)
             index += 1
-            l_pid = None
-            if len(fields) < 6 or len(fields[0]) != 17:
+            if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 position += len(line)
                 continue
             pidtid = fields[2][5:-1]
@@ -650,7 +644,7 @@ class LogIter():
 
         if stateful:
             if pid is None:
-                raise InvalidPid
+                raise InvalidPid(pid)
             return StateIter(self)
 
         return self

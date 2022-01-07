@@ -347,7 +347,8 @@
 #    # When class is set to nvme, bdev_list is the list of unique NVMe IDs
 #    # that should be different across different engine instance.
 #    # Immutable after running "dmg storage format".
-#    bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
+#    bdev_list: ["0000:81:00.0", "0000:82:00.0"]  # generate regular nvme.conf
+#
 #    # If VMD-enabled NVMe SSDs are used, the bdev_list should consist of the VMD
 #    # PCIe addresses, and not the BDF format transport IDs of the backing NVMe SSDs
 #    # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
@@ -487,5 +488,5 @@
 #    # If Volume Management Devices (VMD) are to be used, then the disable_vmd
 #    # flag needs to be set to false (default). The class will remain the
 #    # default "nvme" type, and bdev_list will include the VMD addresses.
-#    class: nvme
-#    bdev_list: ["0000:82:00.0","0000:5d:05.5"]
+#    #class: nvme
+#    #bdev_list: ["0000:5d:05.5"]
