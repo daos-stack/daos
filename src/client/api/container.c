@@ -36,11 +36,6 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
 
-	if (cuuid == NULL) {
-		D_ERROR("NULL pointer for cuuid in daos_cont_create().\n");
-		return -DER_INVAL;
-	}
-
 	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, true)) {
 		D_ERROR("Invalid container properties.\n");
 		return -DER_INVAL;
