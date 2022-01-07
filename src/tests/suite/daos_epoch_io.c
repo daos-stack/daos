@@ -477,8 +477,9 @@ squeeze_spaces(char *line)
 	char	*current = line;
 	int	 spacing = 0;
 	int	 leading_space = 1;
+	int	 i;
 
-	for (; line && *line != '\n'; line++) {
+	for (i = 0; line && *line != '\n' && i < CMD_LINE_LEN_MAX - 1; line++, i++) {
 		if (isspace(*line)) {
 			if (!spacing && !leading_space) {
 				*current++ = *line;
@@ -497,13 +498,16 @@ static int
 cmd_line_get(FILE *fp, char *line)
 {
 	char	*p;
+	int	 i;
 
 	D_ASSERT(line != NULL && fp != NULL);
 	do {
 		if (fgets(line, CMD_LINE_LEN_MAX - 1, fp) == NULL)
 			return -DER_ENOENT;
-		for (p = line; isspace(*p); p++)
+		for (p = line, i = 0; isspace(*p) && i < CMD_LINE_LEN_MAX - 1; p++, i++)
 			;
+		if (i == CMD_LINE_LEN_MAX - 1)
+			continue;
 		if (*p != '\0' && *p != '#' && *p != '\n')
 			break;
 	} while (1);
@@ -1483,9 +1487,11 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 		size_t	cmd_size;
 
 		memset(cmd_line, 0, CMD_LINE_LEN_MAX - 1);
+		print_message("will call cmd_line_get\n");
 		if (cmd_line_get(fp, cmd_line) != 0)
 			break;
 
+		print_message("cmd_line %s\n", cmd_line);
 		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX - 1);
 		if (cmd_size == 0)
 			continue;
@@ -1494,12 +1500,14 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 			break;
 		}
 		rc = cmd_line_parse(arg, cmd_line, &op);
+		print_message("cmd_line_parse rc %d\n", rc);
 		if (rc != 0) {
 			print_message("bad cmd_line %s, exit.\n", cmd_line);
 			break;
 		}
 
 		if (op != NULL) {
+			print_message("op->tx %d\n", op->tx);
 			op->snap_epoch = &sn_epoch[op->tx];
 			print_message("will run cmd_line %s, line_nr %d\n", cmd_line, ++line_nr);
 			rc = cmd_line_run(arg, op);
