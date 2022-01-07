@@ -440,10 +440,12 @@ class DaosPool():
 class DaosServer():
     """Manage a DAOS server instance"""
 
-    def __init__(self, conf, test_class=None, valgrind=False):
+    def __init__(self, conf, test_class=None, valgrind=False, wf=None, fe=None):
         self.running = False
         self._file = __file__.lstrip('./')
         self._sp = None
+        self.wf = wf
+        self.fe = fe
         self.conf = conf
         if test_class:
             self._test_class = 'Server.{}'.format(test_class)
@@ -489,6 +491,25 @@ class DaosServer():
             self.dfuse_cores = 12
         else:
             self.dfuse_cores = None
+        self.fuse_procs = []
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, _type, _value, _traceback):
+        rc = self.stop(self.wf)
+        if rc != 0 and self.fe is not None:
+            self.fe.fail()
+        return False
+
+    def add_fuse(self, fuse):
+        """Register a new fuse instance"""
+        self.fuse_procs.append(fuse)
+
+    def remove_fuse(self, fuse):
+        """Deregister a fuse instance"""
+        self.fuse_procs.remove(fuse)
 
     def __del__(self):
         if self._agent:
@@ -671,7 +692,8 @@ class DaosServer():
         cmd = ['storage', 'format', '--json']
         while True:
             try:
-                self._sp.wait(timeout=0.5)
+                rc = self._sp.wait(timeout=0.5)
+                print(rc)
                 res = 'daos server died waiting for start'
                 self._add_test_case('format', failure=res)
                 raise Exception(res)
@@ -713,6 +735,12 @@ class DaosServer():
 
     def stop(self, wf):
         """Stop a previously started DAOS server"""
+
+        for fuse in self.fuse_procs:
+            print('Stopping server with running fuse procs, cleaning up')
+            self._add_test_case('server-stop-with-running-fuse', failure=str(fuse))
+            fuse.stop()
+
         if self._agent:
             self._stop_agent()
 
@@ -794,6 +822,7 @@ class DaosServer():
 
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
+            self.server_logs.remove(log)
         self.running = False
         return ret
 
@@ -1022,6 +1051,15 @@ class DFuse():
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
+    def __str__(self):
+
+        if self._sp:
+            running = 'running'
+        else:
+            running = 'not running'
+
+        return 'DFuse instance at {} ({})'.format(self.dir, running)
+
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
@@ -1101,6 +1139,8 @@ class DFuse():
             if total_time > 60:
                 raise Exception('Timeout starting dfuse')
 
+        self._daos.add_fuse(self)
+
     def _close_files(self):
         work_done = False
         for fname in os.listdir('/proc/self/fd'):
@@ -1137,7 +1177,10 @@ class DFuse():
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
-            if ret != 0:
+            if ret == 42:
+                self.conf.wf.add_test_case(str(self), failure='valgrind errors', output=ret)
+                self.conf.valgrind_errors = True
+            elif ret != 0:
                 fatal_errors = True
         except subprocess.TimeoutExpired:
             print('Timeout stopping dfuse')
@@ -1152,6 +1195,7 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
         os.rmdir(self.dir)
+        self._daos.remove_fuse(self)
         return fatal_errors
 
     def wait_for_exit(self):
@@ -1302,6 +1346,7 @@ def run_daos_cmd(conf,
     if vh.use_valgrind and rc.returncode == 42:
         print("Valgrind errors detected")
         print(rc)
+        conf.wf.add_test_case(' '.join(cmd), failure='valgrind errors', output=rc)
         conf.valgrind_errors = True
         rc.returncode = 0
     if use_json:
@@ -2317,6 +2362,8 @@ class posix_tests():
         print(os.fstat(ofd.fileno()))
 
         ofd.close()
+        if dfuse.stop():
+            self.fatal_errors = True
 
     def test_cont_ro(self):
         """Test access to a read-only container"""
@@ -2881,6 +2928,15 @@ def run_posix_tests(server, conf, test=None):
 
         for td in threads:
             td.join()
+
+    # Now check for running dfuse instances, there should be none at this point as all tests have
+    # completed.  It's not possible to do this check as each test finishes due to the fact that
+    # the tests are running in parallel.  We could revise this so there's a dfuse method on
+    # posix_tests class itself if required.
+    for fuse in server.fuse_procs:
+        conf.wf.add_test_case('fuse leak in tests',
+                              'Test leaked dfuse instance at {}'.format(fuse),
+                              test_class='test',)
 
     out_wrapper = None
     err_wrapper = None
@@ -4109,9 +4165,7 @@ def run(wf, args):
     if args.mode == 'fi':
         fi_test = True
     else:
-        server = DaosServer(conf, test_class='first')
-        server.start()
-        try:
+        with DaosServer(conf, test_class='first', wf=wf_server, fe=fatal_errors) as server:
             if args.mode == 'launch':
                 run_in_fg(server, conf)
             elif args.mode == 'kv':
@@ -4135,28 +4189,21 @@ def run(wf, args):
                 fatal_errors.add_result(run_posix_tests(server, conf))
                 fatal_errors.add_result(run_dfuse(server, conf))
                 fatal_errors.add_result(set_server_fi(server))
-        finally:
-            if server.stop(wf_server) != 0:
-                fatal_errors.fail()
 
     if args.mode == 'all':
-        server = DaosServer(conf)
-        server.start()
-        if server.stop(wf_server) != 0:
-            fatal_errors.fail()
+        with DaosServer(conf, wf=wf_server, fe=fatal_errors) as server:
+            pass
 
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do cont list, then
     # exit again.
     if args.mode == 'server-valgrind':
-        server = DaosServer(conf, valgrind=True, test_class='valgrind')
-        server.start()
-        pools = server.fetch_pools()
-        for pool in pools:
-            cmd = ['cont', 'list', pool.id()]
-            run_daos_cmd(conf, cmd, valgrind=False)
-        if server.stop(wf_server) != 0:
-            fatal_errors.add_result(True)
+        with DaosServer(conf, valgrind=True, test_class='valgrind',
+                        wf=wf_server, fe=fatal_errors) as server:
+            pools = server.fetch_pools()
+            for pool in pools:
+                cmd = ['cont', 'list', pool.id()]
+                run_daos_cmd(conf, cmd, valgrind=False)
 
     # If the perf-check option is given then re-start everything without much
     # debugging enabled and run some microbenchmarks to give numbers for use
@@ -4165,9 +4212,7 @@ def run(wf, args):
         args.server_debug = 'INFO'
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
-        server = DaosServer(conf, test_class='no-debug')
-        server.start()
-        try:
+        with DaosServer(conf, test_class='no-debug', wf=wf_server, fe=fatal_errors) as server:
             if fi_test:
                 # Most of the fault injection tests go here, they are then run on docker containers
                 # so can be performed in parallel.
@@ -4201,9 +4246,6 @@ def run(wf, args):
 
             if args.perf_check:
                 check_readdir_perf(server, conf)
-        finally:
-            if server.stop(wf_server) != 0:
-                fatal_errors.fail()
 
     if fatal_errors.errors:
         wf.add_test_case('Errors', 'Significant errors encountered')
@@ -4211,8 +4253,8 @@ def run(wf, args):
         wf.add_test_case('Errors')
 
     if conf.valgrind_errors:
+        wf.add_test_case('Errors', 'Valgrind errors encountered')
         print("Valgrind errors detected during execution")
-        fatal_errors.add_result(True)
 
     wf_server.close()
     conf.flush_bz2()
