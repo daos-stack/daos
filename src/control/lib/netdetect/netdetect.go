@@ -1084,51 +1084,58 @@ func ValidateProviderConfig(ctx context.Context, device string, provider string)
 	return errors.Errorf("Device %s does not support provider: %s", device, provider)
 }
 
-// ValidateNUMAStub is used for most unit testing to replace ValidateNUMAConfig because the network configuration
-// validation depends upon physical hardware resources and configuration on the target machine
-// that are either not known or static in the test environment
-func ValidateNUMAStub(ctx context.Context, device string, numaNode uint) error {
-
-	err := ValidateNUMAConfig(ctx, device, numaNode)
-	if err != nil {
-		log.Debugf("ValidateNUMAConfig (device: %s, NUMA: %d) returned error: %v", device, numaNode, err)
+// MockGetIfaceNumaNode is used for most unit testing to replace GetIfaceNumaNode because the
+// network configuration validation depends upon physical hardware resources and configuration on
+// the target machine that are either not known or static in the test environment.
+func MockGetIfaceNumaNode(ctx context.Context, device string) (uint, error) {
+	switch device {
+	case "lo":
+		return 0, nil
+	case "eth0":
+		return 0, nil
+	case "eth1":
+		return 1, nil
+	case "ib0":
+		return 0, nil
+	case "ib1":
+		return 1, nil
+	case "qib42":
+		return 0, nil
+	default:
+		return 0, errors.New("unknown fabric interface")
 	}
-	return nil
 }
 
-// ValidateNUMAConfig confirms that the given network device matches the NUMA ID given.
-func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error {
+// GetIfaceNumaNode returns NUMA ID of the given network device.
+func GetIfaceNumaNode(ctx context.Context, device string) (uint, error) {
 	var err error
 
 	if device == "" {
-		return errors.New("device required")
+		return 0, errors.New("device required")
 	}
 
 	ndc, err := getContext(ctx)
 	if err != nil {
-		return errors.New("hwloc topology not initialized")
+		return 0, errors.New("hwloc topology not initialized")
 	}
 
 	// If the system isn't NUMA aware, skip validation
 	if !ndc.numaAware {
 		log.Debugf("The system is not NUMA aware.  Device/NUMA validation skipped.\n")
-		return nil
+		return 0, nil
 	}
 
 	if _, found := ndc.deviceScanCfg.systemDeviceNamesMap[device]; !found {
-		return errors.Errorf("device: %s is an invalid device name", device)
+		return 0, errors.Errorf("device: %s is an invalid device name", device)
 	}
 
 	ndc.deviceScanCfg.targetDevice = device
 	deviceAffinity, err := GetAffinityForDevice(ndc.deviceScanCfg)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	if deviceAffinity.NUMANode != numaNode {
-		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
-	}
-	return nil
+	return deviceAffinity.NUMANode, nil
 }
 
 func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, excludeMap map[string]struct{}) (*FabricScan, error) {

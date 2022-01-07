@@ -227,7 +227,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			engineCfg := engine.NewConfig().WithTargetCount(testTargetCount)
+			engineCfg := engine.MockConfig().WithTargetCount(testTargetCount)
 			if !tc.disableNVMe {
 				engineCfg = engineCfg.
 					WithStorage(
@@ -419,7 +419,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			defer cancel()
 
 			if tc.mgmtSvc == nil {
-				engineCfg := engine.NewConfig().
+				engineCfg := engine.MockConfig().
 					WithTargetCount(tc.targetCount).
 					WithStorage(
 						storage.NewTierConfig().
@@ -492,7 +492,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	defer cancel()
 
 	mgmtSvc := newTestMgmtSvc(t, log)
-	ec := engine.NewConfig().
+	ec := engine.MockConfig().
 		WithTargetCount(1).
 		WithStorage(
 			storage.NewTierConfig().
