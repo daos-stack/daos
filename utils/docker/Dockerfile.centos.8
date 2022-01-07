@@ -229,15 +229,14 @@ ENV FI_SOCKETS_MAX_CONN_RETRY=1
 WORKDIR /home/daos/daos/src/client/java
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-ARG BASE_DISTRO
 
 USER root:root
 RUN if [[ "$DAOS_JAVA_BUILD" == "yes" ]]; then				\
 	cp /home/daos/daos/utils/scripts/install-centos8-java.sh	\
 		/tmp/install-centos8-java.sh;				\
 	chmod +x /tmp/install-centos8-java.sh;				\
-        ([[ "$BASE_DISTRO" = fedora* ]] && echo "true" || echo		\
-"false") | { read -r b; /tmp/install-centos8-java.sh "$b"; }		\
+	/tmp/install-centos8-java.sh;					\
+	rm -f /tmp/install-centos8-java.sh;				\
     fi
 
 USER daos_server:daos_server
@@ -251,5 +250,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-USER root:root
 RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
