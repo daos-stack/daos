@@ -48,16 +48,15 @@ daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps)
 int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca)
 {
 	struct dc_object *dc_object;
-	daos_handle_t coh = dc_obj_hdl2cont_hdl(oh);
-
-	if (daos_handle_is_inval(coh))
-		return -DER_NO_HDL;
+	struct daos_oclass_attr *tmp;
 
 	dc_object = obj_hdl2ptr(oh);
 	if (dc_object == NULL)
 		return -DER_NO_HDL;
 
-	*oca = *obj_get_oca(dc_object);
+	tmp = obj_get_oca(dc_object);
+	D_ASSERT(tmp != NULL);
+	*oca = *tmp;
 	obj_decref(dc_object);
 
 	return 0;
