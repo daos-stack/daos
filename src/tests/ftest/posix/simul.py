@@ -113,7 +113,7 @@ class PosixSimul(DfuseTestBase):
                     dfuse_mount_dir,
                     exclude)
             else:
-                self.fail("##Both include and exclude tests are selected",
+                self.fail("##Both include and exclude tests are selected"
                           " both or empty.")
             try:
                 run_command(cmd)
