@@ -1545,7 +1545,7 @@ public class DaosObjectIT {
   @Test
   public void testIODescUpdateAsyncNotReuse() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     int bufLen = 100;
     byte[] data = generateDataArray(bufLen);
@@ -1602,7 +1602,7 @@ public class DaosObjectIT {
   @Test
   public void testIODescUpdateAsyncReuse() throws Exception {
     DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
-    id.encode();
+    id.encode(client.getContPtr());
     DaosObject object = client.getObject(id);
     int bufLen = 100;
     long offset = 2L;
