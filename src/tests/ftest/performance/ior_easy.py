@@ -61,7 +61,7 @@ class IorEasy(PerformanceTestBase):
     def test_performance_ior_easy_dfs_ec_4p2gx_stop_write(self):
         """Test Description: Run IOR Easy, DFS, EC_4P2GX, stop a rank during write
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,manual
         :avocado: tags=hw,large
         :avocado: tags=performance_dfs
         :avocado: tags=performance_ior_easy_dfs_ec_4p2gx_stop_write
@@ -73,7 +73,7 @@ class IorEasy(PerformanceTestBase):
     def test_performance_ior_easy_dfs_ec_4p2gx_stop_read(self):
         """Test Description: Run IOR Easy, DFS, EC_4P2GX, stop a rank during read.
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,manual
         :avocado: tags=hw,large
         :avocado: tags=performance_dfs
         :avocado: tags=performance_ior_easy_dfs_ec_4p2gx_stop_read
