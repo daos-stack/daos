@@ -72,10 +72,12 @@ class RbldWithIOR(IorTestBase):
         self.pool.wait_for_rebuild(False)
 
         # verify the pool information after rebuild
+        self.log.info("Verifying pool info after rebuild")
         checks["pi_ndisabled"] = targets
         self.assertTrue(
             self.pool.check_pool_info(**checks),
             "#Invalid pool information detected after rebuild")
+        self.log.info("Verifying rebuild info after rebuild")
         self.assertTrue(
             self.pool.check_rebuild_status(rs_errno=0, rs_done=1),
             "#Invalid pool rebuild error number detected after rebuild")
