@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -504,6 +504,13 @@ reset:
 			bound = DAOS_EPOCH_MAX;
 		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound))
 			rc = -DER_TX_RESTART;
+	}
+
+	if (rc == 0 && epr.epr_hi > obj->obj_df->vo_max_write) {
+		rc = umem_tx_add_ptr(vos_cont2umm(cont), &obj->obj_df->vo_max_write,
+				     sizeof(obj->obj_df->vo_max_write));
+		if (rc == 0)
+			obj->obj_df->vo_max_write = epr.epr_hi;
 	}
 
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);

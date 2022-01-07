@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -588,6 +588,7 @@ punch_model_test(void **state)
 	daos_recx_t		rex;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
+	daos_epoch_t		max_write;
 	const char		*expected = "HelloWorld";
 	const char		*under = "HelloLonelyWorld";
 	const char		*latest = "Goodbye";
@@ -737,10 +738,11 @@ punch_model_test(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_RECX | DAOS_GET_MAX,
-			       11, &dkey, &akey, &rex, 0, 0, NULL);
+			       11, &dkey, &akey, &rex, &max_write, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(rex.rx_idx, 0);
 	assert_int_equal(rex.rx_nr, strlen(latest));
+	assert_int_equal(max_write, 11);
 }
 
 static void

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -447,8 +447,8 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx, unsigned int cell_size, uint64_t stripe_size,
-		  struct dtx_handle *dth)
+		  daos_recx_t *recx, daos_epoch_t *max_write, unsigned int cell_size,
+		  uint64_t stripe_size, struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
@@ -648,6 +648,9 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	if (daos_handle_is_valid(query->qt_dkey_toh))
 		dbtree_close(query->qt_dkey_toh);
 out:
+	if (max_write != NULL && obj != NULL && obj->obj_df != NULL)
+		*max_write = obj->obj_df->vo_max_write;
+
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 

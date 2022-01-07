@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1990,63 +1990,6 @@ free_set_size_cb(tse_task_t *task, void *data)
 }
 
 static int
-punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
-	  tse_task_t *task)
-{
-	daos_obj_punch_t	*p_args;
-	daos_key_t		*dkey;
-	struct io_params	*params = NULL;
-	tse_task_t		*io_task = NULL;
-	daos_opc_t		opc = DAOS_OPC_OBJ_PUNCH_DKEYS;
-	int			rc;
-
-	D_ALLOC_PTR(params);
-	if (params == NULL)
-		return -DER_NOMEM;
-
-	params->dkey_val = dkey_val;
-	dkey = &params->dkey;
-	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
-
-	/** Punch this entire dkey */
-	D_DEBUG(DB_IO, "Punching Key %zu\n", dkey_val);
-
-	D_ASSERT(dkey_val != 0);
-
-	rc = daos_task_create(opc, tse_task2sched(task), 0, NULL, &io_task);
-	if (rc) {
-		D_ERROR("daos_task_create() failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(free, rc);
-	}
-
-	p_args = daos_task_get_args(io_task);
-	p_args->oh	= oh;
-	p_args->th	= th;
-	p_args->dkey	= dkey;
-
-	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
-				       sizeof(params));
-	if (rc)
-		D_GOTO(free, rc);
-
-	rc = tse_task_register_deps(task, 1, &io_task);
-	if (rc)
-		D_GOTO(err, rc);
-
-	rc = tse_task_schedule(io_task, false);
-	if (rc)
-		D_GOTO(err, rc);
-
-	return rc;
-free:
-	D_FREE(params);
-err:
-	if (io_task)
-		tse_task_complete(io_task, rc);
-	return rc;
-}
-
-static int
 punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	     daos_off_t record_i, daos_size_t num_records, tse_task_t *task)
 {
@@ -2373,12 +2316,16 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			if (dkey_val == 0)
 				continue;
 			/*
-			 * Punch the entire dkey since it's in a higher dkey
-			 * group than the intended size.
+			 * The dkey is higher than the adjustded size so we could punch it here.
+			 * But it's better to punch the extent so that the max_write for the object
+			 * doesn't get lost by aggregation.
 			 */
-			D_DEBUG(DB_IO, "Punching key: "DF_U64"\n", dkey_val);
-			rc = punch_key(args->oh, args->th, dkey_val,
-				       props->ptask);
+			D_DEBUG(DB_IO, "Punch full extent in key "DF_U64"\n",
+				dkey_val);
+			rc = punch_extent(args->oh, args->th,
+					  dkey_val, 0,
+					  props->chunk_size,
+					  props->ptask);
 			if (rc)
 				return rc;
 		} else if (dkey_val == props->dkey_val && props->record_i) {
