@@ -49,7 +49,6 @@ class CreateContainerTest(TestWithServers):
         try:
             self.container = DaosContainer(self.context)
             self.container.create(poh)
-#            print("DBG: container.create(), container uuid = %s" % (self.container.get_uuid_str()) )
 
             if self.container.uuid is None:
                 self.fail("Container uuid is None.")
