@@ -27,7 +27,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 
 	if cfg == nil {
 		cfg = config.DefaultServer().WithEngines(
-			engine.NewConfig().WithTargetCount(1),
+			engine.MockConfig().WithTargetCount(1),
 		)
 	}
 

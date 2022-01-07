@@ -24,6 +24,8 @@ const (
 	bdevPciAddrSep = " "
 	// vmdDomainLen defines the expected length of a VMD backing devices address domain.
 	vmdDomainLen = 6
+	// PCIAddrBusBitSize defines the number of bits used to represent bus in address.
+	PCIAddrBusBitSize = 8
 )
 
 // parseVMDAddress returns the domain string interpreted as the VMD address.
