@@ -46,7 +46,7 @@ const (
 func cfgHasBdevs(cfg *config.Server) bool {
 	for _, engineCfg := range cfg.Engines {
 		for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
-			if len(bc.Bdev.DeviceList) > 0 {
+			if bc.Bdev.DeviceList.Len() > 0 {
 				return true
 			}
 		}

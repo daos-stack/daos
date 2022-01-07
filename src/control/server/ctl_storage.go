@@ -32,20 +32,21 @@ func (scs *StorageControlService) Setup() {
 		scs.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
-	var cfgBdevs []string
-
+	bdevAddrs := &storage.BdevDeviceList{}
 	for _, storageCfg := range scs.instanceStorage {
 		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
 			if tierCfg.Class != storage.ClassNvme {
 				// don't scan if any tier is using emulated NVMe
 				return
 			}
-			cfgBdevs = append(cfgBdevs, tierCfg.Bdev.DeviceList...)
+			if err := bdevAddrs.Add(tierCfg.Bdev.DeviceList.Addresses()...); err != nil {
+				scs.log.Debugf("%s\n", errors.Wrap(err, "Failed to add bdev addresses"))
+			}
 		}
 	}
 
 	nvmeScanResp, err := scs.NvmeScan(storage.BdevScanRequest{
-		DeviceList: cfgBdevs,
+		DeviceList: bdevAddrs,
 	})
 	if err != nil {
 		scs.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
