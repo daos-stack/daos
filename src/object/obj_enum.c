@@ -334,6 +334,13 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	return 0;
 }
 
+int
+ds_obj_fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent,
+		struct dss_enum_arg *arg, vos_iter_type_t vos_type)
+{
+	return fill_key(ih, key_ent, arg, vos_type);
+}
+
 static bool
 recx_eq(const daos_recx_t *a, const daos_recx_t *b)
 {

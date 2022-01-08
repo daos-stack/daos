@@ -43,7 +43,6 @@ obj_opc_to_str(crt_opcode_t opc)
 }
 
 #define DAOS_ISEQ_PIPELINE_RUN	/* input fields */			\
-	((struct dtx_id)	(pri_dti)		CRT_RAW)	\
 	((daos_pipeline_t)	(pri_pipe)		CRT_VAR)	\
 	((daos_unit_oid_t)	(pri_oid)		CRT_VAR)	\
 	((uuid_t)		(pri_pool_uuid)		CRT_VAR)	\
@@ -55,6 +54,7 @@ obj_opc_to_str(crt_opcode_t opc)
 	((daos_pipeline_sgls_t)	(pri_sgl_recx)		CRT_VAR)	\
 	((daos_pipeline_sgls_t)	(pri_sgl_aggr)		CRT_VAR)	\
 	((daos_anchor_t)	(pri_anchor)		CRT_RAW)	\
+	((daos_epoch_range_t)	(pri_epr)		CRT_VAR)	\
 	((uint64_t)		(pri_epoch)		CRT_VAR)	\
 	((uint64_t)		(pri_epoch_first)	CRT_VAR)	\
 	((uint64_t)		(pri_flags)		CRT_VAR)	\

@@ -737,213 +737,13 @@ pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
 	}
 }
 #endif
-static uint32_t
-pipeline_part_nops(const char *part_type, size_t part_type_s)
-{
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s))
-	{
-		return 2;
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s)      ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s)    ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s)       ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s)       ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s)       ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s)       ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
-	{
-		return 1;
-	}
-	return 0; /** Everything else has zero operands */
-}
-
-static bool
-pipeline_part_checkop(const char *part_type, size_t part_type_s,
-		      const char *operand_type, size_t operand_type_s)
-{
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s))
-	{
-		return !strncmp(operand_type, "DAOS_FILTER_FUNC",
-				strlen("DAOS_FILTER_FUNC"));
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s)  ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s)  ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s)  ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s)  ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s)  ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s)  ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s))
-	{
-		return strncmp(operand_type, "DAOS_FILTER_FUNC",
-				strlen("DAOS_FILTER_FUNC"));
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s))
-	{
-		return strncmp(operand_type, "DAOS_FILTER_FUNC",
-				strlen("DAOS_FILTER_FUNC"))           ||
-			!strncmp(operand_type, "DAOS_FILTER_FUNC_ADD", operand_type_s) ||
-			!strncmp(operand_type, "DAOS_FILTER_FUNC_SUB", operand_type_s) ||
-			!strncmp(operand_type, "DAOS_FILTER_FUNC_MUL", operand_type_s) ||
-			!strncmp(operand_type, "DAOS_FILTER_FUNC_DIV", operand_type_s);
-	}
-	return false; /** we should not reach this ever */
-}
-
-static bool
-pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
-{
-	uint32_t	i;
-	uint32_t	num_operands;
-	bool		res;
-	char		*part_type;
-	size_t		part_type_s;
-	char		*child_part_type;
-	size_t		child_part_type_s;
-
-	num_operands 	= ftr->parts[*p]->num_operands;
-	part_type	= (char *) ftr->parts[*p]->part_type.iov_buf;
-	part_type_s	= ftr->parts[*p]->part_type.iov_len;
-	for (i = 0; i < num_operands; i++)
-	{
-		*p		+= 1;
-		child_part_type	= (char *) ftr->parts[*p]->part_type.iov_buf;
-		child_part_type_s = ftr->parts[*p]->part_type.iov_len;
-		res = pipeline_part_checkop(part_type, part_type_s,
-					    child_part_type, child_part_type_s);
-		if (res == false)
-		{
-			return res;
-		}
-		res = pipeline_filter_checkops(ftr, p);
-		if (res == false)
-		{
-			return res;
-		}
-	}
-	return true;
-}
 
 /**************************/
 
 
 int dc_pipeline_check(daos_pipeline_t *pipeline)
 {
-	size_t i;
-
-	/** -- Check 0: Check that pipeline is not NULL. */
-
-	if (pipeline == NULL)
-	{
-		return -DER_INVAL;
-	}
-
-	/** -- Check 1: Check that filters are chained together correctly. */
-
-	{
-		for (i = 0; i < pipeline->num_filters; i++)
-		{
-			if (strncmp((char *) pipeline->filters[i]->filter_type.iov_buf,
-				    "DAOS_FILTER_CONDITION",
-				    pipeline->filters[i]->filter_type.iov_len))
-			{
-				return -DER_INVAL;
-			}
-		}
-		for (i = 0; i < pipeline->num_aggr_filters; i++)
-		{
-			if (strncmp((char *) pipeline->aggr_filters[i]->filter_type.iov_buf,
-				    "DAOS_FILTER_AGGREGATION",
-				    pipeline->aggr_filters[i]->filter_type.iov_len))
-			{
-				return -DER_INVAL;
-			}
-		}
-	}
-
-	/** -- Rest of the checks are done for each filter */
-
-	for (i = 0;
-	     i < pipeline->num_filters + pipeline->num_aggr_filters;
-	     i++)
-	{
-		daos_filter_t *ftr;
-		size_t p;
-		uint32_t num_parts = 0;
-		uint32_t num_operands;
-		bool res;
-
-		if (i < pipeline->num_filters)
-		{
-			ftr = pipeline->filters[i];
-		}
-		else
-		{
-			ftr = pipeline->aggr_filters[i-pipeline->num_filters];
-		}
-		if (ftr->num_parts)
-		{
-			num_parts = 1;
-		}
-
-		/**
-		 * -- Check 2: Check that all parts have a correct
-		 *             number of operands and also that the
-		 *             number of total parts is correct.
-		 */
-
-		for (p = 0; p < ftr->num_parts; p++)
-		{
-			daos_filter_part_t *part = ftr->parts[p];
-			num_operands = pipeline_part_nops((char *) part->part_type.iov_buf,
-							  part->part_type.iov_len);
-
-			if (num_operands != part->num_operands)
-			{
-				return -DER_INVAL;
-			}
-			num_parts += part->num_operands;
-		}
-		if (num_parts != ftr->num_parts)
-		{
-			return -DER_INVAL;
-		}
-
-		/**
-		 * -- Check 3: Check that all parts have the right
-		 *             type of operands.
-		 */
-
-		p = 0;
-		res = pipeline_filter_checkops(ftr, &p);
-		if (res == false)
-		{
-			return -DER_INVAL;
-		}
-	}
-
-	return 0;
+	return d_pipeline_check(pipeline);
 }
 
 struct pipeline_auxi_args {
@@ -955,14 +755,12 @@ struct pipeline_auxi_args {
 };
 
 struct shard_pipeline_run_args {
-	struct dtx_epoch		pra_epoch;  // I AM SETTING BUT NOT REALLY USING THIS YET
 	uint32_t			pra_map_ver;// I AM SETTING BUT NOT REALLY USING THIS YET
 	uint32_t			pra_shard;
 	uint32_t			pra_shards;
 	uint32_t			pra_target;
 
 	daos_pipeline_run_t		*pra_api_args;
-	struct dtx_id			pra_dti;       // I AM SETTING BUT NOT REALLY USING THIS YET
 	daos_unit_oid_t			pra_oid;
 	uuid_t				pra_coh_uuid;
 	uuid_t				pra_cont_uuid;
@@ -974,8 +772,6 @@ struct shard_pipeline_run_args {
 struct pipeline_run_cb_args {
 	crt_rpc_t		*rpc;
 	unsigned int		*map_ver; // I AM SETTING BUT NOT REALLY USING THIS YET
-	struct dtx_epoch	epoch;    // I AM SETTING BUT NOT REALLY USING THIS YET
-	daos_handle_t		th;       // I AM SETTING BUT NOT REALLY USING THIS YET
 };
 
 static int
@@ -1016,22 +812,6 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	pro = (struct pipeline_run_out *) crt_reply_get(rpc);
 	rc  = pro->pro_ret; // get status
 
-	// TODO: Handle transactions
-	/*if (daos_handle_is_valid(cb_args->th)) // ???
-	{
-		int rc_tmp;
-
-		rc_tmp = dc_tx_op_end(task, cb_args->th, &cb_args->epoch, rc,
-				      pro->pro_epoch);
-		if (rc_tmp != 0)
-		{
-			D_ERROR("failed to end transaction operation (rc=%d "
-				"epoch="DF_U64": "DF_RC"\n", rc,
-				pro->pro_epoch, DP_RC(rc_tmp));
-			goto out;
-		}
-	}*/
-
 	if (rc != 0)
 	{
 		if (rc == -DER_NONEXIST)
@@ -1063,6 +843,29 @@ out:
 }
 
 static int
+shard_prepare_anchors(daos_pipeline_run_t *api_args, int nr)
+{
+
+	daos_anchor_t	*sub_anchors;
+	int		i;
+
+	D_ASSERT(api_args->anchor->da_sub_anchors == 0);
+	D_ALLOC_ARRAY(sub_anchors, nr);
+	if (sub_anchors == NULL)
+	{
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < nr; i++)
+	{
+		sub_anchors[i] = *api_args->anchor;
+	}
+
+	api_args->anchor->da_sub_anchors = (uint64_t) sub_anchors;
+	return 0;
+}
+
+static int
 shard_pipeline_run_task(tse_task_t *task)
 {
 	struct shard_pipeline_run_args	*args;
@@ -1077,8 +880,11 @@ shard_pipeline_run_task(tse_task_t *task)
 	struct pipeline_run_cb_args	cb_args;
 	struct pipeline_run_in		*pri;
 	uint32_t			nr_kds;
+	uint32_t			nr_iods;
 	uint32_t			shard_nr_kds;
 	int				rc;
+	daos_anchor_t			*da_sub_anchors;
+
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 	crt_ctx	= daos_task2ctx(task);
@@ -1115,8 +921,6 @@ shard_pipeline_run_task(tse_task_t *task)
 	crt_req_addref(req);
 	cb_args.rpc		= req;
 	cb_args.map_ver		= &args->pra_map_ver;
-	cb_args.epoch		= args->pra_epoch;
-	cb_args.th		= args->pra_api_args->th;
 
 	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args,
 				       sizeof(cb_args));
@@ -1127,7 +931,7 @@ shard_pipeline_run_task(tse_task_t *task)
 
 	/** -- calculating nr_kds for this shard */
 
-	D_ASSERT(args->pra_shards > 0 && args->pra_shard > 0);
+	D_ASSERT(args->pra_shards > 0 && args->pra_shard >= 0);
 	D_ASSERT(args->pra_shard < args->pra_shards);
 
 	nr_kds		= *(args->pra_api_args->nr_kds);
@@ -1145,11 +949,15 @@ shard_pipeline_run_task(tse_task_t *task)
 
 	pri = crt_req_get(req);
 	D_ASSERT(pri != NULL);
-	pri->pri_dti		= args->pra_dti;
 	pri->pri_pipe		= args->pra_api_args->pipeline;
 	pri->pri_oid		= args->pra_oid;
-	pri->pri_epoch		= args->pra_epoch.oe_value;
-	pri->pri_epoch_first	= args->pra_epoch.oe_first;
+	/**
+	  * No EPR for now. Using pri_epr to pass epoch values
+	  * -> lo for oe_first, and hi for oe_value
+	  */
+	pri->pri_epr		= (daos_epoch_range_t)
+				 { .epr_lo	= 0,
+				   .epr_hi	= DAOS_EPOCH_MAX };
 	pri->pri_target		= args->pra_target;
 	if (args->pra_api_args->dkey != NULL)
 	{
@@ -1162,15 +970,18 @@ shard_pipeline_run_task(tse_task_t *task)
 				   .iov_buf_len		= 0,
 				   .iov_len		= 0 };
 	}
-	pri->pri_iods.nr	= *(args->pra_api_args->nr_iods);
+	nr_iods			= *(args->pra_api_args->nr_iods);
+	pri->pri_iods.nr	= nr_iods;
 	pri->pri_iods.iods	= args->pra_api_args->iods;
 	pri->pri_sgl_keys.nr	= shard_nr_kds;
 	pri->pri_sgl_keys.sgls	= args->pra_api_args->sgl_keys;
-	pri->pri_sgl_recx.nr	= shard_nr_kds;
+	pri->pri_sgl_recx.nr	= shard_nr_kds*nr_iods;
 	pri->pri_sgl_recx.sgls	= args->pra_api_args->sgl_recx;
 	pri->pri_sgl_aggr.nr	= args->pra_api_args->pipeline.num_aggr_filters;
 	pri->pri_sgl_aggr.sgls	= args->pra_api_args->sgl_agg;
-	pri->pri_anchor		= *(args->pra_api_args->anchor);
+	da_sub_anchors		= (daos_anchor_t *)
+				     args->pra_api_args->anchor->da_sub_anchors;
+	pri->pri_anchor		= da_sub_anchors[args->pra_shard];
 	pri->pri_flags		= args->pra_api_args->flags;
 	uuid_copy(pri->pri_pool_uuid, pool->dp_pool);
 	uuid_copy(pri->pri_co_hdl, args->pra_coh_uuid);
@@ -1209,9 +1020,9 @@ shard_pipeline_task_abort(tse_task_t *task, void *arg)
 static int
 queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout,
 			      struct pipeline_auxi_args *pipeline_auxi,
-			      struct dtx_epoch *epoch, int shard, int shards,
-			      unsigned int map_ver, struct dtx_id *dti,
-			      daos_unit_oid_t oid, uuid_t coh_uuid, uuid_t cont_uuid)
+			      int shard, int shards, unsigned int map_ver,
+			      daos_unit_oid_t oid, uuid_t coh_uuid,
+			      uuid_t cont_uuid)
 {
 	daos_pipeline_run_t		*api_args;
 	tse_sched_t			*sched;
@@ -1230,11 +1041,9 @@ queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 	args->pra_api_args	= api_args;
-	args->pra_epoch		= *epoch;
 	args->pra_map_ver	= map_ver;
 	args->pra_shard		= shard;
 	args->pra_shards	= shards;
-	args->pra_dti		= *dti;
 	args->pra_oid		= oid;
 	args->pipeline_auxi	= pipeline_auxi;
 	args->pra_target	= layout->ol_shards[shard].po_target;
@@ -1257,7 +1066,6 @@ out_task:
 }
 
 struct shard_task_sched_args {
-	struct dtx_epoch	tsa_epoch;
 	bool			tsa_scheded;
 };
 
@@ -1348,15 +1156,14 @@ dc_pipeline_run(tse_task_t *api_task)
 	uint32_t			i;
 	d_list_t			*shard_task_head = NULL;
 	daos_unit_oid_t			oid;
-	struct dtx_id			dti;
-	struct dtx_epoch		epoch;
-	uint32_t			map_ver;
+	uint32_t			map_ver = 0;
 	uuid_t				coh_uuid;
 	uuid_t				cont_uuid;
 	struct pipeline_auxi_args	*pipeline_auxi;
 	bool				priv;
 	struct shard_task_sched_args	sched_arg;
 	int				total_shards;
+
 
 	coh	= dc_obj_hdl2cont_hdl(api_args->oh);
 	rc	= dc_obj_hdl2obj_md(api_args->oh, &obj_md);
@@ -1386,22 +1193,9 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_GOTO(out, rc);
 	}
 
-	if (daos_handle_is_valid(api_args->th))
-	{
-		rc = dc_tx_hdl2dti(api_args->th, &dti);
-		D_ASSERTF(rc == 0, "%d\n", rc);
-		rc = dc_tx_hdl2epoch_pmv(api_args->th, &epoch, &map_ver);
-		if (rc != 0)
-		{
-			D_GOTO(out, rc);
-		}
-	}
-	else
-	{
-		daos_dti_gen(&dti, true /* zero */);
-		dc_io_set_epoch(&epoch);
-		D_DEBUG(DB_IO, "set fetch epoch "DF_U64"\n", epoch.oe_value);
-	}
+	/** Pipelines are read only for now, no transactions needed.
+	  * Ignoring api_args->th for now... */
+
 	if (map_ver == 0)
 	{
 		map_ver = layout->ol_ver;
@@ -1419,7 +1213,7 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_GOTO(out, rc);
 	}
 
-	/** -- Iterate over shards */
+	/** -- Allocate sub anchors if needed */
 
 	oca = daos_oclass_attr_find(obj_md.omd_id, &priv);
 	if (oca == NULL)
@@ -1427,6 +1221,31 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_DEBUG(DB_PL, "Failed to find oclass attr\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	if (!daos_oclass_is_ec(oca) ||
+			likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY)))
+	{
+		total_shards = layout->ol_grp_nr; /* one replica per group */
+	}
+	else
+	{
+		/* groups x data_cells_in_each_group */
+		total_shards = layout->ol_grp_nr * oca->u.ec.e_k;
+	}
+
+	if (api_args->anchor->da_sub_anchors == 0)
+	{
+		rc = shard_prepare_anchors(api_args, total_shards);
+		if (rc != 0)
+		{
+			D_ERROR("task %p failed to allocate sub_anchors "DF_RC"\n",
+								api_task, DP_RC(rc));
+			tse_task_stack_pop(api_task, sizeof(struct pipeline_auxi_args));
+			D_GOTO(out, rc);
+		}
+	}
+
+	/** -- Iterate over shards */
 
 	shard_task_head = &pipeline_auxi->shard_task_head;
 	D_ASSERT(d_list_empty(shard_task_head));
@@ -1438,7 +1257,6 @@ dc_pipeline_run(tse_task_t *api_task)
 
 		/** Try leader for current group */
 		start_shard	= i * layout->ol_grp_size;
-		total_shards	= layout->ol_grp_nr; /* one replica per group */
 
 		if (!daos_oclass_is_ec(oca) ||
 				likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY)))
@@ -1459,9 +1277,9 @@ dc_pipeline_run(tse_task_t *api_task)
 				rc = queue_shard_pipeline_run_task(
 								api_task, layout,
 								pipeline_auxi,
-								&epoch, leader,
+								leader,
 								total_shards,
-								map_ver, &dti, oid,
+								map_ver, oid,
 								coh_uuid, cont_uuid
 								);
 				if (rc)
@@ -1482,11 +1300,10 @@ dc_pipeline_run(tse_task_t *api_task)
 		/** Then try non-leader shards */
 		D_DEBUG(DB_IO, DF_OID" try non-leader shards for group %d.\n",
 			DP_OID(obj_md.omd_id), i);
-		total_shards *= oca->u.ec.e_k; /* groups x data_cells_in_each_group */
 		for (j = start_shard; j < start_shard + oca->u.ec.e_k; j++) {
 			rc = queue_shard_pipeline_run_task(api_task, layout, pipeline_auxi,
-							   &epoch, j, total_shards,
-							   map_ver, &dti, oid, coh_uuid,
+							   j, total_shards,
+							   map_ver, oid, coh_uuid,
 							   cont_uuid);
 			if (rc)
 			{
@@ -1499,7 +1316,6 @@ dc_pipeline_run(tse_task_t *api_task)
 
 	D_ASSERT(!d_list_empty(shard_task_head));
 	sched_arg.tsa_scheded	= false;
-	sched_arg.tsa_epoch	= epoch;
 	tse_task_list_traverse(shard_task_head, shard_task_sched, &sched_arg);
 	if (sched_arg.tsa_scheded == false)
 	{

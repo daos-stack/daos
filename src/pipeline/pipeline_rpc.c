@@ -12,6 +12,25 @@
 #include "pipeline_rpc.h"
 #include <mercury_proc.h>
 
+
+static int
+crt_proc_daos_epoch_range_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			    daos_epoch_range_t *erange)
+{
+	int rc;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &erange->epr_lo);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &erange->epr_hi);
+	if (unlikely(rc))
+		return rc;
+
+	return 0;
+}
+
+
 static int
 pipeline_t_proc_consts(crt_proc_t proc, crt_proc_op_t proc_op,
 		       size_t num_constants, d_iov_t **constants)
@@ -415,10 +434,6 @@ crt_proc_daos_pipeline_sgls_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 	}
 
-	if (FREEING(proc_op))
-	{
-		i = sgls->nr;
-	}
 	while (i < sgls->nr)
 	{
 		rc = crt_proc_uint32_t(proc, proc_op, &sgls->sgls[i].sg_nr);
@@ -457,6 +472,16 @@ crt_proc_daos_pipeline_sgls_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		i++;
 		for (k = 0; k < sg_nr; k++)
 		{
+			/*rc = crt_proc_d_iov_t(proc, proc_op, &sg_iovs[k]);
+			if (unlikely(rc))
+			{
+				if (DECODING(proc_op))
+				{
+					D_GOTO(exit_free, rc);
+				}
+				D_GOTO(exit, rc);
+			}*/
+
 			rc = crt_proc_uint64_t(proc, proc_op, &sg_iovs[k].iov_buf_len);
 			if (unlikely(rc))
 			{
