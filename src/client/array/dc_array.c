@@ -2323,7 +2323,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			D_DEBUG(DB_IO, "Punch full extent in key "DF_U64"\n",
 				dkey_val);
 			rc = punch_extent(args->oh, args->th,
-					  dkey_val, 0,
+					  dkey_val, (daos_off_t)-1,
 					  props->chunk_size,
 					  props->ptask);
 			if (rc)
