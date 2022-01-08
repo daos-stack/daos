@@ -507,8 +507,10 @@ reset:
 	}
 
 	if (rc == 0 && epr.epr_hi > obj->obj_df->vo_max_write) {
-		rc = umem_tx_add_ptr(vos_cont2umm(cont), &obj->obj_df->vo_max_write,
-				     sizeof(obj->obj_df->vo_max_write));
+		if (DAOS_ON_VALGRIND)
+			rc = umem_tx_xadd_ptr(vos_cont2umm(cont), &obj->obj_df->vo_max_write,
+					      sizeof(obj->obj_df->vo_max_write),
+					      POBJ_XADD_NO_SNAPSHOT);
 		if (rc == 0)
 			obj->obj_df->vo_max_write = epr.epr_hi;
 	}

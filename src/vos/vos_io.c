@@ -2320,8 +2320,10 @@ abort:
 	}
 
 	if (err == 0 && ioc->ic_epr.epr_hi > ioc->ic_obj->obj_df->vo_max_write) {
-		err = umem_tx_add_ptr(umem, &ioc->ic_obj->obj_df->vo_max_write,
-				      sizeof(ioc->ic_obj->obj_df->vo_max_write));
+		if (DAOS_ON_VALGRIND)
+			err = umem_tx_xadd_ptr(umem, &ioc->ic_obj->obj_df->vo_max_write,
+					       sizeof(ioc->ic_obj->obj_df->vo_max_write),
+					       POBJ_XADD_NO_SNAPSHOT);
 		if (err == 0)
 			ioc->ic_obj->obj_df->vo_max_write = ioc->ic_epr.epr_hi;
 	}
