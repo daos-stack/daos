@@ -22,7 +22,7 @@
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 
-char	vos_path[STORAGE_PATH_LEN]="";
+char	vos_path[STORAGE_PATH_LEN] = "";
 
 static void
 print_usage()
@@ -173,11 +173,11 @@ main(int argc, char **argv)
 		strncpy(vos_path, "/mnt/daos", STORAGE_PATH_LEN-1);
 	}
 
-        rc = vos_self_init(vos_path);
-        if (rc) {
-                print_error("Error initializing VOS instance\n");
-                goto exit_0;
-        }
+	rc = vos_self_init(vos_path);
+	if (rc) {
+		print_error("Error initializing VOS instance\n");
+		goto exit_0;
+	}
 
 	gc = 0;
 	bool test_run = false;
