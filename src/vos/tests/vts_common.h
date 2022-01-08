@@ -41,8 +41,9 @@
 
 #define VPOOL_SIZE	VPOOL_2G
 
-#define VPOOL_NAME	"/mnt/daos/vpool"
 #define	VP_OPS 10
+
+#define STORAGE_PATH_LEN 64
 
 extern int gc;
 

@@ -47,6 +47,8 @@
 #define PRINT_RECORD(name, type, feats)					\
 	print_record(buf, #name, &name);
 
+extern char vos_path[64];
+
 static void
 print_dynamic(struct d_string_buffer_t *buf, const char *name,
 	      const struct daos_tree_overhead *ovhd)
@@ -147,7 +149,7 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 		goto exit_0;
 	}
 
-	rc = vos_self_init("/mnt/daos");
+	rc = vos_self_init(vos_path);
 	if (rc) {
 		goto exit_1;
 	}

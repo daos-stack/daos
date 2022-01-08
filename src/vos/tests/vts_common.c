@@ -38,7 +38,8 @@ enum {
 	TCX_READY,
 };
 
-int gc, oid_cnt;
+int		gc, oid_cnt;
+extern char	vos_path[STORAGE_PATH_LEN];
 
 bool
 vts_file_exists(const char *filename)
@@ -58,7 +59,7 @@ vts_alloc_gen_fname(char **fname)
 	file_name = malloc(25);
 	if (!file_name)
 		return -ENOMEM;
-	n = snprintf(file_name, 25, VPOOL_NAME);
+	n = snprintf(file_name, 25, vos_path);
 	snprintf(file_name+n, 25-n, ".%d", gc++);
 	*fname = file_name;
 
@@ -335,7 +336,7 @@ dts_ctx_init(struct credit_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_self_init("/mnt/daos");
+	rc = vos_self_init(vos_path);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;

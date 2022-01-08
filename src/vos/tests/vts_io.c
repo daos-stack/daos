@@ -27,6 +27,7 @@ static uint64_t			update_akey_sv;
 static uint64_t			update_akey_array;
 static bool			vts_nest_iterators;
 
+extern char			vos_path[STORAGE_PATH_LEN];
 /**
  * Stores the last key and can be used for
  * punching or overwrite
@@ -197,8 +198,8 @@ test_args_init(struct io_test_args *args,
 		args->dkey = NULL;
 		args->dkey_size = sizeof(uint64_t);
 	}
-	snprintf(args->fname, VTS_BUF_SIZE, "/mnt/daos/vpool.test_%x",
-		 init_ofeats);
+	snprintf(args->fname, VTS_BUF_SIZE, "%s/vpool.test_%x",
+		 vos_path, init_ofeats);
 
 
 }

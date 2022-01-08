@@ -555,7 +555,6 @@ vos_self_nvme_fini(void)
 }
 
 /* Storage path, NVMe config & shm_id used by standalone VOS */
-#define VOS_STORAGE_PATH	"/mnt/daos"
 #define VOS_NVME_CONF		"/etc/daos_nvme.conf"
 #define VOS_NVME_SHM_ID		DAOS_NVME_SHMID_NONE
 #define VOS_NVME_MEM_SIZE	1024

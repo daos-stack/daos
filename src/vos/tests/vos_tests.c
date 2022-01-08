@@ -22,6 +22,8 @@
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 
+char	vos_path[STORAGE_PATH_LEN]="";
+
 static void
 print_usage()
 {
@@ -41,6 +43,7 @@ print_usage()
 	print_message("vos_tests -e|--exclude <filter>\n");
 	print_message("vos_tests -m|--punch-model-tests\n");
 	print_message("vos_tests -C|--mvcc-tests\n");
+	print_message("-S|--storage <storage path>\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
 }
@@ -115,7 +118,7 @@ main(int argc, char **argv)
 	int	ofeats;
 	int	keys;
 	bool	nest_iterators = false;
-	const char *short_options = "apcdglzni:mXA:hf:e:tC";
+	const char *short_options = "apcdglzni:mXA:S:hf:e:tC";
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -134,6 +137,7 @@ main(int argc, char **argv)
 		{"help",		no_argument, 0, 'h'},
 		{"filter",		required_argument, 0, 'f'},
 		{"exclude",		required_argument, 0, 'e'},
+		{"storage",		required_argument, 0, 'S'},
 	};
 
 	d_register_alt_assert(mock_assert);
@@ -144,11 +148,36 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	rc = vos_self_init("/mnt/daos");
-	if (rc) {
-		print_error("Error initializing VOS instance\n");
-		goto exit_0;
+	while  ((opt = getopt_long(argc, argv, short_options,
+				   long_options, &index)) != -1) {
+		switch (opt) {
+		case 'S':
+			if (strlen(optarg) >= STORAGE_PATH_LEN) {
+				print_error("%s is longer than STORAGE_PATH_LEN.\n", optarg);
+				goto exit_0;
+			}
+			strncpy(vos_path, optarg, STORAGE_PATH_LEN-1);
+			break;
+		case 'h':
+			print_usage();
+			goto exit_0;
+		default:
+			break;
+		}
+
+		if (vos_path[0] == '/') {
+			break;
+		}
 	}
+	if (vos_path[0] != '/') {
+		strncpy(vos_path, "/mnt/daos", STORAGE_PATH_LEN-1);
+	}
+
+        rc = vos_self_init(vos_path);
+        if (rc) {
+                print_error("Error initializing VOS instance\n");
+                goto exit_0;
+        }
 
 	gc = 0;
 	bool test_run = false;
@@ -248,13 +277,12 @@ main(int argc, char **argv)
 			nr_failed += run_mvcc_tests("");
 			test_run = true;
 			break;
+		case 'S':
+			break;
 		case 'f':
 		case 'e':
 			/** already handled */
 			break;
-		case 'h':
-			print_usage();
-			goto exit_1;
 		default:
 			print_error("Unknown option\n");
 			print_usage();
