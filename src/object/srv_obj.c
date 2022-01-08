@@ -4356,12 +4356,8 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 			 */
 			if (dcde->dcde_write_cnt != 0) {
 				rc = obj_capa_check(ioc->ioc_coh, true, false);
-				if (rc != 0) {
-					if (comp_cb != NULL)
-						comp_cb(dlh, idx, rc);
-
-					return rc;
-				}
+				if (rc != 0)
+					goto comp;
 			}
 
 			dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
@@ -4378,6 +4374,7 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 						    &dlh->dlh_handle, pin);
 		}
 
+comp:
 		if (comp_cb != NULL)
 			comp_cb(dlh, idx, rc);
 

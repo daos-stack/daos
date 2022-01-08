@@ -80,7 +80,7 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 	if (metrics == NULL)
 		return NULL;
 
-	rc = d_tm_add_metric(&metrics->dpm_batched_degree, D_TM_COUNTER,
+	rc = d_tm_add_metric(&metrics->dpm_batched_degree, D_TM_GAUGE,
 			     "degree of DTX entries per batched commit RPC",
 			     "entries", "%s/entries/dtx_batched_degree/tgt_%u",
 			     path, tgt_id);
@@ -186,8 +186,7 @@ dtx_handler(crt_rpc_t *rpc)
 		rc1 = d_tm_get_counter(NULL, &opc_cnt, dpm->dpm_total[opc]);
 		D_ASSERT(rc1 == DER_SUCCESS);
 
-		d_tm_set_counter(dpm->dpm_batched_degree,
-				 ent_cnt / (opc_cnt + 1));
+		d_tm_set_gauge(dpm->dpm_batched_degree, ent_cnt / (opc_cnt + 1));
 
 		break;
 	}

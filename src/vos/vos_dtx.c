@@ -2089,13 +2089,21 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 	d_iov_set(&kiov, dti, sizeof(*dti));
 	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc == -DER_NONEXIST) {
+		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
+		if (rc == 0) {
+			D_ERROR("NOT allow to abort a committed DTX (1) "DF_DTI"\n", DP_DTI(dti));
+			D_GOTO(out, rc = -DER_NO_PERM);
+		}
+	}
+
 	if (rc != 0)
 		goto out;
 
 	dae = riov.iov_buf;
 	if (dae->dae_committable || dae->dae_committed) {
-		D_ERROR("NOT allow to abort a committed DTX "DF_DTI"\n", DP_DTI(dti));
-		D_GOTO(out, rc = -DER_NONEXIST);
+		D_ERROR("NOT allow to abort a committed DTX (2) "DF_DTI"\n", DP_DTI(dti));
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
 	/* It has been aborted before, but failed to be removed from the active table
@@ -2149,12 +2157,18 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	d_iov_set(&kiov, dti, sizeof(*dti));
 	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc == -DER_NONEXIST) {
+		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
+		if (rc == 0)
+			D_GOTO(out, rc = -DER_NO_PERM);
+	}
+
 	if (rc != 0)
 		goto out;
 
 	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
 	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted)
-		D_GOTO(out, rc = -DER_NONEXIST);
+		D_GOTO(out, rc = -DER_NO_PERM);
 
 	umm = vos_cont2umm(cont);
 	dae_df = umem_off2ptr(umm, dae->dae_df_off);

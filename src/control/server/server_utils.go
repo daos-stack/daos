@@ -134,21 +134,13 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 		return 0, nil
 	}
 
-	ctx, err := netdetect.Init(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer netdetect.CleanUp(ctx)
-
-	// On a NUMA-aware system, emit a message when the configuration may be
-	// sub-optimal.
 	numaCount := netdetect.NumNumaNodes(ctx)
 	if numaCount > 0 && engineCount > numaCount {
-		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected",
+		log.Infof("NOTICE: Detected %d NUMA node(s); %d-engine config may not perform as expected",
 			numaCount, engineCount)
 	}
 
-	netDevClass, err := cfg.CheckFabric(ctx)
+	netDevClass, err := cfg.CheckFabric(ctx, log)
 	if err != nil {
 		return 0, errors.Wrap(err, "validate fabric config")
 	}

@@ -641,11 +641,14 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			b := newBackend(log, sr)
 
 			var gotCall *storage.BdevWriteConfigRequest
-			gotErr := b.writeNVMEConf(tc.req, func(l logging.Logger, r *storage.BdevWriteConfigRequest) error {
-				l.Debugf("req: %+v", r)
-				gotCall = r
-				return tc.writeErr
-			})
+			gotErr := b.writeNvmeConfig(
+				tc.req,
+				func(l logging.Logger, r *storage.BdevWriteConfigRequest) error {
+					l.Debugf("req: %+v", r)
+					gotCall = r
+					return tc.writeErr
+				},
+			)
 			if diff := cmp.Diff(tc.expCall, gotCall, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected request made (-want, +got):\n%s\n", diff)
 			}

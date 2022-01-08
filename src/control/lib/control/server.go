@@ -36,10 +36,8 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	if req.Masks != "" {
-		if err := engine.ValidateLogMasks(req.Masks); err != nil {
-			return nil, err
-		}
+	if err := engine.ValidateLogMasks(req.Masks); err != nil {
+		return nil, err
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
