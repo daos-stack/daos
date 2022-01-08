@@ -21,7 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -601,28 +600,4 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	}
 
 	return nil
-}
-
-// CheckFabric ensures engines in configuration have compatible parameter
-// values and returns fabric network device class for the configuration.
-func (cfg *Server) CheckFabric(ctx context.Context, log logging.Logger, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
-	var netDevClass hardware.NetDevClass
-	for index, engine := range cfg.Engines {
-		fi, err := fis.GetInterface(engine.Fabric.Interface)
-		if err != nil {
-			return 0, err
-		}
-
-		ndc := fi.DeviceClass
-		if index == 0 {
-			netDevClass = ndc
-			continue
-		}
-		if ndc != netDevClass {
-			return 0, FaultConfigInvalidNetDevClass(index, netDevClass,
-				ndc, engine.Fabric.Interface)
-		}
-	}
-
-	return netDevClass, nil
 }

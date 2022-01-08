@@ -35,7 +35,7 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
+func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
 	err := cfg.Validate(ctx, log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
@@ -49,8 +49,16 @@ func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.
 		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
+		if err := ec.ValidateFabric(ctx, log, fis); err != nil {
+			return nil, err
+		}
+
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
 			return nil, err
+		}
+
+		if err := updateFabricEnvars(ctx, log, ec, fis); err != nil {
+			return nil, errors.Wrap(err, "update engine fabric envars")
 		}
 	}
 
@@ -201,13 +209,6 @@ func (srv *server) initNetwork(ctx context.Context) error {
 	}
 	srv.ctlAddr = ctlAddr
 	srv.listener = listener
-
-	ndc, err := netInit(ctx, srv.log, srv.cfg)
-	if err != nil {
-		return err
-	}
-	srv.netDevClass = ndc
-	srv.log.Infof("Network device class set to %q", ndc)
 
 	return nil
 }
@@ -419,7 +420,13 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
 
-	faultDomain, err := processConfig(ctx, log, cfg)
+	scanner := hwprov.DefaultFabricScanner(log)
+	fiSet, err := scanner.Scan(ctx)
+	if err != nil {
+		return errors.Wrap(err, "scan fabric")
+	}
+
+	faultDomain, err := processConfig(ctx, log, cfg, fiSet)
 	if err != nil {
 		return err
 	}
@@ -429,6 +436,10 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return err
 	}
 	defer srv.shutdown()
+
+	if srv.netDevClass, err = getFabricNetDevClass(cfg, fiSet); err != nil {
+		return err
+	}
 
 	if err := srv.createServices(ctx); err != nil {
 		return err

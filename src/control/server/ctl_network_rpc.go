@@ -71,7 +71,7 @@ func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.Fabri
 			continue
 		}
 
-		for prov := range fi.Providers {
+		for _, prov := range fi.Providers.ToSlice() {
 			if provider == "" || provider == prov {
 				resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
 					Provider:    prov,

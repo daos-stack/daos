@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -942,114 +941,6 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 
 			gotErr := conf.Validate(context.TODO(), log)
 			CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
-func TestServerConfig_NetworkDeviceClass(t *testing.T) {
-	configA := func() *engine.Config {
-		return engine.MockConfig().
-			WithLogFile("a").
-			WithStorage(
-				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint("a"),
-			).
-			WithFabricInterfacePort(42)
-	}
-	configB := func() *engine.Config {
-		return engine.MockConfig().
-			WithLogFile("b").
-			WithStorage(
-				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint("b"),
-			).
-			WithFabricInterfacePort(43)
-	}
-
-	for name, tc := range map[string]struct {
-		configA      *engine.Config
-		configB      *engine.Config
-		expNetDevCls hardware.NetDevClass
-		expErr       error
-	}{
-		"successful validation with matching Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib1"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expNetDevCls: hardware.Infiniband,
-		},
-		"successful validation with matching Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth0"),
-			configB: configB().
-				WithFabricInterface("eth1"),
-			expNetDevCls: hardware.Ether,
-		},
-		"mismatching net dev class with primary server as ib0 / Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib0"),
-			configB: configB().
-				WithFabricInterface("eth0"),
-			expErr: FaultConfigInvalidNetDevClass(1, hardware.Infiniband, hardware.Ether, "eth0"),
-		},
-		"mismatching net dev class with primary server as eth0 / Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth0"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, hardware.Ether, hardware.Infiniband, "ib0"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			fis := hardware.NewFabricInterfaceSet(
-				&hardware.FabricInterface{
-					Name:        "eth0",
-					OSDevice:    "eth0",
-					DeviceClass: hardware.Ether,
-					Providers:   NewStringSet("test"),
-				},
-				&hardware.FabricInterface{
-					Name:        "eth1",
-					OSDevice:    "eth1",
-					DeviceClass: hardware.Ether,
-					NUMANode:    1,
-					Providers:   NewStringSet("test"),
-				},
-				&hardware.FabricInterface{
-					Name:        "ib0",
-					OSDevice:    "ib0",
-					DeviceClass: hardware.Infiniband,
-					Providers:   NewStringSet("test"),
-				},
-				&hardware.FabricInterface{
-					Name:        "ib1",
-					OSDevice:    "ib1",
-					DeviceClass: hardware.Infiniband,
-					NUMANode:    1,
-					Providers:   NewStringSet("test"),
-				},
-			)
-
-			gotNetDevCls, gotErr := DefaultServer().
-				WithFabricProvider("test").
-				WithEngines(tc.configA, tc.configB).
-				CheckFabric(context.Background(), log, fis)
-
-			CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
-			}
-
-			AssertEqual(t, tc.expNetDevCls, gotNetDevCls,
-				"unexpected config network device class")
 		})
 	}
 }

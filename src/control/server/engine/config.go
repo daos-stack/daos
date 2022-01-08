@@ -161,8 +161,6 @@ type Config struct {
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
-
-	systemFabric *hardware.FabricInterfaceSet
 }
 
 // NewConfig returns an I/O Engine config.
@@ -172,19 +170,18 @@ func NewConfig() *Config {
 	}
 }
 
-// WithSystemFabricInterfaces adds a set of system fabric interface information to the config.
-func (c *Config) WithSystemFabricInterfaces(fis *hardware.FabricInterfaceSet) *Config {
-	c.systemFabric = fis
-	return c
+// ValidateFabric validates the fabric configuration against actual fabric devices and NUMA config.
+func (c *Config) ValidateFabric(ctx context.Context, log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+	fi, err := fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
+	if err != nil {
+		return err
+	}
+
+	return errors.Wrap(c.setAffinity(ctx, log, fi), "setting numa affinity for engine")
 }
 
 // setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(ctx context.Context, log logging.Logger) error {
-	fi, err := c.systemFabric.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
-	if err != nil {
-		return errors.Wrapf(err, "setting NUMA affinity for engine %d", c.Index)
-	}
-
+func (c *Config) setAffinity(ctx context.Context, log logging.Logger, fi *hardware.FabricInterface) error {
 	ifaceNumaNode := fi.NUMANode
 
 	if c.PinnedNumaNode != nil {
@@ -213,28 +210,12 @@ func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
 
-	if err := c.validateProvider(ctx, c.systemFabric); err != nil {
-		return errors.Wrapf(err, "network device %s does not support provider %s",
-			c.Fabric.Interface, c.Fabric.Provider)
-	}
-
 	if err := c.Storage.Validate(); err != nil {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
 	if err := ValidateLogMasks(c.LogMask); err != nil {
 		return errors.Wrap(err, "validate engine log masks")
-	}
-
-	return errors.Wrap(c.setAffinity(ctx, log), "setting numa affinity for engine")
-}
-
-func (c *Config) validateProvider(ctx context.Context, fis *hardware.FabricInterfaceSet) error {
-	_, err := fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
-	if err != nil {
-		return errors.Wrapf(err, "Network device %s does not support provider %s. "+
-			"The configuration is invalid.", c.Fabric.Interface,
-			c.Fabric.Provider)
 	}
 
 	return nil

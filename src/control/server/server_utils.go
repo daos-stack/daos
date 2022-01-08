@@ -23,7 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -126,31 +125,24 @@ func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Con
 	return nil
 }
 
-// netInit performs all network detection tasks.
-func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (hardware.NetDevClass, error) {
-	engineCount := len(cfg.Engines)
-	if engineCount == 0 {
-		log.Debug("no engines configured, skipping network init")
-		return 0, nil
-	}
+func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
+	var netDevClass hardware.NetDevClass
+	for index, engine := range cfg.Engines {
+		fi, err := fis.GetInterface(engine.Fabric.Interface)
+		if err != nil {
+			return 0, err
+		}
 
-	scanner := hwprov.DefaultFabricScanner(log)
-	fiSet, err := scanner.Scan(ctx)
-	if err != nil {
-		return 0, errors.Wrap(err, "scan fabric")
-	}
-
-	netDevClass, err := cfg.CheckFabric(ctx, log, fiSet)
-	if err != nil {
-		return 0, errors.Wrap(err, "validate fabric config")
-	}
-
-	for _, engine := range cfg.Engines {
-		if err := updateFabricEnvars(ctx, log, engine, fiSet); err != nil {
-			return 0, errors.Wrap(err, "update engine fabric envars")
+		ndc := fi.DeviceClass
+		if index == 0 {
+			netDevClass = ndc
+			continue
+		}
+		if ndc != netDevClass {
+			return 0, config.FaultConfigInvalidNetDevClass(index, netDevClass,
+				ndc, engine.Fabric.Interface)
 		}
 	}
-
 	return netDevClass, nil
 }
 
