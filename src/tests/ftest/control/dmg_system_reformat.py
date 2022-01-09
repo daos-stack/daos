@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from pool_test_base import PoolTestBase
 
@@ -19,7 +18,6 @@ class DmgSystemReformatTest(PoolTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-6004")
     def test_dmg_system_reformat(self):
         """
         JIRA ID: DAOS-5415
