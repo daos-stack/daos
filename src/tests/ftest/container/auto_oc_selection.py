@@ -24,7 +24,7 @@ class AutoOCSelectionTest(TestWithServers):
 
         Test Description:
         Create a container with RF 0 to 4 - OC S1, RP_2G1, RP_3G1, RP_4G1, and
-        RP_6G1.
+        RP_5G1.
 
         Use Cases:
         Create a pool. Then create each container and verify against its
@@ -42,27 +42,27 @@ class AutoOCSelectionTest(TestWithServers):
             ("rf:0", "RP_2G1", False),
             ("rf:0", "RP_3G1", False),
             ("rf:0", "RP_4G1", False),
-            ("rf:0", "RP_6G1", False),
+            ("rf:0", "RP_5G1", False),
             ("rf:1", "S1", True),
             ("rf:1", "RP_2G1", False),
             ("rf:1", "RP_3G1", False),
             ("rf:1", "RP_4G1", False),
-            ("rf:1", "RP_6G1", False),
+            ("rf:1", "RP_5G1", False),
             ("rf:2", "S1", True),
             ("rf:2", "RP_2G1", True),
             ("rf:2", "RP_3G1", False),
             ("rf:2", "RP_4G1", False),
-            ("rf:2", "RP_6G1", False),
+            ("rf:2", "RP_5G1", False),
             ("rf:3", "S1", True),
             ("rf:3", "RP_2G1", True),
             ("rf:3", "RP_3G1", True),
             ("rf:3", "RP_4G1", False),
-            ("rf:3", "RP_6G1", False),
+            ("rf:3", "RP_5G1", False),
             ("rf:4", "S1", True),
             ("rf:4", "RP_2G1", True),
             ("rf:4", "RP_3G1", True),
             ("rf:4", "RP_4G1", True),
-            ("rf:4", "RP_6G1", False)
+            ("rf:4", "RP_5G1", False)
         ]
         self.container = []
         errors = []
