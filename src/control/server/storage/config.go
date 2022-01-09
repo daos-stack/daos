@@ -281,8 +281,8 @@ func (br *BdevBusRange) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return errors.Wrapf(err, "failed to parse bus range %q", tmp)
 	}
 
-	br.LowAddress.Bus = uint8(lo)
-	br.HighAddress.Bus = uint8(hi)
+	br.LowAddress.Bus = lo
+	br.HighAddress.Bus = hi
 
 	return nil
 }
@@ -292,7 +292,10 @@ func (br *BdevBusRange) MarshalYAML() (interface{}, error) {
 }
 
 func (br *BdevBusRange) String() string {
-	return fmt.Sprintf("%d-%d", br.LowAddress.Bus, br.HighAddress.Bus)
+	if br == nil {
+		return ""
+	}
+	return fmt.Sprintf("0x%02x-0x%02x", br.LowAddress.Bus, br.HighAddress.Bus)
 }
 
 // NewBdevBusRange creates a new BdevBusRange from a string.
