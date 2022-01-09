@@ -43,8 +43,6 @@
 
 #define	VP_OPS 10
 
-#define STORAGE_PATH_LEN 64
-
 extern int gc;
 
 enum vts_ops_type {

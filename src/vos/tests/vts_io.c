@@ -16,6 +16,7 @@
 #include <daos_api.h>
 #include <daos/checksum.h>
 #include "vts_array.h"
+#include <linux/limits.h>
 
 #define NO_FLAGS	    (0)
 
@@ -27,7 +28,7 @@ static uint64_t			update_akey_sv;
 static uint64_t			update_akey_array;
 static bool			vts_nest_iterators;
 
-extern char			vos_path[STORAGE_PATH_LEN];
+extern char			vos_path[PATH_MAX];
 /**
  * Stores the last key and can be used for
  * punching or overwrite

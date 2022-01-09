@@ -29,6 +29,7 @@
 #include <vos_internal.h>
 #include "vts_common.h"
 #include <cmocka.h>
+#include <linux/limits.h>
 
 enum {
 	TCX_NONE,
@@ -39,7 +40,7 @@ enum {
 };
 
 int		gc, oid_cnt;
-extern char	vos_path[STORAGE_PATH_LEN];
+extern char	vos_path[PATH_MAX];
 
 bool
 vts_file_exists(const char *filename)

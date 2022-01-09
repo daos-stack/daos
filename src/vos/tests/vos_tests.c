@@ -21,8 +21,9 @@
 #include <getopt.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
+#include <linux/limits.h>
 
-char	vos_path[STORAGE_PATH_LEN] = "";
+char	vos_path[PATH_MAX] = "";
 
 static void
 print_usage()
@@ -152,11 +153,11 @@ main(int argc, char **argv)
 				   long_options, &index)) != -1) {
 		switch (opt) {
 		case 'S':
-			if (strlen(optarg) >= STORAGE_PATH_LEN) {
-				print_error("%s is longer than STORAGE_PATH_LEN.\n", optarg);
+			if (strlen(optarg) >= PATH_MAX) {
+				print_error("%s is longer than PATH_MAX.\n", optarg);
 				goto exit_0;
 			}
-			strncpy(vos_path, optarg, STORAGE_PATH_LEN-1);
+			strncpy(vos_path, optarg, PATH_MAX-1);
 			break;
 		case 'h':
 			print_usage();
@@ -165,12 +166,12 @@ main(int argc, char **argv)
 			break;
 		}
 
-		if (vos_path[0] == '/') {
+		if (vos_path[0] != '\0') {
 			break;
 		}
 	}
-	if (vos_path[0] != '/') {
-		strncpy(vos_path, "/mnt/daos", STORAGE_PATH_LEN-1);
+	if (vos_path[0] == '\0') {
+		strncpy(vos_path, "/mnt/daos", PATH_MAX-1);
 	}
 
 	rc = vos_self_init(vos_path);
