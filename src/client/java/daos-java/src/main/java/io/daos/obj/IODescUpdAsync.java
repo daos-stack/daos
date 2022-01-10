@@ -15,6 +15,8 @@ import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.UnsupportedEncodingException;
+
 /**
  * IO Description for asynchronously update only one entry, dkey/akey.
  */
@@ -251,5 +253,49 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
 
   public long descMemoryAddress() {
     return descBuffer.memoryAddress();
+  }
+
+  private String readKey(ByteBuf buf, int len) {
+    if (len < 0 || len >= buf.capacity() - 10) {
+      return "not set";
+    }
+    byte[] bytes = new byte[len];
+    buf.readBytes(bytes);
+    try {
+      return new String(bytes, Constants.KEY_CHARSET);
+    } catch (UnsupportedEncodingException e) {
+      return "not set";
+    }
+  }
+
+  @Override
+  public String toString() {
+    String dkey, akey;
+    if (maxKeyLen == 0) {
+      descBuffer.writerIndex(descBuffer.capacity());
+      descBuffer.readerIndex(8);
+      int l = descBuffer.readShort();
+      dkey = readKey(descBuffer, l);
+      l = descBuffer.readShort();
+      akey = readKey(descBuffer, l);
+    } else {
+      descBuffer.writerIndex(descBuffer.capacity());
+      descBuffer.readerIndex(10);
+      int l = descBuffer.readShort();
+      dkey = l > maxKeyLen ? "not set" : readKey(descBuffer, l);
+      descBuffer.readerIndex(12 + maxKeyLen);
+      l = descBuffer.readShort();
+      akey = l > maxKeyLen ? "not set" : readKey(descBuffer, l);
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("dkey: ").append(dkey).append(", akey entries\n");
+    sb.append("[update entry|").append(maxKeyLen > 0 ? "" : "not ")
+        .append("reusable|")
+        .append(akey).append('|')
+        .append(offset).append('|')
+        .append(dataBuffer == null ? 0 : dataBuffer.readableBytes()).append('|')
+        .append(resultParsed).append('|')
+        .append(retCode).append(']');
+    return sb.toString();
   }
 }
