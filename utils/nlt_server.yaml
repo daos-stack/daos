@@ -11,6 +11,7 @@ engines:
   fabric_iface: lo
   fabric_iface_port: 31416
   env_vars:
+  - DAOS_TARGET_OVERSUBSCRIBE=1
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
   - FI_SOCKETS_MAX_CONN_RETRY=1

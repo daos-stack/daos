@@ -329,6 +329,7 @@ class DaosServerYamlParameters(YamlParameters):
         REQUIRED_ENV_VARS = {
             "common": [
                 "D_LOG_FILE_APPEND_PID=1",
+		"DAOS_TARGET_OVERSUBSCRIBE=1",
                 "COVFILE=/tmp/test.cov"],
             "ofi+sockets": [
                 "FI_SOCKETS_MAX_CONN_RETRY=5",

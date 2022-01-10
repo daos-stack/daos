@@ -283,9 +283,12 @@ retry:
 		goto retry;
 	}
 
-	if (tgt_nr != nr)
+	if (tgt_nr != nr) {
 		D_PRINT("%d target XS(xstream) requested (#cores %d); "
 			"use (%d) target XS\n", nr, ncores, tgt_nr);
+		if (!oversubscribe)
+			return -DER_INVAL;
+	}
 
 	if (dss_tgt_offload_xs_nr % tgt_nr != 0)
 		dss_helper_pool = true;
@@ -300,7 +303,7 @@ dss_topo_init()
 	int		numa_node_nr;
 	int		num_cores_visited;
 	char		*cpuset;
-	int		k;
+	int		k, rc;
 	hwloc_obj_t	corenode;
 	bool            tgt_oversub = false;
 
@@ -317,9 +320,15 @@ dss_topo_init()
 	/* fall back to the legacy core allocation algorithm */
 	if (dss_numa_node == -1 || numa_node_nr <= 0) {
 		D_PRINT("Using legacy core allocation algorithm\n");
-		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
-					    tgt_oversub);
-
+		rc = dss_tgt_nr_get(dss_core_nr, nr_threads,
+				    tgt_oversub);
+		if (rc < 0) {
+			D_ERROR("%d cores is unable to satisfy %d target XS(xstream), "
+				"enable DAOS_TARGET_OVERSUBSCRIBE or reduce target XS.",
+				dss_core_nr, nr_threads);
+			return rc;
+		}
+		dss_tgt_nr = rc;
 		if (dss_core_offset >= dss_core_nr) {
 			D_ERROR("invalid dss_core_offset %u "
 				"(set by \"-f\" option),"
