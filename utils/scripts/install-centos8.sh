@@ -30,8 +30,8 @@ dnf --nodocs install \
     help2man \
     hwloc-devel \
     ipmctl \
-    json-c-devel \
     java-1.8.0-openjdk \
+    json-c-devel \
     libaio-devel \
     libcmocka-devel \
     libevent-devel \
