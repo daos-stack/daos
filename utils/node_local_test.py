@@ -440,10 +440,12 @@ class DaosPool():
 class DaosServer():
     """Manage a DAOS server instance"""
 
-    def __init__(self, conf, test_class=None, valgrind=False):
+    def __init__(self, conf, test_class=None, valgrind=False, wf=None, fe=None):
         self.running = False
         self._file = __file__.lstrip('./')
         self._sp = None
+        self.wf = wf
+        self.fe = fe
         self.conf = conf
         if test_class:
             self._test_class = 'Server.{}'.format(test_class)
@@ -489,8 +491,17 @@ class DaosServer():
             self.dfuse_cores = 12
         else:
             self.dfuse_cores = None
-
         self.fuse_procs = []
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, _type, _value, _traceback):
+        rc = self.stop(self.wf)
+        if rc != 0 and self.fe is not None:
+            self.fe.fail()
+        return False
 
     def add_fuse(self, fuse):
         """Register a new fuse instance"""
@@ -681,7 +692,8 @@ class DaosServer():
         cmd = ['storage', 'format', '--json']
         while True:
             try:
-                self._sp.wait(timeout=0.5)
+                rc = self._sp.wait(timeout=0.5)
+                print(rc)
                 res = 'daos server died waiting for start'
                 self._add_test_case('format', failure=res)
                 raise Exception(res)
@@ -810,6 +822,7 @@ class DaosServer():
 
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
+            self.server_logs.remove(log)
         self.running = False
         return ret
 
@@ -4153,9 +4166,7 @@ def run(wf, args):
     if args.mode == 'fi':
         fi_test = True
     else:
-        server = DaosServer(conf, test_class='first')
-        server.start()
-        try:
+        with DaosServer(conf, test_class='first', wf=wf_server, fe=fatal_errors) as server:
             if args.mode == 'launch':
                 run_in_fg(server, conf)
             elif args.mode == 'kv':
@@ -4179,28 +4190,21 @@ def run(wf, args):
                 fatal_errors.add_result(run_posix_tests(server, conf))
                 fatal_errors.add_result(run_dfuse(server, conf))
                 fatal_errors.add_result(set_server_fi(server))
-        finally:
-            if server.stop(wf_server) != 0:
-                fatal_errors.fail()
 
     if args.mode == 'all':
-        server = DaosServer(conf)
-        server.start()
-        if server.stop(wf_server) != 0:
-            fatal_errors.fail()
+        with DaosServer(conf, wf=wf_server, fe=fatal_errors) as server:
+            pass
 
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do cont list, then
     # exit again.
     if args.mode == 'server-valgrind':
-        server = DaosServer(conf, valgrind=True, test_class='valgrind')
-        server.start()
-        pools = server.fetch_pools()
-        for pool in pools:
-            cmd = ['cont', 'list', pool.id()]
-            run_daos_cmd(conf, cmd, valgrind=False)
-        if server.stop(wf_server) != 0:
-            fatal_errors.add_result(True)
+        with DaosServer(conf, valgrind=True, test_class='valgrind',
+                        wf=wf_server, fe=fatal_errors) as server:
+            pools = server.fetch_pools()
+            for pool in pools:
+                cmd = ['cont', 'list', pool.id()]
+                run_daos_cmd(conf, cmd, valgrind=False)
 
     # If the perf-check option is given then re-start everything without much
     # debugging enabled and run some microbenchmarks to give numbers for use
@@ -4209,9 +4213,7 @@ def run(wf, args):
         args.server_debug = 'INFO'
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
-        server = DaosServer(conf, test_class='no-debug')
-        server.start()
-        try:
+        with DaosServer(conf, test_class='no-debug', wf=wf_server, fe=fatal_errors) as server:
             if fi_test:
                 # Most of the fault injection tests go here, they are then run on docker containers
                 # so can be performed in parallel.
@@ -4245,9 +4247,6 @@ def run(wf, args):
 
             if args.perf_check:
                 check_readdir_perf(server, conf)
-        finally:
-            if server.stop(wf_server) != 0:
-                fatal_errors.fail()
 
     if fatal_errors.errors:
         wf.add_test_case('Errors', 'Significant errors encountered')
