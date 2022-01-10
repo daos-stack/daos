@@ -118,7 +118,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 				tc.cfg = &storage.Config{}
 			}
 
-			ec := engine.NewConfig().WithStorage(tc.cfg.Tiers...)
+			ec := engine.MockConfig().WithStorage(tc.cfg.Tiers...)
 			runner := engine.NewRunner(log, ec)
 			sys := scm.NewMockSysProvider(log, tc.msCfg)
 			scm := scm.NewMockProvider(log, nil, tc.msCfg)
@@ -136,13 +136,13 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 		goodMountPoint = "/mnt/daos"
 	)
 	var (
-		ramCfg = engine.NewConfig().WithStorage(
+		ramCfg = engine.MockConfig().WithStorage(
 			storage.NewTierConfig().
 				WithBdevClass(storage.ClassRam.String()).
 				WithScmMountPoint(goodMountPoint).
 				WithScmRamdiskSize(1),
 		)
-		dcpmCfg = engine.NewConfig().WithStorage(
+		dcpmCfg = engine.MockConfig().WithStorage(
 			storage.NewTierConfig().
 				WithBdevClass(storage.ClassDcpm.String()).
 				WithScmMountPoint(goodMountPoint).
@@ -222,7 +222,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 			expErr: errors.New("failed to check mount"),
 		},
 		"check dcpm fails (missing device)": {
-			engineCfg: engine.NewConfig().WithStorage(
+			engineCfg: engine.MockConfig().WithStorage(
 				storage.NewTierConfig().
 					WithBdevClass(storage.ClassDcpm.String()).
 					WithScmMountPoint(goodMountPoint)),
@@ -278,7 +278,7 @@ func (tly *tally) fakePublish(evt *events.RASEvent) {
 
 func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 	errStarted := errors.New("already started")
-	dcpmCfg := engine.NewConfig().WithStorage(
+	dcpmCfg := engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
 			WithBdevClass(storage.ClassDcpm.String()).
 			WithScmMountPoint("/mnt/test").
