@@ -55,7 +55,7 @@ class CriticalIntegration(TestWithServers):
                 self.log.error("Error: %s", error)
                 failed_nodes.append(host)
         if failed_nodes:
-            self.fail("Ssh check failed on following nodes.\n {}".format(failed_nodes))
+            self.fail("SSH check failed on the following nodes.\n {}".format(failed_nodes))
 
         for host in self.hostlist_clients:
             dmg_version_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
@@ -79,6 +79,8 @@ class CriticalIntegration(TestWithServers):
             self.log.info("All servers have same daos version")
             self.log.info("All clients have same daos version")
             self.log.info("Servers and Clients have same daos version")
+            self.log.info("Clients: %s", dmg_version_list)
+            self.log.info("servers: %s", daos_server_version_list)
         else:
             self.log.info("Not all servers and clients have same daos version")
             self.log.info("Clients: %s", dmg_version_list)
