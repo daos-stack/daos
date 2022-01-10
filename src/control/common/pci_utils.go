@@ -22,6 +22,8 @@ const (
 	bdevPciAddrSep = " "
 	// vmdDomainLen defines the expected length of a VMD backing devices address domain.
 	vmdDomainLen = 6
+	// PCIAddrBusBitSize defines the number of bits used to represent bus in address.
+	PCIAddrBusBitSize = 8
 )
 
 // parsePCIAddress returns separated components of BDF format PCI address.
@@ -55,6 +57,14 @@ type PCIAddress struct {
 	Bus      string
 	Device   string
 	Function string
+}
+
+// IsZero returns true if address was uninitialized.
+func (pa *PCIAddress) IsZero() bool {
+	if pa == nil {
+		return false
+	}
+	return pa.Equals(&PCIAddress{})
 }
 
 func (pa *PCIAddress) String() string {
@@ -145,6 +155,17 @@ func NewPCIAddress(addr string) (*PCIAddress, error) {
 	}
 
 	return pa, nil
+}
+
+// MustNewPCIAddressSet creates a new PCIAddressSet from input string,
+// which must be valid, otherwise a panic will occur.
+func MustNewPCIAddress(addr string) *PCIAddress {
+	pa, err := NewPCIAddress(addr)
+	if err != nil {
+		panic(err)
+	}
+
+	return pa
 }
 
 // PCIAddressSet represents a unique set of PCI addresses.
@@ -346,4 +367,34 @@ func NewPCIAddressSet(addrs ...string) (*PCIAddressSet, error) {
 // NewPCIAddressSetFromString takes a space-separated string and attempts to create an address set.
 func NewPCIAddressSetFromString(addrs string) (*PCIAddressSet, error) {
 	return NewPCIAddressSet(strings.Split(addrs, bdevPciAddrSep)...)
+}
+
+// GetRangeLimits takes a string of format <Begin-End> and returns the begin and end values.
+// Number base is detected from the string prefixes e.g. 0x for hexadecimal.
+// bitSize parameter sets a cut-off for the return values e.g. 8 for uint8.
+func GetRangeLimits(numRange string, bitSize int) (begin, end uint64, err error) {
+	if numRange == "" {
+		return
+	}
+
+	split := strings.Split(numRange, "-")
+	if len(split) != 2 {
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
+	}
+
+	begin, err = strconv.ParseUint(split[0], 0, bitSize)
+	if err != nil {
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+	}
+
+	end, err = strconv.ParseUint(split[1], 0, bitSize)
+	if err != nil {
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+	}
+
+	if begin > end {
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
+	}
+
+	return
 }

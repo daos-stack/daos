@@ -1506,6 +1506,116 @@ public class DaosObjectIT {
     }
   }
 
+  @Test
+  public void testIODescUpdateAsyncNotReuse() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    int bufLen = 100;
+    byte[] data = generateDataArray(bufLen);
+    DaosEventQueue dq = DaosEventQueue.getInstance(128);
+    String dkey = "dkey1";
+    String akey = "akey1";
+    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(bufLen);
+    buf.writeBytes(data);
+    IODescUpdAsync desc = new IODescUpdAsync(dkey, akey, 0L, buf);
+    IOSimpleDDAsync fetchDesc = object.createAsyncDataDescForFetch(dkey, dq.getEqWrapperHdl());
+    desc.setEvent(dq.acquireEvent());
+    try {
+      object.open();
+      object.punch();
+      object.updateAsync(desc);
+      List<DaosEventQueue.Attachment> compList = new LinkedList<>();
+      dq.waitForCompletion(5000, IODescUpdAsync.class, compList);
+      Assert.assertTrue(compList.size() == 1);
+      Assert.assertTrue(((IODescUpdAsync)compList.get(0)).isSucceeded());
+      // verify written bytes
+      fetchDesc.setEvent(dq.acquireEvent());
+      fetchDesc.addEntryForFetch(akey, 0L, bufLen);
+      object.fetchAsync(fetchDesc);
+      compList.clear();
+      dq.waitForCompletion(5000, IOSimpleDDAsync.class, compList);
+      Assert.assertTrue(compList.size() == 1);
+      Assert.assertTrue(((IOSimpleDDAsync)compList.get(0)).isSucceeded());
+      Assert.assertEquals(bufLen, fetchDesc.getEntry(0).getActualSize());
+      byte[] fetchedData = new byte[bufLen];
+      fetchDesc.getEntry(0).getFetchedData().readBytes(fetchedData);
+      Assert.assertTrue(Arrays.equals(data, fetchedData));
+    } finally {
+      desc.release();
+      fetchDesc.release();
+      object.close();
+    }
+  }
+
+  private void writeOneEntry(DaosObject object, IODescUpdAsync desc, String dkey, String akey,
+                             long offset, ByteBuf dataBuf,
+                             DaosEventQueue dq) throws Exception{
+    desc.setDkey(dkey);
+    desc.setAkey(akey);
+    desc.setOffset(offset);
+    desc.setDataBuffer(dataBuf);
+    desc.setEvent(dq.acquireEvent());
+    object.updateAsync(desc);
+    List<DaosEventQueue.Attachment> compList = new LinkedList<>();
+    dq.waitForCompletion(5000, IODescUpdAsync.class, compList);
+    Assert.assertTrue(compList.size() == 1);
+    Assert.assertTrue(((IODescUpdAsync)compList.get(0)).isSucceeded());
+  }
+
+  @Test
+  public void testIODescUpdateAsyncReuse() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    int bufLen = 100;
+    long offset = 2L;
+    byte[] data = generateDataArray(bufLen);
+    DaosEventQueue dq = DaosEventQueue.getInstance(128);
+    String dkey = "dkey1";
+    String akey = "akey1";
+    String dkey2 = "dkey2";
+    String akey2 = "akey2";
+    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(bufLen);
+    buf.writeBytes(data);
+    ByteBuf buf2 = BufferAllocator.objBufWithNativeOrder(bufLen);
+    buf2.writeBytes(data);
+    IODescUpdAsync desc = new IODescUpdAsync(64);
+    try {
+      object.open();
+      object.punch();
+      writeOneEntry(object, desc, dkey, akey, offset, buf, dq);
+      desc.reuse();
+      writeOneEntry(object, desc, dkey2, akey2, offset, buf2, dq);
+      // verify written bytes
+      verify(object, dkey, akey, offset, data, dq);
+      verify(object, dkey2, akey2, offset, data, dq);
+    } finally {
+      desc.release();
+      object.close();
+    }
+  }
+
+  private void verify(DaosObject object, String dkey, String akey,
+                      long offset, byte[] data, DaosEventQueue dq) throws Exception {
+    IOSimpleDDAsync fetchDesc = object.createAsyncDataDescForFetch(dkey, dq.getEqWrapperHdl());
+    fetchDesc.setEvent(dq.acquireEvent());
+    fetchDesc.addEntryForFetch(akey, offset, data.length);
+    try {
+      object.fetchAsync(fetchDesc);
+      List<DaosEventQueue.Attachment> compList = new LinkedList<>();
+      dq.waitForCompletion(5000, IOSimpleDDAsync.class, compList);
+      Assert.assertTrue(compList.size() == 1);
+      Assert.assertTrue(((IOSimpleDDAsync) compList.get(0)).isSucceeded());
+      Assert.assertEquals(data.length, fetchDesc.getEntry(0).getActualSize());
+      byte[] fetchedData = new byte[data.length];
+      fetchDesc.getEntry(0).getFetchedData().readBytes(fetchedData);
+      Assert.assertTrue(Arrays.equals(data, fetchedData));
+    } finally {
+      fetchDesc.release();
+    }
+  }
+
   @AfterClass
   public static void afterClass() throws IOException {
     if (client != null) {
