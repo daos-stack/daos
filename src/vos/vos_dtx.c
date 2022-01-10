@@ -1826,7 +1826,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		}
 	}
 
-	if (rc == -DER_NONEXIST && cont->vc_reindex_cmt_dtx)
+	if (rc == -DER_NONEXIST && !cont->vc_cmt_dtx_indexed)
 		rc = -DER_INPROGRESS;
 
 	return rc;
@@ -2566,6 +2566,9 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
+	if (cont->vc_cmt_dtx_indexed)
+		return 1;
+
 	umm = vos_cont2umm(cont);
 	cont_df = cont->vc_cont_df;
 
@@ -2579,8 +2582,6 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 
 	D_ASSERTF(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC,
 		  "Corrupted committed DTX blob (2) %x\n", dbd->dbd_magic);
-
-	cont->vc_reindex_cmt_dtx = 1;
 
 	for (i = 0; i < dbd->dbd_count; i++) {
 		if (daos_is_zero_dti(&dbd->dbd_committed_data[i].dce_xid) ||
@@ -2622,7 +2623,7 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 
 out:
 	if (rc > 0)
-		cont->vc_reindex_cmt_dtx = 0;
+		cont->vc_cmt_dtx_indexed = 1;
 
 	return rc;
 }
@@ -2873,7 +2874,6 @@ vos_dtx_cache_reset(daos_handle_t coh)
 {
 	struct vos_container	*cont;
 	struct umem_attr	 uma;
-	uint64_t		 hint = 0;
 	int			 rc = 0;
 
 	cont = vos_hdl2cont(coh);
@@ -2881,76 +2881,68 @@ vos_dtx_cache_reset(daos_handle_t coh)
 
 	if (daos_handle_is_valid(cont->vc_dtx_active_hdl)) {
 		rc = dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
-		if (rc != 0)
-			D_WARN("Failed to destroy act DTX tree: "DF_RC"\n",
-			       DP_RC(rc));
+		if (rc != 0) {
+			D_ERROR("Failed to destroy active DTX tree for "DF_UUID": "DF_RC"\n",
+				DP_UUID(cont->vc_id), DP_RC(rc));
+			return rc;
+		}
+
+		cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
 	}
 
 	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
 		rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
-		if (rc != 0)
-			D_WARN("Failed to destroy cmt DTX tree: "DF_RC"\n",
-			       DP_RC(rc));
+		if (rc != 0) {
+			D_ERROR("Failed to destroy committed DTX tree for "DF_UUID": "DF_RC"\n",
+				DP_UUID(cont->vc_id), DP_RC(rc));
+			return rc;
+		}
+
+		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
+		cont->vc_dtx_committed_count = 0;
+		cont->vc_cmt_dtx_indexed = 0;
 	}
 
 	if (cont->vc_dtx_array)
 		lrua_array_free(cont->vc_dtx_array);
 
-	cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
-	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
-	cont->vc_dtx_committed_count = 0;
-
 	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
-			      sizeof(struct vos_dtx_act_ent),
-			      LRU_FLAG_REUSE_UNIQUE,
-			      NULL, NULL);
+			      sizeof(struct vos_dtx_act_ent), LRU_FLAG_REUSE_UNIQUE, NULL, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to re-create DTX active array: "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
+		D_ERROR("Failed to re-create DTX active array for "DF_UUID": "DF_RC"\n",
+			DP_UUID(cont->vc_id), DP_RC(rc));
+		return rc;
 	}
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 
-	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0,
-				      DTX_BTREE_ORDER, &uma,
-				      &cont->vc_dtx_active_btr,
-				      DAOS_HDL_INVAL, cont,
+	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0, DTX_BTREE_ORDER, &uma,
+				      &cont->vc_dtx_active_btr, DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_active_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to re-create DTX active btree: "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
+		D_ERROR("Failed to re-create DTX active tree for "DF_UUID": "DF_RC"\n",
+			DP_UUID(cont->vc_id), DP_RC(rc));
+		return rc;
 	}
 
-	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE, 0,
-				      DTX_BTREE_ORDER, &uma,
-				      &cont->vc_dtx_committed_btr,
-				      DAOS_HDL_INVAL, cont,
+	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE, 0, DTX_BTREE_ORDER, &uma,
+				      &cont->vc_dtx_committed_btr, DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_committed_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to re-create DTX committed btree: "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
+		D_ERROR("Failed to re-create DTX committed tree for "DF_UUID": "DF_RC"\n",
+			DP_UUID(cont->vc_id), DP_RC(rc));
+		return rc;
 	}
 
 	rc = vos_dtx_act_reindex(cont);
 	if (rc != 0) {
-		D_ERROR("Fail to reindex active DTX table: "DF_RC"\n",
-			DP_RC(rc));
-		goto out;
+		D_ERROR("Fail to reindex active DTX table for "DF_UUID": "DF_RC"\n",
+			DP_UUID(cont->vc_id), DP_RC(rc));
+		return rc;
 	}
 
-	do {
-		rc = vos_dtx_cmt_reindex(coh, &hint);
-		if (rc < 0)
-			D_ERROR("Fail to reindex committed DTX table: "
-				DF_RC"\n", DP_RC(rc));
-	} while (rc == 0);
+	D_DEBUG(DB_TRACE, "Reset DTX cache for "DF_UUID"\n", DP_UUID(cont->vc_id));
 
-out:
-	D_DEBUG(DB_TRACE, "Reset the DTX cache: "DF_RC"\n", DP_RC(rc));
-
-	return rc > 0 ? 0 : rc;
+	return 0;
 }
