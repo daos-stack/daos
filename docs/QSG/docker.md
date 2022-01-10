@@ -63,7 +63,7 @@ following command:
 ```bash
 $ cat <<< "vm.nr_hugepages = 8192" > /etc/sysctl.d/50-hugepages.conf
 $ sysctl -p
-````
+```
 
 ## Building Docker Images
 
