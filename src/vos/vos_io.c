@@ -1894,6 +1894,23 @@ vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 		umoff = umem_alloc(vos_cont2umm(cont), size);
 	}
 
+	if (UMOFF_IS_NULL(umoff)) {
+		daos_size_t scm_used, scm_active;
+		int rc;
+
+		rc = pmemobj_ctl_get(vos_cont2pool(cont)->vp_umm.umm_pool,
+				     "stats.heap.run_allocated", &scm_used);
+		if (rc)
+			goto out;
+		rc = pmemobj_ctl_get(vos_cont2pool(cont)->vp_umm.umm_pool,
+				     "stats.heap.run_active", &scm_active);
+		if (rc)
+			goto out;
+		D_ERROR("Reserve "DF_U64" from SCM failed, run_allocated: "
+			""DF_U64", run_active: "DF_U64"\n",
+			size, scm_used, scm_active);
+	}
+out:
 	return umoff;
 }
 
@@ -2677,17 +2694,17 @@ static int
 vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	     unsigned int sgl_nr)
 {
-	int rc, err;
+	int rc;
 
 	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
 	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		return rc;
 
-	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
-	rc = bio_iod_post(ioc->ic_biod);
+	rc = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	rc = bio_iod_post(ioc->ic_biod, rc);
 
-	return err ? err : rc;
+	return rc;
 }
 
 int

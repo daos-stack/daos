@@ -1,22 +1,21 @@
-#!/bin/sh
+#!/bin/sh -e
 
-# Install OS updates and package.  Include basic tools and daos dependencies
-# that come from the core repo.
-# Clean up any repos afterwards to save space.
-# Switch to dnf as it seems a bit faster.
-# libatomic should be in this list, but can not for now due to CI
-# post provisioning issue.
-# *** Keep these in as much alphbetical order as possible ***
+# Install OS updates and packages as required for building DAOS on CentOS 8 and
+# derivatives.  Include basic tools and daos dependencies that come from the core repos.
 
-set -e
+# This script use used by docker but can be invoked from elsewhere, in order to run it
+# interactively then these two commands can be used to set dnf into automatic mode.
+# dnf --assumeyes install dnf-plugins-core
+# dnf config-manager --save --setopt=assumeyes=True
 
-dnf upgrade
-dnf install \
+dnf --nodocs install \
     boost-python3-devel \
+    bzip2 \
     clang \
     clang-tools-extra \
     cmake \
     CUnit-devel \
+    diffutils \
     e2fsprogs \
     file \
     flex \
@@ -67,5 +66,5 @@ dnf install \
     python3-yaml \
     sg3_utils \
     valgrind-devel \
+    which \
     yasm
-dnf clean all
