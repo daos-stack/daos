@@ -224,13 +224,6 @@ static int data_init(int server, crt_init_options_t *opt)
 		if (ret)
 			D_WARN("Failed to create uri other sensor: "DF_RC"\n",
 			       DP_RC(ret));
-
-		/*** XXX placeholder to be modified when D_TM_STRING is supported */
-		ret = d_tm_add_metric(&crt_gdata.cg_native_prov, D_TM_COUNTER,
-				      "name of native provider", "", "net/native/provider");
-		if (ret)
-			D_WARN("Failed to create native provider sensor: "DF_RC"\n",
-			       DP_RC(ret));
 	}
 
 	gdata_init_flag = 1;

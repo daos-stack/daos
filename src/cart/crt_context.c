@@ -242,9 +242,9 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	/** initialize sensors */
 	if (crt_gdata.cg_use_sensors) {
 		int	ret;
-		/** To be extended when a secondary provider is supported */
-		char	*prov = "native";
+		char	*prov;
 
+		prov = crt_provider_name_get(ctx->cc_hg_ctx.chc_provider);
 		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
 				      "Total number of timed out RPC requests",
 				      "reqs", "net/%s/req_timeout/ctx_%u",
