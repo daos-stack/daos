@@ -610,6 +610,6 @@ void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */
-int bio_add_allowed_alloc(const char *json_config_file,
-			  struct spdk_env_opts *opts);
+int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts);
+int bio_set_hotplug_filter(const char *nvme_conf);
 #endif /* __BIO_INTERNAL_H__ */
