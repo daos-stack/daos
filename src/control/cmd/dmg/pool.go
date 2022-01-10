@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -54,8 +55,7 @@ type PoolCreateCmd struct {
 	PoolLabelFlag string           `short:"p" long:"label" description:"Unique label for pool (deprecated, use positional argument)"`
 	Properties    PoolSetPropsFlag `short:"P" long:"properties" description:"Pool properties to be set"`
 	ACLFile       string           `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	Size          string           `short:"z" long:"size" description:"Total size of DAOS pool (auto)"`
-	All           string           `short:"A" long:"all-ratio" optional:"true" optional-value:"100" description:"Use ratio of all remaining capacity (auto) (default: 100)"`
+	Size          string           `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
 	TierRatio     string           `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
 	NumRanks      uint32           `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps    uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
@@ -68,24 +68,15 @@ type PoolCreateCmd struct {
 	} `positional-args:"yes"`
 }
 
+var allFlagPattern = regexp.MustCompile(`^\s*(\d{1,3})\s*%\s*$`)
+
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
-	flagSizeState := [...]bool{
-		cmd.Size != "",
-		cmd.ScmSize != "" || cmd.NVMeSize != "",
-		cmd.All != "",
+	if cmd.Size != "" && (cmd.ScmSize != "" || cmd.NVMeSize != "") {
+		return errIncompatFlags("size", "scm-size", "nvme-size")
 	}
-	var seenSizeFlags int
-	for _, value := range flagSizeState {
-		if value {
-			seenSizeFlags++
-		}
-	}
-	switch {
-	case seenSizeFlags > 1:
-		return errIncompatFlags("size", "scm-size", "nvme-size", "all")
-	case seenSizeFlags < 1:
-		return errors.New("either --size or --scm-size or --all must be supplied")
+	if cmd.Size == "" && cmd.ScmSize == "" {
+		return errors.New("either --size or --scm-size must be supplied")
 	}
 
 	if cmd.PoolLabelFlag != "" {
@@ -124,7 +115,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	}
 
 	switch {
-	case cmd.All != "":
+	case allFlagPattern.MatchString(cmd.Size):
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("all", "num-ranks")
 		}
@@ -137,12 +128,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errIncompatFlags("all", "ranks")
 		}
 
-		storageRatio, err := strconv.ParseInt(cmd.All, 10, 32)
-		if err != nil {
-			return errors.Wrapf(err,
-				"Creating DAOS pool with invalid full size ratio %q",
-				cmd.All)
-		}
+		storageRatioString := allFlagPattern.FindStringSubmatch(cmd.Size)[1]
+		storageRatio, _ := strconv.ParseInt(storageRatioString, 10, 32)
 		if storageRatio <= 0 || storageRatio > 100 {
 			msg := "Creating DAOS pool with invalid full size ratio %d%%:"
 			msg += " allowed range 0 < ratio <= 100"
@@ -168,7 +155,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			msg := "Not enough SMC storage available with ratio %s%%:"
 			msg += " at least %s of SCM storage (%s missing) is needed"
 			return errors.Errorf(msg,
-				cmd.All,
+				cmd.Size,
 				humanize.Bytes(control.PoolMetadataBytes),
 				humanize.Bytes(missingBytes))
 		}

@@ -185,56 +185,26 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with incompatible arguments (all size)",
-			fmt.Sprintf("pool create --size %s --all-ratio", testSizeStr),
+			"Create pool with incompatible arguments (size nranks)",
+			"pool create --size 100% --nranks 16",
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with incompatible arguments (all nvme-size)",
-			fmt.Sprintf("pool create --all-ratio --nvme-size %s", testSizeStr),
+			"Create pool with incompatible arguments (size ranks)",
+			"pool create --size 100% --ranks 1,2,3",
 			"",
 			errors.New("may not be mixed"),
-		},
-		{
-			"Create pool with incompatible arguments (all scm-size)",
-			fmt.Sprintf("pool create --all-ratio --scm-size %s", testSizeStr),
-			"",
-			errors.New("may not be mixed"),
-		},
-		{
-			"Create pool with incompatible arguments (size all nvme-size)",
-			fmt.Sprintf("pool create --size %s --all-ratio --nvme-size %s", testSizeStr, testSizeStr),
-			"",
-			errors.New("may not be mixed"),
-		},
-		{
-			"Create pool with incompatible arguments (all nranks)",
-			fmt.Sprintf("pool create --all-ratio --nranks 16"),
-			"",
-			errors.New("may not be mixed"),
-		},
-		{
-			"Create pool with incompatible arguments (all ranks)",
-			fmt.Sprintf("pool create --all-ratio --ranks 1,2,3"),
-			"",
-			errors.New("may not be mixed"),
-		},
-		{
-			"Create pool with invalid arguments (invalid all ratio)",
-			fmt.Sprintf("pool create --all-ratio=foo"),
-			"",
-			errors.New("Creating DAOS pool with invalid full size ratio"),
 		},
 		{
 			"Create pool with invalid arguments (too small ratio)",
-			fmt.Sprintf("pool create --all-ratio=0"),
+			"pool create --size=0%",
 			"",
 			errors.New("Creating DAOS pool with invalid full size ratio"),
 		},
 		{
 			"Create pool with invalid arguments (too big ratio)",
-			fmt.Sprintf("pool create --all-ratio=101"),
+			"pool create --size=101%",
 			"",
 			errors.New("Creating DAOS pool with invalid full size ratio"),
 		},
@@ -941,7 +911,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 		ExpectedOutput   ExpectedOutput
 	}{
 		"single server": {
-			StorageRatio: "100",
+			StorageRatio: "100%",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -974,7 +944,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			},
 		},
 		"single server 30%": {
-			StorageRatio: "30",
+			StorageRatio: "30%",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1007,7 +977,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			},
 		},
 		"double server": {
-			StorageRatio: "100",
+			StorageRatio: "100%",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1099,7 +1069,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			},
 		},
 		"No NVME": {
-			StorageRatio: "100",
+			StorageRatio: "100%",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1125,7 +1095,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			},
 		},
 		"SCM:NVME ratio": {
-			StorageRatio: "100",
+			StorageRatio: "  100   %  ",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1159,7 +1129,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			},
 		},
 		"single server error 1%": {
-			StorageRatio: "1",
+			StorageRatio: "1%",
 			HostsConfigArray: []control.MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1225,7 +1195,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			poolCreateCmd := new(PoolCreateCmd)
 			poolCreateCmd.setInvoker(mockInvoker)
 			poolCreateCmd.setLog(log)
-			poolCreateCmd.All = tc.StorageRatio
+			poolCreateCmd.Size = tc.StorageRatio
 
 			err := poolCreateCmd.Execute(nil)
 
@@ -1258,7 +1228,8 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				common.AssertTrue(t,
 					poolCreateRequest.TierRatio == nil,
 					"Invalid size of TierRatio attribute: disabled with manual allocation")
-				msg := fmt.Sprintf("Creating DAOS pool with %s%% of all storage", tc.StorageRatio)
+				msg := fmt.Sprintf("Creating DAOS pool with %s of all storage",
+					strings.ReplaceAll(tc.StorageRatio, " ", ""))
 				common.AssertTrue(t,
 					strings.Contains(buf.String(), msg),
 					"missing success message: Creating DAOS pool with with <ratio>% of all storage")
