@@ -31,6 +31,7 @@ dnf --nodocs install \
     hwloc-devel \
     ipmctl \
     json-c-devel \
+    java-1.8.0-openjdk \
     libaio-devel \
     libcmocka-devel \
     libevent-devel \
@@ -66,3 +67,15 @@ dnf --nodocs install \
     valgrind-devel \
     which \
     yasm
+
+# For fedora, java-11 is installed along with maven if we install maven from
+# repo. But we need java-8 (1.8). The 'devel' package also needs to be
+# installed specifically.
+
+if [ -e /etc/fedora-release ]; then
+        dnf install java-1.8.0-openjdk-devel maven-openjdk8
+else
+        dnf install maven
+fi
+
+dnf clean all
