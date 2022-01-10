@@ -479,6 +479,10 @@ class TelemetryUtils():
         # Add engine network metrics for the configured provider
         try:
             provider = re.sub("[+;]", "_", server.manager.job.get_config_value("provider"))
+            if provider == "ofi_tcp":
+                provider = "ofi_tcp_ofi_rxm"
+            elif provider == "ofi_verbs":
+                provider = "ofi_verbs_ofi_rxm"
         except TypeError:
             provider = "ofi_tcp_ofi_rxm"
         net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
