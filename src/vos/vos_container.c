@@ -368,7 +368,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_ts_idx = &cont->vc_cont_df->cd_ts_idx;
 	cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
-	cont->vc_cmt_dtx_indexed = 0;
+	if (umoff_is_null(cont->vc_cont_df->cd_dtx_committed_head))
+		cont->vc_cmt_dtx_indexed = 1;
+	else
+		cont->vc_cmt_dtx_indexed = 0;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_act_list);
 	cont->vc_dtx_committed_count = 0;
 	gc_check_cont(cont);

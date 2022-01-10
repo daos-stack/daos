@@ -99,12 +99,6 @@ dtx_umoff_flag2type(umem_off_t umoff)
 }
 
 static inline bool
-umoff_is_null(umem_off_t umoff)
-{
-	return umoff == UMOFF_NULL;
-}
-
-static inline bool
 dtx_is_aborted(uint32_t tx_lid)
 {
 	return tx_lid == DTX_LID_ABORTED;

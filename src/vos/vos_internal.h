@@ -1276,6 +1276,12 @@ vos_offload_exec(int (*func)(void *), void *arg)
 		return func(arg);
 }
 
+static inline bool
+umoff_is_null(umem_off_t umoff)
+{
+	return umoff == UMOFF_NULL;
+}
+
 /* vos_csum_recalc.c */
 
 struct csum_recalc {
