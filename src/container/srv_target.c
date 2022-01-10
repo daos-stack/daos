@@ -1376,10 +1376,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			}
 		}
 
-		if (rc == 0 && cont_uuid != NULL && !uuid_is_null(cont_uuid) &&
-		    hdl->sch_cont->sc_open == 1)
-			rc = dtx_cont_open(hdl->sch_cont);
-
 		if (cont_hdl != NULL && rc == 0)
 			*cont_hdl = hdl;
 		else
