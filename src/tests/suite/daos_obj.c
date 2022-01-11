@@ -4173,7 +4173,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	assert_rc_equal(rc, 0);
 
 	cid = daos_obj_id2class(oid);
-	attr = daos_oclass_attr_find(oid, NULL, NULL);
+	attr = daos_oclass_attr_find(oid, NULL);
 	if (!attr) {
 		rc = -EINVAL;
 		goto out;

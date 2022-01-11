@@ -38,13 +38,21 @@ void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth);
 
 /**
- * Generate DTX entry for the given DTX.
+ * Generate DTX entry for the given DTX, and attach it to the DTX handle.
  *
  * \param dth		[IN]	The dtx handle
  * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
  */
 int
-vos_dtx_pin(struct dtx_handle *dth, bool persistent);
+vos_dtx_attach(struct dtx_handle *dth, bool persistent);
+
+/**
+ * Detach the DTX entry from the DTX handle.
+ *
+ * \param dth		[IN]	The dtx handle
+ */
+void
+vos_dtx_detach(struct dtx_handle *dth);
 
 /**
  * Check whether DTX entry attached to the DTX handle is still valid or not.
@@ -68,7 +76,6 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
  * \param mbs		[OUT]	Pointer to the DTX participants information.
  * \param dck		[OUT]	Pointer to the key for CoS cache.
- * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -82,12 +89,12 @@ vos_dtx_validation(struct dtx_handle *dth);
  *			-DER_AGAIN means DTX re-index is in processing, not sure
  *				   about the existence of the DTX entry, need to
  *				   retry sometime later.
+ *			DTX_ST_INITED	means that the DTX is just initialized but not prepared.
  *			Other negative value if error.
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs,
-	      struct dtx_cos_key *dck, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck);
 
 /**
  * Commit the specified DTXs.

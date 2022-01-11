@@ -166,10 +166,9 @@ int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,
 	DSHR_NEED_RETRY		= 2,
-	DSHR_COMMITTED		= 3,
-	DSHR_ABORTED		= 4,
-	DSHR_ABORT_FAILED	= 5,
-	DSHR_CORRUPT		= 6,
+	DSHR_IGNORE		= 3,
+	DSHR_ABORT_FAILED	= 4,
+	DSHR_CORRUPT		= 5,
 };
 
 #endif /* __DTX_INTERNAL_H__ */

@@ -26,6 +26,8 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
+/** container cell size */
+unsigned int	dt_cell_size;
 int		dt_obj_class;
 
 
@@ -310,7 +312,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	unsigned int		 seed;
 	int			 rc = 0;
 	daos_prop_t		 co_props = {0};
-	struct daos_prop_entry	 csum_entry[3] = {0};
+	struct daos_prop_entry	 dpp_entry[4] = {0};
 	struct daos_prop_entry	*entry;
 
 	/* feed a seed for pseudo-random number generator */
@@ -363,7 +365,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		print_message("\n-------\n"
 			      "Checksum enabled in test!"
 			      "\n-------\n");
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
 
@@ -371,14 +373,14 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	if (dt_csum_chunksize) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 		entry->dpe_val = dt_csum_chunksize;
 		co_props.dpp_nr++;
 	}
 
 	if (dt_csum_server_verify) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 		entry->dpe_val = dt_csum_server_verify ?
 			DAOS_PROP_CO_CSUM_SV_ON :
@@ -387,8 +389,15 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		co_props.dpp_nr++;
 	}
 
+	if (dt_cell_size) {
+		entry = &dpp_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+		entry->dpe_val = dt_cell_size;
+		co_props.dpp_nr++;
+	}
+
 	if (co_props.dpp_nr > 0)
-		co_props.dpp_entries = csum_entry;
+		co_props.dpp_entries = dpp_entry;
 
 	while (!rc && step != arg->setup_state)
 		rc = test_setup_next_step(state, pool, NULL, &co_props);
