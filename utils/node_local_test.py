@@ -483,6 +483,8 @@ class DaosServer():
         self._yaml_file = None
         self._io_server_dir = None
         self.test_pool = None
+        self.network_interface = None
+        self.network_provider = None
 
         # Detect the number of cores for dfuse and do something sensible, if there are
         # more than 32 on the node then use 12, otherwise use the whole node.
@@ -641,6 +643,8 @@ class DaosServer():
         else:
             first_core = 0
         server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
+        self.network_interface = ref_engine['fabric_iface']
+        self.network_provider = scyaml['provider']
         for idx in range(self.engines):
             engine = copy.deepcopy(ref_engine)
             engine['log_file'] = self.server_logs[idx].name
@@ -1834,6 +1838,9 @@ class posix_tests():
                 assert False
             except PermissionError:
                 pass
+            except OSError as e:
+                if e.errno != errno.ENOTSUP:
+                    raise
 
             # Chgrp to another group which this process is in, will work for the default group, but
             # should fail for all others.
@@ -1918,6 +1925,8 @@ class posix_tests():
         f = os.path.join(self.dfuse.dir, 'file')
         with open(f, 'w') as fd:
             fd.write('Hello')
+            # Force dfuse caching (when enabled) to writeback the file
+            os.fsync(fd.fileno())
         # Copy it across containers.
         ret = il_cmd(self.dfuse, ['cp', f, sub_cont_dir])
         assert ret.returncode == 0
@@ -3137,8 +3146,8 @@ def set_server_fi(server):
 
     cmd_env = get_base_env()
 
-    cmd_env['OFI_INTERFACE'] = 'eth0'
-    cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+tcp;ofi_rxm'
+    cmd_env['OFI_INTERFACE'] = server.network_interface
+    cmd_env['CRT_PHY_ADDR_STR'] = server.network_provider
 
     vh = ValgrindHelper(server.conf)
 

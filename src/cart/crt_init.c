@@ -414,8 +414,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
 				     strlen(crt_na_dict[plugin_idx].nad_str) + 1) ||
-			    !strncmp(addr_env, crt_na_dict[plugin_idx].nad_alt_str,
-				     strlen(crt_na_dict[plugin_idx].nad_alt_str) + 1)) {
+			    (crt_na_dict[plugin_idx].nad_alt_str &&
+			     !strncmp(addr_env, crt_na_dict[plugin_idx].nad_alt_str,
+				      strlen(crt_na_dict[plugin_idx].nad_alt_str) + 1))) {
 				provider_found = true;
 				crt_gdata.cg_init_prov =
 					crt_na_dict[plugin_idx].nad_type;

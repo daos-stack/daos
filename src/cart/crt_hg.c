@@ -19,7 +19,6 @@ struct crt_na_dict crt_na_dict[] = {
 	{
 		.nad_type	= CRT_NA_SM,
 		.nad_str	= "sm",
-		.nad_alt_str	= "",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
@@ -37,13 +36,11 @@ struct crt_na_dict crt_na_dict[] = {
 	}, {
 		.nad_type	= CRT_NA_OFI_GNI,
 		.nad_str	= "ofi+gni",
-		.nad_alt_str	= "",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
 		.nad_type	= CRT_NA_OFI_PSM2,
 		.nad_str	= "ofi+psm2",
-		.nad_alt_str	= "",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
@@ -55,7 +52,6 @@ struct crt_na_dict crt_na_dict[] = {
 	}, {
 		.nad_type	= CRT_NA_OFI_CXI,
 		.nad_str	= "ofi+cxi",
-		.nad_alt_str	= "",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
@@ -106,7 +102,8 @@ crt_prov_str_to_na_type(const char *prov_str)
 
 	for (i = 0; i < CRT_NA_OFI_COUNT; i++) {
 		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
-		    strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0)
+		    (crt_na_dict[i].nad_alt_str &&
+		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
 			return crt_na_dict[i].nad_type;
 	}
 
