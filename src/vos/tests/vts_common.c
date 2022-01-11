@@ -54,15 +54,13 @@ vts_file_exists(const char *filename)
 int
 vts_alloc_gen_fname(char **fname)
 {
-	char *file_name = NULL;
-	int n;
+	int rc;
 
-	file_name = malloc(25);
-	if (!file_name)
-		return -ENOMEM;
-	n = snprintf(file_name, 25, vos_path);
-	snprintf(file_name+n, 25-n, ".%d", gc++);
-	*fname = file_name;
+	rc = asprintf(fname, "%s.%d", vos_path, gc++);
+	if (rc < 0) {
+		print_error("Failed to allocate memory for fname: rc = %d\n", rc);
+		return rc;
+	}
 
 	return 0;
 }
