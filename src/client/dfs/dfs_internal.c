@@ -44,7 +44,7 @@ rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct dfs_mnt_hdls *hdl = hdl_obj(rlink);
 
-	assert(hdl->ref > 0);
+	D_ASSERT(hdl->ref > 0);
 	hdl->ref--;
 	return (hdl->ref == 0);
 }
@@ -54,8 +54,8 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct dfs_mnt_hdls *hdl = hdl_obj(rlink);
 
-	assert(d_hash_rec_unlinked(&hdl->entry));
-	assert(hdl->ref == 0);
+	D_ASSERT(d_hash_rec_unlinked(&hdl->entry));
+	D_ASSERT(hdl->ref == 0);
 
 	if (hdl->type == DFS_H_POOL)
 		daos_pool_disconnect(hdl->handle, NULL);
@@ -102,9 +102,9 @@ dfs_init()
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = daos_init_locked();
+	rc = daos_init();
 	if (rc)
-		return daos_der2errno(rc);
+		D_GOTO(unlock, rc = daos_der2errno(rc));
 
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_LRU, 4, NULL, &hdl_hash_ops,
 				 &poh_hash);
@@ -133,7 +133,7 @@ unlock:
 }
 
 int
-dfs_finalize(void)
+dfs_fini(void)
 {
 	d_list_t	*rlink;
 	int		rc;
@@ -165,7 +165,7 @@ dfs_finalize(void)
 	}
 	d_hash_table_destroy(poh_hash, false);
 
-	rc = daos_fini_locked();
+	rc = daos_fini();
 	if (rc)
 		D_GOTO(unlock, rc = daos_der2errno(rc));
 

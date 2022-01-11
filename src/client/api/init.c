@@ -124,23 +124,27 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_kv_list, sizeof(daos_kv_list_t)},
 };
 
+/**
+ * Initialize DAOS client library.
+ */
 int
-daos_init_locked(void)
+daos_init(void)
 {
 	struct d_fault_attr_t *d_fault_init;
 	struct d_fault_attr_t *d_fault_mem = NULL;
 	struct d_fault_attr_t d_fault_mem_saved;
 	int rc;
 
+	D_MUTEX_LOCK(&module_lock);
 	if (module_initialized > 0) {
 		/** already initialized, report success */
 		module_initialized++;
-		D_GOTO(out, rc = 0);
+		D_GOTO(unlock, rc = 0);
 	}
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(unlock, rc);
 
 	d_fault_init = d_fault_attr_lookup(101);
 
@@ -215,7 +219,7 @@ daos_init_locked(void)
 		D_GOTO(out_co, rc);
 
 	module_initialized++;
-	D_GOTO(out, rc = 0);
+	D_GOTO(unlock, rc = 0);
 
 out_co:
 	dc_cont_fini();
@@ -235,69 +239,11 @@ out_hhash:
 	daos_hhash_fini();
 out_debug:
 	daos_debug_fini();
-out:
+unlock:
+	D_MUTEX_UNLOCK(&module_lock);
+
 	if (d_fault_mem)
 		d_fault_attr_set(0, d_fault_mem_saved);
-
-	return rc;
-}
-
-int
-daos_fini_locked(void)
-{
-	int	rc;
-
-	if (module_initialized == 0) {
-		/** calling fini without init, report an error */
-		D_GOTO(out, rc = -DER_UNINIT);
-	} else if (module_initialized > 1) {
-		/**
-		 * DAOS was initialized multiple times.
-		 * Can happen when using multiple DAOS-aware middleware.
-		 */
-		module_initialized--;
-		D_GOTO(out, rc = 0);
-	}
-
-	rc = daos_eq_lib_fini();
-	if (rc != 0) {
-		D_ERROR("failed to finalize eq: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
-	dc_obj_fini();
-	dc_cont_fini();
-	dc_pool_fini();
-	dc_mgmt_fini();
-
-	rc = dc_mgmt_notify_exit();
-	if (rc != 0)
-		D_ERROR("failed to disconnect some resources may leak, "DF_RC"\n", DP_RC(rc));
-
-	dc_agent_fini();
-	dc_job_fini();
-
-	pl_fini();
-	daos_hhash_fini();
-	daos_debug_fini();
-	module_initialized = 0;
-
-out:
-	return rc;
-}
-
-
-/**
- * Initialize DAOS client library.
- */
-int
-daos_init(void)
-{
-	int rc;
-
-	D_MUTEX_LOCK(&module_lock);
-	rc = daos_init_locked();
-	D_MUTEX_UNLOCK(&module_lock);
 
 	return rc;
 }
@@ -311,8 +257,42 @@ daos_fini(void)
 	int	rc;
 
 	D_MUTEX_LOCK(&module_lock);
-	rc = daos_fini_locked();
-	D_MUTEX_UNLOCK(&module_lock);
+	if (module_initialized == 0) {
+		/** calling fini without init, report an error */
+		D_GOTO(unlock, rc = -DER_UNINIT);
+	} else if (module_initialized > 1) {
+		/**
+		 * DAOS was initialized multiple times.
+		 * Can happen when using multiple DAOS-aware middleware.
+		 */
+		module_initialized--;
+		D_GOTO(unlock, rc = 0);
+	}
 
+	rc = daos_eq_lib_fini();
+	if (rc != 0) {
+		D_ERROR("failed to finalize eq: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(unlock, rc);
+	}
+
+	dc_obj_fini();
+	dc_cont_fini();
+	dc_pool_fini();
+	dc_mgmt_fini();
+
+	rc = dc_mgmt_notify_exit();
+	if (rc != 0)
+		D_ERROR("failed to disconnect some resources may leak, "
+			DF_RC"\n", DP_RC(rc));
+
+	dc_agent_fini();
+	dc_job_fini();
+
+	pl_fini();
+	daos_hhash_fini();
+	daos_debug_fini();
+	module_initialized = 0;
+unlock:
+	D_MUTEX_UNLOCK(&module_lock);
 	return rc;
 }

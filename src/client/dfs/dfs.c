@@ -1532,7 +1532,7 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
 	int			amode, cmode;
 	int			rc, rc2;
 
-	if (_dfs == NULL)
+	if (_dfs == NULL || pool == NULL || cont == NULL)
 		return EINVAL;
 
 	if (!dfs_is_init()) {
@@ -1590,11 +1590,10 @@ mount:
 			 */
 			for (b = 0; b < 7; b++) {
 				rc = dfs_mount(poh, coh, amode, &dfs);
-				if (rc == ENOENT) {
+				if (rc == ENOENT)
 					usleep(pow(10, b));
-				} else {
+				else
 					break;
-				}
 			}
 			if (rc) {
 				D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));

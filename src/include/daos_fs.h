@@ -91,7 +91,7 @@ typedef struct {
  * or in IO middleware initialization. This is required to be called if using the
  * dfs_connect/disconnect calls to setup the DFS cache for the pool and container handles. There is
  * no harm however in calling it whenever using any of the DFS API (mount/umount) and can be
- * requivalent to calling daos_init() instead.
+ * equivalent to calling daos_init() instead.
  *
  * \return              0 on success, errno code on failure.
  */
@@ -106,17 +106,17 @@ dfs_init();
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_finalize();
+dfs_fini();
 
 /**
  * Mount a DFS namespace over the specified pool and container. The container can be optionally
  * created if it doesn't exist, and O_CREAT is passed in flags. The handle must be released using
- * dfs_disconnect() and not dfs_mount(). Using the latter in this case will leak open handles for
+ * dfs_disconnect() and not dfs_umount(). Using the latter in this case will leak open handles for
  * the pool and container.
  *
  * This function works only if dfs_init() is called, otherwise would return EACCES. In addition to
  * setting up the pool and container handles for the user, this also utilizes an internal cache for
- * keeping the pool and container handles open internally with a ref count and close those handles
+ * keeping the pool and container handles open internally with a ref count and closes those handles
  * on dfs_finalize().
  *
  * \param[in]	pool	Pool label.

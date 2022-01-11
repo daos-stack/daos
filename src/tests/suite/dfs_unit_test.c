@@ -100,7 +100,7 @@ dfs_test_mount(void **state)
 	rc = dfs_disconnect(dfs);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_finalize();
+	rc = dfs_fini();
 	assert_int_equal(rc, 0);
 
 	/** destroy the containers */
@@ -1126,7 +1126,7 @@ dfs_test_handles(void **state)
 	assert_int_equal(rc, 0);
 	rc = dfs_disconnect(dfs_g);
 	assert_int_equal(rc, 0);
-	rc = dfs_finalize();
+	rc = dfs_fini();
 	assert_int_equal(rc, 0);
 	D_FREE(ghdl.iov_buf);
 }
@@ -1155,7 +1155,7 @@ dfs_test_connect_thread(void *arg)
 		printf("Thread %d failed to disconnect %d\n", targ->thread_idx, rc);
 		pthread_exit(NULL);
 	}
-	dfs_finalize();
+	dfs_fini();
 	pthread_exit(NULL);
 }
 
