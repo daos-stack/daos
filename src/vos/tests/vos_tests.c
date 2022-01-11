@@ -149,8 +149,11 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	while  ((opt = getopt_long(argc, argv, short_options,
-				   long_options, &index)) != -1) {
+	gc = 0;
+	bool test_run = false;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'S':
 			if (strlen(optarg) >= PATH_MAX) {
@@ -162,30 +165,7 @@ main(int argc, char **argv)
 		case 'h':
 			print_usage();
 			goto exit_0;
-		default:
-			break;
-		}
 
-		if (vos_path[0] != '\0') {
-			break;
-		}
-	}
-	if (vos_path[0] == '\0') {
-		strncpy(vos_path, "/mnt/daos", PATH_MAX-1);
-	}
-
-	rc = vos_self_init(vos_path);
-	if (rc) {
-		print_error("Error initializing VOS instance\n");
-		goto exit_0;
-	}
-
-	gc = 0;
-	bool test_run = false;
-
-	while ((opt = getopt_long(argc, argv, short_options,
-				  long_options, &index)) != -1) {
-		switch (opt) {
 		case 'e':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			cmocka_set_skip_filter(optarg);
@@ -212,6 +192,17 @@ main(int argc, char **argv)
 			break;
 		}
 	}
+
+	if (vos_path[0] == '\0') {
+		strncpy(vos_path, "/mnt/daos", PATH_MAX-1);
+	}
+
+	rc = vos_self_init(vos_path);
+	if (rc) {
+		print_error("Error initializing VOS instance\n");
+		goto exit_0;
+	}
+
 	index = 0;
 	optind = 0;
 
@@ -279,7 +270,6 @@ main(int argc, char **argv)
 			test_run = true;
 			break;
 		case 'S':
-			break;
 		case 'f':
 		case 'e':
 			/** already handled */
