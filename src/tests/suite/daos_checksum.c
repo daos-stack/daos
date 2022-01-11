@@ -2448,8 +2448,8 @@ test_enumerate_object2(void **state)
 	 */
 	assert_int_equal(4, nr);
 
-	/** only 3 checksums, dkey, akey, and inlined recx */
-	assert_int_equal(3, get_csum_count(&csum_iov));
+	/** only 2 checksums, dkey, akey */
+	assert_int_equal(2, get_csum_count(&csum_iov));
 
 	/** Clean up */
 	d_sgl_fini(&list_sgl, true);
@@ -2507,14 +2507,6 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	assert_memory_equal(&zero_anchor, &anchor, sizeof(zero_anchor));
 	assert_memory_equal(&zero_anchor, &dkey_anchor, sizeof(zero_anchor));
 	assert_memory_equal(&zero_anchor, &akey_anchor, sizeof(zero_anchor));
-
-	/** csum iov buf len shouldn't change, but iov_len should reflect
-	 * what's needed to hold all csum info. Caller can decide what to do
-	 * from here.
-	 */
-	assert_int_equal(10, csum_iov.iov_buf_len);
-	assert_int_equal(11 * (sizeof(struct dcs_csum_info) + 8),
-		csum_iov.iov_len);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);

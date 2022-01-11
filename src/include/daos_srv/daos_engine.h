@@ -737,6 +737,7 @@ struct dss_enum_arg {
 			int			kds_len;
 			d_sg_list_t	       *sgl;
 			d_iov_t			csum_iov;
+			uint32_t		ec_cell_sz;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */

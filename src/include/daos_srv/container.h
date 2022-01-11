@@ -134,7 +134,7 @@ struct agg_param {
 };
 
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
-				   daos_epoch_range_t *epr, bool full_scan,
+				   daos_epoch_range_t *epr, uint32_t flags,
 				   struct agg_param *param, uint64_t *msecs);
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
