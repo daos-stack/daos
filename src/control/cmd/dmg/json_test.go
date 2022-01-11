@@ -69,8 +69,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "version", "telemetry config", "telemetry run", "config generate",
 				"manpage":
 				return
-			case "storage prepare":
-				testArgs = append(testArgs, "--force")
+			case "storage nvme-unbind":
+				testArgs = append(testArgs, "-l", "foo.com", "-a", common.MockPCIAddr())
 			case "storage query target-health":
 				testArgs = append(testArgs, []string{"-r", "0", "-t", "0"}...)
 			case "storage query device-health":

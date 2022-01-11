@@ -11,6 +11,7 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
 
 import "ctl/storage_nvme.proto";
 import "ctl/storage_scm.proto";
+import "ctl/common.proto";
 
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and locally attached storage.
@@ -34,4 +35,12 @@ message StorageFormatReq {
 message StorageFormatResp {
 	repeated NvmeControllerResult crets = 1;	// One per controller format attempt
 	repeated ScmMountResult mrets = 2;		// One per scm format and mount attempt
+}
+
+message NvmeUnbindReq {
+	string pci_addr = 1;	// an NVMe controller PCI address
+}
+
+message NvmeUnbindResp {
+	ResponseState state = 1;
 }

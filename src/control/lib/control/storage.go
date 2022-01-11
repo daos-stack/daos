@@ -428,3 +428,50 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 
 	return sfr, nil
 }
+
+type (
+	// NvmeUnbindReq contains the parameters for a storage nvme-unbind request.
+	NvmeUnbindReq struct {
+		unaryRequest
+		PCIAddr string `json:"pci_addr"`
+	}
+
+	// NvmeUnbindResp contains the response from a storage nvme-unbind request.
+	NvmeUnbindResp struct {
+		HostErrorsResp
+		//HostStorage HostStorageMap
+	}
+)
+
+// StorageNvmeUnbind unbinds NVMe SSD from kernel driver and binds to user-space driver on single
+// server.
+func StorageNvmeUnbind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeUnbindReq) (*NvmeUnbindResp, error) {
+	pbReq := new(ctlpb.NvmeUnbindReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).StorageNvmeUnbind(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	snur := new(NvmeUnbindResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := snur.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+			//			continue
+			//		}
+			//
+			//		if err := sfr.addHostResponse(hostResp); err != nil {
+			//			return nil, err
+		}
+	}
+
+	return snur, nil
+}
