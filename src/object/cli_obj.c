@@ -453,26 +453,21 @@ static int
 obj_init_oca(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oca;
-	bool			 priv;
-	uint32_t		 nr_grps;
+	uint32_t		nr_grps;
+	struct cont_props	props;
 
-	oca = daos_oclass_attr_find(obj->cob_md.omd_id, &priv, &nr_grps);
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id, &nr_grps);
 	if (!oca)
 		return -DER_INVAL;
 
 	obj->cob_oca = *oca;
 	obj->cob_oca.ca_grp_nr = nr_grps;
-	if (daos_oclass_is_ec(oca) && !priv) {
-		struct cont_props	props;
-
-		/* Use the cell size from container property to overwrite
-		 * the default value.
-		 * NB: don't ovewrite cell size of private class.
-		 */
+	if (daos_oclass_is_ec(oca)) {
+		/* Inherit cell size from container property */
 		props = dc_cont_hdl2props(obj->cob_coh);
-		if (props.dcp_ec_cell_sz != 0)
-			obj->cob_oca.u.ec.e_len = props.dcp_ec_cell_sz;
+		obj->cob_oca.u.ec.e_len = props.dcp_ec_cell_sz;
 	}
+
 	return 0;
 }
 

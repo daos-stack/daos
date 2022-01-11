@@ -1985,21 +1985,20 @@ static int
 obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
-	bool			 priv;
 	uint32_t                 nr_grps;
 
-	oca = daos_oclass_attr_find(oid, &priv, &nr_grps);
+	oca = daos_oclass_attr_find(oid, &nr_grps);
 	if (!oca)
 		return -DER_INVAL;
 
 	ioc->ioc_oca = *oca;
 	ioc->ioc_oca.ca_grp_nr = nr_grps;
-	if (daos_oclass_is_ec(oca) && !priv) {
-		/* don't ovewrite cell size of private class */
-		D_ASSERT(ioc->ioc_coc != NULL);
+	D_ASSERT(ioc->ioc_coc != NULL);
+	if (daos_oclass_is_ec(oca)) {
 		ioc->ioc_oca.u.ec.e_len = ioc->ioc_coc->sc_props.dcp_ec_cell_sz;
 		D_ASSERT(ioc->ioc_oca.u.ec.e_len != 0);
 	}
+
 	return 0;
 }
 
