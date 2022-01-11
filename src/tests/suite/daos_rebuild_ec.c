@@ -21,7 +21,7 @@
 #include <daos/container.h>
 
 static void
-rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
+rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 		    int kill_parity_nr, int write_type)
 {
 	test_arg_t		*arg = *state;
@@ -206,7 +206,7 @@ rebuild_ec_multi_stripes(void **state)
 	fail_shards[0] = 2;
 	fail_shards[1] = 1;
 	daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
-	daos_fail_loc_set(DAOS_FAIL_SHARD_FETCH | DAOS_FAIL_ALWAYS);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
 	for (i = 0; i < TEST_STRIPE_NR; i++) {
 		start = i * 4 * CELL_SIZE;
 		recxs[i * 2].rx_idx = start;
@@ -294,12 +294,6 @@ rebuild_ec_setup(void  **state, int number)
 		arg->obj_class = DAOS_OC_R3S_SPEC_RANK;
 
 	return rc;
-}
-
-static int
-rebuild_ec_4nodes_setup(void **state)
-{
-	return rebuild_ec_setup(state, 4);
 }
 
 static int
@@ -876,27 +870,148 @@ rebuild_ec_parity_multi_group(void **state)
 	ioreq_fini(&req);
 }
 
+#define SNAP_CNT	20
+#define EC_CELL_SIZE	1048576
+static void
+rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_epoch_t	snap_epoch[SNAP_CNT];
+	daos_size_t	data_size;
+	d_rank_t	rank;
+	char		*data;
+	char		*verify_data;
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	data_size = ec_data_nr_get(oid) * (uint64_t)EC_CELL_SIZE + 1000;
+	data = (char *)malloc(data_size);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(data_size);
+	assert_true(verify_data != NULL);
+
+	for (i = 0; i < SNAP_CNT; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = data_size;
+		recx.rx_idx = 0;
+		memset(data, 'a' + i, data_size);
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, data_size, &req);
+		daos_cont_create_snap(arg->coh, &snap_epoch[i], NULL, NULL);
+	}
+
+	rank = get_rank_by_oid_shard(arg, oid, shard);
+	rebuild_single_pool_rank(arg, rank, false);
+
+	for (i = 0; i < SNAP_CNT; i++) {
+		daos_handle_t		th_open;
+		daos_epoch_range_t	epr;
+
+		daos_tx_open_snap(arg->coh, snap_epoch[i], &th_open, NULL);
+		memset(verify_data, 'a' + i, data_size);
+		ec_verify_parity_data(&req, "d_key", "a_key", 0, data_size,
+				      verify_data, th_open, false);
+		daos_tx_close(th_open, NULL);
+
+		epr.epr_hi = epr.epr_lo = snap_epoch[i];
+		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	reintegrate_single_pool_rank(arg, rank);
+	free(data);
+	free(verify_data);
+	ioreq_fini(&req);
+}
+
+static void
+rebuild_ec_snapshot_data_shard(void **state)
+{
+	rebuild_ec_snapshot(state, OC_EC_4P2G1, 0);
+}
+
+static void
+rebuild_ec_snapshot_parity_shard(void **state)
+{
+	rebuild_ec_snapshot(state, OC_EC_4P2G1, 5);
+}
+
+static void
+rebuild_ec_parity_overwrite(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		*data;
+	daos_recx_t	recx;
+	d_rank_t	rank = 0;
+	int		i;
+	int		stripe_size = 2 * CELL_SIZE;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	data = (char *)malloc(stripe_size);
+	make_buffer(data, 'a', stripe_size);
+
+	for (i = 0; i < 5; i++) {
+		recx.rx_idx = i * stripe_size;	/* full stripe */
+		recx.rx_nr = stripe_size;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, stripe_size, &req);
+
+		recx.rx_idx = i * stripe_size + 1000;
+		recx.rx_nr = 1000;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, 1000, &req);
+
+		recx.rx_idx = i * stripe_size + CELL_SIZE + 1000;
+		recx.rx_nr = 1000;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, 1000, &req);
+	}
+
+	rank = get_rank_by_oid_shard(arg, oid, 2);
+	rebuild_single_pool_rank(arg, rank, false);
+
+	ioreq_fini(&req);
+
+	free(data);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
-	 rebuild_partial_fail_data, rebuild_ec_4nodes_setup, test_teardown},
+	 rebuild_partial_fail_data, rebuild_ec_8nodes_setup, test_teardown},
 	{"REBUILD1: rebuild partial update with parity tgt fail",
-	 rebuild_partial_fail_parity, rebuild_ec_4nodes_setup, test_teardown},
+	 rebuild_partial_fail_parity, rebuild_ec_8nodes_setup, test_teardown},
 	{"REBUILD2: rebuild full stripe update with data tgt fail",
-	 rebuild_full_fail_data, rebuild_ec_4nodes_setup, test_teardown},
+	 rebuild_full_fail_data, rebuild_ec_8nodes_setup, test_teardown},
 	{"REBUILD3: rebuild full stripe update with parity tgt fail",
-	 rebuild_full_fail_parity, rebuild_ec_4nodes_setup, test_teardown},
+	 rebuild_full_fail_parity, rebuild_ec_8nodes_setup, test_teardown},
 	{"REBUILD4: rebuild full then partial update with data tgt fail",
-	 rebuild_full_partial_fail_data, rebuild_ec_4nodes_setup,
+	 rebuild_full_partial_fail_data, rebuild_ec_8nodes_setup,
 	 test_teardown},
 	{"REBUILD5: rebuild full then partial update with parity tgt fail",
-	 rebuild_full_partial_fail_parity, rebuild_ec_4nodes_setup,
+	 rebuild_full_partial_fail_parity, rebuild_ec_8nodes_setup,
 	 test_teardown},
 	{"REBUILD6: rebuild partial then full update with data tgt fail",
-	 rebuild_partial_full_fail_data, rebuild_ec_4nodes_setup,
+	 rebuild_partial_full_fail_data, rebuild_ec_8nodes_setup,
 	 test_teardown},
 	{"REBUILD7: rebuild partial then full update with parity tgt fail",
-	 rebuild_partial_full_fail_parity, rebuild_ec_4nodes_setup,
+	 rebuild_partial_full_fail_parity, rebuild_ec_8nodes_setup,
 	 test_teardown},
 	{"REBUILD8: rebuild2p partial update with data tgt fail ",
 	 rebuild2p_partial_fail_data, rebuild_ec_8nodes_setup, test_teardown},
@@ -989,6 +1104,15 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD39: rebuild EC parity with multiple group",
 	 rebuild_ec_parity_multi_group, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD40: rebuild EC snapshot with data shard",
+	 rebuild_ec_snapshot_data_shard, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD41: rebuild EC snapshot with parity shard",
+	 rebuild_ec_snapshot_parity_shard, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD42: rebuild parity over write",
+	 rebuild_ec_parity_overwrite, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 

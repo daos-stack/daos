@@ -65,9 +65,10 @@ struct ec_eph {
 struct cont_ec_agg {
 	uuid_t			ea_cont_uuid;
 	daos_epoch_t		ea_current_eph;
-	int			ea_servers_num;
 	struct ec_eph		*ea_server_ephs;
 	d_list_t		ea_list;
+	int			ea_servers_num;
+	uint32_t		ea_deleted:1;
 };
 
 /*

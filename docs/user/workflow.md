@@ -130,7 +130,7 @@ number of targets is also provided.
 This information can also be retrieved programmatically via the
 `daos_pool_query()` function of the libdaos library and python equivalent.
 
-## Pool Attributes
+### Pool Attributes
 
 Project-wise information can be stored in pool user attributes (not to be
 confused with pool properties). Pool attributes can be manipulated via the

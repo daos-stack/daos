@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
-from os.path import basename
+import os
 
 # pylint: disable=too-many-ancestors
 class DmvrPosixLargeFile(DataMoverTestBase):
@@ -27,7 +27,6 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             Create POSIX type cont2.
             Copy data from cont1 to cont2.
             Copy data from cont2 to external POSIX file system.
-            (Assuming dfuse mount as external POSIX FS).
             Create POSIX type cont4.
             Copy data from external POSIX file system to cont4.
             Run ior -a DFS with read verify on copied directory to verify
@@ -60,42 +59,29 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             "DAOS", "/", self.pool[0], self.container[0],
             "DAOS", "/", self.pool[0], self.container[1])
 
-        # TODO: commenting out for now until we have a POSIX shared filesystem
-        # to write to for large file tests. These used to work but do not
-        # anymore because duns now resolves dfuse mount points
+        posix_path = self.new_posix_test_path(shared=True)
 
-        # create cont3 for dfuse (posix)
-        #self.create_cont(self.pool[0])
+        # copy from daos cont2 to posix file system
+        self.run_datamover(
+            self.test_id + " (cont2 to posix)",
+            "DAOS", "/", self.pool[0], self.container[1],
+            "POSIX", posix_path)
 
-        # start dfuse on cont3
-        #self.start_dfuse(self.dfuse_hosts, self.pool[0], self.container[2])
+        # create cont3
+        self.create_cont(self.pool[0])
 
-        # dcp treats a trailing slash on the source as /*
-        # so strip trailing slash from posix path so dcp
-        # behaves similar to "cp"
-        #posix_path = self.dfuse.mount_dir.value.rstrip("/")
-
-        # copy from daos cont2 to posix file system (dfuse)
-        #self.run_datamover(
-        #    self.test_id + " (cont2 to posix)",
-        #    "DAOS", "/", self.pool[0], self.container[1],
-        #    "POSIX", posix_path)
-
-        # create cont4
-        #self.create_cont(self.pool[0])
-
-        # copy from posix file system to daos cont4
-        #self.run_datamover(
-        #    self.test_id + " (posix to cont4)",
-        #    "POSIX", posix_path, None, None,
-        #    "DAOS", "/", self.pool[0], self.container[3])
+        # copy from posix file system to daos cont3
+        self.run_datamover(
+            self.test_id + " (posix to cont3)",
+            "POSIX", posix_path, None, None,
+            "DAOS", "/", self.pool[0], self.container[2])
 
         # the result is that a NEW directory is created in the destination
-        #daos_path = "/" + basename(posix_path) + self.ior_cmd.test_file.value
+        daos_path = "/" + os.path.basename(posix_path) + self.ior_cmd.test_file.value
 
-        # update ior params, read back and verify data from cont2
+        # update ior params, read back and verify data from cont3
         self.run_ior_with_params(
-            "DAOS", self.ior_cmd.test_file.value, self.pool[0], self.container[1],
+            "DAOS", daos_path, self.pool[0], self.container[2],
             flags="-r -R")
 
     def test_dm_large_file_dcp(self):
@@ -105,7 +91,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             an external POSIX file system using dcp.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=datamover,dcp
         :avocado: tags=dm_large_file,dm_large_file_dcp
         """
         self.run_dm_large_file("DCP")
@@ -117,7 +103,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             an external POSIX file system using daos filesystem copy.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,fs_copy,dfuse
+        :avocado: tags=datamover,fs_copy
         :avocado: tags=dm_large_file,dm_large_file_fs_copy
         """
         self.run_dm_large_file("FS_COPY")

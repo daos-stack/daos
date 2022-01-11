@@ -222,6 +222,12 @@ class Anchor(ctypes.Structure):
                 ('da_buff', ctypes.c_uint8 * 104)]
 
 
+class DaosKeyDescriptor(ctypes.Structure):
+    """Represents struct: daos_key_desc_t"""
+    _fields_ = [("kd_key_len", ctypes.c_uint64),
+                ("kd_val_type", ctypes.c_uint32)]
+
+
 class CallbackEvent():
     """ Class to represent a call back event. """
 

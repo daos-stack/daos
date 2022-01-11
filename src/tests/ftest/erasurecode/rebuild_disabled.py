@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
-from ec_utils import ErasureCodeIor
+from ec_utils import ErasureCodeIor, check_aggregation_status
 
 class EcodDisabledRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -35,6 +35,10 @@ class EcodDisabledRebuild(ErasureCodeIor):
 
         # Write the IOR data set with given all the EC object type
         self.ior_write_dataset()
+
+        # Verify if Aggregation is getting started
+        if not any(check_aggregation_status(self.pool).values()):
+            self.fail("Aggregation failed to start..")
 
         # Kill the last server rank and wait for 20 seconds, Rebuild is disabled
         # so data should not be rebuild

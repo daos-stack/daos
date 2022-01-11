@@ -11,8 +11,8 @@ ENV:
     - test_servers_CRT_CTX_NUM: "16"
     - test_clients_CRT_CTX_NUM: "16"
 env_CRT_PHY_ADDR_STR: !mux
-  ofi_sockets:
-    CRT_PHY_ADDR_STR: "ofi+sockets"
+  ofi_tcp:
+    CRT_PHY_ADDR_STR: "ofi+tcp;ofi_rxm"
 env_CRT_CTX_SHARE_ADDR: !mux
   no_sep:
     env: no_sep
@@ -36,8 +36,9 @@ tests: !mux
     test_clients_env: ""
     test_clients_ppn: "1"
     test_clients_arg:
-      - "--name client_group --attach_to tg_srv_grp_swim_test --init_only --holdtime 10"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 2   --shut_only --holdtime 15"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --init_only --holdtime 20"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=alive' --skip_shutdown --skip_check_in"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 2   --shut_only --holdtime 20"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=dead'  --skip_shutdown --skip_check_in"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank1=alive' --skip_shutdown --skip_check_in"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank0=alive' --skip_shutdown --skip_check_in"

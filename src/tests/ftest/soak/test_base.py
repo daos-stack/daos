@@ -20,7 +20,7 @@ from ClusterShell.NodeSet import NodeSet
 from getpass import getuser
 import socket
 from agent_utils import include_local_host
-from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
+from utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
@@ -496,6 +496,7 @@ class SoakTestBase(TestWithServers):
             "single_test_pool", test_param + "*", True)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
+        ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
         if harassers:
             run_harasser = True
             self.log.info("<< Initial harasser list = %s>>", harassers)
@@ -586,8 +587,9 @@ class SoakTestBase(TestWithServers):
                 "Current pools: %s",
                 " ".join([pool.uuid for pool in self.pool]))
             # Fail if the pool/containers did not clean up correctly
-            self.assertEqual(
-                len(self.soak_errors), 0, "\n".join(self.soak_errors))
+            if not ignore_soak_errors:
+                self.assertEqual(
+                    len(self.soak_errors), 0, "\n".join(self.soak_errors))
             # Break out of loop if smoke
             if "smoke" in self.test_name:
                 break

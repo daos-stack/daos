@@ -75,7 +75,7 @@ class OSAOnlineReintegration(OSAUtils):
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude one rank : other than rank 0.
-        rank = random.randint(1, exclude_servers)
+        rank = random.randint(1, exclude_servers) #nosec
 
         # Start the daos_racer thread
         if racer is True:
@@ -166,6 +166,7 @@ class OSAOnlineReintegration(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
+    @skipForTicket("DAOS-7420")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
@@ -191,6 +192,7 @@ class OSAOnlineReintegration(OSAUtils):
         self.log.info("Online Reintegration : System stop/start")
         self.run_online_reintegration_test(1, server_boot=True)
 
+    @skipForTicket("DAOS-7420")
     def test_osa_online_reintegration_without_csum(self):
         """Test ID: DAOS-5075.
 

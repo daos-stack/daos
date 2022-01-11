@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_perf_base import DaosPerfBase
-from apricot import skipForTicket
 
 
 class DaosPerfLarge(DaosPerfBase):
@@ -14,7 +13,6 @@ class DaosPerfLarge(DaosPerfBase):
 
     :avocado: recursive
     """
-    @skipForTicket("DAOS-8563")
     def test_large(self):
         """Jira ID: DAOS-1714.
 

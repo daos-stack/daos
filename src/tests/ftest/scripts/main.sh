@@ -56,7 +56,8 @@ else
     cd "$DAOS_BASE"
 fi
 
-export CRT_PHY_ADDR_STR=ofi+sockets
+# Disable CRT_PHY_ADDR_STR to allow launch.py to set it
+unset CRT_PHY_ADDR_STR
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE

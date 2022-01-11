@@ -29,6 +29,7 @@
 struct bio_bulk_args {
 	void		*ba_bulk_ctxt;
 	unsigned int	 ba_bulk_perm;
+	unsigned int	 ba_sgl_idx;
 };
 
 /* Cached bulk handle for avoiding expensive MR */
@@ -43,8 +44,14 @@ struct bio_bulk_hdl {
 	unsigned int		 bbh_pg_idx;
 	/* Bulk offset in bytes */
 	unsigned int		 bbh_bulk_off;
+	/* Current used length in bytes (for shared bulk handle) */
+	unsigned int		 bbh_used_bytes;
+	/* Remote bulk handle index */
+	unsigned int		 bbh_remote_idx;
+	/* Reference count */
+	unsigned int		 bbh_inuse;
 	/* Flags */
-	unsigned int		 bbh_inuse:1;
+	unsigned int		 bbh_shareable:1;
 };
 
 /* Bulk handle group, categorized by bulk size */
@@ -159,16 +166,12 @@ struct bio_dma_buffer {
 	X(bdh_temp_crit_time, "temp/crit_time",				\
 	  "Amount of time the controller operated above crit temp threshold",  \
 	  "minutes", D_TM_COUNTER)					\
-	X(bdh_percent_used, "reliability/percentage_used",		\
-	  "Estimate of the percentage of NVM subsystem life used based on the "\
-	  "actual usage and the manufacturer's prediction of NVM life",	\
-	  "%", D_TM_COUNTER)						\
 	X(bdh_avail_spare, "reliability/avail_spare",			\
 	  "Percentage of remaining spare capacity available",		\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	X(bdh_avail_spare_thres, "reliability/avail_spare_threshold",	\
 	  "Threshold for available spare value",			\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	X(bdh_avail_spare_warn, "reliability/avail_spare_warn",		\
 	  "Set to 1 when available spare has fallen below threshold",	\
 	  "", D_TM_GAUGE)						\
@@ -198,16 +201,16 @@ struct bio_dma_buffer {
 	  "", D_TM_COUNTER)						\
 	Y(bdh_wear_leveling_cnt_norm, "vendor/wear_leveling_cnt_norm",	\
 	  "Wear leveling count remaining, decrements from 100 to 0",	\
-	  "", D_TM_COUNTER)						\
+	  "", D_TM_GAUGE)						\
 	Y(bdh_wear_leveling_cnt_min, "vendor/wear_leveling_cnt_min",	\
 	  "Wear leveling minimum erase cycle",				\
-	  "", D_TM_COUNTER)						\
+	  "", D_TM_GAUGE)						\
 	Y(bdh_wear_leveling_cnt_max, "vendor/wear_leveling_cnt_max",    \
 	  "Wear leveling maximum erase cycle",                          \
-	  "", D_TM_COUNTER)                                             \
+	  "", D_TM_GAUGE)                                             \
 	Y(bdh_wear_leveling_cnt_avg, "vendor/wear_leveling_cnt_avg",    \
 	  "Wear leveling average erase cycle",                          \
-	  "", D_TM_COUNTER)						\
+	  "", D_TM_GAUGE)						\
 	Y(bdh_endtoend_err_cnt_raw, "vendor/endtoend_err_cnt_raw",	\
 	  "End-to-End detected and corrected errors by hardware",	\
 	  "", D_TM_COUNTER)						\
@@ -216,16 +219,16 @@ struct bio_dma_buffer {
 	  "", D_TM_COUNTER)						\
 	Y(bdh_media_wear_raw, "vendor/media_wear_raw",			\
 	  "Wear seen by the SSD as a percentage of the maximum rated cycles", \
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	Y(bdh_host_reads_raw, "vendor/host_reads_raw",			\
 	  "Percentage of I/O operations that are a read operation",	\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	Y(bdh_workload_timer_raw, "vendor/crc_workload_timer_raw",	\
 	  "The elapsed time since starting the workload timer",		\
 	  "minutes", D_TM_COUNTER)					\
 	Y(bdh_thermal_throttle_status, "vendor/thermal_throttle_status_raw", \
 	  "Thermal throttle status",					\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	Y(bdh_thermal_throttle_event_cnt, "vendor/thermal_throttle_event_cnt", \
 	  "Thermal throttling event count",				\
 	  "", D_TM_COUNTER)						\
@@ -372,6 +375,8 @@ struct bio_rsrvd_region {
 	struct bio_dma_chunk	*brr_chk;
 	/* Start page idx within the DMA chunk */
 	unsigned int		 brr_pg_idx;
+	/* Payload offset (from brr_pg_idx) in bytes, used for SCM only */
+	unsigned int		 brr_chk_off;
 	/* Offset within the SPDK blob in bytes */
 	uint64_t		 brr_off;
 	/* End (not included) in bytes */
@@ -412,7 +417,8 @@ struct bio_desc {
 	unsigned int		 bd_buffer_prep:1,
 				 bd_dma_issued:1,
 				 bd_retry:1,
-				 bd_rdma:1;
+				 bd_rdma:1,
+				 bd_copy_dst:1;
 	/* Cached bulk handles being used by this IOD */
 	struct bio_bulk_hdl    **bd_bulk_hdls;
 	unsigned int		 bd_bulk_max;
@@ -482,6 +488,7 @@ struct media_error_msg {
 
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
+extern bool		bio_spdk_inited;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
@@ -513,8 +520,8 @@ void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
 int dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg);
 int iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
-		   unsigned int chk_pg_idx, uint64_t off, uint64_t end,
-		   uint8_t media);
+		   unsigned int chk_pg_idx, unsigned int chk_off, uint64_t off,
+		   uint64_t end, uint8_t media);
 int dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt);
 
 static inline struct bio_dma_buffer *
@@ -602,7 +609,7 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
-/* b<o_config.c */
-int bio_add_allowed_alloc(const char *json_config_file,
-			  struct spdk_env_opts *opts);
+/* bio_config.c */
+int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts);
+int bio_set_hotplug_filter(const char *nvme_conf);
 #endif /* __BIO_INTERNAL_H__ */

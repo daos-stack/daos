@@ -5,12 +5,12 @@ Maintainer: daos-stack <daos@daos.groups.io>
 Build-Depends: debhelper (>= 10),
                dh-python,
                libcmocka-dev,
-               libfabric-dev (>= 1.12.0),
+               libfabric-dev (>= 1.14.0~rc3-2),
                libhwloc-dev,
                libopenmpi-dev,
                libssl-dev,
                libyaml-dev,
-               libmercury-dev (= 2.0.1-1),
+               libmercury-dev (>= 2.1.0~rc4-3),
                scons,
                uuid-dev,
                pkg-config,
@@ -32,7 +32,7 @@ Build-Depends: debhelper (>= 10),
                python3-tabulate,
                liblz4-dev
 Standards-Version: 4.1.2
-Homepage: https://wiki.hpdd.intel.com/display/DC/DAOS+Community+Home
+Homepage: https://docs.daos.io/
 Vcs-Git: https://github.com/daos-stack/daos.git
 Vcs-Browser: https://github.com/daos-stack/daos.git
 
@@ -92,8 +92,18 @@ Description: The Distributed Asynchronous Object Storage (DAOS) is an open-sourc
 Package: daos-tests
 Architecture: any
 Multi-Arch: same
+Depends: daos-client-tests-openmpi (= ${binary:Version}),
+         daos-server-tests-openmpi (= ${binary:Version})
+Description: This is the package is a metapackage to install all of the test packages
+ .
+ This package contains tests
+
+Package: daos-client-tests
+Architecture: any
+Multi-Arch: same
 Depends: python (>=3.8), python3, python-yaml, python3-yaml,
-         ${shlibs:Depends}, ${misc:Depends}
+         ${shlibs:Depends}, ${misc:Depends},
+         daos-client (= ${binary:Version})
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage
@@ -106,11 +116,38 @@ Description: The Distributed Asynchronous Object Storage (DAOS) is an open-sourc
  .
  This package contains tests
 
+Package: daos-client-tests-openmpi
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         daos-client-tests (= ${binary:Version})
+Description: This is the package needed to run the DAOS test suite openmpi tools
+ .
+ This package contains tests
+
+Package: daos-server-tests
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         daos-server (= ${binary:Version})
+Description: This is the package needed to run the DAOS test suite (server tests)
+ .
+ This package contains tests
+
+Package: daos-server-tests-openmpi
+Architecture: any
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         daos-server-tests (= ${binary:Version})
+Description: This is the package needed to run the DAOS test suite openmpi tools
+ .
+ This package contains tests
+
 Package: daos-client
 Section: net
 Architecture: any
 Multi-Arch: same
-Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin, libfabric (>= 1.12.0)
+Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin, libfabric (>= 1.14.0~rc3-2)
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage
@@ -129,7 +166,7 @@ Section: net
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin,
-         ipmctl (>02.00.00.3816), libfabric (>= 1.12.0)
+         ipmctl (>02.00.00.3816), libfabric (>= 1.14.0~rc3-2)
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage

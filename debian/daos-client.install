@@ -22,3 +22,4 @@ etc/daos/daos_control.yml
 usr/lib/systemd/system/daos_agent.service
 usr/share/man/man8/daos.8*
 usr/share/man/man8/dmg.8*
+usr/bin/cart_ctl

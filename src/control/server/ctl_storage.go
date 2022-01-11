@@ -26,6 +26,72 @@ type StorageControlService struct {
 	instanceStorage map[uint32]*storage.Config
 }
 
+// Setup performs storage discovery and validates existence of configured devices.
+func (scs *StorageControlService) Setup() {
+	if _, err := scs.ScmScan(storage.ScmScanRequest{}); err != nil {
+		scs.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
+	}
+
+	var cfgBdevs []string
+
+	for _, storageCfg := range scs.instanceStorage {
+		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
+			if tierCfg.Class != storage.ClassNvme {
+				// don't scan if any tier is using emulated NVMe
+				return
+			}
+			cfgBdevs = append(cfgBdevs, tierCfg.Bdev.DeviceList...)
+		}
+	}
+
+	nvmeScanResp, err := scs.NvmeScan(storage.BdevScanRequest{
+		DeviceList: cfgBdevs,
+	})
+	if err != nil {
+		scs.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
+		return
+	}
+
+	scs.storage.SetBdevCache(*nvmeScanResp)
+}
+
+// GetScmState performs required initialization and returns current state
+// of SCM module preparation.
+func (scs *StorageControlService) GetScmState() (storage.ScmState, error) {
+	return scs.storage.Scm.GetPmemState()
+}
+
+// ScmPrepare preps locally attached modules and returns need to reboot message,
+// list of pmem device files and error directly.
+//
+// Suitable for commands invoked directly on server, not over gRPC.
+func (scs *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error) {
+	// transition to the next state in SCM preparation
+	return scs.storage.Scm.Prepare(req)
+}
+
+// ScmScan scans locally attached modules, namespaces and state of DCPM config.
+func (scs *StorageControlService) ScmScan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
+	return scs.storage.Scm.Scan(req)
+}
+
+// NvmePrepare preps locally attached SSDs and returns error.
+func (scs *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	scs.log.Debugf("calling bdev provider prepare: %+v", req)
+	return scs.storage.PrepareBdevs(req)
+}
+
+// NvmeScan scans locally attached SSDs.
+func (scs *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
+	return scs.storage.ScanBdevs(req)
+}
+
+// WithVMDEnabled enables VMD support in storage provider.
+func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
+	scs.storage.WithVMDEnabled()
+	return scs
+}
+
 func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider) *StorageControlService {
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, c := range ecs {
@@ -58,34 +124,6 @@ func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Confi
 	)
 }
 
-// Setup delegates to Storage implementation's Setup methods.
-func (c *StorageControlService) Setup() error {
-	if _, err := c.ScmScan(storage.ScmScanRequest{}); err != nil {
-		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
-	}
-
-	// don't scan if using emulated NVMe
-	// TODO: this should probably be verified and scan per engine
-	for _, storageCfg := range c.instanceStorage {
-		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
-			if tierCfg.Class != storage.ClassNvme {
-				return nil
-			}
-		}
-	}
-
-	nvmeScanResp, err := c.NvmeScan(storage.BdevScanRequest{
-		EngineStorage: c.instanceStorage,
-	})
-	if err != nil {
-		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
-		return nil
-	}
-
-	c.storage.SetBdevCache(*nvmeScanResp)
-	return nil
-}
-
 func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.ScmNamespace {
 	for _, scanned := range ssr.Namespaces {
 		for _, path := range pmemDevs {
@@ -106,12 +144,12 @@ func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.Sc
 //
 // Usage is only retrieved for active mountpoints being used by online DAOS I/O
 // Server instances.
-func (c *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.ScmScanResponse, error) {
+func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.ScmScanResponse, error) {
 	if ssr == nil {
 		return nil, errors.New("input scm scan response is nil")
 	}
 
-	instances := c.harness.Instances()
+	instances := cs.harness.Instances()
 
 	nss := make(storage.ScmNamespaces, len(instances))
 	for idx, ei := range instances {
@@ -150,37 +188,11 @@ func (c *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Scm
 			nss[idx] = ns
 		}
 
-		c.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v",
+		cs.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v",
 			nss[idx].BlockDevice, mount.Path, nss[idx].Mount)
 	}
 
 	return &storage.ScmScanResponse{Namespaces: nss}, nil
-}
-
-// GetScmState performs required initialization and returns current state
-// of SCM module preparation.
-func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
-	return c.storage.Scm.GetPmemState()
-}
-
-// ScmPrepare preps locally attached modules and returns need to reboot message,
-// list of pmem device files and error directly.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error) {
-	// transition to the next state in SCM preparation
-	return c.storage.Scm.Prepare(req)
-}
-
-// ScmScan scans locally attached modules, namespaces and state of DCPM config.
-func (c *StorageControlService) ScmScan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
-	return c.storage.Scm.Scan(req)
-}
-
-// NvmePrepare preps locally attached SSDs and returns error.
-func (c *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	c.log.Debugf("calling bdev provider prepare: %+v", req)
-	return c.storage.PrepareBdevs(req)
 }
 
 // mapCtrlrs maps each controller to it's PCI address.
@@ -204,9 +216,9 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
 // assigned to I/O Engines.
-func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
+func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
 	var ctrlrs storage.NvmeControllers
-	instances := c.harness.Instances()
+	instances := cs.harness.Instances()
 
 	for _, ei := range instances {
 		if !ei.HasBlockDevices() {
@@ -238,7 +250,7 @@ func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (
 			}
 
 			if err := ei.updateInUseBdevs(ctx, ctrlrMap); err != nil {
-				return nil, errors.Wrap(err, "updating bdev health and smd info")
+				return nil, err
 			}
 
 			ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
@@ -246,9 +258,4 @@ func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (
 	}
 
 	return &storage.BdevScanResponse{Controllers: ctrlrs}, nil
-}
-
-// NvmeScan scans locally attached SSDs.
-func (c *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	return c.storage.ScanBdevs(req)
 }

@@ -177,11 +177,12 @@ host list.
 devices, taking into account any specified network device class preference
 (ethernet or infiniband).
 
-Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
-that prevented `ndctl` from being able to report the NUMA affinity for a
-namespace.
-This prevents generation of dual engine configs using `dmg config generate`
-when running with one of the above-mentioned affected kernels.
+!!! note
+    Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
+    that prevented `ndctl` from being able to report the NUMA affinity for a
+    namespace.
+    This prevents generation of dual engine configs using `dmg config generate`
+    when running with one of the above-mentioned affected kernels.
 
 #### Certificate Configuration
 
@@ -360,16 +361,20 @@ preference to the default location e.g. `~/.daos_control.yml`.
 Once the DAOS server started, the storage and network can be configured on the
 storage nodes via the dmg utility.
 
+!!! note
+    `daos_server` storage commands are not config aware meaning they will not
+    read parameters from the server configuration file.
+
 ### SCM Preparation
 
 This section addresses how to verify that PMem (Intel(R) Optane(TM) persistent
 memory) modules are correctly installed on the storage nodes and how to
-configure in interleaved mode to be used by DAOS.
+configure them in interleaved mode to be used by DAOS.
 Instructions for other types of SCM may be covered in the future.
 
 Provisioning the SCM occurs by configuring PMem modules in interleaved memory
 regions (interleaved mode) in groups of modules local to a specific socket
-(NUMA), and resultant nvdimm namespaces are defined by a device identifier
+(NUMA), and resultant PMem namespaces are defined by a device identifier
 (e.g., /dev/pmem0).
 
 PMem preparation is required once per DAOS installation.
@@ -428,6 +433,10 @@ used by DAOS.
 The server configuration file gives an administrator the ability to control
 storage selection.
 
+!!! note
+    `daos_server` storage commands are not config aware meaning they will not
+    read parameters from the server configuration file.
+
 #### Discovery
 
 `dmg storage scan` can be run to query remote running `daos_server`
@@ -437,7 +446,7 @@ processes over the management network.
 directly (scans locally-attached SSDs and Intel Persistent Memory Modules usable
 by DAOS).
 NVMe SSDs need to be made accessible first by running
-`daos_server storage prepare --nvme-only -u <current_user` prior.
+`daos_server storage prepare --nvme-only`.
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
@@ -900,10 +909,36 @@ bytes #sent #ack total time  MB/sec  usec/xfer Mxfers/sec
 1m    10    =10  20m   0.00s 8867.45 118.25    0.01
 ```
 
+### CPU Resources
+
+The I/O engine is multi-threaded, and the number of I/O service threads
+and helper threads that should be used per engine must be configured
+in the `engines:` section of the `daos_server.yml` file.
+
+The number of I/O service threads is configured with the `targets:` setting.
+Each storage target manages a fraction of the (interleaved) SCM storage space,
+and a fraction of one of the NVMe SSDs that are managed by this engine.
+The optimal number of storage targets per engine depends on two conditions:
+
+* For optimal balance regarding the NVMe space, the number of targets should be
+an integer multiple of the number of NVMe disks that are configured in the
+`bdev_list:` of the engine.
+* To obtain the maximum SCM performance, a certain number of targets is needed.
+This is device- and workload-dependent, but around 16 targets usually work well.
+
+While not required, it is recommended to also specify a number of
+I/O offloading threads with the `nr_xs_helpers:` setting. These threads can
+improve performance by offloading activities like checksum calculation and
+the dispatching of server-side RPCs from the main I/O service threads.
+
+The server should have sufficiently many physical cores to support the
+number of targets plus the additional service threads.
+
+
 ## Storage Formatting
 
-Once the `daos_server` has been restarted with the correct storage devices and
-network interface to use, one can move to the format phase.
+Once the `daos_server` has been restarted with the correct storage devices,
+network interface, and CPU threads to use, one can move to the format phase.
 When `daos_server` is started for the first time, it enters "maintenance mode"
 and waits for a `dmg storage format` call to be issued from the management tool.
 This remote call will trigger the formatting of the locally attached storage on
@@ -1026,22 +1061,24 @@ also required.
 Example:
 ```
 fabric_ifaces:
-  - numa_node: 0
-    devices:
-    -
-      - iface: ib0
-      - domain: mlx5_0
-    -
-      - iface: ib1
-      - domain: mlx5_1
-  - numa_node: 1
-    devices:
-    -
-      - iface: ib2
-      - domain: mlx5_2
-    -
-      - iface: ib3
-      - domain: mlx5_3
+-
+  numa_node: 0
+  devices:
+  -
+    iface: ib0
+    domain: mlx5_0
+  -
+    iface: ib1
+    domain: mlx5_1
+-
+  numa_node: 1
+  devices:
+  -
+    iface: ib2
+    domain: mlx5_2
+  -
+    iface: ib3
+    domain: mlx5_3
 ```
 
 ### Agent Startup

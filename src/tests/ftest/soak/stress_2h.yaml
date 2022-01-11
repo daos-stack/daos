@@ -101,7 +101,7 @@ ior_stress:
     api:
         - DFS
         - MPIIO
-    test_file: daos:testFile
+    test_file: daos:/testFile
     flags: -v -w -W -r -R
     block_size:
         - '1G'

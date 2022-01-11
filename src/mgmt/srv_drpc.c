@@ -537,8 +537,10 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolEvictReq	*req = NULL;
 	Mgmt__PoolEvictResp	 resp = MGMT__POOL_EVICT_RESP__INIT;
 	uuid_t			 uuid;
-	uuid_t			*handles;
-	int			 n_handles;
+	uuid_t			*handles = NULL;
+	int			 n_handles = 0;
+	char			*machine = NULL;
+	uint32_t		 count = 0;
 	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
 	size_t			 len;
@@ -592,13 +594,15 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		n_handles = 0;
 		destroy = 1;
 		force_destroy = (req->force_destroy ? 1 : 0);
+	} else if (req->machine != protobuf_c_empty_string) {
+		machine = req->machine;
 	} else {
 		handles = NULL;
 		n_handles = 0;
 	}
 
 	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, destroy, force_destroy,
-				req->sys);
+				machine, req->sys, &count);
 	if (rc != 0)
 		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n", req->id, DP_RC(rc));
 
@@ -608,6 +612,7 @@ out_free:
 
 out:
 	resp.status = rc;
+	resp.count = count;
 	len = mgmt__pool_evict_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
@@ -1717,8 +1722,6 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				D_FREE(resp->devices[i]->uuid);
 			if (resp->devices[i]->tgt_ids != NULL)
 				D_FREE(resp->devices[i]->tgt_ids);
-			if (resp->devices[i]->state != NULL)
-				D_FREE(resp->devices[i]->state);
 			if (resp->devices[i]->tr_addr != NULL)
 				D_FREE(resp->devices[i]->tr_addr);
 			D_FREE(resp->devices[i]);
@@ -1993,8 +1996,6 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
 
 	if (rc == 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
 	}
@@ -2065,8 +2066,6 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
 
 	if (rc == 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
 	}
@@ -2157,8 +2156,6 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
 
 	if (rc == 0) {
-		if (resp->dev_state != NULL)
-			D_FREE(resp->dev_state);
 		if (resp->new_dev_uuid != NULL)
 			D_FREE(resp->new_dev_uuid);
 	}
@@ -2209,7 +2206,6 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_identify_resp__init(resp);
 	/* Init empty strings to NULL to avoid error cleanup with free */
 	resp->dev_uuid = NULL;
-	resp->led_state = NULL;
 
 	if (uuid_parse(req->dev_uuid, dev_uuid) != 0) {
 		D_ERROR("Unable to parse device UUID %s: %d\n",
@@ -2237,8 +2233,6 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_identify_req__free_unpacked(req, &alloc.alloc);
 
 	if (rc == 0) {
-		if (resp->led_state != NULL)
-			D_FREE(resp->led_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
 	}

@@ -29,7 +29,7 @@ def write_host_file(hostlist, path='/tmp', slots=1):
     """
 
     log = getLogger()
-    unique = random.randint(1, 100000)
+    unique = random.randint(1, 100000) #nosec
 
     if not os.path.exists(path):
         os.makedirs(path)

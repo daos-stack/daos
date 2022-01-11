@@ -176,7 +176,8 @@ test_run(void)
 	}
 
 	/* Disable swim */
-	if (test_g.t_disable_swim) {
+	if (test_g.t_disable_swim &&
+	    (rank_list != NULL)) {
 
 		crt_rank_abort_all(NULL);
 
@@ -242,12 +243,17 @@ clean_up:
 int main(int argc, char **argv)
 {
 	int		 rc;
+	char		*env;
 
 	rc = test_parse_args(argc, argv);
 	if (rc != 0) {
 		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);
 		return rc;
 	}
+
+	env = getenv("WITH_VALGRIND");
+	if (env != NULL)
+		test_g.t_hold_time *= 4;
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, 40, false, true);

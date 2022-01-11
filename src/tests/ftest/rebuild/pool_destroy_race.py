@@ -31,7 +31,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
           Perform io using ior with RP_3GX replication.
           Kill one of the ranks and trigger rebuild.
           Destroy Pool during rebuild.
-          Re-create pool on reamining ranks.
+          Re-create pool on remaining ranks.
 
         :avocado: tags=all,pr,hw
         :avocado: tags=medium,ib2
@@ -68,8 +68,8 @@ class RbldPoolDestroyWithIO(IorTestBase):
             self.log.info("Starting ior run number %s", run)
             self.run_ior_with_pool()
 
-        self.log.info("Starting rebuild by killing rank %s", rank)
         # Kill the server and trigger rebuild
+        self.log.info("Starting rebuild by killing rank %s", rank)
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start. If True just wait for rebuild to start,

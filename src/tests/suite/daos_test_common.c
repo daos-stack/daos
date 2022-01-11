@@ -211,11 +211,14 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 	int rc = 0;
 
 	if (arg->myrank == 0) {
-		/** use daos_test label if none is provided */
 		if (!co_prop || daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL) {
-			print_message("setup: creating container with label \"daos_test\"\n");
-			rc = daos_cont_create_with_label(arg->pool.poh, "daos_test", co_prop,
-							 &arg->co_uuid, NULL);
+			char cont_label[32];
+			static int cont_idx;
+
+			sprintf(cont_label, "daos_test_%d", cont_idx++);
+			print_message("setup: creating container with label %s\n", cont_label);
+			rc = daos_cont_create_with_label(arg->pool.poh, cont_label,
+							 co_prop, &arg->co_uuid, NULL);
 		} else {
 			print_message("setup: creating container\n");
 			rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, co_prop, NULL);
@@ -448,7 +451,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	daos_pool_disconnect(poh, NULL);
+	rc = daos_pool_disconnect(poh, NULL);
+	if (rc) {
+		print_message("daos_pool_disconnect failed, rc: %d\n", rc);
+	}
 
 	rc = dmg_pool_destroy(dmg_config_file,
 			      pool->pool_uuid, arg->group, 1);
@@ -622,8 +628,8 @@ d_rank_t ranks_to_kill[MAX_KILLS];
 bool
 test_runable(test_arg_t *arg, unsigned int required_nodes)
 {
-	int		 i;
-	static bool	 runable = true;
+	int	i;
+	int	runable = 1;
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"
@@ -645,7 +651,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
-			runable = false;
+			runable = 0;
 		}
 
 		for (i = 0; i < MAX_KILLS; i++)
@@ -657,7 +663,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Barrier(MPI_COMM_WORLD);
-	return runable;
+	return runable == 1;
 }
 
 int
