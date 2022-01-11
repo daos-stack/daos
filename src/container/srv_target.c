@@ -2187,9 +2187,9 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	struct oid_iv_range		rg;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": oid alloc: num_oids="DF_U64"\n",
-		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 in->num_oids);
+	D_DEBUG(DB_MD, DF_CONT": oid alloc: num_oids="DF_U64"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		in->num_oids);
 
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
@@ -2207,6 +2207,9 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 
 	out->oid = rg.oid;
 
+	D_DEBUG(DB_MD, DF_CONT": allocate "DF_X64"/"DF_U64"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		rg.oid, rg.num_oids);
 out:
 	out->coao_op.co_rc = rc;
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
