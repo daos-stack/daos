@@ -2180,7 +2180,8 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 	bool			cont_h_bump = false;
 	struct dfs_mnt_hdls	*pool_hdl = NULL;
 	struct dfs_mnt_hdls	*cont_hdl = NULL;
-	daos_handle_t		poh, coh;
+	daos_handle_t		poh = {0};
+	daos_handle_t		coh = {0};
 	dfs_t			*dfs = NULL;
 	int			rc, rc2;
 

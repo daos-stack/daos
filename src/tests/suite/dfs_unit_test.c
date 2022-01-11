@@ -1117,7 +1117,7 @@ dfs_test_handles(void **state)
 	assert_int_equal(rc, 0);
 
 	/** open the file with "global" handle */
-	rc = dfs_open(dfs_l, NULL, "testfile", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL,
+	rc = dfs_open(dfs_g, NULL, "testfile", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL,
 		      &file);
 	assert_int_equal(rc, 0);
 	dfs_release(file);
