@@ -594,12 +594,10 @@ class DaosServer():
                              '--undef-value-errors=no']
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
-            fd = open(join(self._io_server_dir.name, 'daos_engine'), 'w')
-            fd.write('#!/bin/sh\n')
-            fd.write('export PATH=$REAL_PATH\n')
-            fd.write('exec valgrind {} daos_engine "$@"\n'.format(
-                ' '.join(valgrind_args)))
-            fd.close()
+            with open(join(self._io_server_dir.name, 'daos_engine'), 'w') as fd:
+                fd.write('#!/bin/sh\n')
+                fd.write('export PATH=$REAL_PATH\n')
+                fd.write('exec valgrind {} daos_engine "$@"\n'.format(' '.join(valgrind_args)))
 
             os.chmod(join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
@@ -617,9 +615,8 @@ class DaosServer():
         # nlt_server.yaml file in the current directory, but overwrite
         # the server log file with a temporary file so that multiple
         # server runs do not overwrite each other.
-        scfd = open(join(self_dir, 'nlt_server.yaml'), 'r')
-
-        scyaml = yaml.safe_load(scfd)
+        with open(join(self_dir, 'nlt_server.yaml'), 'r') as scfd:
+            scyaml = yaml.safe_load(scfd)
         if self.conf.args.server_debug:
             scyaml['control_log_mask'] = 'ERROR'
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
