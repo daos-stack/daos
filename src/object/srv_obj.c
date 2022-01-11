@@ -1690,7 +1690,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 again:
 	if (pin) {
-		rc = vos_dtx_pin(dth, false);
+		rc = vos_dtx_attach(dth, false);
 		if (rc != 0)
 			return rc;
 	}
@@ -1706,7 +1706,7 @@ again:
 			 * that will avoid race with the resent RPC during the
 			 * DTX refresh.
 			 */
-			rc1 = vos_dtx_pin(dth, false);
+			rc1 = vos_dtx_attach(dth, false);
 			if (rc1 != 0)
 				return -DER_INPROGRESS;
 		}
@@ -3154,7 +3154,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 
 again:
 	if (pin) {
-		rc = vos_dtx_pin(dth, false);
+		rc = vos_dtx_attach(dth, false);
 		if (rc != 0)
 			return rc;
 	}
@@ -3202,7 +3202,7 @@ again:
 			 * that will avoid race with the resent RPC during the
 			 * DTX refresh.
 			 */
-			rc1 = vos_dtx_pin(dth, false);
+			rc1 = vos_dtx_attach(dth, false);
 			if (rc1 != 0)
 				return -DER_INPROGRESS;
 		}
@@ -4214,7 +4214,7 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 again:
 	if (pin) {
-		rc = vos_dtx_pin(dth, false);
+		rc = vos_dtx_attach(dth, false);
 		if (rc != 0)
 			return rc;
 	}
@@ -4228,7 +4228,7 @@ again:
 		if (!dth->dth_pinned) {
 			int	rc1;
 
-			rc1 = vos_dtx_pin(dth, false);
+			rc1 = vos_dtx_attach(dth, false);
 			if (rc1 != 0)
 				return -DER_INPROGRESS;
 		}
@@ -4319,7 +4319,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	 * generate DTX entry for DTX recovery. Similarly for noop case.
 	 */
 	if (rc == 0 && (dth->dth_modification_cnt == 0 || !dth->dth_active))
-		rc = vos_dtx_pin(dth, true);
+		rc = vos_dtx_attach(dth, true);
 
 	rc = dtx_end(dth, ioc->ioc_coc, rc);
 

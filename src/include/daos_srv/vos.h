@@ -38,13 +38,21 @@ void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth);
 
 /**
- * Generate DTX entry for the given DTX.
+ * Generate DTX entry for the given DTX, and attach it to the DTX handle.
  *
  * \param dth		[IN]	The dtx handle
  * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
  */
 int
-vos_dtx_pin(struct dtx_handle *dth, bool persistent);
+vos_dtx_attach(struct dtx_handle *dth, bool persistent);
+
+/**
+ * Detach the DTX entry from the DTX handle.
+ *
+ * \param dth		[IN]	The dtx handle
+ */
+void
+vos_dtx_detach(struct dtx_handle *dth);
 
 /**
  * Check whether DTX entry attached to the DTX handle is still valid or not.
