@@ -577,7 +577,7 @@ func TestPoolSetProp(t *testing.T) {
 
 func TestPoolGetProp(t *testing.T) {
 	defaultReq := &PoolGetPropReq{
-		ID:         common.MockUUID(),
+		ID: common.MockUUID(),
 		Properties: []*PoolProperty{propWithVal("label", ""),
 			propWithVal("policy", "type=io_size")},
 	}
