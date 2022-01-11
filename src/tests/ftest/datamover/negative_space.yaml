@@ -3,13 +3,16 @@ hosts:
         - server-A
     test_clients:
         - client-B
-timeout: 300
+timeout: 180
 server_config:
-    name: daos_server
+   name: daos_server
+   servers:
+     scm_class: dcpm
+     scm_list: ["/dev/pmem0"]
 pool:
     mode: 146
     name: daos_server
-    scm_size: 5.1G
+    size: 5G
     control_method: dmg
 container:
     type: POSIX
@@ -19,11 +22,9 @@ ior:
         np: 1
     test_file: testFile
     flags: "-v -w -k"
-    block_size: '1K'
-    transfer_size: '1K'
+    block_size: '6G' # Over 5G
+    transfer_size: '1M'
     signature: 5
 dcp:
     client_processes:
         np: 3
-dfuse:
-    mount_dir: "/tmp/daos_dfuse"
