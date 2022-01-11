@@ -77,5 +77,3 @@ if [ -e /etc/fedora-release ]; then
 else
         dnf install maven
 fi
-
-dnf clean all
