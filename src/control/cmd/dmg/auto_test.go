@@ -180,24 +180,19 @@ hyperthreads: false
 `
 	)
 
-	var (
-		numa0 = uint(0)
-		numa1 = uint(1)
-	)
-
 	typicalAutoGenOutCfg := config.DefaultServer().
 		WithControlLogFile(defaultControlLogFile).
 		WithFabricProvider("ofi+verbs").
 		WithAccessPoints("hostX:10002").
 		WithNrHugePages(6144).
 		WithEngines(
-			engine.NewConfig().
+			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
 				WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, 0)).
 				WithFabricInterface("ib0").
 				WithFabricInterfacePort(defaultFiPort).
 				WithFabricProvider("ofi+verbs").
-				WithPinnedNumaNode(&numa0).
+				WithPinnedNumaNode(0).
 				WithStorage(
 					storage.NewTierConfig().
 						WithScmClass(storage.ClassDcpm.String()).
@@ -211,14 +206,14 @@ hyperthreads: false
 				WithStorageVosEnv("NVME").
 				WithTargetCount(12).
 				WithHelperStreamCount(2),
-			engine.NewConfig().
+			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
 				WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, 1)).
 				WithFabricInterface("ib1").
 				WithFabricInterfacePort(
 					int(defaultFiPort+defaultFiPortInterval)).
 				WithFabricProvider("ofi+verbs").
-				WithPinnedNumaNode(&numa1).
+				WithPinnedNumaNode(1).
 				WithStorage(
 					storage.NewTierConfig().
 						WithScmClass(storage.ClassDcpm.String()).
