@@ -422,11 +422,8 @@ dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
 		rec->rec_off = umem_ptr2off(&tins->ti_umm, dce_new);
 		D_FREE(dce_old);
 	} else if (!dce_old->dce_reindex) {
-		D_ASSERTF(dce_new->dce_reindex, "Repeatedly commit DTX "
-			  DF_DTI": old is %s, new is %s\n",
-			  DP_DTI(&DCE_XID(dce_new)),
-			  dce_old->dce_resent ? "resent" : "original",
-			  dce_new->dce_resent ? "resent" : "original");
+		D_ASSERTF(dce_new->dce_reindex, "Repeatedly commit DTX "DF_DTI"\n",
+			  DP_DTI(&DCE_XID(dce_new)));
 		dce_new->dce_exist = 1;
 	}
 
@@ -757,8 +754,7 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 static int
 vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
-		   daos_epoch_t epoch, bool resent,
-		   struct vos_dtx_cmt_ent **dce_p,
+		   daos_epoch_t epoch, struct vos_dtx_cmt_ent **dce_p,
 		   struct vos_dtx_act_ent **dae_p,
 		   bool *rm_cos, bool *fatal)
 {
@@ -827,7 +823,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		DCE_XID(dce) = DAE_XID(dae);
 		DCE_EPOCH(dce) = DAE_EPOCH(dae);
 		DCE_HANDLE_TIME(dce) = dae->dae_start_time;
-		dce->dce_resent = dae->dae_resent;
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
 
@@ -836,7 +831,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		DCE_XID(dce) = *dti;
 		DCE_EPOCH(dce) = dth->dth_epoch;
 		DCE_HANDLE_TIME(dce) = crt_hlc_get();
-		dce->dce_resent = resent;
 	}
 
 	d_iov_set(&riov, dce, sizeof(*dce));
@@ -965,7 +959,7 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 
 	rc = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch, &dae);
 	if (rc != 0) {
-		/** The array is full, need to commit some transactions first */
+		/* The array is full, need to commit some transactions first */
 		if (rc == -DER_BUSY)
 			return -DER_INPROGRESS;
 		return rc;
@@ -979,9 +973,6 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	DAE_EPOCH(dae) = dth->dth_epoch;
 	DAE_FLAGS(dae) = dth->dth_flags;
 	DAE_VER(dae) = dth->dth_ver;
-
-	if (dth->dth_resent)
-		dae->dae_resent = 1;
 
 	if (dth->dth_mbs != NULL) {
 		DAE_TGT_CNT(dae) = dth->dth_mbs->dm_tgt_cnt;
@@ -1589,9 +1580,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 
 	if (dth->dth_solo) {
 		rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
-					     dth->dth_epoch,
-					     dth->dth_resent ? true : false,
-					     NULL, NULL, dce_p);
+					     dth->dth_epoch, NULL, NULL, dce_p);
 		dth->dth_active = 0;
 		dth->dth_pinned = 0;
 		if (rc >= 0) {
@@ -1732,8 +1721,7 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs,
-	      struct dtx_cos_key *dck, bool for_resent)
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
@@ -1799,10 +1787,10 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 				return -DER_MISMATCH;
 		}
 
-		if (dae->dae_prepared || !for_resent)
+		if (dae->dae_prepared)
 			return DTX_ST_PREPARED;
 
-		return -DER_INPROGRESS;
+		return DTX_ST_INITED;
 	}
 
 	if (rc == -DER_NONEXIST) {
@@ -1821,7 +1809,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		}
 	}
 
-	if (rc == -DER_NONEXIST && for_resent && cont->vc_reindex_cmt_dtx)
+	if (rc == -DER_NONEXIST && cont->vc_reindex_cmt_dtx)
 		rc = -DER_INPROGRESS;
 
 	return rc;
@@ -1829,7 +1817,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
-			int count, daos_epoch_t epoch, bool resent, bool rm_cos[],
+			int count, daos_epoch_t epoch, bool rm_cos[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces)
 {
 	struct vos_cont_df		*cont_df = cont->vc_cont_df;
@@ -1865,10 +1853,9 @@ again:
 	     i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
-		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, resent, &dce,
+		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce,
 					daes != NULL ? &daes[cur] : NULL,
-					rm_cos != NULL ? &rm_cos[cur] : NULL,
-					&fatal);
+					rm_cos != NULL ? &rm_cos[cur] : NULL, &fatal);
 		if (dces != NULL)
 			dces[cur] = dce;
 
@@ -2052,8 +2039,7 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]
 	/* Commit multiple DTXs via single PMDK transaction. */
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
-		committed = vos_dtx_commit_internal(cont, dtis, count, 0,
-						    false, rm_cos, daes, dces);
+		committed = vos_dtx_commit_internal(cont, dtis, count, 0, rm_cos, daes, dces);
 		rc = umem_tx_end(vos_cont2umm(cont),
 				 committed > 0 ? 0 : committed);
 		if (rc == 0)
@@ -2219,7 +2205,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	if (dbd == NULL || dbd->dbd_count == 0)
 		return 0;
 
-	/** Take the opportunity to free some memory if we can */
+	/* Take the opportunity to free some memory if we can */
 	lrua_array_aggregate(cont->vc_dtx_array);
 
 	rc = umem_tx_begin(umm, NULL);
