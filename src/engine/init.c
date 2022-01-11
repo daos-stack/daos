@@ -284,10 +284,10 @@ retry:
 	}
 
 	if (tgt_nr != nr) {
-		D_PRINT("%d target XS(xstream) requested (#cores %d); "
-			"use (%d) target XS\n", nr, ncores, tgt_nr);
 		if (!oversubscribe)
 			return -DER_INVAL;
+		D_PRINT("%d target XS(xstream) requested (#cores %d); "
+			"use (%d) target XS\n", nr, ncores, tgt_nr);
 	}
 
 	if (dss_tgt_offload_xs_nr % tgt_nr != 0)
@@ -381,8 +381,15 @@ dss_topo_init()
 	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
 	free(cpuset);
 
-	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
-				    tgt_oversub);
+	rc = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
+			    tgt_oversub);
+	if (rc < 0) {
+		D_ERROR("%d cores is unable to satisfy %d target XS(xstream), "
+			"enable DAOS_TARGET_OVERSUBSCRIBE or reduce target XS.",
+			dss_num_cores_numa_node, nr_threads);
+		return rc;
+	}
+	dss_tgt_nr = rc;
 	if (dss_core_offset >= dss_num_cores_numa_node) {
 		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
 			"should within range [0, %d]", dss_core_offset,
