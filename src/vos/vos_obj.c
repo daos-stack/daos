@@ -488,8 +488,19 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (punch_obj)
 			rc = obj_punch(coh, obj, epr.epr_hi, bound, flags,
 				       ts_set);
-		if (obj != NULL)
+		if (obj != NULL) {
+			if (rc == 0 && epr.epr_hi > obj->obj_df->vo_max_write) {
+				if (DAOS_ON_VALGRIND)
+					rc = umem_tx_xadd_ptr(vos_cont2umm(cont),
+							      &obj->obj_df->vo_max_write,
+							      sizeof(obj->obj_df->vo_max_write),
+							      POBJ_XADD_NO_SNAPSHOT);
+				if (rc == 0)
+					obj->obj_df->vo_max_write = epr.epr_hi;
+			}
+
 			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
+		}
 	}
 
 reset:
@@ -503,15 +514,6 @@ reset:
 			bound = DAOS_EPOCH_MAX;
 		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound))
 			rc = -DER_TX_RESTART;
-	}
-
-	if (rc == 0 && epr.epr_hi > obj->obj_df->vo_max_write) {
-		if (DAOS_ON_VALGRIND)
-			rc = umem_tx_xadd_ptr(vos_cont2umm(cont), &obj->obj_df->vo_max_write,
-					      sizeof(obj->obj_df->vo_max_write),
-					      POBJ_XADD_NO_SNAPSHOT);
-		if (rc == 0)
-			obj->obj_df->vo_max_write = epr.epr_hi;
 	}
 
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
