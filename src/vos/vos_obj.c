@@ -465,8 +465,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			D_GOTO(reset, rc = -DER_NOMEM);
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					     dth->dth_dti_cos_count,
-					     0, false, NULL, daes, dces);
+					     dth->dth_dti_cos_count, 0, NULL, daes, dces);
 		if (rc <= 0)
 			D_FREE(daes);
 	}
