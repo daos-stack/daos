@@ -1252,7 +1252,8 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	 */
 	vis_flag = oiter->it_flags & VOS_IT_RECX_COVERED;
 	if (vis_flag == VOS_IT_RECX_VISIBLE) {
-		D_ASSERT(oiter->it_epc_expr == VOS_IT_EPC_RR);
+		D_ASSERT(oiter->it_epc_expr == VOS_IT_EPC_RR ||
+			 oiter->it_epc_expr == VOS_IT_EPC_RE);
 		return -DER_NONEXIST;
 	}
 
