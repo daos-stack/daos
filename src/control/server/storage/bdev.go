@@ -13,6 +13,7 @@ package storage
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -33,21 +34,27 @@ const BdevPciAddrSep = " "
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
 type NvmeDevState uint32
 
+// NvmeDevState values representing individual bit-flags.
+const (
+	NvmeStatePlugged  NvmeDevState = C.NVME_DEV_FL_PLUGGED
+	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
+	NvmeStateInUse    NvmeDevState = C.NVME_DEV_FL_INUSE
+	NvmeStateIdentify NvmeDevState = C.NVME_DEV_FL_IDENTIFY
+)
+
 // IsNew returns true if SSD is not in use by DAOS.
 func (bs NvmeDevState) IsNew() bool {
-	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY == 0 &&
-		bs&C.NVME_DEV_FL_INUSE == 0)
+	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty == 0 && bs&NvmeStateInUse == 0
 }
 
 // IsNormal returns true if SSD is in a normal, non-faulty state.
 func (bs NvmeDevState) IsNormal() bool {
-	return (bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY == 0 &&
-		bs&C.NVME_DEV_FL_INUSE != 0)
+	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty == 0 && bs&NvmeStateInUse != 0
 }
 
 // IsFaulty returns true if SSD is in a faulty state.
 func (bs NvmeDevState) IsFaulty() bool {
-	return bs&C.NVME_DEV_FL_PLUGGED != 0 && bs&C.NVME_DEV_FL_FAULTY != 0
+	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty != 0
 }
 
 // StatusString summarizes the device status.
@@ -337,14 +344,16 @@ type (
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
 	BdevWriteConfigRequest struct {
 		pbin.ForwardableRequest
-		ConfigOutputPath string
-		OwnerUID         int
-		OwnerGID         int
-		TierProps        []BdevTierProperties
-		VMDEnabled       bool
-		HotplugEnabled   bool
-		Hostname         string
-		BdevCache        *BdevScanResponse
+		ConfigOutputPath  string
+		OwnerUID          int
+		OwnerGID          int
+		TierProps         []BdevTierProperties
+		VMDEnabled        bool
+		HotplugEnabled    bool
+		HotplugBusidBegin uint8
+		HotplugBusidEnd   uint8
+		Hostname          string
+		BdevCache         *BdevScanResponse
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
@@ -410,6 +419,41 @@ type (
 		Results []NVMeDeviceFirmwareUpdateResult
 	}
 )
+
+// getNumaNodeBusidRange sets range parameters in the input request either to user configured
+// values if provided in the server config file, or automatically derive them by querying
+// hardware configuration.
+func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numaNodeIdx uint) (uint64, uint64, error) {
+	topo, err := getTopology(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	if topo == nil {
+		return 0, 0, errors.New("nil topology")
+	}
+
+	// Take the lowest and highest buses in all of the ranges for an engine following the
+	// assumption that bus-IDs assigned to each NUMA node will always be contiguous.
+	// TODO: add each range individually if unsure about assumption
+
+	nodes := topo.NUMANodes
+	if len(nodes) <= int(numaNodeIdx) {
+		return 0, 0, errors.Errorf("insufficient numa nodes in topology, want %d got %d",
+			numaNodeIdx+1, len(nodes))
+	}
+
+	buses := nodes[numaNodeIdx].PCIBuses
+	if len(buses) == 0 {
+		return 0, 0, errors.Errorf("no PCI buses found on numa node %d in topology",
+			numaNodeIdx)
+	}
+
+	lowAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[0].LowAddress
+	highAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[len(buses)-1].HighAddress
+
+	return common.GetRangeLimits(fmt.Sprintf("0x%s-0x%s", lowAddr.Bus, highAddr.Bus),
+		common.PCIAddrBusBitSize)
+}
 
 type BdevForwarder struct {
 	BdevAdminForwarder

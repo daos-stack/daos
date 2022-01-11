@@ -7,6 +7,9 @@
 package storage
 
 import (
+	"context"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -115,6 +118,135 @@ func Test_scanBdevs(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResp, gotResp, defBdevCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func Test_BdevWriteRequestFromConfig(t *testing.T) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		cfg       *Config
+		getTopoFn topologyGetter
+		expReq    BdevWriteConfigRequest
+		expErr    error
+	}{
+		"nil config": {
+			expErr: errors.New("nil config"),
+		},
+		"nil topo function": {
+			cfg:    &Config{},
+			expErr: errors.New("nil GetTopology"),
+		},
+		"no bdev configs": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithScmClass(ClassDcpm.String()).
+						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
+						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID:       os.Geteuid(),
+				OwnerGID:       os.Getegid(),
+				TierProps:      []BdevTierProperties{},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+			},
+		},
+		"hotplug disabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithScmClass(ClassDcpm.String()).
+						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
+						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
+					NewTierConfig().
+						WithBdevClass(ClassNvme.String()).
+						WithBdevBusidRange("0x00-0x7f"),
+				},
+			},
+			getTopoFn: MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+			},
+		},
+		"range specified": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithScmClass(ClassDcpm.String()).
+						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
+						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
+					NewTierConfig().
+						WithBdevClass(ClassNvme.String()).
+						WithBdevBusidRange("0x70-0x7f"),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:          hostname,
+				HotplugEnabled:    true,
+				HotplugBusidBegin: 0x70,
+				HotplugBusidEnd:   0x7f,
+			},
+		},
+		"range unspecified": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					NewTierConfig().
+						WithScmClass(ClassDcpm.String()).
+						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
+						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
+					NewTierConfig().
+						WithBdevClass(ClassNvme.String()),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:        hostname,
+				HotplugEnabled:  true,
+				HotplugBusidEnd: 0x07,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			gotReq, gotErr := BdevWriteConfigRequestFromConfig(context.TODO(), log, tc.cfg,
+				tc.getTopoFn)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expReq, gotReq, defBdevCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected generated request (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
