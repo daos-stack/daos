@@ -439,13 +439,16 @@ type (
 	// NvmeUnbindResp contains the response from a storage nvme-unbind request.
 	NvmeUnbindResp struct {
 		HostErrorsResp
-		//HostStorage HostStorageMap
 	}
 )
 
 // StorageNvmeUnbind unbinds NVMe SSD from kernel driver and binds to user-space driver on single
 // server.
 func StorageNvmeUnbind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeUnbindReq) (*NvmeUnbindResp, error) {
+	if _, err := common.NewPCIAddress(req.PCIAddr); err != nil {
+		return nil, errors.Wrap(err, "invalid pci address in request")
+	}
+
 	pbReq := new(ctlpb.NvmeUnbindReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, err
@@ -465,11 +468,6 @@ func StorageNvmeUnbind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeUnb
 			if err := snur.addHostError(hostResp.Addr, hostResp.Error); err != nil {
 				return nil, err
 			}
-			//			continue
-			//		}
-			//
-			//		if err := sfr.addHostResponse(hostResp); err != nil {
-			//			return nil, err
 		}
 	}
 

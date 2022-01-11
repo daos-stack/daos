@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -307,9 +308,6 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				}
 			}
 
-			if diff := cmp.Diff(tc.expResp, resp, defStorageScanCmpOpts...); diff != "" {
-				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-			}
 			if diff := cmp.Diff(tc.expResp, resp, defStorageScanCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
@@ -1755,6 +1753,89 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
 						tc.expResp.Mrets, resp.Mrets)
 				}
+			}
+		})
+	}
+}
+
+func TestServer_CtlSvc_StorageNvmeUnbind(t *testing.T) {
+	usrCurrent, _ := user.Current()
+	username := usrCurrent.Username
+
+	for name, tc := range map[string]struct {
+		req         *ctlpb.NvmeUnbindReq
+		bmbc        *bdev.MockBackendConfig
+		expErr      error
+		expResp     *ctlpb.NvmeUnbindResp
+		expPrepCall *storage.BdevPrepareRequest
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"failure": {
+			req: &ctlpb.NvmeUnbindReq{
+				PciAddr: common.MockPCIAddr(1),
+			},
+			bmbc: &bdev.MockBackendConfig{
+				PrepareErr: errors.New("failure"),
+			},
+			expPrepCall: &storage.BdevPrepareRequest{
+				TargetUser:   username,
+				PCIAllowList: common.MockPCIAddr(1),
+			},
+			expResp: &ctlpb.NvmeUnbindResp{
+				State: &ctlpb.ResponseState{
+					Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+					Error:  "nvme unbind: failure",
+				},
+			},
+		},
+		"success": {
+			req: &ctlpb.NvmeUnbindReq{
+				PciAddr: common.MockPCIAddr(1),
+			},
+			bmbc: &bdev.MockBackendConfig{},
+			expPrepCall: &storage.BdevPrepareRequest{
+				TargetUser:   username,
+				PCIAllowList: common.MockPCIAddr(1),
+			},
+			expResp: &ctlpb.NvmeUnbindResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mbb := bdev.NewMockBackend(tc.bmbc)
+			mbp := bdev.NewProvider(log, mbb)
+			scs := NewMockStorageControlService(log, nil, nil,
+				scm.NewMockProvider(log, nil, nil), mbp)
+			cs := &ControlService{StorageControlService: *scs}
+
+			resp, err := cs.StorageNvmeUnbind(context.TODO(), tc.req)
+
+			mbb.RLock()
+			if tc.expPrepCall == nil {
+				if len(mbb.PrepareCalls) != 0 {
+					t.Fatal("unexpected number of prepared calls")
+				}
+			} else {
+				if len(mbb.PrepareCalls) != 1 {
+					t.Fatal("unexpected number of prepared calls")
+				}
+				if diff := cmp.Diff(*tc.expPrepCall, mbb.PrepareCalls[0]); diff != "" {
+					t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+				}
+			}
+			mbb.RUnlock()
+
+			common.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

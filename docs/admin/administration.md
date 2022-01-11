@@ -513,6 +513,29 @@ will remain evicted until device replacement occurs).
     Full NVMe hot plug capability will be available and supported in DAOS 2.2 release.
     Use is currently intended for testing only and is not supported for production.
 
+- Unbind a newly added (hot-inserted) SSD from the kernel and bind instead to user-space
+driver so that the device can be used with DAOS:
+```bash
+$ dmg storage nvme-unbind --help
+Usage:
+  dmg [OPTIONS] storage nvme-unbind [nvme-unbind-OPTIONS]
+
+...
+
+[nvme-unbind command options]
+      -a, --pci-address= NVMe SSD PCI address to unbind.
+```
+
+To unbind a newly added NVMe SSD on a single host, run the following command (replace
+SSD PCI address and hostname with appropriate values):
+```bash
+$ dmg storage nvme-unbind -a 0000:84:00.0 -l wolf-167
+Command completed successfully
+```
+
+The device will now be bound to a user-space driver (e.g. VFIO) and can be accessed by
+DAOS I/O engine processes.
+
 - Replace an excluded SSD with a New Device:
 ```bash
 $ dmg storage replace nvme --help
