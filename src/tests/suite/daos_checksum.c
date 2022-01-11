@@ -16,7 +16,7 @@
 #include <daos/container.h>
 #include <daos_srv/daos_engine.h>
 
-#define EC_CSUM_OC	(DAOS_OC_EC_K2P2_L32K)
+#define EC_CSUM_OC	OC_EC_2P2G1
 
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill);
@@ -166,7 +166,7 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	       int chunksize, daos_oclass_id_t oclass)
 {
 	char		str[37];
-	daos_prop_t	*props = daos_prop_alloc(3);
+	daos_prop_t	*props = daos_prop_alloc(4);
 	int		 rc;
 
 	assert_non_null(props);
@@ -177,6 +177,8 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 					DAOS_PROP_CO_CSUM_SV_OFF;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	props->dpp_entries[2].dpe_val = chunksize != 0 ? chunksize : 1024*16;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[3].dpe_val = 1 << 15;
 
 	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	daos_prop_free(props);

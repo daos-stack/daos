@@ -34,8 +34,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
-	err := cfg.Validate(log)
+func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
+	err := cfg.Validate(ctx, log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
@@ -412,15 +412,23 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *config.Server) error {
-	faultDomain, err := processConfig(log, cfg)
-	if err != nil {
-		return err
-	}
-
 	// Create the root context here. All contexts should inherit from this one so
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
+
+	// Add netdetect context to the root context to be used where required.
+	ctxNetdetect, err := netdetect.Init(ctx)
+	if err != nil {
+		return err
+	}
+	ctx = ctxNetdetect
+	defer netdetect.CleanUp(ctx)
+
+	faultDomain, err := processConfig(ctx, log, cfg)
+	if err != nil {
+		return err
+	}
 
 	srv, err := newServer(ctx, log, cfg, faultDomain)
 	if err != nil {

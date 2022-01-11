@@ -116,90 +116,90 @@ func TestServer_getSrxSetting(t *testing.T) {
 		},
 		"not set defaults to cfg value": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig(),
-				engine.NewConfig(),
+				engine.MockConfig(),
+				engine.MockConfig(),
 			),
 			expSetting: int32(common.BoolAsInt(!defCfg.Fabric.DisableSRX)),
 		},
 		"set to 0 in both (single)": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
 			),
 			expSetting: 0,
 		},
 		"set to 1 in both (single)": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
 			),
 			expSetting: 1,
 		},
 		"set to 0 in both (multi)": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
 			),
 			expSetting: 0,
 		},
 		"set to 1 in both (multi)": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
-				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
 			),
 			expSetting: 1,
 		},
 		"set twice; first value used": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0", "FI_OFI_RXM_USE_SRX=1"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0", "FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"set in both; different values": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"set in first; no vars in second": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig(),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig(),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"no vars in first; set in second": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig(),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig(),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"set in first; unset in second": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig().WithEnvVars("FOO=bar"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FOO=bar"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"unset in first; set in second": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FOO=bar"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FOO=bar"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"wonky value": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=on"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=on"),
 			),
 			expErr: errors.New("on"),
 		},
 		"set in env_pass_through": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvPassThrough("FI_OFI_RXM_USE_SRX"),
+				engine.MockConfig().WithEnvPassThrough("FI_OFI_RXM_USE_SRX"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},

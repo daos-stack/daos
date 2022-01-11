@@ -6,7 +6,6 @@
 '''
 import time
 from ec_utils import ErasureCodeSingle
-from apricot import skipForTicket
 
 class EcodDisabledRebuildSingle(ErasureCodeSingle):
     # pylint: disable=too-many-ancestors
@@ -15,7 +14,6 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
             type, after killing servers when pool rebuild is off.
     :avocado: recursive
     """
-    @skipForTicket("DAOS-9191")
     def test_ec_degrade_single_value(self):
         """Jira ID: DAOS-7314.
 

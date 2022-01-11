@@ -105,14 +105,14 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			logCmd.setLog(log)
 		}
 
-		if opts.ConfigPath == "" {
-			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
-			if _, err := os.Stat(defaultConfigPath); err == nil {
-				opts.ConfigPath = defaultConfigPath
-			}
-		}
-
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
+			if opts.ConfigPath == "" {
+				defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
+				if _, err := os.Stat(defaultConfigPath); err == nil {
+					opts.ConfigPath = defaultConfigPath
+				}
+			}
+
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
@@ -123,6 +123,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 					return errors.Wrap(err, "failed to set CLI config overrides")
 				}
 			}
+		} else if opts.ConfigPath != "" {
+			return errors.Errorf("DAOS Server config has been supplied but this command will not use it")
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {
