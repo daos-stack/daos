@@ -251,10 +251,11 @@ func checkRet(retPtr *C.struct_ret_t, failMsg string) error {
 	}
 
 	if retPtr.rc != 0 {
+		reterr := errors.Wrap(FaultBindingFailed(int(retPtr.rc),
+			C.GoString(&retPtr.info[0])), failMsg)
 		clean(retPtr)
 
-		return errors.Wrap(FaultBindingFailed(int(retPtr.rc),
-			C.GoString(&retPtr.info[0])), failMsg)
+		return reterr
 	}
 
 	return nil

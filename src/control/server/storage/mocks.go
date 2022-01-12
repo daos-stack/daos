@@ -13,6 +13,7 @@ package storage
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -207,4 +209,29 @@ func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys System
 	p.Scm = scm
 	p.bdev = bdev
 	return p
+}
+
+func MockGetTopology(context.Context) (*hardware.Topology, error) {
+	return &hardware.Topology{
+		NUMANodes: map[uint]*hardware.NUMANode{
+			0: hardware.MockNUMANode(0, 14).
+				WithPCIBuses(
+					[]*hardware.PCIBus{
+						{
+							LowAddress:  *hardware.MustNewPCIAddress("0000:00:00.0"),
+							HighAddress: *hardware.MustNewPCIAddress("0000:07:00.0"),
+						},
+					},
+				),
+			1: hardware.MockNUMANode(0, 14).
+				WithPCIBuses(
+					[]*hardware.PCIBus{
+						{
+							LowAddress:  *hardware.MustNewPCIAddress("0000:80:00.0"),
+							HighAddress: *hardware.MustNewPCIAddress("0000:8f:00.0"),
+						},
+					},
+				),
+		},
+	}, nil
 }

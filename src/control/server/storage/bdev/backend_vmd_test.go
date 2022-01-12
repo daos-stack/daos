@@ -16,12 +16,13 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func addrListFromStrings(t *testing.T, addrs ...string) *common.PCIAddressSet {
-	al, err := common.NewPCIAddressSet(addrs...)
+func addrListFromStrings(t *testing.T, addrs ...string) *hardware.PCIAddressSet {
+	al, err := hardware.NewPCIAddressSet(addrs...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +30,7 @@ func addrListFromStrings(t *testing.T, addrs ...string) *common.PCIAddressSet {
 	return al
 }
 
-func mockAddrList(t *testing.T, idxs ...int) *common.PCIAddressSet {
+func mockAddrList(t *testing.T, idxs ...int) *hardware.PCIAddressSet {
 	t.Helper()
 	var addrs []string
 
@@ -53,9 +54,9 @@ func TestBackend_substituteVMDAddresses(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
-		inAddrs     *common.PCIAddressSet
+		inAddrs     *hardware.PCIAddressSet
 		bdevCache   *storage.BdevScanResponse
-		expOutAddrs *common.PCIAddressSet
+		expOutAddrs *hardware.PCIAddressSet
 		expErr      error
 	}{
 		"one vmd requested; no backing devices": {
@@ -124,7 +125,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		inReq      *storage.BdevPrepareRequest
-		inVmdAddrs *common.PCIAddressSet
+		inVmdAddrs *hardware.PCIAddressSet
 		expOutReq  *storage.BdevPrepareRequest
 		expErr     error
 	}{
@@ -268,7 +269,7 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
 			},
-			detectVMD: func() (*common.PCIAddressSet, error) { return nil, errors.New("test") },
+			detectVMD: func() (*hardware.PCIAddressSet, error) { return nil, errors.New("test") },
 			expErr:    errors.New("test"),
 		},
 		"vmd enabled; no vmds detected": {
@@ -277,7 +278,7 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
 			},
-			detectVMD: func() (*common.PCIAddressSet, error) { return nil, nil },
+			detectVMD: func() (*hardware.PCIAddressSet, error) { return nil, nil },
 		},
 		"vmd enabled; vmds detected": {
 			inReq: &storage.BdevPrepareRequest{
@@ -285,8 +286,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
 			},
-			detectVMD: func() (*common.PCIAddressSet, error) {
-				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
+			detectVMD: func() (*hardware.PCIAddressSet, error) {
+				al, _ := hardware.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
 				return al, nil
 			},
 			expOutReq: &storage.BdevPrepareRequest{
@@ -304,8 +305,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				TargetUser:    username,
 				PCIAllowList:  common.MockPCIAddr(1),
 			},
-			detectVMD: func() (*common.PCIAddressSet, error) {
-				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
+			detectVMD: func() (*hardware.PCIAddressSet, error) {
+				al, _ := hardware.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
 				return al, nil
 			},
 			expOutReq: &storage.BdevPrepareRequest{
@@ -322,8 +323,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 				TargetUser:    username,
 				PCIBlockList:  common.MockPCIAddr(1),
 			},
-			detectVMD: func() (*common.PCIAddressSet, error) {
-				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
+			detectVMD: func() (*hardware.PCIAddressSet, error) {
+				al, _ := hardware.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
 				return al, nil
 			},
 			expOutReq: &storage.BdevPrepareRequest{
@@ -342,8 +343,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 					common.MockPCIAddr(1), common.MockPCIAddr(2),
 				}, " "),
 			},
-			detectVMD: func() (*common.PCIAddressSet, error) {
-				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
+			detectVMD: func() (*hardware.PCIAddressSet, error) {
+				al, _ := hardware.NewPCIAddressSet(common.MockPCIAddr(1), common.MockPCIAddr(2))
 				return al, nil
 			},
 		},
@@ -356,8 +357,8 @@ func TestBackend_getVMDPrepReq(t *testing.T) {
 					common.MockPCIAddr(1), common.MockPCIAddr(2),
 				}, " "),
 			},
-			detectVMD: func() (*common.PCIAddressSet, error) {
-				al, _ := common.NewPCIAddressSet(common.MockPCIAddr(3), common.MockPCIAddr(4))
+			detectVMD: func() (*hardware.PCIAddressSet, error) {
+				al, _ := hardware.NewPCIAddressSet(common.MockPCIAddr(3), common.MockPCIAddr(4))
 				return al, nil
 			},
 		},
