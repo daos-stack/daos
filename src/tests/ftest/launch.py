@@ -346,11 +346,15 @@ def run_command(cmd):
     """
     print("Running {}".format(" ".join(cmd)))
 
-    process = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        universal_newlines=True)
-    stdout, _ = process.communicate()
-    retcode = process.poll()
+    try:
+        # pylint: disable=consider-using-with
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            universal_newlines=True)
+        stdout, _ = process.communicate()
+        retcode = process.poll()
+    except Exception as error:
+        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
     if retcode:
         raise RuntimeError(
             "Error executing '{}' (rc={}):\n\tOutput:\n{}".format(" ".join(cmd), retcode, stdout))
