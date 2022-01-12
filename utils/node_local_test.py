@@ -818,6 +818,7 @@ class DaosServer():
             entry['message'] = message
             self.conf.wf.issues.append(entry)
             self._add_test_case('server_stop', failure=message)
+        start = time.time()
         rc = self.run_dmg(['system', 'stop'])
         if rc.returncode != 0:
             print(rc)
@@ -831,8 +832,6 @@ class DaosServer():
             self.conf.wf.issues.append(entry)
         if not self.valgrind:
             assert rc.returncode == 0, rc
-
-        start = time.time()
         while True:
             time.sleep(self.stop_sleep_time)
             if self._check_system_state(['stopped', 'errored']):
