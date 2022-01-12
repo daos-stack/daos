@@ -6,7 +6,6 @@
 '''
 from data_mover_test_base import DataMoverTestBase
 from os.path import join
-from apricot import skipForTicket
 
 
 class DmvrNegativeTest(DataMoverTestBase):
@@ -241,46 +240,6 @@ class DmvrNegativeTest(DataMoverTestBase):
             "DAOS_UUID", "/", pool1, cont1,
             "POSIX", "/fake/fake/fake",
             expected_rc=1)
-
-    def test_dm_negative_space_dcp(self):
-        """Jira ID: DAOS-5515
-        Test Description:
-            DAOS-5515: destination pool does not have enough space.
-            DAOS-6387: posix filesystem does not have enough space.
-        :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
-        :avocado: tags=dm_negative,dm_negative_space_dcp
-        """
-        self.set_tool("DCP")
-
-        # mount small tmpfs filesystem on posix path, using size required sudo
-        dst_posix_path = self.new_posix_test_path(mount_dir=True)
-
-        # Create a large test file in POSIX
-        block_size_large = self.params.get(
-            "block_size_large", "/run/ior/*")
-        self.ior_cmd.block_size.update(block_size_large)
-        self.run_ior_with_params("POSIX", self.posix_test_file)
-
-        # Create destination test pool and container
-        pool1 = self.create_pool()
-        cont1 = self.create_cont(pool1)
-
-        # Try to copy, and expect a proper error message.
-        self.run_datamover(
-            self.test_id + " (dst pool out of space)",
-            "POSIX", self.posix_local_test_paths[0], None, None,
-            "DAOS_UUID", "/", pool1, cont1,
-            expected_rc=1,
-            expected_output=[self.MFU_ERR_DCP_COPY, "errno=28"])
-
-        # Try to copy. For now, we expect this to just abort.
-        self.run_datamover(
-            self.test_id + " (dst posix out of space)",
-            "POSIX", self.posix_local_test_paths[0], None, None,
-            "POSIX", dst_posix_path,
-            expected_rc=255,
-            expected_err=["errno=28"])
 
     def test_dm_negative_error_check_dcp(self):
         """Jira ID: DAOS-5515

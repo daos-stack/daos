@@ -40,7 +40,7 @@ type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
 const (
 	iommuPath        = "/sys/class/iommu"
-	minHugePageCount = 0
+	minHugePageCount = 128
 )
 
 func cfgHasBdevs(cfg *config.Server) bool {
@@ -134,21 +134,13 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 		return 0, nil
 	}
 
-	ctx, err := netdetect.Init(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer netdetect.CleanUp(ctx)
-
-	// On a NUMA-aware system, emit a message when the configuration may be
-	// sub-optimal.
 	numaCount := netdetect.NumNumaNodes(ctx)
 	if numaCount > 0 && engineCount > numaCount {
-		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected",
+		log.Infof("NOTICE: Detected %d NUMA node(s); %d-engine config may not perform as expected",
 			numaCount, engineCount)
 	}
 
-	netDevClass, err := cfg.CheckFabric(ctx)
+	netDevClass, err := cfg.CheckFabric(ctx, log)
 	if err != nil {
 		return 0, errors.Wrap(err, "validate fabric config")
 	}
@@ -182,7 +174,13 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 	}
 	// The config value is intended to be per-engine, so we need to adjust
 	// based on the number of engines.
-	prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
+	if srv.cfg.NrHugepages > 0 {
+		if len(srv.cfg.Engines) == 0 {
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		} else {
+			prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
+		}
+	}
 	if hasBdevs {
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
@@ -217,14 +215,14 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 	}
 
 	// Double-check that we got the requested number of huge pages after prepare.
-	if hugePages.Free < prepReq.HugePageCount {
+	if srv.cfg.NrHugepages > 0 && hugePages.Free < prepReq.HugePageCount {
 		return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
 	}
 
 	for _, engineCfg := range srv.cfg.Engines {
 		// Calculate mem_size per I/O engine (in MB)
 		PageSizeMb := hugePages.PageSizeKb >> 10
-		engineCfg.MemSize = prepReq.HugePageCount / len(srv.cfg.Engines)
+		engineCfg.MemSize = srv.cfg.NrHugepages
 		engineCfg.MemSize *= PageSizeMb
 		// Pass hugepage size, do not assume 2MB is used
 		engineCfg.HugePageSz = PageSizeMb

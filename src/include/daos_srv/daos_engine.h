@@ -498,6 +498,7 @@ int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
 int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
+int __attribute__((weak)) dss_offload_exec(int (*func)(void *), void *arg);
 
 /*
  * If server wants to create ULTs periodically, it should call this special
@@ -735,6 +736,7 @@ struct dss_enum_arg {
 			int			kds_len;
 			d_sg_list_t	       *sgl;
 			d_iov_t			csum_iov;
+			uint32_t		ec_cell_sz;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */

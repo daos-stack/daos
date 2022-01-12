@@ -43,7 +43,7 @@ sudo bash -c "set -ex
 cat <<EOF > /etc/sysctl.d/10-dmesg-for-all.conf
 kernel.dmesg_restrict=0
 EOF
-# For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for sockets
+# For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for tcp
 cat <<EOF > /etc/sysctl.d/10-daos-verbs.conf
 net.ipv4.conf.all.accept_local=1
 net.ipv4.conf.all.arp_ignore=2

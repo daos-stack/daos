@@ -20,6 +20,7 @@
 """Fake SCons"""
 
 __all__ = ['Script',
+           'Action',
            'Variables',
            'Builder',
            'Errors',
