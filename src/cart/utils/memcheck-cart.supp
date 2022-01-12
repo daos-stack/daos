@@ -31,8 +31,6 @@
    socketcall.sendto(msg)
    ...
    fun:send
-   ...
-   fun:sock_pe_progress_thread
 }
 {
    server-verbs-0

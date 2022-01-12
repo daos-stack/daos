@@ -4223,6 +4223,7 @@ def run(wf, args):
                 time.sleep(5)
                 cmd = ['cont', 'list', pool.id()]
                 run_daos_cmd(conf, cmd, valgrind=False)
+            time.sleep(5)
 
     # If the perf-check option is given then re-start everything without much
     # debugging enabled and run some microbenchmarks to give numbers for use
