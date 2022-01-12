@@ -15,7 +15,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -355,12 +354,11 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		// Applying the bus-id range limits hotplug activity of engine to a set of ssd
 		// devices.
 
-		var begin, end uint64
-		inRange := tier.Bdev.BusidRange
-
-		if inRange != "" {
-			log.Debugf("received user-specified hotplug bus-id range %q", inRange)
-			begin, end, err = common.GetRangeLimits(inRange, common.PCIAddrBusBitSize)
+		var begin, end uint8
+		if tier.Bdev.BusidRange != nil {
+			log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
+			begin = tier.Bdev.BusidRange.LowAddress.Bus
+			end = tier.Bdev.BusidRange.HighAddress.Bus
 		} else {
 			log.Debug("generating hotplug bus-id range based on hardware topology")
 			begin, end, err = getNumaNodeBusidRange(ctx, getTopo, cfg.NumaNodeIndex)
@@ -373,8 +371,8 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		log.Debugf("NUMA %d: hotplug bus-ids %X-%X", cfg.NumaNodeIndex, uint8(begin),
 			uint8(end))
 
-		req.HotplugBusidBegin = uint8(begin)
-		req.HotplugBusidEnd = uint8(end)
+		req.HotplugBusidBegin = begin
+		req.HotplugBusidEnd = end
 	}
 
 	req.VMDEnabled = vmdEnabled
