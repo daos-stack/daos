@@ -697,7 +697,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 		devices[*disks].n_tgtidx = tgts_len;
 
-		if (!json_object_object_get_ex(dev, "state", &tmp)) {
+		if (!json_object_object_get_ex(dev, "dev_state", &tmp)) {
 			D_ERROR("unable to extract state from JSON\n");
 			return -DER_INVAL;
 		}
