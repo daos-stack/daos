@@ -1240,9 +1240,13 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 
 	if (iods[2].iod_size != sizeof(layout_ver) ||
 	    layout_ver > DFS_LAYOUT_VERSION) {
-		D_ERROR("Incompatible DFS Layout version.\n");
+		D_ERROR("Incompatible DFS Layout version: %d\n", layout_ver);
 		D_GOTO(err, rc = EINVAL);
 	}
+
+	D_DEBUG(DB_ALL, "DFS Container Layout version: %d\n", layout_ver);
+	D_DEBUG(DB_ALL, "DFS Library Layout version: %d\n", DFS_LAYOUT_VERSION);
+
 	*ver = layout_ver;
 	attr->da_chunk_size = (chunk_size) ? chunk_size :
 		DFS_DEFAULT_CHUNK_SIZE;
