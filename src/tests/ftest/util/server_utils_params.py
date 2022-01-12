@@ -330,11 +330,9 @@ class DaosServerYamlParameters(YamlParameters):
             "common": [
                 "D_LOG_FILE_APPEND_PID=1",
                 "COVFILE=/tmp/test.cov"],
-            "ofi+sockets": [
-                "FI_SOCKETS_MAX_CONN_RETRY=5",
-                "FI_SOCKETS_CONN_TIMEOUT=2000",
+            "ofi+tcp": [
                 "CRT_SWIM_RPC_TIMEOUT=10"],
-            "ofi_rxm": [
+            "ofi+verbs": [
                 "FI_OFI_RXM_USE_SRX=1"],
         }
 
@@ -352,7 +350,7 @@ class DaosServerYamlParameters(YamlParameters):
             if provider is not None:
                 self._provider = provider
             else:
-                self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
+                self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
 
             # Use environment variables to get default parameters
             default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
