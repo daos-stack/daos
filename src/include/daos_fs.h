@@ -815,6 +815,24 @@ int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
 
 /**
+ * Change owner and group. Symlinks are dereferenced. Since uid and gid are not enforced at the DFS
+ * level, we do not also enforce the process privileges to be able to change the uid and gid. Any
+ * process with write access to the DFS container can make changes to the uid and gid using this
+ * function.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the object. Can be NULL if parent is root,
+ *			which means operation will be on root object.
+ * \param[in]	uid	change owner of file (-1 to leave unchanged).
+ * \param[in]	gid	change group of file (-1 to leave unchanged).
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid);
+
+/**
  * Sync to commit the latest epoch on the container. This applies to the entire
  * namespace and not to a particular file/directory.
  *

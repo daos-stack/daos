@@ -1037,6 +1037,65 @@ dfs_test_compat(void **state)
 	assert_int_equal(rc, EINVAL);
 }
 
+static void
+dfs_test_chown(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*obj;
+	struct stat	stbuf;
+	uid_t		orig_uid;
+	gid_t		orig_gid;
+	int		rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, "chown_test", S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	assert_int_equal(rc, 0);
+
+	orig_uid = stbuf.st_uid;
+	orig_gid = stbuf.st_gid;
+
+	/** should succeed but not change anything */
+	rc = dfs_chown(dfs_mt, NULL, "chown_test", -1, -1);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, orig_uid);
+	assert_int_equal(stbuf.st_gid, orig_gid);
+
+	/** set uid to 0 */
+	rc = dfs_chown(dfs_mt, NULL, "chown_test", 0, -1);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 0);
+	assert_int_equal(stbuf.st_gid, orig_gid);
+
+	/** set gid to 0 */
+	rc = dfs_chown(dfs_mt, NULL, "chown_test", -1, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 0);
+	assert_int_equal(stbuf.st_gid, 0);
+
+	/** set uid to 1, gid to 2 */
+	rc = dfs_chown(dfs_mt, NULL, "chown_test", 1, 2);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 1);
+	assert_int_equal(stbuf.st_gid, 2);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1062,6 +1121,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_rename, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST12: DFS API compat",
 	  dfs_test_compat, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST13: DFS chown",
+	  dfs_test_chown, async_disable, test_case_teardown},
 };
 
 static int
