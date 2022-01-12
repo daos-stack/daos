@@ -1730,8 +1730,16 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_redun_fac,
 				   &value);
-		if (rc != 0)
+		/**
+		 * For upgrading, redunc fac might not exist, use
+		 * default(0) for this case.
+		 */
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			val = DAOS_RPOP_PO_REDUN_FAC_DEFAULT;
+		} else if (rc != 0) {
 			return rc;
+		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_REDUN_FAC;
 		prop->dpp_entries[idx].dpe_val = val;
