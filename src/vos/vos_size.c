@@ -47,7 +47,11 @@
 #define PRINT_RECORD(name, type, feats)					\
 	print_record(buf, #name, &name);
 
-extern char vos_path[64];
+#ifndef STORAGE_PATH_LEN
+#define STORAGE_PATH_LEN 96
+#endif
+
+extern char vos_path[STORAGE_PATH_LEN];
 
 static void
 print_dynamic(struct d_string_buffer_t *buf, const char *name,

@@ -40,7 +40,7 @@ enum {
 };
 
 int		gc, oid_cnt;
-extern char	vos_path[PATH_MAX];
+extern char	vos_path[STORAGE_PATH_LEN];
 
 bool
 vts_file_exists(const char *filename)

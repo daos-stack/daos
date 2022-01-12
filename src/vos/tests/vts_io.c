@@ -28,7 +28,10 @@ static uint64_t			update_akey_sv;
 static uint64_t			update_akey_array;
 static bool			vts_nest_iterators;
 
-extern char			vos_path[PATH_MAX];
+#ifndef STORAGE_PATH_LEN
+#define STORAGE_PATH_LEN 96
+#endif
+extern char			vos_path[STORAGE_PATH_LEN];
 /**
  * Stores the last key and can be used for
  * punching or overwrite
