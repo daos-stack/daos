@@ -711,9 +711,10 @@ class DaosServer():
         start = time.time()
 
         cmd = ['storage', 'format', '--json']
+        start_timeout = 0.5
         while True:
             try:
-                rc = self._sp.wait(timeout=0.5)
+                rc = self._sp.wait(timeout=start_timeout)
                 print(rc)
                 res = 'daos server died waiting for start'
                 self._add_test_case('format', failure=res)
@@ -731,6 +732,9 @@ class DaosServer():
             if 'running system' in data['error']:
                 break
 
+            if start_timeout < 5:
+                start_timeout *=2
+
             self._check_timing('format', start, self.max_start_time)
         duration = time.time() - start
         self._add_test_case('format', duration=duration)
@@ -738,10 +742,15 @@ class DaosServer():
         self.running = True
 
         # Now wait until the system is up, basically the format to happen.
+        start_timeout = 0.5
         while True:
-            time.sleep(0.5)
+            time.sleep(start_timeout)
             if self._check_system_state(['ready', 'joined']):
                 break
+
+            if start_timeout < 5:
+                start_timeout *=2
+
             self._check_timing("start", start, self.max_start_time)
         duration = time.time() - start
         self._add_test_case('start', duration=duration)
