@@ -33,7 +33,7 @@ var (
 		Priority:    1,
 	}
 	eth1 = &ctlpb.FabricInterface{
-		Provider:    "ofi+sockets",
+		Provider:    "ofi+tcp",
 		Device:      "eth1",
 		Numanode:    1,
 		Netdevclass: 32,
