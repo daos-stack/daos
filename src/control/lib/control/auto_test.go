@@ -42,10 +42,10 @@ var (
 		Provider: "ofi+psm2", Device: "ib1", NumaNode: 1, NetDevClass: 32, Priority: 0,
 	}
 	eth0 = &HostFabricInterface{
-		Provider: "ofi+sockets", Device: "eth0", NumaNode: 0, NetDevClass: 1, Priority: 2,
+		Provider: "ofi+tcp", Device: "eth0", NumaNode: 0, NetDevClass: 1, Priority: 2,
 	}
 	eth1 = &HostFabricInterface{
-		Provider: "ofi+sockets", Device: "eth1", NumaNode: 1, NetDevClass: 1, Priority: 3,
+		Provider: "ofi+tcp", Device: "eth1", NumaNode: 1, NetDevClass: 1, Priority: 3,
 	}
 )
 
@@ -132,9 +132,9 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 	typicalFabIfs := &ctlpb.NetworkScanResp{Interfaces: typIfs, Numacount: 2, Corespernuma: 24}
 	sinIbIfs := []*ctlpb.FabricInterface{
 		{Provider: "ofi+psm2", Device: "ib0", Numanode: 0, Priority: 0, Netdevclass: 32},
-		{Provider: "ofi+sockets", Device: "ib0", Numanode: 0, Priority: 1, Netdevclass: 32},
-		{Provider: "ofi+sockets", Device: "eth0", Numanode: 0, Priority: 2, Netdevclass: 1},
-		{Provider: "ofi+sockets", Device: "eth1", Numanode: 1, Priority: 3, Netdevclass: 1},
+		{Provider: "ofi+tcp", Device: "ib0", Numanode: 0, Priority: 1, Netdevclass: 32},
+		{Provider: "ofi+tcp", Device: "eth0", Numanode: 0, Priority: 2, Netdevclass: 1},
+		{Provider: "ofi+tcp", Device: "eth1", Numanode: 1, Priority: 3, Netdevclass: 1},
 	}
 	sinIbFabIfs := &ctlpb.NetworkScanResp{Interfaces: sinIbIfs, Numacount: 2, Corespernuma: 24}
 	dualHostResp := func(r1, r2 *ctlpb.NetworkScanResp) []*HostResponse {

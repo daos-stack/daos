@@ -33,6 +33,60 @@ func MockNUMANode(id uint, numCores uint, optOff ...uint) *NUMANode {
 	return node
 }
 
+// MockPCIAddress returns a mock PCI address for testing.
+func MockPCIAddress(fields ...uint8) *PCIAddress {
+	switch len(fields) {
+	case 0:
+		fields = []uint8{0, 0, 0, 0}
+	case 1:
+		fields = append(fields, []uint8{0, 0, 0}...)
+	case 2:
+		fields = append(fields, []uint8{0, 0}...)
+	case 3:
+		fields = append(fields, 0)
+	}
+
+	return &PCIAddress{
+		Domain:   uint16(fields[0]),
+		Bus:      fields[1],
+		Device:   fields[2],
+		Function: fields[3],
+	}
+}
+
+// WithPCIBuses is a convenience function to add multiple PCI buses to the node.
+// NB: If AddPCIBus fails, a panic will ensue.
+func (n *NUMANode) WithPCIBuses(buses []*PCIBus) *NUMANode {
+	for _, bus := range buses {
+		if err := n.AddPCIBus(bus); err != nil {
+			panic(err)
+		}
+	}
+	return n
+}
+
+// WithDevices is a convenience function to add a set of devices to a node.
+// NB: If AddDevice fails, a panic will ensue.
+func (n *NUMANode) WithDevices(devices []*PCIDevice) *NUMANode {
+	for _, dev := range devices {
+		if err := n.AddDevice(dev); err != nil {
+			panic(err)
+		}
+	}
+	return n
+}
+
+// WithCPUCores is a convenience function to add a set of cores to a node.
+// NB: If AddCore fails, a panic will ensue.
+func (n *NUMANode) WithCPUCores(cores []CPUCore) *NUMANode {
+	for _, core := range cores {
+		if err := n.AddCore(core); err != nil {
+			panic(err)
+		}
+	}
+	return n
+}
+
 // GetMockFabricScannerConfig gets a FabricScannerConfig for testing.
 func GetMockFabricScannerConfig() *FabricScannerConfig {
 	return &FabricScannerConfig{

@@ -798,8 +798,8 @@ The following commands are typical examples:
 ```bash
 $ dmg network scan
 $ dmg network scan -p all
-$ dmg network scan -p ofi+sockets
-$ dmg network scan --provider 'ofi+verbs;ofi_rxm'
+$ dmg network scan -p ofi+tcp
+$ dmg network scan --provider ofi+verbs
 ```
 
 In the early stages when a `daos_server` has not yet been fully configured and
@@ -827,7 +827,7 @@ wolf-29
 
         Provider    Interfaces
         --------    ----------
-        ofi+sockets ib1
+        ofi+tcp     ib1
 
 ---------
 localhost
@@ -839,7 +839,7 @@ localhost
 
         Provider    Interfaces
         --------    ----------
-        ofi+sockets ib0, eth0
+        ofi+tcp     ib0, eth0
 
     -------------
     NUMA Socket 1
@@ -847,7 +847,7 @@ localhost
 
         Provider    Interfaces
         --------    ----------
-        ofi+sockets ib1
+        ofi+tcp     ib1
 ```
 
 Use one of these providers to configure the `provider` in the `daos_server.yml`.

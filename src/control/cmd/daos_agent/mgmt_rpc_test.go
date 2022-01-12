@@ -27,21 +27,21 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		{
 			MsRanks: []uint32{0, 1, 3},
 			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+sockets",
+				Provider:    "ofi+tcp",
 				NetDevClass: uint32(hardware.Ether),
 			},
 		},
 		{
 			MsRanks: []uint32{0},
 			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+sockets",
+				Provider:    "ofi+tcp",
 				NetDevClass: uint32(hardware.Ether),
 			},
 		},
 		{
 			MsRanks: []uint32{2, 3},
 			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+sockets",
+				Provider:    "ofi+tcp",
 				NetDevClass: uint32(hardware.Ether),
 			},
 		},
@@ -168,7 +168,7 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 						Message: &mgmtpb.GetAttachInfoResp{
 							MsRanks: []uint32{0, 1, 3},
 							ClientNetHint: &mgmtpb.ClientNetHint{
-								Provider:    "ofi+sockets",
+								Provider:    "ofi+tcp",
 								NetDevClass: uint32(hardware.Ether),
 							},
 						},

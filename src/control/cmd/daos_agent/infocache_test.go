@@ -479,7 +479,7 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 			}
 
 			if tc.provider == "" {
-				tc.provider = "ofi+sockets"
+				tc.provider = "ofi+tcp"
 			}
 
 			dev, err := tc.lfc.GetDevice(tc.numaNode, tc.netDevClass, tc.provider)
