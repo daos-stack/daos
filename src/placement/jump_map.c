@@ -155,7 +155,7 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid, NULL, &nr_grps);
+	oc_attr = daos_oclass_attr_find(oid, &nr_grps);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
