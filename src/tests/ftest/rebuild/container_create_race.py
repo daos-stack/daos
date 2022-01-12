@@ -89,7 +89,7 @@ class RbldContainerCreate(IorTestBase):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
         :avocado: tags=all,full_regression
-        :avocado: tags=large
+        :avocado: tags=hw,large
         :avocado: tags=rebuild
         :avocado: tags=rebuild_cont_create
 
