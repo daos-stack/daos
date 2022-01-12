@@ -413,7 +413,10 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
-				     strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
+				     strlen(crt_na_dict[plugin_idx].nad_str) + 1) ||
+			    (crt_na_dict[plugin_idx].nad_alt_str &&
+			     !strncmp(addr_env, crt_na_dict[plugin_idx].nad_alt_str,
+				      strlen(crt_na_dict[plugin_idx].nad_alt_str) + 1))) {
 				provider_found = true;
 				crt_gdata.cg_init_prov =
 					crt_na_dict[plugin_idx].nad_type;
@@ -457,17 +460,8 @@ do_init:
 			       prov, set_sep, max_num_ctx,
 			       max_expect_size, max_unexpect_size);
 
-		/* Print notice that "ofi+verbs" is legacy */
-		if (prov == CRT_NA_OFI_VERBS) {
-			D_ERROR("\"ofi+verbs\" is no longer supported. "
-				"Use \"ofi+verbs;ofi_rxm\" instead for %s env",
-				CRT_PHY_ADDR_ENV);
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-
 		/* rxm and verbs providers only works with regular EP */
 		if ((prov == CRT_NA_OFI_VERBS_RXM ||
-		     prov == CRT_NA_OFI_VERBS ||
 		     prov == CRT_NA_OFI_TCP_RXM) &&
 		    crt_provider_is_sep(prov)) {
 			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "

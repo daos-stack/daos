@@ -270,7 +270,7 @@ def set_provider_environment(interface, args):
     # Use the detected provider if one is not set
     provider = os.environ.get("CRT_PHY_ADDR_STR")
     if provider is None:
-        provider = "ofi+sockets"
+        provider = "ofi+tcp"
         # Confirm the interface is a Mellanox device - verbs did not work with OPA devices.
         command = "sudo mst status -v"
         task = get_remote_output(list(args.test_servers), command)
@@ -285,18 +285,18 @@ def set_provider_environment(interface, args):
                 if len(output_data) > 1:
                     print("ERROR: Non-homogeneous drivers detected.")
                     sys.exit(1)
-                # Select the provider - currently use verbs or sockets
+                # Select the provider - currently use verbs or tcp
                 for line in output_data[0][0]:
                     provider_name = line.decode("utf-8").replace(":", "")
                     # Temporary code to only enable verbs on HW Large stages
                     if "verbs" in provider_name:
-                        provider = "ofi+verbs;ofi_rxm"
+                        provider = "ofi+verbs"
                         break
-                    if "sockets" in provider_name:
-                        provider = "ofi+sockets"
+                    if "tcp" in provider_name:
+                        provider = "ofi+tcp"
                         break
         else:
-            print("No Infiniband devices found - using sockets")
+            print("No Infiniband devices found - using tcp")
         print("  Found {} provider for {}".format(provider, interface))
 
     # Update env definitions
