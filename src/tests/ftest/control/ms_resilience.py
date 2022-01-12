@@ -26,7 +26,6 @@ def get_hostname(host_addr):
     fqdn, _, _ = socket.gethostbyaddr(host_addr.split(":")[0])
     return fqdn.split(".")[0]
 
-
 class ManagementServiceResilience(TestWithServers):
     """Test Class Description:
     Verify that expected MS functionality is retained in various
