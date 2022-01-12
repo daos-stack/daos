@@ -464,7 +464,7 @@ type (
 // getNumaNodeBusidRange sets range parameters in the input request either to user configured
 // values if provided in the server config file, or automatically derive them by querying
 // hardware configuration.
-func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numaNodeIdx uint) (uint64, uint64, error) {
+func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numaNodeIdx uint) (uint8, uint8, error) {
 	topo, err := getTopology(ctx)
 	if err != nil {
 		return 0, 0, err
@@ -492,8 +492,7 @@ func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numa
 	lowAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[0].LowAddress
 	highAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[len(buses)-1].HighAddress
 
-	return common.GetRangeLimits(fmt.Sprintf("0x%s-0x%s", lowAddr.Bus, highAddr.Bus),
-		common.PCIAddrBusBitSize)
+	return lowAddr.Bus, highAddr.Bus, nil
 }
 
 type BdevForwarder struct {
