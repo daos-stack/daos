@@ -270,9 +270,8 @@ retry:
 	/* If user requires less target threads then set it as dss_tgt_nr,
 	 * if user oversubscribes, then:
 	 *      . if oversubscribe is enabled, use the required number
-	 *      . if oversubscribe is disabled(default),
-	 *        use the number calculated above
-	 * Note: oversubscribing  may hurt performance.
+	 *      . if oversubscribe is disabled(default), return error
+	 * Note: oversubscribing may hurt performance.
 	 */
 	if (nr >= 1 && ((nr < tgt_nr) || oversubscribe)) {
 		tgt_nr = nr;
