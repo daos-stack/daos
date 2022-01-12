@@ -79,6 +79,11 @@ will be distributed as follows:
 - 6% is allocated on SCM (i.e., 3GB in the example above)
 - 94% is allocated on NVMe SSD (i.e., 47GB in the example above)
 
+Note that it is difficult to determine the usable space by the user and
+currently we cannot provide the precise value. The usable space depends not only
+on pool size, but also on number of targets, target size, object class,
+redundancy factor, etc.
+
 ### Listing Pools
 
 To see a list of the pools in your DAOS system:

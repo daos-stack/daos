@@ -465,8 +465,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			D_GOTO(reset, rc = -DER_NOMEM);
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					     dth->dth_dti_cos_count,
-					     0, false, NULL, daes, dces);
+					     dth->dth_dti_cos_count, 0, NULL, daes, dces);
 		if (rc <= 0)
 			D_FREE(daes);
 	}
@@ -1253,7 +1252,8 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	 */
 	vis_flag = oiter->it_flags & VOS_IT_RECX_COVERED;
 	if (vis_flag == VOS_IT_RECX_VISIBLE) {
-		D_ASSERT(oiter->it_epc_expr == VOS_IT_EPC_RR);
+		D_ASSERT(oiter->it_epc_expr == VOS_IT_EPC_RR ||
+			 oiter->it_epc_expr == VOS_IT_EPC_RE);
 		return -DER_NONEXIST;
 	}
 
