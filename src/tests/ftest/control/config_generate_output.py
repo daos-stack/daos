@@ -483,7 +483,7 @@ class ConfigGenerateOutput(TestWithServers):
                             "Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in \
                         self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+sockets by
+                        # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
                             " {}; fabric_iface = {}".format(
@@ -531,7 +531,7 @@ class ConfigGenerateOutput(TestWithServers):
                             "Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in \
                         self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+sockets by
+                        # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
                             " {}; fabric_iface = {}".format(
