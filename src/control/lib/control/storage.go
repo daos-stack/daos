@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -445,7 +446,7 @@ type (
 // StorageNvmeUnbind unbinds NVMe SSD from kernel driver and binds to user-space driver on single
 // server.
 func StorageNvmeUnbind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeUnbindReq) (*NvmeUnbindResp, error) {
-	if _, err := common.NewPCIAddress(req.PCIAddr); err != nil {
+	if _, err := hardware.NewPCIAddress(req.PCIAddr); err != nil {
 		return nil, errors.Wrap(err, "invalid pci address in request")
 	}
 
