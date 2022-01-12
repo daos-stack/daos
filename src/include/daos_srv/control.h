@@ -79,7 +79,8 @@ static inline int
 nvme_str2state(char *state_str)
 {
 	if (strcmp(state_str, "EVICTED|IDENTIFY") == 0) {
-		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY);
+		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY |
+			NVME_DEV_FL_IDENTIFY);
 	} else if (strcmp(state_str, "EVICTED") == 0) {
 		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY);
 	} else if (strcmp(state_str, "IDENTIFY") == 0) {
