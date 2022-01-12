@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
+
 from avocado.core.exceptions import TestFail
 from pool_test_base import PoolTestBase
 
@@ -17,7 +19,6 @@ class DmgSystemReformatTest(PoolTestBase):
 
     :avocado: recursive
     """
-
     def test_dmg_system_reformat(self):
         """
         JIRA ID: DAOS-5415
@@ -48,6 +49,9 @@ class DmgSystemReformatTest(PoolTestBase):
             self.fail("Detected issues performing a system stop: {}".format(
                 self.get_dmg_command().result.stderr_text))
 
+        self.log.info("Wait 10 sec for the system to fully stop")
+        time.sleep(10)
+
         # Remove pools
         self.pool = []
 
@@ -57,6 +61,9 @@ class DmgSystemReformatTest(PoolTestBase):
         if self.get_dmg_command().result.exit_status != 0:
             self.fail("Issues performing system erase: {}".format(
                 self.get_dmg_command().result.stderr_text))
+
+        self.log.info("Wait 10 sec for system erase")
+        time.sleep(10)
 
         # To verify that we are using the membership information instead of the
         # dmg config explicit hostlist
@@ -72,7 +79,7 @@ class DmgSystemReformatTest(PoolTestBase):
 
         # Check that engine starts up again
         self.log.info("<SERVER> Waiting for the engines to start")
-        self.server_managers[-1].detect_engine_start(host_qty=2)
+        self.server_managers[-1].detect_engine_start(hosts_qty=2)
 
         # Check that we have cleared storage by checking pool list
         if self.get_dmg_command().get_pool_list_uuids():
@@ -80,8 +87,8 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.get_dmg_command().result.stdout_text))
 
         # Create last pool now that memory has been wiped.
-        self.add_pool_qty(1)
+        self.add_pool_qty(quantity=1, connect=False)
 
         # Lastly, verify that last created pool is in the list
         pool_uuids = self.get_dmg_command().get_pool_list_uuids()
-        self.assertEqual(pool_uuids[0], self.pool[-1].uuid)
+        self.assertEqual(pool_uuids[0].lower(), self.pool[-1].uuid.lower())
