@@ -14,7 +14,7 @@
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 #define LIBSERIALIZE		"libdaos_serialize.so"
-#define NUM_SERIALIZE_PROPS	15
+#define NUM_SERIALIZE_PROPS	17
 
 #include <stdio.h>
 #include <dirent.h>
@@ -164,6 +164,34 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 				(uint32_t)entry->dpe_val);
 		} else {
 			D_PRINT("EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
+		}
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_EC_PDA);
+	if (entry == NULL) {
+		fprintf(ap->errstream, "EC PDA not found\n");
+		rc = -DER_INVAL;
+	} else {
+		if (!daos_ec_pda_valid(entry->dpe_val)) {
+			D_PRINT("Invalid EC PDA value: %u\n",
+				(uint32_t)entry->dpe_val);
+		} else {
+			D_PRINT("EC PDA = %u\n",
+				(uint32_t)entry->dpe_val);
+		}
+	}
+
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_RP_PDA);
+	if (entry == NULL) {
+		fprintf(ap->errstream, "RP PDA not found\n");
+		rc = -DER_INVAL;
+	} else {
+		if (!daos_rp_pda_valid(entry->dpe_val)) {
+			D_PRINT("Invalid RP PDA value: %u\n",
+				(uint32_t)entry->dpe_val);
+		} else {
+			D_PRINT("EC PDA = %u\n",
 				(uint32_t)entry->dpe_val);
 		}
 	}
@@ -2103,6 +2131,8 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	props->dpp_entries[12].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
 	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_DEDUP;
 	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_EC_PDA;
+	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_RP_PDA;
 
 	/* Conditionally get the OID. Should always be true for serialization. */
 	if (get_oid) {

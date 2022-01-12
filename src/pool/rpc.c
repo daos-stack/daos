@@ -182,6 +182,12 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_EC_CELL_SZ:
 			bits |= DAOS_PO_QUERY_PROP_EC_CELL_SZ;
 			break;
+		case DAOS_PROP_PO_EC_PDA:
+			bits |= DAOS_PO_QUERY_PROP_EC_PDA;
+			break;
+		case DAOS_PROP_PO_RP_PDA:
+			bits |= DAOS_PO_QUERY_PROP_RP_PDA;
+			break;
 		case DAOS_PROP_PO_ACL:
 			bits |= DAOS_PO_QUERY_PROP_ACL;
 			break;

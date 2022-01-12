@@ -1367,6 +1367,8 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
+	pool->sp_ec_pda = iv_prop->pip_ec_pda;
+	pool->sp_rp_pda = iv_prop->pip_rp_pda;
 	return 0;
 }
 

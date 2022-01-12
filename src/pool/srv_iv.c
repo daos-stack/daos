@@ -168,6 +168,12 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 					svc_list->rl_nr * sizeof(d_rank_t), 8);
 			}
 			break;
+		case DAOS_PROP_PO_EC_PDA:
+			iv_prop->pip_ec_pda = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_RP_PDA:
+			iv_prop->pip_rp_pda = prop_entry->dpe_val;
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -259,6 +265,12 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 					D_GOTO(out, rc);
 				prop_entry->dpe_val_ptr = dst_list;
 			}
+			break;
+		case DAOS_PROP_PO_EC_PDA:
+			prop_entry->dpe_val = iv_prop->pip_ec_pda;
+			break;
+		case DAOS_PROP_PO_RP_PDA:
+			prop_entry->dpe_val = iv_prop->pip_rp_pda;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);

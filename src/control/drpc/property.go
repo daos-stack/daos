@@ -36,6 +36,10 @@ const (
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
 	// PoolPropertyECCellSize is the EC Cell size.
 	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
+	//PoolPropertyECPda is performance domain affinity level of EC object.
+	PoolPropertyECPda = C.DAOS_PROP_PO_EC_PDA
+	//PoolPropertyRPPda is performance domain affinity level of replicated object.
+	PoolPropertyRPPda = C.DAOS_PROP_PO_RP_PDA
 )
 
 const (
