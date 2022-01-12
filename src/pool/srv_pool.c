@@ -5615,7 +5615,7 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc != 0)
 		goto out;
 
-	oca = daos_oclass_attr_find(oid->id_pub, NULL, NULL);
+	oca = daos_oclass_attr_find(oid->id_pub, NULL);
 	leader_idx = pl_select_leader(oid->id_pub, oid->id_shard / daos_oclass_grp_size(oca),
 				      layout->ol_grp_size, NIL_BITMAP, mbs, tgt_id,
 				      pl_obj_get_shard, layout);
