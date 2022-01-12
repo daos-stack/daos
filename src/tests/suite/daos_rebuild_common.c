@@ -826,8 +826,16 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	int		i;
 	int		rc;
 
-	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl,
+	dfs_attr_t attr = {};
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl,
 			     &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -847,7 +855,7 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	/* Full stripe update */
 	sprintf(filename, "degrade_file");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
@@ -981,7 +989,7 @@ ec_data_nr_get(daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_k;
 }
@@ -991,7 +999,7 @@ ec_parity_nr_get(daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_p;
 }
@@ -1004,7 +1012,7 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	uint32_t		shard;
 	int			idx = 0;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	if (oca->ca_resil == DAOS_RES_REPL) {
 		ranks[0] = get_rank_by_oid_shard(arg, oid, 0);
 		if (ranks_num)

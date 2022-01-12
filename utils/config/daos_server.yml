@@ -353,6 +353,13 @@
 #    # PCIe addresses, and not the BDF format transport IDs of the backing NVMe SSDs
 #    # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
 #    #bdev_list: ["0000:5d:05.5"]
+#
+#    # Optional override, will be automatically generated based on NUMA affinity.
+#    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
+#    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
+#    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    bdev_busid_range: 0x80-0x8f
+#    #bdev_busid_range: 128-143
 
 #-
 #  # Rank to be assigned as identifier for this engine.
@@ -490,3 +497,13 @@
 #    # default "nvme" type, and bdev_list will include the VMD addresses.
 #    #class: nvme
 #    #bdev_list: ["0000:5d:05.5"]
+#
+#    #class: nvme
+#    #bdev_list: ["0000:da:00.0", "0000:db:00.0"]  # generate regular nvme.conf
+#
+#    # Optional override, will be automatically generated based on NUMA affinity.
+#    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
+#    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
+#    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    #bdev_busid_range: 0xd0-0xdf
+#    #bdev_busid_range: 208-223
