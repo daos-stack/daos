@@ -164,8 +164,11 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     if append:
         for host in host_list:
             shared_dir_tmp = shared_dir + append + "{}".format(host)
+            dest_dir_tmp = dest_dir + append + "{}".format(host)
             if not os.path.exists(shared_dir_tmp):
                 os.mkdir(shared_dir_tmp)
+            if not os.path.exists(dest_dir_tmp):
+                os.mkdir(dest_dir_tmp)
             # copy the directory from each client node to a shared directory
             # tagged with the hostname
             command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
@@ -175,7 +178,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             except DaosTestError as error:
                 raise SoakTestError(
                     "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host))
-            command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(shared_dir_tmp, dest_dir)
+            command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(shared_dir_tmp, dest_dir_tmp)
             try:
                 run_command(command, timeout=30)
             except DaosTestError as error:
