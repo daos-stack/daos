@@ -31,7 +31,7 @@ class DAOSVersion(TestWithServers):
         rpm_command = "rpm -qa|grep daos-server"
         output = run_pcmd(hosts=self.hostlist_servers, command=rpm_command)
         stdout = output[0]["stdout"][0]
-        result = re.findall("daos-server-([\d.]+)", stdout)
+        result = re.findall(r"daos-server-([\d.]+)", stdout)
         rpm_version = result[0]
         self.log.info("RPM version = %s", rpm_version)
 
@@ -43,7 +43,7 @@ class DAOSVersion(TestWithServers):
         if "dmg version" not in output:
             errors.append("dmg version is not in the output! {}".format(output))
 
-        result = re.findall("dmg version ([\d.]+)", output)
+        result = re.findall(r"dmg version ([\d.]+)", output)
         dmg_version = result[0]
         self.log.info("dmg version = %s", dmg_version)
 
@@ -56,7 +56,7 @@ class DAOSVersion(TestWithServers):
             errors.append(
                 "daos version is not in the output! {}".format(output))
 
-        result = re.findall("daos version ([\d.]+)", output)
+        result = re.findall(r"daos version ([\d.]+)", output)
         daos_version = result[0]
         self.log.info("daos version = %s", daos_version)
 
@@ -69,7 +69,7 @@ class DAOSVersion(TestWithServers):
         if "DAOS Agent" not in stdout:
             errors.append("DAOS Agent is not in the output! {}".format(stdout))
 
-        result = re.findall("DAOS Agent v([\d.]+)", stdout)
+        result = re.findall(r"DAOS Agent v([\d.]+)", stdout)
         daos_agent_version = result[0]
         self.log.info("daos_agent version = %s", daos_agent_version)
 
@@ -83,7 +83,7 @@ class DAOSVersion(TestWithServers):
             errors.append(
                 "DAOS Control Server is not in the output! {}".format(stdout))
 
-        result = re.findall("DAOS Control Server v([\d.]+)", stdout)
+        result = re.findall(r"DAOS Control Server v([\d.]+)", stdout)
         daos_server_version = result[0]
         self.log.info("daos_server version = %s", daos_server_version)
 
@@ -99,8 +99,8 @@ class DAOSVersion(TestWithServers):
             tool = tool_version[0]
             version = tool_version[1]
             if version != rpm_version:
-                msg = "Unexpected {} version! {} = {}, RPM = {}".format(
-                    tool, tool, version, rpm_version)
+                msg = "Unexpected version! {} = {}, RPM = {}".format(
+                    tool, version, rpm_version)
                 errors.append(msg)
 
         if errors:

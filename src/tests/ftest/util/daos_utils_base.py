@@ -33,6 +33,8 @@ class DaosCommandBase(CommandWithSubCommand):
             self.sub_command_class = self.ObjectSubCommand()
         elif self.sub_command.value == "filesystem":
             self.sub_command_class = self.FilesystemSubCommand()
+        elif self.sub_command.value == "version":
+            self.sub_command_class = self.VersionSubCommand()
         else:
             self.sub_command_class = None
 
@@ -62,8 +64,6 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.SetAttrSubCommand()
             elif self.sub_command.value == "autotest":
                 self.sub_command_class = self.AutotestSubCommand()
-            elif self.sub_command.value == "version":
-                self.sub_command_class = self.VersionSubCommand()
             else:
                 self.sub_command_class = None
 
