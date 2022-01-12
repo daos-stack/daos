@@ -37,10 +37,10 @@ message StorageFormatResp {
 	repeated ScmMountResult mrets = 2;		// One per scm format and mount attempt
 }
 
-message NvmeUnbindReq {
+message NvmeRebindReq {
 	string pci_addr = 1;	// an NVMe controller PCI address
 }
 
-message NvmeUnbindResp {
+message NvmeRebindResp {
 	ResponseState state = 1;
 }

@@ -26,8 +26,8 @@ type CtlSvcClient interface {
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (*StorageFormatResp, error)
-	// Unbind SSD from kernel and bind instead to user-space for use with DAOS
-	StorageNvmeUnbind(ctx context.Context, in *NvmeUnbindReq, opts ...grpc.CallOption) (*NvmeUnbindResp, error)
+	// Rebind SSD from kernel and bind instead to user-space for use with DAOS
+	StorageNvmeRebind(ctx context.Context, in *NvmeRebindReq, opts ...grpc.CallOption) (*NvmeRebindResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(ctx context.Context, in *NetworkScanReq, opts ...grpc.CallOption) (*NetworkScanResp, error)
 	// Retrieve firmware details from storage devices on server
@@ -76,9 +76,9 @@ func (c *ctlSvcClient) StorageFormat(ctx context.Context, in *StorageFormatReq, 
 	return out, nil
 }
 
-func (c *ctlSvcClient) StorageNvmeUnbind(ctx context.Context, in *NvmeUnbindReq, opts ...grpc.CallOption) (*NvmeUnbindResp, error) {
-	out := new(NvmeUnbindResp)
-	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/StorageNvmeUnbind", in, out, opts...)
+func (c *ctlSvcClient) StorageNvmeRebind(ctx context.Context, in *NvmeRebindReq, opts ...grpc.CallOption) (*NvmeRebindResp, error) {
+	out := new(NvmeRebindResp)
+	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/StorageNvmeRebind", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -183,8 +183,8 @@ type CtlSvcServer interface {
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(context.Context, *StorageFormatReq) (*StorageFormatResp, error)
-	// Unbind SSD from kernel and bind instead to user-space for use with DAOS
-	StorageNvmeUnbind(context.Context, *NvmeUnbindReq) (*NvmeUnbindResp, error)
+	// Rebind SSD from kernel and bind instead to user-space for use with DAOS
+	StorageNvmeRebind(context.Context, *NvmeRebindReq) (*NvmeRebindResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error)
 	// Retrieve firmware details from storage devices on server
@@ -218,8 +218,8 @@ func (UnimplementedCtlSvcServer) StorageScan(context.Context, *StorageScanReq) (
 func (UnimplementedCtlSvcServer) StorageFormat(context.Context, *StorageFormatReq) (*StorageFormatResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StorageFormat not implemented")
 }
-func (UnimplementedCtlSvcServer) StorageNvmeUnbind(context.Context, *NvmeUnbindReq) (*NvmeUnbindResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StorageNvmeUnbind not implemented")
+func (UnimplementedCtlSvcServer) StorageNvmeRebind(context.Context, *NvmeRebindReq) (*NvmeRebindResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StorageNvmeRebind not implemented")
 }
 func (UnimplementedCtlSvcServer) NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method NetworkScan not implemented")
@@ -300,20 +300,20 @@ func _CtlSvc_StorageFormat_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _CtlSvc_StorageNvmeUnbind_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NvmeUnbindReq)
+func _CtlSvc_StorageNvmeRebind_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NvmeRebindReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CtlSvcServer).StorageNvmeUnbind(ctx, in)
+		return srv.(CtlSvcServer).StorageNvmeRebind(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ctl.CtlSvc/StorageNvmeUnbind",
+		FullMethod: "/ctl.CtlSvc/StorageNvmeRebind",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CtlSvcServer).StorageNvmeUnbind(ctx, req.(*NvmeUnbindReq))
+		return srv.(CtlSvcServer).StorageNvmeRebind(ctx, req.(*NvmeRebindReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -514,8 +514,8 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CtlSvc_StorageFormat_Handler,
 		},
 		{
-			MethodName: "StorageNvmeUnbind",
-			Handler:    _CtlSvc_StorageNvmeUnbind_Handler,
+			MethodName: "StorageNvmeRebind",
+			Handler:    _CtlSvc_StorageNvmeRebind_Handler,
 		},
 		{
 			MethodName: "NetworkScan",

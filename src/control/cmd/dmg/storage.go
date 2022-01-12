@@ -22,7 +22,7 @@ type storageCmd struct {
 	Scan       storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
 	Format     storageFormatCmd   `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
 	Query      storageQueryCmd    `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	NvmeUnbind nvmeUnbindCmd      `command:"nvme-unbind" description:"Unbind NVMe SSD from kernel driver and bind to user-space driver to enable DAOS to use the device."`
+	NvmeRebind nvmeRebindCmd      `command:"nvme-rebind" description:"Rebind NVMe SSD from kernel driver and bind to user-space driver to enable DAOS to use the device."`
 	Set        setFaultyCmd       `command:"set" description:"Manually set the device state."`
 	Replace    storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
 	Identify   storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
@@ -159,29 +159,29 @@ func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) er
 	return resp.Errors()
 }
 
-// nvmeUnbindCmd is the struct representing the nvme-unbind storage subcommand.
-type nvmeUnbindCmd struct {
+// nvmeRebindCmd is the struct representing the nvme-rebind storage subcommand.
+type nvmeRebindCmd struct {
 	logCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	PCIAddr string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to unbind."`
+	PCIAddr string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to rebind."`
 }
 
-// Execute is run when nvmeUnbindCmd activates.
+// Execute is run when nvmeRebindCmd activates.
 //
-// Unbind NVMe SSD from kernel driver and bind to user-space driver on single server.
-func (cmd *nvmeUnbindCmd) Execute(args []string) error {
+// Rebind NVMe SSD from kernel driver and bind to user-space driver on single server.
+func (cmd *nvmeRebindCmd) Execute(args []string) error {
 	ctx := context.Background()
 
 	if len(cmd.hostlist) != 1 {
 		return errors.New("command expects a single host in hostlist")
 	}
 
-	req := &control.NvmeUnbindReq{PCIAddr: cmd.PCIAddr}
+	req := &control.NvmeRebindReq{PCIAddr: cmd.PCIAddr}
 	req.SetHostList(cmd.hostlist)
 
-	resp, err := control.StorageNvmeUnbind(ctx, cmd.ctlInvoker, req)
+	resp, err := control.StorageNvmeRebind(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}

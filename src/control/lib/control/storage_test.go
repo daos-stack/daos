@@ -808,11 +808,11 @@ func TestControl_checkFormatReq(t *testing.T) {
 	}
 }
 
-func TestControl_StorageNvmeUnbind(t *testing.T) {
+func TestControl_StorageNvmeRebind(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic         *MockInvokerConfig
 		pciAddr     string
-		expResponse *NvmeUnbindResp
+		expResponse *NvmeRebindResp
 		expErr      error
 	}{
 		"empty pci address": {
@@ -839,7 +839,7 @@ func TestControl_StorageNvmeUnbind(t *testing.T) {
 				},
 			},
 			pciAddr:     common.MockPCIAddr(),
-			expResponse: new(NvmeUnbindResp),
+			expResponse: new(NvmeRebindResp),
 		},
 		"invoke fails": {
 			mic: &MockInvokerConfig{
@@ -862,7 +862,7 @@ func TestControl_StorageNvmeUnbind(t *testing.T) {
 				},
 			},
 			pciAddr: common.MockPCIAddr(),
-			expResponse: &NvmeUnbindResp{
+			expResponse: &NvmeRebindResp{
 				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "failed"}),
 			},
 		},
@@ -873,14 +873,14 @@ func TestControl_StorageNvmeUnbind(t *testing.T) {
 						Responses: []*HostResponse{
 							{
 								Addr:    "host1",
-								Message: &ctlpb.NvmeUnbindResp{},
+								Message: &ctlpb.NvmeRebindResp{},
 							},
 						},
 					},
 				},
 			},
 			pciAddr:     common.MockPCIAddr(),
-			expResponse: &NvmeUnbindResp{},
+			expResponse: &NvmeRebindResp{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -890,7 +890,7 @@ func TestControl_StorageNvmeUnbind(t *testing.T) {
 			ctx := context.TODO()
 			mi := NewMockInvoker(log, tc.mic)
 
-			gotResponse, gotErr := StorageNvmeUnbind(ctx, mi, &NvmeUnbindReq{
+			gotResponse, gotErr := StorageNvmeRebind(ctx, mi, &NvmeRebindReq{
 				PCIAddr: tc.pciAddr,
 			})
 			common.CmpErr(t, tc.expErr, gotErr)

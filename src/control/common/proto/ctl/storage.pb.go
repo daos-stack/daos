@@ -254,7 +254,7 @@ func (x *StorageFormatResp) GetMrets() []*ScmMountResult {
 	return nil
 }
 
-type NvmeUnbindReq struct {
+type NvmeRebindReq struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -262,8 +262,8 @@ type NvmeUnbindReq struct {
 	PciAddr string `protobuf:"bytes,1,opt,name=pci_addr,json=pciAddr,proto3" json:"pci_addr,omitempty"` // an NVMe controller PCI address
 }
 
-func (x *NvmeUnbindReq) Reset() {
-	*x = NvmeUnbindReq{}
+func (x *NvmeRebindReq) Reset() {
+	*x = NvmeRebindReq{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_ctl_storage_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -271,13 +271,13 @@ func (x *NvmeUnbindReq) Reset() {
 	}
 }
 
-func (x *NvmeUnbindReq) String() string {
+func (x *NvmeRebindReq) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*NvmeUnbindReq) ProtoMessage() {}
+func (*NvmeRebindReq) ProtoMessage() {}
 
-func (x *NvmeUnbindReq) ProtoReflect() protoreflect.Message {
+func (x *NvmeRebindReq) ProtoReflect() protoreflect.Message {
 	mi := &file_ctl_storage_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -289,19 +289,19 @@ func (x *NvmeUnbindReq) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use NvmeUnbindReq.ProtoReflect.Descriptor instead.
-func (*NvmeUnbindReq) Descriptor() ([]byte, []int) {
+// Deprecated: Use NvmeRebindReq.ProtoReflect.Descriptor instead.
+func (*NvmeRebindReq) Descriptor() ([]byte, []int) {
 	return file_ctl_storage_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *NvmeUnbindReq) GetPciAddr() string {
+func (x *NvmeRebindReq) GetPciAddr() string {
 	if x != nil {
 		return x.PciAddr
 	}
 	return ""
 }
 
-type NvmeUnbindResp struct {
+type NvmeRebindResp struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -309,8 +309,8 @@ type NvmeUnbindResp struct {
 	State *ResponseState `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
 }
 
-func (x *NvmeUnbindResp) Reset() {
-	*x = NvmeUnbindResp{}
+func (x *NvmeRebindResp) Reset() {
+	*x = NvmeRebindResp{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_ctl_storage_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -318,13 +318,13 @@ func (x *NvmeUnbindResp) Reset() {
 	}
 }
 
-func (x *NvmeUnbindResp) String() string {
+func (x *NvmeRebindResp) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*NvmeUnbindResp) ProtoMessage() {}
+func (*NvmeRebindResp) ProtoMessage() {}
 
-func (x *NvmeUnbindResp) ProtoReflect() protoreflect.Message {
+func (x *NvmeRebindResp) ProtoReflect() protoreflect.Message {
 	mi := &file_ctl_storage_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -336,12 +336,12 @@ func (x *NvmeUnbindResp) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use NvmeUnbindResp.ProtoReflect.Descriptor instead.
-func (*NvmeUnbindResp) Descriptor() ([]byte, []int) {
+// Deprecated: Use NvmeRebindResp.ProtoReflect.Descriptor instead.
+func (*NvmeRebindResp) Descriptor() ([]byte, []int) {
 	return file_ctl_storage_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *NvmeUnbindResp) GetState() *ResponseState {
+func (x *NvmeRebindResp) GetState() *ResponseState {
 	if x != nil {
 		return x.State
 	}
@@ -383,10 +383,10 @@ var file_ctl_storage_proto_rawDesc = []byte{
 	0x63, 0x72, 0x65, 0x74, 0x73, 0x12, 0x29, 0x0a, 0x05, 0x6d, 0x72, 0x65, 0x74, 0x73, 0x18, 0x02,
 	0x20, 0x03, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x53, 0x63, 0x6d, 0x4d, 0x6f,
 	0x75, 0x6e, 0x74, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x05, 0x6d, 0x72, 0x65, 0x74, 0x73,
-	0x22, 0x2a, 0x0a, 0x0d, 0x4e, 0x76, 0x6d, 0x65, 0x55, 0x6e, 0x62, 0x69, 0x6e, 0x64, 0x52, 0x65,
+	0x22, 0x2a, 0x0a, 0x0d, 0x4e, 0x76, 0x6d, 0x65, 0x52, 0x65, 0x62, 0x69, 0x6e, 0x64, 0x52, 0x65,
 	0x71, 0x12, 0x19, 0x0a, 0x08, 0x70, 0x63, 0x69, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x01, 0x20,
 	0x01, 0x28, 0x09, 0x52, 0x07, 0x70, 0x63, 0x69, 0x41, 0x64, 0x64, 0x72, 0x22, 0x3a, 0x0a, 0x0e,
-	0x4e, 0x76, 0x6d, 0x65, 0x55, 0x6e, 0x62, 0x69, 0x6e, 0x64, 0x52, 0x65, 0x73, 0x70, 0x12, 0x28,
+	0x4e, 0x76, 0x6d, 0x65, 0x52, 0x65, 0x62, 0x69, 0x6e, 0x64, 0x52, 0x65, 0x73, 0x70, 0x12, 0x28,
 	0x0a, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e,
 	0x63, 0x74, 0x6c, 0x2e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x53, 0x74, 0x61, 0x74,
 	0x65, 0x52, 0x05, 0x73, 0x74, 0x61, 0x74, 0x65, 0x42, 0x39, 0x5a, 0x37, 0x67, 0x69, 0x74, 0x68,
@@ -414,8 +414,8 @@ var file_ctl_storage_proto_goTypes = []interface{}{
 	(*StorageScanResp)(nil),      // 1: ctl.StorageScanResp
 	(*StorageFormatReq)(nil),     // 2: ctl.StorageFormatReq
 	(*StorageFormatResp)(nil),    // 3: ctl.StorageFormatResp
-	(*NvmeUnbindReq)(nil),        // 4: ctl.NvmeUnbindReq
-	(*NvmeUnbindResp)(nil),       // 5: ctl.NvmeUnbindResp
+	(*NvmeRebindReq)(nil),        // 4: ctl.NvmeRebindReq
+	(*NvmeRebindResp)(nil),       // 5: ctl.NvmeRebindResp
 	(*ScanNvmeReq)(nil),          // 6: ctl.ScanNvmeReq
 	(*ScanScmReq)(nil),           // 7: ctl.ScanScmReq
 	(*ScanNvmeResp)(nil),         // 8: ctl.ScanNvmeResp
@@ -435,7 +435,7 @@ var file_ctl_storage_proto_depIdxs = []int32{
 	11, // 5: ctl.StorageFormatReq.scm:type_name -> ctl.FormatScmReq
 	12, // 6: ctl.StorageFormatResp.crets:type_name -> ctl.NvmeControllerResult
 	13, // 7: ctl.StorageFormatResp.mrets:type_name -> ctl.ScmMountResult
-	14, // 8: ctl.NvmeUnbindResp.state:type_name -> ctl.ResponseState
+	14, // 8: ctl.NvmeRebindResp.state:type_name -> ctl.ResponseState
 	9,  // [9:9] is the sub-list for method output_type
 	9,  // [9:9] is the sub-list for method input_type
 	9,  // [9:9] is the sub-list for extension type_name
@@ -501,7 +501,7 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*NvmeUnbindReq); i {
+			switch v := v.(*NvmeRebindReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -513,7 +513,7 @@ func file_ctl_storage_proto_init() {
 			}
 		}
 		file_ctl_storage_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*NvmeUnbindResp); i {
+			switch v := v.(*NvmeRebindResp); i {
 			case 0:
 				return &v.state
 			case 1:

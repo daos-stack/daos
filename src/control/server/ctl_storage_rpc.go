@@ -260,9 +260,9 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	return resp, nil
 }
 
-// StorageNvmeUnbind unbinds SSD from kernel and binds to user-space to allow DAOS to use it.
-func (c *ControlService) StorageNvmeUnbind(ctx context.Context, req *ctlpb.NvmeUnbindReq) (*ctlpb.NvmeUnbindResp, error) {
-	c.log.Debugf("received StorageNvmeUnbind RPC %v", req)
+// StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
+func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
+	c.log.Debugf("received StorageNvmeRebind RPC %v", req)
 
 	if req == nil {
 		return nil, errors.New("nil request")
@@ -281,9 +281,9 @@ func (c *ControlService) StorageNvmeUnbind(ctx context.Context, req *ctlpb.NvmeU
 		Reset_:        false,
 	}
 
-	resp := new(ctlpb.NvmeUnbindResp)
+	resp := new(ctlpb.NvmeRebindResp)
 	if _, err := c.NvmePrepare(prepReq); err != nil {
-		err = errors.Wrap(err, "nvme unbind")
+		err = errors.Wrap(err, "nvme rebind")
 		c.log.Error(err.Error())
 
 		resp.State = &ctlpb.ResponseState{
@@ -294,7 +294,7 @@ func (c *ControlService) StorageNvmeUnbind(ctx context.Context, req *ctlpb.NvmeU
 		return resp, nil // report prepare call result in response
 	}
 
-	c.log.Debug("responding to StorageNvmeUnbind RPC")
+	c.log.Debug("responding to StorageNvmeRebind RPC")
 
 	return resp, nil
 }

@@ -19,8 +19,8 @@ func TestStorageCommands(t *testing.T) {
 	storageFormatReq := &control.StorageFormatReq{Reformat: true}
 	storageFormatReq.SetHostList([]string{})
 	systemQueryReq := &control.SystemQueryReq{FailOnUnavailable: true}
-	nvmeUnbindReq := &control.NvmeUnbindReq{PCIAddr: "0000:80:00.0"}
-	nvmeUnbindReq.SetHostList([]string{"foo2.com"})
+	nvmeRebindReq := &control.NvmeRebindReq{PCIAddr: "0000:80:00.0"}
+	nvmeRebindReq.SetHostList([]string{"foo2.com"})
 
 	runCmdTests(t, []cmdTest{
 		{
@@ -100,27 +100,27 @@ func TestStorageCommands(t *testing.T) {
 			errors.New("cannot use --nvme-health and --nvme-meta"),
 		},
 		{
-			"Unbind NVMe; no PCI address",
-			"storage nvme-unbind",
+			"Rebind NVMe; no PCI address",
+			"storage nvme-rebind",
 			"",
 			errors.New("required flag"),
 		},
 		{
-			"Unbind NVMe; 0 hosts in hostlist",
-			"storage nvme-unbind --pci-address 0000:80:00.0",
+			"Rebind NVMe; 0 hosts in hostlist",
+			"storage nvme-rebind --pci-address 0000:80:00.0",
 			"",
 			errors.New("expects a single host"),
 		},
 		{
-			"Unbind NVMe; 2 hosts in hostlist",
-			"storage nvme-unbind -l foo[1,2].com --pci-address 0000:80:00.0",
+			"Rebind NVMe; 2 hosts in hostlist",
+			"storage nvme-rebind -l foo[1,2].com --pci-address 0000:80:00.0",
 			"",
 			errors.New("expects a single host"),
 		},
 		{
-			"Unbind NVMe",
-			"storage nvme-unbind -l foo2.com --pci-address 0000:80:00.0",
-			printRequest(t, nvmeUnbindReq),
+			"Rebind NVMe",
+			"storage nvme-rebind -l foo2.com --pci-address 0000:80:00.0",
+			printRequest(t, nvmeRebindReq),
 			nil,
 		},
 		{

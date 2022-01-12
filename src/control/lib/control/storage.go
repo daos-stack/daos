@@ -431,31 +431,31 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 }
 
 type (
-	// NvmeUnbindReq contains the parameters for a storage nvme-unbind request.
-	NvmeUnbindReq struct {
+	// NvmeRebindReq contains the parameters for a storage nvme-rebind request.
+	NvmeRebindReq struct {
 		unaryRequest
 		PCIAddr string `json:"pci_addr"`
 	}
 
-	// NvmeUnbindResp contains the response from a storage nvme-unbind request.
-	NvmeUnbindResp struct {
+	// NvmeRebindResp contains the response from a storage nvme-rebind request.
+	NvmeRebindResp struct {
 		HostErrorsResp
 	}
 )
 
-// StorageNvmeUnbind unbinds NVMe SSD from kernel driver and binds to user-space driver on single
+// StorageNvmeRebind rebinds NVMe SSD from kernel driver and binds to user-space driver on single
 // server.
-func StorageNvmeUnbind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeUnbindReq) (*NvmeUnbindResp, error) {
+func StorageNvmeRebind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeRebindReq) (*NvmeRebindResp, error) {
 	if _, err := hardware.NewPCIAddress(req.PCIAddr); err != nil {
 		return nil, errors.Wrap(err, "invalid pci address in request")
 	}
 
-	pbReq := new(ctlpb.NvmeUnbindReq)
+	pbReq := new(ctlpb.NvmeRebindReq)
 	if err := convert.Types(req, pbReq); err != nil {
 		return nil, err
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewCtlSvcClient(conn).StorageNvmeUnbind(ctx, pbReq)
+		return ctlpb.NewCtlSvcClient(conn).StorageNvmeRebind(ctx, pbReq)
 	})
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -463,7 +463,7 @@ func StorageNvmeUnbind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeUnb
 		return nil, err
 	}
 
-	snur := new(NvmeUnbindResp)
+	snur := new(NvmeRebindResp)
 	for _, hostResp := range ur.Responses {
 		if hostResp.Error != nil {
 			if err := snur.addHostError(hostResp.Addr, hostResp.Error); err != nil {

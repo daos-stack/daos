@@ -1758,22 +1758,22 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	}
 }
 
-func TestServer_CtlSvc_StorageNvmeUnbind(t *testing.T) {
+func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username
 
 	for name, tc := range map[string]struct {
-		req         *ctlpb.NvmeUnbindReq
+		req         *ctlpb.NvmeRebindReq
 		bmbc        *bdev.MockBackendConfig
 		expErr      error
-		expResp     *ctlpb.NvmeUnbindResp
+		expResp     *ctlpb.NvmeRebindResp
 		expPrepCall *storage.BdevPrepareRequest
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
 		"failure": {
-			req: &ctlpb.NvmeUnbindReq{
+			req: &ctlpb.NvmeRebindReq{
 				PciAddr: common.MockPCIAddr(1),
 			},
 			bmbc: &bdev.MockBackendConfig{
@@ -1783,15 +1783,15 @@ func TestServer_CtlSvc_StorageNvmeUnbind(t *testing.T) {
 				TargetUser:   username,
 				PCIAllowList: common.MockPCIAddr(1),
 			},
-			expResp: &ctlpb.NvmeUnbindResp{
+			expResp: &ctlpb.NvmeRebindResp{
 				State: &ctlpb.ResponseState{
 					Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
-					Error:  "nvme unbind: failure",
+					Error:  "nvme rebind: failure",
 				},
 			},
 		},
 		"success": {
-			req: &ctlpb.NvmeUnbindReq{
+			req: &ctlpb.NvmeRebindReq{
 				PciAddr: common.MockPCIAddr(1),
 			},
 			bmbc: &bdev.MockBackendConfig{},
@@ -1799,7 +1799,7 @@ func TestServer_CtlSvc_StorageNvmeUnbind(t *testing.T) {
 				TargetUser:   username,
 				PCIAllowList: common.MockPCIAddr(1),
 			},
-			expResp: &ctlpb.NvmeUnbindResp{},
+			expResp: &ctlpb.NvmeRebindResp{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1812,7 +1812,7 @@ func TestServer_CtlSvc_StorageNvmeUnbind(t *testing.T) {
 				scm.NewMockProvider(log, nil, nil), mbp)
 			cs := &ControlService{StorageControlService: *scs}
 
-			resp, err := cs.StorageNvmeUnbind(context.TODO(), tc.req)
+			resp, err := cs.StorageNvmeRebind(context.TODO(), tc.req)
 
 			mbb.RLock()
 			if tc.expPrepCall == nil {
