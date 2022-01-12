@@ -862,13 +862,22 @@ def get_vmd_address_backed_nvme(host_list, value):
               devices.
 
     """
+    command = "daos_server storage prepare --force --reset -n"
+
+    task = get_remote_output(host_list, command)
+
+    # Verify the command was successful on each server host
+    if not check_remote_output(task, command):
+        print("ERROR: Issuing commands {}".format(command))
+        sys.exit(1)
+
     command = "ls -l /sys/block/ | grep nvme | cut -d\'>\' -f2 | cut -d'/' -f4"
 
     task = get_remote_output(host_list, command)
 
     # Verify the command was successful on each server host
     if not check_remote_output(task, command):
-        print("ERROR: Issuing commands ls -l /sys/block/")
+        print("ERROR: Issuing commands {}".format(command))
         sys.exit(1)
 
     # Verify each server host has the same NVMe device behind VMD addresses.

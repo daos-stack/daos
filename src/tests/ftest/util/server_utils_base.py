@@ -297,7 +297,6 @@ class DaosServerCommand(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
-                self.enable_vmd = FormattedParameter("--enable-vmd", False)
 
 class DaosServerInformation():
     """An object that stores the daos_server storage and network scan data."""
@@ -516,8 +515,19 @@ class DaosServerInformation():
         for engine_param in engine_params:
             # Get the NVMe storage configuration for this engine
             bdev_list = engine_param.get_value("bdev_list")
-            storage_capacity["nvme"].append(0)
-            for device in bdev_list:
+            if os.environ.get("DAOS_ENABLE_VMD"):
+                # Get the NVMe storage behind the VMD address
+                for vmd_dev in bdev_list:
+                    device = (vmd_dev.split(":")[1] +
+                              vmd_dev.split(":")[2].split(".")[0]+
+                              vmd_dev.split(":")[2].split(".")[1].zfill(2))
+                    storage_capacity["nvme"].append(0)
+                    for key in device_capacity["nvme"]:
+                        if device in key:
+                            storage_capacity["nvme"][-1] = (storage_capacity["nvme"][-1]+
+                                    device_capacity['nvme'][key][0])
+            else:
+                storage_capacity["nvme"].append(0)
                 if device in device_capacity["nvme"]:
                     storage_capacity["nvme"][-1] += min(
                         device_capacity["nvme"][device])
