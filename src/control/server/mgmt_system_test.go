@@ -113,9 +113,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				MsRanks: []uint32{0},
 			},
 		},
-		"Server uses sockets + Ethernet": {
+		"Server uses TCP sockets + Ethernet": {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
-				Provider:        "ofi+sockets",
+				Provider:        "ofi+tcp",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
 				NetDevClass:     netdetect.Ether,
@@ -126,7 +126,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				ClientNetHint: &mgmtpb.ClientNetHint{
-					Provider:        "ofi+sockets",
+					Provider:        "ofi+tcp",
 					CrtCtxShareAddr: 0,
 					CrtTimeout:      5,
 					NetDevClass:     netdetect.Ether,
@@ -146,7 +146,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 		},
 		"older client (AllRanks: false)": {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
-				Provider:        "ofi+sockets",
+				Provider:        "ofi+tcp",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
 				NetDevClass:     netdetect.Ether,
@@ -157,7 +157,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				ClientNetHint: &mgmtpb.ClientNetHint{
-					Provider:        "ofi+sockets",
+					Provider:        "ofi+tcp",
 					CrtCtxShareAddr: 0,
 					CrtTimeout:      5,
 					NetDevClass:     netdetect.Ether,
