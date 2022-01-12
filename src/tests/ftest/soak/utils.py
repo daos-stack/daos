@@ -145,40 +145,63 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
         fscopy_cmd.run()
 
 
-def get_remote_dir(self, source_dir, dest_dir, host_list, rm_remote=True):
+def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
+                   rm_remote=True, append=None):
     """Copy files from remote dir to local dir.
 
     Args:
         self (obj): soak obj
         source_dir (str): Source directory to archive
         dest_dir (str): Destinaton directory
-        host_list (str):
+        host_list (list): list of hosts
 
     Raises:
         SoakTestError: if there is an error with the remote copy
 
     """
-    # copy the files from the client nodes to a shared directory
-    command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
-        source_dir, self.sharedsoaktest_dir)
-    try:
-        slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params)
-    except DaosTestError as error:
-        raise SoakTestError(
-            "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host_list))
-    # copy the local logs and the logs in the shared dir to avocado dir
-    for directory in [source_dir, self.sharedsoaktest_dir]:
-        command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(directory, dest_dir)
+    if shared_dir is None:
+        shared_dir = self.sharedsoaktest_dir
+    if append:
+        for host in host_list:
+            shared_dir_tmp = shared_dir + append + "{}".format(host)
+            if not os.path.exists(shared_dir_tmp):
+                os.mkdir(shared_dir_tmp)
+            # copy the directory from each client node to a shared directory
+            # tagged with the hostname
+            command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
+                source_dir, shared_dir_tmp)
+            try:
+                slurm_utils.srun(NodeSet.fromlist([host]), command, self.srun_params)
+            except DaosTestError as error:
+                raise SoakTestError(
+                    "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host))
+            command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(shared_dir_tmp, dest_dir)
+            try:
+                run_command(command, timeout=30)
+            except DaosTestError as error:
+                raise SoakTestError("<<FAILED: job logs failed to copy>>") from error
+    else:
+        # copy the remote dir on all client nodes to a shared directory
+        command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
+            source_dir, shared_dir)
         try:
-            run_command(command, timeout=30)
+            slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params)
         except DaosTestError as error:
-            raise SoakTestError("<<FAILED: job logs failed to copy>>") from error
+            raise SoakTestError(
+                "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host_list))
+        # copy the local logs and the logs in the shared dir to avocado dir
+        for directory in [source_dir, shared_dir]:
+            command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(directory, dest_dir)
+            try:
+                run_command(command, timeout=30)
+            except DaosTestError as error:
+                raise SoakTestError("<<FAILED: job logs failed to copy>>") from error
     if rm_remote:
         # remove the remote soak logs for this pass
         command = "/usr/bin/rm -rf {0}".format(source_dir)
         slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params)
         # remove the local log for this pass
-        for directory in [source_dir, self.sharedsoaktest_dir]:
+        for directory in [source_dir, shared_dir]:
             command = "/usr/bin/rm -rf {0}".format(directory)
             try:
                 run_command(command)
@@ -197,14 +220,15 @@ def write_logfile(data, name, destination):
     """
     if not os.path.exists(destination):
         os.makedirs(destination)
-    scriptfile = destination + "/" + str(name)
-    with open(scriptfile, 'w') as script_file:
+    logfile = destination + "/" + str(name)
+    with open(logfile, 'w') as log_file:
         # identify what be used to run this script
         if isinstance(data, list):
             text = "\n".join(data)
-            script_file.write(text)
+            log_file.write(text)
         else:
-            script_file.write(str(data))
+            log_file.write(str(data))
+
 
 def run_event_check(self, since, until, log=False):
     """Run a check on specific events in journalctl.
@@ -221,25 +245,71 @@ def run_event_check(self, since, until, log=False):
     events_found = []
     detected = 0
     events = self.params.get("events", "/run/*")
-    # check events on all nodes
+    # check events on all server nodes
     hosts = list(set(self.hostlist_servers))
     if events:
-        command = ("sudo /usr/bin/journalctl --system -t kernel -t "
-                   "daos_server --since=\"{}\" --until=\"{}\"".format(
-                       since, until))
-        err = "Error gathering system log events"
-        for event in events:
-            for output in get_host_data(hosts, command, "journalctl", err):
-                lines = output["data"].splitlines()
-                for line in lines:
-                    match = re.search(r"{}".format(event), str(line))
-                    if match:
-                        events_found.append(line)
-                        detected += 1
-                self.log.info(
-                    "Found %s instances of %s in system log from %s through %s",
-                    detected, event, since, until)
+        for type in ["kernel", "daos_server"]:
+            for output in get_journalctl(self, hosts, since, until, type):
+                for event in events:
+                    lines = output["data"].splitlines()
+                    for line in lines:
+                        match = re.search(r"{}".format(event), str(line))
+                        if match:
+                            events_found.append(line)
+                            detected += 1
+                    self.log.info(
+                        "Found %s instances of %s in system log from %s through %s",
+                        detected, event, since, until)
     return events_found
+
+
+def get_journalctl(self, hosts, since, until, type, logging=False):
+    """Run the journalctl on daos servers.
+
+    Args:
+        self (obj): soak obj
+        since (str): start time
+        until (str): end time
+        type (str): the -t param for journalctl
+        log (bool):  If true; write the events to a logfile
+
+    Returns:
+        list: a list of dictionaries containing the following key/value pairs:
+            "hosts": NodeSet containing the hosts with this data
+            "data":  data requested for the group of hosts
+
+    """
+    command = "sudo /usr/bin/journalctl --system -t {} --since=\"{}\" --until=\"{}\"".format(
+        type, since, until)
+    err = "Error gathering system log events"
+    results = get_host_data(hosts, command, "journalctl", err)
+    name = "journalctl_{}.log".format(type)
+    destination = self.outputsoak_dir
+    self.log
+    if logging:
+        for result in results:
+            host = result["hosts"]
+            log_name = name + "-" + str(host)
+            self.log.info("Logging %s output to %s", command, log_name)
+            write_logfile(result["data"], log_name, destination)
+    return results
+
+
+def get_daos_server_logs(self):
+    """Gather server logs.
+
+    Args:
+        self (obj): soak obj
+
+    """
+    for host in self.hostlist_servers:
+        daos_dir = self.outputsoak_dir + "/daos_logs-" + "{}".format(host)
+        if not os.path.exists(daos_dir):
+            os.mkdir(daos_dir)
+            commands = ["scp {}:/var/tmp/daos_testing/daos*.log.* {}".format(host, daos_dir),
+                        "scp {}:/var/tmp/daos_testing/daos*.log {}".format(host, daos_dir)]
+            for command in commands:
+                run_command(command, timeout=120)
 
 
 def run_monitor_check(self):
@@ -680,7 +750,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     dfuse.set_dfuse_cont_param(container)
     dfuse_log = os.path.join(
         self.soaktest_dir,
-        self.test_name + "_" + name + "_${SLURM_JOB_NODELIST}_"
+        self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
     dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
     dfuse_start_cmds = [
@@ -818,12 +888,15 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     add_containers(self, pool, o_type)
                     ior_cmd.set_daos_params(
                         self.server_group, pool, self.container[-1].uuid)
-                    env = ior_cmd.get_default_env("mpirun")
+                    log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
+                        job_spec, api, b_size, t_size,
+                        o_type, nodesperjob * ppn, nodesperjob, ppn)
+                    daos_log = os.path.join(
+                        self.soaktest_dir, self.test_name + "_" + log_name +
+                        "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                    env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
                     sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
                     # include dfuse cmdlines
-                    log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
-                        job_spec, api, b_size, t_size, o_type,
-                        nodesperjob * ppn, nodesperjob, ppn)
                     if api in ["HDF5-VOL", "POSIX"]:
                         dfuse, dfuse_start_cmdlist = start_dfuse(
                             self, pool, self.container[-1], name=log_name, job_spec=job_spec)
@@ -915,14 +988,18 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.set_daos_params(
                             self.server_group, pool,
                             self.container[-1].uuid)
-                        env = mdtest_cmd.get_default_env("mpirun")
-                        sbatch_cmds = [
-                            "module purge", "module load {}".format(mpi_module)]
-                        # include dfuse cmdlines
                         log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
                             job_spec, api, write_bytes, read_bytes, depth,
                             oclass, nodesperjob * ppn, nodesperjob,
                             ppn)
+                        daos_log = os.path.join(
+                            self.soaktest_dir, self.test_name + "_" + log_name +
+                            "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                        env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
+                        sbatch_cmds = [
+                            "module purge", "module load {}".format(mpi_module)]
+                        # include dfuse cmdlines
+
                         if api in ["POSIX"]:
                             dfuse, dfuse_start_cmdlist = start_dfuse(
                                 self, pool, self.container[-1], name=log_name, job_spec=job_spec)
@@ -965,7 +1042,7 @@ def create_racer_cmdline(self, job_spec):
     daos_racer.get_params(self)
     racer_log = os.path.join(
         self.soaktest_dir,
-        self.test_name + "_" + job_spec + "_${SLURM_JOB_NODELIST}_"
+        self.test_name + "_" + job_spec + "_`hostname -s`_"
         "${SLURM_JOB_ID}_" + "racer_log")
     env = daos_racer.get_environment(self.server_managers[0], racer_log)
     daos_racer.set_environment(env)
@@ -1073,12 +1150,14 @@ def build_job_script(self, commands, job, nodesperjob):
     # if additional cmds are needed in the batch script
     prepend_cmds = [
         "set -e",
+        "echo \" Job_Start_Time \"`date \+\"%Y-%m-%d %T\"`",
         "daos pool query {} ".format(self.pool[1].uuid),
         "daos pool query {} ".format(self.pool[0].uuid)
         ]
     append_cmds = [
         "daos pool query {} ".format(self.pool[1].uuid),
-        "daos pool query {} ".format(self.pool[0].uuid)
+        "daos pool query {} ".format(self.pool[0].uuid),
+        "echo \" Job_End_Time \"`date \+\"%Y-%m-%d %T\"`"
         ]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines

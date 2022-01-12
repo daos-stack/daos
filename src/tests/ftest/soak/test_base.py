@@ -5,6 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import logging
 import os
 import time
 from datetime import datetime, timedelta
@@ -25,7 +26,8 @@ from utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
-    create_mdtest_cmdline, reserved_file_copy, run_metrics_check
+    create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
+    get_journalctl, get_daos_server_logs
 
 
 class SoakTestBase(TestWithServers):
@@ -46,6 +48,7 @@ class SoakTestBase(TestWithServers):
         self.outputsoak_dir = None
         self.test_name = None
         self.test_timeout = None
+        self.start_time = None
         self.end_time = None
         self.soak_results = None
         self.srun_params = None
@@ -94,6 +97,7 @@ class SoakTestBase(TestWithServers):
                 "<<FAILED: Partition is not correctly setup for daos "
                 "slurm partition>>")
         self.srun_params = {"partition": self.client_partition}
+        self.srun_params["time"] = self.params.get("resource_timeout", "/run/*", 2)
         if self.client_reservation:
             self.srun_params["reservation"] = self.client_reservation
         # Check if the server nodes are in the client list;
@@ -142,10 +146,18 @@ class SoakTestBase(TestWithServers):
 
         # display final metrics
         run_metrics_check(self, prefix="final")
-
-        # Gather daos logs
-
-        # Gather journal logs
+        # Gather server logs
+        get_daos_server_logs(self)
+        # Gather client daos logs with resource manager
+        get_remote_dir(
+            self, self.base_test_dir, self.outputsoak_dir, self.hostlist_clients,
+            shared_dir=self.sharedsoak_dir, rm_remote=False, append="/daos_logs-")
+        # Gather journalctl logs
+        hosts = list(set(self.hostlist_servers))
+        since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
+        until = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.end_time))
+        for type in ["kernel", "daos_server"]:
+            get_journalctl(self, hosts, since, until, type, logging=True)
 
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
@@ -567,9 +579,9 @@ class SoakTestBase(TestWithServers):
         # Baseline metrics data
         run_metrics_check(self, prefix="initial")
         # Initialize time
-        start_time = time.time()
+        self.start_time = time.time()
         self.test_timeout = int(3600 * test_to)
-        self.end_time = start_time + self.test_timeout
+        self.end_time = self.start_time + self.test_timeout
         self.log.info("<<START %s >> at %s", self.test_name, time.ctime())
         while time.time() < self.end_time:
             # Start new pass
@@ -628,4 +640,4 @@ class SoakTestBase(TestWithServers):
             self.loop += 1
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>>", DDHHMMSS_format(
-                time.time() - start_time))
+                time.time() - self.start_time))
