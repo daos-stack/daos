@@ -207,7 +207,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
-		WithFabricProvider("ofi+verbs;ofi_rxm").
+		WithFabricProvider("ofi+verbs").
 		WithCrtCtxShareAddr(0).
 		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
@@ -236,7 +236,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
-			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(0).
@@ -265,7 +265,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithPinnedNumaNode(1).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
-			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(1).
@@ -649,9 +649,9 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"bad busid range": {
 			// fail first engine storage
-			inTxt:          "    bdev_busid_range: 0x80-0x8f",
-			outTxt:         "    bdev_busid_range: 0x80-0x8g",
-			expValidateErr: errors.New("\"0x8g\": invalid syntax"),
+			inTxt:       "    bdev_busid_range: 0x80-0x8f",
+			outTxt:      "    bdev_busid_range: 0x80-0x8g",
+			expParseErr: errors.New("\"0x8g\": invalid syntax"),
 		},
 		"legacy storage; empty bdev_list": {
 			legacyStorage: true,
@@ -713,9 +713,9 @@ func TestServerConfig_Parsing(t *testing.T) {
 					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
 				}
 
-				want := "0x00-0x80"
+				want := storage.MustNewBdevBusRange("0x00-0x80")
 				got := c.Engines[0].Storage.Tiers.BdevConfigs()[0].Bdev.BusidRange
-				if want != got {
+				if want.String() != got.String() {
 					return errors.Errorf("want %s bus-id range, got %s", want, got)
 				}
 
