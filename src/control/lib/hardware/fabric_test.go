@@ -1106,29 +1106,29 @@ func TestHardware_OSDeviceBuilder_BuildPart(t *testing.T) {
 				{
 					Name:    "net0",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: *common.MustNewPCIAddress("0000:00:00.1"),
+					PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
 				},
 				{
 					Name:    "ofi0",
 					Type:    DeviceTypeOFIDomain,
-					PCIAddr: *common.MustNewPCIAddress("0000:00:00.1"),
+					PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
 				},
 				{
 					Name:    "net1",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: *common.MustNewPCIAddress("0000:00:00.2"),
+					PCIAddr: *MustNewPCIAddress("0000:00:00.2"),
 				},
 			}),
 			1: MockNUMANode(1, 8).WithDevices([]*PCIDevice{
 				{
 					Name:    "net2",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: *common.MustNewPCIAddress("0000:00:01.1"),
+					PCIAddr: *MustNewPCIAddress("0000:00:01.1"),
 				},
 				{
 					Name:    "ofi2",
 					Type:    DeviceTypeOFIDomain,
-					PCIAddr: *common.MustNewPCIAddress("0000:00:01.1"),
+					PCIAddr: *MustNewPCIAddress("0000:00:01.1"),
 				},
 			}),
 		},
@@ -1301,24 +1301,24 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 				{
 					Name:    "net0",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: *common.MustNewPCIAddress("0000:00:00.1"),
+					PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
 				},
 				{
 					Name:    "net1",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: *common.MustNewPCIAddress("0000:00:00.2"),
+					PCIAddr: *MustNewPCIAddress("0000:00:00.2"),
 				},
 			}),
 			2: MockNUMANode(2, 8).WithDevices([]*PCIDevice{
 				{
 					Name:    "net2",
 					Type:    DeviceTypeNetInterface,
-					PCIAddr: *common.MustNewPCIAddress("0000:00:01.1"),
+					PCIAddr: *MustNewPCIAddress("0000:00:01.1"),
 				},
 				{
 					Name:    "ofi2",
 					Type:    DeviceTypeOFIDomain,
-					PCIAddr: *common.MustNewPCIAddress("0000:00:01.1"),
+					PCIAddr: *MustNewPCIAddress("0000:00:01.1"),
 				},
 			}),
 		},

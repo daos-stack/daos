@@ -63,7 +63,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		Name:        "test0",
 		Domain:      "test0",
 		NetDevClass: hardware.Ether,
-		Providers:   []string{"ofi+sockets"},
+		Providers:   []string{"ofi+tcp"},
 	}
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
@@ -154,7 +154,7 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 						Name:        "test0",
 						Domain:      "test0",
 						NetDevClass: hardware.Ether,
-						Providers:   []string{"ofi+sockets"},
+						Providers:   []string{"ofi+tcp"},
 					},
 				},
 			},
