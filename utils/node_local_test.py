@@ -4193,7 +4193,7 @@ def run(wf, args):
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do cont list, then
     # exit again.
-    if args.mode == 'server-valgrind':
+    if args.server_valgrind:
         with DaosServer(conf, valgrind=True, test_class='valgrind',
                         wf=wf_server, fe=fatal_errors) as server:
             pools = server.fetch_pools()
