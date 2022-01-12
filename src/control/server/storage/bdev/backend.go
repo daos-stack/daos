@@ -17,7 +17,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -42,7 +42,7 @@ type (
 
 	removeFn     func(string) error
 	userLookupFn func(string) (*user.User, error)
-	vmdDetectFn  func() (*common.PCIAddressSet, error)
+	vmdDetectFn  func() (*hardware.PCIAddressSet, error)
 	hpCleanFn    func(string, string, string) error
 	writeConfFn  func(logging.Logger, *storage.BdevWriteConfigRequest) error
 	restoreFn    func()
@@ -235,7 +235,7 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
 // to only those devices discovered and in device list and confirm that the devices specified in
 // the device list have all been discovered.
-func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.NvmeControllers, vmdEnabled bool) (storage.NvmeControllers, error) {
+func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.NvmeControllers, vmdEnabled bool) (storage.NvmeControllers, error) {
 	if reqDevs == nil {
 		return nil, errors.New("nil device list in bdev scan request")
 	}
@@ -245,7 +245,7 @@ func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.Nvme
 		return discovered, nil
 	}
 
-	var missing common.PCIAddressSet
+	var missing hardware.PCIAddressSet
 	out := make(storage.NvmeControllers, 0)
 
 	vmds, err := mapVMDToBackingDevs(discovered)
@@ -290,7 +290,7 @@ func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.Nvme
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
-	needDevs, err := common.NewPCIAddressSet(req.DeviceList...)
+	needDevs, err := hardware.NewPCIAddressSet(req.DeviceList...)
 	if err != nil {
 		return nil, err
 	}
@@ -422,7 +422,7 @@ func (sb *spdkBackend) formatKdev(req *storage.BdevFormatRequest) (*storage.Bdev
 }
 
 func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	needDevs, err := common.NewPCIAddressSet(req.Properties.DeviceList...)
+	needDevs, err := hardware.NewPCIAddressSet(req.Properties.DeviceList...)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +494,7 @@ func (sb *spdkBackend) writeNvmeConfig(req storage.BdevWriteConfigRequest, confW
 				continue
 			}
 
-			bdevs, err := common.NewPCIAddressSet(props.DeviceList...)
+			bdevs, err := hardware.NewPCIAddressSet(props.DeviceList...)
 			if err != nil {
 				return errors.Wrapf(err, "storage tier %d", props.Tier)
 			}
