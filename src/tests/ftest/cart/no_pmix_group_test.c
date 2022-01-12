@@ -660,7 +660,7 @@ int main(int argc, char **argv)
 	}
 
 	for (i = 0; i < 10; i++) {
-		rc = asprintf(&uris[i], "ofi+sockets://127.0.0.1:%d",
+		rc = asprintf(&uris[i], "ofi+tcp;ofi_rxm://127.0.0.1:%d",
 				10000 + i);
 		if (rc == -1) {
 			D_ERROR("asprintf() failed\n");
