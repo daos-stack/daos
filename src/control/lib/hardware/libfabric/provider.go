@@ -67,6 +67,8 @@ func (p *Provider) getFabricInterfaces(ch chan *fabricResult) {
 		fis.Update(newFI)
 	}
 
+	p.log.Debugf("found fabric interfaces:\n%s", fis)
+
 	ch <- &fabricResult{
 		fiSet: fis,
 	}
@@ -75,7 +77,6 @@ func (p *Provider) getFabricInterfaces(ch chan *fabricResult) {
 type info interface {
 	domainName() string
 	fabricProvider() string
-	osName() string
 }
 
 func (p *Provider) infoToFabricInterface(fi info) (*hardware.FabricInterface, error) {
@@ -96,10 +97,8 @@ func (p *Provider) infoToFabricInterface(fi info) (*hardware.FabricInterface, er
 
 	newFI := &hardware.FabricInterface{
 		Name:      name,
-		OSDevice:  fi.osName(),
 		Providers: common.NewStringSet(extProvider),
 	}
-	p.log.Debugf("found fabric interface %q: %s", name, newFI)
 	return newFI, nil
 }
 

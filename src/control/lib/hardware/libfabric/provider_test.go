@@ -41,7 +41,6 @@ func TestLibfabric_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 
 type mockInfo struct {
 	domainNameReturn     string
-	osNameReturn         string
 	fabricProviderReturn string
 }
 
@@ -51,10 +50,6 @@ func (m *mockInfo) domainName() string {
 
 func (m *mockInfo) fabricProvider() string {
 	return m.fabricProviderReturn
-}
-
-func (m *mockInfo) osName() string {
-	return m.osNameReturn
 }
 
 func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
@@ -68,7 +63,6 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 		},
 		"no domain": {
 			in: &mockInfo{
-				osNameReturn:         "fi0",
 				fabricProviderReturn: "provider_x",
 			},
 			expErr: errors.New("domain name"),
@@ -76,23 +70,10 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 		"no provider": {
 			in: &mockInfo{
 				domainNameReturn: "fi0_domain",
-				osNameReturn:     "fi0",
 			},
 			expErr: errors.New("provider"),
 		},
 		"success": {
-			in: &mockInfo{
-				domainNameReturn:     "fi0_domain",
-				osNameReturn:         "fi0",
-				fabricProviderReturn: "provider_x",
-			},
-			expResult: &hardware.FabricInterface{
-				Name:      "fi0_domain",
-				OSDevice:  "fi0",
-				Providers: common.NewStringSet("provider_x"),
-			},
-		},
-		"no OS name": {
 			in: &mockInfo{
 				domainNameReturn:     "fi0_domain",
 				fabricProviderReturn: "provider_x",

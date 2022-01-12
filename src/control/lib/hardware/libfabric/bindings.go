@@ -72,13 +72,6 @@ func (f *fiInfo) fabricProvider() string {
 	return C.GoString(f.cFI.fabric_attr.prov_name)
 }
 
-func (f *fiInfo) osName() string {
-	if f.cFI == nil || f.cFI.nic == nil || f.cFI.nic.device_attr == nil || f.cFI.nic.device_attr.name == nil {
-		return ""
-	}
-	return C.GoString(f.cFI.nic.device_attr.name)
-}
-
 func (f *fiInfo) hfiUnit() (uint, error) {
 	hfiUnit := C.get_hfi_unit(f.cFI.src_addr)
 	switch hfiUnit {
