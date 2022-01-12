@@ -39,7 +39,17 @@ To do this, the `LD_PRELOAD` setting must be passed to all tasks
 of the MPI-parallel job, for example with
 `mpirun -genv LD_PRELOAD /usr/lib64/libioil.so -np 8 -f hostfile dcp $SOURCE $DEST`.
 
-When upgrading to DAOS Version 2.0, please also verify the supported
+When planning the upgrade to DAOS Version 2.0, please also verify the supported
 operating system levels as outlined in the
-[DAOS Version 2.0 Support](./support_matrix_v2_0.md) document.
+[DAOS Version 2.0 Support](./support_matrix.md) document.
 If an OS upgrade is required, this should be performed prior to upgrading DAOS.
+
+!!! note
+    Note that CentOS 8.3 uses `hwloc-1.11`, while CentOS 8.4 uses `hwloc-2.2`.
+    DAOS requires the hwloc-1 functionality, and DAOS Version 2.0 includes the
+    `compat-hwloc1` RPM that addresses this version change. Older DAOS releases
+    do not include this compatibility package. So updating CentOS 8.3 to
+    CentOS 8.4 while an older DAOS release is installed will likely fail with
+    a dependency error. Adding the DAOS 2.0 packages repository and updating
+    DAOS to Version 2.0 at the same time as performing the CentOS update
+    should eliminate this problem.

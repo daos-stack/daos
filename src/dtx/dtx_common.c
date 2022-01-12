@@ -528,7 +528,7 @@ dtx_batched_commit_one(void *arg)
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, true);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc != 0) {
 			D_WARN("Fail to batched commit %d entries for "DF_UUID": "DF_RC"\n",
@@ -1299,7 +1299,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 sync:
 	if (dth->dth_sync) {
 		dte = &dth->dth_dte;
-		rc = dtx_commit(cont, &dte, NULL, 1, false);
+		rc = dtx_commit(cont, &dte, NULL, 1);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
 				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
@@ -1500,7 +1500,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 			  (unsigned long)total,
 			  (unsigned long)stat.dtx_committable_count);
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, true);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 	}
 
@@ -1730,6 +1730,9 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 	struct dtx_sub_status	*sub = &dlh->dlh_subs[idx];
 	ABT_future		future = dlh->dlh_future;
 
+	D_ASSERTF(sub->dss_comp == 0, "Repeat sub completion for idx %d: %d\n", idx, rc);
+	sub->dss_comp = 1;
+
 	sub->dss_result = rc;
 	rc = ABT_future_set(future, dlh);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
@@ -1748,32 +1751,30 @@ struct dtx_ult_arg {
 static void
 dtx_leader_exec_ops_ult(void *arg)
 {
-	struct dtx_ult_arg	  *ult_arg = arg;
-	struct dtx_leader_handle  *dlh = ult_arg->dlh;
-	ABT_future		  future = dlh->dlh_future;
-	uint32_t		  i;
-	int			  rc = 0;
+	struct dtx_ult_arg		*ult_arg = arg;
+	struct dtx_leader_handle	*dlh = ult_arg->dlh;
+	struct dtx_sub_status		*sub;
+	ABT_future			 future = dlh->dlh_future;
+	uint32_t			 i;
+	int				 rc = 0;
 
 	D_ASSERT(future != ABT_FUTURE_NULL);
 	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
-		struct dtx_sub_status *sub = &dlh->dlh_subs[i];
-
+		sub = &dlh->dlh_subs[i];
 		sub->dss_result = 0;
+		sub->dss_comp = 0;
 
 		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
 		    (i == daos_fail_value_get() &&
 		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
-			int ret;
-
-			ret = ABT_future_set(future, dlh);
-			D_ASSERTF(ret == ABT_SUCCESS,
-				  "ABT_future_set failed %d.\n", ret);
+			dtx_sub_comp_cb(dlh, i, 0);
 			continue;
 		}
 
 		rc = ult_arg->func(dlh, ult_arg->func_arg, i, dtx_sub_comp_cb);
-		if (rc) {
-			sub->dss_result = rc;
+		if (rc != 0) {
+			if (sub->dss_comp == 0)
+				dtx_sub_comp_cb(dlh, i, rc);
 			break;
 		}
 
@@ -1783,14 +1784,13 @@ dtx_leader_exec_ops_ult(void *arg)
 	}
 
 	if (rc != 0) {
-		for (i++; i < dlh->dlh_sub_cnt; i++) {
-			int ret;
-
-			ret = ABT_future_set(future, dlh);
-			D_ASSERTF(ret == ABT_SUCCESS,
-				  "ABT_future_set failed %d.\n", ret);
-		}
+		for (i++; i < dlh->dlh_sub_cnt; i++)
+			dtx_sub_comp_cb(dlh, i, 0);
 	}
+
+	/* To indicate that the IO forward ULT itself has done. */
+	rc = ABT_future_set(future, dlh);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed (3) %d.\n", rc);
 
 	D_FREE(ult_arg);
 }
@@ -1817,9 +1817,12 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dlh->dlh_agg_cb = agg_cb;
 	dlh->dlh_agg_cb_arg = agg_cb_arg;
 
-	/* the future should already be freed */
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
-	rc = ABT_future_create(dlh->dlh_sub_cnt, dtx_comp_cb, &dlh->dlh_future);
+
+	/* Create the future with sub_cnt + 1, the additional one is used by the IO forward
+	 * ULT itself to prevent the DTX handle being freed before the IO forward ULT exit.
+	 */
+	rc = ABT_future_create(dlh->dlh_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_future_create failed %d.\n", rc);
 		D_FREE_PTR(ult_arg);
@@ -1870,7 +1873,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, true);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc < 0) {
 			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));

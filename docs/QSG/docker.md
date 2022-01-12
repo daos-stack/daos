@@ -26,10 +26,44 @@ To build and deploy the Docker images, `docker` and optionally `docker-compose` 
 The docker host should have access to the [Docker Hub](https://hub.docker.com/) and
 [CentOS](https://www.centos.org/) official repositories.  Finally,
 [hugepages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt) linux kernel feature shall
-be enabled on the docker host.
+be enabled on the docker host.  At least, 4096 pages of 2048kB should be available.  The number of
+huge pages allocated could be checked with the following command:
+
+```bash
+$ sysctl vm.nr_hugepages
+```
+
+The default size of a huge page, the number of available huge pages, etc. could be found with the
+following command:
+
+```bash
+$ cat /proc/meminfo | grep -e "^Huge"
+```
 
 The platform was tested and validated with the [CentOS8](https://hub.docker.com/_/centos) official
 docker image.
+
+### Configuring HugePages
+
+First the Linux kernel needs to be built with the `CONFIG_HUGETLBFS` (present under "File systems")
+and `CONFIG_HUGETLB_PAGE` (selected automatically when `CONFIG_HUGETLBFS` is selected) configuration
+options.
+
+To avoid memory fragmentation, huge pages could be allocated on the kernel boot command line by
+specifying the "hugepages=N" parameter, where 'N' = the number of huge pages requested.  It is also
+possible to allocate them at run time, thanks to the `sysctl` command:
+
+```bash
+$ sysctl vm.nr_hugepages=8192
+```
+
+It is also possible to use the `sysctl` command to allocate huge pages at boot time with the
+following command:
+
+```bash
+$ cat <<< "vm.nr_hugepages = 8192" > /etc/sysctl.d/50-hugepages.conf
+$ sysctl -p
+```
 
 ## Building Docker Images
 
@@ -52,7 +86,7 @@ This Docker file accept the following arguments:
 	value such as the date of the day shall be given.
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "no")
 - `DAOS_REPOS`: Space separated list of repos needed to install DAOS (default
-	"https://packages.daos.io/v2.0")
+	"https://packages.daos.io/v2.0/CentOS8/packages/x86_64/")
 - `DAOS_GPG_KEYS`: Space separated list of GPG keys associated with DAOS repos (default
 	"https://packages.daos.io/RPM-GPG-KEY")
 - `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentication
@@ -96,8 +130,8 @@ The Docker file of the `daos-server` image accept the following arguments:
 - `DAOS_IFACE_NAME`: Fabric network interface used by the DAOS engine (default "eth0")
 
 !!! note
-   The IP address of the network interface referenced by the `DAOS_IFACE_NAME` argument will be
-   required when starting DAOS.
+    The IP address of the network interface referenced by the `DAOS_IFACE_NAME` argument will be
+    required when starting DAOS.
 
 The Dockerfile of the `daos-client` and `daos-admin` images accept the following arguments:
 
