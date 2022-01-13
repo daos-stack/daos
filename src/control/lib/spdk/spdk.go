@@ -49,7 +49,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -70,8 +70,8 @@ func Rc2err(label string, rc C.int) error {
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	PCIAllowList *common.PCIAddressSet // restrict SPDK device access
-	EnableVMD    bool                  // flag if VMD functionality should be enabled
+	PCIAllowList *hardware.PCIAddressSet // restrict SPDK device access
+	EnableVMD    bool                    // flag if VMD functionality should be enabled
 }
 
 func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
