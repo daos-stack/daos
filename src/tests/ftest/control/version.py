@@ -31,7 +31,9 @@ class DAOSVersion(TestWithServers):
         # Get RPM version.
         rpm_command = "rpm -qa|grep daos-server"
         output = run_pcmd(hosts=self.hostlist_servers, command=rpm_command)
+        self.log.debug("## rpm output = %s", output)
         stdout = output[0]["stdout"][0]
+        self.log.debug("## rpm stdout = %s", stdout)
         result = re.findall(r"daos-server-([\d.]+)", stdout)
         rpm_version = result[0]
         self.log.info("RPM version = %s", rpm_version)
@@ -39,6 +41,7 @@ class DAOSVersion(TestWithServers):
         # Get dmg version.
         dmg_cmd = self.get_dmg_command()
         output = dmg_cmd.version().stdout.decode("utf-8")
+        self.log.debug("## dmg output = %s", output)
 
         # Verify that "dmg version" is in the output.
         if "dmg version" not in output:
@@ -51,6 +54,7 @@ class DAOSVersion(TestWithServers):
         # Get daos version.
         daos_cmd = self.get_daos_command()
         output = daos_cmd.version().stdout.decode("utf-8")
+        self.log.debug("## daos output = %s", output)
 
         # Verify that "daos version" is in the output.
         if "daos version" not in output:
@@ -64,7 +68,9 @@ class DAOSVersion(TestWithServers):
         # Get daos_agent version.
         daos_agent_cmd = "daos_agent version"
         output = run_pcmd(hosts=self.hostlist_servers, command=daos_agent_cmd)
+        self.log.debug("## daos_agent output = %s", output)
         stdout = output[0]["stdout"][0]
+        self.log.debug("## daos_agent stdout = %s", stdout)
 
         # Verify that "DAOS Agent" is in the output.
         if "DAOS Agent" not in stdout:
@@ -77,7 +83,9 @@ class DAOSVersion(TestWithServers):
         # Get daos_server version
         daos_server_cmd = "daos_server version"
         output = run_pcmd(hosts=self.hostlist_servers, command=daos_server_cmd)
+        self.log.debug("## daos_server output = %s", output)
         stdout = output[0]["stdout"][0]
+        self.log.debug("## daos_server stdout = %s", stdout)
 
         # Verify that "DAOS Control Server" is in the output.
         if "DAOS Control Server" not in stdout:
