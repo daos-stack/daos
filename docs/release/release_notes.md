@@ -20,7 +20,7 @@ In this release we have added the following changes to the DAOS support matrix:
 - CentOS Linux 8 and openSUSE Leap 15.3  support is added
 
 For a complete list of supported hardware and software, refer to the
- [Support Matrix](https://docs.daos.io/v2.0/release/support_matrix/).
+[Support Matrix](https://docs.daos.io/v2.0/release/support_matrix/).
 
 ## Key features and improvements
 
@@ -94,8 +94,7 @@ was written to support tools like dcp and dsync.
 
 - Misconfiguration of certificates causes server crash at start up / [DAOS-8114](https://daosio.atlassian.net/browse/DAOS-8114)
 
-A complete list of known issues in v2.0 can be found [**HERE**]
-(https://daosio.atlassian.net/issues/?jql=project%20in%20(DAOS%2C%20CART)%20AND%20type%20%3D%20bug%20AND%20statuscategory%20!%3D%20done%20AND%20affectedVersion%20!%3D%20%222.1%20Community%20Release%22%20AND%20%22Bug%20Source%22%20!%3D%20%22non-product%20bug%22%20ORDER%20BY%20priority%20DESC).
+A complete list of known issues in v2.0 can be found [**HERE**](https://daosio.atlassian.net/issues/?jql=project%20in%20(DAOS%2C%20CART)%20AND%20type%20%3D%20bug%20AND%20statuscategory%20!%3D%20done%20AND%20affectedVersion%20!%3D%20%222.1%20Community%20Release%22%20AND%20%22Bug%20Source%22%20!%3D%20%22non-product%20bug%22%20ORDER%20BY%20priority%20DESC).
 
 ## Bug fixes
 
