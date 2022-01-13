@@ -23,7 +23,8 @@ class DAOSVersion(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=control,version_number
+        :avocado: tags=control
+        :avocado: tags=version_number
         """
         errors = []
 
