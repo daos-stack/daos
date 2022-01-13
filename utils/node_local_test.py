@@ -1910,6 +1910,7 @@ class posix_tests():
             fd.write('Hello')
             # Force dfuse caching (when enabled) to writeback the file
             os.fsync(fd.fileno())
+            fd.close()
         # Copy it across containers.
         ret = il_cmd(self.dfuse, ['cp', f, sub_cont_dir])
         assert ret.returncode == 0

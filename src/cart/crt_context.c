@@ -758,31 +758,6 @@ crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv)
 	}
 }
 
-static void
-crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
-{
-	struct crt_timeout_cb_priv	*cbs_timeout;
-	crt_timeout_cb			 cb_func;
-	void				*cb_args;
-	size_t				 cbs_size;
-	size_t				 i;
-
-	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || rpc_priv == NULL))
-		return;
-
-	cbs_size = crt_plugin_gdata.cpg_timeout_size;
-	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
-
-	for (i = 0; i < cbs_size; i++) {
-		cb_func = cbs_timeout[i].ctcp_func;
-		cb_args = cbs_timeout[i].ctcp_args;
-		/* check for and execute timeout callbacks here */
-		if (cb_func != NULL)
-			cb_func(rpc_priv->crp_pub.cr_ctx, &rpc_priv->crp_pub,
-				cb_args);
-	}
-}
-
 static bool
 crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 {
@@ -960,8 +935,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag);
 
-		/* check for and execute RPC timeout callbacks here */
-		crt_exec_timeout_cb(rpc_priv);
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
 	}
@@ -1585,63 +1558,6 @@ out_unlock:
 
 	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 out:
-	return rc;
-}
-
-/**
- * to use this function, the user has to:
- * 1) define a callback function user_cb
- * 2) call crt_register_timeout_cb_core(user_cb);
- */
-int
-crt_register_timeout_cb(crt_timeout_cb func, void *args)
-{
-	struct crt_timeout_cb_priv *cbs_timeout;
-	size_t i, cbs_size;
-	int rc = 0;
-
-	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
-
-	cbs_size = crt_plugin_gdata.cpg_timeout_size;
-	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
-
-	for (i = 0; i < cbs_size; i++) {
-		if (cbs_timeout[i].ctcp_func == func &&
-		    cbs_timeout[i].ctcp_args == args) {
-			D_GOTO(out_unlock, rc = -DER_EXIST);
-		}
-	}
-
-	for (i = 0; i < cbs_size; i++) {
-		if (cbs_timeout[i].ctcp_func == NULL) {
-			cbs_timeout[i].ctcp_args = args;
-			cbs_timeout[i].ctcp_func = func;
-			D_GOTO(out_unlock, rc = 0);
-		}
-	}
-
-	D_FREE(crt_plugin_gdata.cpg_timeout_cbs_old);
-
-	crt_plugin_gdata.cpg_timeout_cbs_old = cbs_timeout;
-	cbs_size += CRT_CALLBACKS_NUM;
-
-	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
-	if (cbs_timeout == NULL) {
-		crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
-		D_GOTO(out_unlock, rc = -DER_NOMEM);
-	}
-
-	if (i > 0)
-		memcpy(cbs_timeout, crt_plugin_gdata.cpg_timeout_cbs_old,
-		       i * sizeof(*cbs_timeout));
-	cbs_timeout[i].ctcp_args = args;
-	cbs_timeout[i].ctcp_func = func;
-
-	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
-	crt_plugin_gdata.cpg_timeout_size = cbs_size;
-
-out_unlock:
-	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 
