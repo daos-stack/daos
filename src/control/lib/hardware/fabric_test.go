@@ -575,6 +575,80 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnOSDevice(t *testing.T) {
 				Providers: common.NewStringSet("p3"),
 			},
 		},
+		"ignore provider helpers if not specified": {
+			fis: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:      "test0",
+					OSDevice:  "os_test0",
+					Providers: common.NewStringSet("p1", "p2"),
+				},
+				&FabricInterface{
+					Name:      "test1",
+					OSDevice:  "os_test0",
+					Providers: common.NewStringSet("p3;h1"),
+				},
+				&FabricInterface{
+					Name:      "test2",
+					OSDevice:  "os_test2",
+					Providers: common.NewStringSet("p4"),
+				},
+			),
+			osDev:    "os_test0",
+			provider: "p3",
+			expResult: &FabricInterface{
+				Name:      "test1",
+				OSDevice:  "os_test0",
+				Providers: common.NewStringSet("p3;h1"),
+			},
+		},
+		"provider helper specified, success": {
+			fis: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:      "test0",
+					OSDevice:  "os_test0",
+					Providers: common.NewStringSet("p1", "p2"),
+				},
+				&FabricInterface{
+					Name:      "test1",
+					OSDevice:  "os_test0",
+					Providers: common.NewStringSet("p3;h1"),
+				},
+				&FabricInterface{
+					Name:      "test2",
+					OSDevice:  "os_test2",
+					Providers: common.NewStringSet("p4"),
+				},
+			),
+			osDev:    "os_test0",
+			provider: "p3;h1",
+			expResult: &FabricInterface{
+				Name:      "test1",
+				OSDevice:  "os_test0",
+				Providers: common.NewStringSet("p3;h1"),
+			},
+		},
+		"provider helper specified, not found": {
+			fis: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:      "test0",
+					OSDevice:  "os_test0",
+					Providers: common.NewStringSet("p1", "p2"),
+				},
+				&FabricInterface{
+					Name:      "test1",
+					OSDevice:  "os_test0",
+					Providers: common.NewStringSet("p3;h1"),
+				},
+				&FabricInterface{
+					Name:      "test2",
+					OSDevice:  "os_test2",
+					Providers: common.NewStringSet("p4"),
+				},
+			),
+			osDev:    "os_test0",
+			provider: "p3;h2",
+			expErr:   errors.New("not supported"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.fis.GetInterfaceOnOSDevice(tc.osDev, tc.provider)

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"github.com/pkg/errors"
 
@@ -139,6 +140,19 @@ type FabricInterfaceSet struct {
 	byOSDev osDevMap
 }
 
+func (s *FabricInterfaceSet) String() string {
+	var b strings.Builder
+	for _, name := range s.Names() {
+		fi, err := s.GetInterface(name)
+		if err != nil {
+			continue
+		}
+		b.WriteString(fi.String())
+		b.WriteRune('\n')
+	}
+	return b.String()
+}
+
 // NumFabricInterfaces is the total number of FabricInterfaces in the set.
 func (s *FabricInterfaceSet) NumFabricInterfaces() int {
 	if s == nil {
@@ -229,7 +243,10 @@ func (s *FabricInterfaceSet) GetInterfaceOnOSDevice(osDev string, provider strin
 
 	for _, fi := range fis {
 		for prov := range fi.Providers {
-			if prov == provider {
+			// NB: We ignore the helpers (such as ofi_rxm) that are appended to some
+			// providers when trying to find a match.
+			provParts := strings.Split(prov, ";")
+			if prov == provider || provParts[0] == provider {
 				return fi, nil
 			}
 		}
