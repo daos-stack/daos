@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,9 +53,8 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 				attr->st_uid, attr->st_gid);
 
 		if (!ie->ie_dfs->dfs_multi_user) {
-
-			if (((to_set & FUSE_SET_ATTR_UID) && ie->ie_stat.st_uid != attr->st_uid) ||
-				((to_set & FUSE_SET_ATTR_GID) && ie->ie_stat.st_gid != attr->st_gid)) {
+			if ((set_uid && ie->ie_stat.st_uid != attr->st_uid) ||
+				(set_gid && ie->ie_stat.st_gid != attr->st_gid)) {
 				DFUSE_TRA_INFO(ie, "File uid/gid support not enabled");
 				D_GOTO(err, rc = ENOTSUP);
 			}
@@ -63,7 +62,6 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 			to_set &= ~(FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID);
 
 		} else {
-
 			/* Set defaults based on current file ownership */
 			entry.uid = ie->ie_stat.st_uid;
 			entry.gid = ie->ie_stat.st_gid;
@@ -166,7 +164,6 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		attr->st_uid = ie->ie_stat.st_uid;
 		attr->st_gid = ie->ie_stat.st_gid;
 	}
-
 
 reply:
 	attr->st_ino = ie->ie_stat.st_ino;

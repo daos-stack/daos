@@ -1214,6 +1214,9 @@ class DFuse():
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
         self.valgrind.convert_xml()
+        os.rmdir(self.dir)
+        self._daos.remove_fuse(self)
+
 
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
@@ -3350,7 +3353,6 @@ def run_in_fg(server, conf, args):
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
         pass
-    dfuse = None
 
 def check_readdir_perf(server, conf):
     """ Check and report on readdir performance

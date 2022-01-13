@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -543,8 +543,10 @@ main(int argc, char **argv)
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 
-	if (dfuse_info->di_multi_user)
+	if (dfuse_info->di_multi_user) {
 		dfs->dfs_multi_user = true;
+		dfs->dfs_ops = &dfuse_login_ops;
+	}
 
 	rc = dfuse_fs_start(fs_handle, dfs);
 	if (rc != -DER_SUCCESS)

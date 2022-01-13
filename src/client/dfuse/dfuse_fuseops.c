@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -674,7 +674,8 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.statfs		= dfuse_cb_statfs,
 };
 
-/* dfuse ops that are used for accessing multi-user dfs mounts
+/* dfuse ops that are used for accessing multi-user dfs mounts.
+ *
  * These are the same as single user, but have extra checks around
  * create operations to avoid the creation of files by 3rd party
  * users.
@@ -697,9 +698,10 @@ struct dfuse_inode_ops dfuse_dfs_ops_safe = {
 	.statfs		= dfuse_cb_statfs,
 };
 
-/* Operations for root/multi-user container
+/* Operations for root/multi-user container.
  *
- * The only write operations are mkdir/setattr.
+ * This is for the 'root' container where the only allowed operation is to
+ * create subcontainers, so the only write operations are mkdir/setattr/setxattr
  */
 struct dfuse_inode_ops dfuse_login_ops = {
 	.lookup		= dfuse_cb_lookup,
