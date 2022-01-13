@@ -44,7 +44,7 @@ obj_ec_is_valid_tgt(struct daos_cpd_ec_tgts *tgt_map, uint32_t map_size,
  * split it for different targets before dispatch.
  */
 int
-obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
+obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash, struct obj_iod_array *iod_array,
 		    uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
 		    uint32_t leader_id, void *tgt_map, uint32_t map_size,
 		    struct daos_oclass_attr *oca, uint32_t tgt_nr,
@@ -63,6 +63,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	struct dcs_iod_csums	*split_iod_csum = NULL;
 	struct dcs_iod_csums	*split_iod_csums;
 	uint32_t		 i, tgt_max_idx;
+	uint32_t		 orig_shard;
 	daos_size_t		 req_size, iods_size;
 	daos_size_t		 csums_size = 0, singv_ci_size = 0;
 	uint8_t			 tgt_bit_map[OBJ_TGT_BITMAP_LEN] = {0};
@@ -124,8 +125,9 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		} else {
 			if (tgts[i].st_rank == DAOS_TGT_IGNORE)
 				continue;
-			D_ASSERT(tgts[i].st_shard >= start_shard);
-			tgt_idx = tgts[i].st_shard - start_shard;
+			orig_shard = obj_ec_shard_rotate2orig(oca, dkey_hash, tgts[i].st_shard);
+			D_ASSERT(orig_shard >= start_shard);
+			tgt_idx = orig_shard - start_shard;
 			D_ASSERT(tgt_idx <= tgt_max_idx);
 		}
 
@@ -147,8 +149,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			leader = leader % obj_ec_tgt_nr(oca);
 	} else {
 		D_ASSERT(leader_id == PO_COMP_ID_ALL);
-
-		leader = oid.id_shard % obj_ec_tgt_nr(oca);
+		orig_shard = obj_ec_shard_rotate2orig(oca, dkey_hash, oid.id_shard);
+		leader = orig_shard % obj_ec_tgt_nr(oca);
 		setbit(tgt_bit_map, leader);
 		count++;
 	}

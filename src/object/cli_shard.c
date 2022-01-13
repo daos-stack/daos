@@ -1249,9 +1249,14 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_tgt_idx = auxi->ec_tgt_idx;
 	if (args->reasb_req && args->reasb_req->orr_oca)
 		orw->orw_tgt_max = obj_ec_tgt_nr(args->reasb_req->orr_oca) - 1;
-	if (obj_op_is_ec_fetch(auxi->obj_auxi) &&
-	    (auxi->shard != (auxi->start_shard + auxi->ec_tgt_idx)))
-		orw->orw_flags |= ORF_EC_DEGRADED;
+	if (obj_op_is_ec_fetch(auxi->obj_auxi)) {
+		uint32_t	orig_shard;
+
+		orig_shard = obj_ec_shard_rotate2orig(args->reasb_req->orr_oca, args->dkey_hash,
+						      auxi->shard);
+		if (orig_shard != (auxi->start_shard + auxi->ec_tgt_idx))
+			orw->orw_flags |= ORF_EC_DEGRADED;
+	}
 	orw->orw_dti_cos.ca_count = 0;
 	orw->orw_dti_cos.ca_arrays = NULL;
 
