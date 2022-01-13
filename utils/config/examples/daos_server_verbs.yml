@@ -3,7 +3,7 @@
 name: daos_server           # sys group daos_server
 access_points: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
-provider: ofi+verbs;ofi_rxm
+provider: ofi+verbs
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 

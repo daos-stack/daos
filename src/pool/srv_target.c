@@ -357,13 +357,21 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
 
+	/** set up ds_pool metrics */
+	rc = ds_pool_metrics_start(pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to set up ds_pool metrics: %d\n",
+			DP_UUID(key), rc);
+		goto err_done_cond;
+	}
+
 	uuid_unparse_lower(key, group_id);
 	rc = crt_group_secondary_create(group_id, NULL /* primary_grp */,
 					NULL /* ranks */, &pool->sp_group);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool group: %d\n",
 			DP_UUID(key), rc);
-		goto err_done_cond;
+		goto err_metrics;
 	}
 
 	rc = ds_iv_ns_create(info->dmi_ctx, pool->sp_uuid, pool->sp_group,
@@ -374,14 +382,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err_group;
 	}
 
-	/** set up ds_pool metrics */
-	rc = ds_pool_metrics_start(pool);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to set up ds_pool metrics: %d\n",
-			DP_UUID(key), rc);
-		goto err_iv_ns;
-	}
-
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
@@ -389,14 +389,12 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
 			DP_UUID(key), DP_RC(rc));
-		goto err_metrics;
+		goto err_iv_ns;
 	}
 
 	*link = &pool->sp_entry;
 	return 0;
 
-err_metrics:
-	ds_pool_metrics_stop(pool);
 err_iv_ns:
 	ds_iv_ns_put(pool->sp_iv_ns);
 err_group:
@@ -404,6 +402,8 @@ err_group:
 	if (rc_tmp != 0)
 		D_ERROR(DF_UUID": failed to destroy pool group: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc_tmp));
+err_metrics:
+	ds_pool_metrics_stop(pool);
 err_done_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 err_cond:
@@ -659,6 +659,8 @@ ds_pool_start(uuid_t uuid)
 	} else if (rc != -DER_NONEXIST) {
 		D_ERROR(DF_UUID": failed to look up pool: %d\n", DP_UUID(uuid),
 			rc);
+		if (rc == -DER_EXIST)
+			rc = -DER_BUSY;
 		return rc;
 	}
 
@@ -721,7 +723,7 @@ ds_pool_stop(uuid_t uuid)
 	pool_fetch_hdls_ult_abort(pool);
 
 	ds_rebuild_abort(pool->sp_uuid, -1);
-	ds_migrate_abort(pool->sp_uuid, -1);
+	ds_migrate_stop(pool, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
 	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
