@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -u
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -345,12 +345,14 @@ def run_command(cmd):
 
     """
     print("Running {}".format(" ".join(cmd)))
+
     try:
-        with subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                universal_newlines=True) as process:
-            stdout, _ = process.communicate()
-            retcode = process.poll()
+        # pylint: disable=consider-using-with
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            universal_newlines=True)
+        stdout, _ = process.communicate()
+        retcode = process.poll()
     except Exception as error:
         raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
     if retcode:
