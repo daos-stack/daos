@@ -64,7 +64,7 @@ fio:
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
-    direct: 1
+    #direct: 1
     verify: 'crc64'
     iodepth: 16
     bs: !mux
