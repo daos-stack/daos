@@ -25,7 +25,6 @@
 static enum daos_media_type_t
 policy_io_size(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 {
-	enum daos_media_type_t	medium;
 	uint32_t		scm_threshold;
 
 	if (pool->vp_vea_info == NULL)
@@ -34,12 +33,7 @@ policy_io_size(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 	scm_threshold = pool->vp_policy_desc.params[0] > 0 ?
 		pool->vp_policy_desc.params[0] : VOS_POLICY_SCM_THRESHOLD;
 
-	if (size >= scm_threshold)
-		medium = DAOS_MEDIA_NVME;
-	else
-		medium = DAOS_MEDIA_SCM;
-
-	return medium;
+	return (size > scm_threshold) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
 }
 
 /* policy based on how write-intensive is data to store
