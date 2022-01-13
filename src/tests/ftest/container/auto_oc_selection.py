@@ -80,7 +80,7 @@ class AutoOCSelectionTest(TestWithServers):
             self.container[-1].oclass.update(oclass)
 
             try:
-                self.log.debug(
+                self.log.info(
                     "Create container with RF = %s, OC = %s", properties,
                     oclass)
                 self.container[-1].create()
