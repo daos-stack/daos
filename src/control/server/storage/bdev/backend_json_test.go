@@ -178,7 +178,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				Bdev: storage.BdevConfig{
 					DeviceList: tc.devList,
 					FileSize:   tc.fileSizeGB,
-					BusidRange: tc.busidRange,
+					BusidRange: storage.MustNewBdevBusRange(tc.busidRange),
 				},
 			}
 			if tc.class != "" {

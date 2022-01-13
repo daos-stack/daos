@@ -81,6 +81,10 @@ struct dtx_handle {
 					 dth_for_migration:1,
 					 /* Has prepared locally, for resend. */
 					 dth_prepared:1,
+					 /* The DTX handle has been verified. */
+					 dth_verified:1,
+					 /* The DTX handle is aborted. */
+					 dth_aborted:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
