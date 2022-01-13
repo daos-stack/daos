@@ -2852,15 +2852,18 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		/* object iteration for rebuild or consistency verification. */
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
+		param.ip_flags |= VOS_IT_RECX_VISIBLE;
 		if (daos_anchor_get_flags(&anchors[0].ia_dkey) &
 		      DIOF_WITH_SPEC_EPOCH) {
 			/* For obj verification case. */
-			param.ip_flags |= VOS_IT_RECX_VISIBLE;
 			param.ip_epc_expr = VOS_IT_EPC_RR;
 		} else {
 			param.ip_epc_expr = VOS_IT_EPC_RE;
 		}
 		recursive = true;
+
+		if (daos_oclass_is_ec(&ioc->ioc_oca))
+			enum_arg->ec_cell_sz = ioc->ioc_oca.u.ec.e_len;
 		enum_arg->chk_key2big = 1;
 		enum_arg->need_punch = 1;
 		enum_arg->copy_data_cb = vos_iter_copy;
