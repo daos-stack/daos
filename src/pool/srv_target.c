@@ -1411,12 +1411,15 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 		rc = ds_pool_hdl_is_from_srv(pool, in->tmi_op.pi_hdl);
 		if (rc < 0) {
 			D_CDEBUG(rc == -DER_NOTLEADER, DLOG_DBG, DLOG_ERR,
-				 DF_UUID": failed to check pool handle: "DF_RC"\n",
-				 DP_UUID(in->tmi_op.pi_uuid), DP_RC(rc));
+				 DF_UUID": failed to check server pool handle "DF_UUID": "DF_RC"\n",
+				 DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl),
+				 DP_RC(rc));
 			if (rc == -DER_NOTLEADER)
 				rc = -DER_AGAIN;
 			goto out_pool;
 		} else if (!rc) {
+			D_ERROR(DF_UUID": cannot find server pool handle "DF_UUID"\n",
+				DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl));
 			rc = -DER_NO_HDL;
 			goto out_pool;
 		}
