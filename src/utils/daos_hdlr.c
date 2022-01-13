@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <dlfcn.h>
+#include <linux/limits.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -1645,6 +1646,70 @@ out:
 	return rc;
 }
 
+#define SUB_STR_LEN 256
+static int
+fs_copy_symlink(struct cmd_args_s *ap,
+		struct file_dfs *src_file_dfs,
+		struct file_dfs *dst_file_dfs,
+		struct stat *src_stat,
+		const char *src_path,
+		const char *dst_path)
+{
+	int		rc;
+	daos_size_t	len = 0;
+	char		symlink_value[PATH_MAX-SUB_STR_LEN];
+
+	len = PATH_MAX - SUB_STR_LEN - 1;
+	if (src_file_dfs->type == POSIX) {
+		len = readlink(src_path, symlink_value, (size_t)len);
+		if (len < 0) {
+			rc = errno;
+			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on readlink('%s')",
+				      src_path);
+			D_GOTO(out_copy_symlink, rc);
+		}
+	} else if (src_file_dfs->type == DAOS) {
+		rc = dfs_sys_readlink(src_file_dfs->dfs_sys, src_path, symlink_value, &len);
+		if (rc != 0) {
+			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on dfs_sys_readlink('%s')",
+				      src_path);
+			D_GOTO(out_copy_symlink, rc);
+		}
+		/*length of symlink_value includes the NULL terminator already.*/
+		len--;
+	} else {
+		rc = EINVAL;
+		DH_PERROR_DER(ap, rc, "unknown type for %s", src_path);
+		D_GOTO(out_copy_symlink, rc);
+	}
+	symlink_value[len] = 0;
+
+	if (dst_file_dfs->type == POSIX) {
+		rc = symlink(symlink_value, dst_path);
+		if (rc != 0) {
+			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on symlink('%s')", dst_path);
+		}
+	} else if (dst_file_dfs->type == DAOS) {
+		rc = dfs_sys_symlink(dst_file_dfs->dfs_sys, symlink_value, dst_path);
+		if (rc != 0) {
+			rc = errno;
+			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on dfs_sys_readlink('%s')",
+				     dst_path);
+			D_GOTO(out_copy_symlink, rc);
+		}
+	} else {
+		rc = EINVAL;
+		DH_PERROR_DER(ap, rc, "unknown type for %s", dst_path);
+		D_GOTO(out_copy_symlink, rc);
+	}
+	
+out_copy_symlink:
+	src_file_dfs->offset = 0;
+	dst_file_dfs->offset = 0;
+	return rc;
+}
+#undef SUB_STR_LEN
+
 static int
 fs_copy_dir(struct cmd_args_s *ap,
 	    struct file_dfs *src_file_dfs,
@@ -1727,6 +1792,14 @@ fs_copy_dir(struct cmd_args_s *ap,
 			rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs,
 					  &next_src_stat, next_src_path,
 					  next_dst_path);
+			if (rc != 0)
+				D_GOTO(out, rc);
+			(*num_files)++;
+			break;
+		case S_IFLNK:
+			rc = fs_copy_symlink(ap, src_file_dfs, dst_file_dfs,
+					     &next_src_stat, next_src_path,
+					     next_dst_path);
 			if (rc != 0)
 				D_GOTO(out, rc);
 			(*num_files)++;
