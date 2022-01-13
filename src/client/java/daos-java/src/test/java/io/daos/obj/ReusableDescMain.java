@@ -1,6 +1,5 @@
 package io.daos.obj;
 
-import com.sun.corba.se.impl.orbutil.concurrent.Sync;
 import io.daos.DaosClient;
 import io.netty.buffer.ByteBuf;
 
