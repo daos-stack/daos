@@ -34,10 +34,10 @@ dpdk_cli_override_opts;
 #define NVME_DEV_STATE_FAULTY (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
 #define NVME_DEV_STATE_NEW (NVME_DEV_FL_PLUGGED)
 
-#define BIT_SET(x,m) (((x)&(m)) == (m))
-#define BIT_UNSET(x,m) (!BIT_SET(x,m))
+#define BIT_SET(x, m) (((x)&(m)) == (m))
+#define BIT_UNSET(x, m) (!BIT_SET(x, m))
 
-#define STR_EQ(x,m) (strcmp(x,m) == 0)
+#define STR_EQ(x, m) (strcmp(x, m) == 0)
 
 static inline char *
 nvme_state2str(int state)
@@ -47,7 +47,7 @@ nvme_state2str(int state)
 		return "UNPLUGGED";
 
 	/** If identify is set, return combination with faulty taking precedence over new */
-	if BIT_SET(state, NVME_DEV_FL_IDENTIFY) {
+	if (BIT_SET(state, NVME_DEV_FL_IDENTIFY)) {
 		if BIT_SET(state, NVME_DEV_FL_FAULTY)
 			return "EVICTED|IDENTIFY";
 		if BIT_UNSET(state, NVME_DEV_FL_INUSE)
