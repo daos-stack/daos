@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from test_utils_container import TestContainer
 from avocado.core.exceptions import TestFail
 
 
@@ -19,7 +18,7 @@ class AutoOCSelectionTest(TestWithServers):
 
     :avocado: recursive
     """
-    def test_oc_restrictions(self):
+    def test_oc_selection(self):
         """JIRA ID: DAOS-7595
 
         Test Description:
@@ -32,7 +31,8 @@ class AutoOCSelectionTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=container,oc_restrictions
+        :avocado: tags=container
+        :avocado: tags=oc_selection
         """
         self.add_pool()
 
@@ -64,6 +64,7 @@ class AutoOCSelectionTest(TestWithServers):
             ("rf:4", "RP_4G1", True),
             ("rf:4", "RP_5G1", False)
         ]
+
         self.container = []
         errors = []
 
@@ -73,17 +74,16 @@ class AutoOCSelectionTest(TestWithServers):
             oclass = prop_oclass[1]
             failure_expected = prop_oclass[2]
 
-            cont = TestContainer(
-                pool=self.pool, daos_command=self.get_daos_command())
-            cont.get_params(self)
-            cont.properties.update(properties)
-            cont.oclass.update(oclass)
+            self.container.append(
+                self.get_container(pool=self.pool, create=False))
+            self.container[-1].properties.update(properties)
+            self.container[-1].oclass.update(oclass)
 
             try:
                 self.log.debug(
                     "Create container with RF = %s, OC = %s", properties,
                     oclass)
-                cont.create()
+                self.container[-1].create()
                 if failure_expected:
                     msg = ("Container create succeeded with invalid RF-OC "
                            "pair! RF = {}, OC = {}".format(properties, oclass))
