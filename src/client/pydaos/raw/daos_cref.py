@@ -60,7 +60,7 @@ class RebuildStatus(ctypes.Structure):
     _fields_ = [("rs_version", ctypes.c_uint32),
                 ("rs_seconds", ctypes.c_uint32),
                 ("rs_errno", ctypes.c_uint32),
-                ("rs_done", ctypes.c_uint32),
+                ("rs_state", ctypes.c_uint32),
                 ("rs_padding32", ctypes.c_uint32),
                 ("rs_fail_rank", ctypes.c_uint32),
                 ("rs_toberb_obj_nr", ctypes.c_uint64),

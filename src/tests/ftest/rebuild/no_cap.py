@@ -70,7 +70,7 @@ class RbldNoCapacity(TestWithServers):
             "pi_ndisabled": 0
         }
         rebuild_checks = {
-            "rs_done": 1,
+            "rs_state": 0,
             "rs_obj_nr": 0,
             "rs_rec_nr": 0
         }
@@ -156,7 +156,7 @@ class RbldNoCapacity(TestWithServers):
         pool_checks["pi_ndisabled"] = ">0"
         rebuild_checks["rs_obj_nr"] = ">0"
         rebuild_checks["rs_rec_nr"] = ">0"
-        rebuild_checks["rs_done"] = 0
+        rebuild_checks["rs_state"] = 0
         self.assertTrue(
             self.pool.check_pool_info(**pool_checks),
             "#Invalid pool information detected before rebuild")

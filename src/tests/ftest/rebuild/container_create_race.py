@@ -113,7 +113,7 @@ class RbldContainerCreate(IorTestBase):
         }
         rebuild_checks = {
             "rs_errno": 0,
-            "rs_done": 1,
+            "rs_state": 2,
             "rs_obj_nr": 0,
             "rs_rec_nr": 0
         }

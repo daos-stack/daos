@@ -451,7 +451,7 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		if (rs_inlist != NULL)
 			memcpy(status, rs_inlist, sizeof(*status));
 		else
-			status->rs_done = 1;
+			status->rs_state = DRS_NOT_STARTED;
 	} else {
 		memcpy(status, &rgt->rgt_status, sizeof(*status));
 		status->rs_version = rgt->rgt_rebuild_ver;
@@ -461,31 +461,31 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 	/* If there are still rebuild task queued/running for the pool, let's reset
 	 * the done status.
 	 */
-	if (status->rs_done == 1 &&
+	if (status->rs_state == DRS_COMPLETED &&
 	    (!d_list_empty(&rebuild_gst.rg_queue_list) ||
 	     !d_list_empty(&rebuild_gst.rg_running_list))) {
 		struct rebuild_task *task;
 
 		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
 			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
-				status->rs_done = 0;
+				status->rs_state = DRS_IN_PROGRESS;
 				D_GOTO(out, rc);
 			}
 		}
 
 		d_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
 			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
-				status->rs_done = 0;
+				status->rs_state = DRS_IN_PROGRESS;
 				D_GOTO(out, rc);
 			}
 		}
 	}
 
 out:
-	D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" done %s rec "DF_U64" obj "
+	D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" state %d rec "DF_U64" obj "
 		DF_U64" ver %d err %d\n", DP_UUID(pool_uuid),
-		status->rs_done ? "yes" : "no", status->rs_rec_nr,
-		status->rs_obj_nr, status->rs_version, status->rs_errno);
+		status->rs_state, status->rs_rec_nr, status->rs_obj_nr,
+		status->rs_version, status->rs_errno);
 
 	return rc;
 }
@@ -596,9 +596,9 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 
 		/* query the current rebuild status */
 		if (is_rebuild_global_done(rgt))
-			rs->rs_done = 1;
+			rs->rs_state = DRS_COMPLETED;
 
-		if (rs->rs_done)
+		if (rs->rs_state == DRS_COMPLETED)
 			str = rs->rs_errno ? "failed" : "completed";
 		else if (rgt->rgt_abort || rebuild_gst.rg_abort)
 			str = "aborted";
@@ -615,11 +615,12 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			 " done %d status %d/%d epoch "DF_U64" duration=%d secs)\n",
 			 RB_OP_STR(op), str, DP_UUID(pool->sp_uuid), map_ver,
 			 rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
-			 rs->rs_size, rs->rs_done, rs->rs_errno,
+			 rs->rs_size, rs->rs_state, rs->rs_errno,
 			 rs->rs_fail_rank, rgt->rgt_stable_epoch, rs->rs_seconds);
 
 		D_INFO("%s", sbuf);
-		if (rs->rs_done || rebuild_gst.rg_abort || rgt->rgt_abort) {
+		if (rs->rs_state == DRS_COMPLETED || rebuild_gst.rg_abort ||
+		    rgt->rgt_abort) {
 			D_PRINT("%s", sbuf);
 			break;
 		}
@@ -1277,7 +1278,7 @@ try_reschedule:
 		 * sequence order.
 		 */
 		if (rgt)
-			rgt->rgt_status.rs_done = 0;
+			rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 
 		/* If reintegrate succeeds, schedule reclaim */
 		if (rgt && is_rebuild_global_done(rgt) &&
