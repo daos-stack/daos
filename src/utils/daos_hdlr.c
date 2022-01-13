@@ -1687,14 +1687,16 @@ fs_copy_symlink(struct cmd_args_s *ap,
 	if (dst_file_dfs->type == POSIX) {
 		rc = symlink(symlink_value, dst_path);
 		if (rc != 0) {
-			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on symlink('%s')", dst_path);
+			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on symlink('%s')",
+				      dst_path);
 		}
 	} else if (dst_file_dfs->type == DAOS) {
 		rc = dfs_sys_symlink(dst_file_dfs->dfs_sys, symlink_value, dst_path);
 		if (rc != 0) {
 			rc = errno;
-			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on dfs_sys_readlink('%s')",
-				     dst_path);
+			DH_PERROR_SYS(ap, rc,
+				      "fs_copy_symlink failed on dfs_sys_readlink('%s')",
+				      dst_path);
 			D_GOTO(out_copy_symlink, rc);
 		}
 	} else {
