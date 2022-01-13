@@ -75,11 +75,18 @@ func (bs NvmeDevState) Uint32() uint32 {
 	return uint32(bs)
 }
 
-func NvmeDevStateFromString(status string) NvmeDevState {
-	cstr := C.CString(status)
-	defer C.free(unsafe.Pointer(cstr))
+// NvmeDevStateFromString converts a status string into a state bitset.
+func NvmeDevStateFromString(status string) (NvmeDevState, error) {
+	cStr := C.CString(status)
+	defer C.free(unsafe.Pointer(cStr))
 
-	return NvmeDevState(C.nvme_str2state(cstr))
+	cState := C.nvme_str2state(cStr)
+
+	if cState == C.NVME_DEV_STATE_INVALID {
+		return NvmeDevState(0), errors.Errorf("%q is an invalid nvme dev status string", status)
+	}
+
+	return NvmeDevState(cState), nil
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -198,7 +205,11 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
+	state, err := NvmeDevStateFromString(from.NvmeStateStr)
+	if err != nil {
+		return err
+	}
+	sd.NvmeState = state
 
 	return nil
 }
