@@ -122,11 +122,6 @@ struct crt_prog_cb_priv {
 	void			*cpcp_args;
 };
 
-struct crt_timeout_cb_priv {
-	crt_timeout_cb		 ctcp_func;
-	void			*ctcp_args;
-};
-
 struct crt_event_cb_priv {
 	crt_event_cb		 cecp_func;
 	void			*cecp_args;
@@ -147,10 +142,6 @@ struct crt_plugin_gdata {
 	size_t				 cpg_prog_size[CRT_SRV_CONTEXT_NUM];
 	struct crt_prog_cb_priv		*cpg_prog_cbs[CRT_SRV_CONTEXT_NUM];
 	struct crt_prog_cb_priv		*cpg_prog_cbs_old[CRT_SRV_CONTEXT_NUM];
-	/* list of rpc timeout callbacks */
-	size_t				 cpg_timeout_size;
-	struct crt_timeout_cb_priv	*cpg_timeout_cbs;
-	struct crt_timeout_cb_priv	*cpg_timeout_cbs_old;
 	/* list of event notification callbacks */
 	size_t				 cpg_event_size;
 	struct crt_event_cb_priv	*cpg_event_cbs;

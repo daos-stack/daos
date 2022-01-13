@@ -210,13 +210,13 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 			lfc: newLocalFabricCache(nil, true),
 			input: []*netdetect.FabricScan{
 				{
-					Provider:    "ofi+sockets",
+					Provider:    "ofi+tcp",
 					DeviceName:  "test0",
 					NUMANode:    1,
 					NetDevClass: netdetect.Ether,
 				},
 				{
-					Provider:    "ofi+sockets",
+					Provider:    "ofi+tcp",
 					DeviceName:  "lo",
 					NUMANode:    1,
 					NetDevClass: netdetect.Loopback,
@@ -228,7 +228,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 					NetDevClass: netdetect.Infiniband,
 				},
 				{
-					Provider:    "ofi+sockets",
+					Provider:    "ofi+tcp",
 					DeviceName:  "test2",
 					NUMANode:    0,
 					NetDevClass: netdetect.Ether,
@@ -246,19 +246,19 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 						{
 							Name:        "test2",
 							NetDevClass: netdetect.Ether,
-							Providers:   []string{"ofi+sockets"},
+							Providers:   []string{"ofi+tcp"},
 						},
 					},
 					1: {
 						{
 							Name:        "test0",
 							NetDevClass: netdetect.Ether,
-							Providers:   []string{"ofi+sockets"},
+							Providers:   []string{"ofi+tcp"},
 						},
 						{
 							Name:        "lo",
 							NetDevClass: netdetect.Loopback,
-							Providers:   []string{"ofi+sockets"},
+							Providers:   []string{"ofi+tcp"},
 						},
 					},
 				},
@@ -273,7 +273,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 			},
 			input: []*netdetect.FabricScan{
 				{
-					Provider:    "ofi+sockets",
+					Provider:    "ofi+tcp",
 					DeviceName:  "test0",
 					NUMANode:    2,
 					NetDevClass: netdetect.Ether,
@@ -285,7 +285,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 					NetDevClass: netdetect.Infiniband,
 				},
 				{
-					Provider:    "ofi+sockets",
+					Provider:    "ofi+tcp",
 					DeviceName:  "test2",
 					NUMANode:    1,
 					NetDevClass: netdetect.Ether,
@@ -305,7 +305,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Name:        "test2",
 							NetDevClass: netdetect.Ether,
 							Domain:      "test2_alias",
-							Providers:   []string{"ofi+sockets"},
+							Providers:   []string{"ofi+tcp"},
 						},
 					},
 					2: {
@@ -313,7 +313,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Name:        "test0",
 							NetDevClass: netdetect.Ether,
 							Domain:      "test0_alias",
-							Providers:   []string{"ofi+sockets"},
+							Providers:   []string{"ofi+tcp"},
 						},
 					},
 				},
@@ -514,7 +514,7 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 			}
 
 			if tc.provider == "" {
-				tc.provider = "ofi+sockets"
+				tc.provider = "ofi+tcp"
 			}
 
 			dev, err := tc.lfc.GetDevice(tc.numaNode, tc.netDevClass, tc.provider)

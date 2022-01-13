@@ -72,10 +72,10 @@
 #
 ## Force a specific libfabric provider to be used by all the engines.
 ## The default provider depends on the interfaces that will be auto-detected:
-##  ofi+verbs;ofi_rxm for Infiniband/RoCE and
-##  ofi+sockets for non-RDMA-capable Ethernet.
+##  ofi+verbs for Infiniband/RoCE and
+##  ofi+tcp for non-RDMA-capable Ethernet.
 #
-#provider: ofi+verbs;ofi_rxm
+#provider: ofi+verbs
 #
 #
 ## CART: Whether to enable share address in the network stack

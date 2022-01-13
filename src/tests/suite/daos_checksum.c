@@ -16,7 +16,7 @@
 #include <daos/container.h>
 #include <daos_srv/daos_engine.h>
 
-#define EC_CSUM_OC	(DAOS_OC_EC_K2P2_L32K)
+#define EC_CSUM_OC	OC_EC_2P2G1
 
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill);
@@ -166,7 +166,7 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	       int chunksize, daos_oclass_id_t oclass)
 {
 	char		str[37];
-	daos_prop_t	*props = daos_prop_alloc(3);
+	daos_prop_t	*props = daos_prop_alloc(4);
 	int		 rc;
 
 	assert_non_null(props);
@@ -177,6 +177,8 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 					DAOS_PROP_CO_CSUM_SV_OFF;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	props->dpp_entries[2].dpe_val = chunksize != 0 ? chunksize : 1024*16;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[3].dpe_val = 1 << 15;
 
 	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	daos_prop_free(props);
@@ -2446,8 +2448,8 @@ test_enumerate_object2(void **state)
 	 */
 	assert_int_equal(4, nr);
 
-	/** only 3 checksums, dkey, akey, and inlined recx */
-	assert_int_equal(3, get_csum_count(&csum_iov));
+	/** only 2 checksums, dkey, akey */
+	assert_int_equal(2, get_csum_count(&csum_iov));
 
 	/** Clean up */
 	d_sgl_fini(&list_sgl, true);
@@ -2505,14 +2507,6 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	assert_memory_equal(&zero_anchor, &anchor, sizeof(zero_anchor));
 	assert_memory_equal(&zero_anchor, &dkey_anchor, sizeof(zero_anchor));
 	assert_memory_equal(&zero_anchor, &akey_anchor, sizeof(zero_anchor));
-
-	/** csum iov buf len shouldn't change, but iov_len should reflect
-	 * what's needed to hold all csum info. Caller can decide what to do
-	 * from here.
-	 */
-	assert_int_equal(10, csum_iov.iov_buf_len);
-	assert_int_equal(11 * (sizeof(struct dcs_csum_info) + 8),
-		csum_iov.iov_len);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);
