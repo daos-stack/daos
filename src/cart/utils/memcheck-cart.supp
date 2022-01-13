@@ -285,9 +285,6 @@
    fun:_dl_allocate_tls
    fun:pthread_create*
    ...
-   fun:sock_domain
-   fun:fi_domain
-   fun:na_ofi_domain_open
    fun:na_ofi_initialize
    fun:NA_Initialize_opt
    fun:hg_core_init

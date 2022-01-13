@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -978,7 +978,6 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 
 out:
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
-	return;
 }
 
 inline bool
@@ -1101,7 +1100,6 @@ out_grp_priv:
 out:
 	return rc;
 }
-
 
 void
 crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
@@ -2418,9 +2416,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank)
 
 		for (i = first; i < first + RANK_LIST_REALLOC_SIZE; i++) {
 			membs->rl_ranks[i] = CRT_NO_RANK;
-			rc = grp_add_free_index(
-				&grp_priv->gp_membs.cgm_free_indices,
-				i, true);
+			rc = grp_add_free_index(&grp_priv->gp_membs.cgm_free_indices, i, true);
 			if (rc != -DER_SUCCESS)
 				D_GOTO(out, 0);
 		}
