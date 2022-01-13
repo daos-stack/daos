@@ -33,25 +33,6 @@
    fun:send
 }
 {
-   server-verbs-0
-   Memcheck:Leak
-   fun:calloc
-   ...
-   fun:_verbs_init_and_alloc_context
-   ...
-   fun:verbs_open_device
-   ...
-}
-{
-   server-fi-leak-0
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:calloc
-   ...
-   fun:ibv_get_device_list
-   fun:vrb_init_info
-}
-{
    <insert_a_suppression_name_here>
    Memcheck:Addr8
    fun:runtime.asyncPreempt

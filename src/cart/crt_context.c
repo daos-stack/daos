@@ -518,6 +518,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	struct crt_context	*ctx;
 	uint32_t		 timeout_sec;
 	int			 flags;
+	int			 provider;
 	int			 rc = 0;
 	int			 i;
 
@@ -579,7 +580,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
-	int provider = ctx->cc_hg_ctx.chc_provider;
+	provider = ctx->cc_hg_ctx.chc_provider;
 
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {
@@ -1497,7 +1498,8 @@ crt_register_progress_cb(crt_progress_cb func, int ctx_idx, void *args)
 		}
 	}
 
-	D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
+	if (crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] != NULL)
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
 
 	crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] = cbs_prog;
 	cbs_size += CRT_CALLBACKS_NUM;
