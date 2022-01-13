@@ -35,6 +35,15 @@
    fun:sock_pe_progress_thread
 }
 {
+   access-1
+   Memcheck:Param
+   socketcall.sendto(msg)
+   fun:send
+   ...
+   obj:/usr/lib64/libfabric.so.*
+}
+
+{
    <insert_a_suppression_name_here>
    Memcheck:Addr8
    fun:runtime.asyncPreempt
@@ -297,6 +306,21 @@
    fun:HG_Init_opt
    fun:crt_hg_class_init
    fun:crt_hg_ctx_init
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:strdup
+   ...
+   fun:fi_getinfo
+   ...
+   fun:NA_Initialize_opt
+   ...
+   fun:HG_Core_init_opt
+   fun:HG_Init_opt
+   fun:crt_hg_class_init
 }
 {
    Tcp provider with ofi rxm
