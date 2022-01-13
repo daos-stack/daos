@@ -1423,9 +1423,9 @@ host1
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
       Targets:[3 4 5] Rank:0 State:EVICTED
     UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
-      Targets:[0 1 2] Rank:1 State:UNPLUGGED|NEW
+      Targets:[0 1 2] Rank:1 State:UNPLUGGED
     UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Targets:[3 4 5] Rank:1 State:IDENTIFY
+      Targets:[3 4 5] Rank:1 State:NORMAL|IDENTIFY
 `,
 		},
 		"list-devices (none found)": {
