@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -31,9 +31,6 @@ class CartTest(TestWithoutServers):
         self.provider = None
         self.module = lambda *x: False
         self.supp_file = "/etc/daos/memcheck-cart.supp"
-        self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-                       os.path.dirname(os.path.dirname(os.path.dirname(
-                       os.path.dirname(os.path.abspath(__file__))))))))
         self.attach_dir = None
 
     def setUp(self):
@@ -431,57 +428,38 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
-    @staticmethod
-    def _rm_abs_src_path_from_xml(xml_file):
-        """Remove the absolute path to the DAOS source tree in the
-           Valgrind output xml file
-
-        Args:
-            xml_file (str): path to memcheck xml file
-
-        Returns:
-            int: 0 on success
-
-        """
-
-        # This is the absolute path to where daos-debuginfo installs the source
-        # tree
-        src_dir_re = r".usr.src.debug.daos-[^\/]+."
-
-        with open(xml_file, 'r') as fd:
-            with open('{}.xml'.format(xml_file), 'w') as ofd:
-                for line in fd:
-                    if re.search(src_dir_re, line):
-
-                        L = re.sub(r'^\s*<dir>' + src_dir_re + r'\/*',
-                                   r'\t<dir>',
-                                   line)
-                        ofd.write(L)
-                    else:
-                        ofd.write(line)
-                os.unlink(xml_file)
-
-        return 0
-
-    def rm_abs_src_path_from_xml_files(self):
+    def _rm_abs_src_path_from_xml_files(self):
         """Check valgrind memcheck log files for errors."""
 
-        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
-                                         os.getenv('HOME'))
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR', os.getenv('HOME'))
 
         self.log.info("Parsing log path %s", daos_test_shared_dir)
         if not os.path.exists(daos_test_shared_dir):
             self.log.info("Path does not exist")
-            return 1
+            return
 
         xml_filename_fmt = r"valgrind\.\S+\.memcheck$"
         memcheck_files = list(filter(lambda x: re.search(xml_filename_fmt, x),
                                 os.listdir(daos_test_shared_dir)))
 
-        for filename in memcheck_files:
-            self._rm_abs_src_path_from_xml(daos_test_shared_dir + "/" + filename)
+        # This is the absolute path to where daos-debuginfo installs the source
+        # tree
+        src_dir_re = r".usr.src.debug.daos-[^\/]+."
 
-        return 0
+        for filename in memcheck_files:
+            xml_file = os.path.join(daos_test_shared_dir, filename)
+
+
+            with open(xml_file, 'r') as fd:
+                with open('{}.xml'.format(xml_file), 'w') as ofd:
+                    for line in fd:
+                        if re.search(src_dir_re, line):
+                            L = re.sub(r'^\s*<dir>' + src_dir_re + r'\/*', r'\t<dir>', line)
+                            ofd.write(L)
+                        else:
+                            ofd.write(line)
+            os.unlink(xml_file)
+
 
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
@@ -500,7 +478,7 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
-        self.rm_abs_src_path_from_xml_files()
+        self._rm_abs_src_path_from_xml_files()
 
         return 0
 
@@ -519,13 +497,15 @@ class CartTest(TestWithoutServers):
                 self.stop_process(srv2)
             self.fail("Failed, return codes {}".format(rtn))
 
-        self.rm_abs_src_path_from_xml_files()
+        self._rm_abs_src_path_from_xml_files()
 
         return rtn
 
     def launch_cmd_bg(self, cmd):
         """Launch the given cmd in background."""
         self.print("\nCMD : {}\n".format(cmd))
+
+        # pylint: disable=consider-using-with
 
         cmd = shlex.split(cmd)
         rtn = subprocess.Popen(cmd)
@@ -534,7 +514,7 @@ class CartTest(TestWithoutServers):
             self.fail("Failed to start command\n")
             return -1
 
-        self.rm_abs_src_path_from_xml_files()
+        self._rm_abs_src_path_from_xml_files()
 
         return rtn
 
