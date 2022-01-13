@@ -24,6 +24,8 @@ pool:
  prop_name: reclaim
  prop_value: disabled
  control_method: dmg
+ scm_size: 95%
+ nvme_size: 90%
 ior:
  flags: "-w -r -k -vv"
  repetitions: 1
