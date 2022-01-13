@@ -105,5 +105,5 @@ class DAOSVersion(TestWithServers):
                 errors.append(msg)
 
         if errors:
-            self.fail("\n----- Errors detected! -----\n{}".format(
+            self.fail("\n---- Errors detected! ----\n{}".format(
                 "\n".join(errors)))
