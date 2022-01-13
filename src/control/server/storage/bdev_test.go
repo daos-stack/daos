@@ -14,57 +14,71 @@ import (
 )
 
 func Test_NvmeDevState(t *testing.T) {
-	// verify "NEW" state
-	state := NvmeStatePlugged
-	common.AssertTrue(t, state.IsNew(), "expected state to indicate new")
-	common.AssertFalse(t, state.IsNormal(), "expected state to not indicate normal")
-	common.AssertFalse(t, state.IsFaulty(), "expected state to not indicate faulty")
-	common.AssertTrue(t, NvmeDevStateFromString(state.StatusString()) == state,
-		fmt.Sprintf("expected string %s to yield state %s", state.StatusString(),
-			NvmeDevStateFromString(state.StatusString()).StatusString()))
-
-	// verify "NORMAL" state
-	state = NvmeStatePlugged | NvmeStateInUse
-	common.AssertFalse(t, state.IsNew(), "expected state to not indicate new")
-	common.AssertTrue(t, state.IsNormal(), "expected state to indicate normal")
-	common.AssertFalse(t, state.IsFaulty(), "expected state to not indicate faulty")
-	common.AssertTrue(t, NvmeDevStateFromString(state.StatusString()) == state,
-		fmt.Sprintf("expected string %s to yield state %s", state.StatusString(),
-			NvmeDevStateFromString(state.StatusString()).StatusString()))
-
-	// verify "EVICTED" state
-	state = NvmeStatePlugged | NvmeStateInUse | NvmeStateFaulty
-	common.AssertFalse(t, state.IsNew(), "expected state to not indicate new")
-	common.AssertFalse(t, state.IsNormal(), "expected state to not indicate normal")
-	common.AssertTrue(t, state.IsFaulty(), "expected state to indicate faulty")
-	common.AssertTrue(t, NvmeDevStateFromString(state.StatusString()) == state,
-		fmt.Sprintf("expected string %s to yield state %s", state.StatusString(),
-			NvmeDevStateFromString(state.StatusString()).StatusString()))
-
-	// verify "NEW|EVICTED" state
-	state = NvmeStatePlugged | NvmeStateFaulty
-	common.AssertTrue(t, state.IsNew(), "expected state to indicate new")
-	common.AssertFalse(t, state.IsNormal(), "expected state to not indicate normal")
-	common.AssertTrue(t, state.IsFaulty(), "expected state to indicate faulty")
-	common.AssertTrue(t, NvmeDevStateFromString(state.StatusString()) == state,
-		fmt.Sprintf("expected string %s to yield state %s", state.StatusString(),
-			NvmeDevStateFromString(state.StatusString()).StatusString()))
-
-	// verify "UNPLUGGED|NEW|EVICTED|IDENTIFY" state
-	state = NvmeStateFaulty | NvmeStateIdentify
-	common.AssertFalse(t, state.IsNew(), "expected state to not indicate new")
-	common.AssertFalse(t, state.IsNormal(), "expected state to not indicate normal")
-	common.AssertFalse(t, state.IsFaulty(), "expected state to not indicate faulty")
-	common.AssertTrue(t, NvmeDevStateFromString(state.StatusString()) == state,
-		fmt.Sprintf("expected string %s to yield state %s", state.StatusString(),
-			NvmeDevStateFromString(state.StatusString()).StatusString()))
-
-	// verify "NEW|EVICTED|IDENTIFY" state
-	state = NvmeStatePlugged | NvmeStateFaulty | NvmeStateIdentify
-	common.AssertTrue(t, state.IsNew(), "expected state to indicate new")
-	common.AssertFalse(t, state.IsNormal(), "expected state to not indicate normal")
-	common.AssertTrue(t, state.IsFaulty(), "expected state to indicate faulty")
-	common.AssertTrue(t, NvmeDevStateFromString(state.StatusString()) == state,
-		fmt.Sprintf("expected string %s to yield state %s", state.StatusString(),
-			NvmeDevStateFromString(state.StatusString()).StatusString()))
+	for name, tc := range map[string]struct {
+		state       NvmeDevState
+		expIsNew    bool
+		expIsNormal bool
+		expIsFaulty bool
+		expStr      string
+	}{
+		"new state": {
+			state:    NvmeStatePlugged,
+			expIsNew: true,
+			expStr:   "NEW",
+		},
+		"normal state": {
+			state:       NvmeStatePlugged | NvmeStateInUse,
+			expIsNormal: true,
+			expStr:      "NORMAL",
+		},
+		"faulty state": {
+			state:       NvmeStatePlugged | NvmeStateInUse | NvmeStateFaulty,
+			expIsFaulty: true,
+			expStr:      "EVICTED",
+		},
+		"new and faulty state": {
+			state:       NvmeStatePlugged | NvmeStateFaulty,
+			expIsNew:    true,
+			expIsFaulty: true,
+			expStr:      "EVICTED",
+		},
+		"unplugged, new and faulty": {
+			state:  NvmeStateFaulty,
+			expStr: "UNPLUGGED",
+		},
+		"new and identify state": {
+			state:    NvmeStatePlugged | NvmeStateIdentify,
+			expIsNew: true,
+			expStr:   "NEW|IDENTIFY",
+		},
+		"new, faulty and identify state": {
+			state:       NvmeStatePlugged | NvmeStateFaulty | NvmeStateIdentify,
+			expIsNew:    true,
+			expIsFaulty: true,
+			expStr:      "EVICTED|IDENTIFY",
+		},
+		"normal and identify state": {
+			state:       NvmeStatePlugged | NvmeStateInUse | NvmeStateIdentify,
+			expIsNormal: true,
+			expStr:      "NORMAL|IDENTIFY",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expIsNew, tc.state.IsNew(),
+				"unexpected IsNew() result")
+			common.AssertEqual(t, tc.expIsNormal, tc.state.IsNormal(),
+				"unexpected IsNormal() result")
+			common.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
+				"unexpected IsFaulty() result")
+			common.AssertEqual(t, tc.expStr, tc.state.StatusString(),
+				"unexpected status string")
+			common.AssertEqual(t, NvmeDevStateFromString(
+				tc.state.StatusString()).StatusString(),
+				tc.state.StatusString(),
+				fmt.Sprintf("expected string %s to yield state %s",
+					tc.state.StatusString(),
+					NvmeDevStateFromString(
+						tc.state.StatusString()).StatusString()))
+		})
+	}
 }
