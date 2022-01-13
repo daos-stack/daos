@@ -79,7 +79,7 @@ class SoakTestBase(TestWithServers):
         # self.output dir is an avocado directory .../data/
         self.outputsoak_dir = self.outputdir + "/soak"
         # Create the remote log directories on all client nodes
-        self.soak_dir = self.test_dir + "/soak"
+        self.soak_dir = self.base_test_dir + "/soak"
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         self.sharedsoak_dir = self.tmp + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
@@ -97,7 +97,6 @@ class SoakTestBase(TestWithServers):
                 "<<FAILED: Partition is not correctly setup for daos "
                 "slurm partition>>")
         self.srun_params = {"partition": self.client_partition}
-        self.srun_params["time"] = self.params.get("resource_timeout", "/run/*", 2)
         if self.client_reservation:
             self.srun_params["reservation"] = self.client_reservation
         # Check if the server nodes are in the client list;
@@ -127,6 +126,22 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info("<<preTearDown Started>> at %s", time.ctime())
         errors = []
+        # clear out any jobs in squeue;
+        if self.failed_job_id_list:
+            job_id = " ".join([str(job) for job in self.failed_job_id_list])
+            self.log.info("<<Cancel jobs in queue with ids %s >>", job_id)
+            try:
+                run_command(
+                    "scancel --partition {} -u {} {}".format(
+                        self.client_partition, self.username, job_id))
+            except DaosTestError as error:
+                # Exception was raised due to a non-zero exit status
+                errors.append("Failed to cancel jobs {}: {}".format(
+                    self.failed_job_id_list, error))
+        if self.all_failed_jobs:
+            errors.append("SOAK FAILED: The following jobs failed {} ".format(
+                " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
+
         # verify reserved container data
         if self.resv_cont:
             final_resv_file = os.path.join(self.test_dir, "final", "resv_file")
@@ -148,32 +163,17 @@ class SoakTestBase(TestWithServers):
         run_metrics_check(self, prefix="final")
         # Gather server logs
         get_daos_server_logs(self)
-        # Gather client daos logs with resource manager
-        get_remote_dir(
-            self, self.base_test_dir, self.outputsoak_dir, self.hostlist_clients,
-            shared_dir=self.sharedsoak_dir, rm_remote=False, append="/daos_logs-")
         # Gather journalctl logs
         hosts = list(set(self.hostlist_servers))
         since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
         until = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.end_time))
         for type in ["kernel", "daos_server"]:
             get_journalctl(self, hosts, since, until, type, logging=True)
+        # Gather client daos logs with resource manager
+        get_remote_dir(
+            self, self.base_test_dir, self.outputsoak_dir, self.hostlist_clients,
+            shared_dir=self.sharedsoak_dir, rm_remote=False, append="/daos_logs-")
 
-        # clear out any jobs in squeue;
-        if self.failed_job_id_list:
-            job_id = " ".join([str(job) for job in self.failed_job_id_list])
-            self.log.info("<<Cancel jobs in queue with ids %s >>", job_id)
-            try:
-                run_command(
-                    "scancel --partition {} -u {} {}".format(
-                        self.client_partition, self.username, job_id))
-            except DaosTestError as error:
-                # Exception was raised due to a non-zero exit status
-                errors.append("Failed to cancel jobs {}: {}".format(
-                    self.failed_job_id_list, error))
-        if self.all_failed_jobs:
-            errors.append("SOAK FAILED: The following jobs failed {} ".format(
-                " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
         if self.soak_errors:
