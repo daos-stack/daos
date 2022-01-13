@@ -35,7 +35,7 @@ class RbldContainerCreate(IorTestBase):
         cont_oclass = self.params.get("oclass", "/run/io/*")
         count = 0
         self.container = []
-        while not self.pool.rebuild_complete() and count < qty:
+        while count < qty:
             count += 1
             self.log.info(
                 "..Creating container %s/%s in pool %s during rebuild",
