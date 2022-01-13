@@ -34,85 +34,53 @@ dpdk_cli_override_opts;
 #define NVME_DEV_STATE_FAULTY (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
 #define NVME_DEV_STATE_NEW (NVME_DEV_FL_PLUGGED)
 
+#define BIT_SET(x,m) (((x)&(m)) == (m))
+#define BIT_UNSET(x,m) (!BIT_SET(x,m))
+
+#define STR_EQ(x,m) (strcmp(x,m) == 0)
+
 static inline char *
-nvme_state2str(int dev_state)
+nvme_state2str(int state)
 {
-	switch (dev_state) {
-	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY):
-		return "EVICTED|IDENTIFY";
-	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY):
-		return "EVICTED";
-	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_IDENTIFY):
-		return "IDENTIFY";
-	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE):
-		return "NORMAL";
-	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY):
-		return "NEW|EVICTED|IDENTIFY";
-	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY):
-		return "NEW|EVICTED";
-	case (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_IDENTIFY):
-		return "NEW|IDENTIFY";
-	case NVME_DEV_FL_PLUGGED:
-		return "NEW";
-	case (NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY):
-		return "UNPLUGGED|EVICTED|IDENTIFY";
-	case (NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY):
-		return "UNPLUGGED|EVICTED";
-	case (NVME_DEV_FL_INUSE | NVME_DEV_FL_IDENTIFY):
-		return "UNPLUGGED|IDENTIFY";
-	case NVME_DEV_FL_INUSE:
+	/** If unplugged, return early */
+	if BIT_UNSET(state, NVME_DEV_FL_PLUGGED)
 		return "UNPLUGGED";
-	case (NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY):
-		return "UNPLUGGED|NEW|EVICTED|IDENTIFY";
-	case NVME_DEV_FL_FAULTY:
-		return "UNPLUGGED|NEW|EVICTED";
-	case NVME_DEV_FL_IDENTIFY:
-		return "UNPLUGGED|NEW|IDENTIFY";
-	case 0:
-		return "UNPLUGGED|NEW";
+
+	/** If identify is set, return combination with faulty taking precedence over new */
+	if BIT_SET(state, NVME_DEV_FL_IDENTIFY) {
+		if BIT_SET(state, NVME_DEV_FL_FAULTY)
+			return "EVICTED|IDENTIFY";
+		if BIT_UNSET(state, NVME_DEV_FL_INUSE)
+			return "NEW|IDENTIFY";
+		return "NORMAL|IDENTIFY";
 	}
 
-	return "UNKNOWN";
+	/** Otherwise, return single state with faulty taking precedence over new */
+	if BIT_SET(state, NVME_DEV_FL_FAULTY)
+		return "EVICTED";
+	if BIT_UNSET(state, NVME_DEV_FL_INUSE)
+		return "NEW";
+
+	return "NORMAL";
 }
 
 static inline int
-nvme_str2state(char *state_str)
+nvme_str2state(char *state)
 {
-	if (strcmp(state_str, "EVICTED|IDENTIFY") == 0) {
-		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY |
-			NVME_DEV_FL_IDENTIFY);
-	} else if (strcmp(state_str, "EVICTED") == 0) {
-		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY);
-	} else if (strcmp(state_str, "IDENTIFY") == 0) {
-		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE | NVME_DEV_FL_IDENTIFY);
-	} else if (strcmp(state_str, "NORMAL") == 0) {
-		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE);
-	} else if (strcmp(state_str, "NEW|EVICTED|IDENTIFY") == 0) {
-		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY);
-	} else if (strcmp(state_str, "NEW|EVICTED") == 0) {
-		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_FAULTY);
-	} else if (strcmp(state_str, "NEW|IDENTIFY") == 0) {
-		return (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_IDENTIFY);
-	} else if (strcmp(state_str, "NEW") == 0) {
-		return NVME_DEV_FL_PLUGGED;
-	} else if (strcmp(state_str, "UNPLUGGED|EVICTED|IDENTIFY") == 0) {
-		return (NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY);
-	} else if (strcmp(state_str, "UNPLUGGED|EVICTED") == 0) {
-		return (NVME_DEV_FL_INUSE | NVME_DEV_FL_FAULTY);
-	} else if (strcmp(state_str, "UNPLUGGED|IDENTIFY") == 0) {
-		return (NVME_DEV_FL_INUSE | NVME_DEV_FL_IDENTIFY);
-	} else if (strcmp(state_str, "UNPLUGGED") == 0) {
-		return NVME_DEV_FL_INUSE;
-	} else if (strcmp(state_str, "UNPLUGGED|NEW|EVICTED|IDENTIFY") == 0) {
-		return (NVME_DEV_FL_FAULTY | NVME_DEV_FL_IDENTIFY);
-	} else if (strcmp(state_str, "UNPLUGGED|NEW|EVICTED") == 0) {
-		return NVME_DEV_FL_FAULTY;
-	} else if (strcmp(state_str, "UNPLUGGED|NEW|IDENTIFY") == 0) {
-		return NVME_DEV_FL_IDENTIFY;
-	} else if (strcmp(state_str, "UNPLUGGED|NEW") == 0) {
-		return 0;
-	}
+	if STR_EQ(state, "NORMAL")
+		return NVME_DEV_STATE_NORMAL;
+	if STR_EQ(state, "NEW")
+		return NVME_DEV_STATE_NEW;
+	if STR_EQ(state, "EVICTED")
+		return NVME_DEV_STATE_FAULTY;
+	if STR_EQ(state, "NORMAL|IDENTIFY")
+		return (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_IDENTIFY);
+	if STR_EQ(state, "NEW|IDENTIFY")
+		return (NVME_DEV_STATE_NEW | NVME_DEV_FL_IDENTIFY);
+	if STR_EQ(state, "EVICTED|IDENTIFY")
+		return (NVME_DEV_STATE_FAULTY | NVME_DEV_FL_IDENTIFY);
 
+	/** assume unplugged as no other valid states */
 	return 0;
 }
 
