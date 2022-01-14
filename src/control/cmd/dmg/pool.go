@@ -68,6 +68,7 @@ type PoolCreateCmd struct {
 	} `positional-args:"yes"`
 }
 
+// Regexp allowing to define the size of a new pool as the percentage of the overall available storage
 var allFlagPattern = regexp.MustCompile(`^\s*(\d{1,3})\s*%\s*$`)
 
 // Execute is run when PoolCreateCmd subcommand is activated
