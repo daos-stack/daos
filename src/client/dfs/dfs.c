@@ -1074,13 +1074,14 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->value_len = value_len;
 		rc = insert_entry(parent->oh, DAOS_TX_NONE, sym->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
-		if ((rc == EEXIST) || (rc == 0)) {
-			return rc;
-		} else {
+		if (rc == EEXIST) {
+			D_FREE(sym->value);
+		} else if (rc != 0) {
+			D_FREE(sym->value);
 			D_ERROR("Inserting entry %s failed (rc = %d)\n",
 				sym->name, rc);
-			return rc;
 		}
+		return rc;
 	}
 
 	return ENOTSUP;
@@ -2184,12 +2185,9 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	rc = insert_entry(parent->oh, th, name, len,
 			  DAOS_COND_DKEY_INSERT, &entry);
-	if (rc == EEXIST) {
+	if ((rc == EEXIST) || (rc != 0)) {
 		daos_obj_close(new_dir.oh, NULL);
 		return rc;
-	} else if (rc != 0) {
-		daos_obj_close(new_dir.oh, NULL);
-		return daos_der2errno(rc);
 	}
 
 	rc = daos_obj_close(new_dir.oh, NULL);
@@ -3088,9 +3086,13 @@ out:
 		}
 		*_obj = obj;
 	} else if (rc == EEXIST) {
-		if (stbuf)
-			rc = dfs_stat(dfs, parent, name, stbuf);
-		*_obj = obj;
+		if (stbuf) {
+			int rc2;
+			rc2 = dfs_stat(dfs, parent, name, stbuf);
+			if (rc2)
+				rc = rc2;
+		}
+		D_FREE(obj);
 	} else {
 		D_FREE(obj);
 	}
