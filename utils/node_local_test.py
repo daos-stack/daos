@@ -1487,60 +1487,47 @@ def needs_dfuse(method):
 
     return _helper
 
-def needs_dfuse_single(method):
-    """Decorator function for starting dfuse single threaded
-    under posix_tests class"""
-    @functools.wraps(method)
-    def _helper(self):
-        self.dfuse = DFuse(self.server,
-                           self.conf,
-                           caching=True,
-                           pool=self.pool.dfuse_mount_name(),
-                           container=self.container)
-        self.dfuse.start(v_hint=method.__name__, single_threaded=True)
-        try:
-            rc = method(self)
-        finally:
-            if self.dfuse.stop():
-                self.fatal_errors = True
-        return rc
-    return _helper
+class needs_dfuse_with_opt():
+    """Decorator class for starting dfuse under posix_tests class
 
-def needs_dfuse_with_cache(method):
-    """Decorator function for starting dfuse under posix_tests class"""
-    @functools.wraps(method)
-    def _helper(self):
-        self.dfuse = DFuse(self.server,
-                           self.conf,
-                           caching=True,
-                           pool=self.pool.dfuse_mount_name(),
-                           container=self.container)
-        self.dfuse.start(v_hint=method.__name__)
-        try:
-            rc = method(self)
-        finally:
-            if self.dfuse.stop():
-                self.fatal_errors = True
-        return rc
-    return _helper
+    By default runs the method twice, once with caching and once without, however can be
+    configured to behave differently.  Interacts with the run_posix_tests._run_test() method
+    to achieve this.
+    """
 
-def needs_dfuse_no_cache(method):
-    """Decorator function for starting dfuse under posix_tests class"""
-    @functools.wraps(method)
-    def _helper(self):
-        self.dfuse = DFuse(self.server,
-                           self.conf,
-                           caching=False,
-                           pool=self.pool.dfuse_mount_name(),
-                           container=self.container)
-        self.dfuse.start(v_hint=method.__name__)
-        try:
-            rc = method(self)
-        finally:
-            if self.dfuse.stop():
-                self.fatal_errors = True
-        return rc
-    return _helper
+    # pylint: disable=too-few-public-methods
+
+    def __init__(self, caching=None, single_threaded=False):
+        self.caching = caching
+        self.single_threaded = single_threaded
+
+    def __call__(self, method):
+
+        @functools.wraps(method)
+        def _helper(obj):
+
+            caching = self.caching
+            if caching is None:
+                if obj.call_index == 0:
+                    caching = True
+                    obj.needs_more = True
+                    obj.test_name = '{}_with_caching'.format(method.__name__)
+                else:
+                    caching = False
+
+            obj.dfuse = DFuse(obj.server,
+                              obj.conf,
+                              caching=caching,
+                              pool=obj.pool.dfuse_mount_name(),
+                              container=obj.container)
+            obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
+            try:
+                rc = method(obj)
+            finally:
+                if obj.dfuse.stop():
+                    obj.fatal_errors = True
+            return rc
+        return _helper
 
 class print_stat():
     """Class for nicely showing file 'stat' data, similar to ls -l"""
@@ -1723,7 +1710,7 @@ class posix_tests():
 
         dfuse0 = DFuse(self.server,
                        self.conf,
-                       caching=True,
+                       caching=False,
                        pool=self.pool.uuid,
                        container=self.container)
         dfuse0.start(v_hint='two_0')
@@ -1794,7 +1781,7 @@ class posix_tests():
         print(len(files))
         assert len(files) == count
 
-    @needs_dfuse_single
+    @needs_dfuse_with_opt(single_threaded=True, caching=True)
     def test_single_threaded(self):
         """Test single-threaded mode"""
         self.readdir_test(10)
@@ -1925,9 +1912,12 @@ class posix_tests():
                     check_fstat=check_fstat)
         assert rc.returncode == 0
 
-    @needs_dfuse
+    @needs_dfuse_with_opt(caching=False)
     def test_il(self):
         """Run a basic interception library test"""
+
+        # Sometimes the write can be cached in the kernel and the cp will not read any data so
+        # do not run this test with caching on.
 
         create_and_read_via_il(self.dfuse, self.dfuse.dir)
 
@@ -1938,9 +1928,6 @@ class posix_tests():
         f = join(self.dfuse.dir, 'file')
         with open(f, 'w') as fd:
             fd.write('Hello')
-            # Force dfuse caching (when enabled) to writeback the file
-            os.fsync(fd.fileno())
-            fd.close()
         # Copy it across containers.
         ret = il_cmd(self.dfuse, ['cp', f, sub_cont_dir])
         assert ret.returncode == 0
@@ -2586,7 +2573,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    @needs_dfuse_no_cache
+    @needs_dfuse_with_opt(caching=False)
     def test_daos_fs_tool(self):
         """Create a UNS entry point"""
 
@@ -2868,7 +2855,7 @@ def run_posix_tests(server, conf, test=None):
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
                 duration = time.time() - start
-                out_wrapper.sprint('{} Failed'.format(function))
+                out_wrapper.sprint('{} Failed'.format(ptl.test_name))
                 conf.wf.add_test_case(ptl.test_name,
                                       repr(inst),
                                       stdout=out_wrapper.get_thread_output(),
@@ -2878,7 +2865,7 @@ def run_posix_tests(server, conf, test=None):
                                       duration=duration)
                 raise
             duration = time.time() - start
-            out_wrapper.sprint('Test {} took {:.1f} seconds'.format(function, duration))
+            out_wrapper.sprint('Test {} took {:.1f} seconds'.format(ptl.test_name, duration))
             conf.wf.add_test_case(ptl.test_name,
                                   stdout=out_wrapper.get_thread_output(),
                                   stderr=err_wrapper.get_thread_err(),
