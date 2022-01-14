@@ -704,6 +704,22 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 	return grp_idx;
 }
 
+int
+dc_obj_dkey2grpidx(daos_handle_t oh, uint64_t dkey_hash)
+{
+	struct dc_object	*obj;
+	int			 grp_idx;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
+	grp_idx = obj_dkey2grpidx(obj, dkey_hash, obj->cob_version);
+	obj_decref(obj);
+
+	return grp_idx;
+}
+
 static int
 obj_dkey2shard(struct dc_object *obj, uint64_t hash, unsigned int map_ver,
 	       bool to_leader, struct obj_auxi_tgt_list *failed_tgt_list)
@@ -888,6 +904,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		return 0;
 	}
 	obj_auxi->iod_nr = args->nr;
+	obj_auxi->is_ec_obj = obj_is_ec(obj);
 
 	/** XXX possible re-order/merge for both replica and EC */
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE ||
@@ -895,7 +912,6 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		return 0;
 
 	if (!obj_auxi->req_reasbed) {
-		obj_auxi->is_ec_obj = 1;
 		rc = obj_reasb_req_init(&obj_auxi->reasb_req, obj, args->iods,
 					args->nr, oca);
 		if (rc) {
@@ -4185,7 +4201,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 				obj_ec_update_iod_size(&obj_auxi->reasb_req,
 						       args->nr);
-				if (obj_auxi->bulks != NULL)
+				if (obj_auxi->bulks != NULL && obj_auxi->req_reasbed)
 					obj_ec_fetch_set_sgl(
 						&obj_auxi->reasb_req, args->nr);
 			}

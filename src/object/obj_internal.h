@@ -898,6 +898,9 @@ enum dc_tx_get_epoch_rc {
 };
 
 int
+dc_obj_dkey2grpidx(daos_handle_t oh, uint64_t dkey_hash);
+
+int
 dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch);
 
 int
