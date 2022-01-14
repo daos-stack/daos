@@ -59,8 +59,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val_ptr	= NULL,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_EC_CELL_SZ,
-		/* TODO: change it to DAOS_EC_CELL_DEF in a separate patch */
-		.dpe_val	= DAOS_EC_CELL_MAX,
+		.dpe_val	= DAOS_EC_CELL_DEF,
 	}
 };
 

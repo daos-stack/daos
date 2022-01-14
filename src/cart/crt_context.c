@@ -374,8 +374,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
 		if (cbinfo.cci_rc != 0)
-			RPC_ERROR(rpc_priv, "failed, " DF_RC "\n",
-				  DP_RC(cbinfo.cci_rc));
+			RPC_CERROR(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
+				   "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: "
@@ -758,31 +758,6 @@ crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv)
 	}
 }
 
-static void
-crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
-{
-	struct crt_timeout_cb_priv	*cbs_timeout;
-	crt_timeout_cb			 cb_func;
-	void				*cb_args;
-	size_t				 cbs_size;
-	size_t				 i;
-
-	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || rpc_priv == NULL))
-		return;
-
-	cbs_size = crt_plugin_gdata.cpg_timeout_size;
-	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
-
-	for (i = 0; i < cbs_size; i++) {
-		cb_func = cbs_timeout[i].ctcp_func;
-		cb_args = cbs_timeout[i].ctcp_args;
-		/* check for and execute timeout callbacks here */
-		if (cb_func != NULL)
-			cb_func(rpc_priv->crp_pub.cr_ctx, &rpc_priv->crp_pub,
-				cb_args);
-	}
-}
-
 static bool
 crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 {
@@ -926,39 +901,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (crt_gdata.cg_swim_inited) {
-		struct crt_grp_priv	*gp = crt_gdata.cg_grp->gg_primary_grp;
-		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
-		swim_id_t		 self_id = swim_self_get(csm->csm_ctx);
-
-		if (crt_ctx->cc_last_unpack_hlc > csm->csm_last_unpack_hlc)
-			csm->csm_last_unpack_hlc = crt_ctx->cc_last_unpack_hlc;
-
-		/*
-		 * Check for network idle in all contexts.
-		 * If the time passed from last received RPC till now is more
-		 * than 2/3 of suspicion timeout suspends eviction.
-		 * The max_delay should be less suspicion timeout to guarantee
-		 * the already suspected members will not be expired.
-		 */
-		if (self_id != SWIM_ID_INVALID && csm->csm_alive_count > 2) {
-			uint64_t hlc1 = csm->csm_last_unpack_hlc;
-			uint64_t hlc2 = crt_hlc_get();
-			uint64_t delay = crt_hlc2msec(hlc2 - hlc1);
-			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
-
-			if (delay > max_delay) {
-				D_ERROR("Network outage detected (idle during "
-					"%lu.%lu sec >  maximum allowed "
-					"%lu.%lu sec).\n",
-					delay / 1000, delay % 1000,
-					max_delay / 1000, max_delay % 1000);
-				swim_net_glitch_update(csm->csm_ctx, self_id, delay);
-				csm->csm_last_unpack_hlc = hlc2;
-			}
-		}
-	}
-
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
 
@@ -993,8 +935,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag);
 
-		/* check for and execute RPC timeout callbacks here */
-		crt_exec_timeout_cb(rpc_priv);
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
 	}
@@ -1618,63 +1558,6 @@ out_unlock:
 
 	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 out:
-	return rc;
-}
-
-/**
- * to use this function, the user has to:
- * 1) define a callback function user_cb
- * 2) call crt_register_timeout_cb_core(user_cb);
- */
-int
-crt_register_timeout_cb(crt_timeout_cb func, void *args)
-{
-	struct crt_timeout_cb_priv *cbs_timeout;
-	size_t i, cbs_size;
-	int rc = 0;
-
-	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
-
-	cbs_size = crt_plugin_gdata.cpg_timeout_size;
-	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
-
-	for (i = 0; i < cbs_size; i++) {
-		if (cbs_timeout[i].ctcp_func == func &&
-		    cbs_timeout[i].ctcp_args == args) {
-			D_GOTO(out_unlock, rc = -DER_EXIST);
-		}
-	}
-
-	for (i = 0; i < cbs_size; i++) {
-		if (cbs_timeout[i].ctcp_func == NULL) {
-			cbs_timeout[i].ctcp_args = args;
-			cbs_timeout[i].ctcp_func = func;
-			D_GOTO(out_unlock, rc = 0);
-		}
-	}
-
-	D_FREE(crt_plugin_gdata.cpg_timeout_cbs_old);
-
-	crt_plugin_gdata.cpg_timeout_cbs_old = cbs_timeout;
-	cbs_size += CRT_CALLBACKS_NUM;
-
-	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
-	if (cbs_timeout == NULL) {
-		crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
-		D_GOTO(out_unlock, rc = -DER_NOMEM);
-	}
-
-	if (i > 0)
-		memcpy(cbs_timeout, crt_plugin_gdata.cpg_timeout_cbs_old,
-		       i * sizeof(*cbs_timeout));
-	cbs_timeout[i].ctcp_args = args;
-	cbs_timeout[i].ctcp_func = func;
-
-	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
-	crt_plugin_gdata.cpg_timeout_size = cbs_size;
-
-out_unlock:
-	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 

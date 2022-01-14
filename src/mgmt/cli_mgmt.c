@@ -819,7 +819,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	 */
 	ms_ranks = sys->sy_info.ms_ranks;
 	D_ASSERT(ms_ranks->rl_nr > 0);
-	idx = rand() % ms_ranks->rl_nr;
+	idx = d_rand() % ms_ranks->rl_nr;
 	ctx = daos_get_crt_ctx();
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_FIND, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);

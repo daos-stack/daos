@@ -468,7 +468,10 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 		return rc;
 
 	/* Shuffle the target ranks to avoid overloading any particular ranks. */
-	daos_rank_list_shuffle(rnd_tgts);
+	/*
+	 * DAOS-9177: Temporarily disable shuffle to give us more time to stabilize tests.
+	 */
+	/*daos_rank_list_shuffle(rnd_tgts);*/
 
 	/* Determine the number of selectable targets. */
 	selectable = rnd_tgts->rl_nr;
@@ -4393,7 +4396,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool				updated;
 	int				rc;
 	char				*env;
-	uint64_t			delay = 0;
+	uint64_t			delay = 2;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, &target_list,
 					  list, hint, &updated, map_version,
@@ -4585,7 +4588,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 
 	/* Schedule an extension rebuild for those targets */
 	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, &tgts,
-				 RB_OP_EXTEND, 0);
+				 RB_OP_EXTEND, 2);
 	if (rc != 0) {
 		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_lock, rc);
@@ -5592,7 +5595,7 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc != 0)
 		goto out;
 
-	oca = daos_oclass_attr_find(oid->id_pub, NULL, NULL);
+	oca = daos_oclass_attr_find(oid->id_pub, NULL);
 	leader_idx = pl_select_leader(oid->id_pub, oid->id_shard / daos_oclass_grp_size(oca),
 				      layout->ol_grp_size, NIL_BITMAP, mbs, tgt_id,
 				      pl_obj_get_shard, layout);

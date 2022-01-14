@@ -1738,15 +1738,6 @@ crt_register_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg);
 int
 crt_unregister_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg);
 
-typedef void
-(*crt_timeout_cb) (crt_context_t ctx, crt_rpc_t *rpc, void *arg);
-
-int
-crt_register_timeout_cb(crt_timeout_cb cb, void *arg);
-
-typedef void
-(*crt_eviction_cb) (crt_group_t *grp, d_rank_t rank, void *arg);
-
 enum crt_event_source {
 	CRT_EVS_UNKNOWN,
 	/**< Event triggered by SWIM >*/
@@ -2248,6 +2239,19 @@ void crt_swim_fini(void);
 #define crt_proc_crt_status_t		crt_proc_int32_t
 #define crt_proc_crt_group_id_t		crt_proc_d_string_t
 #define crt_proc_crt_phy_addr_t		crt_proc_d_string_t
+
+/**
+ * \a err is an error that ought to be logged at a less serious level than ERR.
+ *
+ * \param[in] err                an error
+ *
+ * \return                       true or false
+ */
+static inline bool
+crt_quiet_error(int err)
+{
+	return err == -DER_GRPVER;
+}
 
 /** @}
  */
