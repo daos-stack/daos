@@ -2185,7 +2185,7 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	rc = insert_entry(parent->oh, th, name, len,
 			  DAOS_COND_DKEY_INSERT, &entry);
-	if ((rc == EEXIST) || (rc != 0)) {
+	if (rc != 0) {
 		daos_obj_close(new_dir.oh, NULL);
 		return rc;
 	}
@@ -3062,7 +3062,7 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	case S_IFLNK:
 		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len,
 				  obj);
-		if ((rc != 0) && (rc != EEXIST)) {
+		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
@@ -3085,14 +3085,6 @@ out:
 			stbuf->st_ctim.tv_sec = entry.ctime;
 		}
 		*_obj = obj;
-	} else if (rc == EEXIST) {
-		if (stbuf) {
-			int rc2;
-			rc2 = dfs_stat(dfs, parent, name, stbuf);
-			if (rc2)
-				rc = rc2;
-		}
-		D_FREE(obj);
 	} else {
 		D_FREE(obj);
 	}
