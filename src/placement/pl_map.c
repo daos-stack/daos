@@ -153,7 +153,7 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	D_ASSERT(map->pl_ops != NULL);
 
-	oc_attr = daos_oclass_attr_find(md->omd_id, NULL, NULL);
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
 	if (daos_oclass_grp_size(oc_attr) == 1)
 		return 0;
 
@@ -189,7 +189,7 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 
 	D_ASSERT(map->pl_ops != NULL);
 
-	oc_attr = daos_oclass_attr_find(md->omd_id, NULL, NULL);
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
 	if (daos_oclass_grp_size(oc_attr) == 1)
 		return 0;
 
@@ -699,7 +699,7 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	int                              i;
 
 	start = grp_idx * grp_size;
-	oc_attr = daos_oclass_attr_find(oid, NULL, NULL);
+	oc_attr = daos_oclass_attr_find(oid, NULL);
 	if (oc_attr->ca_resil == DAOS_RES_EC) {
 		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
 
