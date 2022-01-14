@@ -376,8 +376,8 @@ trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
 					      0, NULL);
 	}
 
-	print_message("wait for 20 seconds for EC aggregation.\n");
-	sleep(20);
+	print_message("wait for 30 seconds for EC aggregation.\n");
+	sleep(30);
 
 	for (i = 0; i < oids_nr; i++) {
 		struct daos_oclass_attr *oca;

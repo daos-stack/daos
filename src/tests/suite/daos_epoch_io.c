@@ -477,8 +477,9 @@ squeeze_spaces(char *line)
 	char	*current = line;
 	int	 spacing = 0;
 	int	 leading_space = 1;
+	int	 i;
 
-	for (; line && *line != '\n'; line++) {
+	for (i = 0; line && *line != '\n' && i < CMD_LINE_LEN_MAX - 1; line++, i++) {
 		if (isspace(*line)) {
 			if (!spacing && !leading_space) {
 				*current++ = *line;
@@ -497,13 +498,16 @@ static int
 cmd_line_get(FILE *fp, char *line)
 {
 	char	*p;
+	int	 i;
 
 	D_ASSERT(line != NULL && fp != NULL);
 	do {
 		if (fgets(line, CMD_LINE_LEN_MAX - 1, fp) == NULL)
 			return -DER_ENOENT;
-		for (p = line; isspace(*p); p++)
+		for (p = line, i = 0; isspace(*p) && i < CMD_LINE_LEN_MAX - 1; p++, i++)
 			;
+		if (i == CMD_LINE_LEN_MAX - 1)
+			continue;
 		if (*p != '\0' && *p != '#' && *p != '\n')
 			break;
 	} while (1);
