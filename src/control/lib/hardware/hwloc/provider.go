@@ -11,7 +11,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -255,7 +254,7 @@ func (p *Provider) getPCIDevsPerNUMANode(topo *topology, nodes hardware.NodeMap)
 			return err
 		}
 
-		var addr *common.PCIAddress
+		var addr *hardware.PCIAddress
 		var linkSpeed float64
 		switch osDevType {
 		case osDevTypeNetwork, osDevTypeOpenFabrics:

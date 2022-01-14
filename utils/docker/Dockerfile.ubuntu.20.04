@@ -16,11 +16,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
 COPY ./utils/scripts/install-ubuntu20.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh
-RUN /tmp/install.sh
-
-# hack the default shell to bash instead of dash
-RUN rm /bin/sh && ln -s bash /bin/sh
+RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
+RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
+RUN apt-get update && apt-get install apt-utils && apt-get upgrade && chmod +x /tmp/install.sh && \
+  /tmp/install.sh && apt-get clean all
 
 RUN locale-gen en_US.UTF-8
 
@@ -31,10 +30,10 @@ RUN update-alternatives --set \
 ARG UID=1000
 
 # Add DAOS users
-RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
+RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
             --home /home/daos daos_server
 RUN echo "daos_server:daos_server" | chpasswd
-RUN useradd --user-group --create-home --shell /bin/bash daos_agent
+RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Create directory for DAOS backend storage
@@ -64,7 +63,7 @@ ARG DAOS_TARGET_TYPE=release
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { apt-get update && apt-get -y upgrade && apt-get clean all; }
+    { apt-get update && apt-get upgrade && apt-get clean all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
@@ -76,7 +75,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 
 USER root:root
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || { apt-get update && apt-get -y upgrade && apt-get clean all; }
+RUN [ -z "$CACHEBUST" ] || { apt-get update && apt-get upgrade && apt-get clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
@@ -84,7 +83,7 @@ USER daos_server:daos_server
 LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
-COPY VERSION LICENSE ftest.sh SConstruct ./
+COPY VERSION LICENSE ftest.sh SConstruct .clang-format ./
 COPY site_scons site_scons
 COPY utils utils
 COPY src src
@@ -111,25 +110,15 @@ ENV FI_SOCKETS_MAX_CONN_RETRY=1
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java
-# Set maven repo mirror
-RUN mkdir -p /home/daos/.m2
-RUN echo -e "<settings>\n\
-        <mirrors>\n\
-                <mirror>\n\
-                        <id>google-maven-central</id>\n\
-                        <name>GCS Maven Central mirror</name>\n\
-                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-                        <mirrorOf>central</mirrorOf>\n\
-                </mirror>\n\
-        </mirrors>\n\
-</settings>" > /home/daos/.m2/settings.xml
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+    { mkdir /home/daos/.m2 && \
+    cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
+    mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ $"DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
