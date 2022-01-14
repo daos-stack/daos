@@ -143,6 +143,9 @@ const (
 	ServerConfigDuplicateScmMount
 	ServerConfigDuplicateScmDeviceList
 	ServerConfigOverlappingBdevDeviceList
+	ServerConfigBdevCountMismatch
+	ServerConfigTargetCountMismatch
+	ServerConfigHelperStreamCountMismatch
 	ServerConfigFaultDomainInvalid
 	ServerConfigFaultCallbackNotFound
 	ServerConfigFaultCallbackInsecure

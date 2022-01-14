@@ -477,8 +477,9 @@ squeeze_spaces(char *line)
 	char	*current = line;
 	int	 spacing = 0;
 	int	 leading_space = 1;
+	int	 i;
 
-	for (; line && *line != '\n'; line++) {
+	for (i = 0; line && *line != '\n' && i < CMD_LINE_LEN_MAX - 1; line++, i++) {
 		if (isspace(*line)) {
 			if (!spacing && !leading_space) {
 				*current++ = *line;
@@ -497,13 +498,16 @@ static int
 cmd_line_get(FILE *fp, char *line)
 {
 	char	*p;
+	int	 i;
 
 	D_ASSERT(line != NULL && fp != NULL);
 	do {
 		if (fgets(line, CMD_LINE_LEN_MAX - 1, fp) == NULL)
 			return -DER_ENOENT;
-		for (p = line; isspace(*p); p++)
+		for (p = line, i = 0; isspace(*p) && i < CMD_LINE_LEN_MAX - 1; p++, i++)
 			;
+		if (i == CMD_LINE_LEN_MAX - 1)
+			continue;
 		if (*p != '\0' && *p != '#' && *p != '\n')
 			break;
 	} while (1);
@@ -1217,15 +1221,13 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 			arg->eio_args.op_ec = 1;
 			if ((argc == 3 && strcmp(argv[2], "OC_EC_2P2G1") == 0)
 			    || argc == 2) {
-				print_message("EC obj class "
-					      "DAOS_OC_EC_K2P2_L32K\n");
-				dts_ec_obj_class = DAOS_OC_EC_K2P2_L32K;
+				print_message("EC obj class OC_EC_2P2G1\n");
+				dts_ec_obj_class = OC_EC_2P2G1;
 				dts_ec_grp_size = 4;
 			} else if (argc == 3 &&
 				   strcmp(argv[2], "OC_EC_4P2G1") == 0) {
-				print_message("EC obj class "
-					      "DAOS_OC_EC_K4P2_L32K\n");
-				dts_ec_obj_class = DAOS_OC_EC_K4P2_L32K;
+				print_message("EC obj class OC_EC_4P2G1\n");
+				dts_ec_obj_class = OC_EC_4P2G1;
 				dts_ec_grp_size = 6;
 			} else {
 				print_message("bad parameter");
@@ -1562,15 +1564,20 @@ epoch_io_setup(void **state)
 	struct epoch_io_args	*eio_arg;
 	char			*tmp_str;
 	int			 rc;
+	unsigned int		 orig_dt_cell_size;
 
+	orig_dt_cell_size = dt_cell_size;
+	dt_cell_size = 1 << 15;
 	obj_setup(state);
+	dt_cell_size = orig_dt_cell_size;
 	arg = *state;
+
 	eio_arg = &arg->eio_args;
 	D_INIT_LIST_HEAD(&eio_arg->op_list);
 	eio_arg->op_lvl = TEST_LVL_DAOS;
 	eio_arg->op_iod_size = 1;
 	eio_arg->op_oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0,
-				      arg->myrank);
+					    arg->myrank);
 
 	/* generate the temporary IO dir for epoch IO test */
 	if (test_io_dir == NULL) {
