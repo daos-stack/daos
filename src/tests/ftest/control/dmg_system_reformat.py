@@ -7,6 +7,7 @@
 import time
 
 from avocado.core.exceptions import TestFail
+from command_utils_base import CommandFailure
 from pool_test_base import PoolTestBase
 
 
@@ -49,9 +50,6 @@ class DmgSystemReformatTest(PoolTestBase):
             self.fail("Detected issues performing a system stop: {}".format(
                 self.get_dmg_command().result.stderr_text))
 
-        self.log.info("Wait 10 sec for the system to fully stop")
-        time.sleep(10)
-
         # Remove pools
         self.pool = []
 
@@ -62,24 +60,33 @@ class DmgSystemReformatTest(PoolTestBase):
             self.fail("Issues performing system erase: {}".format(
                 self.get_dmg_command().result.stderr_text))
 
-        self.log.info("Wait 10 sec for system erase")
-        time.sleep(10)
-
         # To verify that we are using the membership information instead of the
         # dmg config explicit hostlist
-        # Uncomment below after DAOS-5979 is resolved
-        # self.assertTrue(
-        #     self.server_managers[-1].dmg.set_config_value("hostlist", None))
+        self.assertTrue(
+            self.server_managers[-1].dmg.set_config_value("hostlist", None))
 
         self.log.info("Perform dmg storage format on all system ranks:")
-        self.get_dmg_command().storage_format(force=True)
-        if self.get_dmg_command().result.exit_status != 0:
-            self.fail("Issues performing storage format --force: {}".format(
-                self.get_dmg_command().result.stderr_text))
+
+        # Calling storage format after system stop too soon would fail, so
+        # wait 10 sec and retry up to 4 times.
+        count = 0
+        while count < 4:
+            try:
+                self.get_dmg_command().storage_format(force=True)
+                if self.get_dmg_command().result.exit_status != 0:
+                    self.fail(
+                        "Issues performing storage format --force: {}".format(
+                            self.get_dmg_command().result.stderr_text))
+                break
+            except CommandFailure as error:
+                self.log.info(
+                    "Storage format failed. Wait 10 sec and retry. %s", error)
+                count += 1
+                time.sleep(10)
 
         # Check that engine starts up again
         self.log.info("<SERVER> Waiting for the engines to start")
-        self.server_managers[-1].detect_engine_start(hosts_qty=2)
+        self.server_managers[-1].detect_engine_start()
 
         # Check that we have cleared storage by checking pool list
         if self.get_dmg_command().get_pool_list_uuids():
