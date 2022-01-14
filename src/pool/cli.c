@@ -52,7 +52,11 @@ dc_pool_init(void)
 void
 dc_pool_fini(void)
 {
-	daos_rpc_unregister(&pool_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&pool_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister pool RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 static void
@@ -223,15 +227,16 @@ choose:
 
 /* Assume dp_map_lock is locked before calling this function */
 int
-dc_pool_map_update(struct dc_pool *pool, struct pool_map *map,
-		   unsigned int map_version, bool connect)
+dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
 {
-	int rc;
+	unsigned int	map_version;
+	int		rc;
 
 	D_ASSERT(map != NULL);
+	map_version = pool_map_get_version(map);
+
 	if (pool->dp_map == NULL) {
-		rc = pl_map_update(pool->dp_pool, map, connect,
-				DEFAULT_PL_TYPE);
+		rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -292,7 +297,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
-	rc = dc_pool_map_update(pool, map, map_version, connect);
+	rc = dc_pool_map_update(pool, map, connect);
 	if (rc)
 		D_GOTO(out_unlock, rc);
 
@@ -950,6 +955,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 {
 	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
+	struct pool_map		*map = NULL;
 	void			*p;
 	int			 rc = 0;
 
@@ -981,16 +987,14 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	if (rc < 0)
 		goto out;
 
-	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
-			     &pool->dp_map);
+	rc = pool_map_create(map_buf, pool_glob->dpg_map_version, &map);
 	if (rc != 0) {
 		D_ERROR("failed to create local pool map: "DF_RC"\n",
 			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
-	rc = pl_map_update(pool->dp_pool, pool->dp_map, true,
-			DEFAULT_PL_TYPE);
+	rc = dc_pool_map_update(pool, map, true /* connect */);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1005,6 +1009,8 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 out:
 	if (rc != 0)
 		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
+	if (map != NULL)
+		pool_map_decref(map);
 	if (pool != NULL)
 		dc_pool_put(pool);
 	return rc;
@@ -1481,6 +1487,7 @@ create_map_refresh_rpc(struct dc_pool *pool, unsigned int map_version,
 
 	ep.ep_grp = group;
 	ep.ep_rank = rank;
+	ep.ep_tag = 0;
 
 	rc = pool_req_create(ctx, &ep, POOL_TGT_QUERY_MAP, &c);
 	if (rc != 0) {
@@ -1610,7 +1617,8 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		goto out;
 	}
 
-	rc = dc_pool_map_update(pool, map, out->tmo_op.po_map_version, false /* connect */);
+	rc = dc_pool_map_update(pool, map, false /* connect */);
+	pool_map_decref(map);
 
 out:
 	destroy_map_refresh_rpc(cb_arg->mrc_rpc, cb_arg->mrc_map_buf);

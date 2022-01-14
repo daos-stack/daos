@@ -8,7 +8,7 @@ hosts:
     - server-F
     - server-G
     - server-H
-timeout: 3600
+timeout: 900
 server_config:
   name: daos_server
   servers:
@@ -30,16 +30,16 @@ gen_io_conf:
       targets: "8"
   no_of_dkeys:
     large_no_dkeys:
-      dkeys: "5"
+      dkeys: "2"
   no_of_akeys:
     large_no_akeys:
-      akeys: "5"
+      akeys: "2"
   record:
     large_record_no:
       record_size: "50"
   no_of_objects:
     large_no_objects:
-      obj_num: "10"
+      obj_num: "3"
   object_class: !mux
     replica2_group1:
       obj_class: "RP_2G1"

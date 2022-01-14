@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
@@ -70,6 +71,10 @@ type HostStorageSet struct {
 	HostSet     *hostlist.HostSet `json:"hosts"`
 }
 
+func (hss *HostStorageSet) String() string {
+	return fmt.Sprintf("hosts %s, storage %+v", hss.HostSet, hss.HostStorage)
+}
+
 // NewHostStorageSet returns an initialized HostStorageSet for the given
 // host address and HostStorage configuration.
 func NewHostStorageSet(hostAddr string, hs *HostStorage) (*HostStorageSet, error) {
@@ -85,6 +90,14 @@ func NewHostStorageSet(hostAddr string, hs *HostStorage) (*HostStorageSet, error
 
 // HostStorageMap provides a map of HostStorage keys to HostStorageSet values.
 type HostStorageMap map[uint64]*HostStorageSet
+
+func (hsm HostStorageMap) String() string {
+	var strs []string
+	for _, hss := range hsm {
+		strs = append(strs, hss.String())
+	}
+	return strings.Join(strs, "\n")
+}
 
 // Add inserts the given host address to a matching HostStorageSet or
 // creates a new one.

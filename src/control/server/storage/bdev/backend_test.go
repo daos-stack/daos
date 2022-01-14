@@ -3,11 +3,14 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package bdev
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -19,9 +22,16 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+const (
+	vmdAddr         = "0000:5d:05.5"
+	vmdBackingAddr1 = "5d0505:01:00.0"
+	vmdBackingAddr2 = "5d0505:03:00.0"
 )
 
 // defCmpOpts returns a default set of cmp option suitable for this package
@@ -29,6 +39,7 @@ func defCmpOpts() []cmp.Option {
 	return []cmp.Option{
 		// ignore these fields on most tests, as they are intentionally not stable
 		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
+		cmp.AllowUnexported(hardware.PCIAddressSet{}),
 	}
 }
 
@@ -52,6 +63,26 @@ func mockSpdkController(varIdx ...int32) storage.NvmeController {
 	return *s
 }
 
+func mockCtrlrsInclVMD() storage.NvmeControllers {
+	bdevAddrs := []string{
+		"0000:90:00.0", "0000:d8:00.0", vmdBackingAddr1, "0000:8e:00.0",
+		"0000:8a:00.0", "0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0",
+		"0000:8f:00.0", vmdBackingAddr2,
+	}
+	bdevCtrlrs := make(storage.NvmeControllers, len(bdevAddrs))
+	for idx, addr := range bdevAddrs {
+		bdevCtrlrs[idx] = &storage.NvmeController{PciAddr: addr}
+	}
+	return bdevCtrlrs
+}
+
+func ctrlrsFromPCIAddrs(addrs ...string) (ncs storage.NvmeControllers) {
+	for _, addr := range addrs {
+		ncs = append(ncs, &storage.NvmeController{PciAddr: addr})
+	}
+	return
+}
+
 func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.MockNvmeCfg) *spdkBackend {
 	return &spdkBackend{
 		log: log,
@@ -59,6 +90,70 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 			Env:  &spdk.MockEnvImpl{Cfg: mec},
 			Nvme: &spdk.MockNvmeImpl{Cfg: mnc},
 		},
+	}
+}
+
+func TestBackend_groomDiscoveredBdevs(t *testing.T) {
+	ctrlr1 := storage.MockNvmeController(1)
+	ctrlr2 := storage.MockNvmeController(2)
+	ctrlr3 := storage.MockNvmeController(3)
+
+	for name, tc := range map[string]struct {
+		reqAddrList []string
+		vmdEnabled  bool
+		inCtrlrs    storage.NvmeControllers
+		expCtrlrs   storage.NvmeControllers
+		expErr      error
+	}{
+		"no controllers; no filter": {},
+		"no filter": {
+			inCtrlrs:  storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			expCtrlrs: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+		},
+		"filtered": {
+			reqAddrList: []string{ctrlr1.PciAddr, ctrlr3.PciAddr},
+			inCtrlrs:    storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			expCtrlrs:   storage.NvmeControllers{ctrlr1, ctrlr3},
+		},
+		"missing": {
+			reqAddrList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
+			inCtrlrs:    storage.NvmeControllers{ctrlr1, ctrlr3},
+			expErr:      FaultBdevNotFound(ctrlr2.PciAddr),
+		},
+		"vmd devices; vmd not enabled": {
+			reqAddrList: []string{"0000:85:05.5"},
+			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
+			expErr: FaultBdevNotFound("0000:85:05.5"),
+		},
+		"vmd devices; vmd enabled": {
+			vmdEnabled:  true,
+			reqAddrList: []string{"0000:85:05.5"},
+			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
+			expCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			reqAddrs, err := hardware.NewPCIAddressSet(tc.reqAddrList...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotCtrlrs, gotErr := groomDiscoveredBdevs(reqAddrs, tc.inCtrlrs, tc.vmdEnabled)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expCtrlrs, gotCtrlrs, defCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected controllers (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
 
@@ -119,12 +214,24 @@ func TestBackend_Format(t *testing.T) {
 	testDir, clean := common.CreateTestDir(t)
 	defer clean()
 
+	addrList := func(t *testing.T, in ...string) *hardware.PCIAddressSet {
+		t.Helper()
+
+		addrs, err := hardware.NewPCIAddressSet(in...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return addrs
+	}
+
 	for name, tc := range map[string]struct {
-		req     storage.BdevFormatRequest
-		mec     spdk.MockEnvCfg
-		mnc     spdk.MockNvmeCfg
-		expResp *storage.BdevFormatResponse
-		expErr  error
+		req         storage.BdevFormatRequest
+		mec         spdk.MockEnvCfg
+		mnc         spdk.MockNvmeCfg
+		expResp     *storage.BdevFormatResponse
+		expErr      error
+		expInitOpts []*spdk.EnvOptions
 	}{
 		"unknown device class": {
 			req: storage.BdevFormatRequest{
@@ -216,6 +323,9 @@ func TestBackend_Format(t *testing.T) {
 					},
 				},
 			},
+			expInitOpts: []*spdk.EnvOptions{
+				{PCIAllowList: addrList(t, pci1)},
+			},
 		},
 		"multiple ssd and namespace success": {
 			mnc: spdk.MockNvmeCfg{
@@ -246,6 +356,9 @@ func TestBackend_Format(t *testing.T) {
 						Formatted: true,
 					},
 				},
+			},
+			expInitOpts: []*spdk.EnvOptions{
+				{PCIAllowList: addrList(t, pci1, pci2, pci3)},
 			},
 		},
 		"two success and one failure": {
@@ -285,6 +398,9 @@ func TestBackend_Format(t *testing.T) {
 					},
 				},
 			},
+			expInitOpts: []*spdk.EnvOptions{
+				{PCIAllowList: addrList(t, pci1, pci2, pci3)},
+			},
 		},
 		"multiple namespaces on single controller success": {
 			mnc: spdk.MockNvmeCfg{
@@ -307,6 +423,9 @@ func TestBackend_Format(t *testing.T) {
 						Formatted: true,
 					},
 				},
+			},
+			expInitOpts: []*spdk.EnvOptions{
+				{PCIAllowList: addrList(t, pci1)},
 			},
 		},
 		"multiple namespaces on single controller failure": {
@@ -347,14 +466,55 @@ func TestBackend_Format(t *testing.T) {
 					},
 				},
 			},
+			expInitOpts: []*spdk.EnvOptions{
+				{PCIAllowList: addrList(t, pci1)},
+			},
+		},
+		"binding format success; vmd enabled": {
+			mnc: spdk.MockNvmeCfg{
+				FormatRes: []*spdk.FormatResult{
+					{CtrlrPCIAddr: vmdBackingAddr1, NsID: 1},
+					{CtrlrPCIAddr: vmdBackingAddr2, NsID: 1},
+				},
+			},
+			req: storage.BdevFormatRequest{
+				Properties: storage.BdevTierProperties{
+					Class:      storage.ClassNvme,
+					DeviceList: []string{vmdAddr},
+				},
+				VMDEnabled: true,
+				BdevCache: &storage.BdevScanResponse{
+					Controllers: mockCtrlrsInclVMD(),
+				},
+			},
+			expResp: &storage.BdevFormatResponse{
+				DeviceResponses: map[string]*storage.BdevDeviceFormatResponse{
+					vmdBackingAddr1: {Formatted: true},
+					vmdBackingAddr2: {Formatted: true},
+				},
+			},
+			expInitOpts: []*spdk.EnvOptions{
+				{
+					PCIAllowList: addrList(t, vmdBackingAddr1, vmdBackingAddr2),
+					EnableVMD:    true,
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			b := backendWithMockBinding(log, tc.mec, tc.mnc)
-			b.script = mockScriptRunner(log)
+			mei := &spdk.MockEnvImpl{Cfg: tc.mec}
+			sr, _ := mockScriptRunner(t, log, nil)
+			b := &spdkBackend{
+				log: log,
+				binding: &spdkWrapper{
+					Env:  mei,
+					Nvme: &spdk.MockNvmeImpl{Cfg: tc.mnc},
+				},
+				script: sr,
+			}
 
 			// output path would be set during config validate
 			tc.req.OwnerUID = os.Geteuid()
@@ -370,15 +530,132 @@ func TestBackend_Format(t *testing.T) {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
 
-			if tc.req.Properties.Class != storage.ClassFile {
-				return
-			}
-
-			// verify empty files created for AIO class
-			for _, testFile := range tc.req.Properties.DeviceList {
-				if _, err := os.Stat(testFile); err != nil {
-					t.Fatal(err)
+			switch tc.req.Properties.Class {
+			case storage.ClassFile:
+				// verify empty files created for AIO class
+				for _, testFile := range tc.req.Properties.DeviceList {
+					if _, err := os.Stat(testFile); err != nil {
+						t.Fatal(err)
+					}
 				}
+			case storage.ClassNvme:
+				if diff := cmp.Diff(tc.expInitOpts, mei.CallOpts, defCmpOpts()...); diff != "" {
+					t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestBackend_writeNvmeConfig(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req      storage.BdevWriteConfigRequest
+		writeErr error
+		expErr   error
+		expCall  *storage.BdevWriteConfigRequest
+	}{
+		"write conf success": {
+			req: storage.BdevWriteConfigRequest{
+				TierProps: []storage.BdevTierProperties{
+					{
+						Class: storage.ClassDcpm,
+					},
+					{
+						Class:      storage.ClassNvme,
+						DeviceList: []string{common.MockPCIAddr(1)},
+					},
+				},
+			},
+			expCall: &storage.BdevWriteConfigRequest{
+				TierProps: []storage.BdevTierProperties{
+					{
+						Class: storage.ClassDcpm,
+					},
+					{
+						Class:      storage.ClassNvme,
+						DeviceList: []string{common.MockPCIAddr(1)},
+					},
+				},
+			},
+		},
+		"write conf failure": {
+			req: storage.BdevWriteConfigRequest{
+				TierProps: []storage.BdevTierProperties{
+					{
+						Class: storage.ClassDcpm,
+					},
+					{
+						Class:      storage.ClassNvme,
+						DeviceList: []string{common.MockPCIAddr(1)},
+					},
+				},
+			},
+			writeErr: errors.New("test"),
+			expCall: &storage.BdevWriteConfigRequest{
+				TierProps: []storage.BdevTierProperties{
+					{
+						Class: storage.ClassDcpm,
+					},
+					{
+						Class:      storage.ClassNvme,
+						DeviceList: []string{common.MockPCIAddr(1)},
+					},
+				},
+			},
+			expErr: errors.New("test"),
+		},
+		"write conf success; vmd enabled": {
+			req: storage.BdevWriteConfigRequest{
+				VMDEnabled: true,
+				TierProps: []storage.BdevTierProperties{
+					{
+						Class: storage.ClassDcpm,
+					},
+					{
+						Class:      storage.ClassNvme,
+						DeviceList: []string{vmdAddr},
+					},
+				},
+				BdevCache: &storage.BdevScanResponse{
+					Controllers: mockCtrlrsInclVMD(),
+				},
+			},
+			expCall: &storage.BdevWriteConfigRequest{
+				VMDEnabled: true,
+				TierProps: []storage.BdevTierProperties{
+					{
+						Class:      storage.ClassNvme,
+						DeviceList: []string{vmdBackingAddr1, vmdBackingAddr2},
+					},
+				},
+				BdevCache: &storage.BdevScanResponse{
+					Controllers: mockCtrlrsInclVMD(),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			sr, _ := mockScriptRunner(t, log, nil)
+			b := newBackend(log, sr)
+
+			var gotCall *storage.BdevWriteConfigRequest
+			gotErr := b.writeNvmeConfig(
+				tc.req,
+				func(l logging.Logger, r *storage.BdevWriteConfigRequest) error {
+					l.Debugf("req: %+v", r)
+					gotCall = r
+					return tc.writeErr
+				},
+			)
+			if diff := cmp.Diff(tc.expCall, gotCall, defCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected request made (-want, +got):\n%s\n", diff)
+			}
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
 			}
 		})
 	}
@@ -584,6 +861,419 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 			if diff := cmp.Diff(tc.expRemoved, removedFiles); diff != "" {
 				t.Fatalf("unexpected remove result (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestBackend_Prepare(t *testing.T) {
+	const (
+		testNrHugePages       = 42
+		nonexistentTargetUser = "nonexistentTargetUser"
+		username              = "bob"
+	)
+
+	mockAddrList := func(t *testing.T, idxs ...int) *hardware.PCIAddressSet {
+		var addrs hardware.PCIAddressSet
+
+		for _, idx := range idxs {
+			if err := addrs.AddStrings(common.MockPCIAddr(int32(idx))); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		return &addrs
+	}
+
+	testPCIAllowList := mockAddrList(t, 1, 2, 3).String()
+	testPCIBlockList := mockAddrList(t, 4, 3).String()
+
+	for name, tc := range map[string]struct {
+		reset          bool
+		req            storage.BdevPrepareRequest
+		mbc            *MockBackendConfig
+		userLookupRet  *user.User
+		userLookupErr  error
+		vmdDetectRet   *hardware.PCIAddressSet
+		vmdDetectErr   error
+		hpCleanErr     error
+		expScriptCalls *[]scriptCall
+		expErr         error
+	}{
+		"unknown target user": {
+			req: storage.BdevPrepareRequest{
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			userLookupErr: errors.New("unknown user"),
+			expErr:        errors.New("lookup on local host: unknown user"),
+		},
+		"prepare reset; defaults": {
+			reset: true,
+			req: storage.BdevPrepareRequest{
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+					},
+					Args: []string{"reset"},
+				},
+			},
+		},
+		"prepare reset fails": {
+			reset: true,
+			req: storage.BdevPrepareRequest{
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			mbc: &MockBackendConfig{
+				ResetErr: errors.New("reset failed"),
+			},
+			expErr: errors.New("reset failed"),
+		},
+		"prepare setup; defaults": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         -1,
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+					},
+				},
+			},
+		},
+		"prepare setup; user-specified values": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				PCIAllowList:          testPCIAllowList,
+				DisableVFIO:           true,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
+					},
+				},
+			},
+		},
+		"prepare setup; blocklist": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				PCIBlockList:          testPCIBlockList,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+					},
+				},
+			},
+		},
+		"prepare setup; blocklist allowlist": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				PCIBlockList:          testPCIBlockList,
+				PCIAllowList:          testPCIAllowList,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+					},
+				},
+			},
+		},
+		"prepare setup; fails": {
+			req: storage.BdevPrepareRequest{
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			mbc: &MockBackendConfig{
+				PrepareErr: errors.New("prepare failed"),
+			},
+			expErr: errors.New("prepare failed"),
+		},
+		"prepare setup; vmd enabled": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				DisableCleanHugePages: true,
+				EnableVMD:             true,
+			},
+			vmdDetectRet: mockAddrList(t, 1, 2),
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, fmt.Sprintf("%s %s",
+							common.MockPCIAddr(1), common.MockPCIAddr(2))),
+					},
+				},
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+					},
+				},
+			},
+		},
+		"prepare setup; vmd enabled; vmd detect failed": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				DisableCleanHugePages: true,
+				EnableVMD:             true,
+			},
+			vmdDetectRet: mockAddrList(t, 1, 2),
+			vmdDetectErr: errors.New("vmd detect failed"),
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+					},
+				},
+			},
+			expErr: errors.New("vmd detect failed"),
+		},
+		"prepare setup; vmd enabled; no vmd devices": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				DisableCleanHugePages: true,
+				EnableVMD:             true,
+			},
+			vmdDetectRet: mockAddrList(t),
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+					},
+				},
+			},
+		},
+		"prepare setup; vmd enabled; vmd device allowed": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				PCIAllowList:          testPCIAllowList,
+				DisableCleanHugePages: true,
+				EnableVMD:             true,
+			},
+			vmdDetectRet: mockAddrList(t, 3, 4),
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(3)),
+					},
+				},
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+					},
+				},
+			},
+		},
+		"prepare setup; vmd enabled; vmd device blocked": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				PCIBlockList:          testPCIBlockList,
+				DisableCleanHugePages: true,
+				EnableVMD:             true,
+			},
+			vmdDetectRet: mockAddrList(t, 3, 5),
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(5)),
+					},
+				},
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+					},
+				},
+			},
+		},
+		"prepare setup; vmd enabled; vmd devices all blocked": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				PCIBlockList:          testPCIBlockList,
+				DisableCleanHugePages: true,
+				EnableVMD:             true,
+			},
+			vmdDetectRet: mockAddrList(t, 3, 4),
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+					},
+				},
+			},
+		},
+		"prepare setup; vmd enabled; vmd devices allowed and blocked": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				PCIAllowList:          testPCIAllowList,
+				PCIBlockList:          testPCIBlockList,
+				DisableCleanHugePages: true,
+				EnableVMD:             true,
+			},
+			vmdDetectRet: mockAddrList(t, 3, 2),
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(2)),
+					},
+				},
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+					},
+				},
+			},
+		},
+		"prepare setup; huge page clean enabled": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				PCIAllowList:          testPCIAllowList,
+				PCIBlockList:          testPCIBlockList,
+				DisableCleanHugePages: false,
+			},
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+					},
+				},
+			},
+		},
+		"prepare setup; huge page clean enabled; clean fail": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				TargetUser:            username,
+				PCIAllowList:          testPCIAllowList,
+				PCIBlockList:          testPCIBlockList,
+				DisableCleanHugePages: false,
+			},
+			hpCleanErr: errors.New("clean failed"),
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+					},
+				},
+			},
+			expErr: errors.New("clean failed"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			sss, calls := mockScriptRunner(t, log, tc.mbc)
+			b := newBackend(log, sss)
+
+			if tc.userLookupRet == nil {
+				tc.userLookupRet, _ = user.Current()
+			}
+			mockUserLookup := func(string) (*user.User, error) {
+				return tc.userLookupRet, tc.userLookupErr
+			}
+			mockVmdDetect := func() (*hardware.PCIAddressSet, error) {
+				return tc.vmdDetectRet, tc.vmdDetectErr
+			}
+			mockHpClean := func(string, string, string) error {
+				return tc.hpCleanErr
+			}
+
+			var gotErr error
+			if tc.reset {
+				gotErr = b.Reset(tc.req)
+			} else {
+				_, gotErr = b.prepare(tc.req, mockUserLookup, mockVmdDetect, mockHpClean)
+			}
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expScriptCalls, calls); diff != "" {
+				t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
+			}
+
 		})
 	}
 }

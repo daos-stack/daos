@@ -95,6 +95,11 @@ insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	     daos_size_t data_size, struct ioreq *req);
 
 void
+inset_recxs_dkey_uint64(uint64_t *dkey, const char *akey, daos_size_t iod_size,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
+	     daos_size_t data_size, struct ioreq *req);
+
+void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	daos_size_t *iod_size, void **val, daos_size_t *data_size,
 	daos_handle_t th, struct ioreq *req, bool empty);

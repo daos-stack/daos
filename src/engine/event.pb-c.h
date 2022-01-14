@@ -74,9 +74,9 @@ struct  _Shared__RASEvent__PoolSvcEventInfo
 
 typedef enum {
   SHARED__RASEVENT__EXTENDED_INFO__NOT_SET = 0,
-  SHARED__RASEVENT__EXTENDED_INFO_STR_INFO = 16,
-  SHARED__RASEVENT__EXTENDED_INFO_ENGINE_STATE_INFO = 17,
-  SHARED__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 18
+  SHARED__RASEVENT__EXTENDED_INFO_STR_INFO = 17,
+  SHARED__RASEVENT__EXTENDED_INFO_ENGINE_STATE_INFO = 18,
+  SHARED__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 19
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(SHARED__RASEVENT__EXTENDED_INFO)
 } Shared__RASEvent__ExtendedInfoCase;
 
@@ -114,6 +114,10 @@ struct  _Shared__RASEvent
    * (optional) DAOS rank involved in event.
    */
   uint32_t rank;
+  /*
+   * (optional) Incarnation of DAOS rank involved in event.
+   */
+  uint64_t incarnation;
   /*
    * (optional) Hardware component involved in event.
    */
@@ -158,7 +162,7 @@ struct  _Shared__RASEvent
 };
 #define SHARED__RASEVENT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&shared__rasevent__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, SHARED__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, SHARED__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
 
 
 /*

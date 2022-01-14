@@ -6,6 +6,7 @@
 
 package io.daos.fs.hadoop;
 
+import io.daos.Constants;
 import io.daos.DaosEventQueue;
 import io.daos.DaosIOException;
 import io.daos.dfs.DaosFile;
@@ -15,7 +16,9 @@ import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class DaosFileSourceAsync extends DaosFileSource {
 
@@ -23,13 +26,12 @@ public class DaosFileSourceAsync extends DaosFileSource {
 
   private DaosEventQueue eq;
 
+  private Set<IODfsDesc> candidates = new HashSet<>();
+
   private List<DaosEventQueue.Attachment> completed = new ArrayList<>(1);
 
-  private final static int MIN_WRITE = 1 * 1024 * 1024; // per sec
-  private final static int MIN_READ = 2 * MIN_WRITE; // per sec
-  private final static int TIMEOUT_MS = 100; // MILLI SEC
-  private final static int SPEED_DENOMINATOR_WRITE = MIN_WRITE/TIMEOUT_MS;
-  private final static int SPEED_DENOMINATOR_READ = MIN_READ/TIMEOUT_MS;
+  private final static int TIMEOUT_MS = Integer.valueOf(System.getProperty(Constants.CFG_DAOS_TIMEOUT,
+      Constants.DEFAULT_DAOS_TIMEOUT_MS)); // MILLI SEC
 
   public DaosFileSourceAsync(DaosFile daosFile, int bufCapacity, long fileLen, boolean readOrWrite,
                              FileSystem.Statistics stats) {
@@ -52,6 +54,7 @@ public class DaosFileSourceAsync extends DaosFileSource {
     }
     desc = daosFile.createDfsDesc(buffer, eq);
     desc.setReadOrWrite(readOrWrite);
+    candidates.add(desc);
   }
 
   @Override
@@ -61,45 +64,44 @@ public class DaosFileSourceAsync extends DaosFileSource {
 
   @Override
   protected int doWrite(long nextWritePos) throws IOException {
-    DaosEventQueue.Event event = eq.acquireEvent();
+    assert Thread.currentThread().getId() == eq.getThreadId() : "current thread " + Thread.currentThread().getId() +
+        "(" + Thread.currentThread().getName() + "), is not expected " + eq.getThreadId() + "(" +
+        eq.getThreadName() + ")";
+
+    DaosEventQueue.Event event = eq.acquireEventBlocking(TIMEOUT_MS, completed, IODfsDesc.class, candidates);
     desc.reuse();
     desc.setEvent(event);
     int len = buffer.readableBytes();
     daosFile.writeAsync(desc, nextWritePos, len);
-    waitForCompletion(len, SPEED_DENOMINATOR_WRITE);
+    waitForCompletion();
     return len;
   }
 
   @Override
   protected int doRead(long nextReadPos, int length) throws IOException {
-    DaosEventQueue.Event event = eq.acquireEvent();
+    assert Thread.currentThread().getId() == eq.getThreadId() : "current thread " + Thread.currentThread().getId() +
+        "(" + Thread.currentThread().getName() + "), is not expected " + eq.getThreadId() + "(" +
+        eq.getThreadName() + ")";
+
+    DaosEventQueue.Event event = eq.acquireEventBlocking(TIMEOUT_MS, completed, IODfsDesc.class, candidates);
     desc.reuse();
     desc.setEvent(event);
     daosFile.readAsync(desc, nextReadPos, length);
-    waitForCompletion(length, SPEED_DENOMINATOR_READ);
+    waitForCompletion();
     return desc.getActualLength();
   }
 
-  private void waitForCompletion(int length, int speedDenom) throws IOException {
-    int limit = length/speedDenom;
-    limit = limit < 3 ? 3 : limit;
-    int cnt = 0;
-    int nbr;
-    do {
-      nbr = eq.pollCompleted(completed, 1, TIMEOUT_MS);
-      cnt++;
-      if (cnt > limit) {
-        break;
-      }
-      if (nbr > 0 && completed.get(0) != desc) { // discard unexpected return
-        nbr = 0;
-        limit++;
-      }
-    } while (nbr == 0);
-    if (nbr != 1) {
-      throw new DaosIOException("failed to get expected return after trying " + limit + " times");
-    }
+  private void waitForCompletion() throws IOException {
     completed.clear();
+    long start = System.currentTimeMillis();
+    long dur;
+    while (completed.isEmpty() & ((dur = (System.currentTimeMillis() - start)) < TIMEOUT_MS)) {
+      eq.pollCompleted(completed, IODfsDesc.class, candidates, 1, TIMEOUT_MS - dur);
+    }
+    if (completed.isEmpty()) {
+      desc.discard();
+      throw new DaosIOException("failed to get expected return after waiting " + TIMEOUT_MS + " ms. desc: " + desc +
+          ", candidates size: " + candidates.size() + ", dur: " + (System.currentTimeMillis() - start));
+    }
   }
 }
-

@@ -127,7 +127,8 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 	       uint32_t dedup_type,
 	       uint32_t dedup_threshold_setting)
 {
-	daos_prop_t *props = NULL;
+	daos_prop_t	*props = NULL;
+	char		 str[37];
 	int		 rc;
 	daos_size_t	 data_len;
 	daos_size_t	 dedup_threshold;
@@ -138,8 +139,6 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 	dedup_threshold = dedup_threshold_setting == THRESHOLD_GREATER_THAN_DATA
 			  ? data_len + 10 : data_len - 10;
 
-	uuid_generate(ctx->uuid);
-
 	props = daos_prop_alloc(3);
 	assert_non_null(props);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
@@ -149,11 +148,12 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 	props->dpp_entries[2].dpe_val = dedup_threshold;
 
-	rc = daos_cont_create(ctx->poh, ctx->uuid, props, NULL);
+	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	assert_rc_equal(0, rc);
 	daos_prop_free(props);
 
-	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_open(ctx->poh, str, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
 	assert_rc_equal(0, rc);
 

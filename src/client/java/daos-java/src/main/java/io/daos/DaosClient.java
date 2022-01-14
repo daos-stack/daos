@@ -16,7 +16,12 @@ import java.io.InputStream;
 import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
@@ -36,6 +41,8 @@ public class DaosClient implements ForceCloseable {
   private DaosPool pool;
 
   private DaosContainer container;
+
+  private Map<String, String> attrMap;
 
   private volatile boolean inited;
 
@@ -155,6 +162,37 @@ public class DaosClient implements ForceCloseable {
   static native void daosCloseContainer(long contPtr) throws IOException;
 
   /**
+   * list all user-defined attributes.
+   *
+   * @param contPtr pointer to container
+   * @param memoryAddress encoded names with null-terminator after each name
+   * @throws IOException
+   */
+  static native void daosListContAttrs(long contPtr, long memoryAddress) throws IOException;
+
+  /**
+   * set attributes to container.
+   *
+   * @param contPtr pointer to container
+   * @param memoryAddress encoded attributes in name-value pair
+   * number of attributes + total attributes size (excluding null-terminator) + (length of name + name +
+   *   null-terminator + length of value + value)+
+   * @throws IOException {@link DaosIOException}
+   */
+  static native void daosSetContAttrs(long contPtr, long memoryAddress) throws IOException;
+
+  /**
+   * get container attributes.
+   *
+   * @param contPtr pointer to container
+   * @param memoryAddress encoded attributes in name-value pair
+   * number of attributes + total name size (excluding null-terminator) + max value length + (length of name + name +
+   *   null-terminator + truncated + length of value + value)+
+   * @throws IOException {@link DaosIOException}
+   */
+  static native void daosGetContAttrs(long contPtr, long memoryAddress) throws IOException;
+
+  /**
    * create event queue with given number of events.
    *
    * @param nbrOfEvents number of events to associate with the queue
@@ -220,8 +258,39 @@ public class DaosClient implements ForceCloseable {
       log.warn("container UUID is not set");
     }
     inited = true;
+    attrMap = retrieveUserDefinedAttrs();
     registerForShutdown(this);
     log.info("DaosClient for {}, {} initialized", builder.poolId, builder.contId);
+  }
+
+  public void setAttributes(Map<String, String> map) throws IOException {
+    container.setAttributes(map);
+  }
+
+  public Map<String, String> getAttributes(List<String> nameList) throws IOException {
+    return container.getAttributes(nameList);
+  }
+
+  public Set<String> listAttributes() throws IOException {
+    return container.listAttributes();
+  }
+
+  protected Map<String, String> retrieveUserDefinedAttrs() throws IOException {
+    Set<String> set = container.listAttributes();
+    if (!set.isEmpty()) {
+      List<String> list = new ArrayList<>();
+      list.addAll(set);
+      return Collections.unmodifiableMap(container.getAttributes(list));
+    }
+    return Collections.emptyMap();
+  }
+
+  public void refreshUserDefAttrs() throws IOException {
+    attrMap = retrieveUserDefinedAttrs();
+  }
+
+  public Map<String, String> getUserDefAttrMap() {
+    return attrMap;
   }
 
   public long getPoolPtr() {
@@ -295,7 +364,6 @@ public class DaosClient implements ForceCloseable {
   public static class DaosClientBuilder<T extends DaosClientBuilder<T>> implements Cloneable {
     private String poolId;
     private String contId;
-    private String ranks = Constants.POOL_DEFAULT_RANKS;
     private String serverGroup = Constants.POOL_DEFAULT_SERVER_GROUP;
     private int containerFlags = Constants.ACCESS_FLAG_CONTAINER_READWRITE;
     private int poolFlags = Constants.ACCESS_FLAG_POOL_READWRITE;
@@ -318,17 +386,6 @@ public class DaosClient implements ForceCloseable {
 
     public String getContId() {
       return contId;
-    }
-
-    /**
-     * one or more ranks separated by ":".
-     *
-     * @param ranks default is "0"
-     * @return DaosFsClientBuilder
-     */
-    public T ranks(String ranks) {
-      this.ranks = ranks;
-      return (T) this;
     }
 
     /**

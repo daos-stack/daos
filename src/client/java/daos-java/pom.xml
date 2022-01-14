@@ -36,7 +36,7 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
-      <version>3.11.4</version>
+      <version>3.16.1</version>
     </dependency>
     <dependency>
       <groupId>io.netty</groupId>
@@ -141,18 +141,14 @@
             <configuration>
               <tasks>
                 <mkdir dir="${native.build.path}"/>
-                <exec executable="sh" outputproperty="java-home" failonerror="true">
-                  <arg value="./find_java_home.sh"/>
-                </exec>
+                <exec executable="./find_java_home.sh" outputproperty="java-home" failonerror="true"/>
                 <echo message="Java home is ${java-home}" />
-                <exec executable="bash" outputproperty="sl-prefix" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
+                <exec executable="./find_build_paths.sh" outputproperty="sl-prefix" failonerror="true">
                   <arg value="${daos.install.path}"/>
                   <arg value="SL_PREFIX"/>
                 </exec>
                 <echo message="SL_PREFIX is ${sl-prefix}" />
-                <exec executable="bash" outputproperty="sl-protobufc-prefix" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
+                <exec executable="./find_build_paths.sh" outputproperty="sl-protobufc-prefix" failonerror="true">
                   <arg value="${daos.install.path}"/>
                   <arg value="SL_PROTOBUFC_PREFIX"/>
                 </exec>

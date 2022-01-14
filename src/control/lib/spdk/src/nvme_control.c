@@ -493,7 +493,7 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 		opts.env_context = env_ctx;
 	if (nr_pcil > 0) {
 		for (i = 0; i < nr_pcil; i++) {
-			fprintf(stderr, "spdk env adding pci: %s\n", pcil[i]);
+			fprintf(stdout, "spdk env adding pci: %s\n", pcil[i]);
 
 			rc = opts_add_pci_addr(&opts, &opts.pci_allowed,
 					       pcil[i]);

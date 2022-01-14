@@ -274,9 +274,107 @@ grp_li_uri_get(struct crt_lookup_item *li, int tag)
 	return atomic_load_relaxed(&ui->ui_uri[tag]);
 }
 
+static int
+generate_cxi_uris(int prov_type, char *addr, int tag, struct crt_uri_item *ui)
+{
+	char		tmp_addr[CRT_ADDR_STR_MAX_LEN];
+	int		i, k;
+	uint32_t	raw_addr;
+	uint32_t	raw_tag0_addr;
+	int		rc = 0;
+	int		parsed = 0;
+	char		*prov_name;
+
+	strncpy(tmp_addr, addr, CRT_ADDR_STR_MAX_LEN);
+
+	parsed = sscanf(tmp_addr, "0x%x", &raw_addr);
+	if (parsed != 1) {
+		D_ERROR("Failed to parse address '%s'\n", tmp_addr);
+		return -DER_INVAL;
+	}
+
+	/* TODO: Perform proper parsing of CXI addresses */
+	raw_tag0_addr = raw_addr - tag;
+	prov_name = crt_provider_name_get(prov_type);
+
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		char *tag_uri = NULL;
+
+		D_ASPRINTF(tag_uri, "%s://0x%x", prov_name, raw_tag0_addr + i);
+
+		if (tag_uri == NULL) {
+			for (k = 0; k < i; k++)
+				D_FREE(ui->ui_uri[k]);
+
+			D_FREE(ui);
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+
+		ui->ui_uri[i] = tag_uri;
+	}
+
+exit:
+	return rc;
+}
+
+static int
+generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri_item *ui)
+{
+	char	tmp_addr[CRT_ADDR_STR_MAX_LEN];
+	int	base_port;
+	char	*p;
+	int	i, k;
+	char	*prov_name;
+	int	rc = 0;
+
+	strncpy(tmp_addr, base_addr, CRT_ADDR_STR_MAX_LEN);
+
+	 /*
+	 * Port-based providers have form of string:port
+	 * Parse both parts out
+	 */
+	p = strrchr(tmp_addr, ':');
+	if (p == NULL) {
+		D_ERROR("Badly formed ADDR '%s'\n", tmp_addr);
+		D_GOTO(exit, rc = -DER_INVAL);
+	}
+
+	/* Split <string> from <port> part in URI */
+	*p = '\0';
+	p++;
+	base_port = atoi(p) - tag;
+
+	if (base_port <= 0) {
+		D_ERROR("Failed to parse addr=%s correctly\n", tmp_addr);
+		D_GOTO(exit, rc = -DER_INVAL);
+	}
+
+	prov_name = crt_provider_name_get(prov_type);
+
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		char *tag_uri = NULL;
+
+		D_ASPRINTF(tag_uri, "%s://%s:%d", prov_name, tmp_addr, base_port + i);
+
+		if (tag_uri == NULL) {
+			for (k = 0; k < i; k++)
+				D_FREE(ui->ui_uri[k]);
+
+			D_FREE(ui);
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+
+		ui->ui_uri[i] = tag_uri;
+	}
+
+exit:
+	return rc;
+}
+
 static inline int
 grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 {
+	char			base_addr[CRT_ADDR_STR_MAX_LEN];
 	struct crt_uri_item	*ui;
 	d_list_t		*rlink;
 	struct crt_grp_priv	*grp_priv;
@@ -284,9 +382,8 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	crt_phy_addr_t		uri_dup;
 	d_rank_t		rank;
 	int			rc = 0;
-	char			*p;
-	int			base_port;
 	int			i;
+	enum crt_na_type	prov_type;
 
 	rank = li->li_rank;
 	grp_priv = li->li_grp_priv;
@@ -303,55 +400,25 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		ui->ui_initialized = 1;
 		ui->ui_rank = li->li_rank;
 
-		/* TODO: Derive provider instead of using default one */
-		if (crt_provider_is_contig_ep(crt_gdata.cg_init_prov)) {
-			char tmp_uri[CRT_ADDR_STR_MAX_LEN];
+		rc = crt_hg_parse_uri(uri, &prov_type, base_addr);
+		if (rc)
+			D_GOTO(exit, rc);
 
-			strncpy(tmp_uri, uri, CRT_ADDR_STR_MAX_LEN - 1);
-			/* For now we assume contiguous endpoint providers are
-			 * port based. Based on that we generate URIs for every
-			 * tag of the rank from the base port.
-			 *
-			 * Port-based providers have form of
-			 * string:port
-			 *
-			 * Parse both parts out
-			 */
-			p = strrchr(tmp_uri, ':');
-			if (p == NULL) {
-				D_ERROR("Badly formed URI '%s'\n", tmp_uri);
-				D_GOTO(exit, rc = -DER_INVAL);
+		D_DEBUG(DB_NET, "Parsed uri '%s', base_addr='%s' prov=%d\n",
+			uri, base_addr, prov_type);
+
+		if (crt_provider_is_contig_ep(prov_type)) {
+			if (crt_provider_is_port_based(prov_type)) {
+				rc = generate_port_based_uris(prov_type, base_addr, tag, ui);
+			} else if (prov_type == CRT_NA_OFI_CXI) {
+				rc = generate_cxi_uris(prov_type, base_addr, tag, ui);
+			} else {
+				D_ERROR("Unknown provider %d for uri='%s'\n", prov_type, uri);
+				rc = -DER_INVAL;
 			}
 
-			/* Split <string> from <port> part in URI */
-			*p = '\0';
-			p++;
-			base_port = atoi(p) - tag;
-
-			if (base_port <= 0) {
-				D_ERROR("Failed to parse uri=%s correctly\n",
-					tmp_uri);
-				D_GOTO(exit, rc = -DER_INVAL);
-			}
-
-			for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-				char *tag_uri = NULL;
-
-				D_ASPRINTF(tag_uri, "%s:%d", tmp_uri,
-					   base_port + i);
-
-				if (tag_uri == NULL) {
-					int k;
-
-					for (k = 0; k < i; k++)
-						D_FREE(ui->ui_uri[k]);
-
-					D_FREE(ui);
-					D_GOTO(exit, rc = -DER_NOMEM);
-				}
-
-				ui->ui_uri[i] = tag_uri;
-			}
+			if (rc)
+				D_GOTO(exit, rc);
 		} else {
 			D_STRNDUP(ui->ui_uri[tag], uri, CRT_ADDR_STR_MAX_LEN);
 			if (!ui->ui_uri[tag]) {
@@ -367,8 +434,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		if (rc != 0) {
 			D_ERROR("Entry already present\n");
 
-			/* TODO: Derive rprovider from context */
-			if (crt_provider_is_contig_ep(crt_gdata.cg_init_prov)) {
+			if (crt_provider_is_contig_ep(prov_type)) {
 				for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 					D_FREE(ui->ui_uri[i]);
 			} else {
@@ -3332,7 +3398,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 			cb_args = cbs_event[cb_idx].cecp_args;
 
 			if (cb_func != NULL)
-				cb_func(rank, CRT_EVS_GRPMOD, CRT_EVT_ALIVE,
+				cb_func(rank, 0 /* incarnation */, CRT_EVS_GRPMOD, CRT_EVT_ALIVE,
 					cb_args);
 		}
 	}
@@ -3353,7 +3419,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 			cb_args = cbs_event[cb_idx].cecp_args;
 
 			if (cb_func != NULL)
-				cb_func(rank, CRT_EVS_GRPMOD, CRT_EVT_DEAD,
+				cb_func(rank, 0 /* incarnation */, CRT_EVS_GRPMOD, CRT_EVT_DEAD,
 					cb_args);
 		}
 

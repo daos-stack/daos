@@ -260,6 +260,8 @@ daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch)
 		rc = dc_task_schedule(task, true);
 		if (rc == 0)
 			rc = dc_obj_verify(oh, epochs_p, epoch_nr);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 	}
 
 	D_FREE(epochs_p);
@@ -290,11 +292,16 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors)
 	*nr = layout->ol_nr;
 
 	if (anchors) {
-		uint32_t i;
+		int		grp_size;
+		uint32_t	i;
+
+		rc = dc_obj_get_grp_size(oh, &grp_size);
+		if (rc)
+			D_GOTO(out, rc);
 
 		for (i = 0; i < layout->ol_nr; i++) {
 			daos_anchor_set_zero(&anchors[i]);
-			dc_obj_shard2anchor(&anchors[i], i);
+			dc_obj_shard2anchor(&anchors[i], i * grp_size);
 			daos_anchor_set_flags(&anchors[i], DIOF_TO_SPEC_SHARD);
 		}
 	}
@@ -306,9 +313,16 @@ out:
 int
 daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor)
 {
+	int	grp_size;
+	int	rc;
+
+	rc = dc_obj_get_grp_size(oh, &grp_size);
+	if (rc)
+		return rc;
+
 	/** TBD - support more than per shard iteration */
 	daos_anchor_set_zero(anchor);
-	dc_obj_shard2anchor(anchor, index);
+	dc_obj_shard2anchor(anchor, index * grp_size);
 	daos_anchor_set_flags(anchor, DIOF_TO_SPEC_SHARD);
 
 	return 0;

@@ -32,7 +32,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
 			t.Fatal(err)
 		}
-		cfg := engine.NewConfig().
+		cfg := engine.MockConfig().
 			WithRank(uint32(idx)).
 			WithSystemName(t.Name()).
 			WithStorage(
@@ -46,7 +46,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			IsMountedBool: true,
 		}
 		mbc := &scm.MockBackendConfig{}
-		mp := storage.NewProvider(log, 0, &cfg.Storage, scm.NewMockSysProvider(msc), scm.NewMockProvider(log, mbc, msc), nil)
+		mp := storage.NewProvider(log, 0, &cfg.Storage, scm.NewMockSysProvider(log, msc), scm.NewMockProvider(log, mbc, msc), nil)
 		ei := NewEngineInstance(log, mp, nil, r).
 			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
 		ei.fsRoot = testDir

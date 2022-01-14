@@ -56,19 +56,6 @@ set_dpe_str(struct daos_prop_entry *dpe, d_string_t str)
 }
 
 static inline void
-set_dpe_dupe_str(struct daos_prop_entry *dpe, d_string_t str, int strlen)
-{
-	if (dpe == NULL || str == NULL || strlen == 0)
-		return;
-
-	/* Use this to keep NLT happy; otherwise it will complain
-	 * about "free of unknown memory" if a string allocated
-	 * by cgo's CString() is used.
-	 */
-	D_STRNDUP(dpe->dpe_str, str, strlen);
-}
-
-static inline void
 set_dpe_val(struct daos_prop_entry *dpe, uint64_t val)
 {
 	if (dpe == NULL)

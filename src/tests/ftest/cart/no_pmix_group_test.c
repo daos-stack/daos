@@ -288,6 +288,7 @@ int main(int argc, char **argv)
 	crt_group_t		*grp;
 	crt_context_t		crt_ctx[NUM_SERVER_CTX];
 	pthread_t		progress_thread[NUM_SERVER_CTX];
+	struct test_options	*opts = crtu_get_opts();
 	d_rank_list_t		*mod_ranks;
 	char			*uris[10];
 	d_rank_list_t		*mod_prim_ranks;
@@ -319,8 +320,7 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -356,6 +356,14 @@ int main(int argc, char **argv)
 		assert(rc == 0);
 	}
 
+	if (opts->is_swim_enabled) {
+		rc = crt_swim_init(0);
+		if (rc != 0) {
+			D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+			assert(0);
+		}
+	}
+
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 
 	rc = crt_rank_self_set(my_rank);
@@ -382,12 +390,6 @@ int main(int argc, char **argv)
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
 			my_uri, grp_cfg_file);
 	D_FREE(my_uri);
-
-	rc = crt_swim_init(0);
-	if (rc != 0) {
-		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
-		assert(0);
-	}
 
 	rc = crt_group_size(NULL, &grp_size);
 	if (rc != 0) {
@@ -657,7 +659,7 @@ int main(int argc, char **argv)
 	}
 
 	for (i = 0; i < 10; i++) {
-		rc = asprintf(&uris[i], "ofi+sockets://127.0.0.1:%d",
+		rc = asprintf(&uris[i], "ofi+tcp;ofi_rxm://127.0.0.1:%d",
 				10000 + i);
 		if (rc == -1) {
 			D_ERROR("asprintf() failed\n");

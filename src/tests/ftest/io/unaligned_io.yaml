@@ -17,6 +17,14 @@ server_config:
    bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
    scm_class: dcpm
    scm_list: ["/dev/pmem0"]
+   log_mask: DEBUG,MEM=ERR
+   env_vars:
+    - ABT_ENV_MAX_NUM_XSTREAMS=100
+    - ABT_MAX_NUM_XSTREAMS=100
+    - DAOS_MD_CAP=1024
+    - DD_MASK=mgmt,md,dsms,any
+    - D_LOG_FILE_APPEND_PID=1
+    - COVFILE=/tmp/test.cov
 pool:
   scm_size: 12G
 datasize:

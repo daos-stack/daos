@@ -7,6 +7,7 @@
 package proto
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -16,6 +17,19 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+func TestProto_ConvertNvmeNamespace(t *testing.T) {
+	pb := MockNvmeNamespace()
+	native, err := (*NvmeNamespace)(pb).ToNative()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expNative := storage.MockNvmeNamespace()
+
+	if diff := cmp.Diff(expNative, native, common.DefaultCmpOpts()...); diff != "" {
+		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+	}
+}
 
 func TestProto_ConvertNvmeHealth(t *testing.T) {
 	pb := MockNvmeHealth(1)
@@ -30,13 +44,13 @@ func TestProto_ConvertNvmeHealth(t *testing.T) {
 	}
 }
 
-func TestProto_ConvertNvmeNamespace(t *testing.T) {
-	pb := MockNvmeNamespace()
-	native, err := (*NvmeNamespace)(pb).ToNative()
+func TestProto_ConvertSmdDevice(t *testing.T) {
+	pb := MockSmdDevice("0000:80:00.0", 1)
+	native, err := (*SmdDevice)(pb).ToNative()
 	if err != nil {
 		t.Fatal(err)
 	}
-	expNative := storage.MockNvmeNamespace()
+	expNative := storage.MockSmdDevice("0000:80:00.0", 1)
 
 	if diff := cmp.Diff(expNative, native, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
@@ -116,6 +130,35 @@ func TestProto_ConvertScmModules(t *testing.T) {
 	if diff := cmp.Diff(pbs,
 		([]*ctlpb.ScmModule)(convertedNatives), opts...); diff != "" {
 
+		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+	}
+}
+
+func TestProto_ConvertScmMountPoint(t *testing.T) {
+	a := storage.MockScmMountPoint()
+	resA, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var b storage.ScmMountPoint
+	if err := json.Unmarshal(resA, &b); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(a, &b, opts...); diff != "" {
+		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+	}
+
+	pb := MockScmMountPoint()
+	native, err := (*ScmMountPoint)(pb).ToNative()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expNative := storage.MockScmMountPoint()
+
+	if diff := cmp.Diff(expNative, native, opts...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }

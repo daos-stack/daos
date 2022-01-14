@@ -43,15 +43,12 @@ def build_dts_library(env):
             print("Install and load mpich or openmpi\n")
             return
 
-    libraries = ['cmocka', 'daos_tests', 'vos', 'bio', 'abt']
+    libraries = ['cmocka', 'daos', 'daos_tests']
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(LINKFLAGS=[r'-Wl,-rpath=\$$ORIGIN/daos_srv'])
-
-    denv.AppendUnique(LIBPATH=["../vos"])
-    denv.AppendUnique(LIBPATH=["../bio"])
-
+    denv.AppendUnique(LIBPATH=["../client/api"])
     denv.AppendUnique(CPPPATH=["../tests/suite"])
+    denv.AppendUnique(CPPPATH=["../mgmt"])
 
     denv.Replace(SHOBJPREFIX='mpi_')
     mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])
@@ -67,6 +64,8 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
+    daos_build.add_build_rpath(base_env)
+    daos_build.add_build_rpath(env)
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path

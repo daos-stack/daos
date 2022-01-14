@@ -30,6 +30,7 @@ rm "/var/tmp/${lmd_tarball}"
 rm -rf "/var/tmp/${lmd_src}"
 sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               -d /usr/local/maldetect/sigs/rfxn.hdb -r \
+              --exclude-dir=/.snapshots                \
               --exclude-dir=/usr/local/maldetect       \
               --exclude-dir=/usr/share/clamav          \
               --exclude-dir=/var/lib/clamav            \

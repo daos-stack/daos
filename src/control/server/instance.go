@@ -70,7 +70,6 @@ type EngineInstance struct {
 // NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
 func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner) *EngineInstance {
-
 	return &EngineInstance{
 		log:            l,
 		runner:         r,
@@ -196,8 +195,10 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		NumContexts: ready.GetNctxs(),
 		FaultDomain: ei.hostFaultDomain,
 		InstanceIdx: ei.Index(),
+		Incarnation: ready.GetIncarnation(),
 	})
 	if err != nil {
+		ei.log.Errorf("join failed: %s", err)
 		return system.NilRank, false, err
 	} else if resp.State == system.MemberStateExcluded {
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)

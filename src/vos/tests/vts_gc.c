@@ -125,7 +125,7 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 		}
 
 		/* write garbage, we don't care */
-		rc = bio_iod_post(vos_ioh2desc(ioh));
+		rc = bio_iod_post(vos_ioh2desc(ioh), 0);
 		if (rc) {
 			print_error("Failed to post bio request\n");
 			return rc;
@@ -162,7 +162,7 @@ gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 		daos_unit_oid_t	oid;
 
 		gc_add_stat(STAT_OBJ);
-		oid = dts_unit_oid_gen(0, 0, 0);
+		oid = dts_unit_oid_gen(0, 0);
 		if (oids)
 			oids[i] = oid;
 
@@ -246,7 +246,7 @@ gc_key_run(struct gc_test_args *args)
 	int		      i;
 	int		      rc;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 	for (i = 0; i < CREDS_MAX; i++) {
 		daos_iod_t *iod;
 
@@ -555,6 +555,7 @@ static int
 gc_setup(void **state)
 {
 	struct credit_context	*tc = &gc_args.gc_ctx;
+	int rc;
 
 	memset(&gc_stat, 0, sizeof(gc_stat));
 	memset(&gc_args, 0, sizeof(gc_args));
@@ -569,7 +570,8 @@ gc_setup(void **state)
 	uuid_generate(tc->tsc_cont_uuid);
 	vts_pool_fallocate(&tc->tsc_pmem_file);
 
-	dts_ctx_init(&gc_args.gc_ctx);
+	rc = dts_ctx_init(&gc_args.gc_ctx);
+	assert_rc_equal(rc, 0);
 
 	gc_args.gc_array = false;
 	*state = &gc_args;

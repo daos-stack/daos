@@ -382,22 +382,13 @@ pool_create_and_destroy_retry(void **state)
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
-	/* Skipping second Pool failure because of issue DAOS-5506/2407.
-	 *
-	 * Before daos_test was switched to dmg, it couldn't retry pool destroy
-	 * operations, for another missing functionality that excludes killed
-	 * servers from the system. So killed servers still prevent pools
-	 * being destroyed in some cases. MGMT5 will have issue if it ran in
-	 * sequence.So Skipping this test until MS pool create/destroy crash
-	 * recovery mechanism handle for this test scenario.
-
 	print_message("setting DAOS_POOL_DESTROY_FAIL_CORPC ... ");
 	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
 				  DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
 				  0, NULL);
 	assert_int_equal(rc, 0);
 	print_message("success\n");
-	*/
+
 	print_message("destroying pool synchronously ... ");
 	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);

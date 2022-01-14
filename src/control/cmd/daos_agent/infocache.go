@@ -37,7 +37,7 @@ func newAttachInfoCache(log logging.Logger, enabled bool) *attachInfoCache {
 }
 
 type attachInfoCache struct {
-	mutex sync.RWMutex
+	mutex sync.Mutex
 
 	log         logging.Logger
 	enabled     atm.Bool
@@ -47,59 +47,48 @@ type attachInfoCache struct {
 	attachInfo *mgmtpb.GetAttachInfoResp
 }
 
-// IsEnabled reports whether the cache is enabled.
-func (c *attachInfoCache) IsEnabled() bool {
-	if c == nil {
-		return false
-	}
-
-	return c.enabled.IsTrue()
-}
-
-// IsCached reports whether there is data in the cache.
-func (c *attachInfoCache) IsCached() bool {
-	if c == nil {
-		return false
-	}
+func (c *attachInfoCache) isCached() bool {
 	return c.initialized.IsTrue()
 }
 
-// Cache preserves the results of a GetAttachInfo remote call.
-func (c *attachInfoCache) Cache(ctx context.Context, resp *mgmtpb.GetAttachInfoResp) {
-	if c == nil {
-		return
-	}
-
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if !c.IsEnabled() {
-		return
-	}
-
-	if resp == nil {
-		return
-	}
-
-	c.attachInfo = resp
-	c.initialized.SetTrue()
+func (c *attachInfoCache) isEnabled() bool {
+	return c.enabled.IsTrue()
 }
 
-// GetAttachInfoResp fetches the cached GetAttachInfoResp.
-func (c *attachInfoCache) GetAttachInfoResp() (*mgmtpb.GetAttachInfoResp, error) {
-	if c == nil {
-		return nil, NotCachedErr
-	}
-
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	if !c.IsCached() {
+func (c *attachInfoCache) getAttachInfoResp() (*mgmtpb.GetAttachInfoResp, error) {
+	if !c.isCached() {
 		return nil, NotCachedErr
 	}
 
 	aiCopy := proto.Clone(c.attachInfo)
 	return aiCopy.(*mgmtpb.GetAttachInfoResp), nil
+}
+
+type getAttachInfoFn func(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error)
+
+// Get is responsible for returning a GetAttachInfo response, either from the cache or from
+// the remote server if the cache is disabled.
+func (c *attachInfoCache) Get(ctx context.Context, numaNode int, sys string, getRemote getAttachInfoFn) (*mgmtpb.GetAttachInfoResp, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if c.isEnabled() && c.isCached() {
+		return c.getAttachInfoResp()
+	}
+
+	attachInfo, err := getRemote(ctx, numaNode, sys)
+	if err != nil {
+		return nil, err
+	}
+
+	if !c.isEnabled() {
+		return attachInfo, nil
+	}
+
+	c.attachInfo = attachInfo
+	c.initialized.SetTrue()
+
+	return c.getAttachInfoResp()
 }
 
 func newLocalFabricCache(log logging.Logger, enabled bool) *localFabricCache {
@@ -177,10 +166,11 @@ func (c *localFabricCache) setCache(nf *NUMAFabric) {
 	c.localNUMAFabric = nf
 
 	c.initialized.SetTrue()
+	c.log.Debugf("cached:\n%+v", c.localNUMAFabric.numaMap)
 }
 
 // GetDevices fetches an appropriate fabric device from the cache.
-func (c *localFabricCache) GetDevice(numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (c *localFabricCache) GetDevice(numaNode int, netDevClass uint32, provider string) (*FabricInterface, error) {
 	if c == nil {
 		return nil, NotCachedErr
 	}
@@ -191,5 +181,5 @@ func (c *localFabricCache) GetDevice(numaNode int, netDevClass uint32) (*FabricI
 	if !c.IsCached() {
 		return nil, NotCachedErr
 	}
-	return c.localNUMAFabric.GetDevice(numaNode, netDevClass)
+	return c.localNUMAFabric.GetDevice(numaNode, netDevClass, provider)
 }

@@ -77,7 +77,7 @@ func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*c
 }
 
 func (svc *ControlService) queryNVMeFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.NvmeFirmwareQueryResp, error) {
-	queryResp, err := svc.storage.Bdev.QueryFirmware(storage.NVMeFirmwareQueryRequest{
+	queryResp, err := svc.storage.QueryBdevFirmware(storage.NVMeFirmwareQueryRequest{
 		FirmwareRev: pbReq.FirmwareRev,
 		ModelID:     pbReq.ModelID,
 		DeviceAddrs: pbReq.DeviceIDs,
@@ -160,7 +160,7 @@ func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctl
 }
 
 func (svc *ControlService) updateNVMe(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
-	updateResp, err := svc.storage.Bdev.UpdateFirmware(storage.NVMeFirmwareUpdateRequest{
+	updateResp, err := svc.storage.UpdateBdevFirmware(storage.NVMeFirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
 		FirmwareRev:  pbReq.FirmwareRev,
 		ModelID:      pbReq.ModelID,

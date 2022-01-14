@@ -41,18 +41,16 @@ struct vos_object {
 	daos_handle_t			obj_toh;
 	/** btree iterator handle */
 	daos_handle_t			obj_ih;
-	/** epoch when the object(cache) is initialized */
-	daos_epoch_t			obj_epoch;
 	/** The latest sync epoch */
 	daos_epoch_t			obj_sync_epoch;
-	/** cached vos_obj_df::vo_incarnation, for revalidation. */
-	uint32_t			obj_incarnation;
-	/** nobody should access this object */
-	bool				obj_zombie;
 	/** Persistent memory address of the object */
 	struct vos_obj_df		*obj_df;
 	/** backref to container */
 	struct vos_container		*obj_cont;
+	/** nobody should access this object */
+	bool				obj_zombie;
+	/** Object is in discard */
+	bool				obj_discard;
 };
 
 enum {
@@ -60,6 +58,8 @@ enum {
 	VOS_OBJ_VISIBLE		= (1 << 0),
 	/** Create the object if it doesn't exist */
 	VOS_OBJ_CREATE		= (1 << 1),
+	/** Hold for object specific discard */
+	VOS_OBJ_DISCARD		= (1 << 2),
 };
 
 /**
@@ -211,5 +211,29 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 /** delete an object from OI table */
 int
 vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid);
+
+/** Hold object for range discard
+ *
+ * \param[in]	occ	Object cache, can be per cpu
+ * \param[in]	cont	Open container
+ * \param[in]	oid	The object id
+ * \param[out]	objp	Returned object
+ *
+ * \return	-DER_NONEXIST	object doesn't exist
+ *		-DER_BUSY	Object is already in discard
+ *		-DER_AGAIN	Object is being destroyed
+ *		0		Success
+ */
+int
+vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
+		     struct vos_object **objp);
+
+/** Release object held for range discard
+ *
+ * \param[in]	occ	Object cache, can be per cpu
+ * \param[in]	obj	Object to release
+ */
+void
+vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj);
 
 #endif

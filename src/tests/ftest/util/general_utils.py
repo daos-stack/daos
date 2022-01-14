@@ -406,17 +406,34 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         for item in results
         if expect_rc is not None and item["exit_status"] != expect_rc]
     if verbose or bad_exit_status:
-        log.info("Command: %s", command)
-        log.info("Results:")
-        for result in results:
-            log.info(
-                "  %s: exit_status=%s, interrupted=%s:",
-                result["hosts"], result["exit_status"], result["interrupted"])
-            for line in result["stdout"]:
-                log.info("    %s", line)
+        log.info(colate_results(command, results))
 
     return results
 
+
+def colate_results(command, results):
+    """Colate the output of run_pcmd.
+
+    Args:
+        command (str): command used to obtain the data on each server
+        results (list): list: a list of dictionaries with each entry
+                        containing output, exit status, and interrupted
+                        status common to each group of hosts (see run_pcmd()'s
+                        return for details)
+    Returns:
+        str: a string colating run_pcmd()'s results
+
+    """
+    res = ""
+    res += "Command: %s\n" % command
+    res += "Results:\n"
+    for result in results:
+        res += "  %s: exit_status=%s, interrupted=%s:" % (
+               result["hosts"], result["exit_status"], result["interrupted"])
+        for line in result["stdout"]:
+            res += "    %s\n" % line
+
+    return res
 
 def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
@@ -558,25 +575,31 @@ def process_host_list(hoststr):
     return host_list
 
 
-def get_random_string(length, exclude=None):
+def get_random_string(length, exclude=None, include=None):
     """Create a specified length string of random ascii letters and numbers.
 
     Optionally exclude specific random strings from being returned.
 
     Args:
         length (int): length of the string to return
-        exclude (list|None): list of strings to not return
+        exclude (list, optional): list of strings to not return. Defaults to
+            None.
+        include (list, optional): list of characters to use in the random
+            string. Defaults to None, in which case use all upper case and
+            digits.
 
     Returns:
         str: a string of random ascii letters and numbers
 
     """
     exclude = exclude if isinstance(exclude, list) else []
+
+    if include is None:
+        include = string.ascii_uppercase + string.digits
+
     random_string = None
     while not isinstance(random_string, str) or random_string in exclude:
-        random_string = "".join(
-            random.choice(string.ascii_uppercase + string.digits)
-            for _ in range(length))
+        random_string = "".join(random.choice(include) for _ in range(length)) #nosec
     return random_string
 
 
@@ -697,6 +720,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             result = pcmd(hosts, "; ".join(commands_part1), verbose, timeout,
                           None)
 
+        # in case dump of ULT stacks is still running it may be interrupted
         commands_part2 = [
             "rc=0",
             "if " + ps_cmd,
@@ -704,10 +728,10 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             "sudo /usr/bin/pkill {}".format(pattern),
             "sleep 5",
             "if " + ps_cmd,
-            "then /usr/bin/pkill --signal ABRT {}".format(pattern),
+            "then sudo /usr/bin/pkill --signal ABRT {}".format(pattern),
             "sleep 1",
             "if " + ps_cmd,
-            "then /usr/bin/pkill --signal KILL {}".format(pattern),
+            "then sudo /usr/bin/pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
             "fi",
@@ -1240,3 +1264,37 @@ def get_display_size(size):
     return "{} ({}) ({})".format(
         size, bytes_to_human(size, binary=True),
         bytes_to_human(size, binary=False))
+
+
+def report_errors(test, errors):
+    """Print errors and fail the test if there's any errors.
+
+    Args:
+        test (Test): Test class.
+        errors (list): List of errors.
+    """
+    if errors:
+        test.log.error("Errors detected:")
+        for error in errors:
+            test.log.error("  %s", error)
+        error_msg = ("{} error{} detected".format(
+            len(errors), "" if len(errors) == 0 else "s"))
+        test.fail(error_msg)
+
+    test.log.info("No errors detected.")
+
+
+def percent_change(val1, val2):
+    """Calculate percent change between two values as a decimal.
+
+    Args:
+        val1 (float): first value.
+        val2 (float): second value.
+
+    Returns:
+        float: decimal percent change.
+
+    """
+    if val1 and val2:
+        return (float(val2) - float(val1)) / float(val1)
+    return 0.0

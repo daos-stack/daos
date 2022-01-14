@@ -95,7 +95,7 @@ var (
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigDuplicateFabric,
-		fmt.Sprintf("the fabric configuration in I/O Engine %d is a duplicate of server %d", curIdx, seenIdx),
+		fmt.Sprintf("the fabric configuration in I/O Engine %d is a duplicate of I/O Engine %d", curIdx, seenIdx),
 		"ensure that each I/O Engine has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
 	)
 }
@@ -126,6 +126,33 @@ func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
+func FaultConfigBdevCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigBdevCountMismatch,
+		fmt.Sprintf("the total number of bdev_list entries in all tiers is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal number of total bdev_list entries and restart",
+	)
+}
+
+func FaultConfigTargetCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigTargetCountMismatch,
+		fmt.Sprintf("the target count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for targets parameter and restart",
+	)
+}
+
+func FaultConfigHelperStreamCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigHelperStreamCountMismatch,
+		fmt.Sprintf("the helper stream count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for nr_xs_helpers parameter and restart",
+	)
+}
+
 func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigInvalidNetDevClass,
@@ -137,7 +164,7 @@ func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uin
 
 func dupeValue(code code.Code, name string, curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(code,
-		fmt.Sprintf("the %s value in I/O Engine %d is a duplicate of server %d", name, curIdx, seenIdx),
+		fmt.Sprintf("the %s value in I/O Engine %d is a duplicate of I/O Engine %d", name, curIdx, seenIdx),
 		fmt.Sprintf("ensure that each I/O Engine has a unique %s value and restart", name),
 	)
 }

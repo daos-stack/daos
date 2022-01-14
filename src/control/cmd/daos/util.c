@@ -3,6 +3,13 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#include <libgen.h>
+
 #include "util.h"
 
 static int
@@ -13,7 +20,7 @@ call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
 
 	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd < 0)
-		return ENOENT;
+		return errno;
 
 	errno = 0;
 	rc = ioctl(fd, DFUSE_IOCTL_IL, reply);
@@ -53,53 +60,39 @@ resolve_duns_path(struct cmd_args_s *ap)
 			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
 			uuid_copy(ap->p_uuid, il_reply.fir_pool);
 			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+
+			/** set pool/cont label or uuid */
+			uuid_unparse(ap->p_uuid, ap->pool_str);
+			uuid_unparse(ap->c_uuid, ap->cont_str);
+
 			ap->oid = il_reply.fir_oid;
 			D_GOTO(out, rc);
 		}
 	}
 
 	if (rc) {
-		fprintf(ap->errstream, "could not resolve pool, container by "
-		"path: %d %s %s\n", rc, strerror(rc), ap->path);
+		fprintf(ap->errstream, "could not resolve pool, container by path %s: %s (%d)\n",
+			ap->path, strerror(rc), rc);
 		D_GOTO(out, rc);
 	}
 
 	ap->type = dattr.da_type;
 
 	/** set pool/cont label or uuid */
-	if (dattr.da_pool_label) {
-		D_STRNDUP(ap->pool_label, dattr.da_pool_label,
-			  DAOS_PROP_LABEL_MAX_LEN);
-		if (ap->pool_label == NULL)
-			D_GOTO(out, rc = ENOMEM);
-	} else {
-		uuid_copy(ap->p_uuid, dattr.da_puuid);
-	}
-
-	if (dattr.da_cont_label) {
-		D_STRNDUP(ap->cont_label, dattr.da_cont_label,
-			  DAOS_PROP_LABEL_MAX_LEN);
-		if (ap->cont_label == NULL)
-			D_GOTO(out, rc = ENOMEM);
-	} else {
-		uuid_copy(ap->c_uuid, dattr.da_cuuid);
-	}
+	snprintf(ap->pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 
 	if (ap->fs_op != -1) {
 		if (name) {
-			if (dattr.da_rel_path) {
-				D_ASPRINTF(ap->dfs_path, "%s/%s",
-					   dattr.da_rel_path, name);
-			} else {
-				D_ASPRINTF(ap->dfs_path, "/%s", name);
-			}
+			if (dattr.da_rel_path)
+				asprintf(&ap->dfs_path, "%s/%s", dattr.da_rel_path, name);
+			else
+				asprintf(&ap->dfs_path, "/%s", name);
 		} else {
-			if (dattr.da_rel_path) {
-				D_STRNDUP(ap->dfs_path,
-					  dattr.da_rel_path, PATH_MAX);
-			} else {
-				D_STRNDUP(ap->dfs_path, "/", 1);
-			}
+			if (dattr.da_rel_path)
+				ap->dfs_path = strndup(dattr.da_rel_path, PATH_MAX);
+			else
+				ap->dfs_path = strndup("/", 1);
 		}
 		if (ap->dfs_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
@@ -109,5 +102,38 @@ out:
 	duns_destroy_attr(&dattr);
 	D_FREE(dir_name);
 	D_FREE(name);
-	return rc;
+	return daos_errno2der(rc);
+}
+
+int
+resolve_duns_pool(struct cmd_args_s *ap)
+{
+	int			 rc = 0;
+	char			*path = NULL;
+	char			*dir = NULL;
+	struct dfuse_il_reply	 il_reply = {0};
+
+	if (ap->path == NULL)
+		return -DER_INVAL;
+
+	D_ASPRINTF(path, "%s", ap->path);
+	if (path == NULL)
+		return -DER_NOMEM;
+	dir = dirname(path);
+
+	rc = call_dfuse_ioctl(dir, &il_reply);
+	D_FREE(path);
+
+	switch (rc) {
+	case 0:
+		break;
+	case ENOTTY: /* can happen if the path is not in a dfuse mount */
+		return -DER_INVAL;
+	default:
+		return daos_errno2der(rc);
+	}
+
+	uuid_copy(ap->p_uuid, il_reply.fir_pool);
+
+	return 0;
 }

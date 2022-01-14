@@ -7,7 +7,7 @@
 package bdev
 
 import (
-	"fmt"
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -23,202 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
-
-// TestBackend_writeJsonConfig verifies config parameters for bdev get
-// converted into nvme config files that can be consumed by spdk.
-func TestBackend_writeJsonConfig(t *testing.T) {
-	mockMntpt := "/mock/mnt/daos"
-	tierId := 84
-	host, _ := os.Hostname()
-
-	tests := map[string]struct {
-		class              storage.Class
-		fileSizeGB         int
-		devList            []string
-		enableVmd          bool
-		vosEnv             string
-		expExtraBdevCfgs   []*SpdkSubsystemConfig
-		expExtraSubsystems []*SpdkSubsystem
-		expValidateErr     error
-		expErr             error
-	}{
-		"config validation failure": {
-			class:          storage.ClassNvme,
-			devList:        []string{"not a pci address"},
-			expValidateErr: errors.New("unexpected pci address"),
-		},
-		"multiple controllers": {
-			class:   storage.ClassNvme,
-			devList: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
-			expExtraBdevCfgs: []*SpdkSubsystemConfig{
-				{
-					Method: SpdkBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierId),
-						TransportAddress: common.MockPCIAddr(1),
-					},
-				},
-				{
-					Method: SpdkBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierId),
-						TransportAddress: common.MockPCIAddr(2),
-					},
-				},
-			},
-			vosEnv: "NVME",
-		},
-		"multiple controllers; vmd enabled": {
-			class:     storage.ClassNvme,
-			enableVmd: true,
-			devList:   []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
-			expExtraBdevCfgs: []*SpdkSubsystemConfig{
-				{
-					Method: SpdkBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierId),
-						TransportAddress: common.MockPCIAddr(1),
-					},
-				},
-				{
-					Method: SpdkBdevNvmeAttachController,
-					Params: NvmeAttachControllerParams{
-						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierId),
-						TransportAddress: common.MockPCIAddr(2),
-					},
-				},
-			},
-			expExtraSubsystems: []*SpdkSubsystem{
-				{
-					Name: "vmd",
-					Configs: []*SpdkSubsystemConfig{
-						{
-							Method: SpdkVmdEnable,
-							Params: VmdEnableParams{},
-						},
-					},
-				},
-			},
-			vosEnv: "NVME",
-		},
-		"AIO file class; multiple files; zero file size": {
-			class:          storage.ClassFile,
-			devList:        []string{"/path/to/myfile", "/path/to/myotherfile"},
-			expValidateErr: errors.New("requires non-zero bdev_size"),
-		},
-		"AIO file class; multiple files; non-zero file size": {
-			class:      storage.ClassFile,
-			fileSizeGB: 1,
-			devList:    []string{"/path/to/myfile", "/path/to/myotherfile"},
-			expExtraBdevCfgs: []*SpdkSubsystemConfig{
-				{
-					Method: SpdkBdevAioCreate,
-					Params: AioCreateParams{
-						BlockSize:  humanize.KiByte * 4,
-						DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierId),
-						Filename:   "/path/to/myfile",
-					},
-				},
-				{
-					Method: SpdkBdevAioCreate,
-					Params: AioCreateParams{
-						BlockSize:  humanize.KiByte * 4,
-						DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierId),
-						Filename:   "/path/to/myotherfile",
-					},
-				},
-			},
-			vosEnv: "AIO",
-		},
-		"AIO kdev class; multiple devices": {
-			class:   storage.ClassKdev,
-			devList: []string{"/dev/sdb", "/dev/sdc"},
-			expExtraBdevCfgs: []*SpdkSubsystemConfig{
-				{
-					Method: SpdkBdevAioCreate,
-					Params: AioCreateParams{
-						DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierId),
-						Filename:   "/dev/sdb",
-					},
-				},
-				{
-					Method: SpdkBdevAioCreate,
-					Params: AioCreateParams{
-						DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierId),
-						Filename:   "/dev/sdc",
-					},
-				},
-			},
-			vosEnv: "AIO",
-		},
-	}
-
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			cfg := &storage.TierConfig{
-				Tier:  tierId,
-				Class: storage.ClassNvme,
-				Bdev: storage.BdevConfig{
-					DeviceList: tc.devList,
-					FileSize:   tc.fileSizeGB,
-				},
-			}
-			if tc.class != "" {
-				cfg.Class = tc.class
-			}
-
-			engineConfig := engine.NewConfig().
-				WithFabricProvider("test"). // valid enough to pass "not-blank" test
-				WithFabricInterface("test").
-				WithFabricInterfacePort(42).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmClass("dcpm").
-						WithScmDeviceList("foo").
-						WithScmMountPoint(mockMntpt),
-					cfg,
-				)
-
-			gotValidateErr := engineConfig.Validate() // populate output path
-			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
-			if tc.expValidateErr != nil {
-				return
-			}
-			cfg = engineConfig.Storage.Tiers.BdevConfigs()[0] // refer to validated config
-
-			writeReq, _ := storage.BdevWriteNvmeConfigRequestFromConfig(log, &engineConfig.Storage)
-
-			gotCfg, gotErr := newSpdkConfig(log, tc.enableVmd, &writeReq)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			expCfg := defaultSpdkConfig()
-			for _, ec := range tc.expExtraBdevCfgs {
-				expCfg.Subsystems[0].Configs = append(expCfg.Subsystems[0].Configs, ec)
-			}
-			for _, ess := range tc.expExtraSubsystems {
-				expCfg.Subsystems = append(expCfg.Subsystems, ess)
-			}
-
-			if diff := cmp.Diff(expCfg, gotCfg); diff != "" {
-				t.Fatalf("(-want, +got):\n%s", diff)
-			}
-
-			if engineConfig.Storage.VosEnv != tc.vosEnv {
-				t.Fatalf("expected VosEnv to be %q, but it was %q", tc.vosEnv, engineConfig.Storage.VosEnv)
-			}
-		})
-	}
-}
 
 // TestBackend_createEmptyFile verifies empty files are created as expected.
 func TestBackend_createEmptyFile(t *testing.T) {
@@ -281,19 +85,21 @@ func TestBackend_createEmptyFile(t *testing.T) {
 	}
 }
 
-func TestBackend_createJsonFile(t *testing.T) {
-	tierId := 84
+func TestBackend_writeJSONFile(t *testing.T) {
+	tierID := 84
 	host, _ := os.Hostname()
 
 	tests := map[string]struct {
-		confIn    storage.TierConfig
-		enableVmd bool
-		expErr    error
-		expOut    string
+		confIn            storage.TierConfig
+		enableVmd         bool
+		enableHotplug     bool
+		hotplugBusidRange string
+		expErr            error
+		expOut            string
 	}{
 		"nvme; single ssds": {
 			confIn: storage.TierConfig{
-				Tier:  tierId,
+				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: common.MockPCIAddrs(1),
@@ -301,6 +107,9 @@ func TestBackend_createJsonFile(t *testing.T) {
 			},
 			expOut: `
 {
+  "daos_data": {
+    "config": []
+  },
   "subsystems": [
     {
       "subsystem": "bdev",
@@ -325,7 +134,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "enable": false,
-            "period_us": 10000000
+            "period_us": 0
           },
           "method": "bdev_nvme_set_hotplug"
         },
@@ -345,7 +154,7 @@ func TestBackend_createJsonFile(t *testing.T) {
 		},
 		"nvme; multiple ssds": {
 			confIn: storage.TierConfig{
-				Tier:  tierId,
+				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: common.MockPCIAddrs(1, 2),
@@ -353,6 +162,9 @@ func TestBackend_createJsonFile(t *testing.T) {
 			},
 			expOut: `
 {
+  "daos_data": {
+    "config": []
+  },
   "subsystems": [
     {
       "subsystem": "bdev",
@@ -377,7 +189,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "enable": false,
-            "period_us": 10000000
+            "period_us": 0
           },
           "method": "bdev_nvme_set_hotplug"
         },
@@ -403,17 +215,21 @@ func TestBackend_createJsonFile(t *testing.T) {
 }
 `,
 		},
-		"nvme; multiple ssds; vmd enabled": {
+		"nvme; multiple ssds; vmd enabled; bus-id range": {
 			confIn: storage.TierConfig{
-				Tier:  tierId,
+				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: common.MockPCIAddrs(1, 2),
+					BusidRange: storage.MustNewBdevBusRange("0x80-0x8f"),
 				},
 			},
 			enableVmd: true,
 			expOut: `
 {
+  "daos_data": {
+    "config": []
+  },
   "subsystems": [
     {
       "subsystem": "bdev",
@@ -438,7 +254,162 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "enable": false,
-            "period_us": 10000000
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_0_84",
+            "traddr": "0000:01:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_1_84",
+            "traddr": "0000:02:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        }
+      ]
+    },
+    {
+      "subsystem": "vmd",
+      "config": [
+        {
+          "params": {},
+          "method": "enable_vmd"
+        }
+      ]
+    }
+  ]
+}
+`,
+		},
+		"nvme; multiple ssds; hotplug enabled; bus-id range": {
+			confIn: storage.TierConfig{
+				Tier:  tierID,
+				Class: storage.ClassNvme,
+				Bdev: storage.BdevConfig{
+					DeviceList: common.MockPCIAddrs(1, 2),
+					BusidRange: storage.MustNewBdevBusRange("0x80-0x8f"),
+				},
+			},
+			enableHotplug: true,
+			expOut: `
+{
+  "daos_data": {
+    "config": [
+      {
+        "params": {
+          "begin": 128,
+          "end": 143
+        },
+        "method": "hotplug_busid_range"
+      }
+    ]
+  },
+  "subsystems": [
+    {
+      "subsystem": "bdev",
+      "config": [
+        {
+          "params": {
+            "bdev_io_pool_size": 65536,
+            "bdev_io_cache_size": 256
+          },
+          "method": "bdev_set_options"
+        },
+        {
+          "params": {
+            "retry_count": 4,
+            "timeout_us": 0,
+            "nvme_adminq_poll_period_us": 100000,
+            "action_on_timeout": "none",
+            "nvme_ioq_poll_period_us": 0
+          },
+          "method": "bdev_nvme_set_options"
+        },
+        {
+          "params": {
+            "enable": true,
+            "period_us": 5000000
+          },
+          "method": "bdev_nvme_set_hotplug"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_0_84",
+            "traddr": "0000:01:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_1_84",
+            "traddr": "0000:02:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        }
+      ]
+    }
+  ]
+}
+`,
+		},
+		"nvme; multiple ssds; vmd and hotplug enabled": {
+			confIn: storage.TierConfig{
+				Tier:  tierID,
+				Class: storage.ClassNvme,
+				Bdev: storage.BdevConfig{
+					DeviceList: common.MockPCIAddrs(1, 2),
+				},
+			},
+			enableHotplug: true,
+			enableVmd:     true,
+			expOut: `
+{
+  "daos_data": {
+    "config": [
+      {
+        "params": {
+          "begin": 0,
+          "end": 7
+        },
+        "method": "hotplug_busid_range"
+      }
+    ]
+  },
+  "subsystems": [
+    {
+      "subsystem": "bdev",
+      "config": [
+        {
+          "params": {
+            "bdev_io_pool_size": 65536,
+            "bdev_io_cache_size": 256
+          },
+          "method": "bdev_set_options"
+        },
+        {
+          "params": {
+            "retry_count": 4,
+            "timeout_us": 0,
+            "nvme_adminq_poll_period_us": 100000,
+            "action_on_timeout": "none",
+            "nvme_ioq_poll_period_us": 0
+          },
+          "method": "bdev_nvme_set_options"
+        },
+        {
+          "params": {
+            "enable": true,
+            "period_us": 5000000
           },
           "method": "bdev_nvme_set_hotplug"
         },
@@ -484,7 +455,7 @@ func TestBackend_createJsonFile(t *testing.T) {
 			defer clean()
 
 			cfgOutputPath := filepath.Join(testDir, "outfile")
-			engineConfig := engine.NewConfig().
+			engineConfig := engine.MockConfig().
 				WithFabricProvider("test"). // valid enough to pass "not-blank" test
 				WithFabricInterface("test").
 				WithFabricInterfacePort(42).
@@ -494,11 +465,18 @@ func TestBackend_createJsonFile(t *testing.T) {
 						WithScmDeviceList("foo").
 						WithScmMountPoint("scmmnt"),
 					&tc.confIn,
-				).WithStorageConfigOutputPath(cfgOutputPath)
+				).
+				WithStorageConfigOutputPath(cfgOutputPath).
+				WithStorageEnableHotplug(tc.enableHotplug)
 
-			req, _ := storage.BdevWriteNvmeConfigRequestFromConfig(log, &engineConfig.Storage)
+			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
+				&engineConfig.Storage, storage.MockGetTopology)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.VMDEnabled = tc.enableVmd
 
-			gotErr := writeJsonConfig(log, tc.enableVmd, &req)
+			gotErr := writeJsonConfig(log, &req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

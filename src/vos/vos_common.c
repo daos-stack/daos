@@ -11,6 +11,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <fcntl.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/lru.h>
@@ -50,8 +51,8 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 	}
 
 	ds_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, uuid, NULL,
-			    NULL, NULL, NULL);
+			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, uuid,
+			    NULL, NULL, NULL, NULL);
 }
 
 struct vos_tls *
@@ -440,6 +441,12 @@ vos_mod_init(void)
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = crt_hlc_get();
 
+	rc = vos_pool_settings_init();
+	if (rc != 0) {
+		D_ERROR("VOS pool setting initialization error\n");
+		return rc;
+	}
+
 	rc = vos_cont_tab_register();
 	if (rc) {
 		D_ERROR("VOS CI btree initialization error\n");
@@ -481,6 +488,49 @@ vos_mod_fini(void)
 	return 0;
 }
 
+static inline int
+vos_metrics_count(void)
+{
+	return vea_metrics_count();
+}
+
+static void
+vos_metrics_free(void *data)
+{
+	struct vos_pool_metrics *vp_metrics = data;
+
+	if (vp_metrics->vp_vea_metrics != NULL)
+		vea_metrics_free(vp_metrics->vp_vea_metrics);
+	D_FREE(data);
+}
+
+static void *
+vos_metrics_alloc(const char *path, int tgt_id)
+{
+	struct vos_pool_metrics	*vp_metrics;
+
+	D_ASSERT(tgt_id >= 0);
+
+	D_ALLOC_PTR(vp_metrics);
+	if (vp_metrics == NULL)
+		return NULL;
+
+	vp_metrics->vp_vea_metrics = vea_metrics_alloc(path, tgt_id);
+	if (vp_metrics->vp_vea_metrics == NULL) {
+		vos_metrics_free(vp_metrics);
+		return NULL;
+	}
+
+	return vp_metrics;
+}
+
+struct dss_module_metrics vos_metrics = {
+	.dmm_tags = DAOS_TGT_TAG,
+	.dmm_init = vos_metrics_alloc,
+	.dmm_fini = vos_metrics_free,
+	.dmm_nr_metrics = vos_metrics_count,
+};
+
 struct dss_module vos_srv_module =  {
 	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
@@ -488,6 +538,7 @@ struct dss_module vos_srv_module =  {
 	.sm_init	= vos_mod_init,
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
+	.sm_metrics	= &vos_metrics,
 };
 
 static void
@@ -515,6 +566,7 @@ static int
 vos_self_nvme_init()
 {
 	int rc;
+	int fd;
 
 	/* IV tree used by VEA */
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
@@ -523,9 +575,18 @@ vos_self_nvme_init()
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID, VOS_NVME_MEM_SIZE,
-			   VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET,
-			   vos_db_get(), true);
+	/* Only use hugepages if NVME SSD configuration existed. */
+	fd = open(VOS_NVME_CONF, O_RDONLY, 0600);
+	if (fd < 0) {
+		rc = bio_nvme_init(NULL, VOS_NVME_SHM_ID, 0, 0,
+				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+	} else {
+		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID,
+				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
+				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+		close(fd);
+	}
+
 	if (rc)
 		return rc;
 
@@ -575,12 +636,6 @@ vos_self_init(const char *db_path)
 	if (self_mode.self_ref) {
 		self_mode.self_ref++;
 		D_GOTO(out, rc);
-	}
-
-	rc = vos_pool_settings_init();
-	if (rc != 0) {
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
 	}
 
 	rc = ABT_init(0, NULL);

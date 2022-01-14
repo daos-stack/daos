@@ -16,8 +16,9 @@ from avocado import skip, TestFail, fail_on
 from avocado.utils.distro import detect
 from avocado.core import exceptions
 from ast import literal_eval
+from ClusterShell.NodeSet import NodeSet
 
-import fault_config_utils
+from fault_config_utils import FaultInjection
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
@@ -27,7 +28,7 @@ from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing, run_command
+    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
 from logger_utils import TestLogger
 from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
@@ -36,22 +37,9 @@ from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
 
-def skipForTicket(ticket): # pylint: disable=invalid-name
+def skipForTicket(ticket):  # pylint: disable=invalid-name
     """Skip a test with a comment about a ticket."""
     return skip("Skipping until {} is fixed.".format(ticket))
-
-
-def get_log_file(name):
-    """Get the full log file name and path.
-
-    Args:
-        name (str): log file name
-
-    Returns:
-        str: full log file name including path
-
-    """
-    return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)
 
 
 class Test(avocadoTest):
@@ -76,6 +64,12 @@ class Test(avocadoTest):
 
         # Define a test ID using the test_* method name
         self.test_id = self.get_test_name()
+
+        # Define a test unique temporary directory
+        self.base_test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
+        self.test_dir = os.path.join(self.base_test_dir, self.test_id)
+        if not os.path.exists(self.test_dir):
+            os.makedirs(self.test_dir)
 
         # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
         # Any unit combination may be used, but they must be specified in
@@ -181,7 +175,7 @@ class Test(avocadoTest):
         try:
             with open(self.cancel_file) as skip_handle:
                 skip_list = skip_handle.readlines()
-        except Exception as excpt: # pylint: disable=broad-except
+        except Exception as excpt:  # pylint: disable=broad-except
             skip_process_error("Unable to read skip list: {}".format(excpt))
             skip_list = []
 
@@ -203,9 +197,9 @@ class Test(avocadoTest):
                                           "PR.  Test will not be "
                                           "skipped", ticket)
                             return
-                except exceptions.TestCancel: # pylint: disable=try-except-raise
+                except exceptions.TestCancel:   # pylint: disable=try-except-raise
                     raise
-                except Exception as excpt: # pylint: disable=broad-except
+                except Exception as excpt:      # pylint: disable=broad-except
                     skip_process_error("Unable to read commit title: "
                                        "{}".format(excpt))
                 # Nope, but there is a commit that fixes it
@@ -215,10 +209,10 @@ class Test(avocadoTest):
                         with open(os.path.join(os.sep, 'tmp',
                                                'commit_list')) as commit_handle:
                             commits = commit_handle.readlines()
-                    except Exception as excpt: # pylint: disable=broad-except
+                    except Exception as excpt:  # pylint: disable=broad-except
                         skip_process_error("Unable to read commit list: "
                                            "{}".format(excpt))
-                        commits = None
+                        return
                     if commits and vals[1] in commits:
                         # fix is in this code base
                         self.log.info("This test variant is included in the "
@@ -361,10 +355,28 @@ class Test(avocadoTest):
         # Disable reporting the timeout upon subsequent inherited calls
         self._timeout_reported = True
 
+    def remove_temp_test_dir(self):
+        """Remove the test-specific temporary directory and its contents.
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        errors = []
+        self.log.info("Removing temporary test files in %s", self.test_dir)
+        try:
+            run_command("rm -fr {}".format(self.test_dir))
+        except DaosTestError as error:
+            errors.append("Error removing temporary test files: {}".format(error))
+        return errors
+
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
         super().tearDown()
+
+        # Clean up any temporary files
+        self._teardown_errors.extend(self.remove_temp_test_dir())
 
         # Fail the test if any errors occurred during tear down
         if self._teardown_errors:
@@ -394,10 +406,9 @@ class TestWithoutServers(Test):
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
-        self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
-        self.fault_file = None
         self.context = None
         self.d_log = None
+        self.fault_injection = None
 
         # Create a default TestLogger w/o a DaosLog object to prevent errors in
         # tearDown() if setUp() is not completed.  The DaosLog is added upon the
@@ -436,14 +447,8 @@ class TestWithoutServers(Test):
         self.log.debug("Common test directory: %s", self.test_dir)
 
         # setup fault injection, this MUST be before API setup
-        fault_list = self.params.get("fault_list", '/run/faults/*')
-        if fault_list:
-            # not using workdir because the huge path was messing up
-            # orterun or something, could re-evaluate this later
-            self.fault_file = fault_config_utils.write_fault_file(self.tmp,
-                                                                  fault_list,
-                                                                  None)
-            os.environ["D_FI_CONFIG"] = self.fault_file
+        self.fault_injection = FaultInjection()
+        self.fault_injection.start(self.params.get("fault_list", '/run/faults/*'), self.test_dir)
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
@@ -452,14 +457,7 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-
-        if self.fault_file:
-            try:
-                os.remove(self.fault_file)
-            except OSError as error:
-                self._teardown_errors.append(
-                    "Error running inherited teardown(): {}".format(error))
-
+        self._teardown_errors.extend(self.fault_injection.stop())
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
@@ -652,6 +650,8 @@ class TestWithServers(TestWithoutServers):
         hosts = list(self.hostlist_servers)
         if self.hostlist_clients:
             hosts.extend(self.hostlist_clients)
+        # Copy the fault injection files to the hosts.
+        self.fault_injection.copy_fault_files(hosts)
         lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
         for line in lines:
             self.log.debug("  %s", line)
@@ -664,7 +664,7 @@ class TestWithServers(TestWithoutServers):
             if self.hostlist_clients:
                 hosts.extend(self.hostlist_clients)
             self.log.info("-" * 100)
-            self.stop_leftover_processes(["orterun"], hosts)
+            self.stop_leftover_processes(["orterun", "mpirun"], hosts)
 
             # Ensure write permissions for the daos command log files when
             # using systemctl
@@ -686,13 +686,28 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_agents:
             self.start_agents(force=force_agent_start)
 
-        # If there's no server started, then there's no server log to write to.
-        if self.setup_start_servers:
+        self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
 
+        # If there's no server started, then there's no server log to write to.
+        if (self.setup_start_servers and self.setup_start_agents and
+            not self.skip_add_log_msg):
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
             self.write_string_to_logfile(id_str)
+
+        if self.start_servers_once and not force_agent_start:
+            # Check for any existing pools that may still exist in each
+            # continually running server group.  Pools may still exists if a
+            # previous test method/varaint's tearDown was unable to complete.
+            # This will hopefully ensure these errors do not affect the next
+            # test.  Since the storage is reformatted and the pool metadata is
+            # erased when the servers are restarted this check is only needed
+            # when the servers are left continually running.
+            if self.search_and_destroy_pools():
+                self.fail(
+                    "Errors detected attempting to ensure all pools had been "
+                    "removed from continually running servers.")
 
         # Setup a job manager command for running the test command
         manager_class_name = self.params.get(
@@ -705,6 +720,7 @@ class TestWithServers(TestWithoutServers):
             self.job_manager = get_job_manager_class(
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
             self.set_job_manager_timeout()
+            self.job_manager.tmpdir_base.update(self.test_dir, "tmpdir_base")
 
         # Mark the end of setup
         self.log.info("=" * 100)
@@ -724,15 +740,11 @@ class TestWithServers(TestWithoutServers):
             cart_ctl = CartCtl()
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
-            cart_ctl.cfg_path.value = "."
             cart_ctl.m.value = message
             cart_ctl.n.value = None
+            cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
-                # Fetch attachinfo data from server via the agent
-                attachinfo_file = manager.get_attachinfo_file()
-                cp_command = "sudo cp {} {}".format(attachinfo_file, ".")
-                run_command(cp_command, verbose=True, raise_exception=False)
                 cart_ctl.group_name.value = manager.get_config_value("name")
                 cart_ctl.run()
         else:
@@ -807,6 +819,45 @@ class TestWithServers(TestWithoutServers):
         if self.server_managers:
             force_agent_start = self.start_server_managers(force)
         return force_agent_start
+
+    def restart_servers(self):
+        """Stop and start the servers without reformatting the storage.
+
+        Returns:
+            list: a list of strings identifying an errors found restarting the servers.
+
+        """
+        self.log.info("-" * 100)
+        self.log.info("--- STOPPING SERVERS ---")
+        errors = []
+        status = self.check_running("servers", self.server_managers)
+        if status["restart"] and not status["expected"]:
+            errors.append(
+                "ERROR: At least one multi-variant server was not found in its expected state "
+                "prior to stopping all servers")
+        self.test_log.info("Stopping %s group(s) of servers", len(self.server_managers))
+        errors.extend(self._stop_managers(self.server_managers, "servers"))
+
+        self.log.info("-" * 100)
+        self.log.debug("--- RESTARTING SERVERS ---")
+        # self._start_manager_list("server", self.server_managers)
+        for manager in self.server_managers:
+            self.log.info(
+                "Starting server: group=%s, hosts=%s, config=%s",
+                manager.get_config_value("name"), manager.hosts,
+                manager.get_config_value("filename"))
+            try:
+                manager.manager.run()
+            except CommandFailure as error:
+                manager.manager.kill()
+                errors.append("Failed to restart servers: {}".format(error))
+        status = self.check_running("servers", self.server_managers)
+        if status["restart"] and not status["expected"]:
+            errors.append(
+                "ERROR: At least one multi-variant server was not found in its expected state "
+                "after restarting all servers")
+        self.log.info("-" * 100)
+        return errors
 
     def setup_agents(self, agent_groups=None):
         """Start the daos_agent processes.
@@ -1145,6 +1196,9 @@ class TestWithServers(TestWithoutServers):
             if prepare_dmg and hasattr(manager, "prepare_dmg"):
                 manager.prepare_dmg()
 
+                # Ensure exceptions are raised for any failed command
+                manager.dmg.exit_status_exception = True
+
             # Verify the current states match the expected states
             manager_status = manager.verify_expected_states(set_expected)
             status["expected"] &= manager_status["expected"]
@@ -1167,6 +1221,26 @@ class TestWithServers(TestWithoutServers):
                 name, manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
             manager.start()
+
+    def remove_temp_test_dir(self):
+        """Remove the test-specific temporary directory and its contents on all hosts.
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        errors = []
+        hosts = list(self.hostlist_servers)
+        if self.hostlist_clients:
+            hosts.extend(self.hostlist_clients)
+        all_hosts = include_local_host(hosts)
+        self.log.info(
+            "Removing temporary test files in %s from %s",
+            self.test_dir, str(NodeSet.fromlist(all_hosts)))
+        results = pcmd(all_hosts, "rm -fr {}".format(self.test_dir))
+        if 0 not in results or len(results) > 1:
+            errors.append("Error removing temporary test files")
+        return errors
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -1234,6 +1308,10 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
+                # Ensure exceptions are raised for any failed command
+                if hasattr(container, "daos") and container.daos is not None:
+                    container.daos.exit_status_exception = True
+
                 # Only close a container that has been opened by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
@@ -1270,6 +1348,10 @@ class TestWithServers(TestWithoutServers):
                 pools = [pools]
             self.test_log.info("Destroying pools")
             for pool in pools:
+                # Ensure exceptions are raised for any failed command
+                if pool.dmg is not None:
+                    pool.dmg.exit_status_exception = True
+
                 # Only disconnect a pool that has been connected by the test
                 if not hasattr(pool, "connected") or pool.connected:
                     try:
@@ -1287,6 +1369,37 @@ class TestWithServers(TestWithoutServers):
                         self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error destroying pool: {}".format(error))
+        return error_list
+
+    def search_and_destroy_pools(self):
+        """Search for any pools in each server and destroy each one found.
+
+        Returns:
+            list: a list of errors detected when searching for and destroying
+                the pools
+
+        """
+        error_list = []
+        self.test_log.info("Searching for any existing pools")
+        for manager in self.server_managers:
+            # Ensure exceptions are raised for any failed command
+            manager.dmg.exit_status_exception = True
+
+            # Get a list of remaining pool labels for this server group
+            try:
+                labels = manager.dmg.get_pool_list_labels()
+            except CommandFailure as error:
+                error_list.append("Error listing pools: {}".format(error))
+                labels = []
+
+            # Destroy each pool found
+            for label in labels:
+                try:
+                    manager.dmg.pool_destroy(pool=label, force=True)
+
+                except CommandFailure as error:
+                    error_list.append("Error destroying pool: {}".format(error))
+
         return error_list
 
     def stop_agents(self):
@@ -1321,15 +1434,32 @@ class TestWithServers(TestWithoutServers):
             list: a list of exceptions raised stopping the servers
 
         """
+        force_stop = False
         self.log.info("-" * 100)
         self.log.info("--- STOPPING SERVERS ---")
         errors = []
         status = self.check_running("servers", self.server_managers)
         if self.start_servers_once and not status["restart"]:
-            self.log.info(
-                "Servers are configured to run across multiple test variants, "
-                "not stopping")
-        else:
+            # Destroy any remaining pools on the continuously running servers.
+            pool_destroy_errors = self.search_and_destroy_pools()
+            if pool_destroy_errors:
+                # Force a server stop if there were errors destroying or listing
+                # the pools. This will cause the next test variant/method to
+                # format and restart the servers.
+                errors.extend(pool_destroy_errors)
+                force_stop = True
+                self.log.info(
+                    "* FORCING SERVER STOP DUE TO POOL DESTROY ERRORS *")
+            else:
+                self.log.info(
+                    "Servers are configured to run across multiple test "
+                    "variants, not stopping")
+
+        if not self.start_servers_once or status["restart"] or force_stop:
+            # Stop the servers under the following conditions:
+            #   - servers are not being run continuously across variants/methods
+            #   - engines were found stopped or in an unexpected state
+            #   - errors destroying pools require a forced server stop
             if not status["expected"]:
                 errors.append(
                     "ERROR: At least one multi-variant server was not found in "
@@ -1554,6 +1684,33 @@ class TestWithServers(TestWithoutServers):
                 to True.
         """
         self.container = self.get_container(pool, namespace, create)
+
+    def add_container_qty(self, quantity, pool, namespace=None, create=True):
+        """Add multiple containers to the test case.
+
+        This method requires self.container to be defined as a list.
+        If self.container is undefined it will define it as a list.
+
+        Args:
+            quantity (int): number of containers to create
+            namespace (str, optional): namespace for TestContainer parameters in the
+                test yaml file. Defaults to None.
+            pool (TestPool): Pool object
+            create (bool, optional): should the container be created. Defaults to
+                True.
+
+        Raises:
+            TestFail: if self.pool is defined, but not as a list object.
+
+        """
+        if self.container is None:
+            self.container = []
+        if not isinstance(self.container, list):
+            self.fail(
+                "add_container_qty(): self.container must be a list: {}".format(
+                    type(self.container)))
+        for _ in range(quantity):
+            self.container.append(self.get_container(pool, namespace, create))
 
     def start_additional_servers(self, additional_servers, index=0,
                                  access_points=None):

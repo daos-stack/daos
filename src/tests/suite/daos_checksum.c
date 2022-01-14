@@ -16,7 +16,7 @@
 #include <daos/container.h>
 #include <daos_srv/daos_engine.h>
 
-#define EC_CSUM_OC	(DAOS_OC_EC_K2P2_L32K)
+#define EC_CSUM_OC	OC_EC_2P2G1
 
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill);
@@ -165,10 +165,9 @@ static void
 setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	       int chunksize, daos_oclass_id_t oclass)
 {
-	daos_prop_t	*props = daos_prop_alloc(3);
+	char		str[37];
+	daos_prop_t	*props = daos_prop_alloc(4);
 	int		 rc;
-
-	uuid_generate(ctx->uuid);
 
 	assert_non_null(props);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
@@ -178,12 +177,15 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 					DAOS_PROP_CO_CSUM_SV_OFF;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	props->dpp_entries[2].dpe_val = chunksize != 0 ? chunksize : 1024*16;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[3].dpe_val = 1 << 15;
 
-	rc = daos_cont_create(ctx->poh, ctx->uuid, props, NULL);
+	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	daos_prop_free(props);
 	assert_success(rc);
 
-	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_open(ctx->poh, str, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
 	assert_success(rc);
 
@@ -315,7 +317,8 @@ setup_multiple_extent_data(struct csum_test_ctx *ctx)
 static void
 cleanup_cont_obj(struct csum_test_ctx *ctx)
 {
-	int rc;
+	int	rc;
+	char	str[37];
 
 	/** close object */
 	rc = daos_obj_close(ctx->oh, NULL);
@@ -324,7 +327,8 @@ cleanup_cont_obj(struct csum_test_ctx *ctx)
 	/** Close & Destroy Container */
 	rc = daos_cont_close(ctx->coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_destroy(ctx->poh, str, true, NULL);
 	assert_rc_equal(rc, 0);
 }
 
@@ -454,7 +458,7 @@ test_server_data_corruption(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*8, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*64, oc);
 
 	/**1. Simple server data corruption after RDMA */
 	setup_multiple_extent_data(&ctx);
@@ -2202,13 +2206,11 @@ test_enum_unpack_cb(struct dss_enum_unpack_io *io, void *arg)
 			continue;
 		}
 
-		daos_csummer_alloc_iods_csums_with_packed(
-			csummer,
-			&io->ui_iods[i], 1,
-			&tmp_iov, &iod_csums);
+		rc = daos_csummer_alloc_iods_csums_with_packed(csummer, &io->ui_iods[i], 1,
+							       &tmp_iov, &iod_csums);
+		assert_success(rc);
 
-		rc = daos_csummer_verify_iod(csummer, &io->ui_iods[i],
-					     &io->ui_sgls[i], iod_csums,
+		rc = daos_csummer_verify_iod(csummer, &io->ui_iods[i], &io->ui_sgls[i], iod_csums,
 					     NULL, 0, NULL);
 
 		assert_success(rc);
@@ -2427,7 +2429,7 @@ test_enumerate_object2(void **state)
 	assert_rc_equal(0, rc);
 
 	d_sgl_init(&list_sgl, 1);
-	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 10);
+	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 64);
 	/** Sanity check that no failure still returns success */
 	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX};
 
@@ -2446,8 +2448,8 @@ test_enumerate_object2(void **state)
 	 */
 	assert_int_equal(4, nr);
 
-	/** only 3 checksums, dkey, akey, and inlined recx */
-	assert_int_equal(3, get_csum_count(&csum_iov));
+	/** only 2 checksums, dkey, akey */
+	assert_int_equal(2, get_csum_count(&csum_iov));
 
 	/** Clean up */
 	d_sgl_fini(&list_sgl, true);
@@ -2505,14 +2507,6 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	assert_memory_equal(&zero_anchor, &anchor, sizeof(zero_anchor));
 	assert_memory_equal(&zero_anchor, &dkey_anchor, sizeof(zero_anchor));
 	assert_memory_equal(&zero_anchor, &akey_anchor, sizeof(zero_anchor));
-
-	/** csum iov buf len shouldn't change, but iov_len should reflect
-	 * what's needed to hold all csum info. Caller can decide what to do
-	 * from here.
-	 */
-	assert_int_equal(10, csum_iov.iov_buf_len);
-	assert_int_equal(11 * (sizeof(struct dcs_csum_info) + 8),
-		csum_iov.iov_len);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);

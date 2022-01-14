@@ -76,10 +76,12 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
             "leader": self.params.get("leader", path="/run/exp_vals/*"),
             "tier_stats": [
                 {
+                    "media_type": "scm",
                     "total": self.params.get(
                         "total", path="/run/exp_vals/scm/*")
                 },
                 {
+                    "media_type": "nvme",
                     "total": self.params.get(
                         "total", path="/run/exp_vals/nvme/*")
                 }

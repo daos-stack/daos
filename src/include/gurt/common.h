@@ -63,6 +63,13 @@ extern "C" {
  */
 #define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
 
+/* rand and srand macros */
+
+#define D_RAND_MAX 0x7fffffff
+
+void d_srand(long int);
+long int d_rand(void);
+
 /* memory allocating macros */
 void  d_free(void *);
 void *d_calloc(size_t, size_t);
@@ -135,7 +142,7 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_STRNDUP_S(ptr, s)						\
 	do {								\
 		_Static_assert(sizeof(s) != sizeof(void *) ||		\
-			__builtin_types_compatible_p(typeof(s), typeof("1234567")), \
+			__builtin_types_compatible_p(__typeof__(s), __typeof__("1234567")), \
 	"D_STRNDUP_S cannot be used with this type");			\
 		(ptr) = d_strndup(s, sizeof(s));			\
 		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
@@ -151,14 +158,20 @@ char *d_realpath(const char *path, char *resolved_path);
 			      (ptr) = NULL);				\
 	} while (0)
 
+/* d_realpath() can fail with genuine errors, in which case we want to keep the errno from
+ * realpath, however if it doesn't fail then we want to preserve the previous errno, in
+ * addition the fault injection code could insert an error in the D_CHECK_ALLOC() macro
+ * so if that happens then we want to set ENOMEM there.
+ */
 #define D_REALPATH(ptr, path)						\
 	do {								\
-		int _size;						\
 		(ptr) = d_realpath((path), NULL);			\
-		_size = (ptr) != NULL ?					\
-			strnlen((ptr), PATH_MAX + 1) + 1 : 0;		\
-		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,		\
-			      0, #ptr, 0);				\
+		if ((ptr) != NULL) {					\
+			int _size = strnlen(ptr, PATH_MAX + 1) + 1 ;	\
+			D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	0, #ptr, 0); \
+			if (((ptr) == NULL))				\
+				errno = ENOMEM;				\
+		}							\
 	} while (0)
 
 #define D_ALIGNED_ALLOC(ptr, alignment, size)				\
@@ -431,6 +444,7 @@ d_rank_list_t *d_rank_list_alloc(uint32_t size);
 d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
 int d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src);
+void d_rank_list_shuffle(d_rank_list_t *rank_list);
 void d_rank_list_sort(d_rank_list_t *rank_list);
 bool d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx);
 int d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank);
@@ -494,7 +508,7 @@ void d_free_string(struct d_string_buffer_t *buf);
 # define offsetof(typ, memb)	((long)((char *)&(((typ *)0)->memb)))
 #endif
 
-#define D_ALIGNUP(x, a) (((x) + (a - 1)) & ~(a - 1))
+#define D_ALIGNUP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))

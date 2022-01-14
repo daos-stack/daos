@@ -20,6 +20,7 @@ pool_connect_nonexist(void **state)
 {
 	test_arg_t	*arg = *state;
 	uuid_t		 uuid;
+	char		 str[37];
 	daos_handle_t	 poh;
 	int		 rc;
 
@@ -30,7 +31,8 @@ pool_connect_nonexist(void **state)
 
 	/* Contact pool service replicas as returned by pool create */
 	uuid_generate(uuid);
-	rc = daos_pool_connect(uuid, arg->group, DAOS_PC_RW,
+	uuid_unparse(uuid, str);
+	rc = daos_pool_connect(str, arg->group, DAOS_PC_RW,
 			       &poh, NULL /* info */, NULL /* ev */);
 	assert_rc_equal(rc, -DER_NONEXIST);
 }
@@ -59,7 +61,7 @@ pool_connect(void **state)
 		/** connect to pool */
 		print_message("rank 0 connecting to pool %ssynchronously ... ",
 			      arg->async ? "a" : "");
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW, &poh, &info,
 				       arg->async ? &ev : NULL /* ev */);
 		assert_rc_equal(rc, 0);
@@ -118,12 +120,12 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 1: other connections already exist; shall get "
 		      "%d\n", -DER_BUSY);
 	print_message("establishing a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_rc_equal(rc, 0);
 	print_message("trying to establish an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_rc_equal(rc, -DER_BUSY);
@@ -133,7 +135,7 @@ pool_connect_exclusively(void **state)
 
 	print_message("SUBTEST 2: no other connections; shall succeed\n");
 	print_message("establishing an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_rc_equal(rc, 0);
@@ -141,7 +143,7 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 3: shall prevent other connections (%d)\n",
 		      -DER_BUSY);
 	print_message("trying to establish a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_rc_equal(rc, -DER_BUSY);
@@ -183,7 +185,7 @@ pool_exclude(void **state)
 	/** connect to pool */
 	print_message("rank 0 connecting to pool %ssynchronously... ",
 		      arg->async ? "a" : "");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RW, &poh, &info,
 			       arg->async ? &ev : NULL /* ev */);
 	assert_rc_equal(rc, 0);
@@ -276,7 +278,7 @@ pool_attribute(void **state)
 	}
 
 	print_message("connecting to pool\n");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW, &poh, NULL, NULL);
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW, &poh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("setting pool attributes %ssynchronously ...\n",
@@ -373,7 +375,7 @@ init_fini_conn(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW, &poh, NULL, NULL);
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW, &poh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
@@ -398,7 +400,7 @@ init_fini_conn(void **state)
 	rc = daos_eq_create(&arg->eq);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW, &poh,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW, &poh,
 			       &arg->pool.pool_info, NULL /* ev */);
 	if (rc)
 		print_message("daos_pool_connect failed, rc: %d\n", rc);
@@ -506,7 +508,7 @@ pool_properties(void **state)
 	assert_rc_equal(rc, 0);
 
 	prop = daos_prop_alloc(1);
-	/* label - set arg->pool_label to use daos_pool_connect_by_label() */
+	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
 	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
@@ -616,15 +618,15 @@ pool_op_retry(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	print_message("setting DAOS_POOL_CONNECT_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
+	print_message("setting on leader %u DAOS_POOL_CONNECT_FAIL_CORPC ... ",
+		arg->pool.pool_info.pi_leader);
+	rc = daos_debug_set_params(arg->group, arg->pool.pool_info.pi_leader, DMG_KEY_FAIL_LOC,
+				   DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
 	print_message("connecting to pool ... ");
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RW, &poh, &info,
 			       NULL /* ev */);
 	assert_rc_equal(rc, 0);
@@ -633,10 +635,9 @@ pool_op_retry(void **state)
 	assert_int_equal(info.pi_ndisabled, 0);
 	print_message("success\n");
 
-	print_message("setting DAOS_POOL_QUERY_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
+	print_message("setting on leader %u DAOS_POOL_QUERY_FAIL_CORPC ... ", info.pi_leader);
+	rc = daos_debug_set_params(arg->group, info.pi_leader, DMG_KEY_FAIL_LOC,
+				   DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -648,10 +649,9 @@ pool_op_retry(void **state)
 	assert_int_equal(info.pi_ndisabled, 0);
 	print_message("success\n");
 
-	print_message("setting DAOS_POOL_DISCONNECT_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_DISCONNECT_FAIL_CORPC |
-				  DAOS_FAIL_ONCE, 0, NULL);
+	print_message("setting on leader %u DAOS_POOL_DISCONNECT_FAIL_CORPC ... ", info.pi_leader);
+	rc = daos_debug_set_params(arg->group, info.pi_leader, DMG_KEY_FAIL_LOC,
+				  DAOS_POOL_DISCONNECT_FAIL_CORPC | DAOS_FAIL_ONCE, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -707,7 +707,7 @@ setup_containers(void **state, daos_size_t nconts)
 
 	/* TODO: make test_setup_pool_connect() more generic, call here */
 	if (arg->myrank == 0) {
-		rc = daos_pool_connect(lcarg->tpool.pool_uuid, arg->group,
+		rc = daos_pool_connect(lcarg->tpool.pool_str, arg->group,
 				       DAOS_PC_RW,
 				       &lcarg->tpool.poh, NULL /* pool info */,
 				       NULL /* ev */);
@@ -741,15 +741,16 @@ setup_containers(void **state, daos_size_t nconts)
 	for (i = 0; i < nconts; i++) {
 		/* TODO: make test_setup_cont_create() generic, call here */
 		if (arg->myrank == 0) {
-			uuid_generate(lcarg->conts[i]);
-			print_message("setup: creating container: "DF_UUIDF"\n",
-				      DP_UUID(lcarg->conts[i]));
+			print_message("setup: creating container\n");
 			rc = daos_cont_create(lcarg->tpool.poh,
-					      lcarg->conts[i], NULL /* prop */,
+					      &lcarg->conts[i], NULL /* prop */,
 					      NULL /* ev */);
 			if (rc != 0)
 				print_message("setup: daos_cont_create "
 						"failed: %d\n", rc);
+			else
+				print_message("setup: container "DF_UUIDF" created\n",
+					      DP_UUID(lcarg->conts[i]));
 		}
 
 		if (arg->multi_rank) {
@@ -771,10 +772,13 @@ setup_containers(void **state, daos_size_t nconts)
 
 err_destroy_conts:
 	if (arg->myrank == 0) {
+		char	str[37];
+
 		for (i = 0; i < nconts; i++) {
 			if (uuid_is_null(lcarg->conts[i]))
 				break;
-			daos_cont_destroy(lcarg->tpool.poh, lcarg->conts[i],
+			uuid_unparse(lcarg->conts[i], str);
+			daos_cont_destroy(lcarg->tpool.poh, str,
 					  1 /* force */, NULL /* ev */);
 		}
 	}
@@ -804,14 +808,17 @@ teardown_containers(void **state)
 		return 0;
 
 	for (i = 0; i < lcarg->nconts; i++) {
+		char str[37];
+
 		if (uuid_is_null(lcarg->conts[i]))
 			break;
 
 		if (arg->myrank == 0) {
 			print_message("teardown: destroy container: "
 				      DF_UUIDF"\n", DP_UUID(lcarg->conts[i]));
-			rc = daos_cont_destroy(lcarg->tpool.poh,
-					       lcarg->conts[i], 1, NULL);
+			uuid_unparse(lcarg->conts[i], str);
+			rc = daos_cont_destroy(lcarg->tpool.poh, str,
+					       1, NULL);
 		}
 
 		if (arg->multi_rank)
@@ -1120,6 +1127,9 @@ label_strings_test(void **state)
 					     "0b101010",
 					     /* len=DAOS_PROP_LABEL_MAX_LEN */
 					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDE",
+					     "a-b-cde",
+					     "thiswoul-dntp-arse-asau-uidsoitsfine",
+					     "g006b637-c63a-4734-99bc-a71298597de1",
 	};
 	const char	*invalid_labels[] = {
 					     "",
@@ -1129,8 +1139,8 @@ label_strings_test(void **state)
 					     "No{brackets}",
 					     "Whatsup?",
 					     "'MyLabel'",
-					     "a-b-cde",
 					     "MyPool!",
+					     "0006b637-c63a-4734-99bc-a71298597de1",
 					     "cae61c0]7-52f5-4874-ad21-3c0ec43005cb",
 					     /* len=DAOS_PROP_LABEL_MAX_LEN+1 */
 					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
@@ -1161,16 +1171,16 @@ label_strings_test(void **state)
 		for (i = 0; i < n_valid; i++) {
 			const char *lbl = valid_labels[i];
 
+			print_message("%s should be valid\n", lbl);
 			assert_true(daos_label_is_valid(lbl));
-			print_message("confirmed valid: %s\n", lbl);
 		}
 
 		print_message("Verify %zu INvalid labels\n", n_invalid);
 		for (i = 0; i < n_invalid; i++) {
 			const char *lbl = invalid_labels[i];
 
+			print_message("%s should not be valid\n", lbl);
 			assert_false(daos_label_is_valid(lbl));
-			print_message("confirmed NOT valid: %s\n", lbl);
 		}
 	}
 }

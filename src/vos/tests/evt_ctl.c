@@ -520,7 +520,7 @@ ts_list_rect(void)
 	daos_handle_t		 ih;
 	int			 i;
 	char			*arg;
-	int			 rc;
+	int			 rc, rc2;
 	int			 options = 0;
 	bool			 probe = true;
 
@@ -641,8 +641,9 @@ skip_probe:
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
- out:
-	evt_iter_finish(ih);
+out:
+	rc2 = evt_iter_finish(ih);
+	assert_rc_equal(rc2, 0);
 }
 
 #define TS_VAL_CYCLE	4
@@ -897,8 +898,7 @@ copy_exp_val_to_array(int flag, int **evtdata,
 		if (flag == EVT_ITER_VISIBLE) {
 			val[epoch] = evtdata[epoch][epoch];
 			 count++;
-		} else if ((flag == EVT_ITER_COVERED) ||
-		(flag == (EVT_ITER_COVERED))) {
+		} else if (flag == EVT_ITER_COVERED) {
 			for (offset = epoch; offset >= 1; offset--) {
 				if (evtdata[offset][epoch+incr] != 0) {
 					val[count] =
@@ -1216,6 +1216,9 @@ test_evt_iter_delete(void **state)
 	assert_rc_equal(rc, 0);
 	rc = utest_sync_mem_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
+
+	rc = evt_has_data(arg->ta_root, arg->ta_uma);
+	assert_rc_equal(rc, 0);
 	/* Insert a bunch of entries */
 	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
 		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
@@ -1239,6 +1242,8 @@ test_evt_iter_delete(void **state)
 			assert_int_equal(rc, 0);
 		}
 	}
+	rc = evt_has_data(arg->ta_root, arg->ta_uma);
+	assert_rc_equal(rc, 1);
 
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE, NULL, &ih);
 	assert_rc_equal(rc, 0);

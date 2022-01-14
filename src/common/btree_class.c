@@ -229,7 +229,7 @@ nv_key_decode(struct btr_instance *tins, d_iov_t *key,
 
 static int
 nv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
-	       struct btr_record *rec)
+	       struct btr_record *rec, d_iov_t *val_out)
 {
 	struct nv_rec  *r;
 	umem_off_t	roff;
@@ -316,7 +316,7 @@ nv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 nv_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      d_iov_t *key, d_iov_t *val)
+	      d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct nv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	void		*v;
@@ -338,7 +338,9 @@ nv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		r->nr_value = voff;
 		r->nr_value_buf_size = val->iov_len;
 	} else {
-		umem_tx_add(&tins->ti_umm, r->nr_value, val->iov_len);
+		rc = umem_tx_add(&tins->ti_umm, r->nr_value, val->iov_len);
+		if (rc != 0)
+			return rc;
 	}
 
 	v = umem_off2ptr(&tins->ti_umm, r->nr_value);
@@ -572,7 +574,7 @@ uv_hkey_size(void)
 
 static int
 uv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
-	       struct btr_record *rec)
+	       struct btr_record *rec, d_iov_t *val_out)
 {
 	struct uv_rec  *r;
 	umem_off_t	roff;
@@ -652,7 +654,7 @@ uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 uv_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      d_iov_t *key, d_iov_t *val)
+	      d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct uv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	void		*v;
@@ -674,7 +676,9 @@ uv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		r->ur_value = voff;
 		r->ur_value_buf_size = val->iov_len;
 	} else {
-		umem_tx_add(&tins->ti_umm, r->ur_value, val->iov_len);
+		rc = umem_tx_add(&tins->ti_umm, r->ur_value, val->iov_len);
+		if (rc != 0)
+			return rc;
 	}
 
 	v = umem_off2ptr(&tins->ti_umm, r->ur_value);
@@ -889,7 +893,7 @@ struct ec_rec {
 
 static int
 ec_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
-	       struct btr_record *rec)
+	       struct btr_record *rec, d_iov_t *val_out)
 {
 	struct ec_rec  *r;
 	umem_off_t	roff;
@@ -949,7 +953,7 @@ ec_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ec_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      d_iov_t *key, d_iov_t *val)
+	      d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct ec_rec  *r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	int rc;
@@ -1117,7 +1121,7 @@ kv_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
 
 static int
 kv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
-	     struct btr_record *rec)
+	     struct btr_record *rec, d_iov_t *val_out)
 {
 	struct kv_rec  *r;
 	umem_off_t	roff;
@@ -1190,7 +1194,7 @@ kv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key,
 
 static int
 kv_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      d_iov_t *key, d_iov_t *val)
+	      d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct kv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	void		*v;
@@ -1210,7 +1214,9 @@ kv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		r->kr_value = voff;
 		r->kr_value_cap = val->iov_len;
 	} else {
-		umem_tx_add(&tins->ti_umm, r->kr_value, val->iov_len);
+		rc = umem_tx_add(&tins->ti_umm, r->kr_value, val->iov_len);
+		if (rc != 0)
+			return rc;
 	}
 	v = umem_off2ptr(&tins->ti_umm, r->kr_value);
 
@@ -1292,7 +1298,7 @@ iv_key_decode(struct btr_instance *tins, d_iov_t *key, daos_anchor_t *anchor)
 
 static int
 iv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
-	     struct btr_record *rec)
+	     struct btr_record *rec, d_iov_t *val_out)
 {
 	struct iv_rec  *r;
 	umem_off_t	roff;
@@ -1317,6 +1323,12 @@ iv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	memcpy(v, val->iov_buf, r->ir_value_len);
 
 	rec->rec_off = roff;
+
+	if (val_out) {
+		D_ASSERT(val_out->iov_buf == NULL);
+		val_out->iov_buf = v;
+		val_out->iov_len = r->ir_value_len;
+	}
 	return 0;
 
 err_r:
@@ -1371,7 +1383,7 @@ iv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key,
 
 static int
 iv_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      d_iov_t *key, d_iov_t *val)
+	      d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct iv_rec	*r = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	void		*v;
@@ -1392,11 +1404,19 @@ iv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		r->ir_value = voff;
 		r->ir_value_cap = val->iov_len;
 	} else {
-		umem_tx_add(&tins->ti_umm, r->ir_value, val->iov_len);
+		rc = umem_tx_add(&tins->ti_umm, r->ir_value, val->iov_len);
+		if (rc != 0)
+			return rc;
 	}
 	v = umem_off2ptr(&tins->ti_umm, r->ir_value);
 	memcpy(v, val->iov_buf, val->iov_len);
 	r->ir_value_len = val->iov_len;
+
+	if (val_out) {
+		D_ASSERT(val_out->iov_buf == NULL);
+		val_out->iov_buf = v;
+		val_out->iov_len = r->ir_value_len;
+	}
 	return 0;
 }
 

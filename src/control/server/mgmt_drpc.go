@@ -38,18 +38,25 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 
+// poolResolver defines an interface to be implemented by
+// something that can resolve a pool ID into a PoolService.
+type poolResolver interface {
+	FindPoolServiceByLabel(string) (*system.PoolService, error)
+	FindPoolServiceByUUID(uuid.UUID) (*system.PoolService, error)
+}
+
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_engine (src/engine).
 type srvModule struct {
 	log     logging.Logger
-	sysdb   *system.Database
+	sysdb   poolResolver
 	engines []Engine
 	events  *events.PubSub
 }
 
 // newSrvModule creates a new srv module references to the system database,
 // resident EngineInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, sysdb *system.Database, engines []Engine, events *events.PubSub) *srvModule {
+func newSrvModule(log logging.Logger, sysdb poolResolver, engines []Engine, events *events.PubSub) *srvModule {
 	return &srvModule{
 		log:     log,
 		sysdb:   sysdb,

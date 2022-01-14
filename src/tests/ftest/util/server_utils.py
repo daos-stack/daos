@@ -91,6 +91,7 @@ class DaosServerManager(SubprocessManager):
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
         """
+        self.group = group
         server_command = get_server_command(
             group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
         super().__init__(server_command, manager)
@@ -120,6 +121,9 @@ class DaosServerManager(SubprocessManager):
 
         # Storage and network information
         self.information = DaosServerInformation(self.dmg)
+
+        # Flag used to determine which method is used to detect that the server has started
+        self.detect_start_via_dmg = False
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -287,6 +291,10 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
+        # Additionally try to prepare any discovered VMD NVMe devices.
+        if "True" in os.environ["DAOS_ENABLE_VMD"]:
+            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
+
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
             using_dcpm = self.manager.job.using_dcpm
@@ -361,9 +369,17 @@ class DaosServerManager(SubprocessManager):
         """
         if host_qty is None:
             hosts_qty = len(self._hosts)
-        self.log.info("<SERVER> Waiting for the daos_engine to start")
-        self.manager.job.update_pattern("normal", hosts_qty)
-        if not self.manager.check_subprocess_status(self.manager.process):
+
+        if self.detect_start_via_dmg:
+            self.log.info("<SERVER> Waiting for the daos_engine to start via dmg system query")
+            self.manager.job.update_pattern("dmg", hosts_qty)
+            started = self.get_detected_engine_count(self.manager.process)
+        else:
+            self.log.info("<SERVER> Waiting for the daos_engine to start")
+            self.manager.job.update_pattern("normal", hosts_qty)
+            started = self.manager.check_subprocess_status(self.manager.process)
+
+        if not started:
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
@@ -372,6 +388,55 @@ class DaosServerManager(SubprocessManager):
 
         # Define the expected states for each rank
         self._expected_states = self.get_current_state()
+
+    def get_detected_engine_count(self, sub_process):
+        """Get the number of detected joined engines.
+
+        Args:
+            sub_process (process.SubProcess): subprocess used to run the command
+
+        Returns:
+            int: number of patterns detected in the job output
+
+        """
+        expected_states = self.manager.job.pattern.split(",")
+        detected = 0
+        complete = False
+        timed_out = False
+        start = time.time()
+
+        # Search for patterns in the dmg system query output:
+        #   - the expected number of pattern matches are detected (success)
+        #   - the time out is reached (failure)
+        #   - the subprocess is no longer running (failure)
+        while not complete and not timed_out and sub_process.poll() is None:
+            detected = self.detect_engine_states(expected_states)
+            complete = detected == self.manager.job.pattern_count
+            timed_out = time.time() - start > self.manager.job.pattern_timeout.value
+            if not complete and not timed_out:
+                time.sleep(1)
+
+        # Summarize results
+        self.manager.job.report_subprocess_status(start, detected, complete, timed_out, sub_process)
+
+        return complete
+
+    def detect_engine_states(self, expected_states):
+        """Detect the number of engine states that match the expected states.
+
+        Args:
+            expected_states (list): a list of engine state strings to detect
+
+        Returns:
+            int: number of engine states that match the expected states
+
+        """
+        detected = 0
+        states = self.get_current_state()
+        for rank in sorted(states):
+            if states[rank]["state"].lower() in expected_states:
+                detected += 1
+        return detected
 
     def reset_storage(self):
         """Reset the server storage.
@@ -388,6 +453,10 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.nvme_only.value = True
         cmd.sub_command_class.sub_command_class.reset.value = True
         cmd.sub_command_class.sub_command_class.force.value = True
+
+        # Use VMD option when resetting storage if it's prepared with VMD.
+        if "True" in os.environ["DAOS_ENABLE_VMD"]:
+            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=120)
@@ -418,6 +487,39 @@ class DaosServerManager(SubprocessManager):
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
+
+    def restart(self, hosts, wait=False):
+        """Restart the specified servers after a stop. The servers must
+           have been previously formatted and started.
+
+        Args:
+            hosts (list): List of servers to restart.
+            wait (bool): Whether or not to wait until the servers
+                         have joined.
+        """
+        orig_hosts = self.manager.hosts
+        self.manager.assign_hosts(hosts)
+        orig_pattern = self.manager.job.pattern
+        orig_count = self.manager.job.pattern_count
+        self.manager.job.update_pattern("normal", len(hosts))
+        try:
+            self.manager.run()
+
+            host_ranks = self.get_host_ranks(hosts)
+            self.update_expected_states(host_ranks , ["joined"])
+
+            if not wait:
+                return
+
+            # Loop until we get the expected states or the test times out.
+            while True:
+                status = self.verify_expected_states(show_logs=False)
+                if status["expected"]:
+                    break
+                time.sleep(1)
+        finally:
+            self.manager.assign_hosts(orig_hosts)
+            self.manager.job.update_pattern(orig_pattern, orig_count)
 
     def start(self):
         """Start the server through the job manager."""
@@ -624,6 +726,8 @@ class DaosServerManager(SubprocessManager):
             query_data = {"status": 1}
         if query_data["status"] == 0:
             if "response" in query_data and "members" in query_data["response"]:
+                if query_data["response"]["members"] is None:
+                    return data
                 for member in query_data["response"]["members"]:
                     host = member["fault_domain"].split(".")[0].replace("/", "")
                     if host in self._hosts:
@@ -738,19 +842,24 @@ class DaosServerManager(SubprocessManager):
         engines = generated_yaml["engines"]
         for i, engine in enumerate(engines):
             self.log.info("engine %d", i)
-            self.log.info("scm_mount = %s", engine["scm_mount"])
-            self.log.info("scm_class = %s", engine["scm_class"])
-            self.log.info("scm_list = %s", engine["scm_list"])
+            for storage_tier in engine["storage"]:
+                if storage_tier["class"] != "dcpm":
+                    continue
 
-            per_engine_yaml_parameters =\
-                DaosServerYamlParameters.PerEngineYamlParameters(i)
-            per_engine_yaml_parameters.scm_mount.update(engine["scm_mount"])
-            per_engine_yaml_parameters.scm_class.update(engine["scm_class"])
-            per_engine_yaml_parameters.scm_size.update(None)
-            per_engine_yaml_parameters.scm_list.update(engine["scm_list"])
+                self.log.info("scm_mount = %s", storage_tier["scm_mount"])
+                self.log.info("class = %s", storage_tier["class"])
+                self.log.info("scm_list = %s", storage_tier["scm_list"])
 
-            self.manager.job.yaml.engine_params.append(
-                per_engine_yaml_parameters)
+                per_engine_yaml_parameters =\
+                    DaosServerYamlParameters.PerEngineYamlParameters(i)
+                per_engine_yaml_parameters.scm_mount.update(storage_tier["scm_mount"])
+                per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
+                per_engine_yaml_parameters.scm_size.update(None)
+                per_engine_yaml_parameters.scm_list.update(storage_tier["scm_list"])
+                per_engine_yaml_parameters.reset_yaml_data_updated()
+
+                self.manager.job.yaml.engine_params.append(
+                    per_engine_yaml_parameters)
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.

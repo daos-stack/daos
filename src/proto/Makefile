@@ -12,6 +12,7 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 mgmt/cont.pb-c.h\
 		 mgmt/pool.pb-c.h\
 		 mgmt/smd.pb-c.h\
+		 mgmt/server.pb-c.h\
 		 mgmt/svc.pb-c.h\
 		 security/auth.pb-c.h\
 		 tests/drpc/drpc_test.pb-c.h
@@ -22,6 +23,7 @@ C_SOURCE_FILES = common/drpc.pb-c.c\
 		 mgmt/cont.pb-c.c\
 		 mgmt/pool.pb-c.c\
 		 mgmt/smd.pb-c.c\
+		 mgmt/server.pb-c.c\
 		 mgmt/svc.pb-c.c\
 		 security/auth.pb-c.c\
 		 tests/drpc/drpc_test.pb-c.c
@@ -34,6 +36,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/mgmt/svc.pb.go\
 		   common/proto/mgmt/system.pb.go\
 		   common/proto/ctl/smd.pb.go\
+		   common/proto/ctl/server.pb.go\
 		   common/proto/ctl/storage.pb.go\
 		   common/proto/ctl/common.pb.go\
 		   common/proto/ctl/storage_nvme.pb.go\
@@ -166,6 +169,12 @@ $(DAOS_ROOT)/src/mgmt/smd.pb-c.h: $(PROTO_SOURCE_DIR)/ctl/smd.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/mgmt/smd.pb-c.c: $(PROTO_SOURCE_DIR)/ctl/smd.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/mgmt/server.pb-c.h: $(PROTO_SOURCE_DIR)/ctl/server.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/mgmt/server.pb-c.c: $(PROTO_SOURCE_DIR)/ctl/server.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/tests/drpc/%.pb-c.h: $(PROTO_SOURCE_DIR)/test/%.proto

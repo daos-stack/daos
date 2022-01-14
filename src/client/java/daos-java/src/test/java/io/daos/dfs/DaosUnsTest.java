@@ -56,29 +56,6 @@ public class DaosUnsTest {
   }
 
   @Test
-  public void testBuilderWithProperties() throws Exception {
-    DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
-    builder.path("/abc");
-    builder.poolId("4567-rty-456");
-    builder.putEntry(PropType.DAOS_PROP_CO_LAYOUT_TYPE, new DaosUns.PropValue(1L, 0));
-    builder.putEntry(PropType.DAOS_PROP_CO_ACL, new DaosUns.PropValue(DaosAcl.newBuilder().build(), 0));
-    DaosUns uns = builder.build();
-    DunsAttribute attribute = uns.getAttribute();
-    Properties properties = attribute.getProperties();
-    Assert.assertNotNull(properties);
-    Assert.assertEquals(2, properties.getEntriesCount());
-  }
-
-  @Test(expected = ClassCastException.class)
-  public void testBuilderWithBadPropValue() throws Exception {
-    DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
-    builder.path("/abc");
-    builder.poolId("4567-rty-456");
-    builder.putEntry(PropType.DAOS_PROP_CO_LABEL, new DaosUns.PropValue(1L, 0));
-    builder.build();
-  }
-
-  @Test
   public void testSetAppInfoBadAttrName() throws Exception {
     Exception ee = null;
     try {

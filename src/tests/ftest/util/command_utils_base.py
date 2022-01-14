@@ -415,7 +415,7 @@ class YamlParameters(ObjectWithParameters):
             yaml_data = {}
         for name in self.get_param_names():
             value = getattr(self, name).value
-            if value is not None and value is not False:
+            if value is not None:
                 yaml_data[name] = value
 
         return yaml_data if self.title is None else {self.title: yaml_data}

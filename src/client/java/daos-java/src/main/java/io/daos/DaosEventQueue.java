@@ -13,8 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -34,6 +33,8 @@ public class DaosEventQueue {
 
   private final String threadName;
 
+  private final long threadId;
+
   private final int nbrOfEvents;
 
   protected final Event[] events;
@@ -50,9 +51,12 @@ public class DaosEventQueue {
 
   private int nbrOfTimedOut;
 
+  private Map<Class<?>, List<Attachment>> attMap = new HashMap<>();
+
   private static final int DEFAULT_POLL_TIMEOUT_MS = 10;
 
-  private static final int DEFAULT_NO_PROGRESS_DURATION_ERROR = 5000; // MS
+  private static final int DEFAULT_NO_PROGRESS_DURATION_ERROR = Integer.valueOf(
+      System.getProperty(Constants.CFG_DAOS_TIMEOUT, Constants.DEFAULT_DAOS_TIMEOUT_MS)); // MS
 
   private static final int DEFAULT_NBR_OF_TIMEDOUT_WARN = 5;
 
@@ -88,7 +92,8 @@ public class DaosEventQueue {
    * @throws IOException
    */
   protected DaosEventQueue(String threadName, int nbrOfEvents) throws IOException {
-    this.threadName = threadName;
+    this.threadName = threadName == null ? Thread.currentThread().getName() : threadName;
+    this.threadId = Thread.currentThread().getId();
     if (nbrOfEvents > Short.MAX_VALUE) {
       throw new IllegalArgumentException("number of events should be no larger than " + Short.MAX_VALUE);
     }
@@ -125,7 +130,7 @@ public class DaosEventQueue {
       if (nbrOfEvents <= 0) {
         nbrOfEvents = DEFAULT_NBR_OF_EVENTS;
       }
-      queue = new DaosEventQueue(Thread.currentThread().getName(), nbrOfEvents);
+      queue = new DaosEventQueue(null, nbrOfEvents);
       EQ_MAP.put(tid, queue);
     }
     return queue;
@@ -173,11 +178,13 @@ public class DaosEventQueue {
    * max wait time in millisecond
    * @param completedList
    * a list to hold {@link Attachment}s associated with completed events.
-   * null means you want to ignore them.
+   * @param klass
+   * expected class instance of attachment
    * @return event
    * @throws IOException
    */
-  public Event acquireEventBlocking(long maxWaitMs, List<Attachment> completedList)
+  public Event acquireEventBlocking(long maxWaitMs, List<Attachment> completedList, Class<? extends Attachment> klass,
+                                    Set<? extends Attachment> candidates)
       throws IOException {
     Event e = acquireEvent();
     if (e != null) { // for most of cases
@@ -187,18 +194,15 @@ public class DaosEventQueue {
     checkProgress();
     // unfortunately to poll repeatedly and wait
     int cnt = 0;
-    int totalWait = 0;
-    int wait = 0;
+    int wait;
+    long start = System.currentTimeMillis();
     while (e == null) {
-      if (cnt % 10 == 0) {
-        if (totalWait > maxWaitMs) {
+      if ((cnt % 10 == 0) & (System.currentTimeMillis() - start) > maxWaitMs) {
           nbrOfTimedOut++;
-          throw new TimedOutException("failed to acquire event after waiting " + totalWait + " ms");
-        }
-        wait = cnt < 100 ? cnt : 100;
-        totalWait += wait;
+          throw new TimedOutException("failed to acquire event after waiting more than " + maxWaitMs + " ms");
       }
-      pollCompleted(completedList, wait);
+      wait = cnt < 100 ? cnt : 100;
+      pollCompleted(completedList, klass, candidates, wait);
       e = acquireEvent();
       cnt++;
     }
@@ -210,7 +214,8 @@ public class DaosEventQueue {
       long dur = System.currentTimeMillis() - lastProgressed;
       if (dur > DEFAULT_NO_PROGRESS_DURATION_ERROR) {
         throw new TimedOutException("too long duration without progress. number of timedout: " +
-          nbrOfTimedOut + ", duration: " + dur);
+          nbrOfTimedOut + ", duration: " + dur +", nbrOfAcquired: " + nbrOfAcquired +
+            ", nbrOfEvents: " + nbrOfEvents);
       }
     }
     if (nbrOfTimedOut > DEFAULT_NBR_OF_TIMEDOUT_WARN) {
@@ -227,18 +232,19 @@ public class DaosEventQueue {
    *
    * @param maxWaitMs
    * max wait time in millisecond
+   * @param klass
+   * expected class instance of attachment
    * @param completedList
    * a list to hold {@link Attachment}s associated with completed events.
-   * null means you want to ignore them.
    * @throws IOException
    */
-  public void waitForCompletion(long maxWaitMs, List<Attachment> completedList)
+  public void waitForCompletion(long maxWaitMs, Class<? extends Attachment> klass, List<Attachment> completedList)
       throws IOException {
     long start = System.currentTimeMillis();
     int timeout = 0;
     while (nbrOfAcquired > 0) {
       int lastNbr = nbrOfAcquired;
-      pollCompleted(completedList, timeout);
+      pollCompleted(completedList, klass, null, timeout);
       if (lastNbr == nbrOfAcquired) {
         timeout = DEFAULT_POLL_TIMEOUT_MS;
       } else {
@@ -254,7 +260,7 @@ public class DaosEventQueue {
 
   /**
    * It's just for accessing event without acquiring it for DAOS API calls.
-   * Use {@link #acquireEvent()} or {@link #acquireEventBlocking(long, List)} instead for DAOS API calls.
+   * Use {@link #acquireEvent()} or {@link #acquireEventBlocking(long, List, Class, Set)} instead for DAOS API calls.
    *
    * @param idx
    * @return
@@ -278,38 +284,71 @@ public class DaosEventQueue {
   }
 
   /**
+   * return event which has been used for any DAOS operation.
+   *
+   * @param event
+   */
+  public void returnEvent(Event event) {
+    event.putBack();
+    nbrOfAcquired--;
+  }
+
+  /**
    * poll completed events. The completed events are put back immediately.
    *
    * @param completedList
-   * if it's not null, attachments of completed events are added to this list.
+   * attachments of completed events are added to this list.
+   * @param klass
+   * expected class instance of attachment
+   * @param candidates
+   * expected attachments to get from poll, null means getting any attachment
    * @param timeOutMs
    * timeout in millisecond
-   * @return number of events completed
+   * @return number of events completed. Note that this number may not be equal to number of attachment added to
+   * <code>completedList</code>.
    * @throws IOException
    */
-  public int pollCompleted(List<Attachment> completedList, long timeOutMs) throws IOException {
-    return pollCompleted(completedList, nbrOfEvents, timeOutMs);
+  public int pollCompleted(List<Attachment> completedList, Class<? extends Attachment> klass,
+                           Set<? extends Attachment> candidates, long timeOutMs) throws IOException {
+    return pollCompleted(completedList, klass, candidates, candidates != null ? candidates.size() : nbrOfEvents,
+        timeOutMs);
   }
 
   /**
    * poll expected number of completed events. The completed events are put back immediately.
    *
    * @param completedList
-   * if it's not null, attachments of completed events are added to this list.
+   * expected attachments of completed events are added to this list.
+   * @param klass
+   * expected class instance of attachment
+   * @param candidates
+   * expected attachments to get from poll. null means getting any attachment
    * @param expNbrOfRet
    * expected number of completed event
    * @param timeOutMs
    * timeout in millisecond
-   * @return number of events completed
+   * @return number of events completed. Note that this number may not be equal to number of attachment added to
+   * <code>completedList</code>.
    * @throws IOException
    */
-  public int pollCompleted(List<Attachment> completedList, int expNbrOfRet, long timeOutMs) throws IOException {
+  public int pollCompleted(List<Attachment> completedList, Class<? extends Attachment> klass,
+                           Set<? extends Attachment> candidates, int expNbrOfRet, long timeOutMs) throws IOException {
+    assert Thread.currentThread().getId() == threadId : "current thread " + Thread.currentThread().getId() + "(" +
+        Thread.currentThread().getName() + "), is not expected " + Thread.currentThread().getId() + "(" +
+        threadName + ")";
+
     int aborted;
     int nbr;
-    while (true) {
+    // check detained attachments first.
+    int moved = moveAttachment(completedList, klass, candidates, expNbrOfRet);
+    expNbrOfRet -= moved;
+    if (expNbrOfRet == 0) {
+      return moved;
+    }
+    while (nbrOfAcquired > 0) {
       aborted = 0;
       DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
-          expNbrOfRet, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
+          nbrOfAcquired, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
       completed.readerIndex(0);
       nbr = completed.readShort();
       Event event;
@@ -321,8 +360,10 @@ public class DaosEventQueue {
           continue;
         }
         Attachment attachment = event.complete();
-        if (completedList != null) {
+        if ((completedList.size() < expNbrOfRet) & (candidates == null || candidates.contains(attachment))) {
           completedList.add(attachment);
+        } else {
+          detainAttachment(attachment);
         }
       }
       nbrOfAcquired -= nbr;
@@ -336,6 +377,39 @@ public class DaosEventQueue {
         return nbr;
       }
     }
+    return 0;
+  }
+
+  private int moveAttachment(List<Attachment> completedList, Class<? extends Attachment> klass,
+                              Set<? extends Attachment> candidates, int expNbr) {
+    int nbr = 0;
+    List<Attachment> detainedList = attMap.get(klass);
+    if (detainedList != null && !detainedList.isEmpty()) {
+      Iterator<Attachment> it = detainedList.iterator();
+      while ((nbr < expNbr) & it.hasNext()) {
+        Attachment att = it.next();
+        if (candidates == null || candidates.contains(att)) {
+          completedList.add(att);
+          it.remove();
+          nbr++;
+        }
+      }
+    }
+    return nbr;
+  }
+
+  private void detainAttachment(Attachment attachment) {
+    if (attachment.isDiscarded()) {
+      attachment.release();
+      return;
+    }
+    Class<?> klass = attachment.getClass();
+    List<Attachment> list = attMap.get(klass);
+    if (list == null) {
+      list = new LinkedList<>();
+      attMap.put(klass, list);
+    }
+    list.add(attachment);
   }
 
   public int getNbrOfAcquired() {
@@ -362,6 +436,10 @@ public class DaosEventQueue {
         attachment.release();
       }
     }
+    for (List<Attachment> list : attMap.values()) {
+      list.forEach(a -> a.release());
+    }
+    attMap = null;
   }
 
   public static void destroy(long id, DaosEventQueue eq) throws IOException {
@@ -391,7 +469,13 @@ public class DaosEventQueue {
     EQ_MAP.clear();
   }
 
+  public String getThreadName() {
+    return threadName;
+  }
 
+  public long getThreadId() {
+    return threadId;
+  }
 
   /**
    * Java represent of DAOS event associated to a event queue identified by
@@ -429,7 +513,7 @@ public class DaosEventQueue {
       return pa;
     }
 
-    public void putBack() {
+    private void putBack() {
       status = EventStatus.FREE;
       if (attachment != null && !attachment.alwaysBoundToEvt()) {
         attachment = null;
@@ -485,6 +569,16 @@ public class DaosEventQueue {
      * @return true or false
      */
     boolean alwaysBoundToEvt();
+
+    /**
+     * discard attachment
+     */
+    void discard();
+
+    /**
+     * check if attachment is discarded. If true, it may be discarded when poll and detain attachment.
+     */
+    boolean isDiscarded();
 
     /**
      * release resources if any.

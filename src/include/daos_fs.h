@@ -21,6 +21,7 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <sys/stat.h>
 
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX
@@ -86,21 +87,40 @@ typedef struct {
 } dfs_obj_info_t;
 
 /**
- * Create a DFS container with the POSIX property layout set.  Optionally set
- * attributes for hints on the container.
+ * Create a DFS container with the POSIX property layout set.  Optionally set attributes for hints
+ * on the container.
  *
  * \param[in]	poh	Pool open handle.
- * \param[in]	co_uuid	Container UUID.
- * \param[in]	attr	Optional set of attributes to set on the container.
+ * \param[out]	uuid	Pointer to uuid_t to hold the implementation-generated container UUID.
+ * \param[in]	attr	Optional set of properties and attributes to set on the container.
  *			Pass NULL if none.
- * \param[out]	coh	Optionally leave the container open and return it hdl.
- * \param[out]	dfs	Optionally mount DFS on the container and return it.
+ * \param[out]	coh	Optionally leave the container open and return its hdl.
+ * \param[out]	dfs	Optionally mount DFS on the container and return the dfs handle.
  *
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
-		daos_handle_t *coh, dfs_t **dfs);
+dfs_cont_create(daos_handle_t poh, uuid_t *uuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs);
+
+/**
+ * Create a DFS container with label \a label. This is the same as dfs_container_create() with the
+ * label property set in \a attr->da_props.
+ *
+ * \param[in]	poh	Pool open handle.
+ * \param[in]	label	Required, label property of the new container.
+ *			Supersedes any label specified in \a cont_prop.
+ * \param[in]	attr	Optional set of properties and attributes to set on the container.
+ *			Pass NULL if none.
+ * \param[out]	uuid	Optional pointer to uuid_t to hold the implementation-generated container
+ *			UUID.
+ * \param[out]	coh	Optionally leave the container open and return its hdl.
+ * \param[out]	dfs	Optionally mount DFS on the container and return the dfs handle.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
+			   uuid_t *uuid, daos_handle_t *coh, dfs_t **dfs);
 
 /**
  * Mount a file system over DAOS. The pool and container handle must remain
@@ -874,29 +894,49 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
-/**
- * Mount a DFS namespace in a special container designated as the root
- * container. If the root container does not exist, this call creates it.
- *
- * \param[in]   poh     Pool connection handle
- * \param[out]  dfs     Pointer to the root DFS created.
- *
- * \return              0 on success, errno code on failure.
- */
 int
-dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs);
-
-/**
- * Unmount the root DFS.
- *
- * \param[in]	dfs	Pointer to the root DFS file system.
- *
- * \return		0 on success, errno code on failure.
- */
+dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		 dfs_t **dfs);
 int
-dfs_umount_root_cont(dfs_t *dfs);
+dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		 dfs_t **dfs);
 
 #if defined(__cplusplus)
 }
-#endif
+
+#define dfs_cont_create dfs_cont_create_cpp
+static inline int
+dfs_cont_create_cpp(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		    dfs_t **dfs)
+{
+	return dfs_cont_create2(poh, cuuid, attr, coh, dfs);
+}
+
+static inline int
+dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		    dfs_t **dfs)
+{
+	return dfs_cont_create1(poh, cuuid, attr, coh, dfs);
+};
+#else
+/**
+ * for backward compatility, support old api where a const uuid_t was required to be passed in for
+ * the container to be created.
+ */
+#define dfs_cont_create(poh, co, ...)					\
+	({								\
+		int _ret;						\
+		uuid_t *_u;						\
+		if (d_is_uuid(co)) {					\
+			_u = (uuid_t *)((unsigned char *)(co));		\
+			_ret = dfs_cont_create((poh), _u, __VA_ARGS__);	\
+		} else {						\
+			_u = (uuid_t *)(co);				\
+			_ret = dfs_cont_create2((poh), _u, __VA_ARGS__); \
+		}							\
+		_ret;							\
+	})
+
+
+#endif /* __cplusplus */
 #endif /* __DAOS_FS_H__ */

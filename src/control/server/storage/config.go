@@ -7,11 +7,16 @@
 package storage
 
 import (
+	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 const (
@@ -34,6 +39,7 @@ const (
 	maxScmDeviceLen = 1
 )
 
+// Class indicates a specific type of storage.
 type Class string
 
 func (c *Class) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -52,10 +58,11 @@ func (c *Class) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func (s Class) String() string {
-	return string(s)
+func (c Class) String() string {
+	return string(c)
 }
 
+// Class type definitions.
 const (
 	ClassNone Class = ""
 	ClassDcpm Class = "dcpm"
@@ -76,8 +83,8 @@ func NewTierConfig() *TierConfig {
 	return new(TierConfig)
 }
 
-func (c *TierConfig) IsSCM() bool {
-	switch c.Class {
+func (tc *TierConfig) IsSCM() bool {
+	switch tc.Class {
 	case ClassDcpm, ClassRam:
 		return true
 	default:
@@ -85,8 +92,8 @@ func (c *TierConfig) IsSCM() bool {
 	}
 }
 
-func (c *TierConfig) IsBdev() bool {
-	switch c.Class {
+func (tc *TierConfig) IsBdev() bool {
+	switch tc.Class {
 	case ClassNvme, ClassFile, ClassKdev:
 		return true
 	default:
@@ -94,138 +101,119 @@ func (c *TierConfig) IsBdev() bool {
 	}
 }
 
-func (c *TierConfig) Validate() error {
-	if c.IsSCM() {
-		return c.Scm.Validate(c.Class)
+func (tc *TierConfig) Validate() error {
+	if tc.IsSCM() {
+		return tc.Scm.Validate(tc.Class)
 	}
-	if c.IsBdev() {
-		return c.Bdev.Validate(c.Class)
+	if tc.IsBdev() {
+		return tc.Bdev.Validate(tc.Class)
 	}
 
 	return errors.New("no storage class set")
 }
 
-func (c *TierConfig) WithTier(tier int) *TierConfig {
-	c.Tier = tier
-	return c
+func (tc *TierConfig) WithTier(tier int) *TierConfig {
+	tc.Tier = tier
+	return tc
 }
 
 // WithScmClass defines the type of SCM storage to be configured.
-func (c *TierConfig) WithScmClass(scmClass string) *TierConfig {
-	c.Class = Class(scmClass)
-	return c
+func (tc *TierConfig) WithScmClass(scmClass string) *TierConfig {
+	tc.Class = Class(scmClass)
+	return tc
 }
 
 // WithScmMountPoint sets the path to the device used for SCM storage.
-func (c *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
-	c.Scm.MountPoint = scmPath
-	return c
+func (tc *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
+	tc.Scm.MountPoint = scmPath
+	return tc
 }
 
 // WithScmRamdiskSize sets the size (in GB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
-func (c *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
-	c.Scm.RamdiskSize = size
-	return c
+func (tc *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
+	tc.Scm.RamdiskSize = size
+	return tc
 }
 
 // WithScmDeviceList sets the list of devices to be used for SCM storage.
-func (c *TierConfig) WithScmDeviceList(devices ...string) *TierConfig {
-	c.Scm.DeviceList = devices
-	return c
+func (tc *TierConfig) WithScmDeviceList(devices ...string) *TierConfig {
+	tc.Scm.DeviceList = devices
+	return tc
 }
 
 // WithBdevClass defines the type of block device storage to be used.
-func (c *TierConfig) WithBdevClass(bdevClass string) *TierConfig {
-	c.Class = Class(bdevClass)
-	return c
+func (tc *TierConfig) WithBdevClass(bdevClass string) *TierConfig {
+	tc.Class = Class(bdevClass)
+	return tc
 }
 
 // WithBdevDeviceList sets the list of block devices to be used.
-func (c *TierConfig) WithBdevDeviceList(devices ...string) *TierConfig {
-	c.Bdev.DeviceList = devices
-	return c
+func (tc *TierConfig) WithBdevDeviceList(devices ...string) *TierConfig {
+	tc.Bdev.DeviceList = devices
+	return tc
 }
 
 // WithBdevDeviceCount sets the number of devices to be created when BdevClass is malloc.
-func (c *TierConfig) WithBdevDeviceCount(count int) *TierConfig {
-	c.Bdev.DeviceCount = count
-	return c
+func (tc *TierConfig) WithBdevDeviceCount(count int) *TierConfig {
+	tc.Bdev.DeviceCount = count
+	return tc
 }
 
 // WithBdevFileSize sets the backing file size (used when BdevClass is malloc or file).
-func (c *TierConfig) WithBdevFileSize(size int) *TierConfig {
-	c.Bdev.FileSize = size
-	return c
+func (tc *TierConfig) WithBdevFileSize(size int) *TierConfig {
+	tc.Bdev.FileSize = size
+	return tc
+}
+
+// WithBdevBusidRange sets the bus-ID range to be used to filter hot plug events.
+func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
+	tc.Bdev.BusidRange = MustNewBdevBusRange(rangeStr)
+	return tc
 }
 
 type TierConfigs []*TierConfig
 
-func (sc *Config) Validate() error {
-	if err := sc.Tiers.Validate(); err != nil {
-		return errors.Wrap(err, "storage config validation failed")
-	}
-
-	// set persistent location for engine bdev config file to be consumed by
-	// provider backend, set to empty when no devices specified
-	sc.ConfigOutputPath = ""
-	scmCfgs := sc.Tiers.ScmConfigs()
-	bdevCfgs := sc.Tiers.BdevConfigs()
-	if len(scmCfgs) > 0 && sc.Tiers.CfgHasBdevs() {
-		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
-	}
-
-	// set the VOS env:
-	if len(bdevCfgs) > 0 {
-		switch bdevCfgs[0].Class {
-		case ClassFile, ClassKdev:
-			sc.VosEnv = "AIO"
-		case ClassNvme:
-			sc.VosEnv = "NVME"
-		}
-	}
-
-	return nil
-}
-
-func (c TierConfigs) CfgHasBdevs() bool {
-	for _, bc := range c.BdevConfigs() {
+func (tcs TierConfigs) CfgHasBdevs() bool {
+	for _, bc := range tcs.BdevConfigs() {
 		if len(bc.Bdev.DeviceList) > 0 {
 			return true
 		}
 	}
+
 	return false
 }
 
-func (c TierConfigs) Validate() error {
-	for _, cfg := range c {
+func (tcs TierConfigs) Validate() error {
+	for _, cfg := range tcs {
 		if err := cfg.Validate(); err != nil {
 			return errors.Wrapf(err, "tier %d failed validation", cfg.Tier)
 		}
 	}
-
 	return nil
 }
 
-func (c TierConfigs) ScmConfigs() (out []*TierConfig) {
-	for _, cfg := range c {
+func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
+	for _, cfg := range tcs {
 		if cfg.IsSCM() {
 			out = append(out, cfg)
 		}
 	}
+
 	return
 }
 
-func (c TierConfigs) BdevConfigs() (out []*TierConfig) {
-	for _, cfg := range c {
+func (tcs TierConfigs) BdevConfigs() (out []*TierConfig) {
+	for _, cfg := range tcs {
 		if cfg.IsBdev() {
 			out = append(out, cfg)
 		}
 	}
+
 	return
 }
 
-func (c *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var tmp []*TierConfig
 	if err := unmarshal(&tmp); err != nil {
 		return err
@@ -236,7 +224,7 @@ func (c *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			tmp[i].Tier = i
 		}
 	}
-	*c = tmp
+	*tcs = tmp
 
 	return nil
 }
@@ -252,9 +240,6 @@ type ScmConfig struct {
 func (sc *ScmConfig) Validate(class Class) error {
 	if sc.MountPoint == "" {
 		return errors.New("no scm_mount set")
-	}
-	if sc.RamdiskSize < 0 {
-		return errors.New("negative scm_size")
 	}
 
 	switch class {
@@ -280,12 +265,66 @@ func (sc *ScmConfig) Validate(class Class) error {
 	return nil
 }
 
+// BdevBusRange represents a bus-ID range to be used to filter hot plug events.
+type BdevBusRange struct {
+	hardware.PCIBus
+}
+
+func (br *BdevBusRange) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var tmp string
+	if err := unmarshal(&tmp); err != nil {
+		return err
+	}
+
+	lo, hi, err := parsePCIBusRange(tmp, hardware.PCIAddrBusBitSize)
+	if err != nil {
+		return errors.Wrapf(err, "failed to parse bus range %q", tmp)
+	}
+
+	br.LowAddress.Bus = lo
+	br.HighAddress.Bus = hi
+
+	return nil
+}
+
+func (br *BdevBusRange) MarshalYAML() (interface{}, error) {
+	return br.String(), nil
+}
+
+func (br *BdevBusRange) String() string {
+	if br == nil {
+		return ""
+	}
+	return fmt.Sprintf("0x%02x-0x%02x", br.LowAddress.Bus, br.HighAddress.Bus)
+}
+
+// NewBdevBusRange creates a new BdevBusRange from a string.
+func NewBdevBusRange(rangeStr string) (*BdevBusRange, error) {
+	br := &BdevBusRange{}
+	if err := br.UnmarshalYAML(func(v interface{}) error {
+		return yaml.Unmarshal([]byte(rangeStr), v)
+	}); err != nil {
+		return nil, err
+	}
+
+	return br, nil
+}
+
+// MustNewBdevBusRange creates a new BdevBusRange from a string. Panics on error.
+func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
+	br, err := NewBdevBusRange(rangeStr)
+	if err != nil {
+		panic(err)
+	}
+	return br
+}
+
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	DeviceList  []string `yaml:"bdev_list,omitempty"`
-	VmdDisabled bool     `yaml:"-"` // set during start-up
-	DeviceCount int      `yaml:"bdev_number,omitempty"`
-	FileSize    int      `yaml:"bdev_size,omitempty"`
+	DeviceList  []string      `yaml:"bdev_list,omitempty"`
+	DeviceCount int           `yaml:"bdev_number,omitempty"`
+	FileSize    int           `yaml:"bdev_size,omitempty"`
+	BusidRange  *BdevBusRange `yaml:"bdev_busid_range,omitempty"`
 }
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
@@ -328,11 +367,8 @@ func (bc *BdevConfig) Validate(class Class) error {
 			return err
 		}
 	case ClassNvme:
-		for _, pci := range bc.DeviceList {
-			_, _, _, _, err := common.ParsePCIAddress(pci)
-			if err != nil {
-				return errors.Wrapf(err, "parse pci address %s", pci)
-			}
+		if _, err := hardware.NewPCIAddressSet(bc.DeviceList...); err != nil {
+			return errors.Wrapf(err, "parse pci addresses %v", bc.DeviceList)
 		}
 	default:
 		return errors.Errorf("bdev_class value %q not supported (valid: nvme/kdev/file)", class)
@@ -341,8 +377,86 @@ func (bc *BdevConfig) Validate(class Class) error {
 	return nil
 }
 
+// parsePCIBusRange takes a string of format <Begin-End> and returns the begin and end values.
+// Number base is detected from the string prefixes e.g. 0x for hexadecimal.
+// bitSize parameter sets a cut-off for the return values e.g. 8 for uint8.
+func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
+	if numRange == "" {
+		return 0, 0, nil
+	}
+
+	split := strings.Split(numRange, "-")
+	if len(split) != 2 {
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
+	}
+
+	begin, err := strconv.ParseUint(split[0], 0, bitSize)
+	if err != nil {
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+	}
+
+	end, err := strconv.ParseUint(split[1], 0, bitSize)
+	if err != nil {
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+	}
+
+	if begin > end {
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
+	}
+
+	return uint8(begin), uint8(end), nil
+}
+
 type Config struct {
 	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool        `yaml:"-"`
+	NumaNodeIndex    uint        `yaml:"-"`
+}
+
+func (c *Config) Validate() error {
+	if err := c.Tiers.Validate(); err != nil {
+		return errors.Wrap(err, "storage config validation failed")
+	}
+
+	var pruned TierConfigs
+	for _, tier := range c.Tiers {
+		if tier.IsBdev() && len(tier.Bdev.DeviceList) == 0 {
+			continue // prune empty bdev tier
+		}
+		pruned = append(pruned, tier)
+	}
+	c.Tiers = pruned
+
+	scmCfgs := c.Tiers.ScmConfigs()
+	bdevCfgs := c.Tiers.BdevConfigs()
+
+	if len(scmCfgs) == 0 {
+		return errors.New("missing scm storage tier in config")
+	}
+
+	// set persistent location for engine bdev config file to be consumed by provider
+	// backend, set to empty when no devices specified
+	if len(bdevCfgs) == 0 {
+		c.ConfigOutputPath = ""
+		return nil
+	}
+	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
+	fbc := bdevCfgs[0]
+
+	// set vos environment variable based on class of first bdev config
+	if fbc.Class == ClassFile || fbc.Class == ClassKdev {
+		c.VosEnv = "AIO"
+		return nil
+	}
+
+	if fbc.Class != ClassNvme {
+		return nil
+	}
+
+	c.VosEnv = "NVME"
+
+	return nil
 }

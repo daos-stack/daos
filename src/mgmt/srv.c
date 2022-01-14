@@ -69,6 +69,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_PING_RANK:
 		ds_mgmt_drpc_ping_rank(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_SET_LOG_MASKS:
+		ds_mgmt_drpc_set_log_masks(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_SET_RANK:
 		ds_mgmt_drpc_set_rank(drpc_req, drpc_resp);
 		break;
@@ -181,6 +184,9 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 
 	ps_in = crt_req_get(rpc);
 	D_ASSERT(ps_in != NULL);
+	D_DEBUG(DB_MGMT, "ps_rank=%u, key_id=0x%x, value=0x%"PRIx64", extra=0x%"PRIx64"\n",
+		ps_in->ps_rank, ps_in->ps_key_id, ps_in->ps_value, ps_in->ps_value_extra);
+
 	if (ps_in->ps_rank != -1) {
 		/* Only set local parameter */
 		rc = dss_parameters_set(ps_in->ps_key_id, ps_in->ps_value);
@@ -209,17 +215,8 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	tc_in->tps_value_extra = ps_in->ps_value_extra;
 
 	rc = dss_rpc_send(tc_req);
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
 
-	out = crt_reply_get(tc_req);
-	rc = out->srv_rc;
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
+	crt_req_decref(tc_req);
 out:
 	out = crt_reply_get(rpc);
 	out->srv_rc = rc;
@@ -259,17 +256,8 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	tc_in->p_op = in->p_op;
 	tc_in->p_avg = in->p_avg;
 	rc = dss_rpc_send(tc_req);
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
 
-	out = crt_reply_get(tc_req);
-	rc = out->p_rc;
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
+	crt_req_decref(tc_req);
 out:
 	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out = crt_reply_get(rpc);
@@ -307,17 +295,8 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 
 	tc_in->m_mark = in->m_mark;
 	rc = dss_rpc_send(tc_req);
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
 
-	out = crt_reply_get(tc_req);
-	rc = out->m_rc;
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
+	crt_req_decref(tc_req);
 out:
 	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out = crt_reply_get(rpc);

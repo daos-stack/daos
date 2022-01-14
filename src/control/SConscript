@@ -112,7 +112,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
     denv.Command(build_bin, src + libs,
-                 'cd %s; %s build -mod vendor -v %s %s %s -o %s %s' %
+                 'cd %s; %s build -mod vendor %s %s %s -o %s %s' %
                  (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv),
                   get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
@@ -220,14 +220,6 @@ def scons():
         AlwaysBuild([daosbin])
 
         menv = denv.Clone()
-        menv["ENV"]["LD_LIBRARY_PATH"] = menv.subst(
-            "$BUILD_DIR/src/gurt" + \
-            ":$BUILD_DIR/src/cart" + \
-            ":$BUILD_DIR/src/common" + \
-            ":$BUILD_DIR/src/utils" + \
-            ":$OFI_PREFIX/lib" + \
-            ":$BUILD_DIR/src/client/dfs" + \
-            ":$BUILD_DIR/src/client/api")
         dmg_man = install_go_manpage(menv, "dmg")
         daos_man = install_go_manpage(menv, "daos")
         AlwaysBuild([dmg_man, daos_man])

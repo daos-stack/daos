@@ -20,7 +20,7 @@ import (
 
 // configCmd is the struct representing the top-level config subcommand.
 type configCmd struct {
-	Generate configGenCmd `command:"generate" alias:"g" description:"Generate DAOS server configuration file based on discoverable hardware devices"`
+	Generate configGenCmd `command:"generate" alias:"gen" description:"Generate DAOS server configuration file based on discoverable hardware devices"`
 }
 
 type configGenCmd struct {
@@ -83,11 +83,6 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 			return err
 		}
 		cmd.log.Error(bld.String())
-		return err
-	}
-
-	// includes hardware validation errors e.g. hardware across hostset differs
-	if err != nil {
 		return err
 	}
 

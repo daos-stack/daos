@@ -50,25 +50,6 @@ mgmt_svc_name_cb(d_iov_t *id, char **name)
 }
 
 static int
-mgmt_svc_load_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	uuid_copy(db_uuid, mgmt_svc_db_uuid);
-	return 0;
-}
-
-static int
-mgmt_svc_store_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	return 0;
-}
-
-static int
-mgmt_svc_delete_uuid_cb(d_iov_t *id)
-{
-	return 0;
-}
-
-static int
 mgmt_svc_locate_cb(d_iov_t *id, char **path)
 {
 	char *s = NULL;
@@ -313,9 +294,6 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 
 static struct ds_rsvc_class mgmt_svc_rsvc_class = {
 	.sc_name	= mgmt_svc_name_cb,
-	.sc_load_uuid   = mgmt_svc_load_uuid_cb,
-	.sc_store_uuid  = mgmt_svc_store_uuid_cb,
-	.sc_delete_uuid = mgmt_svc_delete_uuid_cb,
 	.sc_locate	= mgmt_svc_locate_cb,
 	.sc_alloc	= mgmt_svc_alloc_cb,
 	.sc_free	= mgmt_svc_free_cb,
@@ -343,37 +321,31 @@ ds_mgmt_svc_start(void)
 	return rc;
 }
 
+static void
+stopper(void *arg)
+{
+	int rc;
+
+	rc = ds_rsvc_stop_nodb(DS_RSVC_CLASS_MGMT, &mgmt_svc_id);
+	if (rc != 0)
+		D_DEBUG(DB_MGMT, "ignoring "DF_RC"\n", DP_RC(rc));
+}
+
 int
 ds_mgmt_svc_stop(void)
 {
-	struct ds_rsvc *rsvc;
-	int rc;
+	ABT_thread	thread;
+	int		rc;
 
-	/*
-	 * NB: As this cut-down mgmt svc is only being used
-	 * to broadcast the map and doesn't have a raft db
-	 * backing it, we just need to stop the map distribution
-	 * thread on our way out, otherwise it will block shutdown.
-	 */
-	rc = ds_rsvc_lookup(DS_RSVC_CLASS_MGMT, &mgmt_svc_id, &rsvc);
+	rc = dss_ult_create(stopper, NULL, DSS_XS_SYS, 0, 0, &thread);
 	if (rc != 0) {
-		/*
-		 * Non-Replica/Non-Leader are expected and can be ignored.
-		 * Any other errors should be returned.
-		 */
-		if (rc == -DER_NOTREPLICA || rc == -DER_NOTLEADER)
-			return 0;
+		D_ERROR("failed to create stopper ULT: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
-	ABT_mutex_lock(rsvc->s_mutex);
-	rsvc->s_state = DS_RSVC_DOWN;
-	rsvc->s_map_distd_stop = true;
-	ABT_mutex_unlock(rsvc->s_mutex);
-	ABT_cond_broadcast(rsvc->s_map_dist_cv);
+	ABT_thread_join(thread);
 
-	ds_rsvc_put(rsvc);
-
+	ABT_thread_free(&thread);
 	return 0;
 }
 

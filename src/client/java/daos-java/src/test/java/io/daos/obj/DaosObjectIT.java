@@ -59,7 +59,6 @@ public class DaosObjectIT {
         object.update(desc);
       } finally {
         desc.release();
-        buffer.release();
       }
       // update with different record size
       dataSize = 40;
@@ -80,7 +79,6 @@ public class DaosObjectIT {
         Assert.assertEquals(Constants.ERROR_CODE_ILLEGAL_ARG, ee.getErrorCode());
       } finally {
         desc.release();
-        buffer.release();
       }
       // succeed on different key
       dataSize = 40;
@@ -93,7 +91,6 @@ public class DaosObjectIT {
         object.update(desc);
       } finally {
         desc.release();
-        buffer.release();
       }
     } finally {
       if (object.isOpen()) {
@@ -129,9 +126,10 @@ public class DaosObjectIT {
         byte[] bytes2 = generateDataArray(dataSize2);
         // old entry is in list
         desc = object.createDataDescForUpdate("dkey1", IODataDescSync.IodType.ARRAY, 20);
+        buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize1);
+        buffer1.writeBytes(bytes);
         ByteBuf buffer2 = BufferAllocator.objBufWithNativeOrder(dataSize2);
         buffer2.writeBytes(bytes2);
-        buffer1.readerIndex(0);
         desc.addEntryForUpdate("akey1", 0, buffer1);
         desc.addEntryForUpdate("akey2", 0, buffer2);
         Exception ee = null;
@@ -139,15 +137,12 @@ public class DaosObjectIT {
           object.update(desc);
         } catch (Exception e) {
           ee = e;
-        } finally {
-          buffer2.release();
         }
         Assert.assertNotNull(ee);
         Assert.assertTrue(ee instanceof DaosObjectException);
         Assert.assertTrue(ee.getMessage().contains("failed to update object"));
       } finally {
         desc.release();
-        buffer1.release();
       }
     } finally {
       if (object.isOpen()) {
@@ -179,8 +174,6 @@ public class DaosObjectIT {
         object.update(desc);
       } finally {
         desc.release();
-        buffer1.release();
-        buffer2.release();
       }
       // fetch akey1
       IODataDescSync desc2 = object.createDataDescForFetch("dkey1", IODataDescSync.IodType.ARRAY, 10);
@@ -231,13 +224,14 @@ public class DaosObjectIT {
       IODataDescSync desc = object.createDataDescForUpdate("dkey1", IODataDescSync.IodType.SINGLE, 10);
       ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
       buffer1.writeBytes(bytes);
+      ByteBuf buffer2 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      buffer2.writeBytes(bytes);
       desc.addEntryForUpdate("akey1", 0, buffer1);
-      desc.addEntryForUpdate("akey2", 0, buffer1);
+      desc.addEntryForUpdate("akey2", 0, buffer2);
       try {
         object.update(desc);
       } finally {
         desc.release();
-        buffer1.release();
       }
       // fetch one akey
       IODataDescSync desc2 = object.createDataDescForFetch("dkey1", IODataDescSync.IodType.SINGLE, 10);
@@ -290,8 +284,10 @@ public class DaosObjectIT {
       IODataDescSync desc = object.createDataDescForUpdate("dkey1", IODataDescSync.IodType.ARRAY, 10);
       ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
       buffer1.writeBytes(bytes);
+      ByteBuf buffer2 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      buffer2.writeBytes(bytes);
       desc.addEntryForUpdate("akey1", 0, buffer1);
-      desc.addEntryForUpdate("akey2", 0, buffer1);
+      desc.addEntryForUpdate("akey2", 0, buffer2);
       try {
         object.update(desc);
       } finally {
@@ -372,19 +368,19 @@ public class DaosObjectIT {
       object.open();
       object.punch();
       Assert.assertTrue(object.isOpen());
-      List<IODataDescSync.Entry> list = new ArrayList<>();
       int dataSize = 30;
       byte[] bytes = generateDataArray(dataSize);
       IODataDescSync desc = object.createDataDescForUpdate("dkey1", IODataDescSync.IodType.SINGLE, 30);
       ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
       buffer1.writeBytes(bytes);
+      ByteBuf buffer2 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      buffer2.writeBytes(bytes);
       desc.addEntryForUpdate("akey1", 0, buffer1);
-      desc.addEntryForUpdate("akey2", 0, buffer1);
+      desc.addEntryForUpdate("akey2", 0, buffer2);
       try {
         object.update(desc);
       } finally {
         desc.release();
-        buffer1.release();
       }
       // fetch akey1, bigger record size
       IODataDescSync desc2 = object.createDataDescForFetch("dkey1", IODataDescSync.IodType.SINGLE, 40);
@@ -426,8 +422,8 @@ public class DaosObjectIT {
     completedList.clear();
     IOSimpleDDAsync failed = null;
     int failedCnt = 0;
-    int count = eq.pollCompleted(completedList, nbr, 5000);
-    if (count == 0) {
+    eq.pollCompleted(completedList, IOSimpleDDAsync.class, null, nbr, 5000);
+    if (completedList.isEmpty()) {
       throw new TimedOutException("failed to poll completed");
     }
     for (DaosEventQueue.Attachment attachment : completedList) {
@@ -465,7 +461,8 @@ public class DaosObjectIT {
       buffer2.writeBytes(bytes);
       desc.addEntryForUpdate("akey1", 0, buffer1);
       desc.addEntryForUpdate("akey2", 0, buffer2);
-      desc.setEvent(eq.acquireEventBlocking(100, null));
+      desc.setEvent(eq.acquireEventBlocking(100, completeList, IOSimpleDDAsync.class, null));
+      completeList.clear();
       try {
         object.updateAsync(desc);
         progress(eq, 1, completeList);
@@ -476,7 +473,8 @@ public class DaosObjectIT {
       IOSimpleDDAsync desc2 = object.createAsyncDataDescForFetch("dkey1", eq.getEqWrapperHdl());
       IOSimpleDDAsync.AsyncEntry entry = desc2.addEntryForFetch("akey1", 0, 80);
       byte[] actualBytes;
-      desc2.setEvent(eq.acquireEventBlocking(100, null));
+      desc2.setEvent(eq.acquireEventBlocking(100, completeList, IOSimpleDDAsync.class, null));
+      completeList.clear();
       try {
         object.fetchAsync(desc2);
         progress(eq, 1, completeList);
@@ -489,7 +487,8 @@ public class DaosObjectIT {
       }
       // fetch akey2
       desc2 = object.createAsyncDataDescForFetch("dkey1", eq.getEqWrapperHdl());
-      desc2.setEvent(eq.acquireEventBlocking(100, null));
+      completeList.clear();
+      desc2.setEvent(eq.acquireEventBlocking(100, completeList, IOSimpleDDAsync.class, null));
       entry = desc2.addEntryForFetch("akey2", 0, 30);
       try {
         object.fetchAsync(desc2);
@@ -502,7 +501,8 @@ public class DaosObjectIT {
       }
       // fetch both
       desc2 = object.createAsyncDataDescForFetch("dkey1", eq.getEqWrapperHdl());
-      desc2.setEvent(eq.acquireEventBlocking(100, null));
+      completeList.clear();
+      desc2.setEvent(eq.acquireEventBlocking(100, completeList, IOSimpleDDAsync.class, null));
       IOSimpleDDAsync.AsyncEntry entry1 = desc2.addEntryForFetch("akey1", 0, 50);
       IOSimpleDDAsync.AsyncEntry entry2 = desc2.addEntryForFetch("akey2", 0, 50);
       try {
@@ -539,13 +539,14 @@ public class DaosObjectIT {
       IODataDescSync desc = object.createDataDescForUpdate("dkey1", IODataDescSync.IodType.ARRAY, 10);
       ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
       buffer1.writeBytes(bytes);
+      ByteBuf buffer2 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      buffer2.writeBytes(bytes);
       desc.addEntryForUpdate("akey1", 0, buffer1);
-      desc.addEntryForUpdate("akey2", 0, buffer1);
+      desc.addEntryForUpdate("akey2", 0, buffer2);
       try {
         object.update(desc);
       } finally {
         desc.release();
-        buffer1.release();
       }
       // fetch akey1
       IODataDescSync desc2 = object.createDataDescForFetch("dkey1", IODataDescSync.IodType.ARRAY, 10);
@@ -614,13 +615,14 @@ public class DaosObjectIT {
         desc.release();
       }
       IODataDescSync desc2 = object.createDataDescForUpdate("dkey2", IODataDescSync.IodType.ARRAY, 10);
+      buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      buffer1.writeBytes(bytes);
       buffer1.readerIndex(0);
       desc2.addEntryForUpdate("akey1", 0, buffer1);
       try {
         object.update(desc2);
       } finally {
         desc2.release();
-        buffer1.release();
       }
       // list dkeys
       IOKeyDesc keyDesc = object.createKD(null);
@@ -657,7 +659,6 @@ public class DaosObjectIT {
         object.update(desc);
       } finally {
         desc.release();
-        buffer1.release();
       }
       dataSize = 60;
       byte[] bytes2 = generateDataArray(dataSize);
@@ -669,7 +670,6 @@ public class DaosObjectIT {
         object.update(desc2);
       } finally {
         desc2.release();
-        buffer1.release();
       }
       // list dkeys
       IOKeyDesc keyDesc0 = object.createKD(null);
@@ -719,12 +719,12 @@ public class DaosObjectIT {
       int dataSize = 10;
       int nbrOfKeys = (int) (Constants.KEY_LIST_BATCH_SIZE_DEFAULT * 1.5);
       byte[] bytes = generateDataArray(dataSize);
-      ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
-      buffer1.writeBytes(bytes);
+
       if (dkey == null) {
         for (int i = 0; i < nbrOfKeys; i++) {
           IODataDescSync desc = object.createDataDescForUpdate("dkey" + i, IODataDescSync.IodType.ARRAY, 10);
-          buffer1.readerIndex(0);
+          ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
+          buffer1.writeBytes(bytes);
           desc.addEntryForUpdate("akey" + i, 0, buffer1);
           try {
             object.update(desc);
@@ -735,7 +735,8 @@ public class DaosObjectIT {
       } else {
         IODataDescSync desc = object.createDataDescForUpdate(dkey, IODataDescSync.IodType.ARRAY, 10);
         for (int i = 0; i < nbrOfKeys; i++) {
-          buffer1.readerIndex(0);
+          ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
+          buffer1.writeBytes(bytes);
           desc.addEntryForUpdate("akey" + i, 0, buffer1);
         }
         try {
@@ -744,7 +745,6 @@ public class DaosObjectIT {
           desc.release();
         }
       }
-      buffer1.release();
       // list keys, reach number limit
       IOKeyDesc keyDesc = object.createKD(dkey);
       try {
@@ -793,12 +793,11 @@ public class DaosObjectIT {
       int dataSize = 10;
       int nbrOfKeys = 5;
       byte[] bytes = generateDataArray(dataSize);
-      ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
-      buffer1.writeBytes(bytes);
       if (dkey == null) {
         for (int i = 0; i < nbrOfKeys; i++) {
           IODataDescSync desc = object.createDataDescForUpdate("dkey" + i, IODataDescSync.IodType.ARRAY, 10);
-          buffer1.readerIndex(0);
+          ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
+          buffer1.writeBytes(bytes);
           desc.addEntryForUpdate("akey" + i, 0, buffer1);
           try {
             object.update(desc);
@@ -809,7 +808,8 @@ public class DaosObjectIT {
       } else {
         IODataDescSync desc = object.createDataDescForUpdate(dkey, IODataDescSync.IodType.ARRAY, 10);
         for (int i = 0; i < nbrOfKeys; i++) {
-          buffer1.readerIndex(0);
+          ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
+          buffer1.writeBytes(bytes);
           desc.addEntryForUpdate("akey" + i, 0, buffer1);
         }
         try {
@@ -818,7 +818,6 @@ public class DaosObjectIT {
           desc.release();
         }
       }
-      buffer1.release();
       // list dkeys, small size
       IOKeyDesc keyDesc = object.createKDWithAllParams(dkey, 2, 1, 4);
       try {
@@ -909,15 +908,18 @@ public class DaosObjectIT {
       byte[] bytes = generateDataArray(dataSize);
       ByteBuf buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
       buffer1.writeBytes(bytes);
+      ByteBuf buffer2 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      buffer2.writeBytes(bytes);
+      ByteBuf buffer3 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      buffer3.writeBytes(bytes);
       IODataDescSync desc = object.createDataDescForUpdate("dkey1", IODataDescSync.IodType.ARRAY, 10);
       desc.addEntryForUpdate("akey1", 0, buffer1);
-      desc.addEntryForUpdate("akey2", 0, buffer1);
-      desc.addEntryForUpdate("akey3", 0, buffer1);
+      desc.addEntryForUpdate("akey2", 0, buffer2);
+      desc.addEntryForUpdate("akey3", 0, buffer3);
       try {
         object.update(desc);
       } finally {
         desc.release();
-        buffer1.release();
       }
       // punch one akey
       object.punchAkeys("dkey1", Arrays.asList("akey1"));
@@ -965,14 +967,14 @@ public class DaosObjectIT {
         desc.release();
       }
       IODataDescSync desc2 = object.createDataDescForUpdate("dkey1", IODataDescSync.IodType.ARRAY, 10);
-      buffer1.readerIndex(0);
+      buffer1 = BufferAllocator.objBufWithNativeOrder(dataSize);
+      buffer1.writeBytes(bytes);
       desc2.addEntryForUpdate("akey2", 0, buffer1);
       try {
         object.update(desc2);
       } finally {
         desc2.release();
       }
-      buffer1.release();
       // list akeys from non-existing dkey
       IOKeyDesc keyDesc = object.createKD("dkey2");
       try {
@@ -1035,7 +1037,6 @@ public class DaosObjectIT {
         object.update(desc);
       } finally {
         desc.release();
-        buffer1.release();
       }
       Assert.assertEquals(1, object.getRecordSize("dkey1", "akey1"));
       Assert.assertEquals(0, object.getRecordSize("dkey1", "akey2"));
@@ -1440,14 +1441,14 @@ public class DaosObjectIT {
       for (int i = 0; i < reduces; i++) {
         for (int j = 0; j < maps; j++) {
           compList.clear();
-          e = dq.acquireEventBlocking(1000, compList);
+          e = dq.acquireEventBlocking(1000, compList, IOSimpleDataDesc.class, null);
           for (DaosEventQueue.Attachment d : compList) {
             Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
           }
           desc = (IOSimpleDataDesc) e.getAttachment();
           desc.reuse();
           desc.setDkey(String.valueOf(i));
-          entry = (IOSimpleDataDesc.SimpleEntry)desc.getEntry(0);
+          entry = desc.getEntry(0);
           buf = entry.reuseBuffer();
           buf.writerIndex(buf.capacity());
           entry.setEntryForUpdate(String.valueOf(j), 0, buf);
@@ -1455,7 +1456,7 @@ public class DaosObjectIT {
         }
       }
       compList.clear();
-      dq.waitForCompletion(5000, compList);
+      dq.waitForCompletion(5000, IOSimpleDataDesc.class, compList);
       for (DaosEventQueue.Attachment d : compList) {
         Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
       }
@@ -1468,7 +1469,7 @@ public class DaosObjectIT {
         for (int j = 0; j < maps; j++) {
 //          System.out.println(i + "-" +j);
           compList.clear();
-          e = dq.acquireEventBlocking(1000, compList);
+          e = dq.acquireEventBlocking(1000, compList, IOSimpleDataDesc.class, null);
           for (DaosEventQueue.Attachment d : compList) {
             Assert.assertEquals(bufLen, ((IOSimpleDataDesc)d).getEntry(0).getActualSize());
           }
@@ -1484,7 +1485,7 @@ public class DaosObjectIT {
       }
 //      System.out.println("waiting");
       compList.clear();
-      dq.waitForCompletion(5000, compList);
+      dq.waitForCompletion(5000, IOSimpleDataDesc.class, compList);
       for (DaosEventQueue.Attachment d : compList) {
         Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
         Assert.assertEquals(bufLen, ((IOSimpleDataDesc)d).getEntry(0).getActualSize());
@@ -1502,6 +1503,116 @@ public class DaosObjectIT {
       object.close();
       grp.release();
       DaosEventQueue.destroyAll();
+    }
+  }
+
+  @Test
+  public void testIODescUpdateAsyncNotReuse() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    int bufLen = 100;
+    byte[] data = generateDataArray(bufLen);
+    DaosEventQueue dq = DaosEventQueue.getInstance(128);
+    String dkey = "dkey1";
+    String akey = "akey1";
+    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(bufLen);
+    buf.writeBytes(data);
+    IODescUpdAsync desc = new IODescUpdAsync(dkey, akey, 0L, buf);
+    IOSimpleDDAsync fetchDesc = object.createAsyncDataDescForFetch(dkey, dq.getEqWrapperHdl());
+    desc.setEvent(dq.acquireEvent());
+    try {
+      object.open();
+      object.punch();
+      object.updateAsync(desc);
+      List<DaosEventQueue.Attachment> compList = new LinkedList<>();
+      dq.waitForCompletion(5000, IODescUpdAsync.class, compList);
+      Assert.assertTrue(compList.size() == 1);
+      Assert.assertTrue(((IODescUpdAsync)compList.get(0)).isSucceeded());
+      // verify written bytes
+      fetchDesc.setEvent(dq.acquireEvent());
+      fetchDesc.addEntryForFetch(akey, 0L, bufLen);
+      object.fetchAsync(fetchDesc);
+      compList.clear();
+      dq.waitForCompletion(5000, IOSimpleDDAsync.class, compList);
+      Assert.assertTrue(compList.size() == 1);
+      Assert.assertTrue(((IOSimpleDDAsync)compList.get(0)).isSucceeded());
+      Assert.assertEquals(bufLen, fetchDesc.getEntry(0).getActualSize());
+      byte[] fetchedData = new byte[bufLen];
+      fetchDesc.getEntry(0).getFetchedData().readBytes(fetchedData);
+      Assert.assertTrue(Arrays.equals(data, fetchedData));
+    } finally {
+      desc.release();
+      fetchDesc.release();
+      object.close();
+    }
+  }
+
+  private void writeOneEntry(DaosObject object, IODescUpdAsync desc, String dkey, String akey,
+                             long offset, ByteBuf dataBuf,
+                             DaosEventQueue dq) throws Exception{
+    desc.setDkey(dkey);
+    desc.setAkey(akey);
+    desc.setOffset(offset);
+    desc.setDataBuffer(dataBuf);
+    desc.setEvent(dq.acquireEvent());
+    object.updateAsync(desc);
+    List<DaosEventQueue.Attachment> compList = new LinkedList<>();
+    dq.waitForCompletion(5000, IODescUpdAsync.class, compList);
+    Assert.assertTrue(compList.size() == 1);
+    Assert.assertTrue(((IODescUpdAsync)compList.get(0)).isSucceeded());
+  }
+
+  @Test
+  public void testIODescUpdateAsyncReuse() throws Exception {
+    DaosObjectId id = new DaosObjectId(random.nextInt(), lowSeq.incrementAndGet());
+    id.encode();
+    DaosObject object = client.getObject(id);
+    int bufLen = 100;
+    long offset = 2L;
+    byte[] data = generateDataArray(bufLen);
+    DaosEventQueue dq = DaosEventQueue.getInstance(128);
+    String dkey = "dkey1";
+    String akey = "akey1";
+    String dkey2 = "dkey2";
+    String akey2 = "akey2";
+    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(bufLen);
+    buf.writeBytes(data);
+    ByteBuf buf2 = BufferAllocator.objBufWithNativeOrder(bufLen);
+    buf2.writeBytes(data);
+    IODescUpdAsync desc = new IODescUpdAsync(64);
+    try {
+      object.open();
+      object.punch();
+      writeOneEntry(object, desc, dkey, akey, offset, buf, dq);
+      desc.reuse();
+      writeOneEntry(object, desc, dkey2, akey2, offset, buf2, dq);
+      // verify written bytes
+      verify(object, dkey, akey, offset, data, dq);
+      verify(object, dkey2, akey2, offset, data, dq);
+    } finally {
+      desc.release();
+      object.close();
+    }
+  }
+
+  private void verify(DaosObject object, String dkey, String akey,
+                      long offset, byte[] data, DaosEventQueue dq) throws Exception {
+    IOSimpleDDAsync fetchDesc = object.createAsyncDataDescForFetch(dkey, dq.getEqWrapperHdl());
+    fetchDesc.setEvent(dq.acquireEvent());
+    fetchDesc.addEntryForFetch(akey, offset, data.length);
+    try {
+      object.fetchAsync(fetchDesc);
+      List<DaosEventQueue.Attachment> compList = new LinkedList<>();
+      dq.waitForCompletion(5000, IOSimpleDDAsync.class, compList);
+      Assert.assertTrue(compList.size() == 1);
+      Assert.assertTrue(((IOSimpleDDAsync) compList.get(0)).isSucceeded());
+      Assert.assertEquals(data.length, fetchDesc.getEntry(0).getActualSize());
+      byte[] fetchedData = new byte[data.length];
+      fetchDesc.getEntry(0).getFetchedData().readBytes(fetchedData);
+      Assert.assertTrue(Arrays.equals(data, fetchedData));
+    } finally {
+      fetchDesc.release();
     }
   }
 

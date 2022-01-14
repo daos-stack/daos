@@ -231,7 +231,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	crt_endpoint_t		server_ep;
 	sem_t			sem;
 	crt_rpc_t		*rpc = NULL;
-	char			other_server_uri[MAX_URI];
+	char			other_server_uri[MAX_URI+1];
 	int			tag = 0;
 	d_rank_t		other_rank;
 	crt_bulk_t		bulk_hdl = CRT_BULK_NULL;
@@ -263,8 +263,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		error_exit();
 	}
 
-	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER |
-		      CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		error_exit();
@@ -328,13 +327,16 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	sleep(1);
 
 	/* Read each others URIs from the file */
-	memset(other_server_uri, 0x0, MAX_URI);
+	memset(other_server_uri, 0x0, sizeof(other_server_uri));
+
 	lseek(fd_read, 0, SEEK_SET);
 	rc = read(fd_read, other_server_uri, MAX_URI);
 	if (rc < 0) {
 		D_ERROR("Failed to read uri from a file\n");
 		error_exit();
 	}
+	/* Terminate the string read by read since it won't do it on its own */
+	other_server_uri[rc] = '\0';
 
 	DBG_PRINT("Other servers uri is '%s'\n", other_server_uri);
 
@@ -483,7 +485,7 @@ print_usage(const char *msg)
 	printf("-d 'domain0,domain1': Specify two domains to use; ");
 	printf("e.g. 'eth0,eth1'\n");
 	printf("-p 'provider'       : Specify provider to use; ");
-	printf("e.g. 'ofi+sockets'\n");
+	printf("e.g. 'ofi+tcp'\n");
 	printf("-f [filename]       : If set will transfer contents ");
 	printf("of the specified file via bulk/rdma as part of 'PING' rpc\n");
 }
@@ -575,6 +577,7 @@ int main(int argc, char **argv)
 	printf("----------------------------------------\n\n");
 
 	/* Spawn 2 servers, each one reads and writes URIs into diff file */
+	umask(S_IWGRP | S_IWOTH);
 	fd0 = mkstemp(tmp_file0);
 	fd1 = mkstemp(tmp_file1);
 

@@ -52,8 +52,7 @@ shift || true
 
 FILES=("$@")
 
-for file in "${FILES[@]}"
-do
+for file in "${FILES[@]}"; do
     if [ -f "$file" ]; then
         echo "Processing XML $file"
 

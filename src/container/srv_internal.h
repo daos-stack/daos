@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * ds_cont: Client Server Internal Declarations
+ * ds_cont: Container Server Internal Declarations
  */
 
 #ifndef __CONTAINER_SRV_INTERNAL_H__
@@ -55,11 +55,6 @@ dsm_tls_get()
 }
 
 extern bool ec_agg_disabled;
-/*
- * Container service
- *
- * Identified by a number unique within the pool.
- */
 
 struct ec_eph {
 	d_rank_t	rank;
@@ -70,11 +65,17 @@ struct ec_eph {
 struct cont_ec_agg {
 	uuid_t			ea_cont_uuid;
 	daos_epoch_t		ea_current_eph;
-	int			ea_servers_num;
 	struct ec_eph		*ea_server_ephs;
 	d_list_t		ea_list;
+	int			ea_servers_num;
+	uint32_t		ea_deleted:1;
 };
 
+/*
+ * Container service
+ *
+ * Identified by a number unique within the pool.
+ */
 struct cont_svc {
 	uuid_t			cs_pool_uuid;
 	uint64_t		cs_id;
@@ -87,7 +88,7 @@ struct cont_svc {
 	struct ds_pool	       *cs_pool;
 
 	/* Manage the EC aggregation epoch */
-	struct sched_request	*cs_ec_leader_ephs_req;
+	struct sched_request   *cs_ec_leader_ephs_req;
 	d_list_t		cs_ec_agg_list; /* link cont_ec_agg */
 };
 
@@ -122,7 +123,7 @@ struct cont_iv_capa {
 
 /* flattened container properties */
 struct cont_iv_prop {
-	char		cip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char		cip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		cip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		cip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	uint64_t	cip_layout_type;
@@ -170,15 +171,12 @@ struct cont_iv_key {
 	uint32_t	entry_size;
 };
 
-/*
- * srv_container.c
- */
+/* srv_container.c */
 void ds_cont_op_handler(crt_rpc_t *rpc);
 void ds_cont_set_prop_handler(crt_rpc_t *rpc);
 int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 			 crt_opcode_t opcode, crt_rpc_t **rpc);
-int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
-			  uint64_t num_oids, uint64_t *oid);
+int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_t *oid);
 int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 			   struct cont_svc **svcp, struct rsvc_hint *hint);
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
@@ -196,19 +194,10 @@ int ds_cont_acl_delete(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		       crt_rpc_t *rpc);
 int ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 		     daos_prop_t **prop_out);
-
 int ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				  d_rank_t rank, daos_epoch_t eph);
-/*
- * srv_epoch.c
- */
-int ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont,
-			   uuid_t c_hdl, struct container_hdl *hdl);
-int ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
-			   crt_context_t ctx, struct container_hdl *hdl);
-int ds_cont_epoch_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			struct cont *cont, struct container_hdl *hdl,
-			crt_rpc_t *rpc);
+
+/* srv_epoch.c */
 int ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			struct cont *cont, struct container_hdl *hdl,
 			crt_rpc_t *rpc);
@@ -221,15 +210,11 @@ int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
 			 crt_rpc_t *rpc);
-int
-ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
-		      daos_epoch_t **snapshots, int *snap_count);
-void
-ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
+int ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid, daos_epoch_t **snapshots,
+			  int *snap_count);
+void ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
 
-/**
- * srv_target.c
- */
+/* srv_target.c */
 int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
 void ds_cont_tgt_destroy_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result,
@@ -251,7 +236,6 @@ void ds_cont_child_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct d_hash_table *hash);
 void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
-
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
 		     uint32_t status_pm_ver);
@@ -263,13 +247,13 @@ int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				daos_epoch_t eph);
 int ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint32_t pm_ver);
-/**
- * oid_iv.c
- */
+
+/* oid_iv.c */
 int ds_oid_iv_init(void);
 int ds_oid_iv_fini(void);
-int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
-		   uint64_t num_oids, d_sg_list_t *value);
+int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids,
+		   d_sg_list_t *value);
+int oid_iv_invalidate(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
 
 /* container_iv.c */
 int ds_cont_iv_init(void);
@@ -285,15 +269,16 @@ int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop);
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
 int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
+int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
+int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
+int cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
+
+/* srv_metrics.c*/
+void *ds_cont_metrics_alloc(const char *path, int tgt_id);
+void ds_cont_metrics_free(void *data);
+int ds_cont_metrics_count(void);
 
 int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
 			   daos_epoch_t epoch);
-
-int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
-int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
-
-/** srv_metrics.c*/
-void *ds_cont_metrics_alloc(const char *path, int tgt_id);
-void ds_cont_metrics_free(void *data);
 
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

@@ -26,6 +26,7 @@ container:
   data_size: 5
   object_qty: 10
   record_qty: 10
+  properties: rf:2
 rebuild:
   object_class: OC_RP_3G1
   rank:

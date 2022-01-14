@@ -7,14 +7,23 @@
 package server
 
 import (
+	"context"
+	"fmt"
 	"net"
+	"os/user"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type mockInterface struct {
@@ -94,6 +103,8 @@ func TestServer_checkFabricInterface(t *testing.T) {
 }
 
 func TestServer_getSrxSetting(t *testing.T) {
+	defCfg := config.DefaultServer()
+
 	for name, tc := range map[string]struct {
 		cfg        *config.Server
 		expSetting int32
@@ -103,92 +114,92 @@ func TestServer_getSrxSetting(t *testing.T) {
 			cfg:        config.DefaultServer(),
 			expSetting: -1,
 		},
-		"not set": {
+		"not set defaults to cfg value": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig(),
-				engine.NewConfig(),
+				engine.MockConfig(),
+				engine.MockConfig(),
 			),
-			expSetting: -1,
+			expSetting: int32(common.BoolAsInt(!defCfg.Fabric.DisableSRX)),
 		},
 		"set to 0 in both (single)": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
 			),
 			expSetting: 0,
 		},
 		"set to 1 in both (single)": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
 			),
 			expSetting: 1,
 		},
 		"set to 0 in both (multi)": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
 			),
 			expSetting: 0,
 		},
 		"set to 1 in both (multi)": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
-				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
 			),
 			expSetting: 1,
 		},
 		"set twice; first value used": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0", "FI_OFI_RXM_USE_SRX=1"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0", "FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"set in both; different values": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"set in first; no vars in second": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig(),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig(),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"no vars in first; set in second": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig(),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig(),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"set in first; unset in second": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
-				engine.NewConfig().WithEnvVars("FOO=bar"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FOO=bar"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"unset in first; set in second": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FOO=bar"),
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
+				engine.MockConfig().WithEnvVars("FOO=bar"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"wonky value": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=on"),
+				engine.MockConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=on"),
 			),
-			expSetting: -1,
+			expErr: errors.New("on"),
 		},
 		"set in env_pass_through": {
 			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().WithEnvPassThrough("FI_OFI_RXM_USE_SRX"),
+				engine.MockConfig().WithEnvPassThrough("FI_OFI_RXM_USE_SRX"),
 			),
 			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
@@ -201,6 +212,167 @@ func TestServer_getSrxSetting(t *testing.T) {
 			}
 
 			common.AssertEqual(t, tc.expSetting, gotSetting, "unexpected SRX setting")
+		})
+	}
+}
+
+func TestServer_prepBdevStorage(t *testing.T) {
+	usrCurrent, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	username := usrCurrent.Username
+
+	for name, tc := range map[string]struct {
+		enableVMD     bool
+		bmbc          *bdev.MockBackendConfig
+		smbc          *scm.MockBackendConfig
+		allowList     []string
+		blockList     []string
+		expErr        error
+		expPrepCalls  []storage.BdevPrepareRequest
+		expResetCalls []storage.BdevPrepareRequest
+	}{
+		"nvme prep succeeds; user params": {
+			allowList: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			blockList: []string{common.MockPCIAddr(1)},
+			// with reset set to false in request, two calls will be made to
+			// bdev backend prepare, one to reset device bindings and hugepage
+			// allocations and another to set them as requested
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					Reset_:        true,
+					HugePageCount: minHugePageCount,
+					TargetUser:    username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+					PCIBlockList: common.MockPCIAddr(1),
+				},
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					HugePageCount: minHugePageCount,
+					TargetUser:    username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+					PCIBlockList: common.MockPCIAddr(1),
+				},
+			},
+		},
+		"nvme prep fails; user params": {
+			allowList: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			blockList: []string{common.MockPCIAddr(1)},
+			bmbc: &bdev.MockBackendConfig{
+				PrepareErr: errors.New("backed prep setup failed"),
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					Reset_:        true,
+					HugePageCount: minHugePageCount,
+					TargetUser:    username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+					PCIBlockList: common.MockPCIAddr(1),
+				},
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					HugePageCount: minHugePageCount,
+					TargetUser:    username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+					PCIBlockList: common.MockPCIAddr(1),
+				},
+			},
+		},
+		"nvme reset fails; user params": {
+			allowList: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			blockList: []string{common.MockPCIAddr(1)},
+			bmbc: &bdev.MockBackendConfig{
+				ResetErr: errors.New("backed prep setup failed"),
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					Reset_:        true,
+					HugePageCount: minHugePageCount,
+					TargetUser:    username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+					PCIBlockList: common.MockPCIAddr(1),
+				},
+			},
+		},
+		"nvme prep succeeds; user params; vmd enabled": {
+			enableVMD: true,
+			allowList: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			blockList: []string{common.MockPCIAddr(1)},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					Reset_:        true,
+					EnableVMD:     true,
+					HugePageCount: minHugePageCount,
+					TargetUser:    username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+					PCIBlockList: common.MockPCIAddr(1),
+				},
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					EnableVMD:     true,
+					HugePageCount: minHugePageCount,
+					TargetUser:    username,
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+					PCIBlockList: common.MockPCIAddr(1),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			cfg := &config.Server{
+				BdevExclude: tc.blockList,
+				BdevInclude: tc.allowList,
+				EnableVMD:   tc.enableVMD,
+			}
+			srv, err := newServer(context.TODO(), log, cfg, &system.FaultDomain{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			mbb := bdev.NewMockBackend(tc.bmbc)
+			mbp := bdev.NewProvider(log, mbb)
+			sp := scm.NewMockSysProvider(log, nil)
+
+			srv.ctlSvc = &ControlService{
+				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
+					sp,
+					scm.NewProvider(log, scm.NewMockBackend(nil), sp),
+					mbp),
+				srvCfg: cfg,
+			}
+
+			gotErr := prepBdevStorage(srv, true, common.GetHugePageInfo)
+
+			mbb.RLock()
+			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls); diff != "" {
+				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+			}
+			mbb.RUnlock()
+
+			mbb.RLock()
+			if diff := cmp.Diff(tc.expResetCalls, mbb.ResetCalls); diff != "" {
+				t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
+			}
+			mbb.RUnlock()
+
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
 		})
 	}
 }

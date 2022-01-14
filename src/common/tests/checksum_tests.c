@@ -1735,6 +1735,7 @@ test_ci_serialize(void **state)
 	uint64_t		csum_buf = 0x1234567890ABCDEF;
 	uint8_t			iov_buf[iov_buf_len];
 	d_iov_t			iov = {0};
+	int			rc;
 	struct dcs_csum_info	*actual = NULL;
 	struct dcs_csum_info	expected = {
 		.cs_csum = (uint8_t *)&csum_buf,
@@ -1747,7 +1748,8 @@ test_ci_serialize(void **state)
 
 	iov.iov_buf = iov_buf;
 	iov.iov_buf_len = iov_buf_len;
-	ci_serialize(&expected, &iov);
+	rc = ci_serialize(&expected, &iov);
+	assert_rc_equal(rc, 0);
 
 	ci_cast(&actual, &iov);
 	assert_ci_equal(expected, *actual);

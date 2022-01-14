@@ -34,6 +34,8 @@ message ScmNamespace {
 		string path = 1;
 		uint64 total_bytes = 2;
 		uint64 avail_bytes = 3;
+		repeated string device_list = 4;
+		string class = 5;
 	}
 	string uuid = 1;
 	string blockdev = 2;

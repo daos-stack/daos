@@ -28,28 +28,30 @@ hint_update(struct vea_hint_context *hint, uint64_t off, uint64_t *seq)
 	}
 }
 
+static inline bool
+is_rsrv_interleaved(uint64_t seq_min, uint64_t seq_max, unsigned int seq_cnt)
+{
+	unsigned int diff = seq_max - seq_min + 1;
+
+	D_ASSERTF(diff >= seq_cnt, "["DF_U64", "DF_U64"] %u\n",
+		  seq_min, seq_max, seq_cnt);
+	return diff > seq_cnt;
+}
+
 int
 hint_cancel(struct vea_hint_context *hint, uint64_t off, uint64_t seq_min,
-	    uint64_t seq_max)
+	    uint64_t seq_max, unsigned int seq_cnt)
 {
 	if (hint == NULL)
 		return 0;
 
 	D_ASSERT(hint->vhc_pd != NULL);
-	if (hint->vhc_pd->vhd_seq > seq_max) {
+	if (hint->vhc_seq == seq_max &&
+	    !is_rsrv_interleaved(seq_min, seq_max, seq_cnt)) {
 		/*
-		 * Subsequent reserve was already published, abort cancel.
-		 * It will result in un-allocated hole for the I/O stream.
+		 * This is the last reserve, and no interleaved reserve, revert
+		 * the hint offset to the first offset with min sequence.
 		 */
-		return 0;
-	} else if (hint->vhc_pd->vhd_seq > seq_min) {
-		D_ERROR("unexpected persistent hint "DF_U64" > "DF_U64"\n",
-			hint->vhc_pd->vhd_seq, seq_min);
-		return -DER_INVAL;
-	}
-
-	if (hint->vhc_seq == seq_max) {
-		/* This is the last reserve, revert the hint offset. */
 		hint->vhc_off = off;
 		return 0;
 	} else if (hint->vhc_seq > seq_max) {
@@ -61,15 +63,16 @@ hint_cancel(struct vea_hint_context *hint, uint64_t off, uint64_t seq_min,
 		return 0;
 	}
 
-	D_ERROR("unexpected transient hint "DF_U64" ["DF_U64", "DF_U64"]\n",
-		hint->vhc_seq, seq_min, seq_max);
+	D_ERROR("unexpected transient hint "DF_U64" ["DF_U64", "DF_U64"] %u\n",
+		hint->vhc_seq, seq_min, seq_max, seq_cnt);
 
 	return -DER_INVAL;
 }
 
 int
 hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
-		uint64_t off, uint64_t seq_min, uint64_t seq_max)
+		uint64_t off, uint64_t seq_min, uint64_t seq_max,
+		unsigned int seq_cnt)
 {
 	int	rc;
 
@@ -80,10 +83,16 @@ hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
 		return 0;
 
 	D_ASSERT(hint->vhc_pd != NULL);
+
+	if (hint->vhc_pd->vhd_seq == seq_min ||
+	    hint->vhc_pd->vhd_seq == seq_max)
+		goto error;
+
 	if (hint->vhc_pd->vhd_seq > seq_max) {
 		/* Subsequent reserve is already published */
 		return 0;
-	} else if (hint->vhc_pd->vhd_seq < seq_min) {
+	} else if (hint->vhc_pd->vhd_seq < seq_min ||
+		   is_rsrv_interleaved(seq_min, seq_max, seq_cnt)) {
 		rc = umem_tx_add_ptr(umm, hint->vhc_pd, sizeof(*hint->vhc_pd));
 		if (rc != 0)
 			return rc;
@@ -92,9 +101,9 @@ hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
 		hint->vhc_pd->vhd_seq = seq_max;
 		return 0;
 	}
-
-	D_ERROR("unexpected persistent hint "DF_U64", ["DF_U64", "DF_U64"]\n",
-		hint->vhc_pd->vhd_seq, seq_min, seq_max);
+error:
+	D_ERROR("unexpected persistent hint "DF_U64" ["DF_U64", "DF_U64"] %u\n",
+		hint->vhc_pd->vhd_seq, seq_min, seq_max, seq_cnt);
 
 	return -DER_INVAL;
 }

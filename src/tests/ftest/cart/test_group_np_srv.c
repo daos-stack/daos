@@ -20,7 +20,7 @@
 
 /* Callback to process a SWIM message */
 static void
-swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+swim_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		  enum crt_event_type type, void *arg)
 {
 	int maxlen;

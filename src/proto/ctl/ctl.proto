@@ -14,6 +14,7 @@ import "ctl/network.proto";
 import "ctl/firmware.proto";
 import "ctl/smd.proto";
 import "ctl/ranks.proto";
+import "ctl/server.proto";
 
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS system and server hardware.
@@ -33,6 +34,8 @@ service CtlSvc {
 	rpc FirmwareUpdate(FirmwareUpdateReq) returns (FirmwareUpdateResp) {};
 	// Query the per-server metadata
 	rpc SmdQuery(SmdQueryReq) returns (SmdQueryResp) {}
+	// Set log level for DAOS I/O Engines on a host.
+	rpc SetEngineLogMasks(SetLogMasksReq) returns (SetLogMasksResp) {}
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)
 	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)
