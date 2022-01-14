@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# Install Intel OneAPI and the DAOS Client
+# Install DAOS Server
 #
 
 set -e
 trap 'echo "An unexpected error occurred. Exiting."' ERR
 
 # DAOS_VERSION must be set before running this script
-if [[ -z $DAOS_VERSION ]]; then
+if [ -z "$DAOS_VERSION" ];then
     echo "DAOS_VERSION not set. Exiting."
     exit 1
 fi
@@ -26,22 +26,8 @@ yum clean all
 yum makecache
 yum update -y
 
-log "Installing Intel oneAPI MPI"
-
-# Install Intel MPI from Intel oneAPI package
-cat > /etc/yum.repos.d/oneAPI.repo <<EOF
-[oneAPI]
-name=Intel(R) oneAPI repository
-baseurl=https://yum.repos.intel.com/oneapi
-enabled=1
-gpgcheck=1
-repo_gpgcheck=1
-gpgkey=https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-EOF
-
-yum install -y intel-oneapi-mpi intel-oneapi-mpi-devel
-
-# Determine which repo to use
+# Determine which official DAOS repo to use
+# Offical DAOS repos are located at https://packages.daos.io/
 . /etc/os-release
 OS_VERSION=$(echo "${VERSION_ID}" | cut -d. -f1)
 OS_VERSION_ID="${ID,,}_${OS_VERSION}"
@@ -69,16 +55,15 @@ protect=1
 gpgkey=https://packages.daos.io/RPM-GPG-KEY
 EOF
 
-# Install DAOS client packages
-log "Installing daos-client v${DAOS_VERSION}"
-yum install -y daos-client daos-devel
+log "Installing stackdriver-agent"
+curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh
+bash add-monitoring-agent-repo.sh
+yum install -y stackdriver-agent
 
-# Install some other software helpful for development
-# (e.g. to compile ior or fio)
-log "Installing additional packages needed on DAOS clients"
-yum install -y gcc git autoconf automake libuuid-devel devtoolset-9-gcc patch
+log "Installing daos-server v${DAOS_VERSION}"
+yum install -y daos-server
 
 # TODO:
 # - enable gvnic
 
-printf "\nDAOS client v${DAOS_VERSION} install complete!\n\n"
+printf "\nDAOS server v${DAOS_VERSION} install complete!\n\n"

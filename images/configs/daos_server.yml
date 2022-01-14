@@ -3,24 +3,29 @@ transport_config:
   allow_insecure: true
 provider: ofi+tcp;ofi_rxm
 disable_vfio: true
-crt_timeout: 200
+crt_timeout: 300
+nr_hugepages: 4096
+control_log_file: /var/daos/daos_server.log
 
 engines:
 -
    targets: 8
    nr_xs_helpers: 0
    first_core: 1
-   fabric_iface_port: 31316
+   bypass_health_chk: true
    fabric_iface: eth0
+   fabric_iface_port: 31316
    log_mask: ERR
    log_file: /var/daos/engine.log
 
    env_vars:
       - FI_OFI_RXM_DEF_TCP_WAIT_OBJ=pollfd
 
-   scm_mount: /var/daos/ram
-   scm_class: ram
-   scm_size: 100
-
-   bdev_class: nvme
-   bdev_list: ["0000:00:04.0"]
+   storage:
+   -
+      scm_mount: /var/daos/ram
+      class: ram
+      scm_size: 100
+   -
+      class: nvme
+      bdev_list: ["0000:00:04.0"]

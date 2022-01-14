@@ -18,7 +18,7 @@ readonly yaml_path="/etc/daos"
 readonly meta_path="/usr/share/daos/gcp_metadata.sh"
 readonly systemd_file="/usr/lib/systemd/system/daos_server.service"
 
-echo "Setting up DAOS version ${DAOS_VERSION}"
+echo "Setting up DAOS server version ${DAOS_VERSION}"
 
 # Template config files have been copied by packer to /tmp/daos_configs
 cp -f /tmp/configs/* ${yaml_path}

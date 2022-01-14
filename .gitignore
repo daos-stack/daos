@@ -17,6 +17,6 @@ terraform.tfvars
 
 # Ignore other files
 id_rsa*
-hosts
+hosts*
 *.flag
 keys.txt

@@ -26,7 +26,7 @@ update_sysctl()
   local value=$*
   echo "Updating sysctl key=$key, value=$value"
   touch $SYSCTL_CONF
-  local regex="'s/^\s*$key\s*=.*$/$key = $value/g'"
+  local regex="s/^\s*${key}\s*=.*$/${key} = ${value}/g"
   sed -i "$regex" "$SYSCTL_CONF"
   if ! grep -Fq "$key" "$SYSCTL_CONF"; then
     echo "sysctl $key not found, appending to $SYSCTL_CONF"
