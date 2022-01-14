@@ -201,7 +201,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				).
 				WithStorageEnableHotplug(tc.enableHotplug)
 
-			gotValidateErr := engineConfig.Validate(context.TODO(), log) // populate output path
+			gotValidateErr := engineConfig.Validate(log) // populate output path
 			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
 			if tc.expValidateErr != nil {
 				return

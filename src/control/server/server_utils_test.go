@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"os/user"
@@ -231,7 +230,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		bdevsInCfg    bool
 		hugePageCount int
 		hugePagesFree int
-		hpiErr        error
 		allowList     []string
 		blockList     []string
 		expErr        error
@@ -394,7 +392,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					))
 			}
 
-			srv, err := newServer(context.TODO(), log, cfg, &system.FaultDomain{})
+			srv, err := newServer(log, cfg, &system.FaultDomain{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -411,14 +409,12 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				srvCfg: cfg,
 			}
 
-			mockGetHugePageInfo := func() (*common.HugePageInfo, error) {
-				return &common.HugePageInfo{
-					PageSizeKb: 2048,
-					Free:       tc.hugePagesFree,
-				}, tc.hpiErr
+			hpi := &common.HugePageInfo{
+				PageSizeKb: 2048,
+				Free:       tc.hugePagesFree,
 			}
 
-			gotErr := prepBdevStorage(srv, true, mockGetHugePageInfo)
+			gotErr := prepBdevStorage(srv, true, hpi)
 
 			mbb.RLock()
 			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls); diff != "" {

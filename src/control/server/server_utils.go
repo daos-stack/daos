@@ -106,7 +106,7 @@ func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.
-func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Config, fis *hardware.FabricInterfaceSet) error {
+func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.FabricInterfaceSet) error {
 	// In the case of some providers, mercury uses the interface name
 	// such as ib0, while OFI uses the device name such as hfi1_0 CaRT and
 	// Mercury will now support the new OFI_DOMAIN environment variable so
@@ -146,7 +146,7 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) error {
 	hasBdevs := cfgHasBdevs(srv.cfg)
 
 	if hasBdevs {
@@ -189,10 +189,10 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 	}
 
 	if hasBdevs {
-		// Use default value if bdevs have been configured but nr_hugepages unset in config.
-		if srv.cfg.NrHugepages < 0 {
-			srv.cfg.NrHugepages = 4096
-		}
+		//	// Use default value if bdevs have been configured but nr_hugepages unset in config.
+		//	if srv.cfg.NrHugepages < 0 {
+		//		srv.cfg.NrHugepages = 4096
+		//	}
 
 		prepReq.HugePageCount = srv.cfg.NrHugepages
 
@@ -226,29 +226,22 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}
 
-	hugePages, err := hpiGetter()
-	if err != nil {
-		return errors.Wrap(err, "unable to read system hugepage info")
+	// Double-check that we got the requested number of huge pages after prepare.
+	if hpi.Free < prepReq.HugePageCount {
+		return FaultInsufficientFreeHugePages(hpi.Free, prepReq.HugePageCount)
 	}
 
-	// Double-check that we got the requested number of huge pages after prepare.
-	if srv.cfg.NrHugepages > 0 && hugePages.Free < prepReq.HugePageCount {
-		return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
-	}
+	// Calculate mem_size per I/O engine (in MB)
+	pageSizeMb := hpi.PageSizeKb >> 10
+	memSizeMb := (hpi.Free / len(srv.cfg.Engines)) * pageSizeMb
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeMb, pageSizeMb)
 
 	for _, engineCfg := range srv.cfg.Engines {
-		// Calculate mem_size per I/O engine (in MB)
-		PageSizeMb := hugePages.PageSizeKb >> 10
-		engineCfg.MemSize = srv.cfg.NrHugepages
-		engineCfg.MemSize *= PageSizeMb
+		engineCfg.MemSize = memSizeMb
 		// Pass hugepage size, do not assume 2MB is used
-		engineCfg.HugePageSz = PageSizeMb
-		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
+		engineCfg.HugePageSz = pageSizeMb
 		// Warn if hugepages are not enough to sustain average
-		// I/O workload (~1GB), ignore warning if using SCM backend with 0 hugepages
-		if !hasBdevs && engineCfg.MemSize == 0 {
-			continue
-		}
+		// I/O workload (~1GB).
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
 			srv.log.Errorf("Not enough hugepages are allocated!")
 		}

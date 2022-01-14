@@ -16,17 +16,9 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
-const (
-	defaultExcludeInterfaces = "lo"
-)
-
 // NetworkScan retrieves details of network interfaces on remote hosts.
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
 	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
-	excludes := req.GetExcludeinterfaces()
-	if excludes == "" {
-		excludes = defaultExcludeInterfaces
-	}
 
 	provider := c.srvCfg.Fabric.Provider
 	switch {

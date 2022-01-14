@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package engine
 
 import (
-	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -171,17 +170,17 @@ func NewConfig() *Config {
 }
 
 // ValidateFabric validates the fabric configuration against actual fabric devices and NUMA config.
-func (c *Config) ValidateFabric(ctx context.Context, log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+func (c *Config) ValidateFabric(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+	return errors.Wrap(c.setAffinity(log, fis), "setting numa affinity for engine")
+}
+
+// setAffinity ensures engine NUMA locality is assigned and valid.
+func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
 	fi, err := fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
 	if err != nil {
 		return err
 	}
 
-	return errors.Wrap(c.setAffinity(ctx, log, fi), "setting numa affinity for engine")
-}
-
-// setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(ctx context.Context, log logging.Logger, fi *hardware.FabricInterface) error {
 	ifaceNumaNode := fi.NUMANode
 
 	if c.PinnedNumaNode != nil {
@@ -205,7 +204,7 @@ func (c *Config) setAffinity(ctx context.Context, log logging.Logger, fi *hardwa
 }
 
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
+func (c *Config) Validate(log logging.Logger) error {
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}

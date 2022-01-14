@@ -7,7 +7,6 @@
 package engine
 
 import (
-	"context"
 	"flag"
 	"os"
 	"path/filepath"
@@ -291,7 +290,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate(log))
 		})
 	}
 }
@@ -419,7 +418,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate(log))
 			if tc.expErr != nil {
 				return
 			}
@@ -448,7 +447,7 @@ func TestConfig_Validation(t *testing.T) {
 
 	bad := MockConfig()
 
-	if err := bad.Validate(context.TODO(), log); err == nil {
+	if err := bad.Validate(log); err == nil {
 		t.Fatal("expected empty config to fail validation")
 	}
 
@@ -463,7 +462,7 @@ func TestConfig_Validation(t *testing.T) {
 				WithScmMountPoint("/foo/bar"),
 		)
 
-	if err := good.Validate(context.TODO(), log); err != nil {
+	if err := good.Validate(log); err != nil {
 		t.Fatalf("expected %#v to validate; got %s", good, err)
 	}
 }
@@ -612,10 +611,14 @@ func TestConfig_setAffinity(t *testing.T) {
 	}{
 		"numa pinned; matching iface": {
 			cfg: MockConfig().
-				WithPinnedNumaNode(1),
+				WithPinnedNumaNode(1).
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:     "ib0",
-				NUMANode: 1,
+				Name:      "ib1",
+				OSDevice:  "ib1",
+				NUMANode:  1,
+				Providers: common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
@@ -623,18 +626,26 @@ func TestConfig_setAffinity(t *testing.T) {
 		//       but there might be legitimate use cases e.g. sharing interface
 		"numa pinned; not matching iface": {
 			cfg: MockConfig().
-				WithPinnedNumaNode(1),
+				WithPinnedNumaNode(1).
+				WithFabricInterface("ib2").
+				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:     "ib0",
-				NUMANode: 2,
+				Name:      "ib2",
+				OSDevice:  "ib2",
+				NUMANode:  2,
+				Providers: common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
 		"numa not pinned": {
-			cfg: MockConfig(),
+			cfg: MockConfig().
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:     "ib0",
-				NUMANode: 1,
+				Name:      "ib1",
+				OSDevice:  "ib1",
+				NUMANode:  1,
+				Providers: common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
@@ -643,7 +654,9 @@ func TestConfig_setAffinity(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			err := tc.cfg.setAffinity(context.TODO(), log, tc.fi)
+			fis := hardware.NewFabricInterfaceSet(tc.fi)
+
+			err := tc.cfg.setAffinity(log, fis)
 			common.CmpErr(t, tc.expErr, err)
 
 			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
@@ -692,7 +705,7 @@ func TestConfig_ValidateFabric(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			err := tc.cfg.ValidateFabric(context.Background(), log, tc.fis)
+			err := tc.cfg.ValidateFabric(log, tc.fis)
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}

@@ -35,9 +35,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
-	err := cfg.Validate(ctx, log)
-	if err != nil {
+func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet, hpi *common.HugePageInfo) (*system.FaultDomain, error) {
+	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
@@ -49,7 +48,7 @@ func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.
 		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
-		if err := ec.ValidateFabric(ctx, log, fis); err != nil {
+		if err := ec.ValidateFabric(log, fis); err != nil {
 			return nil, err
 		}
 
@@ -57,7 +56,7 @@ func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.
 			return nil, err
 		}
 
-		if err := updateFabricEnvars(ctx, log, ec, fis); err != nil {
+		if err := updateFabricEnvars(log, ec, fis); err != nil {
 			return nil, errors.Wrap(err, "update engine fabric envars")
 		}
 	}
@@ -103,7 +102,7 @@ type server struct {
 	onShutdown       []func()
 }
 
-func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
+func newServer(log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, errors.Wrap(err, "get hostname")
@@ -198,9 +197,8 @@ func (srv *server) shutdown() {
 	}
 }
 
-// initNetwork resolves local address and starts TCP listener then calls
-// netInit to process network configuration.
-func (srv *server) initNetwork(ctx context.Context) error {
+// initNetwork resolves local address and starts TCP listener.
+func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
 
 	ctlAddr, listener, err := createListener(srv.cfg.ControlPort, net.ResolveTCPAddr, net.Listen)
@@ -213,10 +211,10 @@ func (srv *server) initNetwork(ctx context.Context) error {
 	return nil
 }
 
-func (srv *server) initStorage() error {
+func (srv *server) initStorage(hpi *common.HugePageInfo) error {
 	defer srv.logDuration(track("time to init storage"))
 
-	if err := prepBdevStorage(srv, iommuDetected(), common.GetHugePageInfo); err != nil {
+	if err := prepBdevStorage(srv, iommuDetected(), hpi); err != nil {
 		return err
 	}
 
@@ -426,12 +424,17 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return errors.Wrap(err, "scan fabric")
 	}
 
-	faultDomain, err := processConfig(ctx, log, cfg, fiSet)
+	hpi, err := common.GetHugePageInfo()
 	if err != nil {
 		return err
 	}
 
-	srv, err := newServer(ctx, log, cfg, faultDomain)
+	faultDomain, err := processConfig(log, cfg, fiSet, hpi)
+	if err != nil {
+		return err
+	}
+
+	srv, err := newServer(log, cfg, faultDomain)
 	if err != nil {
 		return err
 	}
@@ -445,11 +448,11 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return err
 	}
 
-	if err := srv.initNetwork(ctx); err != nil {
+	if err := srv.initNetwork(); err != nil {
 		return err
 	}
 
-	if err := srv.initStorage(); err != nil {
+	if err := srv.initStorage(hpi); err != nil {
 		return err
 	}
 
