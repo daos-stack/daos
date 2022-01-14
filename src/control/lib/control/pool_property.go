@@ -19,6 +19,12 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
+/*
+#include <daos/object.h>
+#include <daos/cont_props.h>
+*/
+import "C"
+
 // PoolProperties returns a map of property names to handlers
 // for processing property values.
 func PoolProperties() PoolPropertyMap {
@@ -101,9 +107,10 @@ func PoolProperties() PoolPropertyMap {
 				Description: "EC cell size",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					b, err := humanize.ParseBytes(s)
-					if err != nil {
+					if err != nil || !C.daos_ec_cs_valid(C.uint32_t(b)) {
 						return nil, errors.Errorf("invalid EC Cell size %q", s)
 					}
+
 					return &PoolPropertyValue{b}, nil
 				},
 				valueStringer: func(v *PoolPropertyValue) string {
@@ -122,8 +129,8 @@ func PoolProperties() PoolPropertyMap {
 				Description: "Performance domain affinity level of EC",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					ecpdaErr := errors.Errorf("invalid ec_pda value %s", s)
-					pdaPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
-					if err != nil {
+					pdaPct, err := strconv.ParseUint(s, 10, 64)
+					if err != nil || !C.daos_ec_pda_valid(C.uint32_t(pdaPct)) {
 						return nil, ecpdaErr
 					}
 					return &PoolPropertyValue{pdaPct}, nil
@@ -145,7 +152,7 @@ func PoolProperties() PoolPropertyMap {
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rppdaErr := errors.Errorf("invalid rp_pda value %s", s)
 					pdaPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
-					if err != nil {
+					if err != nil || !C.daos_ec_pda_valid(C.uint32_t(pdaPct)) {
 						return nil, rppdaErr
 					}
 					return &PoolPropertyValue{pdaPct}, nil

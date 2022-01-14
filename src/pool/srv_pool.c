@@ -330,14 +330,14 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 					   &value);
 			break;
 		case DAOS_PROP_PO_EC_CELL_SZ:
-			if (entry->dpe_val < DAOS_PROP_PO_EC_CELL_SZ_MIN ||
-			    entry->dpe_val > DAOS_PROP_PO_EC_CELL_SZ_MAX) {
+			if (!daos_ec_cs_valid(entry->dpe_val)) {
 				D_ERROR("DAOS_PROP_PO_EC_CELL_SZ property value"
 					" "DF_U64" should within rage of "
-					"["DF_U64", "DF_U64"].\n",
+					"["DF_U64", "DF_U64"] and multiplier of "DF_U64"\n",
 					entry->dpe_val,
 					DAOS_PROP_PO_EC_CELL_SZ_MIN,
-					DAOS_PROP_PO_EC_CELL_SZ_MAX);
+					DAOS_PROP_PO_EC_CELL_SZ_MAX,
+					DAOS_PROP_PO_EC_CELL_SZ_MIN);
 				rc = -DER_INVAL;
 				break;
 			}
@@ -349,12 +349,20 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 		case DAOS_PROP_PO_SVC_LIST:
 			break;
 		case DAOS_PROP_PO_EC_PDA:
+			if (!daos_ec_pda_valid(entry->dpe_val)) {
+				rc = -DER_INVAL;
+				break;
+			}
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_ec_pda,
 					   &value);
 			break;
 		case DAOS_PROP_PO_RP_PDA:
+			if (!daos_rp_pda_valid(entry->dpe_val)) {
+				rc = -DER_INVAL;
+				break;
+			}
 			d_iov_set(&value, &entry->dpe_val,
 				   sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_rp_pda,
