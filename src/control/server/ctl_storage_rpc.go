@@ -100,6 +100,7 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 		return newScanNvmeResp(req, resp, err)
 	}
 
+	c.log.Debugf("scanning only bdevs in cfg")
 	resp, err := c.scanAssignedBdevs(ctx, req.GetHealth() || req.GetMeta())
 
 	return newScanNvmeResp(req, resp, err)
@@ -201,37 +202,45 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		}(ei)
 	}
 
-	instanceErrored := make(map[uint32]bool)
+	instanceErrored := make(map[uint32]string)
 	for formatting > 0 {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case scmResult := <-scmChan:
 			formatting--
-			if scmResult.GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-				instanceErrored[scmResult.GetInstanceidx()] = true
+			state := scmResult.GetState()
+			if state.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+				instanceErrored[scmResult.GetInstanceidx()] = state.GetError()
 			}
 			resp.Mrets = append(resp.Mrets, scmResult)
 		}
 	}
 
-	var err error
+	// allow format to complete on one instance even if another fail
 	// TODO: perform bdev format in parallel
 	for _, ei := range instances {
-		if instanceErrored[ei.Index()] {
+		if _, hasError := instanceErrored[ei.Index()]; hasError {
 			// if scm errored, indicate skipping bdev format
 			ret := ei.newCret("", nil)
 			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)
 			continue
 		}
+
 		// SCM formatted correctly on this instance, format NVMe
 		cResults := ei.StorageFormatNVMe()
 		if cResults.HasErrors() {
-			instanceErrored[ei.Index()] = true
-		} else {
-			err = ei.StorageWriteNvmeConfig()
+			instanceErrored[ei.Index()] = cResults.Errors()
+			resp.Crets = append(resp.Crets, cResults...)
+			continue
 		}
+
+		if err := ei.StorageWriteNvmeConfig(ctx); err != nil {
+			instanceErrored[ei.Index()] = err.Error()
+			cResults = append(cResults, ei.newCret("", err))
+		}
+
 		resp.Crets = append(resp.Crets, cResults...)
 	}
 
@@ -239,14 +248,13 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// Block until all instances have formatted NVMe to avoid
 	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
-	// TODO: supply allowlist of instance.Devs to init() on format.
 	for _, ei := range instances {
-		if instanceErrored[ei.Index()] {
-			c.log.Errorf(msgFormatErr, ei.Index())
+		if msg, hasError := instanceErrored[ei.Index()]; hasError {
+			c.log.Errorf("instance %d: %s", ei.Index(), msg)
 			continue
 		}
 		ei.NotifyStorageReady()
 	}
 
-	return resp, err
+	return resp, nil
 }

@@ -144,7 +144,7 @@ ior_harasser:
         - MPIIO
         - POSIX
         - HDF5
-    test_file: daos:testFile
+    test_file: daos:/testFile
     flags: -v -w -W -r -R -F -k
     block_size:
         - '64M'

@@ -4,7 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=pylint-too-many-lines
+# pylint: disable=too-many-lines
+# pylint: disable=raise-missing-from
 
 # pylint: disable=relative-beyond-top-level
 from .. import pydaos_shim
@@ -89,8 +90,7 @@ class DaosPool():
                 self.handle = 0
                 raise DaosApiError("Pool connect returned non-zero. "
                                    "RC: {0}".format(ret))
-            else:
-                self.connected = 1
+            self.connected = 1
         else:
             event = daos_cref.DaosEvent()
             params = [self.uuid, self.group, c_flags,
@@ -111,8 +111,7 @@ class DaosPool():
             if ret != 0:
                 raise DaosApiError("Pool disconnect returned non-zero. RC: {0}"
                                    .format(ret))
-            else:
-                self.connected = 0
+            self.connected = 0
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, event]
@@ -145,6 +144,7 @@ class DaosPool():
         return c_glob.iov_len, c_glob.iov_buf_len, buf
 
     def global2local(self, context, iov_len, buf_len, buf):
+        # pylint: disable=unused-argument
         """Convert a global pool handle to local."""
         func = self.context.get_function("convert-pglobal")
 
@@ -199,17 +199,17 @@ class DaosPool():
                 raise DaosApiError("Pool query returned non-zero. RC: {0}"
                                    .format(ret))
             return self.pool_info
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.handle, None, ctypes.byref(self.pool_info), None,
-                      event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
+
+        event = daos_cref.DaosEvent()
+        params = [self.handle, None, ctypes.byref(self.pool_info), None,
+                  event]
+        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+                                  args=(func,
+                                        params,
+                                        self.context,
+                                        cb_func,
+                                        self))
+        thread.start()
         return None
 
     def target_query(self, tgt):
@@ -377,6 +377,7 @@ class DaosPool():
 
         return results
 
+    # pylint: disable=unused-private-member
     @staticmethod
     def __pylist_to_array(pylist):
         """Convert a python list into an array."""
@@ -406,9 +407,6 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_R1S_SPEC_RANK = 19
     DAOS_OC_R2S_SPEC_RANK = 20
     DAOS_OC_R3S_SPEC_RANK = 21
-    DAOS_OC_EC_K2P1_L32K = 22
-    DAOS_OC_EC_K2P2_L32K = 23
-    DAOS_OC_EC_K4P2_L32K = 24
 
 
 # pylint: disable=no-member
@@ -794,7 +792,6 @@ class IORequest():
 
     def __del__(self):
         """Cleanup this request."""
-        pass
 
     def insert_array(self, dkey, akey, c_data, txn=daos_cref.DAOS_TX_NONE):
         """Set up the I/O Vector and I/O descriptor for an array insertion.
@@ -1455,6 +1452,7 @@ class DaosContainer():
         """Return C representation of Python string."""
         return conversion.c_uuid_to_str(self.uuid)
 
+    # pylint: disable=too-many-branches
     def create(self, poh, con_uuid=None, con_prop=None, cb_func=None):
         """Send a container creation request to the daos server group."""
         # create a random uuid if none is provided
@@ -1508,7 +1506,8 @@ class DaosContainer():
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
             else:
-                # TODO: This should ideally fail.
+                # TODO:                              # pylint: disable=W0511
+                # This should ideally fail.
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKNOWN.value)
             idx = idx + 1
@@ -1552,8 +1551,7 @@ class DaosContainer():
                 self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise DaosApiError(
                     "Container create returned non-zero. RC: {0}".format(ret))
-            else:
-                self.attached = 1
+            self.attached = 1
         else:
             event = daos_cref.DaosEvent()
             if self.cont_prop is None:
@@ -1588,8 +1586,7 @@ class DaosContainer():
             if ret != 0:
                 raise DaosApiError("Container destroy returned non-zero. "
                                    "RC: {0}".format(ret))
-            else:
-                self.attached = 0
+            self.attached = 0
         else:
             event = daos_cref.DaosEvent()
             params = [self.poh, self.uuid, c_force, event]
@@ -1625,8 +1622,7 @@ class DaosContainer():
             if ret != 0:
                 raise DaosApiError("Container open returned non-zero. RC: {0}"
                                    .format(ret))
-            else:
-                self.opened = 1
+            self.opened = 1
         else:
             event = daos_cref.DaosEvent()
             params = [self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
@@ -1655,8 +1651,7 @@ class DaosContainer():
             if ret != 0:
                 raise DaosApiError("Container close returned non-zero. RC: {0}"
                                    .format(ret))
-            else:
-                self.opened = 0
+            self.opened = 0
         else:
             event = daos_cref.DaosEvent()
             params = [self.coh, event]
@@ -1682,16 +1677,14 @@ class DaosContainer():
                 raise DaosApiError("Container query returned non-zero. RC: {0}"
                                    .format(ret))
             return self.info
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.coh, ctypes.byref(self.info), None, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
+
+        event = daos_cref.DaosEvent()
+        params = [self.coh, ctypes.byref(self.info), None, event]
+        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+                                  args=(func, params, self.context,
+                                        cb_func, self))
+        thread.start()
+
         return None
 
     def get_new_tx(self):
@@ -1958,6 +1951,7 @@ class DaosContainer():
         return c_glob.iov_len, c_glob.iov_buf_len, buf
 
     def global2local(self, context, iov_len, buf_len, buf):
+        # pylint: disable=unused-argument
         """Convert a global container handle to a local handle."""
         func = self.context.get_function("convert-cglobal")
 
@@ -2300,7 +2294,7 @@ class DaosContext():
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
-            'generate-oid':    self.libdaos.daos_obj_generate_oid,
+            'generate-oid':    self.libdaos.daos_obj_generate_oid2,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,
@@ -2371,6 +2365,7 @@ class DaosLog:
         func = self.context.get_function("d_log")
 
         caller = inspect.getframeinfo(inspect.stack()[2][0])
+        # pylint: disable=protected-access
         caller_func = sys._getframe(1).f_back.f_code.co_name
         filename = os.path.basename(caller.filename)
 

@@ -122,6 +122,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			if (tgt_max_idx < tgt_idx)
 				tgt_max_idx = tgt_idx;
 		} else {
+			if (tgts[i].st_rank == DAOS_TGT_IGNORE)
+				continue;
 			D_ASSERT(tgts[i].st_shard >= start_shard);
 			tgt_idx = tgts[i].st_shard - start_shard;
 			D_ASSERT(tgt_idx <= tgt_max_idx);

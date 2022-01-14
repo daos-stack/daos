@@ -74,6 +74,7 @@ extern unsigned int dt_csum_type;
 extern unsigned int dt_csum_chunksize;
 extern bool dt_csum_server_verify;
 extern int  dt_obj_class;
+extern unsigned int dt_cell_size;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -265,8 +266,9 @@ int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
 static inline daos_obj_id_t
-daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
-		  daos_oclass_hints_t hints, unsigned seed)
+daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass,
+		  enum daos_otype_t type, daos_oclass_hints_t hints,
+		  unsigned int seed)
 {
 	daos_obj_id_t	oid;
 
@@ -275,9 +277,10 @@ daos_test_oid_gen(daos_handle_t coh, daos_oclass_id_t oclass, uint8_t ofeats,
 
 	oid = dts_oid_gen(seed);
 	if (daos_handle_is_valid(coh))
-		daos_obj_generate_oid(coh, &oid, ofeats, oclass, hints, 0);
+		daos_obj_generate_oid(coh, &oid, type, oclass, hints, 0);
 	else
-		daos_obj_set_oid(&oid, ofeats, oclass, 0);
+		daos_obj_set_oid(&oid, type, oclass >> 24,
+				 oclass - (oclass >> 24), 0);
 
 	return oid;
 }

@@ -612,7 +612,7 @@ example_daos_kv()
 	oid.hi = 0;
 	oid.lo = 4;
 	/** the KV API requires the flat feature flag be set in the oid */
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, OC_SX, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	ASSERT(rc == 0, "KV open failed with %d", rc);

@@ -63,11 +63,13 @@ message PoolEvictReq {
 	repeated string handles = 4; // Optional list of handles to evict (Mutually exclusive with destroy/force_destroy)
 	bool destroy = 5; // If true, evict is first step of a pool destroy operation
 	bool force_destroy = 6; // If true and destroy=true, forcibly closes open pool handles
+	string machine = 7; // Optional machine name to evict handles for (Mutually exclusive with handles)
 }
 
 // PoolEvictResp returns resultant state of evict operation.
 message PoolEvictResp {
 	int32 status = 1; // DAOS error code
+	int32 count = 2; // Count of handles evicted
 }
 
 // PoolExcludeReq supplies pool identifier, rank, and target_idxs.

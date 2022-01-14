@@ -60,7 +60,7 @@ init_tests(void **state)
 	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
 	srand(seed);
 
-	setenv("CRT_PHY_ADDR_STR", "ofi+sockets", 1);
+	setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
 	setenv("OFI_INTERFACE", "lo", 1);
 
 	return 0;

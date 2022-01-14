@@ -5,6 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
+import re
 from ClusterShell.NodeSet import NodeSet
 
 
@@ -54,6 +55,21 @@ class TelemetryUtils():
         "engine_events_last_event_ts",
         "engine_servicing_at",
         "engine_started_at"]
+    ENGINE_SCHED_METRICS = [
+        "engine_sched_total_time",
+        "engine_sched_relax_time",
+        "engine_sched_wait_queue",
+        "engine_sched_sleep_queue",
+        "engine_sched_cycle_duration",
+        "engine_sched_cycle_duration_max",
+        "engine_sched_cycle_duration_mean",
+        "engine_sched_cycle_duration_min",
+        "engine_sched_cycle_duration_stddev",
+        "engine_sched_cycle_size",
+        "engine_sched_cycle_size_max",
+        "engine_sched_cycle_size_mean",
+        "engine_sched_cycle_size_min",
+        "engine_sched_cycle_size_stddev"]
     ENGINE_IO_DTX_COMMITTABLE_METRICS = [
         "engine_io_dtx_committable",
         "engine_io_dtx_committable_max",
@@ -328,9 +344,9 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
-        "engine_net_ofi_sockets_failed_addr",
-        "engine_net_ofi_sockets_req_timeout",
-        "engine_net_ofi_sockets_uri_lookup_timeout",
+        "engine_net_<provider>_failed_addr",
+        "engine_net_<provider>_req_timeout",
+        "engine_net_<provider>_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
@@ -451,8 +467,8 @@ class TelemetryUtils():
 
         """
         all_metrics_names = list(self.ENGINE_EVENT_METRICS)
+        all_metrics_names.extend(self.ENGINE_SCHED_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
-        all_metrics_names.extend(self.ENGINE_NET_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
         all_metrics_names.extend(self.GO_METRICS)
         all_metrics_names.extend(self.PROCESS_METRICS)
@@ -460,14 +476,24 @@ class TelemetryUtils():
             all_metrics_names.extend(self.ENGINE_POOL_METRICS)
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)
 
+        # Add engine network metrics for the configured provider
+        try:
+            provider = re.sub("[+;]", "_", server.manager.job.get_config_value("provider"))
+            if provider == "ofi_tcp":
+                provider = "ofi_tcp_ofi_rxm"
+            elif provider == "ofi_verbs":
+                provider = "ofi_verbs_ofi_rxm"
+        except TypeError:
+            provider = "ofi_tcp_ofi_rxm"
+        net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
+        all_metrics_names.extend(net_metrics)
+
         # Add NVMe metrics for any NVMe devices configured for this server
         for nvme_list in server.manager.job.get_engine_values("bdev_list"):
             for nvme in nvme_list if nvme_list is not None else []:
                 # Replace the '<id>' placeholder with the actual NVMe ID
                 nvme_id = nvme.replace(":", "_").replace(".", "_")
-                nvme_metrics = [
-                    name.replace("<id>", nvme_id)
-                    for name in self.ENGINE_NVME_METRICS]
+                nvme_metrics = [name.replace("<id>", nvme_id) for name in self.ENGINE_NVME_METRICS]
                 all_metrics_names.extend(nvme_metrics)
 
         return all_metrics_names

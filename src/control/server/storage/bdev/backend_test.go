@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package bdev
 
 import (
@@ -21,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -37,6 +39,7 @@ func defCmpOpts() []cmp.Option {
 	return []cmp.Option{
 		// ignore these fields on most tests, as they are intentionally not stable
 		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
+		cmp.AllowUnexported(hardware.PCIAddressSet{}),
 	}
 }
 
@@ -73,6 +76,13 @@ func mockCtrlrsInclVMD() storage.NvmeControllers {
 	return bdevCtrlrs
 }
 
+func ctrlrsFromPCIAddrs(addrs ...string) (ncs storage.NvmeControllers) {
+	for _, addr := range addrs {
+		ncs = append(ncs, &storage.NvmeController{PciAddr: addr})
+	}
+	return
+}
+
 func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.MockNvmeCfg) *spdkBackend {
 	return &spdkBackend{
 		log: log,
@@ -80,6 +90,70 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 			Env:  &spdk.MockEnvImpl{Cfg: mec},
 			Nvme: &spdk.MockNvmeImpl{Cfg: mnc},
 		},
+	}
+}
+
+func TestBackend_groomDiscoveredBdevs(t *testing.T) {
+	ctrlr1 := storage.MockNvmeController(1)
+	ctrlr2 := storage.MockNvmeController(2)
+	ctrlr3 := storage.MockNvmeController(3)
+
+	for name, tc := range map[string]struct {
+		reqAddrList []string
+		vmdEnabled  bool
+		inCtrlrs    storage.NvmeControllers
+		expCtrlrs   storage.NvmeControllers
+		expErr      error
+	}{
+		"no controllers; no filter": {},
+		"no filter": {
+			inCtrlrs:  storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			expCtrlrs: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+		},
+		"filtered": {
+			reqAddrList: []string{ctrlr1.PciAddr, ctrlr3.PciAddr},
+			inCtrlrs:    storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
+			expCtrlrs:   storage.NvmeControllers{ctrlr1, ctrlr3},
+		},
+		"missing": {
+			reqAddrList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
+			inCtrlrs:    storage.NvmeControllers{ctrlr1, ctrlr3},
+			expErr:      FaultBdevNotFound(ctrlr2.PciAddr),
+		},
+		"vmd devices; vmd not enabled": {
+			reqAddrList: []string{"0000:85:05.5"},
+			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
+			expErr: FaultBdevNotFound("0000:85:05.5"),
+		},
+		"vmd devices; vmd enabled": {
+			vmdEnabled:  true,
+			reqAddrList: []string{"0000:85:05.5"},
+			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
+			expCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			reqAddrs, err := hardware.NewPCIAddressSet(tc.reqAddrList...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotCtrlrs, gotErr := groomDiscoveredBdevs(reqAddrs, tc.inCtrlrs, tc.vmdEnabled)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expCtrlrs, gotCtrlrs, defCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected controllers (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
 
@@ -139,6 +213,17 @@ func TestBackend_Format(t *testing.T) {
 
 	testDir, clean := common.CreateTestDir(t)
 	defer clean()
+
+	addrList := func(t *testing.T, in ...string) *hardware.PCIAddressSet {
+		t.Helper()
+
+		addrs, err := hardware.NewPCIAddressSet(in...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return addrs
+	}
 
 	for name, tc := range map[string]struct {
 		req         storage.BdevFormatRequest
@@ -239,7 +324,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1}},
+				{PCIAllowList: addrList(t, pci1)},
 			},
 		},
 		"multiple ssd and namespace success": {
@@ -273,7 +358,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1, pci2, pci3}},
+				{PCIAllowList: addrList(t, pci1, pci2, pci3)},
 			},
 		},
 		"two success and one failure": {
@@ -314,7 +399,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1, pci2, pci3}},
+				{PCIAllowList: addrList(t, pci1, pci2, pci3)},
 			},
 		},
 		"multiple namespaces on single controller success": {
@@ -340,7 +425,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1}},
+				{PCIAllowList: addrList(t, pci1)},
 			},
 		},
 		"multiple namespaces on single controller failure": {
@@ -382,7 +467,7 @@ func TestBackend_Format(t *testing.T) {
 				},
 			},
 			expInitOpts: []*spdk.EnvOptions{
-				{PCIAllowList: []string{pci1}},
+				{PCIAllowList: addrList(t, pci1)},
 			},
 		},
 		"binding format success; vmd enabled": {
@@ -410,7 +495,7 @@ func TestBackend_Format(t *testing.T) {
 			},
 			expInitOpts: []*spdk.EnvOptions{
 				{
-					PCIAllowList: []string{vmdBackingAddr1, vmdBackingAddr2},
+					PCIAllowList: addrList(t, vmdBackingAddr1, vmdBackingAddr2),
 					EnableVMD:    true,
 				},
 			},
@@ -557,11 +642,14 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			b := newBackend(log, sr)
 
 			var gotCall *storage.BdevWriteConfigRequest
-			gotErr := b.writeNVMEConf(tc.req, func(l logging.Logger, r *storage.BdevWriteConfigRequest) error {
-				l.Debugf("req: %+v", r)
-				gotCall = r
-				return tc.writeErr
-			})
+			gotErr := b.writeNvmeConfig(
+				tc.req,
+				func(l logging.Logger, r *storage.BdevWriteConfigRequest) error {
+					l.Debugf("req: %+v", r)
+					gotCall = r
+					return tc.writeErr
+				},
+			)
 			if diff := cmp.Diff(tc.expCall, gotCall, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected request made (-want, +got):\n%s\n", diff)
 			}
@@ -783,11 +871,21 @@ func TestBackend_Prepare(t *testing.T) {
 		nonexistentTargetUser = "nonexistentTargetUser"
 		username              = "bob"
 	)
-	var (
-		testPCIAllowList = fmt.Sprintf("%s %s %s", common.MockPCIAddr(1), common.MockPCIAddr(2),
-			common.MockPCIAddr(3))
-		testPCIBlockList = fmt.Sprintf("%s %s", common.MockPCIAddr(4), common.MockPCIAddr(3))
-	)
+
+	mockAddrList := func(t *testing.T, idxs ...int) *hardware.PCIAddressSet {
+		var addrs hardware.PCIAddressSet
+
+		for _, idx := range idxs {
+			if err := addrs.AddStrings(common.MockPCIAddr(int32(idx))); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		return &addrs
+	}
+
+	testPCIAllowList := mockAddrList(t, 1, 2, 3).String()
+	testPCIBlockList := mockAddrList(t, 4, 3).String()
 
 	for name, tc := range map[string]struct {
 		reset          bool
@@ -795,7 +893,7 @@ func TestBackend_Prepare(t *testing.T) {
 		mbc            *MockBackendConfig
 		userLookupRet  *user.User
 		userLookupErr  error
-		vmdDetectRet   []string
+		vmdDetectRet   *hardware.PCIAddressSet
 		vmdDetectErr   error
 		hpCleanErr     error
 		expScriptCalls *[]scriptCall
@@ -840,6 +938,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
+				HugePageCount:         -1,
 				TargetUser:            username,
 				EnableVMD:             false,
 				DisableCleanHugePages: true,
@@ -933,7 +1032,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			vmdDetectRet: mockAddrList(t, 1, 2),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -960,7 +1059,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			vmdDetectRet: mockAddrList(t, 1, 2),
 			vmdDetectErr: errors.New("vmd detect failed"),
 			expScriptCalls: &[]scriptCall{
 				{
@@ -980,7 +1079,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{},
+			vmdDetectRet: mockAddrList(t),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -999,7 +1098,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
+			vmdDetectRet: mockAddrList(t, 3, 4),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1027,7 +1126,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(5)},
+			vmdDetectRet: mockAddrList(t, 3, 5),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1055,7 +1154,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
+			vmdDetectRet: mockAddrList(t, 3, 4),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1076,7 +1175,7 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 				EnableVMD:             true,
 			},
-			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(2)},
+			vmdDetectRet: mockAddrList(t, 3, 2),
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
@@ -1153,7 +1252,7 @@ func TestBackend_Prepare(t *testing.T) {
 			mockUserLookup := func(string) (*user.User, error) {
 				return tc.userLookupRet, tc.userLookupErr
 			}
-			mockVmdDetect := func() ([]string, error) {
+			mockVmdDetect := func() (*hardware.PCIAddressSet, error) {
 				return tc.vmdDetectRet, tc.vmdDetectErr
 			}
 			mockHpClean := func(string, string, string) error {
@@ -1175,130 +1274,6 @@ func TestBackend_Prepare(t *testing.T) {
 				t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
 			}
 
-		})
-	}
-}
-
-func TestBackend_checkCfgBdevsExist(t *testing.T) {
-	for name, tc := range map[string]struct {
-		vmdEnabled    bool
-		inControllers storage.NvmeControllers
-		engineStorage map[uint32]*storage.Config
-		expErr        error
-	}{
-		"empty cfg bdev list": {
-			engineStorage: make(map[uint32]*storage.Config),
-		},
-		"addr in cfg bdev list; vmd disabled": {
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(vmdAddr),
-					},
-				},
-			},
-			expErr: FaultBdevNotFound(vmdAddr),
-		},
-		"addr in cfg bdev list; vmd enabled": {
-			vmdEnabled: true,
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(vmdAddr),
-					},
-				},
-			},
-		},
-		"no backing devices": {
-			vmdEnabled: true,
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:d7:05.5"),
-					},
-				},
-			},
-			expErr: FaultBdevNotFound("0000:d7:05.5"),
-		},
-		"vmd and non vmd in scan; addr in cfg bdev list": {
-			vmdEnabled: true,
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:8a:00.0", "0000:8d:00.0",
-								vmdAddr),
-					},
-				},
-			},
-		},
-		"vmd and non vmd in scan; addr in cfg bdev list; multiple io servers": {
-			vmdEnabled: true,
-			inControllers: append(mockCtrlrsInclVMD(),
-				&storage.NvmeController{PciAddr: "d70505:01:00.0"},
-				&storage.NvmeController{PciAddr: "d70505:02:00.0"}),
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:90:00.0", "0000:d8:00.0",
-								"0000:d7:05.5"),
-					},
-				},
-				1: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:8a:00.0", "0000:8d:00.0",
-								vmdAddr),
-					},
-				},
-			},
-		},
-		"unexpected scan": {
-			inControllers: storage.MockNvmeControllers(3),
-			engineStorage: map[uint32]*storage.Config{
-				0: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:90:00.0", "0000:d8:00.0",
-								"0000:d7:05.5"),
-					},
-				},
-				1: {
-					Tiers: storage.TierConfigs{
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:8a:00.0", "0000:8d:00.0",
-								vmdAddr),
-					},
-				},
-			},
-			expErr: errors.New("not found"), // engine order not deterministic
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			if tc.inControllers == nil {
-				tc.inControllers = mockCtrlrsInclVMD()
-			}
-
-			gotErr := checkCfgBdevsExist(log, tc.inControllers, tc.engineStorage, tc.vmdEnabled)
-			common.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
 		})
 	}
 }

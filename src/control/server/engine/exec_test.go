@@ -96,7 +96,7 @@ func TestRunnerContextExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
+	cfg := MockConfig().
 		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
 	cfg.Index = 9
 
@@ -116,7 +116,6 @@ func TestRunnerContextExit(t *testing.T) {
 }
 
 func TestRunnerNormalExit(t *testing.T) {
-	var numaNode uint = 1
 	var bypass bool = false
 	createFakeBinary(t)
 
@@ -134,14 +133,14 @@ func TestRunnerNormalExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
+	cfg := MockConfig().
 		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",
 			"OFI_INTERFACE", allowedUserEnv).
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
-		WithPinnedNumaNode(&numaNode).
+		WithPinnedNumaNode(1).
 		WithBypassHealthChk(&bypass).
 		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30).
@@ -166,6 +165,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	wantArgs := "-t 42 -x 1 -T 1 -p 1 -I 0 -r 0 -H 0 -s /foo/bar"
 	var gotArgs string
 	env := []string{
+		"FI_OFI_RXM_USE_SRX=1",
 		"CRT_CTX_SHARE_ADDR=1",
 		"CRT_TIMEOUT=30",
 		"OFI_INTERFACE=qib0",

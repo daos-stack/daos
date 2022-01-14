@@ -3,6 +3,11 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <libgen.h>
 
 #include "util.h"

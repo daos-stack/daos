@@ -32,7 +32,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
 			t.Fatal(err)
 		}
-		cfg := engine.NewConfig().
+		cfg := engine.MockConfig().
 			WithRank(uint32(idx)).
 			WithSystemName(t.Name()).
 			WithStorage(

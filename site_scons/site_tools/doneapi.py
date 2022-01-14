@@ -56,7 +56,7 @@ def generate(env):
 
     detector = DetectCompiler()
     if detector['icx'] is None:
-        raise SCons.Error.InternalError("No oneapi compiler found")
+        raise SCons.Errors.InternalError("No oneapi compiler found")
 
     env['INTEL_C_COMPILER_TOP'] = detector['root']
     paths = {'INCLUDE': 'include',
