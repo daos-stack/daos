@@ -44,6 +44,6 @@ ior:
     dfs_oclass: "RP_2G1"
     flags: "-w -W -k -G 1"
     transfersize_blocksize:
-      1M:
-        transfer_size: '1M'
-        block_size: '128M'
+      16M:
+        transfer_size: '16M'
+        block_size: '512M'
