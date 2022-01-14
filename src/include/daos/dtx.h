@@ -40,6 +40,16 @@ enum dtx_mbs_flags {
 	 * is not stored inside MBS as optimization.
 	 */
 	DMF_CONTAIN_LEADER		= (1 << 1),
+	/* The dtx_memberships::dm_tgts is sorted against target ID. */
+	DMF_SORTED_TGT_ID		= (1 << 2),
+	/* The dtx_memberships::dm_tgts is sorted against shard index.
+	 * For most of cases, shard index matches the shard ID. But during
+	 * shard migration, there may be some temporary shards in related
+	 * object layout. Under such case, related shard ID is not unique
+	 * in the object layout, but the shard index is unique. So we use
+	 * shard index to sort the dtx_memberships::dm_tgts.
+	 */
+	DMF_SORTED_SAD_IDX		= (1 << 3),
 };
 
 /**
@@ -48,8 +58,12 @@ enum dtx_mbs_flags {
 struct dtx_daos_target {
 	/* Globally target ID, corresponding to pool_component::co_id. */
 	uint32_t			ddt_id;
-	/* See dtx_target_flags. */
-	uint32_t			ddt_flags;
+	union {
+		/* For distributed transaction, see dtx_target_flags. */
+		uint32_t		ddt_flags;
+		/* For standalong modification. */
+		uint32_t		ddt_shard;
+	};
 };
 
 /**
@@ -183,6 +197,7 @@ enum daos_ops_intent {
 	DAOS_INTENT_CHECK		= 5, /* check aborted or not */
 	DAOS_INTENT_KILL		= 6, /* delete object/key */
 	DAOS_INTENT_IGNORE_NONCOMMITTED	= 7, /* ignore non-committed DTX. */
+	DAOS_INTENT_DISCARD		= 8, /* discard data */
 };
 
 /**

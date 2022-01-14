@@ -12,6 +12,10 @@ hosts:
 
 timeout: 360
 
+setup:
+  start_agents_once: False
+  start_servers_once: False
+
 server_config:
   name: daos_server
 

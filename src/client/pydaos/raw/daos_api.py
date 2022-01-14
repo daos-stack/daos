@@ -4,7 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=pylint-too-many-lines
+# pylint: disable=too-many-lines
+# pylint: disable=raise-missing-from
 
 # pylint: disable=relative-beyond-top-level
 from .. import pydaos_shim
@@ -33,6 +34,11 @@ DaosContPropEnum = enum.Enum(
     "DaosContPropEnum",
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("DAOS_PROP_")})
+
+# Value used to determine whether we need to call daos_obj_list_dkey again.
+# This is a value used in daos_anchor_is_eof in daos_api.h. Not sure how to
+# access that method from here, so define it.
+DAOS_ANCHOR_TYPE_EOF = 3
 
 
 class DaosPool():
@@ -84,8 +90,7 @@ class DaosPool():
                 self.handle = 0
                 raise DaosApiError("Pool connect returned non-zero. "
                                    "RC: {0}".format(ret))
-            else:
-                self.connected = 1
+            self.connected = 1
         else:
             event = daos_cref.DaosEvent()
             params = [self.uuid, self.group, c_flags,
@@ -106,8 +111,7 @@ class DaosPool():
             if ret != 0:
                 raise DaosApiError("Pool disconnect returned non-zero. RC: {0}"
                                    .format(ret))
-            else:
-                self.connected = 0
+            self.connected = 0
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, event]
@@ -140,6 +144,7 @@ class DaosPool():
         return c_glob.iov_len, c_glob.iov_buf_len, buf
 
     def global2local(self, context, iov_len, buf_len, buf):
+        # pylint: disable=unused-argument
         """Convert a global pool handle to local."""
         func = self.context.get_function("convert-pglobal")
 
@@ -194,17 +199,17 @@ class DaosPool():
                 raise DaosApiError("Pool query returned non-zero. RC: {0}"
                                    .format(ret))
             return self.pool_info
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.handle, None, ctypes.byref(self.pool_info), None,
-                      event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
+
+        event = daos_cref.DaosEvent()
+        params = [self.handle, None, ctypes.byref(self.pool_info), None,
+                  event]
+        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+                                  args=(func,
+                                        params,
+                                        self.context,
+                                        cb_func,
+                                        self))
+        thread.start()
         return None
 
     def target_query(self, tgt):
@@ -372,6 +377,7 @@ class DaosPool():
 
         return results
 
+    # pylint: disable=unused-private-member
     @staticmethod
     def __pylist_to_array(pylist):
         """Convert a python list into an array."""
@@ -401,9 +407,6 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_R1S_SPEC_RANK = 19
     DAOS_OC_R2S_SPEC_RANK = 20
     DAOS_OC_R3S_SPEC_RANK = 21
-    DAOS_OC_EC_K2P1_L32K = 22
-    DAOS_OC_EC_K2P2_L32K = 23
-    DAOS_OC_EC_K4P2_L32K = 24
 
 
 # pylint: disable=no-member
@@ -789,7 +792,6 @@ class IORequest():
 
     def __del__(self):
         """Cleanup this request."""
-        pass
 
     def insert_array(self, dkey, akey, c_data, txn=daos_cref.DAOS_TX_NONE):
         """Set up the I/O Vector and I/O descriptor for an array insertion.
@@ -1143,6 +1145,229 @@ class IORequest():
 
         return result
 
+    @staticmethod
+    def prepare_dkey_ptr(dkey):
+        """Prepare dkey pointer.
+
+        dkey needs to be converted to daos_cref.IOV() in order to pass in to the
+        underlying method.
+
+        Args:
+            dkey (array): dkey.
+
+        Returns:
+            ctypes.pointer: dkey pointer.
+
+        """
+        dkey_ptr = None
+
+        if dkey is not None:
+            dkey_iov = daos_cref.IOV()
+            dkey_iov.iov_buf = ctypes.cast(dkey, ctypes.c_void_p)
+            dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
+            dkey_iov.iov_len = ctypes.sizeof(dkey)
+            dkey_ptr = ctypes.pointer(dkey_iov)
+
+        return dkey_ptr
+
+    def prepare_sgl(self, key_num, key_len):
+        """Prepare the scatter/gather list to store the dkeys obtained.
+
+        Buffer size is set to key_num * key_len.
+
+        Args:
+            key_num (int): Number of keys.
+            key_len (int): Length of each key.
+
+        Returns:
+            array: Buffer that eventually stores the key(s).
+
+        """
+        sgl_iov = daos_cref.IOV()
+        buf_len = key_num * key_len
+        sgl_iov.iov_len = ctypes.c_size_t(buf_len)
+        sgl_iov.iov_buf_len = ctypes.c_size_t(buf_len)
+        buf = ctypes.create_string_buffer(buf_len)
+        sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
+        self.sgl.sg_iovs = ctypes.pointer(sgl_iov)
+        self.sgl.sg_nr = 1
+        self.sgl.sg_nr_out = 0
+
+        return buf
+
+    @staticmethod
+    def collect_keys(key_count, daos_kds, buf):
+        """Get keys from buffer.
+
+        Keys are written contiguously in the buffer. Use the key size
+        set in the kds (key descriptors) object to get the individual keys.
+
+        Args:
+            key_count (int): Number of keys obtained.
+            daos_kds (daos_cref.DaosKeyDescriptor): Key descriptors that
+                contain the length and type of each key.
+            buf (array): Buffer that stores the keys.
+
+        Returns:
+            list: Keys.
+
+        """
+        keys = []
+
+        cur = 0
+        for i in range(key_count):
+            keys.append(buf[cur:cur + daos_kds[i].kd_key_len])
+            cur += daos_kds[i].kd_key_len
+
+        return keys
+
+    def list_dkey(self, obj_handle=None, key_num=5, key_len=512,
+                  txn=daos_cref.DAOS_TX_NONE):
+        """Return dkeys in the object.
+
+        Because the underlying method takes buffer of given size and stores the
+        key(s) in it, the caller of this method should provide size of the
+        buffer. The size is determined by the key_num * key_len. Adjust them
+        according to the number and size of dkeys in the object. If the buffer
+        size is too small, it returns -2012 DER_KEY2BIG.
+
+        The dkeys shouldn't contain \0 at the end. dkeys are usually defined
+        by ctypes.create_string_buffer(). This method adds \0 at the end.
+        However, the underlying method sets dkeys in the buffer up to this
+        termination, so even if there are multiple dkeys, it would only sets the
+        first one. One way to avoid this is to pass in the length of the dkey
+        to create_string_buffer. e.g.,
+
+        from general_utils import create_string_buffer
+        my_dkey = create_string_buffer(value=dkey_val, size=len(dkey_val))
+
+        This way, the buffer size would be the exact size of the key you want
+        to use and the method doesn't add \0 at the end.
+
+        Args:
+            obj_handle (ctypes.c_uint64): Object handle that defines the object
+                to get dkeys from.
+            key_num (int): Number of dkeys expected. Defaults to 5. This is the
+                typical default value used by some of the C object tests.
+            key_len (int): Approximate length of each dkey. Use the longest key
+                size to be safe. Defaults to 512. This is the typical default
+                value used by some of the C object tests.
+            txn (Daos_handle_t): Transaction handle.
+                Defaults to daos_cref.DAOS_TX_NONE. This is the typical default
+                value used in other methods as well as some of the C client and
+                test code.
+
+        Returns:
+            list: dkeys.
+
+        """
+        if obj_handle is None:
+            obj_handle = self.obj.obj_handle
+
+        nr_val = ctypes.c_uint32(key_num)
+
+        # Define the array of ctypes DaosKeyDescriptor.
+        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(
+            daos_cref.DaosKeyDescriptor())
+
+        # Prepare the scatter/gather list to store the dkeys obtained. Use
+        # key_num * key_len for the buffer size.
+        buf = self.prepare_sgl(key_num=key_num, key_len=key_len)
+
+        # One daos_obj_list_dkey call may not obtain all the dkeys. Anchor is
+        # used to determine whether we need to call it again.
+        anchor = daos_cref.Anchor()
+
+        list_dkey_func = self.context.get_function('list-dkey')
+
+        dkeys = []
+
+        while not anchor.da_type == DAOS_ANCHOR_TYPE_EOF:
+            ret = list_dkey_func(
+                obj_handle, txn, ctypes.byref(nr_val),
+                ctypes.byref(daos_kds), ctypes.byref(self.sgl),
+                ctypes.byref(anchor), None)
+
+            if ret != 0:
+                raise DaosApiError(
+                    "list_dkey returned non-zero. RC: {0}".format(ret))
+
+            # No dkeys returned.
+            if nr_val.value == 0:
+                continue
+
+            # The keys are written contiguously in the buffer. Use the key size
+            # set in the kds (key descriptors) object to get the individual
+            # keys.
+            dkeys.extend(
+                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds,
+                buf=buf))
+
+        return dkeys
+
+    def list_akey(self, dkey, obj_handle=None, key_num=5, key_len=512,
+                  txn=daos_cref.DAOS_TX_NONE):
+        """Return akeys from given dkey in the object.
+
+        See list_dkey doc for details.
+
+        Args:
+            obj_handle (ctypes.c_uint64): Object handle that defines the object
+                to get dkeys from.
+            key_num (int): Number of dkeys expected. Defaults to 5. This is the
+                typical default value used by some of the C object tests.
+            key_len (int): Approximate length of each dkey. Use the longest key
+                size to be safe. Defaults to 512. This is the typical default
+                value used by some of the C object tests.
+            txn (Daos_handle_t): Transaction handle.
+                Defaults to daos_cref.DAOS_TX_NONE. This is the typical default
+                value used in other methods as well as some of the C client and
+                test code.
+
+        Returns:
+            list: akeys.
+
+        """
+        if obj_handle is None:
+            obj_handle = self.obj.obj_handle
+
+        dkey_ptr = self.prepare_dkey_ptr(dkey)
+
+        nr_val = ctypes.c_uint32(key_num)
+
+        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(
+            daos_cref.DaosKeyDescriptor())
+
+        buf = self.prepare_sgl(key_num=key_num, key_len=key_len)
+
+        # One daos_obj_list_dkey call may not obtain all the dkeys. Anchor is
+        # used to determine whether we need to call it again.
+        anchor = daos_cref.Anchor()
+
+        list_akey_func = self.context.get_function('list-akey')
+
+        akeys = []
+
+        while not anchor.da_type == DAOS_ANCHOR_TYPE_EOF:
+            ret = list_akey_func(
+                obj_handle, txn, dkey_ptr, ctypes.byref(nr_val),
+                ctypes.byref(daos_kds), ctypes.byref(self.sgl),
+                ctypes.byref(anchor), None)
+
+            if ret != 0:
+                raise DaosApiError(
+                    "list_akey returned non-zero. RC: {0}".format(ret))
+
+            # No akeys returned.
+            if nr_val.value == 0:
+                continue
+
+            akeys.extend(
+                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds,
+                buf=buf))
+
+        return akeys
+
 
 class DaosContProperties(ctypes.Structure):
     # pylint: disable=too-few-public-methods
@@ -1227,6 +1452,7 @@ class DaosContainer():
         """Return C representation of Python string."""
         return conversion.c_uuid_to_str(self.uuid)
 
+    # pylint: disable=too-many-branches
     def create(self, poh, con_uuid=None, con_prop=None, cb_func=None):
         """Send a container creation request to the daos server group."""
         # create a random uuid if none is provided
@@ -1280,7 +1506,8 @@ class DaosContainer():
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
             else:
-                # TODO: This should ideally fail.
+                # TODO:                              # pylint: disable=W0511
+                # This should ideally fail.
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
                     DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKNOWN.value)
             idx = idx + 1
@@ -1324,8 +1551,7 @@ class DaosContainer():
                 self.uuid = (ctypes.c_ubyte * 1)(0)
                 raise DaosApiError(
                     "Container create returned non-zero. RC: {0}".format(ret))
-            else:
-                self.attached = 1
+            self.attached = 1
         else:
             event = daos_cref.DaosEvent()
             if self.cont_prop is None:
@@ -1360,8 +1586,7 @@ class DaosContainer():
             if ret != 0:
                 raise DaosApiError("Container destroy returned non-zero. "
                                    "RC: {0}".format(ret))
-            else:
-                self.attached = 0
+            self.attached = 0
         else:
             event = daos_cref.DaosEvent()
             params = [self.poh, self.uuid, c_force, event]
@@ -1397,8 +1622,7 @@ class DaosContainer():
             if ret != 0:
                 raise DaosApiError("Container open returned non-zero. RC: {0}"
                                    .format(ret))
-            else:
-                self.opened = 1
+            self.opened = 1
         else:
             event = daos_cref.DaosEvent()
             params = [self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
@@ -1427,8 +1651,7 @@ class DaosContainer():
             if ret != 0:
                 raise DaosApiError("Container close returned non-zero. RC: {0}"
                                    .format(ret))
-            else:
-                self.opened = 0
+            self.opened = 0
         else:
             event = daos_cref.DaosEvent()
             params = [self.coh, event]
@@ -1454,16 +1677,14 @@ class DaosContainer():
                 raise DaosApiError("Container query returned non-zero. RC: {0}"
                                    .format(ret))
             return self.info
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.coh, ctypes.byref(self.info), None, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
+
+        event = daos_cref.DaosEvent()
+        params = [self.coh, ctypes.byref(self.info), None, event]
+        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+                                  args=(func, params, self.context,
+                                        cb_func, self))
+        thread.start()
+
         return None
 
     def get_new_tx(self):
@@ -1730,6 +1951,7 @@ class DaosContainer():
         return c_glob.iov_len, c_glob.iov_buf_len, buf
 
     def global2local(self, context, iov_len, buf_len, buf):
+        # pylint: disable=unused-argument
         """Convert a global container handle to a local handle."""
         func = self.context.get_function("convert-cglobal")
 
@@ -2072,13 +2294,15 @@ class DaosContext():
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
-            'generate-oid':    self.libdaos.daos_obj_generate_oid,
+            'generate-oid':    self.libdaos.daos_obj_generate_oid2,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,
             'init-event':      self.libdaos.daos_event_init,
+            'list-akey':       self.libdaos.daos_obj_list_akey,
             'list-attr':       self.libdaos.daos_cont_list_attr,
             'list-cont-attr':  self.libdaos.daos_cont_list_attr,
+            'list-dkey':       self.libdaos.daos_obj_list_dkey,
             'list-pool-attr':  self.libdaos.daos_pool_list_attr,
             'cont-aggregate':  self.libdaos.daos_cont_aggregate,
             'list-snap':       self.libdaos.daos_cont_list_snap,
@@ -2141,6 +2365,7 @@ class DaosLog:
         func = self.context.get_function("d_log")
 
         caller = inspect.getframeinfo(inspect.stack()[2][0])
+        # pylint: disable=protected-access
         caller_func = sys._getframe(1).f_back.f_code.co_name
         filename = os.path.basename(caller.filename)
 

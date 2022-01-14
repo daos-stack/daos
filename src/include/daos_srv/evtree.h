@@ -410,7 +410,7 @@ evt_vis2dbg(int flag)
 
 	switch (flag & flags) {
 	default:
-		D_ASSERT(0);
+		D_ASSERTF(0, "unexpected flag %x\n", flag);
 	case 0:
 		break;
 	case EVT_PARTIAL:
@@ -665,8 +665,12 @@ enum {
 	EVT_ITER_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
 	EVT_ITER_FOR_MIGRATION	= (1 << 6),
+	/** The iterator is for data discard */
+	EVT_ITER_FOR_DISCARD	= (1 << 7),
 	/** Skip visible data (Only valid with EVT_ITER_VISIBLE) */
-	EVT_ITER_SKIP_DATA	= (1 << 7),
+	EVT_ITER_SKIP_DATA	= (1 << 8),
+	/** Only process removals */
+	EVT_ITER_REMOVALS	= (1 << 9),
 };
 
 D_CASSERT((int)EVT_VISIBLE == (int)EVT_ITER_VISIBLE);

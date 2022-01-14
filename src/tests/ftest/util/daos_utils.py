@@ -34,8 +34,7 @@ class DaosCommand(DaosCommandBase):
             sys (str, optional): [description]. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool query command fails.
@@ -302,8 +301,7 @@ class DaosCommand(DaosCommandBase):
             sys_name (str): DAOS system name. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool query command fails.
@@ -322,8 +320,7 @@ class DaosCommand(DaosCommandBase):
                 to False.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool list-attrs command fails.
@@ -343,11 +340,10 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
-            dict: the dmg json command output converted to a python dictionary
+            CommandFailure: if the daos container query command fails.
 
         """
         return self._get_json_result(
@@ -449,7 +445,7 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            dict: the dmg json command output converted to a python dictionary
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos get-attr command fails.
@@ -469,7 +465,7 @@ class DaosCommand(DaosCommandBase):
             verbose (bool, optional): True - fetch values of all attributes.
 
         Returns:
-            dict: the dmg json command output converted to a python dictionary
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container list-attrs command fails.
@@ -503,10 +499,9 @@ class DaosCommand(DaosCommandBase):
             sys_name=sys_name, snap=snap_name, epc=epoch)
 
         # Sample create-snap output.
-        # snapshot/epoch 1582610056530034697 has been created
+        # snapshot/epoch 0x51e719907180000 has been created
         data = {}
-        match = re.findall(
-            r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout_text)
+        match = re.findall(r"[A-Za-z\/]+\s(0x[0-9a-fA-F]+)\s[a-z\s]+", self.result.stdout_text)
         if match:
             data["epoch"] = match[0]
 
@@ -562,9 +557,12 @@ class DaosCommand(DaosCommandBase):
 
         # Sample container list-snaps output.
         # Container's snapshots :
-        # 1598478249040609297 1598478258840600594 1598478287952543761
+        # 0x51ebe2f21500000
+        # 0x51ebe4f5b6c0000
+        # 0x51ebe5233780000
         data = {}
-        match = re.findall(r"(\d+)", self.result.stdout_text)
+        match = re.findall(r"(0x[0-9a-fA-F]+)", self.result.stdout_text)
+
         if match:
             data["epochs"] = match
         return data
@@ -634,7 +632,7 @@ class DaosCommand(DaosCommandBase):
 
         return data
 
-    def filesystem_copy(self, src, dst):
+    def filesystem_copy(self, src, dst, preserve_props=None):
         """Copy a POSIX container or path to another POSIX container or path.
 
         Args:
@@ -642,6 +640,7 @@ class DaosCommand(DaosCommandBase):
                 daos:<pool>/<cont>/<path> or posix:<path>
             dst (str): The destination, formatted as
                 daos:<pool>/<cont>/<path> or posix:<path>
+            preserve_props (str): The filename to read or write container properties
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -652,4 +651,4 @@ class DaosCommand(DaosCommandBase):
 
         """
         return self._get_result(
-            ("filesystem", "copy"), src=src, dst=dst)
+            ("filesystem", "copy"), src=src, dst=dst, preserve_props=preserve_props)

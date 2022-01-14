@@ -6,7 +6,35 @@ LSB_RELEASE=redhat-lsb-core
 EXCLUDE_UPGRADE=dpdk,fuse,mercury,daos,daos-\*
 
 bootstrap_dnf() {
-    :
+    # hack in the removal of group repos
+    version="$(lsb_release -sr)"
+    version=${version%.*}
+    if dnf repolist | grep "repo.dc.hpdd.intel.com_repository_centos-${version}-x86_64-group_"; then
+        rm -f /etc/yum.repos.d/repo.dc.hpdd.intel.com_repository_{centos-8.4,daos-stack-centos-8}-x86_64-group_.repo
+        for repo in centos-${version}-{base,extras,powertools} epel-el-8; do
+            my_repo="${REPOSITORY_URL}repository/$repo-x86_64-proxy"
+            my_name="${my_repo#*//}"
+            my_name="${my_name//\//_}"
+            echo -e "[${my_name}]
+name=created from ${my_repo}
+baseurl=${my_repo}
+enabled=1
+repo_gpgcheck=0
+gpgcheck=1" >> /etc/yum.repos.d/local-centos-"$repo".repo
+        done
+        my_repo="${REPOSITORY_URL}/repository/daos-stack-el-8-x86_64-stable-local"
+        my_name="${my_repo#*//}"
+        my_name="${my_name//\//_}"
+        echo -e "[${my_name}]
+name=created from ${my_repo}
+baseurl=${my_repo}
+enabled=1
+repo_gpgcheck=0
+gpgcheck=0" >> /etc/yum.repos.d/local-daos-group.repo
+    fi
+
+    systemctl enable postfix.service
+    systemctl start postfix.service
 }
 
 group_repo_post() {
@@ -15,22 +43,9 @@ group_repo_post() {
 }
 
 distro_custom() {
-    # force install of avocado 69.x
-    dnf -y erase avocado{,-common}                                              \
-                 python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
-                 python3-pyyaml
-    pip3 install "avocado-framework<70.0"
-    pip3 install "avocado-framework-plugin-result-html<70.0"
-    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
-    pip3 install clustershell
-
-    if ! rpm -q nfs-utils; then
-        dnf -y install nfs-utils
-    fi
-
-    # CORCI-1096
-    dnf -y install esmtp
-    sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
+    # install avocado
+    dnf -y install python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
+                   clustershell
 
     dnf config-manager --disable powertools
 
@@ -91,21 +106,21 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    time dnf -y install $LSB_RELEASE
+    retry_cmd 360 dnf -y install $LSB_RELEASE
 
     # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ] &&
-       ! time dnf -y install $INST_RPMS; then
-        rc=${PIPESTATUS[0]}
-        dump_repos
-        exit "$rc"
+    if [ -n "$INST_RPMS" ]; then
+        if ! retry_cmd 360 dnf -y install $INST_RPMS; then
+            rc=${PIPESTATUS[0]}
+            dump_repos
+            exit "$rc"
+        fi
     fi
 
     distro_custom
 
     # now make sure everything is fully up-to-date
-    if ! time dnf -y upgrade \
-                  --exclude "$EXCLUDE_UPGRADE"; then
+    if ! retry_cmd 600 dnf -y upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
     fi

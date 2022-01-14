@@ -37,15 +37,6 @@ struct ds_rsvc_class {
 	 */
 	int (*sc_name)(d_iov_t *id, char **name);
 
-	/** Retrieve the stored UUID of the service database. */
-	int (*sc_load_uuid)(d_iov_t *id, uuid_t db_uuid);
-
-	/** Store the UUID of the service database. */
-	int (*sc_store_uuid)(d_iov_t *id, uuid_t db_uuid);
-
-	/** Delete the stored UUID of the service database. */
-	int (*sc_delete_uuid)(d_iov_t *id);
-
 	/**
 	 * Locate the DB of the service identified by \a id. The returned DB
 	 * path will later be passed to D_FREE.

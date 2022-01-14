@@ -25,16 +25,22 @@ enum {
 };
 
 struct sched_stats {
-	uint64_t	ss_tot_time;	/* Total CPU time (ms) */
-	uint64_t	ss_relax_time;	/* CPU relax time (ms) */
-	uint64_t	ss_busy_ts;	/* Last busy timestamp (ms) */
-	uint64_t	ss_print_ts;	/* Last stats print timestamp (ms) */
-	uint64_t	ss_watchdog_ts;	/* Last watchdog print ts (ms) */
-	void		*ss_last_unit;	/* Last executed unit */
+	struct d_tm_node_t	*ss_total_time;		/* Total CPU time (ms) */
+	struct d_tm_node_t	*ss_relax_time;		/* CPU relax time (ms) */
+	struct d_tm_node_t	*ss_wq_len;		/* Wait queue length */
+	struct d_tm_node_t	*ss_sq_len;		/* Sleep queue length */
+	struct d_tm_node_t	*ss_cycle_duration;	/* Cycle duration (ms) */
+	struct d_tm_node_t	*ss_cycle_size;		/* Total ULTs in a cycle */
+	uint64_t		 ss_busy_ts;		/* Last busy timestamp (ms) */
+	uint64_t		 ss_watchdog_ts;	/* Last watchdog print ts (ms) */
+	void			*ss_last_unit;		/* Last executed unit */
 };
 
 struct sched_info {
 	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
+	uint64_t		 si_cur_seq;	/* Current schedule sequence */
+	uint64_t		 si_ult_start;	/* Start time of last executed unit */
+	void			*si_ult_func;	/* Function addr of last executed unit */
 	struct sched_stats	 si_stats;	/* Sched stats */
 	d_list_t		 si_idle_list;	/* All unused requests */
 	d_list_t		 si_sleep_list;	/* All sleeping requests */
@@ -97,7 +103,7 @@ extern int		dss_core_depth;
 /** number of physical cores, w/o hyper-threading */
 extern int		dss_core_nr;
 /** start offset index of the first core for service XS */
-extern int		dss_core_offset;
+extern unsigned int	dss_core_offset;
 /** NUMA node to bind to */
 extern int		dss_numa_node;
 /** bitmap describing core allocation */
@@ -112,6 +118,7 @@ extern unsigned int	dss_tgt_offload_xs_nr;
 extern unsigned int	dss_sys_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool		dss_helper_pool;
+
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);
 
@@ -185,6 +192,7 @@ extern unsigned int sched_stats_intvl;
 extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;
 extern unsigned int sched_unit_runtime_max;
+extern bool sched_watchdog_all;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
@@ -268,10 +276,11 @@ void ds_iv_fini(void);
 	 (dss_tgt_offload_xs_nr > dss_tgt_nr ? dss_tgt_nr :	\
 	  dss_tgt_offload_xs_nr))
 /** main XS id of (vos) tgt_id */
-#define DSS_MAIN_XS_ID(tgt_id)						\
-	(dss_helper_pool ? ((tgt_id) + dss_sys_xs_nr) :			\
-			   ((tgt_id) * ((dss_tgt_offload_xs_nr /	\
+#define DSS_MAIN_XS_ID(tgt_id)					\
+	(dss_helper_pool ? ((tgt_id) + dss_sys_xs_nr) :		\
+			   ((tgt_id) * ((dss_tgt_offload_xs_nr /\
 			      dss_tgt_nr) + 1) + dss_sys_xs_nr))
+
 
 /**
  * get the VOS target ID of xstream.

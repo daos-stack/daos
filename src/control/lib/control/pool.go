@@ -121,6 +121,22 @@ func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty,
 	return out, nil
 }
 
+func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
+	props, err := convertPoolProps(pcr.Properties, true)
+	if err != nil {
+		return nil, err
+	}
+
+	type toJSON PoolCreateReq
+	return json.Marshal(struct {
+		Properties []*mgmtpb.PoolProperty `json:"properties"`
+		*toJSON
+	}{
+		Properties: props,
+		toJSON:     (*toJSON)(pcr),
+	})
+}
+
 // genPoolCreateRequest takes a *PoolCreateRequest and generates a valid protobuf
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
@@ -143,11 +159,6 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 
 	out = new(mgmtpb.PoolCreateReq)
 	if err = convert.Types(in, out); err != nil {
-		return
-	}
-
-	out.Properties, err = convertPoolProps(in.Properties, true)
-	if err != nil {
 		return
 	}
 

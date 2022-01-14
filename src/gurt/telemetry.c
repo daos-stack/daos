@@ -3091,6 +3091,107 @@ d_tm_get_version(void)
 	return D_TM_VERSION;
 }
 
+static int
+list_children(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
+	      struct d_tm_node_t *node, int d_tm_type,
+	      int cur_depth, const int max_depth, int skip_root)
+{
+	int			 rc = DER_SUCCESS;
+	int			 skip_add = skip_root && (cur_depth == 0);
+	struct d_tm_shmem_hdr	*shmem;
+
+	cur_depth++;
+	if (max_depth > 0 && cur_depth > max_depth)
+		return DER_SUCCESS;
+
+	if ((ctx == NULL) || (head == NULL) || (node == NULL)) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	if (node->dtn_type == D_TM_LINK) {
+		node = d_tm_follow_link(ctx, node);
+		if (node == NULL)
+			D_GOTO(out, rc = 0);
+	}
+
+	if (!skip_add && d_tm_type & node->dtn_type) {
+		rc = d_tm_list_add_node(node, head);
+		if (rc != DER_SUCCESS)
+			goto out;
+	}
+
+	if (node->dtn_child == NULL)
+		goto out;
+
+	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
+	if (shmem == NULL)
+		D_GOTO(out, rc = -DER_SHMEM_PERMS);
+
+	node = conv_ptr(shmem, node->dtn_child);
+	if (node == NULL) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	while (node != NULL) {
+		rc = list_children(ctx, head, node, d_tm_type,
+				   cur_depth, max_depth, 0);
+		if (rc != DER_SUCCESS)
+			goto out;
+		node = conv_ptr(shmem, node->dtn_sibling);
+	}
+
+out:
+	return rc;
+
+}
+
+/**
+ * Perform a recursive listing from the given \a node for all subdirectories
+ * to a maximum depth of \a max_depth.
+ *
+ * \param[in]		ctx		Telemetry context
+ * \param[in,out]	head		Pointer to a nodelist
+ * \param[in]		node		The recursive listing starts
+ *					from this node.
+ * \param[in,out]	num_dirs	Optional pointer to storage for the
+ *					number of directories found.
+ * \param[in]		max_depth	The maximum depth below the root of
+ *					the listing.
+ *
+ * \return		DER_SUCCESS		Success
+ *			-DER_NOMEM		Out of global heap
+ *			-DER_INVAL		Invalid pointer for \a head or
+ *						\a node
+ */
+int
+d_tm_list_subdirs(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
+		  struct d_tm_node_t *node, uint64_t *num_dirs, int max_depth)
+{
+	int			 rc = DER_SUCCESS;
+	uint64_t		 dir_count = 0;
+	struct d_tm_nodeList_t	*cur = NULL;
+
+	/** add +1 to max_depth to account for the root node */
+	rc = list_children(ctx, head, node, D_TM_DIRECTORY, 0, max_depth+1, 1);
+	if (rc != DER_SUCCESS)
+		return rc;
+
+	cur = *head;
+	while (cur != NULL && cur->dtnl_node != NULL) {
+		if (cur->dtnl_node->dtn_type == D_TM_DIRECTORY)
+			dir_count++;
+
+		cur = cur->dtnl_next;
+	}
+
+	if (num_dirs != NULL)
+		*num_dirs = dir_count;
+
+	return DER_SUCCESS;
+}
+
 /**
  * Perform a recursive directory listing from the given \a node for the items
  * described by the \a d_tm_type bitmask.  A result is added to the list if it
@@ -3116,48 +3217,7 @@ int
 d_tm_list(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	  struct d_tm_node_t *node, int d_tm_type)
 {
-	int			 rc = DER_SUCCESS;
-	struct d_tm_shmem_hdr	*shmem;
-
-	if ((ctx == NULL) || (head == NULL) || (node == NULL)) {
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-	if (node->dtn_type == D_TM_LINK) {
-		node = d_tm_follow_link(ctx, node);
-		if (node == NULL)
-			D_GOTO(out, rc = 0);
-	}
-
-	if (d_tm_type & node->dtn_type) {
-		rc = d_tm_list_add_node(node, head);
-		if (rc != DER_SUCCESS)
-			goto out;
-	}
-
-	if (node->dtn_child == NULL)
-		goto out;
-
-	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
-	if (shmem == NULL)
-		D_GOTO(out, rc = -DER_SHMEM_PERMS);
-
-	node = conv_ptr(shmem, node->dtn_child);
-	if (node == NULL) {
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-	while (node != NULL) {
-		rc = d_tm_list(ctx, head, node, d_tm_type);
-		if (rc != DER_SUCCESS)
-			goto out;
-		node = conv_ptr(shmem, node->dtn_sibling);
-	}
-
-out:
-	return rc;
+	return list_children(ctx, head, node, d_tm_type, 0, 0, 0);
 }
 
 /**

@@ -167,6 +167,17 @@
    ...
 }
 {
+   libevent
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   obj:*libevent*.so*
+   fun:*event_base_loop
+   ...
+}
+{
    libopen-rte leak
    Memcheck:Leak
    match-leak-kinds: all
@@ -239,5 +250,15 @@
    fun:hg_core_init
    fun:HG_Core_init_opt
    fun:HG_Init_opt
+   ...
+}
+{
+   Tcp provider with ofi rxm
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   obj:*
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_tsend
    ...
 }

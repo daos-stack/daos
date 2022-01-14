@@ -376,7 +376,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 		punch_or_delete = TF_DELETE;
 
 	if (daos_unit_oid_is_null(ds->td_oid))
-		oid = dts_unit_oid_gen(0, 0, 0);
+		oid = dts_unit_oid_gen(0, 0);
 	else
 		oid = ds->td_oid;
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
@@ -421,10 +421,9 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 		    "Discard" : "Aggregate", epr_a->epr_lo, epr_a->epr_hi);
 
 	if (ds->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
+		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
-				   ds_csum_agg_recalc, NULL, NULL, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, false);
 	if (rc != -DER_CSUM) {
 		/* Skip delete verification for now */
 		assert_rc_equal(rc, 0);
@@ -523,7 +522,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	epr_a = &ds_sample->td_agg_epr;
 
 	for (i = 0; i < AT_OBJ_KEY_NR; i++) {
-		oids[i] = dts_unit_oid_gen(0, 0, 0);
+		oids[i] = dts_unit_oid_gen(0, 0);
 		dts_key_gen(dkeys[i], UPDATE_DKEY_SIZE, UPDATE_DKEY);
 		dts_key_gen(akeys[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
 	}
@@ -607,10 +606,9 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		    "Discard" : "Aggregate");
 
 	if (ds_sample->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
+		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL,
-				   false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, false);
 	assert_rc_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1030,7 +1028,7 @@ discard_13(void **state)
 	daos_recx_t		 recx_tot;
 	int			 i;
 
-	ds.td_oid = dts_unit_oid_gen(0, 0, 0);
+	ds.td_oid = dts_unit_oid_gen(0, 0);
 	/*
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
@@ -1119,7 +1117,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 	int			 old_flags = arg->ta_flags;
 	daos_recx_t		 recx = {0, 1};
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	arg->ta_flags = TF_USE_VAL;
 
@@ -1159,10 +1157,9 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 
 	for (i = 0; i < 2; i++) {
 		if (discard)
-			rc = vos_discard(arg->ctx.tc_co_hdl, &epr, NULL, NULL);
+			rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, &epr, NULL, NULL);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
-					   NULL, NULL, false);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
 
 		assert_rc_equal(rc, 0);
 
@@ -1259,6 +1256,84 @@ static void
 discard_15(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, true);
+	cleanup();
+}
+
+static void
+discard_obj_test(void **state, bool empty)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 oid;
+	daos_epoch_range_t	 epr = {1, DAOS_EPOCH_MAX - 1};
+	daos_epoch_t		 epoch;
+	int			 rc;
+	char			 first_val = 'f';
+	char			 middle_val = 'm';
+	char			 fetch_val;
+	char			 expected;
+	char			 dkey[2] = "a";
+	char			 akey[2] = "b";
+	char			 akey2[2] = "c";
+	int			 old_flags = arg->ta_flags;
+	daos_recx_t		 recx = {0, 1};
+
+	oid = dts_unit_oid_gen(0, 0);
+
+	arg->ta_flags = TF_USE_VAL;
+
+	if (!empty) {
+		update_value(arg, oid, epr.epr_lo, 0, dkey, akey,
+			     DAOS_IOD_SINGLE, sizeof(first_val), &recx,
+			     &first_val);
+
+		update_value(arg, oid, epr.epr_lo + 1, 0, dkey, akey2,
+			     DAOS_IOD_ARRAY, sizeof(first_val), &recx,
+			     &first_val);
+
+	}
+
+	epoch = epr.epr_lo + 2;
+
+	update_value(arg, oid, epoch++, 0, dkey, akey,
+		     DAOS_IOD_SINGLE, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	update_value(arg, oid, epoch++, 0, dkey, akey2,
+		     DAOS_IOD_ARRAY, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	epr.epr_hi = epoch;
+
+	rc = vos_discard(arg->ctx.tc_co_hdl, &oid, &epr, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Middle value should now be gone.  If empty, it will be 0, otherwise will be first
+	 * value
+	 */
+	expected = 0;
+	fetch_val = 0;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, DAOS_IOD_SINGLE,
+		    sizeof(first_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+	fetch_val = 0;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey2, DAOS_IOD_ARRAY,
+		    sizeof(first_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+
+	arg->ta_flags = old_flags;
+}
+
+static void
+discard_16(void **state)
+{
+	discard_obj_test(state, true);
+	cleanup();
+}
+
+static void
+discard_17(void **state)
+{
+	discard_obj_test(state, false);
 	cleanup();
 }
 
@@ -1760,10 +1835,10 @@ print_space_info(vos_pool_info_t *pi, char *desc)
 	VERBOSE_MSG("  NVMe allocator statistics:\n");
 	VERBOSE_MSG("    free_p: "DF_U64", \tfree_t: "DF_U64", "
 		    "\tfrags_large: "DF_U64", \tfrags_small: "DF_U64", "
-		    "\tmax_frag_blks: %u\n",
+		    "\tfrags_aging: "DF_U64"\n",
 		    stat->vs_free_persistent, stat->vs_free_transient,
-		    stat->vs_large_frags, stat->vs_small_frags,
-		    stat->vs_largest_blks);
+		    stat->vs_frags_large, stat->vs_frags_small,
+		    stat->vs_frags_aging);
 	VERBOSE_MSG("    resrv_hit: "DF_U64", \tresrv_large: "DF_U64", "
 		    "\tresrv_small: "DF_U64"\n", stat->vs_resrv_hint,
 		    stat->vs_resrv_large, stat->vs_resrv_small);
@@ -1848,7 +1923,7 @@ aggregate_14(void **state)
 	}
 	fill_size = fill_size / 3;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 
@@ -1869,8 +1944,7 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL,
-				   false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
@@ -2015,7 +2089,7 @@ aggregate_22(void **state)
 	char			 buf_u[16];
 	int			 rc;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
@@ -2060,7 +2134,7 @@ aggregate_22(void **state)
 
 	epr.epr_hi = epoch++;
 
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL, false);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
 	assert_rc_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,
@@ -2584,6 +2658,56 @@ aggregate_32(void **state)
 	cleanup();
 }
 
+static void
+aggregate_33(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[10];
+	daos_epoch_t		 punch_epochs[] = {2, 4, 6, 8, 10, 12};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = 2;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = 2;
+	recx_arr[2].rx_idx = 2;
+	recx_arr[2].rx_nr = 2;
+	recx_arr[3].rx_idx = 1;
+	recx_arr[3].rx_nr = 2;
+	recx_arr[4].rx_idx = 4;
+	recx_arr[4].rx_nr = 2;
+	recx_arr[5].rx_idx = 4;
+	recx_arr[5].rx_nr = 2;
+	recx_arr[6].rx_idx = 6;
+	recx_arr[6].rx_nr = 2;
+	recx_arr[7].rx_idx = 6;
+	recx_arr[7].rx_nr = 2;
+	recx_arr[8].rx_idx = 12;
+	recx_arr[8].rx_nr = 20;
+	recx_arr[9].rx_idx = 12;
+	recx_arr[9].rx_nr = 2;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 2;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -2623,9 +2747,33 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_14, NULL, agg_tst_teardown },
 	{ "VOS465: Discard object/key punches array",
 	  discard_15, NULL, agg_tst_teardown },
+	{ "VOS466: Object specific discard (empty obj)",
+	  discard_16, NULL, agg_tst_teardown },
+	{ "VOS467: Object specific discard (non-empty obj)",
+	  discard_17, NULL, agg_tst_teardown },
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
+	{ "VOS424: Aggregate extents not fully covered by delete record",
+	  aggregate_24, NULL, agg_tst_teardown },
+	{ "VOS425: Aggregate delete of end of merge window",
+	  aggregate_25, NULL, agg_tst_teardown },
+	{ "VOS426: Consecutive removed extents",
+	  aggregate_26, NULL, agg_tst_teardown },
+	{ "VOS427: Consecutive removed extents, no logical extents",
+	  aggregate_27, NULL, agg_tst_teardown },
+	{ "VOS428: Logical extent followed by consecutive removed extents",
+	  aggregate_28, NULL, agg_tst_teardown },
+	{ "VOS429: Logical extent followed by disjoint removed extents",
+	  aggregate_29, NULL, agg_tst_teardown },
+	{ "VOS430: Removal stress test",
+	  aggregate_30, NULL, agg_tst_teardown },
+	{ "VOS431: Removal spans windows, flush with no physical records",
+	  aggregate_31, NULL, agg_tst_teardown },
+	{ "VOS432: Overlapping removals",
+	  aggregate_32, NULL, agg_tst_teardown },
+	{ "VOS433: Many small removals",
+	  aggregate_33, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -2672,24 +2820,6 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_22, NULL, agg_tst_teardown },
 	{ "VOS423: Aggregate deleted records spanning window end",
 	  aggregate_23, NULL, agg_tst_teardown },
-	{ "VOS424: Aggregate extents not fully covered by delete record",
-	  aggregate_24, NULL, agg_tst_teardown },
-	{ "VOS425: Aggregate delete of end of merge window",
-	  aggregate_25, NULL, agg_tst_teardown },
-	{ "VOS426: Consecutive removed extents",
-	  aggregate_26, NULL, agg_tst_teardown },
-	{ "VOS427: Consecutive removed extents, no logical extents",
-	  aggregate_27, NULL, agg_tst_teardown },
-	{ "VOS428: Logical extent followed by consecutive removed extents",
-	  aggregate_28, NULL, agg_tst_teardown },
-	{ "VOS429: Logical extent followed by disjoint removed extents",
-	  aggregate_29, NULL, agg_tst_teardown },
-	{ "VOS430: Removal stress test",
-	  aggregate_30, NULL, agg_tst_teardown },
-	{ "VOS431: Removal spans windows, flush with no physical records",
-	  aggregate_31, NULL, agg_tst_teardown },
-	{ "VOS432: Overlapping removals",
-	  aggregate_32, NULL, agg_tst_teardown },
 };
 
 int

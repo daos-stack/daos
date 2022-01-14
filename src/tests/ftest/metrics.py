@@ -9,7 +9,7 @@
 import os
 import sys
 import fnmatch
-import subprocess
+import subprocess #nosec
 import jira
 from jira import JIRA
 

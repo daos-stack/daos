@@ -4,7 +4,6 @@ usr/bin/dmg
 usr/bin/daos_agent
 usr/bin/dfuse
 usr/bin/daos
-usr/bin/daos_old
 usr/lib64/libdfs.so
 usr/lib64/daos/API_VERSION
 usr/lib64/libduns.so
@@ -23,3 +22,4 @@ etc/daos/daos_control.yml
 usr/lib/systemd/system/daos_agent.service
 usr/share/man/man8/daos.8*
 usr/share/man/man8/dmg.8*
+usr/bin/cart_ctl

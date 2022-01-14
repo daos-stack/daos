@@ -30,16 +30,14 @@ type SetEngineLogMasksResp struct {
 	HostErrorsResp
 }
 
-// SetEngineLogMasks will send RPC to MS to request changes to effective log
-// level of all DAOS engines in a system.
+// SetEngineLogMasks will send RPC to hostlist to request changes to log
+// level of all DAOS engines on each host in list.
 func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngineLogMasksReq) (*SetEngineLogMasksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	if req.Masks != "" {
-		if err := engine.ValidateLogMasks(req.Masks); err != nil {
-			return nil, err
-		}
+	if err := engine.ValidateLogMasks(req.Masks); err != nil {
+		return nil, err
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {

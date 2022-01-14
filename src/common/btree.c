@@ -346,6 +346,7 @@ btr_trace_set(struct btr_context *tcx, int level,
 
 	D_DEBUG(DB_TRACE, "trace[%d] "DF_X64"/%d\n", level, nd_off, at);
 
+	D_ASSERT(nd_off != UMOFF_NULL);
 	tcx->tc_trace[level].tr_node = nd_off;
 	tcx->tc_trace[level].tr_at = at;
 }
@@ -475,7 +476,7 @@ btr_key_cmp(struct btr_context *tcx, struct btr_record *rec, d_iov_t *key)
 
 static int
 btr_rec_alloc(struct btr_context *tcx, d_iov_t *key, d_iov_t *val,
-	       struct btr_record *rec)
+	       struct btr_record *rec, d_iov_t *val_out)
 {
 	if (btr_is_direct_key(tcx) && (key->iov_len > EMBEDDED_KEY_MAX)) {
 		D_ERROR("Key size (%zd) > Anchor size (%u)\n",
@@ -483,7 +484,7 @@ btr_rec_alloc(struct btr_context *tcx, d_iov_t *key, d_iov_t *val,
 		return -DER_KEY2BIG;
 	}
 
-	return btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec);
+	return btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec, val_out);
 }
 
 static int
@@ -514,12 +515,12 @@ btr_rec_fetch(struct btr_context *tcx, struct btr_record *rec,
 
 static int
 btr_rec_update(struct btr_context *tcx, struct btr_record *rec,
-	       d_iov_t *key, d_iov_t *val)
+	       d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	if (!btr_ops(tcx)->to_rec_update)
 		return -DER_NO_PERM;
 
-	return btr_ops(tcx)->to_rec_update(&tcx->tc_tins, rec, key, val);
+	return btr_ops(tcx)->to_rec_update(&tcx->tc_tins, rec, key, val, val_out);
 }
 
 static int
@@ -1658,6 +1659,7 @@ btr_probe_next(struct btr_context *tcx)
 		tmp = btr_node_child_at(tcx, trace->tr_node, trace->tr_at);
 		trace++;
 		trace->tr_at = 0;
+		D_ASSERT(tmp != UMOFF_NULL);
 		trace->tr_node = tmp;
 	}
 
@@ -1711,6 +1713,7 @@ btr_probe_prev(struct btr_context *tcx)
 		tmp = btr_node_child_at(tcx, trace->tr_node, trace->tr_at);
 
 		trace++;
+		D_ASSERT(tmp != UMOFF_NULL);
 		trace->tr_node = tmp;
 		leaf = btr_node_is_leaf(tcx, trace->tr_node);
 
@@ -1783,6 +1786,109 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 }
 
 /**
+ * Fetch on current trace position.
+ *
+ * \param toh     [IN]		Tree open handle.
+ * \param key_out [OUT]		Return the key
+ * \param val_out [OUT]		Returned value address, or sink buffer to
+ *				store returned value.
+ *
+ * \return		0	Key exists on current pos
+ *			-ve	Error code
+ */
+int
+dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out)
+{
+	struct btr_record	*rec;
+	struct btr_context	*tcx;
+	struct btr_trace	*trace;
+	struct btr_node		*nd;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	if (btr_root_empty(tcx)) /* empty tree */
+		return -DER_NONEXIST;
+
+	D_ASSERT(tcx->tc_depth > 0);
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+
+	nd = btr_off2ptr(tcx, trace->tr_node);
+	D_ASSERT(trace->tr_at <= nd->tn_keyn);
+	if (nd->tn_keyn == 0 || trace->tr_at == nd->tn_keyn)
+		return -DER_NONEXIST;
+
+	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
+	return btr_rec_fetch(tcx, rec, key_out, val_out);
+}
+
+/**
+ * Fetch sibling of current trace position.
+ *
+ * \param toh     [IN]		Tree open handle.
+ * \param key_out [OUT]		Return the key
+ * \param val_out [OUT]		Returned value address, or sink buffer to
+ *				store returned value.
+ * \param next    [IN]		Fetch next or prev sibling
+ * \param move    [IN]		Move trace position or not
+ *
+ * \return		0	Key exists in current pos
+ *			-ve	Error code
+ */
+static int
+fetch_sibling(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool next, bool move)
+{
+	struct btr_record	*rec;
+	struct btr_context	*tcx;
+	struct btr_trace	*orig_trace;
+	struct btr_trace	 orig_traces[BTR_TRACE_MAX];
+	bool			 found;
+	int			 rc;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	/* Save original trace */
+	if (!move) {
+		orig_trace = tcx->tc_trace;
+		memcpy(&orig_traces[0], &tcx->tc_traces[0],
+		       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
+	}
+
+	found = next ? btr_probe_next(tcx) : btr_probe_prev(tcx);
+	if (!found) {
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+
+	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
+	rc = btr_rec_fetch(tcx, rec, key_out, val_out);
+out:
+	/* Restore original trace */
+	if (!move) {
+		tcx->tc_trace = orig_trace;
+		memcpy(&tcx->tc_traces[0], &orig_traces[0],
+		       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
+	}
+
+	return rc;
+}
+
+int
+dbtree_fetch_prev(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move)
+{
+	return fetch_sibling(toh, key_out, val_out, false, move);
+}
+
+int
+dbtree_fetch_next(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool move)
+{
+	return fetch_sibling(toh, key_out, val_out, true, move);
+}
+
+/**
  * Search the provided \a key and return its value to \a val_out.
  * If \a val_out provides sink buffer, then this function will copy record
  * value into the buffer, otherwise it only returns address of value of the
@@ -1804,7 +1910,7 @@ dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out)
 }
 
 static int
-btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
+btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct btr_record *rec;
 	int		   rc;
@@ -1815,7 +1921,7 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 	D_DEBUG(DB_TRACE, "Update record %s\n",
 		btr_rec_string(tcx, rec, true, sbuf, BTR_PRINT_BUF));
 
-	rc = btr_rec_update(tcx, rec, key, val);
+	rc = btr_rec_update(tcx, rec, key, val, val_out);
 	if (rc == -DER_NO_PERM) { /* cannot make inplace change */
 		struct btr_trace *trace = &tcx->tc_trace[tcx->tc_depth - 1];
 
@@ -1827,7 +1933,7 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 
 		D_DEBUG(DB_TRACE, "Replace the original record\n");
 		btr_rec_free(tcx, rec, NULL);
-		rc = btr_rec_alloc(tcx, key, val, rec);
+		rc = btr_rec_alloc(tcx, key, val, rec, val_out);
 	}
 out:
 	if (rc != 0) { /* failed */
@@ -1842,7 +1948,7 @@ out:
  * create a new record, insert it into tree leaf node.
  */
 static int
-btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
+btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct btr_record *rec;
 	char		  *rec_str = NULL;
@@ -1853,7 +1959,7 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 	rec = &rec_buf.rb_rec;
 	btr_hkey_gen(tcx, key, &rec->rec_hkey[0]);
 
-	rc = btr_rec_alloc(tcx, key, val, rec);
+	rc = btr_rec_alloc(tcx, key, val, rec, val_out);
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "Failed to create new record: "DF_RC"\n",
 			DP_RC(rc));
@@ -1894,7 +2000,7 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 
 static int
 btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	   uint32_t intent, d_iov_t *key, d_iov_t *val)
+	   uint32_t intent, d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	int	 rc;
 
@@ -1910,11 +2016,11 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		break;
 
 	case PROBE_RC_OK:
-		rc = btr_update(tcx, key, val);
+		rc = btr_update(tcx, key, val, val_out);
 		break;
 
 	case PROBE_RC_NONE:
-		rc = btr_insert(tcx, key, val);
+		rc = btr_insert(tcx, key, val, val_out);
 		break;
 
 	case PROBE_RC_UNKNOWN:
@@ -1989,7 +2095,7 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 	if (rc != 0)
 		return rc;
 
-	rc = btr_upsert(tcx, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key, val);
+	rc = btr_upsert(tcx, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key, val, NULL);
 
 	return btr_tx_end(tcx, rc);
 }
@@ -1999,18 +2105,19 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
  * there is no match.
  *
  * \param toh		[IN]	Tree open handle.
- * \param opc	[IN]		Probe opcode, see dbtree_probe_opc_t for the
+ * \param opc		[IN]	Probe opcode, see dbtree_probe_opc_t for the
  *				details.
  * \param key		[IN]	Key to search.
  * \param val		[IN]	New value for the key, it will punch the
  *				original value if \val is NULL.
+ * \param val_out	[OUT]	Return value address
  *
  * \return		0	success
  *			-ve	error code
  */
 int
 dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
-	      d_iov_t *key, d_iov_t *val)
+	      d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	struct btr_context *tcx;
 	int		    rc = 0;
@@ -2022,7 +2129,7 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
-	rc = btr_upsert(tcx, opc, intent, key, val);
+	rc = btr_upsert(tcx, opc, intent, key, val, val_out);
 
 	return btr_tx_end(tcx, rc);
 }
@@ -2745,6 +2852,7 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			}
 
 			root->tr_depth--;
+			D_ASSERT(node->tn_child != UMOFF_NULL);
 			root->tr_node = node->tn_child;
 
 			btr_context_set_depth(tcx, root->tr_depth);
@@ -3655,6 +3763,41 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 	} else {
 		btr_hkey_copy(tcx, (char *)&anchor->da_buf[0],
 			      &rec->rec_hkey[0]);
+		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
+	}
+
+	return 0;
+}
+
+
+/** Encode the anchor from a known key
+ *
+ * \param[in]	toh	Tree open handle
+ * \param[in]	key	The key to encode
+ * \param[out]	anchor	Encoded anchor
+ *
+ * \return	0 on success, error otherwise
+ */
+int
+dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor)
+{
+	char hkey[DAOS_HKEY_MAX];
+	struct btr_context  *tcx;
+
+	D_ASSERT(key != NULL);
+	D_ASSERT(anchor != NULL);
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	if (btr_is_direct_key(tcx)) {
+		btr_key_encode(tcx, key, anchor);
+		anchor->da_type = DAOS_ANCHOR_TYPE_KEY;
+
+	} else {
+		btr_hkey_gen(tcx, key, hkey);
+		btr_hkey_copy(tcx, (char *)&anchor->da_buf[0], &hkey[0]);
 		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 	}
 

@@ -26,6 +26,8 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
+/** container cell size */
+unsigned int	dt_cell_size;
 int		dt_obj_class;
 
 
@@ -105,6 +107,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		else
 			print_message("setup: created pool "DF_UUIDF"\n",
 				       DP_UUID(outpool->pool_uuid));
+		uuid_unparse(outpool->pool_uuid, outpool->pool_str);
 		if (rank_list)
 			d_rank_list_free(rank_list);
 	}
@@ -116,6 +119,7 @@ out:
 		if (!rc) {
 			MPI_Bcast(outpool->pool_uuid, 16,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			uuid_unparse(outpool->pool_uuid, outpool->pool_str);
 
 			/* TODO: Should we even be broadcasting this now? */
 			if (outpool->svc == NULL)
@@ -162,9 +166,9 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 					       &arg->pool.pool_info,
 					       NULL);
 		} else {
-			print_message("setup: connecting to pool "DF_UUID"\n",
-				      DP_UUID(arg->pool.pool_uuid));
-			rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			print_message("setup: connecting to pool %s\n",
+				      arg->pool.pool_str);
+			rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 					       flags, &arg->pool.poh,
 					       &arg->pool.pool_info, NULL);
 		}
@@ -209,22 +213,38 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 	int rc = 0;
 
 	if (arg->myrank == 0) {
-		uuid_generate(arg->co_uuid);
-		print_message("setup: creating container "DF_UUIDF"\n",
-			      DP_UUID(arg->co_uuid));
-		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, co_prop,
-				      NULL);
-		if (rc)
+		if (!co_prop || daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL) {
+			char cont_label[32];
+			static int cont_idx;
+
+			sprintf(cont_label, "daos_test_%d", cont_idx++);
+			print_message("setup: creating container with label %s\n", cont_label);
+			rc = daos_cont_create_with_label(arg->pool.poh, cont_label,
+							 co_prop, &arg->co_uuid, NULL);
+		} else {
+			print_message("setup: creating container\n");
+			rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, co_prop, NULL);
+		}
+
+		if (rc) {
 			print_message("daos_cont_create failed, rc: %d\n", rc);
+		} else {
+			print_message("setup: container "DF_UUIDF" created\n",
+				      DP_UUID(arg->co_uuid));
+			uuid_unparse(arg->co_uuid, arg->co_str);
+		}
 	}
 	/** broadcast container create result */
 	if (arg->multi_rank) {
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		/** broadcast container UUID */
-		if (!rc)
+		if (!rc) {
 			MPI_Bcast(arg->co_uuid, 16,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			uuid_unparse(arg->co_uuid, arg->co_str);
+		}
 	}
+
 	return rc;
 }
 
@@ -244,9 +264,9 @@ test_setup_cont_open(void **state)
 					    &arg->coh, &arg->co_info,
 					    NULL);
 		} else {
-			print_message("setup: opening container "DF_UUID"\n",
-				      DP_UUID(arg->co_uuid));
-			rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
+			print_message("setup: opening container %s\n",
+				      arg->co_str);
+			rc = daos_cont_open(arg->pool.poh, arg->co_str,
 					    arg->cont_open_flags,
 					    &arg->coh, &arg->co_info, NULL);
 		}
@@ -299,7 +319,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	unsigned int		 seed;
 	int			 rc = 0;
 	daos_prop_t		 co_props = {0};
-	struct daos_prop_entry	 csum_entry[3] = {0};
+	struct daos_prop_entry	 dpp_entry[4] = {0};
 	struct daos_prop_entry	*entry;
 
 	/* feed a seed for pseudo-random number generator */
@@ -352,7 +372,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		print_message("\n-------\n"
 			      "Checksum enabled in test!"
 			      "\n-------\n");
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
 
@@ -360,14 +380,14 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	if (dt_csum_chunksize) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 		entry->dpe_val = dt_csum_chunksize;
 		co_props.dpp_nr++;
 	}
 
 	if (dt_csum_server_verify) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 		entry->dpe_val = dt_csum_server_verify ?
 			DAOS_PROP_CO_CSUM_SV_ON :
@@ -376,8 +396,15 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		co_props.dpp_nr++;
 	}
 
+	if (dt_cell_size) {
+		entry = &dpp_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+		entry->dpe_val = dt_cell_size;
+		co_props.dpp_nr++;
+	}
+
 	if (co_props.dpp_nr > 0)
-		co_props.dpp_entries = csum_entry;
+		co_props.dpp_entries = dpp_entry;
 
 	while (!rc && step != arg->setup_state)
 		rc = test_setup_next_step(state, pool, NULL, &co_props);
@@ -402,7 +429,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 	poh = pool->poh;
 
 	if (daos_handle_is_inval(poh)) {
-		rc = daos_pool_connect(pool->pool_uuid, arg->group,
+		rc = daos_pool_connect(pool->pool_str, arg->group,
 				       DAOS_PC_RW,
 				       &poh, &pool->pool_info,
 				       NULL /* ev */);
@@ -433,7 +460,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	daos_pool_disconnect(poh, NULL);
+	rc = daos_pool_disconnect(poh, NULL);
+	if (rc) {
+		print_message("daos_pool_disconnect failed, rc: %d\n", rc);
+	}
 
 	rc = dmg_pool_destroy(dmg_config_file,
 			      pool->pool_uuid, arg->group, 1);
@@ -474,7 +504,7 @@ test_teardown_cont(test_arg_t *arg)
 	int	rc = 0;
 
 	while (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1,
+		rc = daos_cont_destroy(arg->pool.poh, arg->co_str, 1,
 				       NULL);
 		if (rc == -DER_BUSY) {
 			print_message("Container is busy, wait\n");
@@ -488,6 +518,9 @@ test_teardown_cont(test_arg_t *arg)
 	if (rc)
 		print_message("failed to destroy container "DF_UUIDF
 			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+	else
+		print_message("teardown: container "DF_UUIDF" destroyed\n",
+			      DP_UUID(arg->co_uuid));
 
 	uuid_clear(arg->co_uuid);
 	arg->setup_state = SETUP_POOL_CONNECT;
@@ -604,8 +637,8 @@ d_rank_t ranks_to_kill[MAX_KILLS];
 bool
 test_runable(test_arg_t *arg, unsigned int required_nodes)
 {
-	int		 i;
-	static bool	 runable = true;
+	int	i;
+	int	runable = 1;
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"
@@ -627,7 +660,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
-			runable = false;
+			runable = 0;
 		}
 
 		for (i = 0; i < MAX_KILLS; i++)
@@ -639,7 +672,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Barrier(MPI_COMM_WORLD);
-	return runable;
+	return runable == 1;
 }
 
 int
@@ -649,7 +682,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 	int	   rc;
 
 	if (daos_handle_is_inval(arg->pool.poh)) {
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW,
 				       &arg->pool.poh, pinfo,
 				       NULL /* ev */);

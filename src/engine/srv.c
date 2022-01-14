@@ -30,7 +30,7 @@
 /**
  * DAOS server threading model:
  * 1) a set of "target XS (xstream) set" per engine (dss_tgt_nr)
- * There is a "-c" option of daos_server to set the number.
+ * There is a "-t" option of daos_server to set the number.
  * For DAOS pool, one target XS set per VOS target to avoid extra lock when
  * accessing VOS file.
  * With in each target XS set, there is one "main XS":
@@ -385,26 +385,33 @@ dss_srv_handler(void *arg)
 		dx->dx_ctx_id = dmi->dmi_ctx_id;
 		/** verify CART assigned the ctx_id ascendantly start from 0 */
 		if (dx->dx_xs_id < dss_sys_xs_nr) {
-			D_ASSERT(dx->dx_ctx_id == dx->dx_xs_id);
+			/*
+			 * xs_id: 0 => SYS  XS: ctx_id: 0
+			 * xs_id: 1 => SWIM XS: ctx_id: 1
+			 * xs_id: 2 => DRPC XS: no ctx_id
+			 */
+			D_ASSERTF(dx->dx_ctx_id == dx->dx_xs_id,
+				  "incorrect ctx_id %d for xs_id %d\n",
+				  dx->dx_ctx_id, dx->dx_xs_id);
 		} else {
 			if (dx->dx_main_xs) {
 				D_ASSERTF(dx->dx_ctx_id ==
-					  dx->dx_tgt_id + dss_sys_xs_nr -
-					  DRPC_XS_NR,
-					  "incorrect ctx_id %d for xs_id %d\n",
-					  dx->dx_ctx_id, dx->dx_xs_id);
+					  (dx->dx_tgt_id + dss_sys_xs_nr - DRPC_XS_NR),
+					  "incorrect ctx_id %d for xs_id %d tgt_id %d\n",
+					  dx->dx_ctx_id, dx->dx_xs_id, dx->dx_tgt_id);
 			} else {
 				if (dss_helper_pool)
-					D_ASSERTF(dx->dx_ctx_id ==
-						  (dx->dx_xs_id - DRPC_XS_NR),
-					"incorrect ctx_id %d for xs_id %d\n",
-					dx->dx_ctx_id, dx->dx_xs_id);
+					D_ASSERTF(dx->dx_ctx_id == (dx->dx_xs_id - DRPC_XS_NR),
+						  "incorrect ctx_id %d for xs_id %d tgt_id %d\n",
+						  dx->dx_ctx_id, dx->dx_xs_id, dx->dx_tgt_id);
 				else
 					D_ASSERTF(dx->dx_ctx_id ==
-						(dss_sys_xs_nr + dss_tgt_nr +
-						 dx->dx_tgt_id - DRPC_XS_NR),
-					"incorrect ctx_id %d for xs_id %d\n",
-					dx->dx_ctx_id, dx->dx_xs_id);
+						  (dx->dx_tgt_id + dss_sys_xs_nr - DRPC_XS_NR +
+						   dss_tgt_nr),
+						  "incorrect ctx_id %d for xs_id %d "
+						  "tgt_id %d tgt_nr %d\n",
+						  dx->dx_ctx_id, dx->dx_xs_id,
+						  dx->dx_tgt_id, dss_tgt_nr);
 			}
 		}
 	}
@@ -463,8 +470,13 @@ dss_srv_handler(void *arg)
 	/* wait until all xstreams are ready, otherwise it is not safe
 	 * to run lock-free dss_collective, although this race is not
 	 * realistically possible in the DAOS stack.
+	 *
+	 * The SWIM xstream, however, needs to start progressing crt quickly to
+	 * respond to incoming pings. It is out of the scope of
+	 * dss_{thread,task}_collective.
 	 */
-	ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
+	if (dx->dx_xs_id != 1 /* DSS_XS_SWIM */)
+		ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
 	signal_caller = false;
@@ -602,27 +614,38 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * as it is only for EC/checksum/compress offloading.
 	 */
 	if (dss_helper_pool) {
-		comm = (xs_id == 0) || (xs_id >= dss_sys_xs_nr &&
-				xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr));
+		comm =  (xs_id == 0) || /* DSS_XS_SYS */
+			(xs_id == 1) || /* DSS_XS_SWIM */
+			(xs_id >= dss_sys_xs_nr &&
+			 xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr));
 	} else {
 		int	helper_per_tgt;
 
 		helper_per_tgt = dss_tgt_offload_xs_nr / dss_tgt_nr;
-		D_ASSERT(helper_per_tgt == 0 || helper_per_tgt == 1 ||
+		D_ASSERT(helper_per_tgt == 0 ||
+			 helper_per_tgt == 1 ||
 			 helper_per_tgt == 2);
-		xs_offset = xs_id < dss_sys_xs_nr ? -1 :
-				(((xs_id) - dss_sys_xs_nr) %
-				 (helper_per_tgt + 1));
-		comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
+
+		if ((xs_id >= dss_sys_xs_nr) &&
+		    (xs_id < (dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)))
+			xs_offset = (xs_id - dss_sys_xs_nr) % (helper_per_tgt + 1);
+		else
+			xs_offset = -1;
+
+		comm =  (xs_id == 0) ||		/* DSS_XS_SYS */
+			(xs_id == 1) ||		/* DSS_XS_SWIM */
+			(xs_offset == 0) ||	/* main XS */
+			(xs_offset == 1);	/* first offload XS */
 	}
+
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
 	if (dss_helper_pool) {
-		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr &&
-				  xs_id < (dss_sys_xs_nr + dss_tgt_nr);
+		dx->dx_main_xs	= (xs_id >= dss_sys_xs_nr) &&
+				  (xs_id < (dss_sys_xs_nr + dss_tgt_nr));
 	} else {
-		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
+		dx->dx_main_xs	= (xs_id >= dss_sys_xs_nr) && (xs_offset == 0);
 	}
 	dx->dx_dsc_started = false;
 
@@ -821,8 +844,11 @@ dss_start_xs_id(int xs_id)
 		}
 		D_DEBUG(DB_TRACE,
 			"Choosing next available core index %d.", idx);
-		/* the 2nd system XS (drpc XS) will reuse the first XS' core */
-		if (xs_id != 0)
+		/*
+		 * All system XS will reuse the first XS' core, but
+		 * the SWIM and DRPC XS will use separate core if enough cores
+		 */
+		if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
 			hwloc_bitmap_clr(core_allocation_bitmap, idx);
 
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
@@ -837,13 +863,15 @@ dss_start_xs_id(int xs_id)
 	} else {
 		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
 		/*
-		* System XS all use the first core
-		*/
-		if (xs_id < dss_sys_xs_nr)
-			xs_core_offset = 0;
+		 * All system XS will use the first core, but
+		 * the SWIM XS will use separate core if enough cores
+		 */
+		if (xs_id > 2)
+			xs_core_offset = xs_id - ((dss_core_nr > dss_tgt_nr) ? 1 : 2);
+		else if (xs_id == 1)
+			xs_core_offset = (dss_core_nr > dss_tgt_nr) ? 1 : 0;
 		else
-			xs_core_offset = xs_id - (dss_sys_xs_nr - DRPC_XS_NR);
-
+			xs_core_offset = 0;
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
 					     (xs_core_offset + dss_core_offset)
 					     % dss_core_nr);
@@ -874,19 +902,11 @@ dss_xstreams_init(void)
 	if (sched_prio_disabled)
 		D_INFO("ULT prioritizing is disabled.\n");
 
-	d_getenv_int("DAOS_SCHED_STATS_INTVL", &sched_stats_intvl);
-	if (sched_stats_intvl != 0) {
-		D_INFO("Print sched stats every %u seconds\n",
-		       sched_stats_intvl);
-		/* Convert seconds to milliseconds */
-		sched_stats_intvl = sched_stats_intvl * 1000;
-	}
-
 	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
-		       sched_stats_intvl, SCHED_RELAX_INTVL_DEFAULT);
+		       sched_relax_intvl, SCHED_RELAX_INTVL_DEFAULT);
 		sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 	} else {
 		D_INFO("CPU relax interval is set to %u msecs\n",
@@ -905,6 +925,7 @@ dss_xstreams_init(void)
 	       sched_relax_mode2str(sched_relax_mode));
 
 	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
 
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
@@ -935,28 +956,28 @@ dss_xstreams_init(void)
 	}
 
 	/* start offload XS if any */
-	if (dss_tgt_offload_xs_nr == 0)
-		D_GOTO(out, rc);
-	if (dss_helper_pool) {
-		for (i = 0; i < dss_tgt_offload_xs_nr; i++) {
-			xs_id = dss_sys_xs_nr + dss_tgt_nr + i;
-			rc = dss_start_xs_id(xs_id);
-			if (rc)
-				D_GOTO(out, rc);
-		}
-	} else {
-		D_ASSERTF(dss_tgt_offload_xs_nr % dss_tgt_nr == 0,
-			  "bad dss_tgt_offload_xs_nr %d, dss_tgt_nr %d\n",
-			  dss_tgt_offload_xs_nr, dss_tgt_nr);
-		for (i = 0; i < dss_tgt_nr; i++) {
-			int j;
-
-			for (j = 0; j < dss_tgt_offload_xs_nr / dss_tgt_nr;
-			     j++) {
-				xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+	if (dss_tgt_offload_xs_nr > 0) {
+		if (dss_helper_pool) {
+			for (i = 0; i < dss_tgt_offload_xs_nr; i++) {
+				xs_id = dss_sys_xs_nr + dss_tgt_nr + i;
 				rc = dss_start_xs_id(xs_id);
 				if (rc)
 					D_GOTO(out, rc);
+			}
+		} else {
+			D_ASSERTF(dss_tgt_offload_xs_nr % dss_tgt_nr == 0,
+				  "dss_tgt_offload_xs_nr %d, dss_tgt_nr %d\n",
+				  dss_tgt_offload_xs_nr, dss_tgt_nr);
+			for (i = 0; i < dss_tgt_nr; i++) {
+				int j;
+
+				for (j = 0; j < dss_tgt_offload_xs_nr /
+						dss_tgt_nr; j++) {
+					xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+					rc = dss_start_xs_id(xs_id);
+					if (rc)
+						D_GOTO(out, rc);
+				}
 			}
 		}
 	}

@@ -37,8 +37,16 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	}
 
 	if (to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) {
-		DFUSE_TRA_INFO(ie, "File uid/gid support not enabled");
-		D_GOTO(err, rc = ENOTSUP);
+		DFUSE_TRA_DEBUG(ie, "uid flags %#x uid %d gid %d",
+				(to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)),
+				attr->st_uid, attr->st_gid);
+
+		if (((to_set & FUSE_SET_ATTR_UID) && ie->ie_stat.st_uid != attr->st_uid) ||
+			((to_set & FUSE_SET_ATTR_GID) && ie->ie_stat.st_gid != attr->st_gid)) {
+			DFUSE_TRA_INFO(ie, "File uid/gid support not enabled");
+			D_GOTO(err, rc = ENOTSUP);
+		}
+		to_set &= ~(FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID);
 	}
 
 	if (to_set & FUSE_SET_ATTR_MODE) {
@@ -63,20 +71,13 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		dfs_flags |= DFS_SET_ATTR_MTIME;
 	}
 
-	/* Only set this when caching is enabled as dfs doesn't fully support
-	 * ctime, but rather uses mtime instead.  In practice this is only
-	 * seen when using writeback cache.
+	/* Set this when requested, however dfs doesn't support ctime, only mtime.
 	 *
-	 * This is only seen of entries where caching is enabled, however
-	 * if a file is opened with caching then the operation might then
-	 * happen on the inode, not the file handle so simply check if
-	 * caching might be enabled for the container.
+	 * This is only seen on entries where caching is enabled, however it can happen
+	 * for either data or metadata caching, so just accept it always.
+	 * Update, it can happen with metadata caching, but not data caching.
 	 */
 	if (to_set & FUSE_SET_ATTR_CTIME) {
-		if (!ie->ie_dfs->dfc_data_caching) {
-			DFUSE_TRA_INFO(ie, "CTIME set without data caching");
-			D_GOTO(err, rc = ENOTSUP);
-		}
 		DFUSE_TRA_DEBUG(ie, "ctime %#lx", attr->st_ctime);
 		to_set &= ~FUSE_SET_ATTR_CTIME;
 		attr->st_mtime = attr->st_ctime;
@@ -111,8 +112,11 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	attr->st_ino = ie->ie_stat.st_ino;
 
-	/* Update the size as dfuse knows about it for future use */
-	ie->ie_stat.st_size = attr->st_size;
+	/* Update the size as dfuse knows about it for future use, but only if it was set as part
+	 * of this call.  See DAOS-8333
+	 */
+	if (dfs_flags & DFS_SET_ATTR_SIZE)
+		ie->ie_stat.st_size = attr->st_size;
 
 	DFUSE_REPLY_ATTR(ie, req, attr);
 	return;

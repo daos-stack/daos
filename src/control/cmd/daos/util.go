@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -223,6 +224,7 @@ type daosCaller interface {
 }
 
 type daosCmd struct {
+	cmdutil.NoArgsCmd
 	jsonOutputCmd
 	logCmd
 }

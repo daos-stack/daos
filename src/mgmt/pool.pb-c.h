@@ -229,14 +229,26 @@ struct  _Mgmt__PoolEvictReq
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
   /*
-   * Optional list of handles to evict
+   * Optional list of handles to evict (Mutually exclusive with destroy/force_destroy)
    */
   size_t n_handles;
   char **handles;
+  /*
+   * If true, evict is first step of a pool destroy operation
+   */
+  protobuf_c_boolean destroy;
+  /*
+   * If true and destroy=true, forcibly closes open pool handles
+   */
+  protobuf_c_boolean force_destroy;
+  /*
+   * Optional machine name to evict handles for (Mutually exclusive with handles)
+   */
+  char *machine;
 };
 #define MGMT__POOL_EVICT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_evict_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string }
 
 
 /*
@@ -249,10 +261,14 @@ struct  _Mgmt__PoolEvictResp
    * DAOS error code
    */
   int32_t status;
+  /*
+   * Count of handles evicted
+   */
+  int32_t count;
 };
 #define MGMT__POOL_EVICT_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_evict_resp__descriptor) \
-    , 0 }
+    , 0, 0 }
 
 
 /*

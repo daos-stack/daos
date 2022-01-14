@@ -59,86 +59,6 @@ ioveq(const d_iov_t *iov1, const d_iov_t *iov2)
 	D_ASSERT(memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len) == 0);
 }
 
-/* Load uuid from file path. */
-static int
-uuid_load(const char *path, uuid_t uuid)
-{
-	int	fd;
-	int	rc;
-
-	/* Open the UUID file. */
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		if (errno == ENOENT)
-			D_DEBUG(DB_MD, "failed to open uuid file %s: %d\n",
-				path, errno);
-		else
-			D_ERROR("failed to open uuid file %s: %d\n", path,
-				errno);
-		rc = daos_errno2der(errno);
-		goto out;
-	}
-
-	/* Read the UUID. */
-	rc = read(fd, uuid, sizeof(uuid_t));
-	if (rc == sizeof(uuid_t)) {
-		rc = 0;
-	} else {
-		if (rc != -1)
-			errno = EIO;
-		D_ERROR("failed to read %s: %d %d\n", path, rc, errno);
-		rc = daos_errno2der(errno);
-	}
-
-	close(fd);
-out:
-	return rc;
-}
-
-/* Store uuid in file path. */
-static int
-uuid_store(const char *path, const uuid_t uuid)
-{
-	int	fd;
-	int	rc;
-
-	/* Create and open the UUID file. */
-	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		D_ERROR(DF_UUID": failed to create uuid file %s: %d\n",
-			DP_UUID(uuid), path, errno);
-		rc = daos_errno2der(errno);
-		goto out;
-	}
-
-	/* Write the UUID. */
-	rc = write(fd, uuid, sizeof(uuid_t));
-	if (rc != sizeof(uuid_t)) {
-		if (rc != -1)
-			errno = EIO;
-		D_ERROR(DF_UUID": failed to write uuid into %s: %d %d\n",
-			DP_UUID(uuid), path, rc, errno);
-		rc = daos_errno2der(errno);
-		goto out_fd;
-	}
-
-	/* Persist the UUID. */
-	rc = fsync(fd);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to fsync %s: %d\n", DP_UUID(uuid),
-			path, errno);
-		rc = daos_errno2der(errno);
-	}
-
-	/* Free the resource and remove the file on errors. */
-out_fd:
-	close(fd);
-	if (rc != 0)
-		remove(path);
-out:
-	return rc;
-}
-
 static int
 test_svc_name_cb(d_iov_t *id, char **name)
 {
@@ -146,58 +66,6 @@ test_svc_name_cb(d_iov_t *id, char **name)
 	D_STRNDUP(*name, test_svc_name, strlen(test_svc_name));
 	D_ASSERT(*name != NULL);
 	return 0;
-}
-
-static int
-test_svc_load_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	int	rc;
-	char    *path = NULL;
-
-	ID_OK(id);
-	rc = asprintf(&path, "%s/rdbt-%s-uuid", dss_storage_path,
-		      test_svc_name);
-	if ((rc <= 0) || (path == NULL))
-		return -DER_NOMEM;
-	rc = uuid_load(path, db_uuid);
-	D_FREE(path);
-	return rc;
-}
-
-static int
-test_svc_store_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	int	rc;
-	char    *path = NULL;
-
-	ID_OK(id);
-	rc = asprintf(&path, "%s/rdbt-%s-uuid", dss_storage_path,
-		      test_svc_name);
-	if ((rc <= 0) || (path == NULL))
-		return -DER_NOMEM;
-	rc = uuid_store(path, db_uuid);
-	D_FREE(path);
-	return rc;
-}
-
-static int
-test_svc_delete_uuid_cb(d_iov_t *id)
-{
-	int	rc;
-	char    *path = NULL;
-
-	ID_OK(id);
-	rc = asprintf(&path, "%s/rdbt-%s-uuid", dss_storage_path,
-		      test_svc_name);
-	if ((rc <= 0) || (path == NULL))
-		return -DER_NOMEM;
-	rc = remove(path);
-	if (rc != 0) {
-		D_ERROR("%s: failed to remove path %s\n", test_svc_name, path);
-		rc = daos_errno2der(errno);
-	}
-	D_FREE(path);
-	return rc;
 }
 
 static int
@@ -274,9 +142,6 @@ test_svc_drain_cb(struct ds_rsvc *rsvc)
 
 static struct ds_rsvc_class test_svc_rsvc_class = {
 	.sc_name	= test_svc_name_cb,
-	.sc_load_uuid	= test_svc_load_uuid_cb,
-	.sc_store_uuid	= test_svc_store_uuid_cb,
-	.sc_delete_uuid	= test_svc_delete_uuid_cb,
 	.sc_locate	= test_svc_locate_cb,
 	.sc_alloc	= test_svc_alloc_cb,
 	.sc_free	= test_svc_free_cb,

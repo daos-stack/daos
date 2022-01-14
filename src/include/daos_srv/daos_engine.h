@@ -43,10 +43,10 @@ extern const char	*dss_socket_dir;
 extern int		 dss_nvme_shm_id;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode (in MB) */
-extern int		 dss_nvme_mem_size;
+extern unsigned int	dss_nvme_mem_size;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation (in MB) */
-extern int		 dss_nvme_hugepage_size;
+extern unsigned int	 dss_nvme_hugepage_size;
 
 /** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;
@@ -133,50 +133,6 @@ void dss_unregister_key(struct dss_module_key *key);
 
 /** pthread names are limited to 16 chars */
 #define DSS_XS_NAME_LEN		(32)
-
-struct srv_profile_chunk {
-	d_list_t	spc_chunk_list;
-	uint32_t	spc_chunk_offset;
-	uint32_t	spc_chunk_size;
-	uint64_t	*spc_chunks;
-};
-
-/* The profile structure to record single operation */
-struct srv_profile_op {
-	int		pro_op;			/* operation */
-	char		*pro_op_name;		/* name of the op */
-	int		pro_acc_cnt;		/* total number of val */
-	int		pro_acc_val;		/* current total val */
-	d_list_t	pro_chunk_list;		/* list of all chunks */
-	d_list_t	pro_chunk_idle_list;	/* idle list of profile chunk */
-	int		pro_chunk_total_cnt;	/* Count in idle list & list */
-	int		pro_chunk_cnt;		/* count in list */
-	struct srv_profile_chunk *pro_current_chunk; /* current chunk */
-};
-
-/* Holding the total trunk list for a specific profiling module */
-
-#define D_TIME_START(start, op)			\
-do {						\
-	struct daos_profile *dp;		\
-						\
-	dp = dss_get_module_info()->dmi_dp;	\
-	if ((dp) == NULL)			\
-		break;				\
-	start = daos_get_ntime();		\
-} while (0)
-
-#define D_TIME_END(start, op)			\
-do {						\
-	struct daos_profile *dp;		\
-	int time_msec;				\
-						\
-	dp = dss_get_module_info()->dmi_dp;	\
-	if ((dp) == NULL || start == 0)		\
-		break;				\
-	time_msec = (daos_get_ntime() - start)/1000; \
-	daos_profile_count(dp, op, time_msec);	\
-} while (0)
 
 /* Opaque xstream configuration data */
 struct dss_xstream;
@@ -276,11 +232,14 @@ sched_req_attr_init(struct sched_req_attr *attr, unsigned int type,
 struct sched_request;	/* Opaque schedule request */
 
 /**
- * Get A sched request.
+ * Get a sched request.
  *
  * \param[in] attr	Sched request attributes.
- * \param[in] ult	ULT attached to the sched request,
- *			self ULT will be used when ult == ABT_THREAD_NULL.
+ * \param[in] ult	ULT attached to the sched request, self ULT will be
+ *			used when ult == ABT_THREAD_NULL. If not
+ *			ABT_THREAD_NULL, ult will be freed by sched_req_put.
+ *			Unnamed ULTs (e.g., from ABT_thread_self) are
+ *			prohibited.
  *
  * \retval		Sched request.
  */
@@ -288,7 +247,8 @@ struct sched_request *
 sched_req_get(struct sched_req_attr *attr, ABT_thread ult);
 
 /**
- * Put A sched request.
+ * Put a sched request. If the associated ULT was passed in by the caller, it
+ * will be freed.
  *
  * \param[in] req	Sched request.
  *
@@ -325,7 +285,8 @@ void sched_req_sleep(struct sched_request *req, uint32_t msec);
 void sched_req_wakeup(struct sched_request *req);
 
 /**
- * Wakeup a sched request attached ULT terminated.
+ * Wakeup a sched request attached ULT terminated. The associated ULT of \a req
+ * must not an unnamed ULT.
  *
  * \param[in] req	Sched request.
  * \param[in] abort	Abort the ULT or not.
@@ -364,6 +325,39 @@ void sched_cond_wait(ABT_cond cond, ABT_mutex mutex);
  * Get current monotonic time in milli-seconds.
  */
 uint64_t sched_cur_msec(void);
+
+/**
+ * Get current schedule sequence, by comparing the results of two
+ * sched_cur_seq() calls, we can tell if an ULT was yielding between
+ * these two calls.
+ */
+uint64_t sched_cur_seq(void);
+
+/**
+ * Get current ULT/Task execution time. The execution time is the elapsed
+ * time since current ULT/Task was scheduled last time.
+ *
+ * \param[out]	msecs		executed time in milli-second
+ * \param[in]	ult_name	ULT name (optional)
+ *
+ * \retval			-DER_NOSYS or 0 on success.
+ */
+int sched_exec_time(uint64_t *msecs, const char *ult_name);
+
+/**
+ * Create an ULT on the caller xstream and return the associated sched_request.
+ * Caller is responsible for freeing the sched_request by sched_req_put().
+ *
+ * \param[in]	attr		sched request attributes
+ * \param[in]	func		ULT function
+ * \param[in]	arg		ULT argument
+ * \param[in]	stack_size	ULT stack size
+ *
+ * \retval			associated shed_request on success, NULL on error.
+ */
+struct sched_request *
+sched_create_ult(struct sched_req_attr *attr, void (*func)(void *), void *arg,
+		 size_t stack_size);
 
 static inline bool
 dss_ult_exiting(struct sched_request *req)
@@ -415,6 +409,11 @@ struct dss_module_metrics {
 	 */
 	void	*(*dmm_init)(const char *path, int tgt_id);
 	void	 (*dmm_fini)(void *data);
+
+	/**
+	 * Get the number of metrics allocated by this module in total (including all targets).
+	 */
+	int	 (*dmm_nr_metrics)(void);
 };
 
 /**
@@ -479,8 +478,10 @@ enum dss_xs_type {
 	DSS_XS_OFFLOAD	= 2,
 	/** pool service, RDB, drpc handler */
 	DSS_XS_SYS	= 3,
+	/** SWIM operations */
+	DSS_XS_SWIM	= 4,
 	/** drpc listener */
-	DSS_XS_DRPC	= 4,
+	DSS_XS_DRPC	= 5,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -488,6 +489,8 @@ int dss_parameters_set(unsigned int key_id, uint64_t value);
 enum dss_ult_flags {
 	/* Periodically created ULTs */
 	DSS_ULT_FL_PERIODIC	= (1 << 0),
+	/* Use DSS_DEEP_STACK_SZ as the stack size */
+	DSS_ULT_DEEP_STACK	= (1 << 1),
 };
 
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
@@ -495,6 +498,7 @@ int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
 int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
+int __attribute__((weak)) dss_offload_exec(int (*func)(void *), void *arg);
 
 /*
  * If server wants to create ULTs periodically, it should call this special
@@ -594,6 +598,7 @@ struct dss_module *dss_module_get(int mod_id);
 void dss_module_fini_metrics(enum dss_module_tag tag, void **metrics);
 int dss_module_init_metrics(enum dss_module_tag tag, void **metrics,
 			    const char *path, int tgt_id);
+int dss_module_nr_pool_metrics(void);
 
 /* Convert Argobots errno to DAOS ones. */
 static inline int
@@ -731,6 +736,7 @@ struct dss_enum_arg {
 			int			kds_len;
 			d_sg_list_t	       *sgl;
 			d_iov_t			csum_iov;
+			uint32_t		ec_cell_sz;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */
@@ -844,12 +850,10 @@ int
 ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
 		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
 		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  unsigned int *shards, int cnt, int clear_conts);
+		  daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
+		  unsigned int migrate_opc);
 void
-ds_migrate_fini_one(uuid_t pool_uuid, uint32_t ver);
-
-void
-ds_migrate_abort(uuid_t pool_uuid, uint32_t ver);
+ds_migrate_stop(struct ds_pool *pool, uint32_t ver);
 
 /** Server init state (see server_init) */
 enum dss_init_state {

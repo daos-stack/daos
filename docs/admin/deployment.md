@@ -13,7 +13,7 @@ first time, `daos_server storage prepare --scm-only` will set PMem storage
 into the necessary state for use with DAOS when run on each host.
 Then `dmg storage format` formats persistent storage devices (specified in the
 server configuration file) on the storage nodes and writes necessary metadata
-before starting DAOS Engine processes that will operate across the fabric.
+before starting DAOS I/O engine processes that will operate across the fabric.
 
 To sum up, the typical workflow of a DAOS system deployment consists of the
 following steps:
@@ -45,7 +45,7 @@ DAOS server configuration and how to start it on all the storage nodes.
 A recommended workflow to get up and running is as follows:
 
 * Install DAOS Server RPMs - `daos_server` systemd services will start in
-listening mode which means DAOS Engine processes will not be started as the
+listening mode which means DAOS I/O engine processes will not be started as the
 server config file (default location at `/etc/daos/daos_server.yml`) has not
 yet been populated.
 
@@ -62,14 +62,15 @@ and restart all `daos_server` services.
 An example command to restart the services is
 `clush -w machines-[118-121,130-133] "sudo systemctl restart daos_server"`.
 The services should prompt for format on restart and after format is triggered
-from `dmg`, the DAOS Engine processes should start.
+from `dmg`, the DAOS I/O engine processes should start.
 
 ### Server Configuration File
 
-The `daos_server` configuration file is parsed when starting the
-`daos_server` process. The configuration file location can be specified
-on the command line (`daos_server -h` for usage) or it will be read from
-the default location (`/etc/daos/daos_server.yml`).
+The `daos_server` configuration file is parsed when starting the `daos_server`
+process.
+The configuration file location can be specified on the command line
+(`daos_server -h` for usage) otherwise it will be read from the default location
+(`/etc/daos/daos_server.yml`).
 
 Parameter descriptions are specified in
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
@@ -176,11 +177,12 @@ host list.
 devices, taking into account any specified network device class preference
 (ethernet or infiniband).
 
-Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
-that prevented `ndctl` from being able to report the NUMA affinity for a
-namespace.
-This prevents generation of dual engine configs using `dmg config generate`
-when running with one of the above-mentioned affected kernels.
+!!! note
+    Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
+    that prevented `ndctl` from being able to report the NUMA affinity for a
+    namespace.
+    This prevents generation of dual engine configs using `dmg config generate`
+    when running with one of the above-mentioned affected kernels.
 
 #### Certificate Configuration
 
@@ -330,7 +332,7 @@ After RPM install, `daos_server` service starts automatically running as user
 certificates are read from `/etc/daos/certs`.
 With no other admin intervention other than the loading of certificates,
 `daos_server` will enter a listening state enabling discovery of storage and
-network hardware through the `dmg` tool without any I/O Engines specified in the
+network hardware through the `dmg` tool without any I/O engines specified in the
 configuration file. After device discovery and provisioning, an updated
 configuration file with a populated per-engine section can be stored in
 `/etc/daos/daos_server.yml`, and after reestarting the `daos_server` service
@@ -359,16 +361,20 @@ preference to the default location e.g. `~/.daos_control.yml`.
 Once the DAOS server started, the storage and network can be configured on the
 storage nodes via the dmg utility.
 
+!!! note
+    `daos_server` storage commands are not config aware meaning they will not
+    read parameters from the server configuration file.
+
 ### SCM Preparation
 
 This section addresses how to verify that PMem (Intel(R) Optane(TM) persistent
 memory) modules are correctly installed on the storage nodes and how to
-configure in interleaved mode to be used by DAOS.
+configure them in interleaved mode to be used by DAOS.
 Instructions for other types of SCM may be covered in the future.
 
 Provisioning the SCM occurs by configuring PMem modules in interleaved memory
 regions (interleaved mode) in groups of modules local to a specific socket
-(NUMA), and resultant nvdimm namespaces are defined by a device identifier
+(NUMA), and resultant PMem namespaces are defined by a device identifier
 (e.g., /dev/pmem0).
 
 PMem preparation is required once per DAOS installation.
@@ -420,23 +426,27 @@ devices are mounted before running reset (as per the printed warning).
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
 
+### Storage Discovery and Selection
 
-### Storage Selection
+This section covers how to manually detect and select storage devices to be
+used by DAOS.
+The server configuration file gives an administrator the ability to control
+storage selection.
 
-While the DAOS server auto-detects all the usable storage, the administrator
-will still be provided with the ability through the configuration file
-(see next section) to whitelist or blacklist the storage devices to be
-(or not) used. This section covers how to manually detect the storage devices
-potentially usable by DAOS to populate the configuration file when the
-administrator wants to have finer control over the storage selection.
+!!! note
+    `daos_server` storage commands are not config aware meaning they will not
+    read parameters from the server configuration file.
+
+#### Discovery
 
 `dmg storage scan` can be run to query remote running `daos_server`
 processes over the management network.
 
-`daos_server storage scan` can be used to query `daos_server` directly
-(scans locally-attached SSDs and Intel Persistent Memory Modules usable by
-DAOS) but SSDs need to be made accessible first by running
-`daos_server storage prepare --nvme-only -u <current_user` first.
+`daos_server storage scan` can be used to query local `daos_server` instances
+directly (scans locally-attached SSDs and Intel Persistent Memory Modules usable
+by DAOS).
+NVMe SSDs need to be made accessible first by running
+`daos_server storage prepare --nvme-only`.
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
@@ -469,6 +479,8 @@ section of the server configuration file for best performance.
 
 For further info on command usage run `dmg storage --help`.
 
+#### Health
+
 SSD health state can be verified via `dmg storage scan --nvme-health`:
 
 ```bash
@@ -478,6 +490,7 @@ wolf-71
 -------
 PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
   Health Stats:
+    Timestamp:2021-09-13T11:12:34.000+00:00
     Temperature:318K(44.85C)
     Controller Busy Time:0s
     Power Cycles:15
@@ -496,6 +509,29 @@ PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
     Device Reliability: OK
     Read Only: OK
     Volatile Memory Backup: OK
+  Intel Vendor SMART Attributes:
+    Program Fail Count:
+       Normalized:100%
+       Raw:0
+    Erase Fail Count:
+       Normalized:100%
+       Raw:0
+    Wear Leveling Count:
+       Normalized:100%
+       Min:0
+       Max:9
+       Avg:3
+    End-to-End Error Detection Count:0
+    CRC Error Count:0
+    Timed Workload, Media Wear:65535
+    Timed Workload, Host Read/Write Ratio:65535
+    Timed Workload, Timer:65535
+    Thermal Throttle Status:0%
+    Thermal Throttle Event Count:0
+    Retry Buffer Overflow Counter:0
+    PLL Lock Loss Count:0
+    NAND Bytes Written:222897
+    Host Bytes Written:71
 
 PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
   Health Stats:
@@ -517,6 +553,29 @@ PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
     Device Reliability: OK
     Read Only: OK
     Volatile Memory Backup: OK
+  Intel Vendor SMART Attributes:
+    Program Fail Count:
+       Normalized:100%
+       Raw:0
+    Erase Fail Count:
+       Normalized:100%
+       Raw:0
+    Wear Leveling Count:
+       Normalized:100%
+       Min:0
+       Max:9
+       Avg:3
+    End-to-End Error Detection Count:0
+    CRC Error Count:0
+    Timed Workload, Media Wear:65535
+    Timed Workload, Host Read/Write Ratio:65535
+    Timed Workload, Timer:65535
+    Thermal Throttle Status:0%
+    Thermal Throttle Event Count:0
+    Retry Buffer Overflow Counter:0
+    PLL Lock Loss Count:0
+    NAND Bytes Written:222897
+    Host Bytes Written:71
 
 -------
 wolf-72
@@ -541,6 +600,29 @@ PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
     Device Reliability: OK
     Read Only: OK
     Volatile Memory Backup: OK
+  Intel Vendor SMART Attributes:
+    Program Fail Count:
+       Normalized:100%
+       Raw:0
+    Erase Fail Count:
+       Normalized:100%
+       Raw:0
+    Wear Leveling Count:
+       Normalized:100%
+       Min:0
+       Max:9
+       Avg:3
+    End-to-End Error Detection Count:0
+    CRC Error Count:0
+    Timed Workload, Media Wear:65535
+    Timed Workload, Host Read/Write Ratio:65535
+    Timed Workload, Timer:65535
+    Thermal Throttle Status:0%
+    Thermal Throttle Event Count:0
+    Retry Buffer Overflow Counter:0
+    PLL Lock Loss Count:0
+    NAND Bytes Written:222897
+    Host Bytes Written:71
 
 PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
   Health Stats:
@@ -562,29 +644,66 @@ PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
     Device Reliability: OK
     Read Only: OK
     Volatile Memory Backup: OK
+  Intel Vendor SMART Attributes:
+    Program Fail Count:
+       Normalized:100%
+       Raw:0
+    Erase Fail Count:
+       Normalized:100%
+       Raw:0
+    Wear Leveling Count:
+       Normalized:100%
+       Min:0
+       Max:9
+       Avg:3
+    End-to-End Error Detection Count:0
+    CRC Error Count:0
+    Timed Workload, Media Wear:65535
+    Timed Workload, Host Read/Write Ratio:65535
+    Timed Workload, Timer:65535
+    Thermal Throttle Status:0%
+    Thermal Throttle Event Count:0
+    Retry Buffer Overflow Counter:0
+    PLL Lock Loss Count:0
+    NAND Bytes Written:222897
+    Host Bytes Written:71
+
 ```
 
-The next step consists of adjusting in the server configuration the storage
-devices that should be used by DAOS. The `servers` section of the yaml is a
-list specifying details for each DAOS I/O instance to be started on the host
-(currently a maximum of 2 per host is imposed).
+#### Selection
 
-Devices with the same NUMA rating/node/socket should be colocated on
-a single DAOS I/O instance where possible.
-[more details](#server-configuration)
+The next step consists of specifying the devices that should be used by DAOS
+in the server configuration YAML file.
+The `engines` section of the config is a list with details for each DAOS engine
+to be started on the host (one engine will be created for each entry in list).
 
-- `bdev_list` should be populated with NVMe PCI addresses
-- `scm_list` should be populated with PMem interleaved set namespaces
-(e.g. `/dev/pmem1`)
-- DAOS Control Servers will need to be restarted on all hosts after
-updates to the server configuration file.
-- Pick one host in the system and set `access_points` to list of that
-host's hostname or IP address (don't need to specify port).
-This will be the host which bootstraps the DAOS management service
-(MS).
+Devices with the same NUMA rating/node/socket should be colocated on a single
+DAOS engine where possible.
+See the [server configuration file section](#server-configuration-file) for
+more details.
 
-To illustrate, assume a cluster with homogeneous hardware
-configurations that returns the following from scan for each host:
+Storage is specified for each engine in a `storage` list with each entry in
+the list defining an individual storage tier.
+
+Each tier has a `class` parameter which defines the storage type.
+Typical class values are "dcpm" for PMem (Intel(R) Optane(TM) persistent
+memory) and "nvme" for NVMe SSDs.
+
+For class == "dcpm", the following parameters should be populated:
+- `scm_list` should should contain PMem interleaved-set namespaces
+(e.g. `/dev/pmem1`).
+Currently the size of the list is limited to 1.
+- `scm_mount` gives the desired local directory to be used as the mount point
+for DAOS persistent storage mounted on the specified PMem device specified in
+`scm_list`.
+
+For class == "nvme", the following parameters should be populated:
+- `bdev_list` should be populated with NVMe PCI addresses.
+
+#### Example Configurations
+
+To illustrate, assume a cluster with homogeneous hardware configurations that
+returns the following from scan for each host:
 
 ```bash
 [daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] -i storage scan --verbose
@@ -603,8 +722,8 @@ NVMe PCI     Model                FW Revision Socket ID Capacity
 0000:da:00.0 INTEL SSDPED1K750GA  E2010325    1         750.00GB
 ```
 
-In this situation, the configuration file `engines` section could be
-populated as follows:
+In this situation, the configuration file `engines` section could be populated
+as follows to establish 2-tier storage:
 
 ```yaml
 <snip>
@@ -620,11 +739,14 @@ engines:
   fabric_iface_port: 31416    # network port
   log_mask: ERR               # debug level to start with the engine with
   log_file: /tmp/server1.log  # where to store engine logs
-  scm_mount: /mnt/daos        # where to mount SCM
-  scm_class: dcpm             # type of SCM
-  scm_list: [/dev/pmem0]      # <----- updated
-  bdev_class: nvme            # type of block device
-  bdev_list: ["0000:87:00.0"] # <----- updated
+  storage:
+  -
+    class: dcpm               # type of first storage tier (SCM)
+    scm_list: [/dev/pmem0]    # <----- updated
+    scm_mount: /mnt/daos0     # where to mount SCM
+  -
+    class: nvme               # type of second storage tier (NVMe)
+    bdev_list: ["0000:87:00.0"] # <----- updated
 -
   targets: 16
   first_core: 0
@@ -633,11 +755,14 @@ engines:
   fabric_iface_port: 32416
   log_mask: ERR
   log_file: /tmp/server2.log
-  scm_mount: /mnt/daos
-  scm_class: dcpm
-  scm_list: [/dev/pmem1]       # <----- updated
-  bdev_class: nvme
-  bdev_list: ["0000:da:00.0"]  # <----- updated
+  storage:
+  -
+    class: dcpm               # type of first storage tier (SCM)
+    scm_list: [/dev/pmem1]    # <----- updated
+    scm_mount: /mnt/daos1     # where to mount SCM
+  -
+    class: nvme               # type of second storage tier (NVMe)
+    bdev_list: ["0000:da:00.0"] # <----- updated
 <end>
 ```
 
@@ -645,6 +770,14 @@ There are a few optional providers that are not built by default. For detailed
 information, please refer to the [DAOS build documentation][6].
 
 >**_NOTE_**
+>
+>DAOS Control Servers will need to be restarted on all hosts after
+>updates to the server configuration file.
+>
+>Pick one host in the system and set `access_points` to list of that
+>host's hostname or IP address (don't need to specify port).
+>This will be the host which bootstraps the DAOS management service
+>(MS).
 >
 >The support of the optional providers is not guarantee and can be removed
 >without further notification.
@@ -657,7 +790,7 @@ The `dmg` utility supports the `network scan` function to display the network
 interfaces, related OFI fabric providers and associated NUMA node for each
 device.
 This information is used to configure the global fabric provider and the unique
-local network interface for each I/O Engine instance on the storage nodes.
+local network interface for each I/O engine on the storage nodes.
 This section will help you determine what to provide for the `provider`,
 `fabric_iface` and `pinned_numa_node` entries in the `daos_server.yml` file.
 
@@ -665,8 +798,8 @@ The following commands are typical examples:
 ```bash
 $ dmg network scan
 $ dmg network scan -p all
-$ dmg network scan -p ofi+sockets
-$ dmg network scan --provider 'ofi+verbs;ofi_rxm'
+$ dmg network scan -p ofi+tcp
+$ dmg network scan --provider ofi+verbs
 ```
 
 In the early stages when a `daos_server` has not yet been fully configured and
@@ -694,7 +827,7 @@ wolf-29
 
         Provider    Interfaces
         --------    ----------
-        ofi+sockets ib1
+        ofi+tcp     ib1
 
 ---------
 localhost
@@ -706,7 +839,7 @@ localhost
 
         Provider    Interfaces
         --------    ----------
-        ofi+sockets ib0, eth0
+        ofi+tcp     ib0, eth0
 
     -------------
     NUMA Socket 1
@@ -714,7 +847,7 @@ localhost
 
         Provider    Interfaces
         --------    ----------
-        ofi+sockets ib1
+        ofi+tcp     ib1
 ```
 
 Use one of these providers to configure the `provider` in the `daos_server.yml`.
@@ -735,17 +868,16 @@ filtered to the specified provider with the command `dmg network scan
 -p ofi_provider` where `ofi_provider` is one of the available providers from
 the list.
 
-The results of the network scan may be used to help configure the I/O Engine
-instances.
+The results of the network scan may be used to help configure the I/O engines.
 
-Each I/O Engine instance is configured with a unique `fabric_iface` and
-optional `pinned_numa_node`.
+Each I/O engine is configured with a unique `fabric_iface` and optional
+`pinned_numa_node`.
 The interfaces and NUMA Sockets listed in the scan results map to the
 `daos_server.yml` `fabric_iface` and `pinned_numa_node` respectively.
 The use of `pinned_numa_node` is optional, but recommended for best
 performance.
 When specified with the value that matches the network interface, the I/O
-Engine will bind itself to that NUMA node and to cores purely within that NUMA
+engine will bind itself to that NUMA node and to cores purely within that NUMA
 node.
 This configuration yields the fastest access to that network device.
 
@@ -777,10 +909,36 @@ bytes #sent #ack total time  MB/sec  usec/xfer Mxfers/sec
 1m    10    =10  20m   0.00s 8867.45 118.25    0.01
 ```
 
+### CPU Resources
+
+The I/O engine is multi-threaded, and the number of I/O service threads
+and helper threads that should be used per engine must be configured
+in the `engines:` section of the `daos_server.yml` file.
+
+The number of I/O service threads is configured with the `targets:` setting.
+Each storage target manages a fraction of the (interleaved) SCM storage space,
+and a fraction of one of the NVMe SSDs that are managed by this engine.
+The optimal number of storage targets per engine depends on two conditions:
+
+* For optimal balance regarding the NVMe space, the number of targets should be
+an integer multiple of the number of NVMe disks that are configured in the
+`bdev_list:` of the engine.
+* To obtain the maximum SCM performance, a certain number of targets is needed.
+This is device- and workload-dependent, but around 16 targets usually work well.
+
+While not required, it is recommended to also specify a number of
+I/O offloading threads with the `nr_xs_helpers:` setting. These threads can
+improve performance by offloading activities like checksum calculation and
+the dispatching of server-side RPCs from the main I/O service threads.
+
+The server should have sufficiently many physical cores to support the
+number of targets plus the additional service threads.
+
+
 ## Storage Formatting
 
-Once the `daos_server` has been restarted with the correct storage devices and
-network interface to use, one can move to the format phase.
+Once the `daos_server` has been restarted with the correct storage devices,
+network interface, and CPU threads to use, one can move to the format phase.
 When `daos_server` is started for the first time, it enters "maintenance mode"
 and waits for a `dmg storage format` call to be issued from the management tool.
 This remote call will trigger the formatting of the locally attached storage on
@@ -790,8 +948,8 @@ the host for use with DAOS using the parameters defined in the server config fil
 node specifying a hostlist (`-l <host>[,...]`) of storage nodes with SCM/PMem
 modules and NVMe SSDs installed and prepared.
 
-Upon successful format, DAOS Control Servers will start DAOS IO
-instances that have been specified in the server config file.
+Upon successful format, DAOS Control Servers will start DAOS I/O engines that
+have been specified in the server config file.
 
 Successful start-up is indicated by the following on stdout:
 `DAOS I/O Engine (v0.8.0) process 433456 started on rank 1 with 8 target, 2 helper XS per target, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
@@ -839,7 +997,7 @@ configuration file `scm_mount` parameter should be mounted and should contain
 the necessary DAOS metadata indicating that the server has been formatted.
 
 When starting, `daos_server` will skip `maintenance mode` and attempt to start
-I/O Engines if valid DAOS metadata is found in `scm_mount`.
+I/O engines if valid DAOS metadata is found in `scm_mount`.
 
 ## Agent Setup
 
@@ -903,22 +1061,24 @@ also required.
 Example:
 ```
 fabric_ifaces:
-  - numa_node: 0
-    devices:
-    -
-      - iface: ib0
-      - domain: mlx5_0
-    -
-      - iface: ib1
-      - domain: mlx5_1
-  - numa_node: 1
-    devices:
-    -
-      - iface: ib2
-      - domain: mlx5_2
-    -
-      - iface: ib3
-      - domain: mlx5_3
+-
+  numa_node: 0
+  devices:
+  -
+    iface: ib0
+    domain: mlx5_0
+  -
+    iface: ib1
+    domain: mlx5_1
+-
+  numa_node: 1
+  devices:
+  -
+    iface: ib2
+    domain: mlx5_2
+  -
+    iface: ib3
+    domain: mlx5_3
 ```
 
 ### Agent Startup

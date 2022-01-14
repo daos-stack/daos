@@ -1061,6 +1061,57 @@ test_list_ephemeral(void **state)
 }
 
 static void
+test_list_subdirs(void **state)
+{
+	char			*root_dir = "gurt/tests/subdir_root";
+	char			*subdir_name;
+	char			 new_path[D_TM_MAX_NAME_LEN];
+	struct d_tm_node_t	*dir_node;
+	struct d_tm_nodeList_t	*head = NULL;
+	struct d_tm_nodeList_t	*cur = NULL;
+	uint64_t		 num_subdirs = 0;
+	int			 expected_subdirs = 0;
+	int			 i, rc;
+
+	static const char * const subdirs[] = {
+		"sub0",
+		"sub1",
+		"sub2",
+		"sub3",
+		NULL,
+	};
+
+	for (i = 0; subdirs[i] != NULL; i++) {
+		snprintf(new_path, sizeof(new_path), "%s/%s", root_dir, subdirs[i]);
+		rc = d_tm_add_ephemeral_dir(&dir_node, 1024, new_path);
+		assert_rc_equal(rc, DER_SUCCESS);
+		expected_subdirs++;
+	}
+
+	/* add another dir at a deeper level -- shouldn't be included */
+	snprintf(new_path, sizeof(new_path), "%s/%s/deeper", root_dir, subdirs[0]);
+	rc = d_tm_add_ephemeral_dir(&dir_node, 1024, new_path);
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	/* collect a list from the ephemeral metrics' parent directory */
+	dir_node = d_tm_find_metric(cli_ctx, root_dir);
+	assert_non_null(dir_node);
+
+	rc = d_tm_list_subdirs(cli_ctx, &head, dir_node, &num_subdirs, 1);
+	assert_rc_equal(rc, DER_SUCCESS);
+	assert_int_equal(num_subdirs, expected_subdirs);
+
+	for (cur = head, i = 0; cur && i < num_subdirs; i++) {
+		subdir_name = d_tm_get_name(cli_ctx, cur->dtnl_node);
+
+		assert_string_equal(subdir_name, subdirs[i]);
+		cur = cur->dtnl_next;
+	}
+
+	d_tm_list_free(head);
+}
+
+static void
 test_follow_link(void **state)
 {
 	struct d_tm_node_t	*node;
@@ -1269,6 +1320,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gc_ctx),
 		/* Run after the tests that populate the metrics */
 		cmocka_unit_test(test_list_ephemeral),
+		cmocka_unit_test(test_list_subdirs),
 		cmocka_unit_test(test_follow_link),
 		cmocka_unit_test(test_find_metric),
 		cmocka_unit_test(test_verify_object_count),

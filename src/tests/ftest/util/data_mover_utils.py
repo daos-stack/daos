@@ -72,9 +72,9 @@ class MfuCommandBase(ExecutableCommand):
             kwargs: name, value pairs of class Parameters
 
         """
-        for a in kwargs:
-            attr = getattr(self, a)
-            attr.update(kwargs[a], a)
+        for k, v in kwargs.items():
+            attr = getattr(self, k)
+            attr.update(v, k)
 
     @staticmethod
     def __param_sort(k):
@@ -106,12 +106,13 @@ class MfuCommandBase(ExecutableCommand):
         param_names.sort(key=self.__param_sort)
         return param_names
 
-    def run(self, processes):
+    def run(self, processes, job_manager):
         # pylint: disable=arguments-differ
         """Run the MpiFileUtils command.
 
         Args:
             processes: Number of processes for the command.
+            job_manager: Job manager variable to set/assign
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -124,13 +125,13 @@ class MfuCommandBase(ExecutableCommand):
         self.log.info('Starting %s', str(self.command).lower())
 
         # Get job manager cmd
-        mpirun = Mpirun(self, mpitype="mpich")
-        mpirun.assign_hosts(self.hosts, self.tmp)
-        mpirun.assign_processes(processes)
-        mpirun.exit_status_exception = self.exit_status_exception
+        job_manager = Mpirun(self, mpitype="mpich")
+        job_manager.assign_hosts(self.hosts, self.tmp)
+        job_manager.assign_processes(processes)
+        job_manager.exit_status_exception = self.exit_status_exception
 
         # Run the command
-        out = mpirun.run()
+        out = job_manager.run()
 
         return out
 
@@ -287,10 +288,11 @@ class FsCopy():
         """
         self.src = None
         self.dst = None
+        self.preserve_props = None
         self.daos_cmd = daos_cmd
         self.log = log
 
-    def set_fs_copy_params(self, src=None, dst=None):
+    def set_fs_copy_params(self, src=None, dst=None, preserve_props=None):
         """Set the daos fs copy params.
 
         Args:
@@ -304,6 +306,8 @@ class FsCopy():
             self.src = src
         if dst:
             self.dst = dst
+        if preserve_props:
+            self.preserve_props = preserve_props
 
     def run(self):
         # pylint: disable=arguments-differ
@@ -319,7 +323,8 @@ class FsCopy():
         """
         self.log.info("Starting daos filesystem copy")
 
-        return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst)
+        return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
+	    preserve_props=self.preserve_props)
 
 class ContClone():
     """Class defining an object of type ContClone.

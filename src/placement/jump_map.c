@@ -151,10 +151,11 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	struct pool_domain      *root;
 	daos_obj_id_t           oid;
 	int                     rc;
+	uint32_t		nr_grps;
 
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid, NULL);
+	oc_attr = daos_oclass_attr_find(oid, &nr_grps);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
@@ -176,7 +177,7 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		if (grp_max == 0)
 			grp_max = 1;
 
-		jmop->jmop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
+		jmop->jmop_grp_nr = nr_grps;
 		if (jmop->jmop_grp_nr == DAOS_OBJ_GRP_MAX)
 			jmop->jmop_grp_nr = grp_max;
 		else if (jmop->jmop_grp_nr > grp_max)
@@ -846,14 +847,11 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				rc = remap_alloc_one(remap_list, k, target, false, remap_grp_used);
 				if (rc)
 					D_GOTO(out, rc);
-
-				if (is_extending != NULL &&
-				    (target->ta_comp.co_status ==
-				     PO_COMP_ST_UP ||
-				     target->ta_comp.co_status ==
-				     PO_COMP_ST_DRAIN))
-					*is_extending = true;
 			}
+
+			if (is_extending != NULL && (target->ta_comp.co_status == PO_COMP_ST_UP ||
+						     target->ta_comp.co_status == PO_COMP_ST_DRAIN))
+				*is_extending = true;
 		}
 	}
 
@@ -1069,7 +1067,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	D_INIT_LIST_HEAD(&extend_list);
-	allow_status = PO_COMP_ST_UPIN;
+	allow_status = PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN;
 	rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status, &layout,
 				      NULL, &is_extending);
 	if (rc != 0) {
@@ -1096,11 +1094,12 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 			DP_OID(oid), md->omd_ver, is_adding_new ? "yes" : "no",
 			is_extending ? "yes" : "no");
 
+		allow_status = PO_COMP_ST_UPIN;
 		if (is_adding_new)
 			allow_status |= PO_COMP_ST_NEW;
 
 		if (is_extending)
-			allow_status |= PO_COMP_ST_UP | PO_COMP_ST_DRAIN;
+			allow_status |= PO_COMP_ST_UP;
 
 		/* Don't repeat remapping failed shards during this phase -
 		 * they have already been remapped.
@@ -1128,7 +1127,7 @@ out:
 	if (extend_layout != NULL)
 		pl_obj_layout_free(extend_layout);
 
-	if (rc < 0) {
+	if (rc != 0) {
 		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
 			DP_RC(rc));
 		if (layout != NULL)
