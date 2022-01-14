@@ -189,26 +189,30 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 	}
 
 	if hasBdevs {
-		//	// Use default value if bdevs have been configured but nr_hugepages unset in config.
-		//	if srv.cfg.NrHugepages < 0 {
-		//		srv.cfg.NrHugepages = 4096
-		//	}
-
 		prepReq.HugePageCount = srv.cfg.NrHugepages
 
-		// The config value is intended to be per-engine, so we need to allocate hugepages on
-		// each engine's numa node.
-		var nodes []string
+		// The config value is intended to be per-engine so allocate hugepages each engine's
+		// numa node. Storage backend will allocate HugePageCount on each numa node in
+		// HugeNodes list.
+		nodeMap := make(map[string]bool)
+		nodes := make([]string, 0, len(srv.cfg.Engines))
 		for _, ec := range srv.cfg.Engines {
-			nodes = append(nodes, fmt.Sprintf("%d", ec.Storage.NumaNodeIndex))
+			nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
+			if nodeMap[nn] {
+				srv.log.Errorf("multiple engines assigned to NUMA node %d",
+					nn)
+				nodes = nil
+				break
+			}
+			nodeMap[nn] = true
+			nodes = append(nodes, nn)
 		}
 		if len(nodes) != 0 {
-			// Allocate HugePageCount on each numa node in HugeNodes.
 			prepReq.HugeNodes = strings.Join(nodes, ",")
 		}
 	} else {
-		// If nr_hugepages unset and no bdevs in config, set minimum needed for scanning and
-		// set number of hugepages for engine to zero.
+		// If nr_hugepages is unset and no bdevs in config, set minimum needed for scanning
+		// and set number of hugepages for engine to zero.
 		if srv.cfg.NrHugepages < 0 {
 			prepReq.HugePageCount = minHugePageCount
 			srv.cfg.NrHugepages = 0
@@ -231,12 +235,21 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 		return FaultInsufficientFreeHugePages(hpi.Free, prepReq.HugePageCount)
 	}
 
+	if len(srv.cfg.Engines) == 0 {
+		// skip mem size check
+		return nil
+	}
+
 	// Calculate mem_size per I/O engine (in MB)
 	pageSizeMb := hpi.PageSizeKb >> 10
 	memSizeMb := (hpi.Free / len(srv.cfg.Engines)) * pageSizeMb
 	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeMb, pageSizeMb)
 
 	for _, engineCfg := range srv.cfg.Engines {
+		if engineCfg.TargetCount == 0 {
+			return errors.Errorf("engine has zero target count")
+		}
+
 		engineCfg.MemSize = memSizeMb
 		// Pass hugepage size, do not assume 2MB is used
 		engineCfg.HugePageSz = pageSizeMb

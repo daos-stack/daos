@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -223,11 +223,17 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	}
 	username := usrCurrent.Username
 
+	scmTier := storage.NewTierConfig().WithScmClass(storage.ClassDcpm.String())
+	nvmeTier := storage.NewTierConfig().WithBdevClass(storage.ClassNvme.String()).
+		WithBdevDeviceList(common.MockPCIAddr())
+	scmEngine := engine.MockConfig().WithStorage(scmTier)
+	nvmeEngine := engine.MockConfig().WithStorage(scmTier, nvmeTier)
+
 	for name, tc := range map[string]struct {
 		enableVMD     bool
 		bmbc          *bdev.MockBackendConfig
 		smbc          *scm.MockBackendConfig
-		bdevsInCfg    bool
+		engineCfgs    []*engine.Config
 		hugePageCount int
 		hugePagesFree int
 		allowList     []string
@@ -236,7 +242,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		expPrepCalls  []storage.BdevPrepareRequest
 		expResetCalls []storage.BdevPrepareRequest
 	}{
-		"nvme prep succeeds; user params": {
+		"nvme prep succeeds; user params; 2 engines": {
+			engineCfgs:    []*engine.Config{nvmeEngine, nvmeEngine},
 			hugePageCount: 8192,
 			hugePagesFree: 8192,
 			allowList:     []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
@@ -263,7 +270,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				},
 			},
 		},
-		"nvme prep fails; user params": {
+		"nvme prep fails; user params; 2 engines": {
+			engineCfgs:    []*engine.Config{nvmeEngine, nvmeEngine},
 			hugePageCount: 8192,
 			hugePagesFree: 8192,
 			allowList:     []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
@@ -290,7 +298,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				},
 			},
 		},
-		"nvme reset fails; user params": {
+		"nvme reset fails; user params; 2 engines": {
+			engineCfgs:    []*engine.Config{nvmeEngine, nvmeEngine},
 			hugePageCount: 8192,
 			hugePagesFree: 8192,
 			allowList:     []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
@@ -317,7 +326,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				},
 			},
 		},
-		"nvme prep succeeds; user params; vmd enabled": {
+		"nvme prep succeeds; user params; vmd enabled; 2 engines": {
+			engineCfgs:    []*engine.Config{nvmeEngine, nvmeEngine},
 			enableVMD:     true,
 			hugePageCount: 8192,
 			hugePagesFree: 8192,
@@ -344,7 +354,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				},
 			},
 		},
-		"nvme prep succeeds; huge pages unspecified; no bdevs in cfg": {
+		"nvme prep succeeds; huge pages unspecified; 2 engines; scm only": {
+			engineCfgs:    []*engine.Config{scmEngine, scmEngine},
 			hugePageCount: -1,
 			//hugePagesFree: 8192,
 			allowList: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
@@ -383,13 +394,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				NrHugepages: tc.hugePageCount,
 			}
 
-			if tc.bdevsInCfg {
-				cfg.WithEngines(
-					engine.MockConfig().WithStorage(
-						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddr()),
-					))
+			if tc.engineCfgs != nil {
+				cfg.WithEngines(tc.engineCfgs...)
 			}
 
 			srv, err := newServer(log, cfg, &system.FaultDomain{})

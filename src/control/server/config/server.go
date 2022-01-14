@@ -410,78 +410,6 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		return errors.New("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
 	}
 
-	var cfgHasBdevs bool
-	cfgTargets := 0
-	for idx, ec := range cfg.Engines {
-		cfgTargets += ec.TargetCount
-
-		if ec.LegacyStorage.WasDefined() {
-			log.Infof("engine %d: Legacy storage configuration detected. Please migrate to new-style storage configuration.", idx)
-			var tierCfgs storage.TierConfigs
-			if ec.LegacyStorage.ScmClass != storage.ClassNone {
-				tierCfgs = append(tierCfgs,
-					storage.NewTierConfig().
-						WithScmClass(ec.LegacyStorage.ScmClass.String()).
-						WithScmDeviceList(ec.LegacyStorage.ScmConfig.DeviceList...).
-						WithScmMountPoint(ec.LegacyStorage.MountPoint).
-						WithScmRamdiskSize(ec.LegacyStorage.RamdiskSize),
-				)
-			}
-
-			// Do not add bdev tier if cls is none or nvme has no
-			// devices to maintain backward compatible behavior.
-			bc := ec.LegacyStorage.BdevClass
-			switch {
-			case bc == storage.ClassNvme && len(ec.LegacyStorage.BdevConfig.DeviceList) == 0:
-				log.Debugf("legacy storage config conversion skipped for class %s with empty bdev_list",
-					storage.ClassNvme)
-			case bc == storage.ClassNone:
-				log.Debugf("legacy storage config conversion skipped for class %s",
-					storage.ClassNone)
-			default:
-				tierCfgs = append(tierCfgs,
-					storage.NewTierConfig().
-						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
-						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
-						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
-						WithBdevFileSize(ec.LegacyStorage.FileSize).
-						WithBdevBusidRange(ec.LegacyStorage.BdevConfig.BusidRange.String()),
-				)
-			}
-			ec.WithStorage(tierCfgs...)
-			ec.LegacyStorage = engine.LegacyStorage{}
-		}
-
-		if ec.Storage.Tiers.CfgHasBdevs() {
-			cfgHasBdevs = true
-		}
-	}
-
-	if cfgHasBdevs {
-		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargets)
-		if err != nil {
-			return err
-		}
-
-		// If the config doesn't specify hugepages, use the minimum.
-		// Otherwise, validate that the configured amount is sufficient.
-		if cfg.NrHugepages == 0 {
-			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages, cfgTargets)
-			cfg.NrHugepages = minHugePages
-		} else if cfg.NrHugepages < minHugePages {
-			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
-		}
-	}
-
-	// A config without engines is valid when initially discovering hardware
-	// prior to adding per-engine sections with device allocations.
-	if len(cfg.Engines) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName,
-			build.ControlPlaneName)
-		cfg.Engines = nil
-		return nil
-	}
-
 	switch {
 	case cfg.Fabric.Provider == "":
 		return FaultConfigNoProvider
@@ -514,15 +442,93 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		return FaultConfigEvenAccessPoints
 	}
 
-	for i, engine := range cfg.Engines {
-		engine.Fabric.Update(cfg.Fabric)
+	log.Debugf("hotplug=%v vfio=%v vmd=%v requested in config", cfg.EnableHotplug,
+		!cfg.DisableVFIO, cfg.EnableVMD)
 
-		if err := engine.Validate(log); err != nil {
-			return errors.Wrapf(err, "I/O Engine %d failed config validation", i)
+	// A config without engines is valid when initially discovering hardware
+	// prior to adding per-engine sections with device allocations.
+	if len(cfg.Engines) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName,
+			build.ControlPlaneName)
+		cfg.Engines = nil
+		return nil
+	}
+
+	var cfgHasBdevs bool
+	cfgTargets := 0
+	for idx, ec := range cfg.Engines {
+		cfgTargets += ec.TargetCount
+
+		ls := ec.LegacyStorage
+		if ls.WasDefined() {
+			log.Infof("engine %d: Legacy storage configuration detected. Please "+
+				"migrate to new-style storage configuration.", idx)
+			var tierCfgs storage.TierConfigs
+			if ls.ScmClass != storage.ClassNone {
+				tierCfgs = append(tierCfgs,
+					storage.NewTierConfig().
+						WithScmClass(ls.ScmClass.String()).
+						WithScmDeviceList(ls.ScmConfig.DeviceList...).
+						WithScmMountPoint(ls.MountPoint).
+						WithScmRamdiskSize(ls.RamdiskSize),
+				)
+			}
+
+			// Do not add bdev tier if cls is none or nvme has no
+			// devices to maintain backward compatible behavior.
+			bc := ls.BdevClass
+			switch {
+			case bc == storage.ClassNvme &&
+				len(ls.BdevConfig.DeviceList) == 0:
+				log.Debugf("legacy storage config conversion skipped for class "+
+					"%s with empty bdev_list", storage.ClassNvme)
+			case bc == storage.ClassNone:
+				log.Debugf("legacy storage config conversion skipped for class %s",
+					storage.ClassNone)
+			default:
+				tierCfgs = append(tierCfgs,
+					storage.NewTierConfig().
+						WithBdevClass(ls.BdevClass.String()).
+						WithBdevDeviceCount(ls.DeviceCount).
+						WithBdevDeviceList(ls.BdevConfig.DeviceList...).
+						WithBdevFileSize(ls.FileSize).
+						WithBdevBusidRange(
+							ls.BdevConfig.BusidRange.String()),
+				)
+			}
+			ec.WithStorage(tierCfgs...)
+			ec.LegacyStorage = engine.LegacyStorage{}
 		}
 
-		log.Debugf("engine %d fabric numa %d, storage numa %d", i,
-			engine.Fabric.NumaNodeIndex, engine.Storage.NumaNodeIndex)
+		if ec.Storage.Tiers.CfgHasBdevs() {
+			cfgHasBdevs = true
+		}
+
+		ec.Fabric.Update(cfg.Fabric)
+
+		if err := ec.Validate(log); err != nil {
+			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
+		}
+
+		log.Debugf("engine %d fabric numa %d, storage numa %d", idx,
+			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
+	}
+
+	if cfgHasBdevs {
+		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargets)
+		if err != nil {
+			return err
+		}
+
+		// If the config doesn't specify hugepages, use the minimum.
+		// Otherwise, validate that the configured amount is sufficient.
+		if cfg.NrHugepages == -1 {
+			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages,
+				cfgTargets)
+			cfg.NrHugepages = minHugePages
+		} else if cfg.NrHugepages < minHugePages {
+			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
+		}
 	}
 
 	if len(cfg.Engines) > 1 {
@@ -530,9 +536,6 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 			return err
 		}
 	}
-
-	log.Debugf("hotplug=%v vfio=%v vmd=%v requested in config", cfg.EnableHotplug,
-		!cfg.DisableVFIO, cfg.EnableVMD)
 
 	return nil
 }
