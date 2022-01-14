@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,8 +40,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	void				*buff;
 	int				rc;
 	size_t				buff_len = len;
-	bool				skip_read = false;
-	bool				readahead = false;
 	bool				async = false;
 	struct dfuse_event		*ev = NULL;
 
@@ -54,47 +52,19 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	DFUSE_TRA_INFO(ev, "%#zx-%#zx requested pid=%d",
 		       position, position + len - 1, fc->pid);
 
-	if (oh->doh_ie->ie_truncated &&
-	    position + len < oh->doh_ie->ie_stat.st_size &&
-		((oh->doh_ie->ie_start_off == 0 &&
-			oh->doh_ie->ie_end_off == 0) ||
-			position >= oh->doh_ie->ie_end_off ||
-			position + len <= oh->doh_ie->ie_start_off)) {
-		off_t pos_ra = position + len + READAHEAD_SIZE;
-
-		DFUSE_TRA_DEBUG(oh, "Returning zeros");
-		skip_read = true;
-
-		if (pos_ra <= oh->doh_ie->ie_stat.st_size &&
-		    ((oh->doh_ie->ie_start_off == 0 &&
-				oh->doh_ie->ie_end_off == 0) ||
-				(position >= oh->doh_ie->ie_end_off ||
-					pos_ra <= oh->doh_ie->ie_start_off))) {
-			readahead = true;
-		}
-	} else if (oh->doh_caching &&
-		len < (1024 * 1024) &&
-		oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
+	if (oh->doh_caching && len < (1024 * 1024) && oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
 		/* Only do readahead if the requested size is less than 1Mb and
 		 * the file size is > 1Mb
 		 */
-
-		readahead = true;
-	}
-
-	if (readahead) {
 		buff_len += READAHEAD_SIZE;
 	} else {
-		if (!skip_read) {
-			rc = daos_event_init(&ev->de_ev,
-					     fs_handle->dpi_eq, NULL);
-			if (rc != -DER_SUCCESS)
-				D_GOTO(err, rc = daos_der2errno(rc));
+		rc = daos_event_init(&ev->de_ev, fs_handle->dpi_eq, NULL);
+		if (rc != -DER_SUCCESS)
+			D_GOTO(err, rc = daos_der2errno(rc));
 
-			ev->de_req = req;
-			ev->de_complete_cb = dfuse_cb_read_complete;
-			async = true;
-		}
+		ev->de_req = req;
+		ev->de_complete_cb = dfuse_cb_read_complete;
+		async = true;
 	}
 
 	D_ALLOC(buff, buff_len);
@@ -105,17 +75,13 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	d_iov_set(&ev->de_iov, (void *)buff, buff_len);
 	ev->de_sgl.sg_iovs = &ev->de_iov;
 
-	if (skip_read) {
-		ev->de_len = buff_len;
-	} else {
-		rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position,
-			      &ev->de_len, async ? &ev->de_ev : NULL);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_REPLY_ERR_RAW(oh, req, rc);
-			D_FREE(buff);
-			D_FREE(ev);
-			return;
-		}
+	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position,
+		      &ev->de_len, async ? &ev->de_ev : NULL);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+		D_FREE(buff);
+		D_FREE(ev);
+		return;
 	}
 
 	if (async) {

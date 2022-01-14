@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -524,13 +524,6 @@ struct dfuse_inode_entry {
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint		ie_ref;
-
-	/** written region for truncated files (i.e. ie_truncated set) */
-	size_t			ie_start_off;
-	size_t			ie_end_off;
-
-	/** file was truncated from 0 to a certain size */
-	bool			ie_truncated;
 
 	/** file is the root of a container */
 	bool			ie_root;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -188,7 +188,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_parent = parent->ie_stat.st_ino;
-	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	LOG_FLAGS(ie, fi->flags);

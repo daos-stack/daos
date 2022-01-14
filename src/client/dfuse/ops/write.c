@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,23 +66,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	ev->de_sgl.sg_nr = 1;
 	d_iov_set(&ev->de_iov, ibuf.buf[0].mem, len);
 	ev->de_sgl.sg_iovs = &ev->de_iov;
-
-	/* Check for potentially using readahead on this file, ie_truncated
-	 * will only be set if caching is enabled so only check for the one
-	 * flag rather than two here
-	 */
-	if (oh->doh_ie->ie_truncated) {
-		if (oh->doh_ie->ie_start_off == 0 &&
-		    oh->doh_ie->ie_end_off == 0) {
-			oh->doh_ie->ie_start_off = position;
-			oh->doh_ie->ie_end_off = position + len;
-		} else {
-			if (oh->doh_ie->ie_start_off > position)
-				oh->doh_ie->ie_start_off = position;
-			if (oh->doh_ie->ie_end_off < position + len)
-				oh->doh_ie->ie_end_off = position + len;
-		}
-	}
 
 	if (len + position > oh->doh_ie->ie_stat.st_size)
 		oh->doh_ie->ie_stat.st_size = len + position;
