@@ -60,7 +60,7 @@ ones used by OpenMPI. For additional details, please refer to the
 
 **Run CaRT self_test**
 
-The example below uses an Ethernet interface and Sockets provider.
+The example below uses an Ethernet interface and TCP provider.
 In the `self_test` commands:
 
 -   **Selftest client to servers** - Replace the argument for `--endpoint`
@@ -93,7 +93,7 @@ $ ./bin/self_test --help
 ```bash
 
 # Specify provider
-export CRT_PHY_ADDR_STR='ofi+sockets'
+export CRT_PHY_ADDR_STR='ofi+tcp'
 
 # Specify interface
 export OFI_INTERFACE=eth0
