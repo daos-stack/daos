@@ -513,7 +513,7 @@ will remain evicted until device replacement occurs).
     Full NVMe hot plug capability will be available and supported in DAOS 2.2 release.
     Use is currently intended for testing only and is not supported for production.
 
-- Rebind a newly added (hot-inserted) SSD from the kernel and bind instead to user-space
+- Unbind a newly added (hot-inserted) SSD from the kernel and bind instead to user-space
 driver so that the device can be used with DAOS:
 ```bash
 $ dmg storage nvme-rebind --help

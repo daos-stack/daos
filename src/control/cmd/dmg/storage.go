@@ -22,7 +22,7 @@ type storageCmd struct {
 	Scan       storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
 	Format     storageFormatCmd   `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
 	Query      storageQueryCmd    `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	NvmeRebind nvmeRebindCmd      `command:"nvme-rebind" description:"Rebind NVMe SSD from kernel driver and bind to user-space driver to enable DAOS to use the device."`
+	NvmeRebind nvmeRebindCmd      `command:"nvme-rebind" description:"Unbind NVMe SSD from kernel driver and bind instead to a user-space driver to enable DAOS to use the device."`
 	Set        setFaultyCmd       `command:"set" description:"Manually set the device state."`
 	Replace    storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
 	Identify   storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
