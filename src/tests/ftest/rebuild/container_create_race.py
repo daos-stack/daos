@@ -35,7 +35,7 @@ class RbldContainerCreate(IorTestBase):
         cont_oclass = self.params.get("oclass", "/run/io/*")
         count = 0
         self.container = []
-        while count < qty:
+        while not self.pool.rebuild_complete() and count < qty:
             count += 1
             self.log.info(
                 "..Creating container %s/%s in pool %s during rebuild",
@@ -80,7 +80,7 @@ class RbldContainerCreate(IorTestBase):
             Test steps:
             (1)Start IOR before rebuild.
             (2)Starting rebuild by killing rank.
-            (3)Wait for rebuild to start.
+            (3)Don't wait for rebuild to start for race condition.
             (4)Race condition, create containers, data write/read during
                rebuild.
             (5)Wait for rebuild to finish.
@@ -136,8 +136,7 @@ class RbldContainerCreate(IorTestBase):
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start.
-        self.log.info("..(3)Wait for rebuild to start")
-        self.pool.wait_for_rebuild(True, interval=1)
+        self.log.info("..(3)Don't wait for rebuild to start for racecondition")
 
         # Race condition, create containers write and read during rebuild.
         self.log.info("..(4)Create containers, write/read during rebuild")
