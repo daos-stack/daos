@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -477,7 +477,8 @@ dfuse_release_check_all(struct dfuse_projection_info *fs_handle)
 
 	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
 
-	while ((ddl = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_dfs_list, ddl_list))) {
+	while ((ddl = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_dfs_list,
+						ddl_list))) {
 		count++;
 
 		rc2 = dfs_release(ddl->ddl_obj);
@@ -497,7 +498,8 @@ dfuse_release_check_all(struct dfuse_projection_info *fs_handle)
 
 	DFUSE_TRA_INFO(fs_handle, "Released %d/%d descriptors\n", count - fcount, count);
 	if (rc)
-		DFUSE_TRA_ERROR(fs_handle, "Failed to flush free inodes: %d (%s)", rc, strerror(rc));
+		DFUSE_TRA_ERROR(fs_handle,
+				"Failed to flush free inodes: %d (%s)", rc, strerror(rc));
 	return rc;
 }
 
