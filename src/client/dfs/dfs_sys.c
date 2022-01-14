@@ -1036,7 +1036,7 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 	rc = dfs_open(dfs_sys->dfs, sys_path.parent, sys_path.name,
 		      S_IFLNK, O_CREAT | O_EXCL,
 		      0, 0, target, &obj);
-	if ((rc != 0) && (rc != EEXIST)) {
+	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
 			sys_path.name, rc);
 	}
