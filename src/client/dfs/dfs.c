@@ -562,16 +562,13 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	sgl.sg_iovs	= sg_iovs;
 
 	rc = daos_obj_update(oh, th, flags, &dkey, 1, &iod, &sgl, NULL);
-
-	if (rc == 0) {
-		return rc;
-	} else if(rc == -DER_EXIST) {
-		return EEXIST;
-	} else {
-		if (rc != -DER_NO_PERM)
+	if (rc) {
+		/** don't log error if conditional failed */
+		if (rc != -DER_EXIST && rc != -DER_NO_PERM)
 			D_ERROR("Failed to insert entry '%s', "DF_RC"\n", name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
+	return 0;
 }
 
 static int
