@@ -635,7 +635,7 @@ daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 
 /* merge adjacent recxs for same epoch */
 static inline void
-daos_recx_ep_lists_merge(struct daos_recx_ep_list *lists, unsigned int nr)
+daos_recx_ep_list_merge(struct daos_recx_ep_list *lists, unsigned int nr)
 {
 	struct daos_recx_ep_list	*list;
 	struct daos_recx_ep		*recx_ep, *next;
