@@ -1663,7 +1663,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 	if (src_file_dfs->type == POSIX) {
 		len = readlink(src_path, symlink_value, (size_t)len);
 		if (len < 0) {
-			rc = errno;
+			rc = daos_errno2der(errno);
 			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on readlink('%s')",
 				      src_path);
 			D_GOTO(out_copy_symlink, rc);
@@ -1671,6 +1671,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 	} else if (src_file_dfs->type == DAOS) {
 		rc = dfs_sys_readlink(src_file_dfs->dfs_sys, src_path, symlink_value, &len);
 		if (rc != 0) {
+			rc = daos_errno2der(rc);
 			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on dfs_sys_readlink('%s')",
 				      src_path);
 			D_GOTO(out_copy_symlink, rc);
@@ -1678,7 +1679,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		/*length of symlink_value includes the NULL terminator already.*/
 		len--;
 	} else {
-		rc = EINVAL;
+		rc = daos_errno2der(EINVAL);
 		DH_PERROR_DER(ap, rc, "unknown type for %s", src_path);
 		D_GOTO(out_copy_symlink, rc);
 	}
@@ -1686,21 +1687,28 @@ fs_copy_symlink(struct cmd_args_s *ap,
 
 	if (dst_file_dfs->type == POSIX) {
 		rc = symlink(symlink_value, dst_path);
-		if (rc != 0) {
+		if ((rc != 0) && (errno == EEXIST)) {
+			D_WARN("Link %s exists.\n", dst_path);
+			rc = -DER_EXIST;
+		} else if (rc != 0) {
+			rc = daos_errno2der(errno);
 			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on symlink('%s')",
 				      dst_path);
 		}
 	} else if (dst_file_dfs->type == DAOS) {
 		rc = dfs_sys_symlink(dst_file_dfs->dfs_sys, symlink_value, dst_path);
-		if (rc != 0) {
-			rc = errno;
+		if (rc == EEXIST) {
+			D_WARN("Link %s exists.\n", dst_path);
+			rc = -DER_EXIST;
+		} else if (rc != 0) {
+			rc = daos_errno2der(rc);
 			DH_PERROR_SYS(ap, rc,
 				      "fs_copy_symlink failed on dfs_sys_readlink('%s')",
 				      dst_path);
 			D_GOTO(out_copy_symlink, rc);
 		}
 	} else {
-		rc = EINVAL;
+		rc = daos_errno2der(EINVAL);
 		DH_PERROR_DER(ap, rc, "unknown type for %s", dst_path);
 		D_GOTO(out_copy_symlink, rc);
 	}
@@ -1720,7 +1728,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 	    const char *src_path,
 	    const char *dst_path,
 	    uint64_t *num_dirs,
-	    uint64_t *num_files)
+	    uint64_t *num_files,
+	    uint64_t *num_links)
 {
 	DIR			*src_dir = NULL;
 	struct dirent		*entry = NULL;
@@ -1740,9 +1749,11 @@ fs_copy_dir(struct cmd_args_s *ap,
 
 	/* create the destination directory if it does not exist */
 	rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-	if (rc != EEXIST && rc != 0)
+	if (rc == EEXIST) {
+		D_WARN("Directory %s exists.\n", dst_path);
+	} else if (rc != 0) {
 		D_GOTO(out, rc = daos_errno2der(rc));
-
+	}
 	/* copy all directory entries */
 	while (1) {
 		const char *d_name;
@@ -1794,7 +1805,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 			rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs,
 					  &next_src_stat, next_src_path,
 					  next_dst_path);
-			if (rc != 0)
+			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
 			(*num_files)++;
 			break;
@@ -1802,15 +1813,15 @@ fs_copy_dir(struct cmd_args_s *ap,
 			rc = fs_copy_symlink(ap, src_file_dfs, dst_file_dfs,
 					     &next_src_stat, next_src_path,
 					     next_dst_path);
-			if (rc != 0)
+			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
-			(*num_files)++;
+			(*num_links)++;
 			break;
 		case S_IFDIR:
 			rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs,
 					 &next_src_stat, next_src_path,
-					 next_dst_path, num_dirs, num_files);
-			if (rc != 0)
+					 next_dst_path, num_dirs, num_files, num_links);
+			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
 			(*num_dirs)++;
 			break;
@@ -1856,7 +1867,8 @@ fs_copy(struct cmd_args_s *ap,
 	const char *src_path,
 	const char *dst_path,
 	uint64_t *num_dirs,
-	uint64_t *num_files)
+	uint64_t *num_files,
+	uint64_t *num_links)
 {
 	int		rc = 0;
 	struct stat	src_stat;
@@ -1913,7 +1925,7 @@ fs_copy(struct cmd_args_s *ap,
 		break;
 	case S_IFDIR:
 		rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path, dst_path,
-				 num_dirs, num_files);
+				 num_dirs, num_files, num_links);
 		if (rc == 0)
 			(*num_dirs)++;
 		break;
@@ -2803,6 +2815,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	bool			is_posix_copy = true;
 	uint64_t		num_dirs = 0;
 	uint64_t		num_files = 0;
+	uint64_t		num_links = 0;
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_file_dfs);
@@ -2851,7 +2864,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, &num_dirs, &num_files);
+	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, &num_dirs, &num_files, &num_links);
 	if (rc != 0)
 		D_GOTO(out_disconnect, rc);
 
@@ -2862,7 +2875,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	}
 	fprintf(ap->outstream, "    Directories: %lu\n", num_dirs);
 	fprintf(ap->outstream, "    Files:       %lu\n", num_files);
-
+	fprintf(ap->outstream, "    Links:       %lu\n", num_links);
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */
 	rc2 = dm_disconnect(ap, is_posix_copy, &ca, &src_file_dfs, &dst_file_dfs);

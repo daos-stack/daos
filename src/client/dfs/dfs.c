@@ -563,13 +563,15 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 
 	rc = daos_obj_update(oh, th, flags, &dkey, 1, &iod, &sgl, NULL);
 
-	if ((rc != 0) && (rc != -DER_EXIST)) {
+	if (rc == 0) {
+		return rc;
+	} else if(rc == -DER_EXIST) {
+		return EEXIST;
+	} else {
 		if (rc != -DER_NO_PERM)
 			D_ERROR("Failed to insert entry '%s', "DF_RC"\n", name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
-
-	return rc;
 }
 
 static int
@@ -1075,8 +1077,8 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->value_len = value_len;
 		rc = insert_entry(parent->oh, DAOS_TX_NONE, sym->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
-		if ((rc == -DER_EXIST) || (rc == 0)) {
-			return 0;
+		if ((rc == EEXIST) || (rc == 0)) {
+			return rc;
 		} else {
 			D_FREE(sym->value);
 			D_ERROR("Inserting entry %s failed (rc = %d)\n",
@@ -2186,9 +2188,12 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	rc = insert_entry(parent->oh, th, name, len,
 			  DAOS_COND_DKEY_INSERT, &entry);
-	if (rc != 0) {
+	if (rc == EEXIST) {
 		daos_obj_close(new_dir.oh, NULL);
 		return rc;
+	} else if (rc != 0) {
+		daos_obj_close(new_dir.oh, NULL);
+		return daos_der2errno(rc);
 	}
 
 	rc = daos_obj_close(new_dir.oh, NULL);
@@ -3063,7 +3068,7 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	case S_IFLNK:
 		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len,
 				  obj);
-		if (rc) {
+		if ((rc != 0) && (rc != EEXIST)) {
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
@@ -3085,6 +3090,10 @@ out:
 			stbuf->st_mtim.tv_sec = entry.mtime;
 			stbuf->st_ctim.tv_sec = entry.ctime;
 		}
+		*_obj = obj;
+	} else if (rc == EEXIST) {
+		if (stbuf)
+			rc = dfs_stat(dfs, parent, name, stbuf);
 		*_obj = obj;
 	} else {
 		D_FREE(obj);
