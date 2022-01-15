@@ -222,8 +222,7 @@ out:
 	return rc;
 }
 
-typedef bool
-(*check_func)(const struct evt_entry *ent1, const struct evt_entry *ent2);
+typedef bool (*check_func)(const struct evt_entry *ent1, const struct evt_entry *ent2);
 
 static bool
 hi_gtr(const struct evt_entry *ent1, const struct evt_entry *ent2)
@@ -492,7 +491,7 @@ query_recx(struct open_query *query, daos_recx_t *recxs)
 	if (!(query->qt_flags & VOS_GET_RECX_EC))
 		return query_normal_recx(query, &recxs[0]);
 
-	memset(&recxs[1], 0, sizeof(&recxs[1]) * 2);
+	memset(&recxs[1], 0, sizeof(recxs[1]) * 2);
 	return query_ec_recx(query, &recxs[0]);
 }
 
