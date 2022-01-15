@@ -632,8 +632,6 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		numTargets += e.TargetCount
 	}
 
-	//nr_hugepages := (minDMABuffer * nrTgts) / hugepage_size
-
 	reqHugePages, err := common.CalcMinHugePages(sd.hugePageSize, numTargets)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to calculate minimum hugepages")
@@ -646,5 +644,5 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		WithControlLogFile(defaultControlLogFile).
 		WithNrHugePages(reqHugePages)
 
-	return cfg, cfg.Validate(log, sd.hugePageSize)
+	return cfg, cfg.Validate(log, sd.hugePageSize, nil)
 }

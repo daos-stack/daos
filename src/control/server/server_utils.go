@@ -39,8 +39,8 @@ type netListenFn func(string, string) (net.Listener, error)
 type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
 const (
-	iommuPath        = "/sys/class/iommu"
-	minHugePageCount = 128
+	iommuPath            = "/sys/class/iommu"
+	scanMinHugePageCount = 128
 )
 
 func cfgHasBdevs(cfg *config.Server) bool {
@@ -150,8 +150,8 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 	hasBdevs := cfgHasBdevs(srv.cfg)
 
 	if hasBdevs {
-		// Perform these checks to avoid even trying a prepare if the system
-		// isn't configured properly.
+		// Perform these checks to avoid even trying a prepare if the system isn't
+		// configured properly.
 		if srv.runningUser != "root" {
 			if srv.cfg.DisableVFIO {
 				return FaultVfioDisabled
@@ -161,15 +161,11 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 				return FaultIommuDisabled
 			}
 		}
-		if srv.cfg.NrHugepages == 0 {
-			// TODO: add fault
-			return errors.New("bdevs detected in config but zero hugepages requested")
-		}
-	}
-
-	if srv.cfg.NrHugepages == 0 {
-		// Zero hugepages requested so skip NVMe prepare.
-		srv.log.Debugf("skip nvme prepare, no hugepages allocd as nr_hugepages 0 in config")
+	} else if srv.cfg.NrHugepages == 0 {
+		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: 0 in config")
+		return nil
+	} else if len(srv.cfg.Engines) > 0 && srv.cfg.NrHugepages < 0 {
+		srv.log.Debugf("skip nvme prepare as scm-only cfg and nr_hugepages unset in config")
 		return nil
 	}
 
@@ -189,36 +185,40 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 	}
 
 	if hasBdevs {
-		prepReq.HugePageCount = srv.cfg.NrHugepages
-
-		// The config value is intended to be per-engine so allocate hugepages each engine's
-		// numa node. Storage backend will allocate HugePageCount on each numa node in
-		// HugeNodes list.
+		// The NrHugepages config value is a total for all engines. Distribute allocation
+		// of hugepages equally across each engine's numa node (as validation ensures that
+		// TargetsCount is equal for each engine). Detect if any engines share numa nodes
+		// and if that's the case, allocate only on the shared numa node and notify user.
 		nodeMap := make(map[string]bool)
 		nodes := make([]string, 0, len(srv.cfg.Engines))
 		for _, ec := range srv.cfg.Engines {
 			nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
 			if nodeMap[nn] {
-				srv.log.Errorf("multiple engines assigned to NUMA node %d",
-					nn)
-				nodes = nil
+				srv.log.Infof("Multiple engines assigned to NUMA node %s, "+
+					"allocating all hugepages on this node.", nn)
+				prepReq.HugePageCount = srv.cfg.NrHugepages
+				nodes = []string{nn}
 				break
 			}
 			nodeMap[nn] = true
 			nodes = append(nodes, nn)
 		}
-		if len(nodes) != 0 {
-			prepReq.HugeNodes = strings.Join(nodes, ",")
-		}
+
+		prepReq.HugePageCount = srv.cfg.NrHugepages / len(nodes)
+		prepReq.HugeNodes = strings.Join(nodes, ",")
+
+		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
+			prepReq.HugePageCount, nodes)
+	} else if len(srv.cfg.Engines) == 0 && srv.cfg.NrHugepages < 0 {
+		// If nr_hugepages is unset and no engines in config, set minimum needed for
+		// scanning and set number of hugepages for engines to zero for discovery mode.
+		prepReq.HugePageCount = scanMinHugePageCount
+		srv.cfg.NrHugepages = 0
 	} else {
-		// If nr_hugepages is unset and no bdevs in config, set minimum needed for scanning
-		// and set number of hugepages for engine to zero.
-		if srv.cfg.NrHugepages < 0 {
-			prepReq.HugePageCount = minHugePageCount
-			srv.cfg.NrHugepages = 0
-		} else {
-			prepReq.HugePageCount = srv.cfg.NrHugepages
-		}
+		// If nr_hugepages has been set manually but no bdevs in config then allocate on
+		// numa node 0 (for example if a bigger number of hugepages are required in
+		// discovery mode for an unusually large number of SSDs).
+		prepReq.HugePageCount = srv.cfg.NrHugepages
 	}
 
 	// Run prepare to bind devices to user-space driver and allocate hugepages.
@@ -230,14 +230,17 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}
 
+	expFree := prepReq.HugePageCount
+	if hasBdevs {
+		expFree = srv.cfg.NrHugepages // total for all engines
+	}
 	// Double-check that we got the requested number of huge pages after prepare.
-	if hpi.Free < prepReq.HugePageCount {
-		return FaultInsufficientFreeHugePages(hpi.Free, prepReq.HugePageCount)
+	if hpi.Free < expFree {
+		return FaultInsufficientFreeHugePages(hpi.Free, expFree)
 	}
 
 	if len(srv.cfg.Engines) == 0 {
-		// skip mem size check
-		return nil
+		return nil // skip mem size check
 	}
 
 	// Calculate mem_size per I/O engine (in MB)
@@ -247,14 +250,14 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 
 	for _, engineCfg := range srv.cfg.Engines {
 		if engineCfg.TargetCount == 0 {
+			// should have already been validated but ensure no divide by zero
 			return errors.Errorf("engine has zero target count")
 		}
 
 		engineCfg.MemSize = memSizeMb
 		// Pass hugepage size, do not assume 2MB is used
 		engineCfg.HugePageSz = pageSizeMb
-		// Warn if hugepages are not enough to sustain average
-		// I/O workload (~1GB).
+		// Warn if hugepages are not enough to sustain average I/O workload (~1GB).
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
 			srv.log.Errorf("Not enough hugepages are allocated!")
 		}

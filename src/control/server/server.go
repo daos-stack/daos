@@ -36,7 +36,7 @@ import (
 )
 
 func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet, hpi *common.HugePageInfo) (*system.FaultDomain, error) {
-	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
+	if err := cfg.Validate(log, hpi.PageSizeKb, fis); err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
@@ -48,10 +48,6 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware
 		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
-		if err := ec.ValidateFabric(log, fis); err != nil {
-			return nil, err
-		}
-
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
 			return nil, err
 		}

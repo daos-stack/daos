@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -47,7 +48,7 @@ type Server struct {
 	DisableVFIO         bool             `yaml:"disable_vfio"`
 	EnableVMD           bool             `yaml:"enable_vmd"`
 	EnableHotplug       bool             `yaml:"enable_hotplug"`
-	NrHugepages         int              `yaml:"nr_hugepages"`
+	NrHugepages         int              `yaml:"nr_hugepages"` // total for all engines
 	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
 	ControlLogFile      string           `yaml:"control_log_file"`
 	ControlLogJSON      bool             `yaml:"control_log_json,omitempty"`
@@ -390,7 +391,7 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
+func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.FabricInterfaceSet) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -419,8 +420,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		return FaultConfigBadTelemetryPort
 	}
 
-	// Update access point addresses with control port if port is not
-	// supplied.
+	// Update access point addresses with control port if port is not supplied.
 	newAPs := make([]string, 0, len(cfg.AccessPoints))
 	for _, ap := range cfg.AccessPoints {
 		newAP, err := getAccessPointAddrWithPort(log, ap, cfg.ControlPort)
@@ -445,19 +445,19 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	log.Debugf("hotplug=%v vfio=%v vmd=%v requested in config", cfg.EnableHotplug,
 		!cfg.DisableVFIO, cfg.EnableVMD)
 
-	// A config without engines is valid when initially discovering hardware
-	// prior to adding per-engine sections with device allocations.
+	// A config without engines is valid when initially discovering hardware prior to adding
+	// per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode", build.DataPlaneName,
-			build.ControlPlaneName)
+		log.Infof("No %ss in configuration, %s starting in discovery mode",
+			build.DataPlaneName, build.ControlPlaneName)
 		cfg.Engines = nil
 		return nil
 	}
 
-	var cfgHasBdevs bool
-	cfgTargets := 0
+	cfgHasBdevs := false
+	cfgTargetCount := 0
 	for idx, ec := range cfg.Engines {
-		cfgTargets += ec.TargetCount
+		cfgTargetCount += ec.TargetCount
 
 		ls := ec.LegacyStorage
 		if ls.WasDefined() {
@@ -474,8 +474,8 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 				)
 			}
 
-			// Do not add bdev tier if cls is none or nvme has no
-			// devices to maintain backward compatible behavior.
+			// Do not add bdev tier if cls is none or nvme has no devices to maintain
+			// backward compatible behavior.
 			bc := ls.BdevClass
 			switch {
 			case bc == storage.ClassNvme &&
@@ -502,11 +502,15 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 
 		if ec.Storage.Tiers.CfgHasBdevs() {
 			cfgHasBdevs = true
+			if ec.TargetCount == 0 {
+				return errors.Errorf("engine %d: Target count cannot be zero if "+
+					"bdevs have been assigned in config", idx)
+			}
 		}
 
 		ec.Fabric.Update(cfg.Fabric)
 
-		if err := ec.Validate(log); err != nil {
+		if err := ec.Validate(log, fis); err != nil {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
 		}
 
@@ -515,16 +519,17 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	}
 
 	if cfgHasBdevs {
-		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargets)
+		// Calculate minimum number of hugepages for all configured engines.
+		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount)
 		if err != nil {
 			return err
 		}
 
-		// If the config doesn't specify hugepages, use the minimum.
-		// Otherwise, validate that the configured amount is sufficient.
+		// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
+		// that the configured amount is sufficient.
 		if cfg.NrHugepages == -1 {
 			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages,
-				cfgTargets)
+				cfgTargetCount)
 			cfg.NrHugepages = minHugePages
 		} else if cfg.NrHugepages < minHugePages {
 			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
@@ -540,10 +545,9 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	return nil
 }
 
-// validateMultiServerConfig performs an extra level of validation
-// for multi-server configs. The goal is to ensure that each instance
-// has unique values for resources which cannot be shared (e.g. log files,
-// fabric configurations, PCI devices, etc.)
+// validateMultiServerConfig performs an extra level of validation for multi-server configs. The
+// goal is to ensure that each instance has unique values for resources which cannot be shared
+// (e.g. log files, fabric configurations, PCI devices, etc.)
 func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	if len(cfg.Engines) < 2 {
 		return nil
