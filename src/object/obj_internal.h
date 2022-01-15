@@ -283,14 +283,14 @@ struct obj_pool_metrics {
 
 	/** Total number of silently restarted updates (type = counter) */
 	struct d_tm_node_t	*opm_update_restart;
-	/** Total number of resent I/O RPCs (type = counter) */
-	struct d_tm_node_t	*opm_resent;
+	/** Total number of client-resent fetch and update RPCs (type = counter) */
+	struct d_tm_node_t	*opm_fetch_udate_cli_resent;
 	/**
-	 * Total number of I/O RPCs that failed with DER_INPROGRESS, trying to
-	 * read uncommitted data
+	 * Total number of fetch/update RPCs that failed with DER_INPROGRESS, trying to
+	 * access uncommitted data
 	 * (type = counter)
 	 */
-	struct d_tm_node_t	*opm_inprogress;
+	struct d_tm_node_t	*opm_fetch_update_inprogress;
 };
 
 struct obj_tls {

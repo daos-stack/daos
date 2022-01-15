@@ -23,7 +23,7 @@ struct pool_metrics {
 	struct d_tm_node_t	*disconnect_total;
 	struct d_tm_node_t	*query_total;
 	struct d_tm_node_t	*query_space_total;
-	struct d_tm_node_t	*handle_eviction;
+	struct d_tm_node_t	*evict_total;
 };
 
 /**

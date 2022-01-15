@@ -4818,7 +4818,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 
 				/** update metric */
 				metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
-				d_tm_inc_counter(metrics->handle_eviction, n_hdl_uuids);
+				d_tm_inc_counter(metrics->evict_total, n_hdl_uuids);
 			}
 		}
 	}

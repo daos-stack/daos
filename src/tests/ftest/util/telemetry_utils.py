@@ -13,10 +13,11 @@ class TelemetryUtils():
     """Defines a object used to verify telemetry information."""
 
     ENGINE_CONTAINER_METRICS = [
-        "engine_pool_container_handles",
+        "engine_pool_ops_cont_open",
         "engine_pool_ops_cont_close",
+        "engine_pool_ops_cont_create",
         "engine_pool_ops_cont_destroy",
-        "engine_pool_ops_cont_open"]
+        "engine_pool_ops_cont_query"]
     ENGINE_POOL_METRICS = [
         "engine_pool_entries_dtx_batched_degree",
         "engine_pool_entries_dtx_batched_total",
@@ -43,8 +44,13 @@ class TelemetryUtils():
         "engine_pool_ops_tgt_punch",
         "engine_pool_ops_tgt_update",
         "engine_pool_ops_update",
-        "engine_pool_pool_handles",
+        "engine_pool_ops_pool_evict",
+        "engine_pool_ops_pool_connect",
+        "engine_pool_ops_pool_disconnect",
+        "engine_pool_ops_pool_query",
+        "engine_pool_ops_pool_query_space",
         "engine_pool_resent",
+        "engine_pool_uncommitted_retry",
         "engine_pool_restarted",
         "engine_pool_started_at",
         "engine_pool_xferred_fetch",

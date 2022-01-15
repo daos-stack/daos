@@ -2561,9 +2561,9 @@ re_fetch:
 
 		dtx_flags |= DTX_RESEND;
 
-again1:
 		opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
-		d_tm_inc_counter(opm->opm_resent, 1);
+		d_tm_inc_counter(opm->opm_fetch_update_cli_resent, 1);
+again1:
 		e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2699,7 +2699,7 @@ out:
 		struct obj_pool_metrics	*m;
 
 		m = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
-		d_tm_inc_counter(m->opm_inprogress, 1);
+		d_tm_inc_counter(m->opm_fetch_update_inprogress, 1);
 	}
 
 	if (unlikely(rc != 0 && need_abort)) {
