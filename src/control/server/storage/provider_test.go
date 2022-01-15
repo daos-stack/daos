@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -127,7 +127,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mockScmTier := NewTierConfig().WithScmClass(ClassDcpm.String()).
+	mockScmTier := NewTierConfig().WithStorageClass(ClassDcpm.String()).
 		WithScmMountPoint("/mnt/daos0").
 		WithScmDeviceList("/dev/pmem0")
 
@@ -163,8 +163,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
-					NewTierConfig().
-						WithBdevClass(ClassNvme.String()).
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
 						WithBdevBusidRange("0x00-0x7f"),
 				},
 			},
@@ -182,7 +181,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
-					NewTierConfig().WithBdevClass(ClassNvme.String()).
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
 						WithBdevBusidRange("0x70-0x7f"),
 				},
 				EnableHotplug: true,
@@ -204,7 +203,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
-					NewTierConfig().WithBdevClass(ClassNvme.String()).
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
 						WithBdevBusidRange("0x70-0x7f"),
 				},
 				EnableHotplug: true,
@@ -228,7 +227,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
-					NewTierConfig().WithBdevClass(ClassNvme.String()),
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
 				},
 				EnableHotplug: true,
 			},
@@ -248,7 +247,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					mockScmTier,
-					NewTierConfig().WithBdevClass(ClassNvme.String()),
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
 				},
 				EnableHotplug: true,
 			},
