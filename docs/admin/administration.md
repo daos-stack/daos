@@ -514,7 +514,7 @@ will remain evicted until device replacement occurs).
     Use is currently intended for testing only and is not supported for production.
 
 - To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
-and bounnd instead to a user-space driver so that the device can be used with DAOS.
+and bound instead to a user-space driver so that the device can be used with DAOS.
 
 To rebind a SSD on a single host, run the following command (replace SSD PCI address and
 hostname with appropriate values):
