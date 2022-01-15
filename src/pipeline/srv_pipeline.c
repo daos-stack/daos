@@ -9,42 +9,127 @@
 #include <math.h>
 #include <daos/rpc.h>
 #include <daos_srv/container.h>
-#include <daos_srv/object.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/bio.h>
 #include "daos_api.h"
 #include "pipeline_rpc.h"
 #include "pipeline_internal.h"
 
 
+struct pipeline_enum_arg {
+	d_iov_t			dkey;
+	bool			dkey_set;
+	daos_iod_t		*iods;
+	uint32_t		nr_iods;
+	d_sg_list_t		*sgl_recx;
+	int			akey_idx;
+	iter_copy_data_cb_t	copy_data_cb;
+};
+
+
+#if 0
+static int
+pipeline_obj_fetch(daos_handle_t vos_coh, daos_unit_oid_t oid,
+		   daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
+		   daos_iod_t *iods)
+{
+	int			rc;
+	daos_handle_t		ioh;
+	struct vos_io_context	*ioc;
+	daos_size_t		size;
+
+	rc = vos_fetch_begin(vos_coh, oid, epoch, dkey, nr, iods, 0, NULL,
+	
+	// TODO: fetch data pointer here
+
+			     &ioh, NULL);
+	rc = vos_fetch_end(ioh, &size, rc);
+
+	return rc;
+}
+#endif
+
 static int
 enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
-	int	rc;
+	int				rc;
+	struct pipeline_enum_arg	*pipe_arg = cb_arg;
+	d_sg_list_t			*sgls;
+	d_iov_t				*iov;
+	uint32_t			i;
 
 	switch(type)
 	{
+	case VOS_ITER_AKEY:
+		D_ASSERT(pipe_arg->akey_idx < 0);
+		D_ASSERT(entry->ie_key.iov_len > 0);
+
+		for (i = 0; i < pipe_arg->nr_iods; i++)
+		{
+			if (pipe_arg->iods[i].iod_name.iov_len !=
+				entry->ie_key.iov_len)
+			{
+				continue;
+			}
+			if (memcmp(pipe_arg->iods[i].iod_name.iov_buf,
+				   entry->ie_key.iov_buf,
+				   entry->ie_key.iov_len) == 0)
+			{
+				pipe_arg->akey_idx = i;
+				break;
+			}
+		}
+		break;
 	case VOS_ITER_DKEY:
-		rc = ds_obj_fill_key(ih, entry, cb_arg, type);
+		if (pipe_arg->dkey_set == true)
+		{
+			return 1;
+		}
+		if (entry->ie_key.iov_len > 0)
+		{
+			pipe_arg->dkey		= entry->ie_key;
+			pipe_arg->dkey_set	= true;
+		}
+		break;
+	case VOS_ITER_SINGLE:
+		D_ASSERT(pipe_arg->copy_data_cb != NULL);
+
+		if (pipe_arg->akey_idx < 0)
+		{
+			break; /** akey is not in iods passed by client */
+		}
+
+		sgls	= pipe_arg->sgl_recx;
+		iov	= sgls[pipe_arg->akey_idx].sg_iovs;
+
+		rc = pipe_arg->copy_data_cb(ih, entry, iov);
+		if (rc == 0)
+		{
+			sgls[pipe_arg->akey_idx].sg_nr_out = 1;
+			pipe_arg->akey_idx		   = -1;
+		}
+
 		break;
 	default:
 		D_ASSERTF(false, "unknown/unsupported type %d\n", type);
-		rc = -DER_INVAL;
+		return -DER_INVAL;
 	}
 
-	return rc;
+	return 0;
 }
 
 static int
-pipeline_list_dkey(daos_handle_t vos_coh, daos_unit_oid_t oid,
-		   struct vos_iter_anchors *anchors, daos_epoch_range_t epr,
-		   daos_key_desc_t *kds, d_sg_list_t *sgl_keys)
+pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
+		      struct vos_iter_anchors *anchors, daos_epoch_range_t epr,
+		      daos_iod_t *iods, uint32_t nr_iods, d_iov_t *d_key,
+		      d_sg_list_t *sgl_recx)
 {
 	int			rc;
 	int			type;
-	struct dss_enum_arg	enum_arg = { 0 };
+	struct pipeline_enum_arg	enum_arg = { 0 };
 	vos_iter_param_t	param = { 0 };
 
 	param.ip_hdl		= vos_coh;
@@ -54,20 +139,29 @@ pipeline_list_dkey(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	/* items show epoch is <= epr_hi. For range, use VOS_IT_EPC_RE */
 	param.ip_epc_expr	= VOS_IT_EPC_LE;
 
-	enum_arg.sgl		= sgl_keys;
-	enum_arg.sgl_idx	= 0;
-	enum_arg.kds		= kds;
-	enum_arg.kds_cap	= 1; /* TODO: Does it work to get more than one? */
-	enum_arg.kds_len	= 0;
 	/* TODO: Set enum_arg.csummer !  Figure out how checksum works */
 
 	type			= VOS_ITER_DKEY;
+	enum_arg.iods		= iods;
+	enum_arg.nr_iods	= nr_iods;
+	enum_arg.sgl_recx	= sgl_recx;
+	enum_arg.akey_idx	= -1;
+	enum_arg.copy_data_cb	= vos_iter_copy;
 
-	rc = vos_iterate(&param, type, false, anchors, enum_pack_cb, NULL,
+	rc = vos_iterate(&param, type, true, anchors, enum_pack_cb, NULL,
 			 &enum_arg, NULL);
 	D_DEBUG(DB_IO, "enum type %d rc "DF_RC"\n", type, DP_RC(rc));
+	if (rc < 0)
+	{
+		return rc;
+	}
+	if (enum_arg.dkey_set == true)
+	{
+		*d_key	= enum_arg.dkey;
+		return 0;
+	}
 
-	return rc;
+	return 1;
 }
 
 static void
@@ -117,13 +211,10 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 {
 	int				rc;
 	uint32_t			i;
-	daos_key_desc_t			kds_iter;
 	uint32_t			nr_kds_pass;
-	d_iov_t				keys_iov_iter;
-	d_sg_list_t			sgl_keys_iter;
-	char				**bufs;
-	d_iov_t				*recx_iov_iter;
+	d_iov_t				d_key_iter;
 	d_sg_list_t			*sgl_recx_iter;
+	uint32_t			sgl_recx_idx;
 	struct vos_iter_anchors		anchors;
 
 
@@ -149,20 +240,12 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		D_GOTO(exit, rc = 0);	/** nothing to return */
 	}
 
-	sgl_keys_iter.sg_iovs = &keys_iov_iter;
-	D_ALLOC_ARRAY(recx_iov_iter, *nr_iods);
-	D_ALLOC_ARRAY(sgl_recx_iter, *nr_iods);
-	D_ALLOC_ARRAY(bufs, *nr_iods);
-	if (recx_iov_iter == NULL || sgl_recx_iter == NULL || bufs == NULL)
-	{
-		D_GOTO(exit, rc = -DER_NOMEM);
-	}
-	bzero(bufs, sizeof(*bufs)*(*nr_iods));
-
 	/** -- Init all aggregation counters. */
+
 	pipeline_aggregations_init(&pipeline, sgl_agg);
 
 	/** -- "compile" pipeline */
+
 	pipeline_compile(&pipeline);
 
 	/**
@@ -172,8 +255,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	 */
 
 	nr_kds_pass			= 0;
+	sgl_recx_idx			= 0;
 	bzero(&anchors, sizeof(anchors));
-	anchors.ia_reprobe_dkey		= 1;
 	anchors.ia_dkey			= *anchor;
 
 	while (!daos_anchor_is_eof(&anchors.ia_dkey))
@@ -184,28 +267,49 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 			break; /** all records read */
 		}
 
-		if (bufs[0] == NULL)
-		{
-			for (i = 0; i < *nr_iods; i++)
-			{
-				size_t iov_buf_len = sgl_recx[nr_kds_pass*i].sg_iovs->iov_buf_len;
+		/** -- fetching record */
 
-				D_ALLOC(bufs[i], iov_buf_len);
-				if (bufs[i] == NULL)
-				{
-					D_GOTO(exit, rc = -DER_NOMEM);
-				}
-				d_iov_set(&recx_iov_iter[i], bufs[i], iov_buf_len);
-				sgl_recx_iter[i].sg_nr = sgl_recx[nr_kds_pass*i].sg_nr;
-				sgl_recx_iter[i].sg_nr_out = sgl_recx[nr_kds_pass*i].sg_nr_out;
-				sgl_recx_iter[i].sg_iovs = &recx_iov_iter[i];
-			}
+		sgl_recx_iter = &sgl_recx[sgl_recx_idx*(*nr_iods)];
+		rc = pipeline_fetch_record(vos_coh, oid, &anchors, epr, iods,
+					   *nr_iods, &d_key_iter,
+					   sgl_recx_iter);
+		if (rc < 0)
+		{
+			D_GOTO(exit, rc);
+		}
+		if (rc == 1)
+		{
+			continue; /** nothing returned; no more records? */
 		}
 
-		rc = pipeline_list_dkey(vos_coh, oid, &anchors, epr, &kds_iter,
-					&sgl_keys_iter);
+		printf("dkey = %.*s\n", (int)d_key_iter.iov_len, (char *)d_key_iter.iov_buf);
+		fflush(stdout);
+		for (i = 0; i < (*nr_iods)-1; i++)
+		{
+			printf("k:%.*s v:%.*s  ", (int)iods[i].iod_name.iov_len,
+						  (char *)iods[i].iod_name.iov_buf,
+						  (int)sgl_recx_iter[i].sg_iovs->iov_len,
+						  (char *)sgl_recx_iter[i].sg_iovs->iov_buf);
+			fflush(stdout);
+		}
+		printf("k:%.*s v:%d  ", (int)iods[i].iod_name.iov_len,
+					  (char *)iods[i].iod_name.iov_buf,
+					  *((int *)sgl_recx_iter[i].sg_iovs->iov_buf));
+		fflush(stdout);
+		printf("\n");
+		fflush(stdout);
 
+		break;
 
+		/** this is here for the case where dkey is provided by the
+		 *  user. */
+		/*
+		rc = pipeline_obj_fetch(vos_coh, oid, epr.epr_hi,
+					sgl_keys_iter.sg_iovs, *nr_iods, iods);
+		if (rc != 0)
+		{
+			D_GOTO(exit, rc);
+		}*/
 
 	}
 
@@ -286,9 +390,11 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 			D_GOTO(exit, rc = -DER_NOMEM);
 		}
 	}
-
+if (pri->pri_target)
+{
+	D_GOTO(exit, rc = 0);
+}
 	/** -- calling pipeline run */
-
 	rc = ds_pipeline_run(vos_coh, pri->pri_oid, pri->pri_pipe, pri->pri_epr,
 			     pri->pri_flags, &pri->pri_dkey, &nr_iods,
 			     pri->pri_iods.iods, &pri->pri_anchor, &nr_kds, kds,
