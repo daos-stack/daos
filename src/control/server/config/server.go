@@ -111,7 +111,7 @@ func (cfg *Server) WithModules(mList string) *Server {
 func (cfg *Server) WithFabricProvider(provider string) *Server {
 	cfg.Fabric.Provider = provider
 	for _, engine := range cfg.Engines {
-		engine.Fabric.Update(cfg.Fabric)
+		engine.Fabric.Provider = cfg.Fabric.Provider
 	}
 	return cfg
 }
