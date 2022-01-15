@@ -889,7 +889,7 @@ func convertMercuryToLibFabric(provider string) (string, error) {
 	// automatically append rxm if not specified in yaml file
 	if provider == "ofi+tcp" {
 		provider = "ofi+tcp;ofi_rxm"
-	} else if provider == "ofi+verns" {
+	} else if provider == "ofi+verbs" {
 		provider = "ofi+verbs;ofi_rxm"
 	}
 
