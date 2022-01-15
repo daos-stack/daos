@@ -25,7 +25,7 @@ import (
 
 type cliOptions struct {
 	AllowProxy bool                    `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      string                  `short:"d" long:"debug" optional:"1" optional-value:"basic" choice:"basic" choice:"net" description:"Enable basic or enhanced network debug"`
+	Debug      bool                    `short:"d" long:"debug" description:"Enable debug output"`
 	JSON       bool                    `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs   bool                    `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath string                  `short:"o" long:"config-path" description:"Path to agent configuration file"`
@@ -149,9 +149,8 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			jsonCmd.enableJsonOutput(opts.JSON)
 		}
 
-		if opts.Debug != "" {
+		if opts.Debug {
 			log.WithLogLevel(logging.LogLevelDebug)
-			log.Debug("basic debug output enabled")
 		}
 
 		if opts.JSONLogs {
