@@ -194,7 +194,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithEnableVMD(true).     // vmd disabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
-		WithNrHugePages(-1).     // hugepages auto-calculated by default
+		WithNrHugePages(0).      // hugepages auto-calculated by default
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
@@ -489,7 +489,7 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"calculated hugepages": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(-1).
+				return c.WithNrHugePages(0).
 					WithEngines(
 						engine.NewConfig().
 							WithStorage(

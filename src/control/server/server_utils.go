@@ -161,10 +161,10 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 				return FaultIommuDisabled
 			}
 		}
-	} else if srv.cfg.NrHugepages == 0 {
-		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: 0 in config")
+	} else if srv.cfg.NrHugepages == -1 {
+		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: -1 in config")
 		return nil
-	} else if len(srv.cfg.Engines) > 0 && srv.cfg.NrHugepages < 0 {
+	} else if len(srv.cfg.Engines) > 0 && srv.cfg.NrHugepages == 0 {
 		srv.log.Debugf("skip nvme prepare as scm-only cfg and nr_hugepages unset in config")
 		return nil
 	}
@@ -209,7 +209,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
 			prepReq.HugePageCount, nodes)
-	} else if len(srv.cfg.Engines) == 0 && srv.cfg.NrHugepages < 0 {
+	} else if len(srv.cfg.Engines) == 0 && srv.cfg.NrHugepages == 0 {
 		// If nr_hugepages is unset and no engines in config, set minimum needed for
 		// scanning and set number of hugepages for engines to zero for discovery mode.
 		prepReq.HugePageCount = scanMinHugePageCount

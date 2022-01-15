@@ -282,7 +282,6 @@ func DefaultServer() *Server {
 	return &Server{
 		SystemName:      build.DefaultSystemName,
 		SocketDir:       defaultRuntimeDir,
-		NrHugepages:     -1, // mapped to 4096 by default.
 		AccessPoints:    []string{fmt.Sprintf("localhost:%d", build.DefaultControlPort)},
 		ControlPort:     build.DefaultControlPort,
 		TransportConfig: security.DefaultServerTransportConfig(),
@@ -529,7 +528,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 
 		// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
 		// that the configured amount is sufficient.
-		if cfg.NrHugepages == -1 {
+		if cfg.NrHugepages == 0 {
 			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages,
 				cfgTargetCount)
 			cfg.NrHugepages = minHugePages

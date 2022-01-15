@@ -272,9 +272,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expErr: FaultIommuDisabled,
 		},
-		"no bdevs configured; 0 hugepages requested": {
+		"no bdevs configured; -1 hugepages requested": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(0).
+				return sc.WithNrHugePages(-1).
 					WithEngines(scmEngine(0), scmEngine(1))
 			},
 		},

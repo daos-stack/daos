@@ -185,9 +185,9 @@
 ##
 ## Hugepages are mandatory with NVME SSD configured and optional without so
 ## that when NVMe isn't configured, daos will allocate normal memory pages
-## (not hugepages) if nr_hugepages is 0.
+## (and disable use of hugepages) if nr_hugepages is -1.
 #
-##nr_hugepages: 0
+##nr_hugepages: -1
 #
 #
 ## Force specific debug mask for daos_server (control plane).
