@@ -769,7 +769,7 @@ def auto_detect_devices(host_list, device_type, filter=None):
         if filter:
             command_list.append("grep '{}'".format(filter))
     else:
-        print("ERROR: Invlaid 'device_type' for NVMe/VMD auto-detection: {}".format(device_type))
+        print("ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {}".format(device_type))
         sys.exit(1)
     command = " | ".join(command_list) + " || :"
     task = get_remote_output(host_list, command)
@@ -781,7 +781,7 @@ def auto_detect_devices(host_list, device_type, filter=None):
         if len(output_data) > 1:
             print("ERROR: Non-homogeneous {} PCI addresses.".format(device_type))
         else:
-            # Get the devices from the successfull, homogeneous command output
+            # Get the devices from the successful, homogeneous command output
             output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
             devices = find_pci_address(output_str)
 
