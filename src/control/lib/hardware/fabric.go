@@ -119,6 +119,19 @@ func (m osDevMap) update(name string, fi *FabricInterface) {
 	m[name].update(fi.Name, fi)
 }
 
+func (m osDevMap) remove(fi *FabricInterface) {
+	if fi == nil || fi.OSDevice == "" {
+		return
+	}
+
+	if devices, exists := m[fi.OSDevice]; exists {
+		delete(devices, fi.Name)
+		if len(devices) == 0 {
+			delete(m, fi.OSDevice)
+		}
+	}
+}
+
 // NewFabricInterfaceSet creates a new fabric interface set and initializes it with the passed-in
 // FabricInterfaces if provided.
 func NewFabricInterfaceSet(fis ...*FabricInterface) *FabricInterfaceSet {
@@ -201,6 +214,18 @@ func (s *FabricInterfaceSet) Update(fi *FabricInterface) {
 	}
 
 	s.byOSDev.update(osDev, fi)
+}
+
+// Remove deletes a FabricInterface from the set.
+func (s *FabricInterfaceSet) Remove(fiName string) {
+	fi, err := s.GetInterface(fiName)
+	if err != nil {
+		// Not in the set
+		return
+	}
+
+	s.byOSDev.remove(fi)
+	delete(s.byName, fiName)
 }
 
 // GetInterface fetches a fabric interface by its fabric device name.
@@ -375,7 +400,6 @@ func (f *FabricInterfaceBuilder) BuildPart(ctx context.Context, fis *FabricInter
 				f.log.Errorf("can't update interface %s: %s", name, err.Error())
 				continue
 			}
-			f.log.Debugf("updating fabric interface %q", name)
 			fis.Update(fi)
 		}
 	}
@@ -429,7 +453,8 @@ func (o *OSDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet
 
 		dev, exists := devsByName[name]
 		if !exists {
-			o.log.Debugf("fabric interface %q not found in topology", name)
+			o.log.Debugf("ignoring fabric interface %q not found in topology", name)
+			fis.Remove(name)
 			continue
 		}
 
@@ -543,9 +568,14 @@ func (n *NetDevClassBuilder) BuildPart(ctx context.Context, fis *FabricInterface
 			return err
 		}
 
+		if fi.OSDevice == "" {
+			n.log.Debugf("fabric interface %q has no corresponding OS-level device", name)
+			continue
+		}
+
 		ndc, err := n.provider.GetNetDevClass(fi.OSDevice)
 		if err != nil {
-			n.log.Debug(err.Error())
+			n.log.Debugf("failed to get device class for %q: %s", name, err.Error())
 		}
 
 		fi.DeviceClass = ndc

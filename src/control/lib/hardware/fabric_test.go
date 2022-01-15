@@ -418,6 +418,77 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 	}
 }
 
+func TestHardware_FabricInterfaceSet_Remove(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fis       *FabricInterfaceSet
+		input     string
+		expResult *FabricInterfaceSet
+	}{
+		"nil": {
+			input: "something",
+		},
+		"empty": {
+			fis:       NewFabricInterfaceSet(),
+			input:     "something",
+			expResult: NewFabricInterfaceSet(),
+		},
+		"not found": {
+			fis: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:     "fi0",
+					OSDevice: "net0",
+				},
+			),
+			input: "fi1",
+			expResult: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:     "fi0",
+					OSDevice: "net0",
+				},
+			),
+		},
+		"removed": {
+			fis: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:     "fi0",
+					OSDevice: "net0",
+				},
+				&FabricInterface{
+					Name:     "fi1",
+					OSDevice: "net0",
+				},
+			),
+			input: "fi1",
+			expResult: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:     "fi0",
+					OSDevice: "net0",
+				},
+			),
+		},
+		"remove only item": {
+			fis: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:     "fi0",
+					OSDevice: "net0",
+				},
+			),
+			input:     "fi0",
+			expResult: NewFabricInterfaceSet(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.fis.Remove(tc.input)
+
+			if diff := cmp.Diff(tc.expResult, tc.fis,
+				cmp.AllowUnexported(FabricInterfaceSet{}),
+			); diff != "" {
+				t.Fatalf("(-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestHardware_FabricInterfaceSet_GetInterface(t *testing.T) {
 	for name, tc := range map[string]struct {
 		fis       *FabricInterfaceSet
@@ -846,6 +917,23 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 }
 
 func TestHardware_FabricScanner_Scan(t *testing.T) {
+	testTopo := &Topology{
+		NUMANodes: NodeMap{
+			0: MockNUMANode(0, 6).
+				WithDevices([]*PCIDevice{
+					mockPCIDevice("test", 1, 2, 3, 4).withType(DeviceTypeOFIDomain),
+					mockPCIDevice("os_test", 1, 2, 3, 4).withType(DeviceTypeNetInterface),
+				}),
+		},
+	}
+
+	testFis := NewFabricInterfaceSet(
+		&FabricInterface{
+			Name:     "test01",
+			OSDevice: "os_test01",
+		},
+	)
+
 	for name, tc := range map[string]struct {
 		config     *FabricScannerConfig
 		nilScanner bool
@@ -877,7 +965,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				},
 				FabricInterfaceProviders: []FabricInterfaceProvider{
 					&MockFabricInterfaceProvider{
-						GetFabricReturn: NewFabricInterfaceSet(),
+						GetFabricReturn: testFis,
 					},
 				},
 				NetDevClassProvider: &MockNetDevClassProvider{
@@ -893,7 +981,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 		"fabric fails": {
 			config: &FabricScannerConfig{
 				TopologyProvider: &MockTopologyProvider{
-					GetTopoReturn: &Topology{},
+					GetTopoReturn: testTopo,
 				},
 				FabricInterfaceProviders: []FabricInterfaceProvider{
 					&MockFabricInterfaceProvider{
@@ -916,22 +1004,18 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 		"netdevclass fails": {
 			config: &FabricScannerConfig{
 				TopologyProvider: &MockTopologyProvider{
-					GetTopoReturn: &Topology{},
+					GetTopoReturn: testTopo,
 				},
 				FabricInterfaceProviders: []FabricInterfaceProvider{
 					&MockFabricInterfaceProvider{
-						GetFabricReturn: NewFabricInterfaceSet(
-							&FabricInterface{
-								Name:     "test1",
-								OSDevice: "os_test1",
-							},
-						),
+						GetFabricReturn: testFis,
 					},
 				},
 				NetDevClassProvider: &MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
-							Err: errors.New("mock GetNetDevClass"),
+							Err:      errors.New("mock GetNetDevClass"),
+							ExpInput: "os_test01",
 						},
 					},
 				},
@@ -939,30 +1023,37 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			// we ignore the error in this case
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:     "test1",
-					OSDevice: "os_test1",
+					Name:     "test01",
+					OSDevice: "os_test01",
 				},
 			),
 		},
 		"success": {
 			config: &FabricScannerConfig{
 				TopologyProvider: &MockTopologyProvider{
-					GetTopoReturn: &Topology{},
+					GetTopoReturn: testTopo,
 				},
 				FabricInterfaceProviders: []FabricInterfaceProvider{
 					&MockFabricInterfaceProvider{
-						GetFabricReturn: NewFabricInterfaceSet(),
+						GetFabricReturn: testFis,
 					},
 				},
 				NetDevClassProvider: &MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
-							NDC: Ether,
+							NDC:      Ether,
+							ExpInput: "os_test01",
 						},
 					},
 				},
 			},
-			expResult: NewFabricInterfaceSet(),
+			expResult: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:        "test01",
+					OSDevice:    "os_test01",
+					DeviceClass: Ether,
+				},
+			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1241,11 +1332,7 @@ func TestHardware_OSDeviceBuilder_BuildPart(t *testing.T) {
 					Name: "notfound",
 				},
 			),
-			expResult: NewFabricInterfaceSet(
-				&FabricInterface{
-					Name: "notfound",
-				},
-			),
+			expResult: NewFabricInterfaceSet(),
 		},
 		"not OFI domain": {
 			builder: newOSDeviceBuilder(nil, testTopo),
