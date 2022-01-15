@@ -248,19 +248,11 @@ obj_metrics_alloc(const char *path, int tgt_id)
 		       DP_RC(rc));
 
 	/** Total number of resent I/Os, of type counter */
-	rc = d_tm_add_metric(&metrics->opm_fetch_upate_cli_resent, D_TM_COUNTER,
+	rc = d_tm_add_metric(&metrics->opm_upate_resent, D_TM_COUNTER,
 			     "total number of fetch/update RPCs resent by clients", "rpcs",
 			     "%s/resent/tgt_%u", path, tgt_id);
 	if (rc)
 		D_WARN("Failed to create resent counter: "DF_RC"\n",
-		       DP_RC(rc));
-
-	/** Total number of I/O RPCs that failed with DER_INPROGRESS, of type counter */
-	rc = d_tm_add_metric(&metrics->opm_fetch_update_inprogress, D_TM_COUNTER,
-			     "total number of I/O RPCs retried due to uncommitted updates",
-			     "rpcs", "%s/uncommitted_retry/tgt_%u", path, tgt_id);
-	if (rc)
-		D_WARN("Failed to create inprogress counter: "DF_RC"\n",
 		       DP_RC(rc));
 
 	/** Total number of retry updates locally, of type counter */

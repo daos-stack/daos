@@ -681,19 +681,22 @@ class TelemetryUtils():
                                     host, rank, target, "-", metric["value"])
         return data
 
-    def check_container_metrics(self, open_count=None, active_count=None,
-                                close_count=None, destroy_count=None):
+    def check_container_metrics(self, open_count=None, create_count=None,
+                                close_count=None, destroy_count=None,
+                                query_count=None):
         """Verify the container telemetry metrics.
 
         Args:
-            open_count (dict, optional): Number of times cont_open has been
-                called per host key. Defaults to None.
-            active_count (dict, optional): Number of open container handles per
+            open_count (dict, optional): Number of cont_open operations per
                 host key. Defaults to None.
-            close_count (dict, optional): Number of times cont_close has been
-                called per host key. Defaults to None.
-            destroy_count (dict, optional): Number of times cont_destroy has
-                been called per host key. Defaults to None.
+            create_count (dict, optional): Number of cont_create per
+                host key. Defaults to None.
+            close_count (dict, optional): Number of cont_close operation per
+                host key. Defaults to None.
+            destroy_count (dict, optional): Number of cont_destroy operations
+                per host key. Defaults to None.
+            query_count (dict, optional): Number of cont_query operations
+                per host key. Defaults to None.
 
         Returns:
             list: list of errors detected
@@ -702,8 +705,9 @@ class TelemetryUtils():
         errors = []
         expected = {
             "engine_pool_ops_cont_open": open_count,
-            "engine_pool_container_handles": active_count,
             "engine_pool_ops_cont_close": close_count,
+            "engine_pool_ops_cont_query": query_count,
+            "engine_pool_ops_cont_create": create_count,
             "engine_pool_ops_cont_destroy": destroy_count,
         }
         data = self.get_container_metrics()

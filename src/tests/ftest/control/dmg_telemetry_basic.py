@@ -22,8 +22,9 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         self.container = []
         self.metrics = {
             "open_count": {},
-            "active_count": {},
+            "create_count": {},
             "close_count": {},
+            "query_count": {},
             "destroy_count": {}}
         self.pool_leader_host = None
 
@@ -37,6 +38,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         self.container[-1].type.update(
             "POSIX" if posix else None, "container.type")
         self.container[-1].create()
+        self.metrics["create_count"][self.pool_leader_host] += 1
         self.metrics["open_count"][self.pool_leader_host] += 1
         self.metrics["close_count"][self.pool_leader_host] += 1
         if posix:
@@ -51,7 +53,6 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         """
         container.open()
         self.metrics["open_count"][self.pool_leader_host] += 1
-        self.metrics["active_count"][self.pool_leader_host] += 1
 
     def close_container(self, container):
         """Close the container and update the metrics.
@@ -61,7 +62,6 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         """
         container.close()
         self.metrics["close_count"][self.pool_leader_host] += 1
-        self.metrics["active_count"][self.pool_leader_host] -= 1
 
     def destroy_container(self, container):
         """Destroy the container and update the metrics.
@@ -119,8 +119,10 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         for host in data:
             self.metrics["open_count"][host] = \
                 data[host]["engine_pool_ops_cont_open"]
-            self.metrics["active_count"][host] = \
-                data[host]["engine_pool_container_handles"]
+            self.metrics["create_count"][host] = \
+                data[host]["engine_pool_ops_cont_create"]
+            self.metrics["query_count"][host] = \
+                data[host]["engine_pool_ops_cont_query"]
             self.metrics["close_count"][host] = \
                 data[host]["engine_pool_ops_cont_close"]
             self.metrics["destroy_count"][host] = \
