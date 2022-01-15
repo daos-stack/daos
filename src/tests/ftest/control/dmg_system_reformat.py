@@ -60,11 +60,6 @@ class DmgSystemReformatTest(PoolTestBase):
             self.fail("Issues performing system erase: {}".format(
                 self.get_dmg_command().result.stderr_text))
 
-        # To verify that we are using the membership information instead of the
-        # dmg config explicit hostlist
-        self.assertTrue(
-            self.server_managers[-1].dmg.set_config_value("hostlist", None))
-
         self.log.info("Perform dmg storage format on all system ranks:")
 
         # Calling storage format after system stop too soon would fail, so
