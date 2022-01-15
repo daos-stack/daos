@@ -234,7 +234,7 @@ struct test_op_record {
 	d_list_t		or_queue_link;
 	struct test_key_record	*or_key_rec; /* back pointer */
 	int			tx;
-	daos_epoch_t		snap_epoch;
+	daos_epoch_t		*snap_epoch;
 	enum test_op_type	or_op;
 	union {
 		struct test_update_fetch_arg	uf_arg;
