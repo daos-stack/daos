@@ -35,15 +35,19 @@ class RbldContainerCreate(IorTestBase):
         cont_oclass = self.params.get("oclass", "/run/io/*")
         count = 0
         self.container = []
-        while not self.pool.rebuild_complete() and count < qty:
+        rebuild_done = False
+        self.log.info("..Create %s containers and write data during rebuild.",
+                      qty)
+        while not rebuild_done and count < qty:
             count += 1
             self.log.info(
                 "..Creating container %s/%s in pool %s during rebuild",
                 count, qty, self.pool.uuid)
             self.container.append(self.get_container(self.pool))
+            rebuild_done = self.pool.rebuild_complete()
+            self.log.info(
+                "..Rebuild status, rebuild_done= %s", rebuild_done)
 
-        self.log.info("..Create %s containers and write data during rebuild.",
-                      qty)
         self.container[index].object_qty.value = object_qty
         self.container[index].record_qty.value = record_qty
         self.container[index].data_size.value = data_size
