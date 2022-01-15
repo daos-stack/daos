@@ -191,7 +191,7 @@ func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
 	)
 }
 
-// FaultConfigFaultCallbackBadPerms creates a fault for the scenario where the
+// FaultConfigInsufficientHugePages creates a fault for the scenario where the
 // number of configured huge pages is less than required.
 func FaultConfigInsufficientHugePages(min, req int) *fault.Fault {
 	return serverConfigFault(
