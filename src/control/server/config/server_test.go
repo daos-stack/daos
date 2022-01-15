@@ -138,7 +138,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log, defHugePageInfo.PageSizeKb)
+				err = configA.Validate(log, defHugePageInfo.PageSizeKb, nil)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -157,7 +157,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log, defHugePageInfo.PageSizeKb)
+				err = configB.Validate(log, defHugePageInfo.PageSizeKb, nil)
 			}
 
 			if err != nil {
@@ -194,7 +194,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithEnableVMD(true).     // vmd disabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
-		WithNrHugePages(0).      // hugepages auto-calculated by default
+		WithNrHugePages(-1).     // hugepages auto-calculated by default
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
@@ -288,23 +288,13 @@ func TestServerConfig_Validation(t *testing.T) {
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
-	config, err := mockConfigFromFile(t, testFile)
-	if err != nil {
-		t.Fatalf("failed to load %s: %s", testFile, err)
-	}
 
-	dupeCfg := func(in *Server) *Server {
-		out := new(Server)
-		*out = *in
-
-		*out.TransportConfig = *in.TransportConfig
-		copy(out.Servers, in.Servers)
-		copy(out.Engines, in.Engines)
-		copy(out.BdevExclude, in.BdevExclude)
-		copy(out.BdevInclude, in.BdevInclude)
-		copy(out.AccessPoints, in.AccessPoints)
-
-		return out
+	baseCfg := func() *Server {
+		config, err := mockConfigFromFile(t, testFile)
+		if err != nil {
+			t.Fatalf("failed to load %s: %s", testFile, err)
+		}
+		return config
 	}
 
 	noopExtra := func(c *Server) *Server { return c }
@@ -468,7 +458,7 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"different number of helper streams": {
 			extraConfig: func(c *Server) *Server {
-				// change engine 0 number of targets to create mismatch
+				// change engine 0 number of helper streams to create mismatch
 				c.Engines[0].WithHelperStreamCount(9)
 
 				return c
@@ -491,14 +481,15 @@ func TestServerConfig_Validation(t *testing.T) {
 							).
 							WithFabricInterfacePort(1234).
 							WithFabricInterface("eth0").
-							WithTargetCount(8),
+							WithTargetCount(8).
+							WithPinnedNumaNode(0),
 					)
 			},
 			expErr: FaultConfigInsufficientHugePages(4096, 2048),
 		},
 		"calculated hugepages": {
 			extraConfig: func(c *Server) *Server {
-				return c.WithNrHugePages(0).
+				return c.WithNrHugePages(-1).
 					WithEngines(
 						engine.NewConfig().
 							WithStorage(
@@ -512,10 +503,11 @@ func TestServerConfig_Validation(t *testing.T) {
 							).
 							WithFabricInterfacePort(1234).
 							WithFabricInterface("eth0").
-							WithTargetCount(8),
+							WithTargetCount(8).
+							WithPinnedNumaNode(0),
 					)
 			},
-			expConfig: dupeCfg(config).
+			expConfig: baseCfg().
 				WithAccessPoints("hostname1:10001").
 				WithNrHugePages(4096).
 				WithEngines(
@@ -533,7 +525,8 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithStorageVosEnv("NVME").
 						WithFabricInterfacePort(1234).
 						WithFabricInterface("eth0").
-						WithTargetCount(8),
+						WithTargetCount(8).
+						WithPinnedNumaNode(0),
 				),
 		},
 	} {
@@ -546,9 +539,9 @@ func TestServerConfig_Validation(t *testing.T) {
 			}
 
 			// Apply extra config test case
-			dupe := tt.extraConfig(dupeCfg(config))
+			dupe := tt.extraConfig(baseCfg())
 
-			CmpErr(t, tt.expErr, dupe.Validate(log, defHugePageInfo.PageSizeKb))
+			CmpErr(t, tt.expErr, dupe.Validate(log, defHugePageInfo.PageSizeKb, nil))
 			if tt.expErr != nil || tt.expConfig == nil {
 				return
 			}
@@ -715,7 +708,8 @@ func TestServerConfig_Parsing(t *testing.T) {
 							storage.NewTierConfig().
 								WithBdevClass("nvme").
 								WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
-						))
+						).
+						WithTargetCount(8))
 			},
 			expValidateErr: errors.New("bdev_list contains duplicate pci"),
 		},
@@ -828,7 +822,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			}
 			config = tt.extraConfig(config)
 
-			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo.PageSizeKb))
+			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo.PageSizeKb, nil))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -924,7 +918,9 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("a"),
-			)
+			).
+			WithPinnedNumaNode(0).
+			WithTargetCount(8)
 	}
 	configB := func() *engine.Config {
 		return engine.MockConfig().
@@ -936,7 +932,9 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 					WithScmClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("b"),
-			)
+			).
+			WithPinnedNumaNode(0).
+			WithTargetCount(8)
 	}
 
 	for name, tc := range map[string]struct {
@@ -1027,7 +1025,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log, defHugePageInfo.PageSizeKb)
+			gotErr := conf.Validate(log, defHugePageInfo.PageSizeKb, nil)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}

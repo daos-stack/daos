@@ -402,13 +402,27 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 	defer func() {
 		if err != nil && !fault.HasResolution(err) {
 			examplesPath, _ := common.GetAdjacentPath(relConfExamplesPath)
-			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+examplesPath)
+			err = errors.WithMessage(FaultBadConfig, err.Error()+", examples: "+
+				examplesPath)
 		}
 	}()
 
 	// The config file format no longer supports "servers"
 	if len(cfg.Servers) > 0 {
-		return errors.New("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
+		return errors.New("\"servers\" server config file parameter is deprecated, use " +
+			"\"engines\" instead")
+	}
+
+	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
+		cfg.EnableHotplug, cfg.EnableVMD)
+
+	// A config without engines is valid when initially discovering hardware prior to adding
+	// per-engine sections with device allocations.
+	if len(cfg.Engines) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode",
+			build.DataPlaneName, build.ControlPlaneName)
+		cfg.Engines = nil
+		return nil
 	}
 
 	switch {
@@ -440,18 +454,6 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
-	}
-
-	log.Debugf("hotplug=%v vfio=%v vmd=%v requested in config", cfg.EnableHotplug,
-		!cfg.DisableVFIO, cfg.EnableVMD)
-
-	// A config without engines is valid when initially discovering hardware prior to adding
-	// per-engine sections with device allocations.
-	if len(cfg.Engines) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode",
-			build.DataPlaneName, build.ControlPlaneName)
-		cfg.Engines = nil
-		return nil
 	}
 
 	cfgHasBdevs := false

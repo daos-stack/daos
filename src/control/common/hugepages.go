@@ -21,9 +21,6 @@ const (
 	// MinTargetHugePageSize is the minimum amount of hugepage space that
 	// can be requested for each target.
 	MinTargetHugePageSize = 1 << 30 // 1GiB
-	// ExtraHugePages is the number of extra hugepages to request beyond
-	// the minimum required.
-	ExtraHugePages = 2
 )
 
 // HugePageInfo contains information about system hugepages.
