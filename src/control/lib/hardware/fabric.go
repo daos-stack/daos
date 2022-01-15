@@ -693,6 +693,10 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 		}
 	}
 
+	// TODO KJ: REMOVE
+	s.log.Errorf("discovered %d fabric interfaces:", result.NumFabricInterfaces())
+	s.log.Error(result.String())
+
 	return result, nil
 }
 
