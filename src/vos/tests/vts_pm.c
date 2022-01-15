@@ -1574,7 +1574,8 @@ remove_test(void **state)
 		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
 	epr.epr_lo = 0;
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, true);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL,
+			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 
 	/* Should get same result after aggregation */
 	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
@@ -2378,7 +2379,7 @@ start_over:
 		if ((epoch - 200) < epr.epr_lo)
 			continue;
 		epr.epr_hi = epoch - 200;
-		rc = vos_aggregate(coh, &epr, NULL, NULL, false);
+		rc = vos_aggregate(coh, &epr, NULL, NULL, 0);
 		assert_rc_equal(rc, 0);
 	}
 	for (i = 0; i < NR_TX - 1; i++) {

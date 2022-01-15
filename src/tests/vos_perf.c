@@ -469,7 +469,8 @@ pf_aggregate(struct pf_test *ts, struct pf_param *param)
 
 	TS_TIME_START(&param->pa_duration, start);
 
-	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, true);
+	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL,
+			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 
 	TS_TIME_END(&param->pa_duration, start);
 

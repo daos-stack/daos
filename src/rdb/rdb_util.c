@@ -560,7 +560,8 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr, NULL, NULL, true);
+	return vos_aggregate(cont, &epr, NULL, NULL,
+			     VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 }
 
 /* Return amount of vos pool SCM memory available accounting for
