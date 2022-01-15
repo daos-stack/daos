@@ -75,6 +75,12 @@ func MockMSResponse(hostAddr string, hostErr error, hostMsg proto.Message) *Unar
 	}
 }
 
+func (mi *MockInvoker) GetInvokeCount() int {
+	mi.invokeCountMutex.RLock()
+	defer mi.invokeCountMutex.RUnlock()
+	return mi.invokeCount
+}
+
 func (mi *MockInvoker) Debug(msg string) {
 	mi.log.Debug(msg)
 }
@@ -441,6 +447,13 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		ssr.Nvme.State = &ctlpb.ResponseState{
 			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
 			Error:  "nvme scan failed",
+		}
+	case "noNvmeOnNuma1":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		if err := convert.Types(ctrlrs(0, 2), &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
 		}
 	case "standard":
 	default:

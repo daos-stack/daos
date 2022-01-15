@@ -8,9 +8,10 @@ extra_servers:
   test_servers:
     - server-C
     - server-D
-timeout: 1000
+timeout: 1100
 setup:
   start_servers_once: False
+skip_add_log_msg: True
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -95,6 +96,7 @@ test_obj_class:
     - RP_2G8
     - RP_3G6
     - S1
+    - EC_2P1G1
 loop_test:
   iterations: 3
 aggregation:

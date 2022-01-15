@@ -5,9 +5,12 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 800
+timeout: 900
+timeouts:
+  test_osa_offline_reintegrate_with_less_pool_space: 1300
 setup:
   start_servers_once: False
+skip_add_log_msg: True
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -55,7 +58,7 @@ pool:
   nvme_size: 54000000000
   svcn: 4
   control_method: dmg
-  rebuild_timeout: 120
+  rebuild_timeout: 240
   pool_query_timeout: 30
 container:
   type: POSIX
@@ -103,6 +106,7 @@ test_obj_class:
     - RP_3G6
     - RP_4G1
     - S1
+    - EC_2P1G1
 loop_test:
   iterations: 3
 aggregation:
@@ -117,3 +121,8 @@ blank_node:
   test_with_blank_node: True
 snapshot:
   test_with_snapshot: True
+pool_capacity:
+  pool_fillup: 50
+  pool_test_oclass: RP_2GX
+  pool_test_repetitions: 1
+

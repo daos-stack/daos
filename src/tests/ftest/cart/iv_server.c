@@ -730,7 +730,6 @@ iv_destroy_cb(crt_iv_namespace_t ivns, void *arg)
 {
 	D_ASSERT(ivns != NULL);
 	D_ASSERT(arg != NULL);
-	D_ASSERT(ivns == ivns);
 
 	D_DEBUG(DB_TRACE, "ivns %p was destroyed, arg %p\n", ivns, arg);
 }
@@ -1266,8 +1265,7 @@ int main(int argc, char **argv)
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
 
-	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER |
-				   CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert(rc == 0);
 
 	rc = crt_rank_self_set(my_rank);

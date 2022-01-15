@@ -915,6 +915,8 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		tmp.lr_magic = ilog_ver_inc(lctx);
 		tmp.lr_ts_idx = root->lr_ts_idx;
 		tmp.lr_id = *id_in;
+		D_ASSERTF(id_in->id_epoch != 0, "epoch "DF_U64" opc %d\n",
+			  id_in->id_epoch, opc);
 		rc = ilog_ptr_set(lctx, root, &tmp);
 		if (rc != 0)
 			goto done;
@@ -1240,8 +1242,6 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 		if (status != -DER_INPROGRESS && status < 0)
 			D_GOTO(fail, rc = status);
 		set_entry(entries, i, status);
-		if (rc != 0)
-			goto fail;
 	}
 
 out:
@@ -1276,6 +1276,7 @@ struct agg_arg {
 	int32_t				 aa_prior_punch;
 	daos_epoch_t			 aa_punched;
 	bool				 aa_discard;
+	bool				 aa_inprogress;
 	uint16_t			 aa_punched_minor;
 };
 
@@ -1333,9 +1334,25 @@ check_agg_entry(const struct ilog_entries *entries, const struct ilog_entry *ent
 	if (entry->ie_id.id_epoch > agg_arg->aa_epr->epr_hi)
 		D_GOTO(done, rc = AGG_RC_DONE);
 
-	/* Abort ilog aggregation on hitting any uncommitted entry */
-	if (entry->ie_status == ILOG_UNCOMMITTED)
+	if (agg_arg->aa_inprogress) {
+		/** if removing only aborted/in progress entries, skip committed ones */
+		if (entry->ie_status == ILOG_COMMITTED)
+			D_GOTO(done, rc = AGG_RC_NEXT);
+		if (entry->ie_id.id_epoch < agg_arg->aa_epr->epr_lo)
+			D_GOTO(done, rc = AGG_RC_NEXT);
+		/** If entry is either marked aborted or uncommitted, remove it */
+		D_GOTO(done, rc = AGG_RC_REMOVE);
+	} else if (agg_arg->aa_discard) {
+		/** Normal discard should remove everything */
+		if (entry->ie_id.id_epoch < agg_arg->aa_epr->epr_lo)
+			D_GOTO(done, rc = AGG_RC_NEXT);
+		D_GOTO(done, rc = AGG_RC_REMOVE);
+	}
+
+	if (entry->ie_status == ILOG_UNCOMMITTED) {
+		/** Abort ilog aggregation on hitting any uncommitted entry */
 		D_GOTO(done, rc = AGG_RC_ABORT);
+	}
 
 	parent_punched = entry_punched(entry, agg_arg);
 	if (entry->ie_id.id_epoch < agg_arg->aa_epr->epr_lo) {
@@ -1478,7 +1495,7 @@ collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache, struct 
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
-	       bool discard, daos_epoch_t punched_major, uint16_t punched_minor,
+	       bool discard, bool inprogress, daos_epoch_t punched_major, uint16_t punched_minor,
 	       struct ilog_entries *entries)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
@@ -1493,6 +1510,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 
 	D_ASSERT(epr != NULL);
 	D_ASSERT(punched_major <= epr->epr_hi);
+	D_ASSERT(!inprogress || discard);
 
 	D_DEBUG(DB_TRACE, "%s incarnation log: epr: "DF_X64"-"DF_X64" punched="
 		DF_X64".%d\n", discard ? "Discard" : "Aggregate", epr->epr_lo,
@@ -1530,6 +1548,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	agg_arg.aa_punched = punched_major;
 	agg_arg.aa_punched_minor = punched_minor;
 	agg_arg.aa_discard = discard;
+	agg_arg.aa_inprogress = inprogress;
 
 	ilog_foreach_entry(entries, &entry) {
 		D_ASSERT(entry.ie_idx < cache.ac_nr);

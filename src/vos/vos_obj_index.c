@@ -68,7 +68,7 @@ oi_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	     d_iov_t *val_iov, struct btr_record *rec)
+	     d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_obj_df	*obj;
@@ -155,7 +155,7 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  d_iov_t *key, d_iov_t *val)
+		  d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	D_ASSERTF(0, "Should never been called\n");
 	return 0;
@@ -246,7 +246,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
-			   &key_iov, &val_iov);
+			   &key_iov, &val_iov, NULL);
 	if (rc) {
 		D_ERROR("Failed to update Key for Object index\n");
 		return rc;
@@ -470,6 +470,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->oit_flags = param->ip_flags;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->oit_iter.it_for_purge = 1;
+	if (param->ip_flags & VOS_IT_FOR_DISCARD)
+		oiter->oit_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->oit_iter.it_for_migration = 1;
 
@@ -647,7 +649,7 @@ exit:
 }
 
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard)
+oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
@@ -674,7 +676,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog,
-				&oiter->oit_epr, discard, NULL,
+				&oiter->oit_epr, iter->it_for_discard, false, NULL,
 				&oiter->oit_ilog_info);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */

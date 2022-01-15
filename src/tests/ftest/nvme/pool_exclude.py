@@ -7,6 +7,7 @@
 import time
 import random
 import threading
+import re
 
 from test_utils_pool import TestPool, LabelGenerator
 from osa_utils import OSAUtils
@@ -52,13 +53,7 @@ class NvmePoolExclude(OSAUtils):
         # Create a pool
         label_generator = LabelGenerator()
         pool = {}
-        target_list = []
 
-        # Exclude target : random two targets (target idx : 0-7)
-        n = random.randint(0, 6)
-        target_list.append(n)
-        target_list.append(n+1)
-        t_string = "{},{}".format(target_list[0], target_list[1])
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
 
@@ -78,7 +73,9 @@ class NvmePoolExclude(OSAUtils):
             self.pool = pool[val]
             self.add_container(self.pool)
             self.cont_list.append(self.container)
-            for test in self.ior_test_sequence:
+            rf = ''.join(self.container.properties.value.split(":"))
+            rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
+            for test in range(0, rf_num):
                 threads = []
                 threads.append(threading.Thread(target=self.run_ior_thread,
                                                 kwargs={"action": "Write",
@@ -93,13 +90,14 @@ class NvmePoolExclude(OSAUtils):
                 self.pool.display_pool_daos_space("Pool space: Before Exclude")
                 pver_begin = self.get_pool_version()
 
-                index = random.randint(1, len(rank_list))
+                index = random.randint(1, len(rank_list)) #nosec
                 rank = rank_list.pop(index-1)
-                self.log.info("Removing rank %d", rank)
+                tgt_exclude = random.randint(1, 6) #nosec
+                self.log.info("Removing rank %d, target %d", rank, tgt_exclude)
 
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                       rank, t_string)
+                                                       rank, tgt_exclude)
                 self.print_and_assert_on_rebuild_failure(output)
 
                 pver_exclude = self.get_pool_version()

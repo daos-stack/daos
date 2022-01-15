@@ -7,7 +7,7 @@
 from collections import defaultdict
 import yaml
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from command_utils import CommandFailure
 from dmg_utils import DmgCommand
 
@@ -252,7 +252,6 @@ class ConfigGenerateOutput(TestWithServers):
 
         self.check_errors(errors)
 
-    @skipForTicket("DAOS-7792")
     def test_access_points_odd(self):
         """Test --access-points with odd number of APs.
 
@@ -484,7 +483,7 @@ class ConfigGenerateOutput(TestWithServers):
                             "Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in \
                         self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+sockets by
+                        # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
                             " {}; fabric_iface = {}".format(
@@ -532,7 +531,7 @@ class ConfigGenerateOutput(TestWithServers):
                             "Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in \
                         self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+sockets by
+                        # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
                             " {}; fabric_iface = {}".format(

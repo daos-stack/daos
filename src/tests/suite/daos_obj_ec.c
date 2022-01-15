@@ -44,6 +44,8 @@ get_dkey_cnt(struct ioreq *req)
 	return total;
 }
 
+#define EC_CELL_SIZE	DAOS_EC_CELL_DEF
+
 static void
 ec_dkey_list_punch(void **state)
 {
@@ -67,7 +69,7 @@ ec_dkey_list_punch(void **state)
 		req.iod_type = DAOS_IOD_ARRAY;
 		sprintf(dkey, "dkey_%d", i);
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a', 16);
 		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, 16, &req);
@@ -156,7 +158,7 @@ ec_akey_list_punch(void **state)
 		req.iod_type = DAOS_IOD_ARRAY;
 		sprintf(akey, "akey_%d", i);
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a', 16);
 		insert_recxs("d_key", akey, 1, DAOS_TX_NONE, &recx, 1,
 			     data, 16, &req);
@@ -214,7 +216,8 @@ get_rec_cnt(struct ioreq *req, char *dkey, char *akey, int start)
 			      &number, recxs, eprs, &anchor, true, req);
 		total += number;
 		for (i = 0; i < number; i++, idx++) {
-			assert_int_equal((int)recxs[i].rx_idx, idx * 1048576);
+			assert_int_equal((int)recxs[i].rx_idx,
+					 idx * EC_CELL_SIZE);
 			assert_int_equal((int)recxs[i].rx_nr, 5);
 		}
 
@@ -244,7 +247,7 @@ ec_rec_list_punch(void **state)
 		/* Make dkey on different shards */
 		req.iod_type = DAOS_IOD_ARRAY;
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a', 16);
 		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, 16, &req);
@@ -262,7 +265,7 @@ ec_rec_list_punch(void **state)
 		daos_recx_t recx;
 
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 
 		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
 		if (i % 10 == 0) {
@@ -403,7 +406,7 @@ trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
 void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
-		      char *verify_data, daos_handle_t th)
+		      char *verify_data, daos_handle_t th, bool degraded)
 {
 	daos_recx_t	recx;
 	char		*data;
@@ -415,14 +418,15 @@ ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 	req->iod_type = DAOS_IOD_ARRAY;
 	recx.rx_nr = size;
 	recx.rx_idx = offset;
-	daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
+	if (degraded)
+		daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
+
 	lookup_recxs(dkey, akey, 1, th, &recx, 1, data, size, req);
 	assert_memory_equal(data, verify_data, size);
 	daos_fail_loc_set(0);
 	free(data);
 }
 
-#define EC_CELL_SIZE	1048576
 static void
 ec_partial_update_agg(void **state)
 {
@@ -432,6 +436,8 @@ ec_partial_update_agg(void **state)
 	int		i;
 	char		*data;
 	char		*verify_data;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;
@@ -463,7 +469,7 @@ ec_partial_update_agg(void **state)
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
 				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      DAOS_TX_NONE, true);
 	}
 	ioreq_fini(&req);
 	free(data);
@@ -480,6 +486,8 @@ ec_cross_cell_partial_update_agg(void **state)
 	char		*data;
 	char		*verify_data;
 	daos_size_t	update_size = 500000;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;
@@ -512,7 +520,7 @@ ec_cross_cell_partial_update_agg(void **state)
 
 		memset(verify_data, c, update_size);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
-				      update_size, verify_data, DAOS_TX_NONE);
+				      update_size, verify_data, DAOS_TX_NONE, true);
 	}
 
 	ioreq_fini(&req);
@@ -533,6 +541,8 @@ ec_full_partial_update_agg(void **state)
 	int		data_nr;
 	daos_size_t	full_update_size;
 	daos_size_t	partial_update_size;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;
@@ -578,7 +588,7 @@ ec_full_partial_update_agg(void **state)
 				       full_update_size, DAOS_FORCE_EC_AGG);
 
 	ec_verify_parity_data(&req, "d_key", "a_key", (daos_size_t)0,
-			      full_update_size, verify_data, DAOS_TX_NONE);
+			      full_update_size, verify_data, DAOS_TX_NONE, true);
 	free(data);
 	free(verify_data);
 }
@@ -596,6 +606,8 @@ ec_partial_full_update_agg(void **state)
 	int		data_nr;
 	daos_size_t	full_update_size;
 	daos_size_t	partial_update_size;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 6))
 		return;
@@ -641,7 +653,7 @@ ec_partial_full_update_agg(void **state)
 				       full_update_size, DAOS_FORCE_EC_AGG);
 
 	ec_verify_parity_data(&req, "d_key", "a_key", (daos_size_t)0,
-			      full_update_size, verify_data, DAOS_TX_NONE);
+			      full_update_size, verify_data, DAOS_TX_NONE, true);
 
 	ioreq_fini(&req);
 	free(data);
@@ -667,8 +679,15 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 	int		i;
 	daos_obj_id_t	oid;
 	int		rc;
+	dfs_attr_t	attr = {};
 
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -677,7 +696,7 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 
 	sprintf(filename, "ec_file");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 
@@ -813,7 +832,7 @@ ec_fail_agg_internal(void **state, unsigned fail_loc)
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
 				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      DAOS_TX_NONE, true);
 	}
 	ioreq_fini(&req);
 	free(data);
@@ -927,7 +946,7 @@ ec_singv_array_mixed_io(void **state)
 	}
 }
 
-#define SNAP_CNT 5
+#define SNAP_CNT 3
 static void
 ec_full_stripe_snapshot(void **state)
 {
@@ -946,7 +965,7 @@ ec_full_stripe_snapshot(void **state)
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	stripe_size = ec_data_nr_get(oid) * EC_CELL_SIZE;
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)EC_CELL_SIZE;
 	data = (char *)malloc(stripe_size);
 	assert_true(data != NULL);
 	verify_data = (char *)malloc(stripe_size);
@@ -965,13 +984,21 @@ ec_full_stripe_snapshot(void **state)
 	}
 
 	for (i = 0; i < SNAP_CNT; i++) {
-		daos_handle_t	th_open;
+		daos_handle_t		th_open;
+		daos_epoch_range_t	epr;
+		int			rc;
 
 		daos_tx_open_snap(arg->coh, snap_epoch[i], &th_open, NULL);
 		memset(verify_data, 'a' + i, stripe_size);
 		ec_verify_parity_data(&req, "d_key", "a_key", 0, stripe_size,
-				      verify_data, th_open);
+				      verify_data, th_open, false);
 		daos_tx_close(th_open, NULL);
+
+		epr.epr_hi = epr.epr_lo = snap_epoch[i];
+		trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+					       stripe_size, DAOS_FORCE_EC_AGG);
+		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
+		assert_int_equal(rc, 0);
 	}
 
 	ioreq_fini(&req);
@@ -989,13 +1016,15 @@ ec_partial_stripe_snapshot_internal(void **state, int data_size)
 	char		*verify_data;
 	int		i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 6))
 		return;
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	stripe_size = ec_data_nr_get(oid) * data_size;
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)data_size;
 	data = (char *)malloc(stripe_size);
 	assert_true(data != NULL);
 	verify_data = (char *)malloc(stripe_size);
@@ -1021,13 +1050,22 @@ ec_partial_stripe_snapshot_internal(void **state, int data_size)
 				       ec_data_nr_get(oid) * EC_CELL_SIZE,
 				       DAOS_FORCE_EC_AGG);
 	for (i = 0; i < SNAP_CNT; i++) {
-		daos_handle_t	th_open;
+		daos_handle_t		th_open;
+		daos_epoch_range_t	epr;
+		int			rc;
 
 		daos_tx_open_snap(arg->coh, snap_epoch[i], &th_open, NULL);
 		memset(verify_data, 'a' + i, stripe_size);
 		ec_verify_parity_data(&req, "d_key", "a_key", 0, stripe_size,
-				      verify_data, th_open);
+				      verify_data, th_open, true);
 		daos_tx_close(th_open, NULL);
+
+		trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+					       ec_data_nr_get(oid) * EC_CELL_SIZE,
+					       DAOS_FORCE_EC_AGG);
+		epr.epr_hi = epr.epr_lo = snap_epoch[i];
+		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
+		assert_int_equal(rc, 0);
 	}
 
 	free(data);
@@ -1066,8 +1104,14 @@ ec_punch_check_size(void **state)
 	int		i;
 	daos_obj_id_t	oid;
 	int		rc;
+	dfs_attr_t	attr = {};
 
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -1076,7 +1120,7 @@ ec_punch_check_size(void **state)
 
 	sprintf(filename, "ec_file");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 
@@ -1106,7 +1150,7 @@ ec_punch_check_size(void **state)
 
 	sprintf(filename, "ec_file1");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 
@@ -1200,12 +1244,12 @@ ec_singv_overwrite_oc(void **state, unsigned int ec_oc)
 		iod[i].iod_size		= size;
 		iod[i].iod_recxs	= NULL;
 		iod[i].iod_type		= DAOS_IOD_SINGLE;
-
-		D_FREE(buf[i]);
 	}
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
 			     NULL);
 	assert_rc_equal(rc, 0);
+	for (i = 0; i < NUM_AKEYS; i++)
+		D_FREE(buf[i]);
 
 	/** overwrite record with different size (smaller or larger) */
 	for (i = 0; i < NUM_AKEYS; i++) {
@@ -1300,6 +1344,192 @@ ec_singv_overwrite(void **state)
 	ec_singv_overwrite_oc(state, OC_EC_4P2G1);
 }
 
+
+static void
+ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint32_t new_len)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t		 sg_iov;
+	daos_iod_t	 iod;
+	char		*buf;
+	char		*akey = "akey_singv_test";
+	char		*fetch_buf;
+	uint32_t	 length;
+	daos_size_t	 size;
+	bool		 degraded_test = false;
+	uint16_t	 fail_shards[2];
+	uint64_t	 fail_val;
+	int		 rc;
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** firstly update with old_len, then overwrite with new_len */
+	size = old_len;
+	D_ALLOC(buf, size);
+	assert_non_null(buf);
+	dts_buf_render(buf, size);
+	d_iov_set(&sg_iov, buf, size);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, akey, strlen(akey));
+	iod.iod_nr	= 1;
+	iod.iod_size	= size;
+	iod.iod_recxs	= NULL;
+	iod.iod_type	= DAOS_IOD_SINGLE;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	if (new_len != 0) {
+		D_FREE(buf);
+		size = new_len;
+		D_ALLOC(buf, size);
+		assert_non_null(buf);
+		dts_buf_render(buf, size);
+		d_iov_set(&sg_iov, buf, size);
+		iod.iod_size	= size;
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
+		length = new_len;
+	} else {
+		length = old_len;
+	}
+
+deg_test:
+	size = new_len != 0 ? new_len : old_len;
+	if (degraded_test) {
+		fail_shards[0] = 1;
+		fail_shards[1] = 4;
+		fail_val = daos_shard_fail_value(fail_shards, 2);
+		daos_fail_value_set(fail_val);
+		daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
+	}
+
+	/** fetch record size */
+	print_message("fetch iod_size with NULL sgl\n");
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, size);
+
+	/** fetch with unknown size and matched buffer */
+	size = length;
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+	print_message("fetch with unknown size and matched buffer\n");
+	d_iov_set(&sg_iov, fetch_buf, size);
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, length);
+	assert_memory_equal(buf, fetch_buf, length);
+	D_FREE(fetch_buf);
+
+	/** fetch with larger buffer */
+	size = length + 17 * 1024;
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+
+	/* fetch with UNKNOWN iod_size */
+	print_message("fetch with zero iod_size and larger buffer\n");
+	d_iov_set(&sg_iov, fetch_buf, size);
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, length);
+	assert_memory_equal(buf, fetch_buf, length);
+	/* extra buffer should not be touched by the fetch, not required for now */
+	/*
+	 * for (i = 0; i < size - length; i++)
+	 *	D_ASSERTF(fetch_buf[length + i] == 0, "fetch_buf[%d]: %d\n",
+	 *		  length + i, fetch_buf[length + i]);
+	 */
+	memset(fetch_buf, 0, size);
+
+	/* fetch with incorrect smaller iod_size */
+	d_iov_set(&sg_iov, fetch_buf, size);
+	iod.iod_size	= 7;
+	print_message("fetch with smaller incorrect iod_size\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, -DER_REC2BIG);
+	memset(fetch_buf, 0, size);
+
+	print_message("fetch with replied correct iod_size\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_memory_equal(buf, fetch_buf, length);
+	memset(fetch_buf, 0, size);
+
+	/* fetch with incorrect larger iod_size */
+	d_iov_set(&sg_iov, fetch_buf, size);
+	iod.iod_size	= length + 111;
+	print_message("fetch with larger incorrect iod_size\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, length);
+	assert_memory_equal(buf, fetch_buf, length);
+	memset(fetch_buf, 0, size);
+
+	if (!degraded_test) {
+		degraded_test = true;
+		print_message("run same tests in degraded mode ...\n");
+		goto deg_test;
+	}
+
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	D_FREE(buf);
+	D_FREE(fetch_buf);
+}
+
+static void
+ec_singv_diff_size_fetch(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	print_message("test OC_EC_2P1G1, small singv 511B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 511, 0);
+	print_message("test OC_EC_2P1G1, long singv 16KB\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 16 * 1024, 0);
+	print_message("test OC_EC_2P1G1, singv 4103B overwritten by 4095B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 4103, 4095);
+	print_message("test OC_EC_2P1G1, singv 16KB overwritten by 11B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 16 * 1024, 11);
+	print_message("test OC_EC_2P1G1, singv 133B overwritten by 17KB\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 133, 17 * 1024);
+
+	print_message("test OC_EC_4P2G1, small singv 127B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 127, 0);
+	print_message("test OC_EC_4P2G1, long singv 16389B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 16389, 0);
+	print_message("test OC_EC_4P2G1, singv 4103B overwritten by 4095B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 4103, 4095);
+	print_message("test OC_EC_4P2G1, singv 16KB overwritten by 11B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 16 * 1024, 11);
+	print_message("test OC_EC_4P2G1, singv 133B overwritten by 17KB\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 133, 17 * 1024);
+	print_message("test OC_EC_4P2G1, singv 12KB overwritten by 4000B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 12 * 1024, 4000);
+}
+
 static int
 ec_setup(void  **state)
 {
@@ -1357,6 +1587,8 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC15: ec punch and check_size", ec_punch_check_size, async_disable,
 	 test_case_teardown},
 	{"EC16: ec single-value overwrite", ec_singv_overwrite, async_disable,
+	 test_case_teardown},
+	{"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
 	 test_case_teardown},
 };
 

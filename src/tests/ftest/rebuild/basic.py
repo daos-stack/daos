@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from daos_utils import DaosCommand
 
 class RbldBasic(TestWithServers):
@@ -94,9 +94,8 @@ class RbldBasic(TestWithServers):
             else:
                 self.pool[index].exclude(ranks=[rank])
 
-        # Wait for recovery to start
-        for index in range(pool_quantity):
-            self.pool[index].wait_for_rebuild(True)
+        # Wait for recovery to start for first pool.
+        self.pool[0].wait_for_rebuild(True)
 
         # Wait for recovery to complete
         for index in range(pool_quantity):
@@ -144,7 +143,6 @@ class RbldBasic(TestWithServers):
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-7050, DAOS-7134")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 

@@ -68,17 +68,16 @@ class PoolServicesFaultInjection(TestWithServers):
         Due to the nature of how wait_for_rebuild() is coded
         we can only get the last dmg command output.
         """
-        server_to_exclude = randint(0, len(self.hostlist_servers) - 1)
+        server_to_exclude = randint(0, len(self.hostlist_servers) - 1) #nosec
         self.pool.exclude([server_to_exclude])
         self.look_missed_request(self.pool.dmg.result.stderr)
 
-        self.pool.wait_for_rebuild(True)
-        self.look_missed_request(self.pool.dmg.result.stderr)
         self.pool.wait_for_rebuild(False)
         self.look_missed_request(self.pool.dmg.result.stderr)
+
         self.pool.reintegrate(str(server_to_exclude))
-        self.pool.wait_for_rebuild(True)
         self.look_missed_request(self.pool.dmg.result.stderr)
+
         self.pool.wait_for_rebuild(False)
         self.look_missed_request(self.pool.dmg.result.stderr)
 
@@ -86,11 +85,13 @@ class PoolServicesFaultInjection(TestWithServers):
         """Destroy container and pool
         Look for missed request on each executed command
         """
-        self.container.destroy()
-        self.look_missed_request(
-            self.container.daos.result.stderr)
-        self.pool.destroy(force=1)
-        self.look_missed_request(self.pool.dmg.result.stderr)
+        if self.container:
+            self.container.destroy()
+            self.look_missed_request(
+                self.container.daos.result.stderr)
+        if self.pool:
+            self.pool.destroy(force=1)
+            self.look_missed_request(self.pool.dmg.result.stderr)
 
     def test_pool_services(self):
         """ Test the following pool commands:
@@ -119,7 +120,6 @@ class PoolServicesFaultInjection(TestWithServers):
         dmg_command = self.get_dmg_command()
         pool_namespace = self.params.get("pool", "/run/*")
         number_pools = self.params.get("number_pools", "/run/*")
-
         for _ in range(number_pools):
             try:
                 # Create pool

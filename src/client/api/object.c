@@ -260,6 +260,8 @@ daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch)
 		rc = dc_task_schedule(task, true);
 		if (rc == 0)
 			rc = dc_obj_verify(oh, epochs_p, epoch_nr);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 	}
 
 	D_FREE(epochs_p);

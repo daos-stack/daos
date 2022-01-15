@@ -439,7 +439,8 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers)
+        rank = random.randint(0, exclude_servers) #nosec
+
         if targets >= 8:
             tgt_idx = None
         else:
@@ -516,7 +517,7 @@ def launch_server_stop_start(self, pools, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers)
+        rank = random.randint(0, exclude_servers) #nosec
         # init the status dictionary
         params = {"name": name,
                   "status": status,

@@ -17,8 +17,7 @@
 #define CRT_SWIM_NGLITCHES_TRESHOLD	10
 #define CRT_SWIM_NMESSAGES_TRESHOLD	1000
 #define CRT_SWIM_FLUSH_ATTEMPTS		100
-#define CRT_SWIM_PROGRESS_TIMEOUT	0	/* minimal progressing time */
-#define CRT_DEFAULT_PROGRESS_CTX_IDX	0
+#define CRT_DEFAULT_PROGRESS_CTX_IDX	1
 
 struct crt_swim_target {
 	d_circleq_entry(crt_swim_target) cst_link;
@@ -32,6 +31,8 @@ struct crt_swim_membs {
 	struct crt_swim_target		*csm_target;
 	struct swim_context		*csm_ctx;
 	uint64_t			 csm_incarnation;
+	uint64_t			 csm_last_unpack_hlc;
+	uint64_t			 csm_alive_count;
 	int				 csm_crt_ctx_idx;
 	int				 csm_nglitches;
 	int				 csm_nmessages;

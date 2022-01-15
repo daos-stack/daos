@@ -7,9 +7,8 @@ timeout: 130
 server_config:
   nr_hugepages: 8192
   servers:
-    # 16 targets and 16 nr_xs_helpers are the requirements.
-    targets: 16
-    nr_xs_helpers: 16
+    targets: 8
+    nr_xs_helpers: 8
     bdev_class: nvme
     bdev_list: ["0000:00:00.0"]
     scm_class: dcpm

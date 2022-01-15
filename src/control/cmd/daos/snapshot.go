@@ -15,13 +15,13 @@ import (
 */
 import "C"
 
-type containerSnapshotCreateCmd struct {
+type containerSnapCreateCmd struct {
 	existingContainerCmd
 
 	Name string `long:"snap" short:"s" description:"snapshot name"`
 }
 
-func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
+func (cmd *containerSnapCreateCmd) Execute(args []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
@@ -48,7 +48,7 @@ func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
 	return nil
 }
 
-type containerSnapshotDestroyCmd struct {
+type containerSnapDestroyCmd struct {
 	existingContainerCmd
 
 	Epoch      EpochFlag      `long:"epc" short:"e" description:"snapshot epoch to delete"`
@@ -56,7 +56,7 @@ type containerSnapshotDestroyCmd struct {
 	Name       string         `long:"snap" short:"s" description:"snapshot name"`
 }
 
-func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
+func (cmd *containerSnapDestroyCmd) Execute(args []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
@@ -112,11 +112,11 @@ func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
 	return nil
 }
 
-type containerSnapshotListCmd struct {
+type containerSnapListCmd struct {
 	existingContainerCmd
 }
 
-func (cmd *containerSnapshotListCmd) Execute(args []string) error {
+func (cmd *containerSnapListCmd) Execute(args []string) error {
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err

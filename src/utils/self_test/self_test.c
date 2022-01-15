@@ -113,7 +113,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 
 	if (listen)
-		init_flags |= CRT_FLAG_BIT_SERVER;
+		init_flags |= (CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
 	if (ret != 0) {
 		D_ERROR("crt_init failed; ret = %d\n", ret);
@@ -145,7 +145,8 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			return ret;
 		}
 	} else {
-		while (attach_retries-- > 0) {
+		/* DAOS-8839: Do not limit retries, instead rely on global test timeout */
+		while (1) {
 			ret = crt_group_attach(dest_name, srv_grp);
 			if (ret == 0)
 				break;

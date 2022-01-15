@@ -263,6 +263,13 @@ obj_metrics_alloc(const char *path, int tgt_id)
 		D_WARN("Failed to create inprogress counter: "DF_RC"\n",
 		       DP_RC(rc));
 
+	/** Total number of retry updates locally, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_update_retry, D_TM_COUNTER,
+			     "total number of retried update RPCs", "updates",
+			     "%s/retry/tgt_%u", path, tgt_id);
+	if (rc)
+		D_WARN("Failed to create retry cnt sensor: "DF_RC"\n", DP_RC(rc));
+
 	/** Total bytes read */
 	rc = d_tm_add_metric(&metrics->opm_fetch_bytes, D_TM_COUNTER,
 			     "total number of bytes fetched/read", "bytes",
@@ -291,7 +298,7 @@ obj_metrics_free(void *data)
 static int
 obj_metrics_count(void)
 {
-	return (sizeof(struct obj_pool_metrics) / sizeof(struct d_tm_node_t *)) * dss_tgt_nr;
+	return (sizeof(struct obj_pool_metrics) / sizeof(struct d_tm_node_t *));
 }
 
 struct dss_module_metrics obj_metrics = {

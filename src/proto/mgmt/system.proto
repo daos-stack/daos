@@ -85,3 +85,21 @@ message SystemEraseReq {
 message SystemEraseResp {
 	repeated shared.RankResult results = 1;
 }
+
+// SystemCleanupReq supplies the machinename.
+message SystemCleanupReq {
+	string sys = 1; // DAOS system identifier
+	string machine = 2; // Name of the machine to cleanup resources for.
+}
+
+// SystemCleanupResp returns resultant state of cleanup operation.
+message SystemCleanupResp {
+	message CleanupResult {
+		int32 status = 1; // Status of the evict on the specific pool
+		string msg = 2; // Error message if status indicates an error
+		string pool_id = 3; // uuid of pool
+		uint32 count = 4; // number of pool handles cleaned up
+
+	}
+	repeated CleanupResult results = 1; // Results and Status for individual pools that are cleanedup.
+}

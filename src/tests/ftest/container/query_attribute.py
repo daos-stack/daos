@@ -142,7 +142,7 @@ class ContainerQueryAttributeTest(TestWithServers):
             "cont": actual_cont_uuid
         }
         data = self.daos_cmd.container_list_attrs(**kwargs)['response']
-        actual_attrs = list(data.keys())
+        actual_attrs = list(data)
         actual_attrs.sort()
         self.log.debug(str(actual_attrs))
         self.assertEqual(actual_attrs, expected_attrs)
@@ -185,7 +185,7 @@ class ContainerQueryAttributeTest(TestWithServers):
             "cont": self.container.uuid
         }
         data = self.daos_cmd.container_list_attrs(**kwargs)['response']
-        actual_attrs = list(data.keys())
+        actual_attrs = list(data)
         actual_attrs.sort()
         self.assertEqual(
             expected_attrs, actual_attrs, "Unexpected output from list_attrs")

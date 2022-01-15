@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_io_conf import IoConfTestBase
-from apricot import skipForTicket
 
 class RbldRunIoConf(IoConfTestBase):
     """Test daos_run_io_conf.
@@ -14,7 +13,6 @@ class RbldRunIoConf(IoConfTestBase):
     """
     # pylint: disable=too-many-ancestors
 
-    @skipForTicket("DAOS-7136")
     def test_daos_run_io_conf(self):
         """Jira ID: DAOS-3150.
 

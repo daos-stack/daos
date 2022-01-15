@@ -36,14 +36,21 @@ enum crt_na_type {
 	CRT_NA_SM		= 0,
 	CRT_NA_OFI_SOCKETS	= 1,
 	CRT_NA_OFI_VERBS_RXM	= 2,
-	CRT_NA_OFI_VERBS	= 3,
-	CRT_NA_OFI_GNI		= 4,
-	CRT_NA_OFI_PSM2		= 5,
-	CRT_NA_OFI_TCP_RXM	= 6,
+	CRT_NA_OFI_GNI		= 3,
+	CRT_NA_OFI_PSM2		= 4,
+	CRT_NA_OFI_TCP_RXM	= 5,
+	CRT_NA_OFI_CXI		= 6,
 
-	/* Note: This entry should be the last one in enum */
+	/* Note: This entry should be the last valid one in enum */
 	CRT_NA_OFI_COUNT,
+	CRT_NA_UNKNOWN = -1,
 };
+
+enum crt_na_type
+crt_prov_str_to_na_type(const char *prov_str);
+
+int
+crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr);
 
 static inline bool
 crt_na_type_is_ofi(int na_type)
@@ -53,10 +60,15 @@ crt_na_type_is_ofi(int na_type)
 }
 
 struct crt_na_dict {
+	/** String identifying the provider */
 	char	*nad_str;
+	/** Alternative string */
+	char	*nad_alt_str;
 	int	nad_type;
-	/* a flag of explicitly bind with IP:port to create NA class */
+	/** a flag of explicitly bind with IP:port to create NA class */
 	bool	nad_port_bind;
+	/** a flag to indicate if endpoints are contiguous */
+	bool	nad_contig_eps;
 };
 
 extern struct crt_na_dict crt_na_dict[];
@@ -119,6 +131,7 @@ int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
 int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
 
 bool crt_provider_is_contig_ep(int provider);
+bool crt_provider_is_port_based(int provider);
 bool crt_provider_is_sep(int provider);
 void crt_provider_set_sep(int provider, bool enable);
 int crt_provider_get_cur_ctx_num(int provider);
