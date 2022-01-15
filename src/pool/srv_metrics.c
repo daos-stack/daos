@@ -133,7 +133,7 @@ ds_pool_metrics_start(struct ds_pool *pool)
 
 	/** create new shmem space for per-pool metrics */
 	rc = d_tm_add_ephemeral_dir(NULL, get_pool_dir_size(), pool->sp_path);
-	if (rc != 0){
+	if (rc != 0) {
 		D_WARN(DF_UUID ": failed to create metrics dir for pool: "
 		       DF_RC "\n", DP_UUID(pool->sp_uuid), DP_RC(rc));
 		return rc;
