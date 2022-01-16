@@ -18,9 +18,9 @@ import (
 type GetHugePageInfoFn func() (*HugePageInfo, error)
 
 const (
-	// minTargetHugePageSize is the minimum amount of hugepage space that
+	// MinTargetHugePageSize is the minimum amount of hugepage space that
 	// can be requested for each target.
-	minTargetHugePageSize = 1 << 30 // 1GiB
+	MinTargetHugePageSize = 1 << 30 // 1GiB
 	// ExtraHugePages is the number of extra hugepages to request beyond
 	// the minimum required, often one or two are not reported as available.
 	ExtraHugePages = 2
@@ -108,11 +108,11 @@ func CalcMinHugePages(hugePageSizeKb int, numTargets int) (int, error) {
 		return 0, errors.New("numTargets must be >= 1")
 	}
 
-	hugepageSizeBytes := hugePageSizeKb * 1024
+	hugepageSizeBytes := hugePageSizeKb << 10 // KiB to B
 	if hugepageSizeBytes == 0 {
 		return 0, errors.New("invalid system hugepage size")
 	}
-	minHugePageBytes := minTargetHugePageSize * numTargets
+	minHugePageBytes := MinTargetHugePageSize * numTargets
 
 	return minHugePageBytes / hugepageSizeBytes, nil
 }

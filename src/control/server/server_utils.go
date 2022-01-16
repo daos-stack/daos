@@ -146,7 +146,54 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) error {
+// Detect if any engines share numa nodes and if that's the case, allocate only on the shared numa
+// node and notify user.
+func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []string {
+	nodeMap := make(map[string]bool)
+	nodes := make([]string, 0, len(engineCfgs))
+	for _, ec := range engineCfgs {
+		nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
+		if nodeMap[nn] {
+			log.Infof("Multiple engines assigned to NUMA node %s, "+
+				"allocating all hugepages on this node.", nn)
+			nodes = []string{nn}
+			break
+		}
+		nodeMap[nn] = true
+		nodes = append(nodes, nn)
+	}
+
+	return nodes
+}
+
+// Update memory related config values to be passed to engine and validate minimums are met.
+func updateMemValues(log logging.Logger, hpi *common.HugePageInfo, engineCfgs []*engine.Config) error {
+	// Calculate mem_size per I/O engine (in MB)
+	pageSizeMb := hpi.PageSizeKb >> 10
+	memSizeMb := (hpi.Free / len(engineCfgs)) * pageSizeMb
+	log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeMb, pageSizeMb)
+
+	for _, engineCfg := range engineCfgs {
+		if engineCfg.TargetCount == 0 {
+			// should have already been validated but ensure no divide by zero
+			return errors.Errorf("engine has zero target count")
+		}
+
+		engineCfg.MemSize = memSizeMb
+		// Pass hugepage size, do not assume 2MB is used
+		engineCfg.HugePageSz = pageSizeMb
+
+		// Warn if hugepages are not enough to sustain average I/O workload (~1GB).
+		minSizeMbPerTarget := common.MinTargetHugePageSize >> 20 // B to MiB
+		if (engineCfg.MemSize / engineCfg.TargetCount) < minSizeMbPerTarget {
+			log.Errorf("Not enough hugepages are allocated!")
+		}
+	}
+
+	return nil
+}
+
+func prepBdevStorage(srv *server, iommuEnabled bool, getHugePageInfo common.GetHugePageInfoFn) error {
 	hasBdevs := cfgHasBdevs(srv.cfg)
 
 	if hasBdevs {
@@ -187,28 +234,16 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 	if hasBdevs {
 		// The NrHugepages config value is a total for all engines. Distribute allocation
 		// of hugepages equally across each engine's numa node (as validation ensures that
-		// TargetsCount is equal for each engine). Detect if any engines share numa nodes
-		// and if that's the case, allocate only on the shared numa node and notify user.
-		nodeMap := make(map[string]bool)
-		nodes := make([]string, 0, len(srv.cfg.Engines))
-		for _, ec := range srv.cfg.Engines {
-			nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
-			if nodeMap[nn] {
-				srv.log.Infof("Multiple engines assigned to NUMA node %s, "+
-					"allocating all hugepages on this node.", nn)
-				nodes = []string{nn}
-				break
-			}
-			nodeMap[nn] = true
-			nodes = append(nodes, nn)
-		}
+		// TargetsCount is equal for each engine).
+		numaNodes := getEngineNUMANodes(srv.log, srv.cfg.Engines)
 
 		// Request a few more hugepages than actually required as not all may be available.
-		prepReq.HugePageCount = (srv.cfg.NrHugepages / len(nodes)) + common.ExtraHugePages
-		prepReq.HugeNodes = strings.Join(nodes, ",")
+		prepReq.HugePageCount = (srv.cfg.NrHugepages + common.ExtraHugePages)
+		prepReq.HugePageCount /= len(numaNodes)
+		prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
-			prepReq.HugePageCount, nodes)
+			prepReq.HugePageCount, numaNodes)
 	} else if len(srv.cfg.Engines) == 0 && srv.cfg.NrHugepages == 0 {
 		// If nr_hugepages is unset and no engines in config, set minimum needed for
 		// scanning and set number of hugepages for engines to zero for discovery mode.
@@ -230,11 +265,15 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}
 
-	expFree := prepReq.HugePageCount
+	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
+	hpi, err := getHugePageInfo()
+	if err != nil {
+		return err
+	}
+	expFree := prepReq.HugePageCount // no nvme case
 	if hasBdevs {
 		expFree = srv.cfg.NrHugepages // total for all engines
 	}
-	// Double-check that we got the requested number of huge pages after prepare.
 	if hpi.Free < expFree {
 		return FaultInsufficientFreeHugePages(hpi.Free, expFree)
 	}
@@ -243,27 +282,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 		return nil // skip mem size check
 	}
 
-	// Calculate mem_size per I/O engine (in MB)
-	pageSizeMb := hpi.PageSizeKb >> 10
-	memSizeMb := (hpi.Free / len(srv.cfg.Engines)) * pageSizeMb
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeMb, pageSizeMb)
-
-	for _, engineCfg := range srv.cfg.Engines {
-		if engineCfg.TargetCount == 0 {
-			// should have already been validated but ensure no divide by zero
-			return errors.Errorf("engine has zero target count")
-		}
-
-		engineCfg.MemSize = memSizeMb
-		// Pass hugepage size, do not assume 2MB is used
-		engineCfg.HugePageSz = pageSizeMb
-		// Warn if hugepages are not enough to sustain average I/O workload (~1GB).
-		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
-			srv.log.Errorf("Not enough hugepages are allocated!")
-		}
-	}
-
-	return nil
+	return updateMemValues(srv.log, hpi, srv.cfg.Engines)
 }
 
 func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {

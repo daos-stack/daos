@@ -35,8 +35,13 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet, hpi *common.HugePageInfo) (*system.FaultDomain, error) {
+func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
 	processFabricProvider(cfg)
+
+	hpi, err := common.GetHugePageInfo()
+	if err != nil {
+		return nil, errors.Wrapf(err, "retrieve hugepage info")
+	}
 
 	if err := cfg.Validate(log, hpi.PageSizeKb, fis); err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
@@ -224,10 +229,10 @@ func (srv *server) initNetwork() error {
 	return nil
 }
 
-func (srv *server) initStorage(hpi *common.HugePageInfo) error {
+func (srv *server) initStorage() error {
 	defer srv.logDuration(track("time to init storage"))
 
-	if err := prepBdevStorage(srv, iommuDetected(), hpi); err != nil {
+	if err := prepBdevStorage(srv, iommuDetected(), common.GetHugePageInfo); err != nil {
 		return err
 	}
 
@@ -437,12 +442,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return errors.Wrap(err, "scan fabric")
 	}
 
-	hpi, err := common.GetHugePageInfo()
-	if err != nil {
-		return err
-	}
-
-	faultDomain, err := processConfig(log, cfg, fiSet, hpi)
+	faultDomain, err := processConfig(log, cfg, fiSet)
 	if err != nil {
 		return err
 	}
@@ -465,7 +465,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return err
 	}
 
-	if err := srv.initStorage(hpi); err != nil {
+	if err := srv.initStorage(); err != nil {
 		return err
 	}
 

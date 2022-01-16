@@ -251,6 +251,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	for name, tc := range map[string]struct {
 		iommuDisabled bool
 		srvCfgExtra   func(*config.Server) *config.Server
+		getHpiErr     error
 		hugePagesFree int
 		bmbc          *bdev.MockBackendConfig
 		smbc          *scm.MockBackendConfig
@@ -300,7 +301,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 16384,
+					HugePageCount: 16386, // 2 extra huge pages requested
 					HugeNodes:     "0",
 					TargetUser:    username,
 					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
@@ -323,7 +324,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 16384,
+					HugePageCount: 16386, // 2 extra huge pages requested
 					HugeNodes:     "1",
 					TargetUser:    username,
 				},
@@ -343,7 +344,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 8192,
+					HugePageCount: 8193, // 1 extra huge page requested per-engine
 					HugeNodes:     "0,1",
 					TargetUser:    username,
 				},
@@ -363,7 +364,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 8192,
+					HugePageCount: 8193, // 1 extra huge page requested per-engine
 					HugeNodes:     "0,1",
 					TargetUser:    username,
 				},
@@ -432,6 +433,22 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expErr: errors.New("requested 128 hugepages; got 0"),
 		},
+		"nvme prep succeeds; 0 engines; nr_hugepages unset; hpi fetch fails": {
+			getHpiErr: errors.New("could not find hugepage info"),
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					Reset_:     true,
+					TargetUser: username,
+				},
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					HugePageCount: 128,
+					TargetUser:    username,
+				},
+			},
+			expErr: errors.New("could not find hugepage info"),
+		},
 		// prepare will continue even if reset fails
 		"nvme reset fails; 2 engines": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -455,7 +472,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 8192,
+					HugePageCount: 8193, // 1 extra huge page requested per-engine
 					HugeNodes:     "0,1",
 					TargetUser:    username,
 					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
@@ -488,7 +505,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 8192,
+					HugePageCount: 8193, // 1 extra huge page requested per-engine
 					HugeNodes:     "0,1",
 					TargetUser:    username,
 					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
@@ -533,12 +550,14 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				srvCfg: cfg,
 			}
 
-			hpi := &common.HugePageInfo{
-				PageSizeKb: 2048,
-				Free:       tc.hugePagesFree,
+			mockGetHugePageInfo := func() (*common.HugePageInfo, error) {
+				return &common.HugePageInfo{
+					PageSizeKb: 2048,
+					Free:       tc.hugePagesFree,
+				}, tc.getHpiErr
 			}
 
-			gotErr := prepBdevStorage(srv, !tc.iommuDisabled, hpi)
+			gotErr := prepBdevStorage(srv, !tc.iommuDisabled, mockGetHugePageInfo)
 
 			mbb.RLock()
 			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls); diff != "" {
