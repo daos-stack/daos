@@ -21,9 +21,9 @@ const (
 	// minTargetHugePageSize is the minimum amount of hugepage space that
 	// can be requested for each target.
 	minTargetHugePageSize = 1 << 30 // 1GiB
-	// extraHugePages is the number of extra hugepages to request beyond
+	// ExtraHugePages is the number of extra hugepages to request beyond
 	// the minimum required, often one or two are not reported as available.
-	extraHugePages = 2
+	ExtraHugePages = 2
 )
 
 // HugePageInfo contains information about system hugepages.
@@ -114,5 +114,5 @@ func CalcMinHugePages(hugePageSizeKb int, numTargets int) (int, error) {
 	}
 	minHugePageBytes := minTargetHugePageSize * numTargets
 
-	return (minHugePageBytes / hugepageSizeBytes) + extraHugePages, nil
+	return minHugePageBytes / hugepageSizeBytes, nil
 }

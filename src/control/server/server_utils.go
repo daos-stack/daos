@@ -196,7 +196,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 			if nodeMap[nn] {
 				srv.log.Infof("Multiple engines assigned to NUMA node %s, "+
 					"allocating all hugepages on this node.", nn)
-				prepReq.HugePageCount = srv.cfg.NrHugepages
 				nodes = []string{nn}
 				break
 			}
@@ -204,7 +203,8 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpi *common.HugePageInfo) e
 			nodes = append(nodes, nn)
 		}
 
-		prepReq.HugePageCount = srv.cfg.NrHugepages / len(nodes)
+		// Request a few more hugepages than actually required as not all may be available.
+		prepReq.HugePageCount = (srv.cfg.NrHugepages / len(nodes)) + common.ExtraHugePages
 		prepReq.HugeNodes = strings.Join(nodes, ",")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
