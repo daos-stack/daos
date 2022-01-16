@@ -278,16 +278,13 @@ daos_getutime(void)
 	return d_time2us(tv);
 }
 
-static inline int daos_gettime_coarse(uint64_t *time)
+static inline uint64_t
+daos_gettime_coarse(void)
 {
-	struct timespec	now;
-	int		rc;
+	struct timespec	tv;
 
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	if (rc == 0)
-		*time = now.tv_sec;
-
-	return rc;
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+	return tv.tv_sec;
 }
 
 /** Function table for combsort and binary search */
