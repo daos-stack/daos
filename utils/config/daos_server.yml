@@ -183,9 +183,9 @@
 ## Default system hugepage size will be used.
 ## Example: (2 engines * (8 targets/engine * 1GB)) / 2MB hugepage size = 16834
 ##
-## Hugepages are mandatory with NVME SSD configured and optional without so
-## that when NVMe isn't configured, daos will allocate normal memory pages
-## (and disable use of hugepages) if nr_hugepages is -1.
+## Hugepages are mandatory with NVME SSD configured and optional without.
+## To disabled the use of hugepages when no NVMe SSDs are configured, set
+## nr_hugepages to -1.
 #
 ##nr_hugepages: -1
 #

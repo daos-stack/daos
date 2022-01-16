@@ -298,6 +298,10 @@ func (br *BdevBusRange) String() string {
 	return fmt.Sprintf("0x%02x-0x%02x", br.LowAddress.Bus, br.HighAddress.Bus)
 }
 
+// IsZero returns true if range is empty (e.g. 0x00-0x00).
+//func (br *BdevBusRange) IsZero() bool {
+//	return br.IsZero()
+
 // NewBdevBusRange creates a new BdevBusRange from a string.
 func NewBdevBusRange(rangeStr string) (*BdevBusRange, error) {
 	br := &BdevBusRange{}

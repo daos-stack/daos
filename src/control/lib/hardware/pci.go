@@ -461,6 +461,15 @@ func (b *PCIBus) String() string {
 	return fmt.Sprintf("%s:[%s-%s]", laf["Domain"], laf["Bus"], haf["Bus"])
 }
 
+// IsZero if PCI bus contains no valid addresses.
+func (b *PCIBus) IsZero() bool {
+	if b == nil {
+		return true
+	}
+
+	return b.LowAddress.IsZero() && b.HighAddress.IsZero()
+}
+
 func (d *PCIDevice) String() string {
 	var speedStr string
 	if d.LinkSpeed > 0 {
