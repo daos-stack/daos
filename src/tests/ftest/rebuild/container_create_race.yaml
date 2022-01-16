@@ -24,6 +24,7 @@ pool:
   control_method: dmg
   pool_query_timeout: 15
   scm_size: 90%
+  nvme_size: 95%
 container:
   type: POSIX
   control_method: daos
