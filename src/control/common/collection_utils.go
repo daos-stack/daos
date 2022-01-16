@@ -17,7 +17,7 @@ import (
 )
 
 // StringSet is a non-duplicated set of strings.
-type StringSet map[string]interface{}
+type StringSet map[string]struct{}
 
 // ToSlice returns the strings in the set as a sorted slice.
 func (s StringSet) ToSlice() []string {
@@ -36,8 +36,14 @@ func (s StringSet) Add(values ...string) {
 	}
 
 	for _, str := range values {
-		s[str] = nil
+		s[str] = struct{}{}
 	}
+}
+
+// Has checks if the passed string is in the StringSet.
+func (s StringSet) Has(val string) bool {
+	_, exists := s[val]
+	return exists
 }
 
 func (s StringSet) String() string {

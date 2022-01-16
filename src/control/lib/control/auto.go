@@ -603,7 +603,7 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		if len(sd.numaPMems) > 0 {
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
-					WithScmClass(storage.ClassDcpm.String()).
+					WithStorageClass(storage.ClassDcpm.String()).
 					WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
 					WithScmDeviceList(sd.numaPMems[nn][0]),
 			)
@@ -611,7 +611,7 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		if len(sd.numaSSDs) > 0 {
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
-					WithBdevClass(storage.ClassNvme.String()).
+					WithStorageClass(storage.ClassNvme.String()).
 					WithBdevDeviceList(sd.numaSSDs[nn][:minSsds]...),
 			)
 		}

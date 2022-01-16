@@ -100,6 +100,35 @@ func TestCommon_StringSet_Add(t *testing.T) {
 	}
 }
 
+func TestCommon_StringSet_Has(t *testing.T) {
+	for name, tc := range map[string]struct {
+		set       StringSet
+		input     string
+		expResult bool
+	}{
+		"nil": {
+			input: "something",
+		},
+		"empty": {
+			set:   NewStringSet(),
+			input: "something",
+		},
+		"has value": {
+			set:       NewStringSet("one", "two", "three"),
+			input:     "two",
+			expResult: true,
+		},
+		"doesn't have value": {
+			set:   NewStringSet("one", "two", "three"),
+			input: "something",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			AssertEqual(t, tc.expResult, tc.set.Has(tc.input), "")
+		})
+	}
+}
+
 func TestCommon_StringSet_ToSlice(t *testing.T) {
 	for name, tc := range map[string]struct {
 		set       StringSet

@@ -468,7 +468,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 			if ls.ScmClass != storage.ClassNone {
 				tierCfgs = append(tierCfgs,
 					storage.NewTierConfig().
-						WithScmClass(ls.ScmClass.String()).
+						WithStorageClass(ls.ScmClass.String()).
 						WithScmDeviceList(ls.ScmConfig.DeviceList...).
 						WithScmMountPoint(ls.MountPoint).
 						WithScmRamdiskSize(ls.RamdiskSize),
@@ -479,8 +479,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 			// backward compatible behavior.
 			bc := ls.BdevClass
 			switch {
-			case bc == storage.ClassNvme &&
-				len(ls.BdevConfig.DeviceList) == 0:
+			case bc == storage.ClassNvme && len(ls.BdevConfig.DeviceList) == 0:
 				log.Debugf("legacy storage config conversion skipped for class "+
 					"%s with empty bdev_list", storage.ClassNvme)
 			case bc == storage.ClassNone:
@@ -489,7 +488,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 			default:
 				tierCfgs = append(tierCfgs,
 					storage.NewTierConfig().
-						WithBdevClass(ls.BdevClass.String()).
+						WithStorageClass(ls.BdevClass.String()).
 						WithBdevDeviceCount(ls.DeviceCount).
 						WithBdevDeviceList(ls.BdevConfig.DeviceList...).
 						WithBdevFileSize(ls.FileSize).

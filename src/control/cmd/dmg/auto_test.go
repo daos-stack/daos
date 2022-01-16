@@ -195,11 +195,11 @@ hyperthreads: false
 				WithPinnedNumaNode(0).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmDeviceList("/dev/pmem0").
 						WithScmMountPoint("/mnt/daos0"),
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
@@ -216,11 +216,11 @@ hyperthreads: false
 				WithPinnedNumaNode(1).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmDeviceList("/dev/pmem1").
 						WithScmMountPoint("/mnt/daos1"),
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").

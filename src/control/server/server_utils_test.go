@@ -233,12 +233,12 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			WithPinnedNumaNode(uint(i)).WithFabricInterface(fmt.Sprintf("ib%d", i))
 	}
 	scmTier := func(i int) *storage.TierConfig {
-		return storage.NewTierConfig().WithScmClass(storage.ClassDcpm.String()).
+		return storage.NewTierConfig().WithStorageClass(storage.ClassDcpm.String()).
 			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", i)).
 			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", i))
 	}
 	nvmeTier := func(i int) *storage.TierConfig {
-		return storage.NewTierConfig().WithBdevClass(storage.ClassNvme.String()).
+		return storage.NewTierConfig().WithStorageClass(storage.ClassNvme.String()).
 			WithBdevDeviceList(common.MockPCIAddr(int32(i)))
 	}
 	scmEngine := func(i int) *engine.Config {
@@ -566,7 +566,7 @@ func TestServer_getNetDevClass(t *testing.T) {
 			WithLogFile("a").
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("a"),
 			).
@@ -577,7 +577,7 @@ func TestServer_getNetDevClass(t *testing.T) {
 			WithLogFile("b").
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("b"),
 			).

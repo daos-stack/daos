@@ -8,6 +8,7 @@ package server
 
 import (
 	"fmt"
+	"os/user"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -264,6 +265,45 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		}
 		ei.NotifyStorageReady()
 	}
+
+	return resp, nil
+}
+
+// StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
+func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
+	c.log.Debugf("received StorageNvmeRebind RPC %v", req)
+
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	cu, err := user.Current()
+	if err != nil {
+		return nil, errors.Wrap(err, "get username")
+	}
+
+	prepReq := storage.BdevPrepareRequest{
+		// zero as hugepages already allocated on start-up
+		HugePageCount: 0,
+		TargetUser:    cu.Username,
+		PCIAllowList:  req.PciAddr,
+		Reset_:        false,
+	}
+
+	resp := new(ctlpb.NvmeRebindResp)
+	if _, err := c.NvmePrepare(prepReq); err != nil {
+		err = errors.Wrap(err, "nvme rebind")
+		c.log.Error(err.Error())
+
+		resp.State = &ctlpb.ResponseState{
+			Error:  err.Error(),
+			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+		}
+
+		return resp, nil // report prepare call result in response
+	}
+
+	c.log.Debug("responding to StorageNvmeRebind RPC")
 
 	return resp, nil
 }

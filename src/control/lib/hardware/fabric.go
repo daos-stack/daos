@@ -267,10 +267,8 @@ func (s *FabricInterfaceSet) GetInterfaceOnOSDevice(osDev string, provider strin
 	}
 
 	for _, fi := range fis {
-		for prov := range fi.Providers {
-			if prov == provider {
-				return fi, nil
-			}
+		if fi.Providers.Has(provider) {
+			return fi, nil
 		}
 	}
 
