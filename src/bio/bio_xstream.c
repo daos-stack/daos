@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <uuid/uuid.h>
 #include <abt.h>
+#include <spdk/string.h>
 #include <spdk/log.h>
 #include <spdk/env.h>
 #include <spdk/init.h>
@@ -65,7 +66,8 @@ struct bio_nvme_data {
 	uint64_t		 bd_scan_age;
 	/* Path to input SPDK JSON NVMe config file */
 	const char		*bd_nvme_conf;
-	int			 bd_shm_id;
+	/* NUMA node affinity */
+	int			 bd_numa_node;
 	/* When using SPDK primary mode, specifies memory allocation in MB */
 	int			 bd_mem_size;
 	bool			 bd_started;
@@ -79,7 +81,8 @@ static int
 bio_spdk_env_init(void)
 {
 	struct spdk_env_opts	 opts;
-	int			 rc;
+	int			 buflen = 32;
+	int			 rc = 0;
 
 	/* Only print error and more severe to stderr. */
 	spdk_log_set_print_level(SPDK_LOG_ERROR);
@@ -96,17 +99,39 @@ bio_spdk_env_init(void)
 		}
 	}
 
-	/*
+	/**
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
 	 * Currently we can't guarantee clean shutdown (no hugepages leaked).
 	 * Setting mem_size could cause EAL: Not enough memory available error,
 	 * and DPDK will fail to initialize.
 	 */
 
-	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
-		opts.shm_id = nvme_glb.bd_shm_id;
+	buflen += strlen(dpdk_cli_override_opts);
+	D_ALLOC(opts.env_context, buflen);
+	if (opts.env_context == NULL) {
+		D_ERROR("Failed to allocate env_context buffer");
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
-	opts.env_context = (char *)dpdk_cli_override_opts;
+	/**
+	 * Add socket memory size to DPDK env context opts to specify which NUMA node to use.
+	 * For any unsupported NUMA node IDs, don't supply socket memory param.
+	 */
+	if (nvme_glb.bd_numa_node == 0)
+		rc = snprintf(opts.env_context, buflen, "%s --socket-mem=%d,0",
+			      dpdk_cli_override_opts, nvme_glb.bd_mem_size);
+	else if (nvme_glb.bd_numa_node == 1)
+		rc = snprintf(opts.env_context, buflen, "%s --socket-mem=0,%d",
+			      dpdk_cli_override_opts, nvme_glb.bd_mem_size);
+	else
+		opts.env_context = (char *)dpdk_cli_override_opts;
+
+	if (rc != 0) {
+		D_ERROR("Failed to write env_context: %s", spdk_strerror(-rc));
+		rc = -DER_INVAL;
+		goto out;
+	}
 
 	if (bio_nvme_configured()) {
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
@@ -150,7 +175,7 @@ bypass_health_collect()
 }
 
 int
-bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
+bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	      unsigned int hugepage_size, unsigned int tgt_nr,
 	      struct sys_db *db, bool bypass_health_collect)
 {
@@ -171,6 +196,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
 	nvme_glb.bd_nvme_conf = NULL;
+	nvme_glb.bd_numa_node = DAOS_NVME_NUMANODE_NONE;
 	nvme_glb.bd_bypass_health_collect = bypass_health_collect;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
 
@@ -246,7 +272,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	vmd_led_period = env ? atoi(env) : 0;
 	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
-	nvme_glb.bd_shm_id = shm_id;
+	nvme_glb.bd_numa_node = numa_node;
 	nvme_glb.bd_mem_size = mem_size;
 	nvme_glb.bd_nvme_conf = nvme_conf;
 
