@@ -86,7 +86,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
 
     if libs is None:
         libs = []
-    libs.extend([gurt_lib, cart_lib])
+    libs.extend([gurt_lib])
 
     def gen_build_id():
         """generate a unique build id per binary for use by RPM

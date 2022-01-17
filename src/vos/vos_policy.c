@@ -33,7 +33,7 @@ policy_io_size(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
 	scm_threshold = pool->vp_policy_desc.params[0] > 0 ?
 		pool->vp_policy_desc.params[0] : VOS_POLICY_SCM_THRESHOLD;
 
-	return (size > scm_threshold) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
+	return (size >= scm_threshold) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
 }
 
 /* policy based on how write-intensive is data to store

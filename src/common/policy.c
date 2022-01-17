@@ -31,9 +31,9 @@ static bool
 parse_param_val(int param_idx, char *tok, struct policy_desc_t *out_pd)
 {
 	char *endptr;
-	int val = strtol(tok, &endptr, 10);
+	unsigned long val = strtoul(tok, &endptr, 10);
 
-	if (*tok != '\0' && *endptr == '\0') {
+	if (*tok != '\0' && *endptr == '\0' && val <= UINT32_MAX) {
 		if (out_pd != NULL)
 			out_pd->params[param_idx] = val;
 		return true;
