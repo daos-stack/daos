@@ -118,7 +118,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	switch {
 	case allFlagPattern.MatchString(cmd.Size):
 		if cmd.NumRanks > 0 {
-			return errIncompatFlags("all", "num-ranks")
+			return errIncompatFlags("size", "num-ranks")
 		}
 
 		// TODO (DAOS-9557) Update the protocol to allow filtering on ranks to use.  To
@@ -126,7 +126,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		// namespace is associated with one rank or not. If yes, it should define with which
 		// rank the SCM namespace is associated.
 		if cmd.RankList != "" {
-			return errIncompatFlags("all", "ranks")
+			return errIncompatFlags("size", "ranks")
 		}
 
 		storageRatioString := allFlagPattern.FindStringSubmatch(cmd.Size)[1]
