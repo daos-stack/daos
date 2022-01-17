@@ -16,12 +16,12 @@ class PoolPDAProperty(TestWithServers):
 
     :avocado: recursive
     """
-    def verify_cont_ec_pda(self, expected_value):
+    def verify_cont_pda(self, expected_value, match_str):
         """
-        Verify the container ec_pda property.
+        Verify the container pda property.
 
         Args:
-            expected_value (int): expected container ec_pda value
+            expected_value (int): expected container pda value
         """
         daos_cmd = self.get_daos_command()
         cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
@@ -29,26 +29,8 @@ class PoolPDAProperty(TestWithServers):
         cont_prop_stdout = cont_prop.stdout_text
         prop_list = cont_prop_stdout.split('\n')[1:]
         cont_index = [i for i, word in enumerate(prop_list)
-                      if word.startswith('Performance domain affinity level of EC')][0]
-        pda_str = (prop_list[cont_index].split('Performance domain affinity level of EC')[1].strip())
-        pda_value = int(pda_str)
-        self.assertEqual(expected_value, pda_value)
-
-    def verify_cont_rp_pda(self, expected_value):
-        """
-        Verify the container rp_pda property.
-
-        Args:
-            expected_value (int): expected container rp_pda value
-        """
-        daos_cmd = self.get_daos_command()
-        cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
-                                                self.container.uuid)
-        cont_prop_stdout = cont_prop.stdout_text
-        prop_list = cont_prop_stdout.split('\n')[1:]
-        cont_index = [i for i, word in enumerate(prop_list)
-                      if word.startswith('Performance domain affinity level of RP')][0]
-        pda_str = (prop_list[cont_index].split('Performance domain affinity level of RP')[1].strip())
+                      if word.startswith(match_str)][0]
+        pda_str = (prop_list[cont_index].split(match_str)[1].strip())
         pda_value = int(pda_str)
         self.assertEqual(expected_value, pda_value)
 
@@ -68,8 +50,9 @@ class PoolPDAProperty(TestWithServers):
             Verify the pda is updated for the container.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool,pool_pda_property
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=pool_pda_property
         """
 
         # Create the pool with default
@@ -90,8 +73,10 @@ class PoolPDAProperty(TestWithServers):
         ec_pda = self.pool.get_property("ec_pda")
         rp_pda = self.pool.get_property("rp_pda")
 
-        self.verify_cont_ec_pda(ec_pda)
-        self.verify_cont_rp_pda(rp_pda)
+        match_ec_str = 'Performance domain affinity level of EC'
+        match_rp_str = 'Performance domain affinity level of RP'
+        self.verify_cont_pda(ec_pda, match_ec_str)
+        self.verify_cont_pda(rp_pda, match_rp_str)
 	# Destroy the container.
         self.container.destroy()
 
@@ -102,8 +87,8 @@ class PoolPDAProperty(TestWithServers):
 	# Create the container
         self.container.create()
 
-        self.verify_cont_ec_pda(ec_pda)
-        self.verify_cont_rp_pda(rp_pda)
+        self.verify_cont_pda(ec_pda, match_ec_str)
+        self.verify_cont_pda(rp_pda, match_rp_str)
 
 	# Destroy the container.
         self.container.destroy()

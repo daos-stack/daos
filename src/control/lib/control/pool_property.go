@@ -19,12 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
-/*
-#include <daos/object.h>
-#include <daos/cont_props.h>
-*/
-import "C"
-
 // PoolProperties returns a map of property names to handlers
 // for processing property values.
 func PoolProperties() PoolPropertyMap {
@@ -107,7 +101,7 @@ func PoolProperties() PoolPropertyMap {
 				Description: "EC cell size",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					b, err := humanize.ParseBytes(s)
-					if err != nil || !C.daos_ec_cs_valid(C.uint32_t(b)) {
+					if err != nil || !drpc.EcCellSizeIsValid(b) {
 						return nil, errors.Errorf("invalid EC Cell size %q", s)
 					}
 
@@ -145,12 +139,12 @@ func PoolProperties() PoolPropertyMap {
 				Number:      drpc.PoolPropertyECPda,
 				Description: "Performance domain affinity level of EC",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					ecpdaErr := errors.Errorf("invalid ec_pda value %s", s)
-					pdaPct, err := strconv.ParseUint(s, 10, 64)
-					if err != nil || !C.daos_ec_pda_valid(C.uint32_t(pdaPct)) {
+					ecpdaErr := errors.Errorf("invalid ec_pda value %q", s)
+					pdalvl, err := strconv.ParseUint(s, 10, 32)
+					if err != nil || !drpc.EcPdaIsValid(pdalvl) {
 						return nil, ecpdaErr
 					}
-					return &PoolPropertyValue{pdaPct}, nil
+					return &PoolPropertyValue{pdalvl}, nil
 				},
 				valueStringer: func(v *PoolPropertyValue) string {
 					n, err := v.GetNumber()
@@ -167,12 +161,12 @@ func PoolProperties() PoolPropertyMap {
 				Number:      drpc.PoolPropertyRPPda,
 				Description: "Performance domain affinity level of RP",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					rppdaErr := errors.Errorf("invalid rp_pda value %s", s)
-					pdaPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
-					if err != nil || !C.daos_ec_pda_valid(C.uint32_t(pdaPct)) {
+					rppdaErr := errors.Errorf("invalid rp_pda value %q", s)
+					pdalvl, err := strconv.ParseUint(s, 10, 32)
+					if err != nil || !drpc.RpPdaIsValid(pdalvl) {
 						return nil, rppdaErr
 					}
-					return &PoolPropertyValue{pdaPct}, nil
+					return &PoolPropertyValue{pdalvl}, nil
 				},
 				valueStringer: func(v *PoolPropertyValue) string {
 					n, err := v.GetNumber()
