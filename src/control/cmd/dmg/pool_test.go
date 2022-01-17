@@ -188,13 +188,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (size nranks)",
 			"pool create --size 100% --nranks 16",
 			"",
-			errors.New("may not be mixed"),
+			errors.New("--size may not be mixed with --num-ranks"),
 		},
 		{
 			"Create pool with incompatible arguments (size ranks)",
 			"pool create --size 100% --ranks 1,2,3",
 			"",
-			errors.New("may not be mixed"),
+			errors.New("--size may not be mixed with --ranks"),
 		},
 		{
 			"Create pool with invalid arguments (too small ratio)",
