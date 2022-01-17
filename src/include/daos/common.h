@@ -878,8 +878,8 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 }
 
 /* NVMe shared constants */
-#define DAOS_NVME_SHMID_NONE	-1
-#define DAOS_NVME_MEM_PRIMARY	0
+#define DAOS_NVME_NUMANODE_NONE		-1
+#define DAOS_NVME_MEM_PRIMARY		0
 
 /** Size of (un)expected Mercury buffers */
 #define DAOS_RPC_SIZE  (20480) /* 20KiB */

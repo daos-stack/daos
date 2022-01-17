@@ -22,7 +22,6 @@ package spdk
 #include "spdk/env.h"
 #include "spdk/nvme.h"
 #include "include/nvme_control.h"
-#include "include/nvme_control_common.h"
 */
 import "C"
 
@@ -120,7 +119,10 @@ func ctrlrPCIAddresses(ctrlrs storage.NvmeControllers) []string {
 // containing any Namespace and DeviceHealth structs.
 // Afterwards remove lockfile for each discovered device.
 func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
-	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
+	retPtr := C.nvme_discover()
+	defer C.nvme_cleanup(retPtr)
+
+	ctrlrs, err := collectCtrlrs(retPtr, "NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := ctrlrPCIAddresses(ctrlrs)
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
@@ -142,8 +144,10 @@ func resultPCIAddresses(results []*FormatResult) []string {
 // Attempt wipe of each controller namespace's LBA-0.
 // Afterwards remove lockfile for each formatted device.
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
-	results, err := collectFormatResults(C.nvme_wipe_namespaces(),
-		"NVMe Format(): C.nvme_wipe_namespaces()")
+	retPtr := C.nvme_wipe_namespaces()
+	defer C.nvme_cleanup(retPtr)
+
+	results, err := collectFormatResults(retPtr, "NVMe Format(): C.nvme_wipe_namespaces()")
 
 	pciAddrs := resultPCIAddresses(results)
 	log.Debugf("formatted nvme ssds: %v", pciAddrs)
@@ -239,12 +243,6 @@ func c2GoFormatResult(fmtResult *C.struct_wipe_res_t) *FormatResult {
 	}
 }
 
-// clean deallocates memory in return structure and frees the pointer.
-func clean(retPtr *C.struct_ret_t) {
-	C.clean_ret(retPtr)
-	C.free(unsafe.Pointer(retPtr))
-}
-
 // checkRet returns fault if ret_t struct input is nil or rc is non-zero.
 func checkRet(retPtr *C.struct_ret_t, msgFail string) error {
 	if retPtr == nil {
@@ -276,8 +274,6 @@ func checkRet(retPtr *C.struct_ret_t, msgFail string) error {
 
 // collectCtrlrs parses return struct to collect slice of nvme.Controller.
 func collectCtrlrs(retPtr *C.struct_ret_t, msgFail string) (storage.NvmeControllers, error) {
-	defer clean(retPtr)
-
 	if err := checkRet(retPtr, msgFail); err != nil {
 		return nil, err
 	}
@@ -312,8 +308,6 @@ func collectCtrlrs(retPtr *C.struct_ret_t, msgFail string) (storage.NvmeControll
 // collectFormatResults parses return struct to collect slice of
 // nvme.FormatResult.
 func collectFormatResults(retPtr *C.struct_ret_t, msgFail string) ([]*FormatResult, error) {
-	defer clean(retPtr)
-
 	if err := checkRet(retPtr, msgFail); err != nil {
 		return nil, err
 	}

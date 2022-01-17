@@ -191,7 +191,16 @@ func TestBackend_Scan(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			b := backendWithMockBinding(log, tc.mec, tc.mnc)
+			mei := &spdk.MockEnvImpl{Cfg: tc.mec}
+			sr, _ := mockScriptRunner(t, log, nil)
+			b := &spdkBackend{
+				log: log,
+				binding: &spdkWrapper{
+					Env:  mei,
+					Nvme: &spdk.MockNvmeImpl{Cfg: tc.mnc},
+				},
+				script: sr,
+			}
 
 			gotResp, gotErr := b.Scan(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -202,6 +211,8 @@ func TestBackend_Scan(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
+			common.AssertEqual(t, 1, len(mei.InitCalls), "unexpected number of spdk init calls")
+			common.AssertEqual(t, 1, len(mei.FiniCalls), "unexpected number of spdk fini calls")
 		})
 	}
 }
@@ -539,9 +550,11 @@ func TestBackend_Format(t *testing.T) {
 					}
 				}
 			case storage.ClassNvme:
-				if diff := cmp.Diff(tc.expInitOpts, mei.CallOpts, defCmpOpts()...); diff != "" {
+				if diff := cmp.Diff(tc.expInitOpts, mei.InitCalls, defCmpOpts()...); diff != "" {
 					t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 				}
+				common.AssertEqual(t, 1, len(mei.FiniCalls),
+					"unexpected number of spdk fini calls")
 			}
 		})
 	}
@@ -867,7 +880,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 
 func TestBackend_Prepare(t *testing.T) {
 	const (
-		testNrHugePages       = 42
+		testNrHugePages       = 8192
 		nonexistentTargetUser = "nonexistentTargetUser"
 		username              = "bob"
 	)
@@ -938,7 +951,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         -1,
+				HugePageCount:         128,
 				TargetUser:            username,
 				EnableVMD:             false,
 				DisableCleanHugePages: true,
@@ -947,11 +960,20 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, 128),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 				},
 			},
+		},
+		"prepare setup; unset hugepages": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         -1,
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			expErr: errors.New("number of hugepages not specified in request"),
 		},
 		"prepare setup; user-specified values": {
 			req: storage.BdevPrepareRequest{

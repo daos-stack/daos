@@ -7,7 +7,6 @@
 package engine
 
 import (
-	"context"
 	"flag"
 	"os"
 	"path/filepath"
@@ -122,7 +121,7 @@ func TestConfig_HasEnvVar(t *testing.T) {
 	}
 }
 
-func TestConstructedConfig(t *testing.T) {
+func TestConfig_Constructed(t *testing.T) {
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity
@@ -185,7 +184,8 @@ func TestConfig_ScmValidation(t *testing.T) {
 		return MockConfig().
 			WithFabricProvider("test"). // valid enough to pass "not-blank" test
 			WithFabricInterface("ib0"). // ib0 recognized by mock validator
-			WithFabricInterfacePort(42)
+			WithFabricInterfacePort(42).
+			WithPinnedNumaNode(0)
 	}
 
 	for name, tc := range map[string]struct {
@@ -291,7 +291,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate(log, nil))
 		})
 	}
 }
@@ -307,7 +307,8 @@ func TestConfig_BdevValidation(t *testing.T) {
 					WithStorageClass("dcpm").
 					WithScmDeviceList("foo").
 					WithScmMountPoint("test"),
-			)
+			).
+			WithPinnedNumaNode(0)
 	}
 
 	for name, tc := range map[string]struct {
@@ -419,7 +420,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate(context.TODO(), log))
+			common.CmpErr(t, tc.expErr, tc.cfg.Validate(log, nil))
 			if tc.expErr != nil {
 				return
 			}
@@ -448,7 +449,7 @@ func TestConfig_Validation(t *testing.T) {
 
 	bad := MockConfig()
 
-	if err := bad.Validate(context.TODO(), log); err == nil {
+	if err := bad.Validate(log, nil); err == nil {
 		t.Fatal("expected empty config to fail validation")
 	}
 
@@ -461,9 +462,10 @@ func TestConfig_Validation(t *testing.T) {
 				WithStorageClass("ram").
 				WithScmRamdiskSize(1).
 				WithScmMountPoint("/foo/bar"),
-		)
+		).
+		WithPinnedNumaNode(0)
 
-	if err := good.Validate(context.TODO(), log); err != nil {
+	if err := good.Validate(log, nil); err != nil {
 		t.Fatalf("expected %#v to validate; got %s", good, err)
 	}
 }
@@ -612,10 +614,14 @@ func TestConfig_setAffinity(t *testing.T) {
 	}{
 		"numa pinned; matching iface": {
 			cfg: MockConfig().
-				WithPinnedNumaNode(1),
+				WithPinnedNumaNode(1).
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:     "ib0",
-				NUMANode: 1,
+				Name:      "ib1",
+				OSDevice:  "ib1",
+				NUMANode:  1,
+				Providers: common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
@@ -623,77 +629,83 @@ func TestConfig_setAffinity(t *testing.T) {
 		//       but there might be legitimate use cases e.g. sharing interface
 		"numa pinned; not matching iface": {
 			cfg: MockConfig().
-				WithPinnedNumaNode(1),
+				WithPinnedNumaNode(1).
+				WithFabricInterface("ib2").
+				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:     "ib0",
-				NUMANode: 2,
+				Name:      "ib2",
+				OSDevice:  "ib2",
+				NUMANode:  2,
+				Providers: common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
 		"numa not pinned": {
-			cfg: MockConfig(),
+			cfg: MockConfig().
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:     "ib0",
-				NUMANode: 1,
+				Name:      "ib1",
+				OSDevice:  "ib1",
+				NUMANode:  1,
+				Providers: common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			err := tc.cfg.setAffinity(context.TODO(), log, tc.fi)
-			common.CmpErr(t, tc.expErr, err)
-
-			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
-				"unexpected storage numa node id")
-			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
-				"unexpected fabric numa node id")
-		})
-	}
-}
-
-func TestConfig_ValidateFabric(t *testing.T) {
-	for name, tc := range map[string]struct {
-		cfg    *Config
-		fis    *hardware.FabricInterfaceSet
-		expErr error
-	}{
-		"success": {
+		"validation success": {
 			cfg: MockConfig().
 				WithFabricInterface("net1").
 				WithFabricProvider("test").
 				WithPinnedNumaNode(1),
-			fis: hardware.NewFabricInterfaceSet(
-				&hardware.FabricInterface{
-					Name:      "net1",
-					OSDevice:  "net1",
-					Providers: common.NewStringSet("test"),
-				},
-			),
+			fi: &hardware.FabricInterface{
+				Name:      "net1",
+				OSDevice:  "net1",
+				Providers: common.NewStringSet("test"),
+			},
+			expNuma: 1,
 		},
 		"provider not supported": {
 			cfg: MockConfig().
 				WithFabricInterface("net1").
 				WithFabricProvider("test").
 				WithPinnedNumaNode(1),
-			fis: hardware.NewFabricInterfaceSet(
-				&hardware.FabricInterface{
-					Name:      "net1",
-					OSDevice:  "net1",
-					Providers: common.NewStringSet("test2"),
-				},
-			),
+			fi: &hardware.FabricInterface{
+				Name:      "net1",
+				OSDevice:  "net1",
+				Providers: common.NewStringSet("test2"),
+			},
 			expErr: errors.New("not supported"),
+		},
+		"no fabric info; pinned numa": {
+			cfg: MockConfig().
+				WithFabricInterface("net1").
+				WithFabricProvider("test").
+				WithPinnedNumaNode(1),
+			expNuma: 1,
+		},
+		"no fabric info; no pinned numa": {
+			cfg: MockConfig().
+				WithFabricInterface("net1").
+				WithFabricProvider("test"),
+			expErr: errors.New("fabric info not provided"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			err := tc.cfg.ValidateFabric(context.Background(), log, tc.fis)
+			var fis *hardware.FabricInterfaceSet
+			if tc.fi != nil {
+				fis = hardware.NewFabricInterfaceSet(tc.fi)
+			}
+
+			err := tc.cfg.setAffinity(log, fis)
 			common.CmpErr(t, tc.expErr, err)
+
+			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
+				"unexpected storage numa node id")
+			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
+				"unexpected fabric numa node id")
 		})
 	}
 }

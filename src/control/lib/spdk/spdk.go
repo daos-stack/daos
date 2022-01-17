@@ -25,7 +25,6 @@ package spdk
 #include "spdk/nvme.h"
 #include "spdk/vmd.h"
 #include "include/nvme_control.h"
-#include "include/nvme_control_common.h"
 
 static char **makeCStringArray(int size) {
         return calloc(sizeof(char*), size);
@@ -119,13 +118,14 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 
 	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(opts.PCIAllowList.Len()),
 		cAllowList)
-	defer clean(retPtr)
+	defer C.nvme_cleanup(retPtr)
 
 	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
 		return err
 	}
 
 	if opts.EnableVMD {
+		log.Debugf("calling spdk vmd init")
 		if rc := C.spdk_vmd_init(); rc != 0 {
 			return rc2err("spdk_vmd_init()", rc)
 		}
@@ -139,6 +139,7 @@ func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 	log.Debugf("spdk fini go opts: %+v", opts)
 
 	if opts.EnableVMD {
+		log.Debugf("calling spdk vmd fini")
 		C.spdk_vmd_fini()
 	}
 
