@@ -170,6 +170,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <!-- <arg value="-Werror"/> -->
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"
@@ -185,6 +186,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <!-- <arg value="-Werror"/> -->
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"
@@ -201,6 +203,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <!-- <arg value="-Werror"/> -->
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"
@@ -217,6 +220,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <arg value="-Werror"/>
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"

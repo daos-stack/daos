@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#define _GNU_SOURCE
+
 #include "io_daos_DaosClient.h"
 #include <sys/stat.h>
 #include <gurt/common.h>
@@ -225,7 +227,10 @@ Java_io_daos_DaosClient_daosGetContAttrs(JNIEnv *env,
 	}
 
 	memcpy(&coh, &contHandle, sizeof(coh));
-	rc = daos_cont_get_attr(coh, n, names, values, sizes, NULL);
+	rc = daos_cont_get_attr(coh, n,
+				(const char * const *)names,
+	 			(void * const *)values,
+				sizes, NULL);
 	if (rc) {
 		throw_base(env, "Failed to get attributes from container", rc, 0, 0);
 		goto rel;
@@ -302,7 +307,10 @@ Java_io_daos_DaosClient_daosSetContAttrs(JNIEnv *env,
 	}
 
 	memcpy(&coh, &contHandle, sizeof(coh));
-	rc = daos_cont_set_attr(coh, n, names, values, sizes, NULL);
+	rc = daos_cont_set_attr(coh, n,
+				(const char * const *)names,
+				(const void * const *)values,
+				sizes, NULL);
 	if (rc) {
 		throw_base(env, "Failed to set attributes to container", rc, 0, 0);
 	}
@@ -461,7 +469,7 @@ Java_io_daos_DaosClient_abortEvent(JNIEnv *env,
 	if (rc) {
 		char *msg = NULL;
 
-		asprintf(&msg, "Failed to abort event (%d)",
+		asprintf(&msg, "Failed to abort event (%ld)",
 			 event->event.ev_debug);
 		throw_base(env, msg, rc, 1, 0);
 	}
