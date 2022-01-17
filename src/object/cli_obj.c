@@ -904,7 +904,8 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		return 0;
 	}
 	obj_auxi->iod_nr = args->nr;
-	obj_auxi->is_ec_obj = obj_is_ec(obj);
+	//lxz if (args->extra_flags & DIOF_TO_SPEC_SHARD)
+		obj_auxi->is_ec_obj = obj_is_ec(obj);
 
 	/** XXX possible re-order/merge for both replica and EC */
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE ||
@@ -912,6 +913,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		return 0;
 
 	if (!obj_auxi->req_reasbed) {
+		obj_auxi->is_ec_obj = 1;
 		rc = obj_reasb_req_init(&obj_auxi->reasb_req, obj, args->iods,
 					args->nr, oca);
 		if (rc) {
@@ -4277,6 +4279,7 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg->api_args		= obj_args;
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
+	D_ERROR("lxz obj_auxi->req_reasbed %d\n", obj_auxi->req_reasbed);
 	if (obj_auxi->req_reasbed) {
 		reasb_req = &obj_auxi->reasb_req;
 		if (reasb_req->tgt_oiods != NULL) {
@@ -4295,6 +4298,8 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 		}
 		if (obj_auxi->is_ec_obj)
 			shard_arg->reasb_req = reasb_req;
+		D_ERROR("lxz obj_auxi->is_ec_obj %d, shard_arg->reasb_req %p, shard_arg %p\n",
+			obj_auxi->is_ec_obj, shard_arg->reasb_req, shard_arg);
 	} else {
 		shard_arg->oiods = NULL;
 		shard_arg->offs = NULL;
