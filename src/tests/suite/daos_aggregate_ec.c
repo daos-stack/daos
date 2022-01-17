@@ -308,7 +308,6 @@ ec_cleanup_data(struct ec_agg_test_ctx *ctx)
 
 #define NUM_STRIPES 64
 #define NUM_KEYS 3
-//lxz #define NUM_KEYS 1
 
 #define EXTS_PER_STRIPE 4
 static void
@@ -529,7 +528,6 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						  false, false, 0);
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 			shard++;
-			print_message("lxz will fetch EC obj, shard %d\n", shard);
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
 						      &ctx->dkey, 1,
 						      DIOF_TO_SPEC_SHARD,
@@ -540,7 +538,6 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
 			assert_rc_equal(rc, 0);
-			print_message("lxz i %d, j %d, shard %d\n", i, j, shard);
 			/* verify no remaining replicas on parity tgt */
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 0);
 			task = NULL;

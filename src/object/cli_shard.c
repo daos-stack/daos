@@ -911,7 +911,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	reasb_req = rw_args->shard_args->reasb_req;
-	D_ERROR("lxz reasb_req %p\n", reasb_req);
 	is_ec_obj = reasb_req != NULL &&
 		     daos_oclass_is_ec(reasb_req->orr_oca);
 	if (rc != 0) {
@@ -1117,8 +1116,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					if (recov_list->re_nr == 0)
 						recov_list = NULL;
 				}
-				D_ERROR("lxz dump before merge, is ec %d =============\n", is_ec_obj);
-				daos_iom_dump(reply_maps);
 				if (is_ec_obj &&
 				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
 					rc = obj_ec_iom_merge(reasb_req,
@@ -1133,10 +1130,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				}
 				if (rc)
 					goto out;
-
-				/* lxz */
-				D_ERROR("lxz dump %d =============\n", i);
-				daos_iom_dump(&rw_args->maps[i]);
 			}
 		}
 	}

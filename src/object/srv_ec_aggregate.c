@@ -2151,15 +2151,12 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *agg_par
 	agg_entry->ae_dkey_hash = obj_dkey2hash(agg_entry->ae_oid.id_pub, &agg_entry->ae_dkey);
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 
-	D_ERROR("lxz agg_dkey EC obj "DF_UOID", dkey "DF_KEY"\n", DP_UOID(agg_entry->ae_oid), DP_KEY(&entry->ie_key));
 	rc = agg_obj_is_leader(info->api_pool, &agg_entry->ae_oca, &agg_entry->ae_oid,
 			       agg_entry->ae_dkey_hash, info->api_pool->sp_map_version);
-	D_ERROR("lxz agg_dkey EC obj "DF_UOID", dkey "DF_KEY"rc %d \n", DP_UOID(agg_entry->ae_oid), DP_KEY(&entry->ie_key), rc);
 	if (rc == 1) {
 		rc = agg_obj_dkey_shard_map_reset(agg_entry);
 		if (rc == 0) {
-			//D_DEBUG(DB_EPC, "oid:"DF_UOID" "DF_KEY" ec agg starting\n",
-			D_ERROR("lxz oid:"DF_UOID" "DF_KEY" ec agg starting\n",
+			D_DEBUG(DB_EPC, "oid:"DF_UOID" "DF_KEY" ec agg starting\n",
 				DP_UOID(agg_entry->ae_oid), DP_KEY(&agg_entry->ae_dkey));
 		} else {
 			D_ERROR(DF_UOID" "DF_KEY" agg_obj_dkey_shard_map_reset failed, "DF_RC"\n",
@@ -2290,7 +2287,6 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca, daos_unit_
 	int			 rc;
 
 	orig_shard = obj_ec_shard_rotate2orig(oca, dkey_hash, oid->id_shard);
-	D_ERROR("lxz uoid "DF_UOID" id_shard %d, dkey_hash "DF_U64", orig_shard %d\n", DP_UOID(*oid), oid->id_shard, dkey_hash, orig_shard);
 	/* Only last parity shard can be EC-AGG leader. */
 	if ((orig_shard % daos_oclass_grp_size(oca)) != (daos_oclass_grp_size(oca) - 1))
 		return 0;
@@ -2312,10 +2308,6 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca, daos_unit_
 	shard = pl_obj_get_shard(layout, idx);
 	if (shard->po_target != -1 && shard->po_shard != -1 && !shard->po_rebuilding) {
 		rc = (oid->id_shard == shard->po_shard) ? 1 : 0;
-		if (rc == 1)
-			D_ERROR("lxz is leader\n");
-		else
-			D_ERROR("lxz oid->id_shard %d, po_shard %d, orig_shard %d\n", oid->id_shard, shard->po_shard, orig_shard);
 	} else {
 		/* If last parity unavailable, then skip the object via returning -DER_STALE. */
 		rc = -DER_STALE;
@@ -2365,7 +2357,6 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	agg_reset_entry(&agg_param->ap_agg_entry, entry, &oca);
-	D_ERROR("lxz agg_object EC obj "DF_UOID"\n", DP_UOID(entry->ie_oid));
 
 out:
 	return rc;
