@@ -4156,7 +4156,8 @@ def run(wf, args):
             elif args.test == 'all':
                 fatal_errors.add_result(run_posix_tests(server, conf))
             elif args.test:
-                fatal_errors.add_result(run_posix_tests(server, conf, args.test))
+                for _ in range(args.count):
+                    fatal_errors.add_result(run_posix_tests(server, conf, args.test))
             else:
                 fatal_errors.add_result(run_posix_tests(server, conf))
                 fatal_errors.add_result(run_dfuse(server, conf))
@@ -4245,6 +4246,7 @@ def main():
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--class-name', default=None, help='class name to use for junit')
+    parser.add_argument('--count', type=int, default=1, help='Rep count for test')
     parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
