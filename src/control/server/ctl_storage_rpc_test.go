@@ -1074,12 +1074,11 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			// results of the start-up bdev scan from the control service storage
 			// provider into the engine's storage provider. The control service and
 			// each of the engines have distinct storage provider instances so cached
-			// cached results have to be explicitly shared so cache is available when
+			// cached results have to be explicitly shared so results are available when
 			// engines are up.
 
-			// This block mimics control service start-up and engine creation where
-			// cache is shared, Setup() runs discovery for nvme & scm.
-			cs.Setup()
+			// This block mimics control service start-up and engine creation where cache
+			// is shared to the engines from the base control service storage provider.
 			nvmeScanResp, err := cs.NvmeScan(storage.BdevScanRequest{})
 			if err != nil {
 				t.Fatal(err)
@@ -1091,7 +1090,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					cs.storage.Sys, // share system provider cfo
 					scm.NewMockProvider(log, tc.smbc, nil),
 					bdev.NewMockProvider(log, tc.bmbc))
-				// share bdev cache with control service
+				// share control service bdev cache with engine
 				sp.SetBdevCache(*nvmeScanResp)
 				ne := newTestEngine(log, false, sp)
 
@@ -1629,11 +1628,17 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			instances := cs.harness.Instances()
 			common.AssertEqual(t, len(tc.sMounts), len(instances), name)
 
-			// runs discovery for nvme & scm
-			cs.Setup()
+			// Mimic control service start-up and engine creation where cache is shared
+			// to the engines from the base control service storage provider.
+			nvmeScanResp, err := cs.NvmeScan(storage.BdevScanRequest{})
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			for i, e := range instances {
 				ei := e.(*EngineInstance)
+				ei.storage.SetBdevCache(*nvmeScanResp)
+
 				root := filepath.Dir(tc.sMounts[i])
 				if tc.scmMounted {
 					root = tc.sMounts[i]

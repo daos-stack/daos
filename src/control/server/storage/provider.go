@@ -346,8 +346,9 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		// Applying the range limits hotplug activity of engine to a ssd device set.
 
 		var begin, end uint8
-		if tier.Bdev.BusidRange != nil {
-			log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
+		if tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero() {
+			log.Debugf("received user-specified hotplug bus-id range %q",
+				tier.Bdev.BusidRange)
 			begin = tier.Bdev.BusidRange.LowAddress.Bus
 			end = tier.Bdev.BusidRange.HighAddress.Bus
 		} else {

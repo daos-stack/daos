@@ -35,10 +35,15 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
+func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
 	processFabricProvider(cfg)
-	err := cfg.Validate(ctx, log)
+
+	hpi, err := common.GetHugePageInfo()
 	if err != nil {
+		return nil, errors.Wrapf(err, "retrieve hugepage info")
+	}
+
+	if err := cfg.Validate(log, hpi.PageSizeKb, fis); err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
@@ -50,15 +55,11 @@ func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.
 		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
-		if err := ec.ValidateFabric(ctx, log, fis); err != nil {
-			return nil, err
-		}
-
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
 			return nil, err
 		}
 
-		if err := updateFabricEnvars(ctx, log, ec, fis); err != nil {
+		if err := updateFabricEnvars(log, ec, fis); err != nil {
 			return nil, errors.Wrap(err, "update engine fabric envars")
 		}
 	}
@@ -119,7 +120,7 @@ type server struct {
 	onShutdown       []func()
 }
 
-func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
+func newServer(log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, errors.Wrap(err, "get hostname")
@@ -214,9 +215,8 @@ func (srv *server) shutdown() {
 	}
 }
 
-// initNetwork resolves local address and starts TCP listener then calls
-// netInit to process network configuration.
-func (srv *server) initNetwork(ctx context.Context) error {
+// initNetwork resolves local address and starts TCP listener.
+func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
 
 	ctlAddr, listener, err := createListener(srv.cfg.ControlPort, net.ResolveTCPAddr, net.Listen)
@@ -225,19 +225,6 @@ func (srv *server) initNetwork(ctx context.Context) error {
 	}
 	srv.ctlAddr = ctlAddr
 	srv.listener = listener
-
-	return nil
-}
-
-func (srv *server) initStorage() error {
-	defer srv.logDuration(track("time to init storage"))
-
-	if err := prepBdevStorage(srv, iommuDetected(), common.GetHugePageInfo); err != nil {
-		return err
-	}
-
-	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
-	srv.ctlSvc.Setup()
 
 	return nil
 }
@@ -261,33 +248,30 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	return engine, nil
 }
 
-// addEngines creates and adds engine instances to harness then starts
-// goroutine to execute callbacks when all engines are started.
+// addEngines creates and adds engine instances to harness then starts goroutine to execute
+// callbacks when all engines are started.
 func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	// Store cached NVMe device details retrieved on start-up (before
-	// engines are started) so static details can be recovered by the engine
-	// storage provider(s) during scan even if devices are in use.
-	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{})
-	if err != nil {
-		srv.log.Errorf("nvme scan failed: %s", err)
-		nvmeScanResp = &storage.BdevScanResponse{}
+	// Allocate hugepages and rebind NVMe devices to userspace drivers.
+	if err := prepBdevStorage(srv, iommuDetected()); err != nil {
+		return err
 	}
-	if nvmeScanResp == nil {
-		return errors.New("nil nvme scan response received")
-	}
+
+	// Retrieve NVMe device details (before engines are started) so static details can be
+	// recovered by the engine storage provider(s) during scan even if devices are in use.
+	nvmeScanResp := scanBdevStorage(srv)
 
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "creating engine instances")
 		}
 
 		engine.storage.SetBdevCache(*nvmeScanResp)
 
-		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
+		registerEngineEventCallbacks(srv, engine, &allStarted)
 
 		if err := srv.harness.AddInstance(engine); err != nil {
 			return err
@@ -442,12 +426,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return errors.Wrap(err, "scan fabric")
 	}
 
-	faultDomain, err := processConfig(ctx, log, cfg, fiSet)
+	faultDomain, err := processConfig(log, cfg, fiSet)
 	if err != nil {
 		return err
 	}
 
-	srv, err := newServer(ctx, log, cfg, faultDomain)
+	srv, err := newServer(log, cfg, faultDomain)
 	if err != nil {
 		return err
 	}
@@ -461,11 +445,7 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return err
 	}
 
-	if err := srv.initNetwork(ctx); err != nil {
-		return err
-	}
-
-	if err := srv.initStorage(); err != nil {
+	if err := srv.initNetwork(); err != nil {
 		return err
 	}
 
