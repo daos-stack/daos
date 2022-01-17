@@ -24,7 +24,6 @@ class TestWithTelemetryBasic(TestWithTelemetry):
             "open_count": {},
             "create_count": {},
             "close_count": {},
-            "query_count": {},
             "destroy_count": {}}
         self.pool_leader_host = None
 
@@ -121,8 +120,6 @@ class TestWithTelemetryBasic(TestWithTelemetry):
                 data[host]["engine_pool_ops_cont_open"]
             self.metrics["create_count"][host] = \
                 data[host]["engine_pool_ops_cont_create"]
-            self.metrics["query_count"][host] = \
-                data[host]["engine_pool_ops_cont_query"]
             self.metrics["close_count"][host] = \
                 data[host]["engine_pool_ops_cont_close"]
             self.metrics["destroy_count"][host] = \
