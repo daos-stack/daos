@@ -59,7 +59,7 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
     this.nativeHdl = 0L;
     this.offset = offset;
     this.dataBuffer = dataBuffer;
-    byte[] dkeyBytes = DaosUtils.keyToBytes(dkey);
+    byte[] dkeyBytes = DaosUtils.keyToBytes8(dkey);
     byte[] akeyBytes = DaosUtils.keyToBytes(akey);
     // 8 for null native handle, 4 = 2 + 2 for lens,
     requestLen = 8 + dkeyBytes.length + akeyBytes.length + 4;
@@ -98,7 +98,7 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
   public void setDkey(String dkey) {
     checkReusable();
     checkState();
-    byte[] bytes = DaosUtils.keyToBytes(dkey, maxKeyLen);
+    byte[] bytes = DaosUtils.keyToBytes8(dkey, maxKeyLen);
     descBuffer.writerIndex(10); // 8 (native desc hdl) + 2 (max key len)
     descBuffer.writeShort(bytes.length);
     descBuffer.writeBytes(bytes);
