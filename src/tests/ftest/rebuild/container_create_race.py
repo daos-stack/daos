@@ -140,7 +140,7 @@ class RbldContainerCreate(IorTestBase):
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start.
-        self.log.info("..(3)Wait for rebuild to start for racecondition")
+        self.log.info("..(3)Wait for rebuild to start for race condition")
         self.pool.wait_for_rebuild(True, interval=1)
 
         # Race condition, create containers write and read during rebuild.
