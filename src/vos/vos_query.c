@@ -286,6 +286,14 @@ overlap_hi(struct evt_entry *nentry, struct evt_entry *pentry, bool *nrefresh, b
 	*nrefresh = true;
 }
 
+static inline void
+ent2recx(daos_recx_t *recx, const struct evt_entry *ent)
+{
+	recx->rx_idx = ent->en_sel_ext.ex_lo;
+	recx->rx_nr = ent->en_sel_ext.ex_hi - ent->en_sel_ext.ex_lo + 1;
+	D_DEBUG(DB_TRACE, "ec_recx size is "DF_X64"\n", recx->rx_idx + recx->rx_nr);
+}
+
 static bool
 find_answer(struct evt_entry *pentry, struct evt_entry *nentry, daos_recx_t *recx, bool *nrefresh,
 	    bool *prefresh, check_func start_chk, check_func after_chk,
@@ -293,15 +301,13 @@ find_answer(struct evt_entry *pentry, struct evt_entry *nentry, daos_recx_t *rec
 {
 	if (start_chk(pentry, nentry)) {
 		/** Use the adjusted parity extent */
-		recx->rx_idx = pentry->en_sel_ext.ex_lo;
-		recx->rx_nr = pentry->en_sel_ext.ex_hi - pentry->en_sel_ext.ex_lo + 1;
+		ent2recx(recx, pentry);
 		return true;
 	}
 
 	if (!bio_addr_is_hole(&nentry->en_addr)) {
 		/** Data entry is fine, it yields the same answer */
-		recx->rx_idx = nentry->en_sel_ext.ex_lo;
-		recx->rx_nr = nentry->en_sel_ext.ex_hi - nentry->en_sel_ext.ex_lo + 1;
+		ent2recx(recx, nentry);
 		return true;
 	}
 
@@ -315,8 +321,7 @@ find_answer(struct evt_entry *pentry, struct evt_entry *nentry, daos_recx_t *rec
 	if (pentry->en_epoch > nentry->en_epoch ||
 	    (pentry->en_epoch == nentry->en_epoch && pentry->en_minor_epc > nentry->en_minor_epc)) {
 		/** Parity is after the punch, so use the parity */
-		recx->rx_idx = pentry->en_sel_ext.ex_lo;
-		recx->rx_nr = pentry->en_sel_ext.ex_hi - pentry->en_sel_ext.ex_lo + 1;
+		ent2recx(recx, pentry);
 		return true;
 	}
 
@@ -433,13 +438,11 @@ query_ec_recx(struct open_query *query, daos_recx_t *recx)
 			}
 
 			/** There is no parity and the data entry isn't a hole, so return it */
-			recx->rx_idx = nentry.en_sel_ext.ex_lo;
-			recx->rx_nr = nentry.en_sel_ext.ex_hi - nentry.en_sel_ext.ex_lo + 1;
+			ent2recx(recx, &nentry);
 			break;
 		} else if (nrc == -DER_NONEXIST) {
 			/** Use the adjusted parity extent */
-			recx->rx_idx = pentry.en_sel_ext.ex_lo;
-			recx->rx_nr = pentry.en_sel_ext.ex_hi - pentry.en_sel_ext.ex_lo + 1;
+			ent2recx(recx, &pentry);
 			break;
 		}
 

@@ -16,7 +16,7 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-#define EC_DEBUG 0
+#define EC_DEBUG 1
 #define EC_REASB_TRACE 0
 
 #if EC_REASB_TRACE
