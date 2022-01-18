@@ -384,7 +384,7 @@ func TestServer_getNetDevClass(t *testing.T) {
 			WithLogFile("a").
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("a"),
 			).
@@ -395,7 +395,7 @@ func TestServer_getNetDevClass(t *testing.T) {
 			WithLogFile("b").
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("b"),
 			).
