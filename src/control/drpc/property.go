@@ -8,7 +8,7 @@ package drpc
 import "unsafe"
 
 /*
-#cgo LDFLAGS: -ldaos_common -lgurt
+#cgo LDFLAGS: -ldaos_common -lgurt -lcart
 #include <daos_prop.h>
 #include <daos_pool.h>
 #include <daos_prop.h>
