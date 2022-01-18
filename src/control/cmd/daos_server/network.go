@@ -36,7 +36,11 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 		return nil
 	}
 
-	hf := fabricInterfaceSetToHostFabric(results)
+	if cmd.FabricProvider == "" {
+		cmd.FabricProvider = cmd.config.Fabric.Provider
+	}
+
+	hf := fabricInterfaceSetToHostFabric(results, cmd.FabricProvider)
 	hfm := make(control.HostFabricMap)
 	if err := hfm.Add("localhost", hf); err != nil {
 		return err
@@ -51,7 +55,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 	return nil
 }
 
-func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet) *control.HostFabric {
+func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProvider string) *control.HostFabric {
 	hf := &control.HostFabric{}
 	for _, fiName := range fis.Names() {
 		fi, err := fis.GetInterface(fiName)
@@ -69,12 +73,14 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet) *control.H
 			name = fi.Name
 		}
 		for _, provider := range fi.Providers.ToSlice() {
-			hf.AddInterface(&control.HostFabricInterface{
-				Provider:    provider,
-				Device:      name,
-				NumaNode:    uint32(fi.NUMANode),
-				NetDevClass: fi.DeviceClass,
-			})
+			if filterProvider == "all" || strings.HasPrefix(provider, filterProvider) {
+				hf.AddInterface(&control.HostFabricInterface{
+					Provider:    provider,
+					Device:      name,
+					NumaNode:    uint32(fi.NUMANode),
+					NetDevClass: fi.DeviceClass,
+				})
+			}
 		}
 	}
 
