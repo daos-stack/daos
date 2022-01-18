@@ -2410,8 +2410,12 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_ec_pda,
 				   &value);
-		if (rc != 0)
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			val = DAOS_PROP_PO_EC_PDA_DEFAULT;
+		} else  if (rc != 0) {
 			D_GOTO(out, rc);
+		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_EC_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -2421,8 +2425,12 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_rp_pda,
 				   &value);
-		if (rc != 0)
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			val = DAOS_PROP_PO_RP_PDA_DEFAULT;
+		} else  if (rc != 0) {
 			D_GOTO(out, rc);
+		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_RP_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
