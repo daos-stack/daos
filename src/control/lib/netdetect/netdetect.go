@@ -762,6 +762,13 @@ func convertMercuryToLibFabric(provider string) (string, error) {
 		return "", errors.New("fabric provider was empty")
 	}
 
+	// automatically append rxm if not specified in yaml file
+	if provider == "ofi+tcp" {
+		provider = "ofi+tcp;ofi_rxm"
+	} else if provider == "ofi+verbs" {
+		provider = "ofi+verbs;ofi_rxm"
+	}
+
 	tmp := strings.Split(provider, ";")
 	for _, subProvider := range tmp {
 		libFabricProviderList += mercuryToLibFabric(subProvider) + ";"
