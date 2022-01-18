@@ -1658,7 +1658,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		const char *src_path,
 		const char *dst_path)
 {
-	int		rc;
+	int		rc = 0;
 	daos_size_t	len = 0;
 	char		symlink_value[PATH_MAX];
 
@@ -1666,25 +1666,22 @@ fs_copy_symlink(struct cmd_args_s *ap,
 	if (src_file_dfs->type == POSIX) {
 		len = readlink(src_path, symlink_value, (size_t)len);
 		if (len < 0) {
-			rc = daos_errno2der(errno);
-			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on readlink('%s')",
+			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on readlink('%s')",
 				      src_path);
-			D_GOTO(out_copy_symlink, rc);
+			D_GOTO(out_copy_symlink, rc = daos_errno2der(errno));
 		}
 	} else if (src_file_dfs->type == DAOS) {
 		rc = dfs_sys_readlink(src_file_dfs->dfs_sys, src_path, symlink_value, &len);
 		if (rc != 0) {
-			rc = daos_errno2der(rc);
-			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on dfs_sys_readlink('%s')",
+			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on dfs_sys_readlink('%s')",
 				      src_path);
-			D_GOTO(out_copy_symlink, rc);
+			D_GOTO(out_copy_symlink, rc = daos_errno2der(rc));
 		}
 		/*length of symlink_value includes the NULL terminator already.*/
 		len--;
 	} else {
-		rc = daos_errno2der(EINVAL);
 		DH_PERROR_DER(ap, rc, "unknown type for %s", src_path);
-		D_GOTO(out_copy_symlink, rc);
+		D_GOTO(out_copy_symlink, rc = -DER_INVAL);
 	}
 	symlink_value[len] = 0;
 
@@ -1692,28 +1689,26 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		rc = symlink(symlink_value, dst_path);
 		if ((rc != 0) && (errno == EEXIST)) {
 			D_WARN("Link %s exists.\n", dst_path);
-			rc = -DER_EXIST;
+			D_GOTO(out_copy_symlink, rc = -DER_EXIST);
 		} else if (rc != 0) {
-			rc = daos_errno2der(errno);
-			DH_PERROR_SYS(ap, rc, "fs_copy_symlink failed on symlink('%s')",
+			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on symlink('%s')",
 				      dst_path);
+			D_GOTO(out_copy_symlink, rc = daos_errno2der(errno));
 		}
 	} else if (dst_file_dfs->type == DAOS) {
 		rc = dfs_sys_symlink(dst_file_dfs->dfs_sys, symlink_value, dst_path);
 		if (rc == EEXIST) {
 			D_WARN("Link %s exists.\n", dst_path);
-			rc = -DER_EXIST;
+			D_GOTO(out_copy_symlink, rc = -DER_EXIST);
 		} else if (rc != 0) {
-			rc = daos_errno2der(rc);
-			DH_PERROR_SYS(ap, rc,
+			DH_PERROR_DER(ap, rc,
 				      "fs_copy_symlink failed on dfs_sys_readlink('%s')",
 				      dst_path);
-			D_GOTO(out_copy_symlink, rc);
+			D_GOTO(out_copy_symlink, rc = daos_errno2der(rc));
 		}
 	} else {
-		rc = daos_errno2der(EINVAL);
 		DH_PERROR_DER(ap, rc, "unknown type for %s", dst_path);
-		D_GOTO(out_copy_symlink, rc);
+		D_GOTO(out_copy_symlink, rc = -DER_INVAL);
 	}
 	
 out_copy_symlink:
@@ -1721,7 +1716,6 @@ out_copy_symlink:
 	dst_file_dfs->offset = 0;
 	return rc;
 }
-#undef SUB_STR_LEN
 
 static int
 fs_copy_dir(struct cmd_args_s *ap,
