@@ -717,6 +717,9 @@ dtx_19(void **state)
 
 	print_message("DTX resend during bulk data transfer - multiple reps\n");
 
+	/* Skip the test until DAOS-9658 resolved. */
+	skip();
+
 	if (!test_runable(arg, 2))
 		return;
 
