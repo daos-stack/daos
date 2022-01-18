@@ -696,14 +696,14 @@ def get_device_replacement(args):
     host_list = list(args.test_servers)
 
     # Separate any optional filter from the key
-    filter = None
+    dev_filter = None
     nvme_args = args.nvme.split(":")
     if len(nvme_args) > 1:
-        filter = nvme_args[1]
+        dev_filter = nvme_args[1]
 
     # First check for any VMD disks, if requested
     if nvme_args[0] in ["auto", "auto_vmd"]:
-        vmd_devices = auto_detect_devices(host_list, "NVMe", "5", filter)
+        vmd_devices = auto_detect_devices(host_list, "NVMe", "5", dev_filter)
         if vmd_devices:
             # Find the VMD controller for the matching VMD disks
             vmd_controllers = auto_detect_devices(host_list, "VMD", "4", None)
@@ -712,7 +712,7 @@ def get_device_replacement(args):
 
     # Second check for any non-VMD NVMe disks, if requested
     if nvme_args[0] in ["auto", "auto_nvme"]:
-        dev_list = auto_detect_devices(host_list, "NVMe", "4", filter)
+        dev_list = auto_detect_devices(host_list, "NVMe", "4", dev_filter)
         if dev_list:
             devices.extend(dev_list)
             device_types.append("NVMe")
@@ -728,14 +728,15 @@ def get_device_replacement(args):
     return ",".join(devices), "VMD" in device_types
 
 
-def auto_detect_devices(host_list, device_type, length, filter=None):
+def auto_detect_devices(host_list, device_type, length, device_filter=None):
     """Get a list of NVMe/VMD devices found on each specified host.
 
     Args:
         host_list (list): list of host on which to find the NVMe/VMD devices
         device_type (str): device type to find, e.g. 'NVMe' or 'VMD'
         length (str): number of digits to match in the first PCI domain number
-        filter (str, optional): optional filter to apply to device searching. Defaults to None.
+        device_filter (str, optional): optional filter to apply to device searching. Defaults to
+            None.
 
     Returns:
         list: A list of detected devices - empty if none found
@@ -754,8 +755,8 @@ def auto_detect_devices(host_list, device_type, length, filter=None):
             "/sbin/lspci -D",
             "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
             "grep -E 'Non-Volatile memory controller:'"]
-        if filter:
-            command_list.append("grep '{}'".format(filter))
+        if device_filter:
+            command_list.append("grep '{}'".format(device_filter))
     else:
         print("ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {}".format(device_type))
         sys.exit(1)
@@ -2216,8 +2217,10 @@ def main():
              "hosts - the optional '<filter>' can be used to limit auto-detected "
              "NVMe addresses, e.g. 'auto:Optane' for Intel Optane NVMe devices.  "
              "To limit the device detection to either VMD controller or NVMe "
-             "devices the 'auto_vmd' or 'auto_nvme[:<filter>]' keywords can be "
-             "used, respectively.")
+             "devices the 'auto_vmd[:filter]' or 'auto_nvme[:<filter>]' keywords "
+             "can be used, respectively.  When using 'filter' with VMD controllers, "
+             "the filter is applied to devices managed by the controller, therefore "
+             "only selecting controllers that manage the matching devices.")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",
