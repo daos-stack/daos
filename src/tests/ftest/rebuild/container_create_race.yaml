@@ -46,4 +46,4 @@ ior:
     transfersize_blocksize:
       1M:
         transfer_size: '1M'
-        block_size: '256M'
+        block_size: '128M'
