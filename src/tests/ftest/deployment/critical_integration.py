@@ -98,13 +98,14 @@ class CriticalIntegration(TestWithServers):
 
         dmg = self.get_dmg_command()
         rank_list = self.server_managers[0].get_host_ranks(self.hostlist_servers)
-        print("rank_list: {}".format(rank_list))
-
+        self.log.info("rank_list: %s", rank_list)
         for rank in rank_list:
             dmg.system_stop(ranks=rank)
-            time.sleep(5)
-            dmg.system_start(ranks=rank)
-            time.sleep(5)
-
+            if self.server_managers[0].check_rank_state(rank, "stopped", 5):
+                dmg.system_start(ranks=rank)
+                if not self.server_managers[0].check_rank_state(rank, "joined", 5):
+                    self.fail("Rank {} failed to restart".format(rank))
+            else:
+                self.fail("Rank {} failed to stop".format(rank))
         dmg.storage_scan()
         dmg.network_scan()
