@@ -146,7 +146,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithCrtTimeout(30).
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmMountPoint("/foo/bar"),
 		)
 	runner := NewRunner(log, cfg)

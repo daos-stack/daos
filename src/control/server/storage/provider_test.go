@@ -146,7 +146,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					NewTierConfig().
-						WithScmClass(ClassDcpm.String()).
+						WithStorageClass(ClassDcpm.String()).
 						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
 						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
 				},
@@ -165,11 +165,11 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					NewTierConfig().
-						WithScmClass(ClassDcpm.String()).
+						WithStorageClass(ClassDcpm.String()).
 						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
 						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
 					NewTierConfig().
-						WithBdevClass(ClassNvme.String()).
+						WithStorageClass(ClassNvme.String()).
 						WithBdevBusidRange("0x00-0x7f"),
 				},
 			},
@@ -187,11 +187,11 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					NewTierConfig().
-						WithScmClass(ClassDcpm.String()).
+						WithStorageClass(ClassDcpm.String()).
 						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
 						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
 					NewTierConfig().
-						WithBdevClass(ClassNvme.String()).
+						WithStorageClass(ClassNvme.String()).
 						WithBdevBusidRange("0x70-0x7f"),
 				},
 				EnableHotplug: true,
@@ -213,11 +213,11 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 			cfg: &Config{
 				Tiers: TierConfigs{
 					NewTierConfig().
-						WithScmClass(ClassDcpm.String()).
+						WithStorageClass(ClassDcpm.String()).
 						WithScmMountPoint(fmt.Sprintf("/mnt/daos0")).
 						WithScmDeviceList(fmt.Sprintf("/dev/pmem0")),
 					NewTierConfig().
-						WithBdevClass(ClassNvme.String()),
+						WithStorageClass(ClassNvme.String()),
 				},
 				EnableHotplug: true,
 			},
