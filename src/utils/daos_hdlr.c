@@ -43,6 +43,10 @@
 
 #define OID_ARR_SIZE 8
 
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
+
 struct file_dfs {
 	enum {POSIX, DAOS} type;
 	int fd;
@@ -1646,7 +1650,6 @@ out:
 	return rc;
 }
 
-#define SUB_STR_LEN 256
 static int
 fs_copy_symlink(struct cmd_args_s *ap,
 		struct file_dfs *src_file_dfs,
@@ -1657,9 +1660,9 @@ fs_copy_symlink(struct cmd_args_s *ap,
 {
 	int		rc;
 	daos_size_t	len = 0;
-	char		symlink_value[PATH_MAX-SUB_STR_LEN];
+	char		symlink_value[PATH_MAX];
 
-	len = PATH_MAX - SUB_STR_LEN - 1;
+	len = PATH_MAX - 1;
 	if (src_file_dfs->type == POSIX) {
 		len = readlink(src_path, symlink_value, (size_t)len);
 		if (len < 0) {
