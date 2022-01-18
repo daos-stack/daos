@@ -83,21 +83,21 @@ func LabelIsValid(label string) bool {
 
 func EcCellSizeIsValid(sz uint64) bool {
 	if sz > math.MaxUint32 {
-		return false;
+		return false
 	}
 	return bool(C.daos_ec_cs_valid((C.uint32_t(sz))))
 }
 
 func EcPdaIsValid(pda uint64) bool {
 	if pda > math.MaxUint32 {
-		return false;
+		return false
 	}
 	return bool(C.daos_ec_pda_valid((C.uint32_t(pda))))
 }
 
 func RpPdaIsValid(pda uint64) bool {
 	if pda > math.MaxUint32 {
-		return false;
+		return false
 	}
 	return bool(C.daos_rp_pda_valid((C.uint32_t(pda))))
 }
