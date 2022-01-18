@@ -2662,8 +2662,7 @@ class posix_tests():
         src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
         with open(join(src_dir.name, 'file'), 'w') as ofd:
             ofd.write('hello')
-        os.symlink(join(src_dir.name, 'file'), join(src_dir.name, 'file_s'))
-
+        os.symlink('file', join(src_dir.name, 'file_s'))
         cmd = ['filesystem',
                'copy',
                '--src',
