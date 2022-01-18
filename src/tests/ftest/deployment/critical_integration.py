@@ -5,8 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import time
-
 from general_utils import run_command, DaosTestError
 from ior_test_base import IorTestBase
 from apricot import TestWithServers
