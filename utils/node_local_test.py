@@ -4098,6 +4098,30 @@ def test_fi_get_attr(server, conf, wf):
     destroy_container(conf, pool, container)
     return rc
 
+def test_fi_cont_check(server, conf, wf):
+    """Run daos cont check with fi"""
+
+    pool = server.get_test_pool_id()
+
+    container = create_cont(conf, pool)
+
+    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'check',
+           pool,
+           container]
+
+    test_cmd = AllocFailTest(conf, 'cont-check', cmd)
+    test_cmd.wf = wf
+
+    test_cmd.check_daos_stderr = True
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = True
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
+    return rc
+
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection"""
 
@@ -4200,6 +4224,7 @@ def run(wf, args):
                 # Container attribute tests
 
                 # Tests work but report failures.
+                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
                 # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
                 # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
