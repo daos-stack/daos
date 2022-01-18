@@ -88,7 +88,7 @@ def base_setup(env, prereqs=None):
 
     if build_type != 'release':
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION':'1'})
-        env.AppendUnique(CPPDEFINES='DUSE_GOTO_LOGGING')
+        env.AppendUnique(CPPDEFINES='USE_GOTO_LOGGING')
 
     env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED':'0'})
 

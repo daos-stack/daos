@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -321,7 +321,7 @@ int : "%d",				\
 			char *__errcode = NULL;				\
 			int __rcs = -DER_INVAL;				\
 			if (maybe_derrcode(__rc)) {			\
-				__rcs = d_get_errstr((int)__rc, &__errcode); \
+				__rcs = d_get_errstr((intptr_t)__rc, &__errcode); \
 			}						\
 			snprintf(__result, 20, DG_FMT(__rc), __rc);	\
 			if (__rcs == -DER_SUCCESS) {			\
