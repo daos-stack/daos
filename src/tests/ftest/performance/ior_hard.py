@@ -39,7 +39,7 @@ class IorHard(PerformanceTestBase):
         self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*")
 
     def test_performance_ior_hard_dfuse_sx(self):
-        """Test Description: Run IOR Hard, dfuse, SX.
+        """Test Description: Run IOR Hard, POSIX dfuse, SX.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
@@ -49,7 +49,7 @@ class IorHard(PerformanceTestBase):
         self.run_performance_ior(namespace="/run/ior_dfuse_sx/*")
 
     def test_performance_ior_hard_dfuse_ec_16p2gx(self):
-        """Test Description: Run IOR Hard, dfuse, EC_16P2GX.
+        """Test Description: Run IOR Hard, POSIX dfuse, EC_16P2GX.
 
         :avocado: tags=all,manual
         :avocado: tags=hw,large
