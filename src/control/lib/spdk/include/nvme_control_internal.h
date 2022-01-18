@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2019-2021 Intel Corporation.
+* (C) Copyright 2019-2022 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
 */
@@ -123,18 +123,4 @@ _collect(struct ret_t *, data_copier, pci_getter, socket_id_getter);
  */
 struct ret_t *
 collect(void);
-
-/**
- * Deallocate return struct memory.
- *
- * \parm ret: A pointer to a return struct (ret_t).
- */
-void
-clean_ret(struct ret_t *);
-
-/**
- * Deallocate memory allocated in global ctrlr lists.
- */
-void
-clean_globals(void);
 #endif

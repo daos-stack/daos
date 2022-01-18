@@ -120,9 +120,9 @@ func ctrlrPCIAddresses(ctrlrs storage.NvmeControllers) []string {
 // Afterwards remove lockfile for each discovered device.
 func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
 	retPtr := C.nvme_discover()
-	defer C.nvme_cleanup(retPtr)
-
 	ctrlrs, err := collectCtrlrs(retPtr, "NVMe Discover(): C.nvme_discover")
+	C.nvme_clean_ret(retPtr)
+	C.nvme_clean_globals()
 
 	pciAddrs := ctrlrPCIAddresses(ctrlrs)
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
@@ -145,9 +145,9 @@ func resultPCIAddresses(results []*FormatResult) []string {
 // Afterwards remove lockfile for each formatted device.
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	retPtr := C.nvme_wipe_namespaces()
-	defer C.nvme_cleanup(retPtr)
-
 	results, err := collectFormatResults(retPtr, "NVMe Format(): C.nvme_wipe_namespaces()")
+	C.nvme_clean_ret(retPtr)
+	C.nvme_clean_globals()
 
 	pciAddrs := resultPCIAddresses(results)
 	log.Debugf("formatted nvme ssds: %v", pciAddrs)

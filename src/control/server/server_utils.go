@@ -43,16 +43,30 @@ const (
 	scanMinHugePageCount = 128
 )
 
-func cfgHasBdevs(cfg *config.Server) bool {
-	for _, engineCfg := range cfg.Engines {
-		for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
-			if len(bc.Bdev.DeviceList) > 0 {
-				return true
-			}
+func engineCfgGetBdevs(engineCfg *engine.Config) []string {
+	bdevs := []string{}
+	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
+		if bc.Class != storage.ClassNvme {
+			// don't scan if any tier is using emulated NVMe
+			return []string{}
 		}
+		bdevs = append(bdevs, bc.Bdev.DeviceList...)
 	}
 
-	return false
+	return bdevs
+}
+
+func cfgGetBdevs(cfg *config.Server) []string {
+	bdevs := []string{}
+	for _, engineCfg := range cfg.Engines {
+		bdevs = append(bdevs, engineCfgGetBdevs(engineCfg)...)
+	}
+
+	return bdevs
+}
+
+func cfgHasBdevs(cfg *config.Server) bool {
+	return len(cfgGetBdevs(cfg)) != 0
 }
 
 func cfgGetReplicas(cfg *config.Server, resolver resolveTCPFn) ([]*net.TCPAddr, error) {
@@ -166,34 +180,7 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 	return nodes
 }
 
-// Update memory related config values to be passed to engine and validate minimums are met.
-func updateMemValues(log logging.Logger, hpi *common.HugePageInfo, engineCfgs []*engine.Config) error {
-	// Calculate mem_size per I/O engine (in MB)
-	pageSizeMb := hpi.PageSizeKb >> 10
-	memSizeMb := (hpi.Free / len(engineCfgs)) * pageSizeMb
-	log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeMb, pageSizeMb)
-
-	for _, engineCfg := range engineCfgs {
-		if engineCfg.TargetCount == 0 {
-			// should have already been validated but ensure no divide by zero
-			return errors.Errorf("engine has zero target count")
-		}
-
-		engineCfg.MemSize = memSizeMb
-		// Pass hugepage size, do not assume 2MB is used
-		engineCfg.HugePageSz = pageSizeMb
-
-		// Warn if hugepages are not enough to sustain average I/O workload (~1GB).
-		minSizeMbPerTarget := common.MinTargetHugePageSize >> 20 // B to MiB
-		if (engineCfg.MemSize / engineCfg.TargetCount) < minSizeMbPerTarget {
-			log.Errorf("Not enough hugepages are allocated!")
-		}
-	}
-
-	return nil
-}
-
-func prepBdevStorage(srv *server, iommuEnabled bool, getHugePageInfo common.GetHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	hasBdevs := cfgHasBdevs(srv.cfg)
 
 	if hasBdevs {
@@ -265,24 +252,61 @@ func prepBdevStorage(srv *server, iommuEnabled bool, getHugePageInfo common.GetH
 		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}
 
+	return nil
+}
+
+// scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
+func scanBdevStorage(srv *server) *storage.BdevScanResponse {
+	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
+		DeviceList: cfgGetBdevs(srv.cfg),
+	})
+	if err != nil {
+		srv.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan Failed"))
+		return &storage.BdevScanResponse{}
+	}
+
+	return nvmeScanResp
+}
+
+// Minimum recommended number of hugepages has already been calculated and set in config so verify
+// we have enough free hugepage memory to satisfy this requirement before setting mem_size and
+// hugepage_size parameters for engine.
+func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.GetHugePageInfoFn) error {
+	ei.RLock()
+	engineCfg := ei.runner.GetConfig()
+	engineIdx := engineCfg.Index
+	if len(engineCfgGetBdevs(engineCfg)) == 0 {
+		srv.log.Debugf("skipping mem check on engine %d, no bdevs", engineIdx)
+		ei.RUnlock()
+		return nil
+	}
+	ei.RUnlock()
+
 	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
 	hpi, err := getHugePageInfo()
 	if err != nil {
 		return err
 	}
-	expFree := prepReq.HugePageCount // no nvme case
-	if hasBdevs {
-		expFree = srv.cfg.NrHugepages // total for all engines
-	}
-	if hpi.Free < expFree {
-		return FaultInsufficientFreeHugePages(hpi.Free, expFree)
-	}
 
-	if len(srv.cfg.Engines) == 0 {
-		return nil // skip mem size check
-	}
+	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
+	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
+	pageSizeMb := hpi.PageSizeKb >> 10
+	memSizeReqMb := nrPagesRequired * pageSizeMb
+	memSizeFreeMb := hpi.Free * pageSizeMb
 
-	return updateMemValues(srv.log, hpi, srv.cfg.Engines)
+	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
+	if memSizeFreeMb < memSizeReqMb {
+		return FaultInsufficientFreeHugePageMem(int(engineIdx), memSizeReqMb, memSizeFreeMb,
+			nrPagesRequired, hpi.Free)
+	}
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeReqMb, pageSizeMb)
+
+	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info. mem_size set
+	// to 80% of available memory to take into account any overhead when preallocating in DPDK.
+	ei.setMemSize(memSizeReqMb)
+	ei.setHugePageSz(pageSizeMb)
+
+	return nil
 }
 
 func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
@@ -301,23 +325,29 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-func registerEngineEventCallbacks(engine *EngineInstance, hostname string, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
+func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname))
+	engine.OnInstanceExit(publishInstanceExitFn(srv.pubSub.Publish, srv.hostname))
 
 	// Register callback to publish engine format requested events.
-	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname))
+	engine.OnAwaitFormat(publishFormatRequiredFn(srv.pubSub.Publish, srv.hostname))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {
-		// Indicate that engine has been started, only do this
-		// the first time that the engine starts as shared
-		// memory persists between engine restarts.
+		// Indicate that engine has been started, only do this the first time that the
+		// engine starts as shared memory persists between engine restarts.
 		onceReady.Do(func() {
 			allStarted.Done()
 		})
 
 		return nil
+	})
+
+	// Register callback to update engine cfg mem_size after format.
+	engine.OnStorageReady(func(_ context.Context) error {
+		// Retrieve up-to-date hugepage info to evaluate and assign available memory.
+		return errors.Wrap(updateMemValues(srv, engine, common.GetHugePageInfo),
+			"updating engine memory parameters")
 	})
 }
 

@@ -229,19 +229,6 @@ func (srv *server) initNetwork() error {
 	return nil
 }
 
-func (srv *server) initStorage() error {
-	defer srv.logDuration(track("time to init storage"))
-
-	if err := prepBdevStorage(srv, iommuDetected(), common.GetHugePageInfo); err != nil {
-		return err
-	}
-
-	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
-	srv.ctlSvc.Setup()
-
-	return nil
-}
-
 func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
 	// Closure to join an engine instance to a system using control API.
 	joinFn := func(ctxIn context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
@@ -261,33 +248,30 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	return engine, nil
 }
 
-// addEngines creates and adds engine instances to harness then starts
-// goroutine to execute callbacks when all engines are started.
+// addEngines creates and adds engine instances to harness then starts goroutine to execute
+// callbacks when all engines are started.
 func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
-	// Store cached NVMe device details retrieved on start-up (before
-	// engines are started) so static details can be recovered by the engine
-	// storage provider(s) during scan even if devices are in use.
-	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{})
-	if err != nil {
-		srv.log.Errorf("nvme scan failed: %s", err)
-		nvmeScanResp = &storage.BdevScanResponse{}
+	// Allocate hugepages and rebind NVMe devices to userspace drivers.
+	if err := prepBdevStorage(srv, iommuDetected()); err != nil {
+		return err
 	}
-	if nvmeScanResp == nil {
-		return errors.New("nil nvme scan response received")
-	}
+
+	// Retrieve NVMe device details (before engines are started) so static details can be
+	// recovered by the engine storage provider(s) during scan even if devices are in use.
+	nvmeScanResp := scanBdevStorage(srv)
 
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "creating engine instances")
 		}
 
 		engine.storage.SetBdevCache(*nvmeScanResp)
 
-		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
+		registerEngineEventCallbacks(srv, engine, &allStarted)
 
 		if err := srv.harness.AddInstance(engine); err != nil {
 			return err
@@ -462,10 +446,6 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 
 	if err := srv.initNetwork(); err != nil {
-		return err
-	}
-
-	if err := srv.initStorage(); err != nil {
 		return err
 	}
 

@@ -118,7 +118,7 @@ const (
 	ServerPoolInvalidRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugePages
+	ServerInsufficientFreeHugePageMem
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped

@@ -115,10 +115,10 @@ bio_spdk_env_init(void)
 	 */
 	if (nvme_glb.bd_numa_node == 0)
 		n = snprintf(sock_mem_str, sizeof(sock_mem_str), " --socket-mem %d,0",
-			     nvme_glb.bd_mem_size);
+			     (nvme_glb.bd_mem_size * 80) / 100);
 	else if (nvme_glb.bd_numa_node == 1)
 		n = snprintf(sock_mem_str, sizeof(sock_mem_str), " --socket-mem 0,%d",
-			     nvme_glb.bd_mem_size);
+			     (nvme_glb.bd_mem_size * 80) / 100);
 
 	buflen = strlen(dpdk_cli_override_opts) + n + 1;
 	D_ALLOC(buf, buflen);

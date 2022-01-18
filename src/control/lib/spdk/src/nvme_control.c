@@ -471,13 +471,6 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	return ret;
 }
 
-void
-nvme_cleanup(struct ret_t *ret)
-{
-	clean_ret(ret);
-	clean_globals();
-}
-
 static int
 is_addr_in_allowlist(char *pci_addr, const struct spdk_pci_addr *allowlist,
 		     int num_allowlist_devices)

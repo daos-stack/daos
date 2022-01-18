@@ -404,11 +404,15 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 		ctrlr_tmp->next = ret->ctrlrs;
 		ret->ctrlrs = ctrlr_tmp;
 
+//		if (spdk_nvme_detach(ctrlr_entry->ctrlr) < 0)
+//			fprintf(stderr, "detach controller failed");
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
 	return;
 fail:
+	if (spdk_nvme_detach(ctrlr_entry->ctrlr) < 0)
+		fprintf(stderr, "detach controller failed");
 	ret->rc = rc;
 	if (ret->rc == 0)
 		/* Catch unexpected failures */
@@ -431,7 +435,7 @@ collect(void)
 }
 
 void
-clean_ret(struct ret_t *ret)
+nvme_clean_ret(struct ret_t *ret)
 {
 	struct ctrlr_t		*cnext;
 	struct ns_t		*nnext;
@@ -461,7 +465,7 @@ clean_ret(struct ret_t *ret)
 }
 
 void
-clean_globals(void)
+nvme_clean_globals(void)
 {
 	struct ns_entry		*nentry;
 	struct ctrlr_entry	*centry, *cnext;
@@ -476,8 +480,6 @@ clean_globals(void)
 		}
 		if (centry->health)
 			free(centry->health);
-		if (spdk_nvme_detach(centry->ctrlr) < 0)
-			fprintf(stderr, "detach controller failed");
 
 		cnext = centry->next;
 		free(centry);

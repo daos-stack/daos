@@ -278,8 +278,8 @@ setup(void **state)
 static int
 teardown(void **state)
 {
-	clean_ret(test_ret);
-	clean_globals();
+	nvme_clean_ret(test_ret);
+	nvme_clean_globals();
 
 	return 0;
 }

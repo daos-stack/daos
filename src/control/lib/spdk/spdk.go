@@ -118,7 +118,7 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 
 	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(opts.PCIAllowList.Len()),
 		cAllowList)
-	defer C.nvme_cleanup(retPtr)
+	defer C.nvme_clean_ret(retPtr)
 
 	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
 		return err
