@@ -36,6 +36,7 @@ import (
 )
 
 func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
+	processFabricProvider(cfg)
 	err := cfg.Validate(ctx, log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
@@ -75,6 +76,21 @@ func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.
 	log.Debugf("fault domain: %s", faultDomain.String())
 
 	return faultDomain, nil
+}
+
+func processFabricProvider(cfg *config.Server) {
+	if shouldAppendRXM(cfg.Fabric.Provider) {
+		cfg.WithFabricProvider(cfg.Fabric.Provider + ";ofi_rxm")
+	}
+}
+
+func shouldAppendRXM(provider string) bool {
+	for _, rxmProv := range []string{"ofi+verbs", "ofi+tcp"} {
+		if rxmProv == provider {
+			return true
+		}
+	}
+	return false
 }
 
 // server struct contains state and components of DAOS Server.

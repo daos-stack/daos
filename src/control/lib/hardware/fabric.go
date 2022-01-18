@@ -268,10 +268,7 @@ func (s *FabricInterfaceSet) GetInterfaceOnOSDevice(osDev string, provider strin
 
 	for _, fi := range fis {
 		for prov := range fi.Providers {
-			// NB: We ignore the helpers (such as ofi_rxm) that are appended to some
-			// providers when trying to find a match.
-			provParts := strings.Split(prov, ";")
-			if prov == provider || provParts[0] == provider {
+			if prov == provider {
 				return fi, nil
 			}
 		}
@@ -693,9 +690,8 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 		}
 	}
 
-	// TODO KJ: REMOVE
-	s.log.Errorf("discovered %d fabric interfaces:", result.NumFabricInterfaces())
-	s.log.Error(result.String())
+	s.log.Debugf("discovered %d fabric interfaces:\n%s",
+		result.NumFabricInterfaces(), result.String())
 
 	return result, nil
 }

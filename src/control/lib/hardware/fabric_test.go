@@ -646,38 +646,12 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnOSDevice(t *testing.T) {
 				Providers: common.NewStringSet("p3"),
 			},
 		},
-		"ignore provider helpers if not specified": {
-			fis: NewFabricInterfaceSet(
-				&FabricInterface{
-					Name:      "test0",
-					OSDevice:  "os_test0",
-					Providers: common.NewStringSet("p1", "p2"),
-				},
-				&FabricInterface{
-					Name:      "test1",
-					OSDevice:  "os_test0",
-					Providers: common.NewStringSet("p3;h1"),
-				},
-				&FabricInterface{
-					Name:      "test2",
-					OSDevice:  "os_test2",
-					Providers: common.NewStringSet("p4"),
-				},
-			),
-			osDev:    "os_test0",
-			provider: "p3",
-			expResult: &FabricInterface{
-				Name:      "test1",
-				OSDevice:  "os_test0",
-				Providers: common.NewStringSet("p3;h1"),
-			},
-		},
 		"provider helper specified, success": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
 					Name:      "test0",
 					OSDevice:  "os_test0",
-					Providers: common.NewStringSet("p1", "p2"),
+					Providers: common.NewStringSet("p1", "p2", "p3"),
 				},
 				&FabricInterface{
 					Name:      "test1",
@@ -708,7 +682,7 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnOSDevice(t *testing.T) {
 				&FabricInterface{
 					Name:      "test1",
 					OSDevice:  "os_test0",
-					Providers: common.NewStringSet("p3;h1"),
+					Providers: common.NewStringSet("p3;h1", "p3"),
 				},
 				&FabricInterface{
 					Name:      "test2",
