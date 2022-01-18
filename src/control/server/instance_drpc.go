@@ -231,8 +231,7 @@ func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdD
 			return false, nil
 		}
 
-		return false, errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(),
-			ctrlr.PciAddr)
+		return false, errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(), smdDev.TrAddr)
 	}
 
 	// populate space usage for each smd device from health stats
