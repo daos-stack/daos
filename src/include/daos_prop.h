@@ -90,12 +90,12 @@ enum daos_pool_props {
  * more than 3 replicas, DAOS will place three replicas within a PD
  * and switch to another PD.
  */
-#define DAOS_PROP_PO_EC_PDA_DEFAULT	1
+#define DAOS_PROP_PO_RP_PDA_DEFAULT	3
 /**
  * the placement algorithm always tries to scatter shards of EC
  * object to different PDs.
  */
-#define DAOS_PROP_PO_RP_PDA_DEFAULT	3
+#define DAOS_PROP_PO_EC_PDA_DEFAULT	1
 
 /**
  * Number of pool property types
