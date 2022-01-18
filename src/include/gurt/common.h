@@ -313,17 +313,18 @@ int : "%d",				\
 				struct crt_ivns_internal *  : "%p",	\
 				d_rank_list_t *  : "%p")
 
+#define GOTO_MSG_LEN 21
+
 #define D_GOTO(label, rc)						\
 	do {								\
 		__typeof__(rc) __rc = (rc);				\
 		if (D_LOG_ENABLED(DB_GOTO)) {				\
-			char __result[20] = {0};			\
+			char __result[GOTO_MSG_LEN] = {0};		\
 			char *__errcode = NULL;				\
 			int __rcs = -DER_INVAL;				\
-			if (maybe_derrcode(__rc)) {			\
+			if (maybe_derrcode(__rc))			\
 				__rcs = d_get_errstr((intptr_t)__rc, &__errcode); \
-			}						\
-			snprintf(__result, 20, DG_FMT(__rc), __rc);	\
+			snprintf(__result, GOTO_MSG_LEN, DG_FMT(__rc), __rc); \
 			if (__rcs == -DER_SUCCESS) {			\
 				D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s': %s\n", __result, __errcode); \
 			} else {					\
