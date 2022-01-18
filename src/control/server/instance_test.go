@@ -39,7 +39,7 @@ var (
 func getTestEngineInstance(log logging.Logger) *EngineInstance {
 	cfg := engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
-			WithScmClass("ram").
+			WithStorageClass("ram").
 			WithScmMountPoint("/foo/bar"),
 	)
 	runner := engine.NewRunner(log, cfg)
