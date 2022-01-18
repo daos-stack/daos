@@ -6,7 +6,6 @@
 /**
  * Dynamic group testing for primary and secondary groups
  */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -17,6 +16,12 @@
 #include <cart/api.h>
 
 #include "crt_utils.h"
+
+/*
+ * By default expect RPCs to finish in 10 seconds; increase timeout for
+ * when running under the valgrind
+ */
+static int g_exp_rpc_timeout = 10;
 
 #define MY_BASE 0x010000000
 #define MY_VER  0
@@ -309,12 +314,20 @@ int main(int argc, char **argv)
 	sem_t			sem;
 	int			tag;
 	int			rc;
+	int			num_attach_retries = 20;
 
 	env_self_rank = getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
 
+	/* When under valgrind bump expected timeouts to 60 seconds */
+	if (D_ON_VALGRIND) {
+		DBG_PRINT("Valgrind env detected. bumping timeouts\n");
+		g_exp_rpc_timeout = 60;
+		num_attach_retries = 60;
+	}
+
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	crtu_test_init(my_rank, 20, true, true);
+	crtu_test_init(my_rank, num_attach_retries, true, true);
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -578,7 +591,7 @@ int main(int argc, char **argv)
 				D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 				assert(0);
 			}
-			crtu_sem_timedwait(&sem, 10, __LINE__);
+			crtu_sem_timedwait(&sem, g_exp_rpc_timeout, __LINE__);
 			DBG_PRINT("RPC to rank=%d finished\n", rank);
 		}
 	}
@@ -601,7 +614,7 @@ int main(int argc, char **argv)
 		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 		assert(0);
 	}
-	crtu_sem_timedwait(&sem, 10, __LINE__);
+	crtu_sem_timedwait(&sem, g_exp_rpc_timeout, __LINE__);
 	DBG_PRINT("CORRPC to secondary group finished\n");
 
 	/* Send shutdown RPC to all nodes except for self */
@@ -631,7 +644,7 @@ int main(int argc, char **argv)
 			D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 			assert(0);
 		}
-		crtu_sem_timedwait(&sem, 10, __LINE__);
+		crtu_sem_timedwait(&sem, g_exp_rpc_timeout, __LINE__);
 	}
 	D_FREE(rank_list->rl_ranks);
 	D_FREE(rank_list);
@@ -660,7 +673,7 @@ int main(int argc, char **argv)
 	}
 
 	for (i = 0; i < 10; i++) {
-		rc = asprintf(&uris[i], "ofi+sockets://127.0.0.1:%d",
+		rc = asprintf(&uris[i], "ofi+tcp;ofi_rxm://127.0.0.1:%d",
 				10000 + i);
 		if (rc == -1) {
 			D_ERROR("asprintf() failed\n");

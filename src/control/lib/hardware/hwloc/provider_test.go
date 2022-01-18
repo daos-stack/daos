@@ -37,18 +37,9 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 					0: hardware.MockNUMANode(0, 24).
 						WithPCIBuses(
 							[]*hardware.PCIBus{
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:00:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:02:00.0"),
-								},
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:17:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:18:00.0"),
-								},
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:3a:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:3e:00.0"),
-								},
+								hardware.NewPCIBus(0, 0, 2),
+								hardware.NewPCIBus(0, 0x17, 0x18),
+								hardware.NewPCIBus(0, 0x3a, 0x3e),
 							},
 						).
 						WithDevices(
@@ -56,32 +47,32 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:    "ib0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:18:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 								},
 								{
 									Name:    "hfi1_0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: *common.MustNewPCIAddress("0000:18:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 								},
 								{
 									Name:    "eth0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:3d:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.0"),
 								},
 								{
 									Name:    "i40iw1",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: *common.MustNewPCIAddress("0000:3d:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.0"),
 								},
 								{
 									Name:    "eth1",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:3d:00.1"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
 								{
 									Name:    "i40iw0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: *common.MustNewPCIAddress("0000:3d:00.1"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
 							},
 						),
@@ -96,22 +87,10 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 					0: hardware.MockNUMANode(0, 24).
 						WithPCIBuses(
 							[]*hardware.PCIBus{
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:00:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:02:00.0"),
-								},
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:17:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:18:00.0"),
-								},
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:3a:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:3e:00.0"),
-								},
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:5d:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:5f:00.0"),
-								},
+								hardware.NewPCIBus(0, 0, 2),
+								hardware.NewPCIBus(0, 0x17, 0x18),
+								hardware.NewPCIBus(0, 0x3a, 0x3e),
+								hardware.NewPCIBus(0, 0x5d, 0x5f),
 							},
 						).
 						WithDevices(
@@ -119,42 +98,39 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:    "ib0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:18:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 								},
 								{
 									Name:    "hfi1_0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: *common.MustNewPCIAddress("0000:18:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 								},
 								{
 									Name:    "eth0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:3d:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.0"),
 								},
 								{
 									Name:    "i40iw1",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: *common.MustNewPCIAddress("0000:3d:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.0"),
 								},
 								{
 									Name:    "eth1",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:3d:00.1"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
 								{
 									Name:    "i40iw0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: *common.MustNewPCIAddress("0000:3d:00.1"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
 							},
 						),
 					1: hardware.MockNUMANode(1, 24, 24).
 						WithPCIBuses(
 							[]*hardware.PCIBus{
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:ae:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:af:00.0"),
-								},
+								hardware.NewPCIBus(0, 0xae, 0xaf),
 							},
 						).
 						WithDevices(
@@ -162,12 +138,12 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:    "ib1",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:af:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:af:00.0"),
 								},
 								{
 									Name:    "hfi1_1",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: *common.MustNewPCIAddress("0000:af:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:af:00.0"),
 								},
 							},
 						),
@@ -181,10 +157,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 					0: hardware.MockNUMANode(0, 8).
 						WithPCIBuses(
 							[]*hardware.PCIBus{
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:00:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:00:00.0"),
-								},
+								hardware.NewPCIBus(0, 0, 0),
 							},
 						),
 					1: hardware.MockNUMANode(1, 8, 8),
@@ -198,10 +171,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 					0: hardware.MockNUMANode(0, 8).
 						WithPCIBuses(
 							[]*hardware.PCIBus{
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:00:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:07:00.0"),
-								},
+								hardware.NewPCIBus(0, 0, 7),
 							},
 						).
 						WithDevices(
@@ -209,32 +179,29 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:    "ib0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:02:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:02:00.0"),
 								},
 								{
 									Name:    "enp2s0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:02:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:02:00.0"),
 								},
 								{
 									Name:    "mlx4_0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: *common.MustNewPCIAddress("0000:02:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:02:00.0"),
 								},
 								{
 									Name:    "enp6s0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:06:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:06:00.0"),
 								},
 							},
 						),
 					1: hardware.MockNUMANode(1, 8, 8).
 						WithPCIBuses(
 							[]*hardware.PCIBus{
-								{
-									LowAddress:  *common.MustNewPCIAddress("0000:80:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:84:00.0"),
-								},
+								hardware.NewPCIBus(0, 0x80, 0x84),
 							},
 						).
 						WithDevices(
@@ -242,17 +209,17 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 								{
 									Name:    "ib1",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:83:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:83:00.0"),
 								},
 								{
 									Name:    "ib2",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: *common.MustNewPCIAddress("0000:83:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:83:00.0"),
 								},
 								{
 									Name:    "mlx4_1",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: *common.MustNewPCIAddress("0000:83:00.0"),
+									PCIAddr: *hardware.MustNewPCIAddress("0000:83:00.0"),
 								},
 							},
 						),
@@ -267,14 +234,8 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 						node := hardware.MockNUMANode(0, 4).
 							WithPCIBuses(
 								[]*hardware.PCIBus{
-									{
-										LowAddress:  *common.MustNewPCIAddress("0000:00:00.0"),
-										HighAddress: *common.MustNewPCIAddress("0000:03:00.0"),
-									},
-									{
-										LowAddress:  *common.MustNewPCIAddress("0000:17:00.0"),
-										HighAddress: *common.MustNewPCIAddress("0000:18:00.0"),
-									},
+									hardware.NewPCIBus(0, 0, 3),
+									hardware.NewPCIBus(0, 0x17, 0x18),
 								},
 							).
 							WithDevices(
@@ -282,12 +243,12 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 									{
 										Name:    "ib0",
 										Type:    hardware.DeviceTypeNetInterface,
-										PCIAddr: *common.MustNewPCIAddress("0000:18:00.0"),
+										PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 									},
 									{
 										Name:    "hfi1_0",
 										Type:    hardware.DeviceTypeOFIDomain,
-										PCIAddr: *common.MustNewPCIAddress("0000:18:00.0"),
+										PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 									},
 								},
 							)

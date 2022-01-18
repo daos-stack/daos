@@ -245,7 +245,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	uint64_t		*snapshots = NULL;
 	int			snapshots_nr;
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
-	bool			full_scan = false;
+	uint32_t		flags = 0;
 	int			i, rc = 0;
 
 	/* Check if it's ok to start aggregation in every 2 seconds */
@@ -260,7 +260,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		 * aggregation, let's restart from 0.
 		 */
 		epoch_min = 0;
-		full_scan = true;
+		flags |= VOS_AGG_FL_FORCE_SCAN;
 		D_DEBUG(DB_EPC, "change hlc "DF_X64" > full "DF_X64"\n",
 			change_hlc, param->ap_full_scan_hlc);
 	} else {
@@ -373,7 +373,8 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-		rc = agg_cb(cont, &epoch_range, full_scan, param, msecs);
+		flags |= VOS_AGG_FL_FORCE_MERGE;
+		rc = agg_cb(cont, &epoch_range, flags, param, msecs);
 		if (rc)
 			D_GOTO(free, rc);
 		epoch_range.epr_lo = epoch_range.epr_hi + 1;
@@ -388,7 +389,9 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-	rc = agg_cb(cont, &epoch_range, full_scan, param, msecs);
+	if (dss_xstream_is_busy())
+		flags &= ~VOS_AGG_FL_FORCE_MERGE;
+	rc = agg_cb(cont, &epoch_range, flags, param, msecs);
 out:
 	if (rc == 0 && epoch_min == 0)
 		param->ap_full_scan_hlc = hlc;
@@ -449,11 +452,11 @@ out:
 
 static int
 cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		      bool full_scan, struct agg_param *param, uint64_t *msecs)
+		      uint32_t flags, struct agg_param *param, uint64_t *msecs)
 {
 	int rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, full_scan);
+	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
 
 	/* Suppress csum error and continue on other epoch ranges */
 	if (rc == -DER_CSUM)
@@ -2184,9 +2187,9 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	struct oid_iv_range		rg;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": oid alloc: num_oids="DF_U64"\n",
-		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 in->num_oids);
+	D_DEBUG(DB_MD, DF_CONT": oid alloc: num_oids="DF_U64"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		in->num_oids);
 
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
@@ -2204,6 +2207,9 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 
 	out->oid = rg.oid;
 
+	D_DEBUG(DB_MD, DF_CONT": allocate "DF_X64"/"DF_U64"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		rg.oid, rg.num_oids);
 out:
 	out->coao_op.co_rc = rc;
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",

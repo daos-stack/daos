@@ -24,17 +24,13 @@ struct crt_na_dict crt_na_dict[] = {
 	}, {
 		.nad_type	= CRT_NA_OFI_SOCKETS,
 		.nad_str	= "ofi+sockets",
+		.nad_alt_str	= "ofi+socket",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
 		.nad_type	= CRT_NA_OFI_VERBS_RXM,
 		.nad_str	= "ofi+verbs;ofi_rxm",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = true,
-	}, {
-	/* verbs is not supported. Keep entry in order to print warning */
-		.nad_type	= CRT_NA_OFI_VERBS,
-		.nad_str	= "ofi+verbs",
+		.nad_alt_str	= "ofi+verbs",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
@@ -50,6 +46,7 @@ struct crt_na_dict crt_na_dict[] = {
 	}, {
 		.nad_type	= CRT_NA_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
+		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
@@ -104,7 +101,9 @@ crt_prov_str_to_na_type(const char *prov_str)
 	int i;
 
 	for (i = 0; i < CRT_NA_OFI_COUNT; i++) {
-		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0)
+		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
+		    (crt_na_dict[i].nad_alt_str &&
+		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
 			return crt_na_dict[i].nad_type;
 	}
 
@@ -893,7 +892,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 
-	RPC_TRACE(DB_TRACE, rpc_priv,
+	RPC_TRACE(DB_ALL, rpc_priv,
 		  "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);

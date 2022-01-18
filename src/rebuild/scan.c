@@ -512,7 +512,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	oc_attr = daos_oclass_attr_find(oid.id_pub, NULL, NULL);
+	oc_attr = daos_oclass_attr_find(oid.id_pub, NULL);
 	if (oc_attr == NULL) {
 		D_INFO(DF_UUID" skip invalid "DF_UOID"\n", DP_UUID(rpt->rt_pool_uuid),
 		       DP_UOID(oid));
