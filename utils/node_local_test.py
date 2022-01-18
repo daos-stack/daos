@@ -457,6 +457,8 @@ class DaosPool():
 class DaosCont():
     """Class to store data about daos containers"""
 
+    # pylint: disable=too-few-public-methods
+
     def __init__(self, cont_uuid, label):
         self.uuid = cont_uuid
         if label == 'container_label_not_set':
