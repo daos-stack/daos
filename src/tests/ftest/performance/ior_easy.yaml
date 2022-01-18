@@ -58,11 +58,8 @@ ior: &ior_base
     ppn: 8
   write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
   read_flags: "-r -R -C -e -g -G 27 -k -Q 1 -v"
-  repetitions: 1
   block_size: '150G'
-  segment_count: 1
   sw_deadline: 30
-  sw_wearout: 1
   sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
 ior_dfs_sx:
   <<: *ior_base
