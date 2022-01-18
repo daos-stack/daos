@@ -100,8 +100,16 @@ enum {
  */
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
+/*
+ * Default size (in blocks) threshold for merging NVMe records, we choose
+ * 256 blocks as default value since the default DFS chunk size is 1MB.
+ */
+#define VOS_MW_NVME_THRESH	256		/* 256 * VOS_BLK_SZ = 1MB */
+
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
 #define VOS_AGG_CREDITS_MAX	32
+
+extern unsigned int vos_agg_nvme_thresh;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -218,6 +226,8 @@ struct vos_container {
 	daos_epoch_range_t	vc_epr_aggregation;
 	/* Current ongoing discard EPR */
 	daos_epoch_range_t	vc_epr_discard;
+	/* Last timestamp when VOS aggregation reporting ENOSPACE */
+	uint64_t		vc_agg_nospc_ts;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,

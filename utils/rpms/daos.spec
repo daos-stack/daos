@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.1.0~rc4-3%{?dist}
-%global libfabric_version 1.14.0~rc3-2
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       18%{?relval}%{?dist}
+Release:       19%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -531,8 +531,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Jan 04 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-18
+<<<<<<< HEAD
+* Tue Jan 18 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-19
 - Remove direct MPI dependency from most of tests
+
+* Mon Jan 17 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-18
+- Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
 
 * Thu Dec 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-17
 - Update to v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage
