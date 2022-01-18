@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package spdk
 
 import (
@@ -23,17 +24,20 @@ var (
 		"NVMe controller details are missing health statistics",
 		"",
 	)
-	FaultBindingRetNull = spdkFault(
-		code.SpdkBindingRetNull,
-		"SPDK binding unexpectedly returned NULL",
-		"",
-	)
 )
 
-func FaultBindingFailed(rc int, errMsg string) *fault.Fault {
+func FaultBindingRetNull(msg string) *fault.Fault {
+	return spdkFault(
+		code.SpdkBindingRetNull,
+		fmt.Sprintf("SPDK binding unexpectedly returned NULL, %s", msg),
+		"",
+	)
+}
+
+func FaultBindingFailed(rc int, msg string) *fault.Fault {
 	return spdkFault(
 		code.SpdkBindingFailed,
-		fmt.Sprintf("SPDK binding failed, rc: %d, %s", rc, errMsg),
+		fmt.Sprintf("SPDK binding failed, rc: %d, %s", rc, msg),
 		"",
 	)
 }
