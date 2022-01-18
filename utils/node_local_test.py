@@ -2662,6 +2662,10 @@ class posix_tests():
         src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
         with open(join(src_dir.name, 'file'), 'w') as ofd:
             ofd.write('hello')
+        cwd = os.getcwd()
+        os.chdir(src_dir.name)
+        os.symlink('file', 'file_s')
+        os.chdir(cwd)
 
         cmd = ['filesystem',
                'copy',
@@ -2671,6 +2675,10 @@ class posix_tests():
                'daos://{}/{}'.format(self.pool.uuid, self.container)]
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
+        lineresult = rc.stdout.decode('utf-8').splitlines()
+        assert lineresult[1] == '    Directories: 1'
+        assert lineresult[2] == '    Files:       1'
+        assert lineresult[3] == '    Links:       1'
         assert rc.returncode == 0
 
     def test_cont_clone(self):
