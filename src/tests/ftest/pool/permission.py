@@ -86,6 +86,7 @@ class Permission(TestWithServers):
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
 
         if createmode == 73:
+            permissions = 0
             expected_result = RESULT_FAIL
         elif createmode in [146, 511]:
             permissions = 1
