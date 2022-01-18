@@ -435,9 +435,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	if (rc != 0)
 		goto err_mc;
 
-	D_DEBUG(DB_MD, DF_DB": started db %s %p with %u replicas\n",
-		DP_DB(*dbp), path, *dbp,
-		(*dbp)->d_replicas == NULL ? 0 : (*dbp)->d_replicas->rl_nr);
+	D_DEBUG(DB_MD, DF_DB": started db %s %p\n", DP_DB(*dbp), path, *dbp);
 	return 0;
 
 err_mc:
@@ -608,7 +606,7 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 int
 rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 {
-	return daos_rank_list_dup(ranksp, db->d_replicas);
+	return rdb_raft_get_ranks(db, ranksp);
 }
 
 /**
