@@ -666,32 +666,18 @@ def get_device_replacement(args):
     Determine if the specified hosts have homogeneous NVMe drives (either standalone or VMD
     controlled) and use these values to replace placeholder devices in avocado test yaml files.
 
-    When detecting VMD devices, search the lspci output for VMD controllers, e.g.
-
-        $ lspci | grep -E 'Volume Management Device NVMe RAID Controller'
-        0000:17:05.5 RAID bus controller:
-            Intel Corporation Volume Management Device NVMe RAID Controller (rev 07)
-        0000:5d:05.5 RAID bus controller:
-            Intel Corporation Volume Management Device NVMe RAID Controller (rev 07)
-
-    When detecting standalone NVMe devices, search the lspci output for any NMVe devices, e.g.
-        $ lspci | grep 'Non-Volatile memory controller:'
-        5e:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [3DNAND, Beta Rock Controller]
-        5f:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [3DNAND, Beta Rock Controller]
-        81:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
-        da:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
-
-    Optionally filter the above output even further with a specified search
-    string (e.g. '--nvme=auto:Optane'):
-        $ lspci | grep 'Non-Volatile memory controller:' | grep 'Optane'
-        81:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
-        da:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
+    Supported auto '--nvme' arguments:
+        auto[:filter]       = select any PCI domain number of a NVMe device or VMD controller
+                              (connected to a VMD enabled NVMe device) in the homogeneous 'lspci -D'
+                              output from each server.  Optionally grep the list of NVMe or VMD
+                              enabled NVMe devices for 'filter'.
+        auto_nvme[:filter]  = select any PCI domain number of a non-VMD controlled NVMe device in
+                              the homogeneous 'lspci -D' output from each server.  Optionally grep
+                              this output for 'filter'.
+        auto_vmd[:filter]   = select any PCI domain number of a VMD controller connected to a VMD
+                              enabled NVMe device in the homogeneous 'lspci -D' output from each
+                              server.  Optionally grep the list of VMD enabled NVMe devices for
+                              'filter'.
 
     Args:
         args (argparse.Namespace): command line arguments for this program
@@ -707,12 +693,6 @@ def get_device_replacement(args):
     """
     devices = []
     device_types = []
-
-    # Get a list of NVMe and or VMD devices from each specified server host based upon the arg.nvme:
-    #   - 'auto[:filter]'       = find any NVMe or VMD controller devices available on each host
-    #   - 'auto_nvme[:filter]'  = find any NVMe devices available on each host
-    #   - 'auto_vmd'            = find any VMD controller devices available on each host
-    #   If a 'filter' is specified then it will be used to further limit the NVMe device matches.
     host_list = list(args.test_servers)
 
     # Separate any optional filter from the key
@@ -721,14 +701,21 @@ def get_device_replacement(args):
     if len(nvme_args) > 1:
         filter = nvme_args[1]
 
-    # First check for VMD controllers - do not include any additional filters
-    # Then check for NVMe controllers - with an optional filter
-    for arg_key, dev_type, dev_filter in (("auto_vmd", "VMD", None), ("auto_nvme", "NVMe", filter)):
-        if nvme_args[0] in ["auto", arg_key]:
-            dev_list = auto_detect_devices(host_list, dev_type, dev_filter)
-            if dev_list:
-                devices.extend(dev_list)
-                device_types.append(dev_type)
+    # First check for any VMD disks, if requested
+    if nvme_args[0] in ["auto", "auto_vmd"]:
+        vmd_devices = auto_detect_devices(host_list, "NVMe", "5", filter)
+        if vmd_devices:
+            # Find the VMD controller for the matching VMD disks
+            vmd_controllers = auto_detect_devices(host_list, "VMD", "4", None)
+            devices.extend(get_vmd_address_backed_nvme(host_list, vmd_devices, vmd_controllers))
+            device_types.append("VMD")
+
+    # Second check for any non-VMD NVMe disks, if requested
+    if nvme_args[0] in ["auto", "auto_nvme"]:
+        dev_list = auto_detect_devices(host_list, "NVMe", "4", filter)
+        if dev_list:
+            devices.extend(dev_list)
+            device_types.append("NVMe")
 
     # If no VMD or NVMe devices were found exit
     if not devices:
@@ -741,13 +728,14 @@ def get_device_replacement(args):
     return ",".join(devices), "VMD" in device_types
 
 
-def auto_detect_devices(host_list, device_type, filter=None):
+def auto_detect_devices(host_list, device_type, length, filter=None):
     """Get a list of NVMe/VMD devices found on each specified host.
 
     Args:
         host_list (list): list of host on which to find the NVMe/VMD devices
         device_type (str): device type to find, e.g. 'NVMe' or 'VMD'
-        filter (str, optional): optional filter to apply to NVMe device searching. Defaults to None.
+        length (str): number of digits to match in the first PCI domain number
+        filter (str, optional): optional filter to apply to device searching. Defaults to None.
 
     Returns:
         list: A list of detected devices - empty if none found
@@ -759,13 +747,13 @@ def auto_detect_devices(host_list, device_type, filter=None):
     if device_type == "VMD":
         command_list = [
             "/sbin/lspci -D",
-            "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] '",
+            "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
             "grep -E 'Volume Management Device NVMe RAID Controller'"]
     elif device_type == "NVMe":
         command_list = [
             "/sbin/lspci -D",
-            "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
-            "Non-Volatile memory controller:'"]
+            "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
+            "grep -E 'Non-Volatile memory controller:'"]
         if filter:
             command_list.append("grep '{}'".format(filter))
     else:
@@ -780,50 +768,53 @@ def auto_detect_devices(host_list, device_type, filter=None):
         output_data = list(task.iter_buffers())
         if len(output_data) > 1:
             print("ERROR: Non-homogeneous {} PCI addresses.".format(device_type))
-        else:
+        elif len(output_data) == 1:
             # Get the devices from the successful, homogeneous command output
             output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
             devices = find_pci_address(output_str)
 
-    if devices and device_type == "VMD":
-        # Remove any VMD controllers without devices
-        devices = get_vmd_address_backed_nvme(host_list, devices)
-
     return devices
 
 
-def get_vmd_address_backed_nvme(host_list, value):
+def get_vmd_address_backed_nvme(host_list, vmd_disks, vmd_controllers):
     """Find valid VMD address which has backing NVMe.
 
     Args:
         host_list (list): list of hosts
-        value (list): list of all PCI address.
+        vmd_disks (list): list of PCI domain numbers for each VMD controlled disk
+        vmd_controllers (list): list of PCI domain numbers for each VMD controller
 
     Returns:
-        list: a list of the VMD PCI addresses only which has connected NVMe
-              devices.
+        list: a list of the VMD controller PCI domain numbers which are connected to the VMD disks
 
     """
-    command = "ls -l /sys/block/ | grep nvme | cut -d\'>\' -f2 | cut -d'/' -f4"
-
+    disk_controllers = []
+    command_list = [
+        "ls -l /sys/block/",
+        "grep nvme",
+        "grep -E '({0})'".format("|".join(vmd_disks)),
+        "cut -d'>' -f2",
+        "cut -d'/' -f4",
+    ]
+    command = " | ".join(command_list) + " || :"
     task = get_remote_output(host_list, command)
 
     # Verify the command was successful on each server host
     if not check_remote_output(task, command):
-        print("ERROR: Issuing commands ls -l /sys/block/")
+        print("ERROR: Issuing command '{}'".format(command))
     else:
         # Verify each server host has the same NVMe device behind VMD addresses.
         output_data = list(task.iter_buffers())
         if len(output_data) > 1:
             print("ERROR: Non-homogeneous NVMe device behind VMD addresses.")
-        else:
+        elif len(output_data) == 1:
             # Remove the VMD PCI address if no NVMe is backed-up and connected.
             output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
-            for device in value:
-                if device not in output_str:
-                    value.remove(device)
+            for device in vmd_controllers:
+                if device in output_str:
+                    disk_controllers.append(device)
 
-    return value
+    return disk_controllers
 
 
 def find_pci_address(value):
