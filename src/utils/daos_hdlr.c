@@ -1660,7 +1660,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 {
 	int		rc = 0;
 	daos_size_t	len = 0;
-	char		symlink_value[PATH_MAX];
+	char		symlink_value[DFS_MAX_PATH];
 
 	len = PATH_MAX - 1;
 	if (src_file_dfs->type == POSIX) {
