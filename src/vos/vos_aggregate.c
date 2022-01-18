@@ -1460,7 +1460,8 @@ need_merge(daos_handle_t ih, uint16_t src_media, int lgc_cnt, daos_size_t seg_si
 	if (lgc_cnt == 1)
 		return false;
 
-	tgt_media = vos_media_select(vos_obj2pool(obj), DAOS_IOD_ARRAY, seg_size);
+	tgt_media = vos_policy_media_select(vos_obj2pool(obj), DAOS_IOD_ARRAY,
+					    seg_size, VOS_IOS_AGGREGATION);
 	/* Some data can be migrated from SCM to NVMe to alleviate SCM pressure */
 	if (src_media != tgt_media)
 		return true;
