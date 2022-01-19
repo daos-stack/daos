@@ -3765,6 +3765,10 @@ class AllocFailTestRun():
                 if line.endswith(': DER_NOMEM(-1009): Out of memory'):
                     continue
 
+                # This is what the go code uses for system errors.
+                if line.endswith(': errno 12 (Cannot allocate memory)'):
+                    continue
+
                 # This is what DH_PERROR_DER uses
                 if line.endswith(': Out of memory (-1009)'):
                     continue
@@ -4103,8 +4107,7 @@ def test_fi_cont_query(server, conf, wf):
 
     pool = server.get_test_pool_id()
 
-    #container = create_cont(conf, pool, ctype='POSIX')
-    container = create_cont(conf, pool)
+    container = create_cont(conf, pool, ctype='POSIX')
 
     cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
