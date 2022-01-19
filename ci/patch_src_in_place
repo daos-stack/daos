@@ -35,4 +35,7 @@ then
     done
 fi
 
+# Format the go code correctly.
+find src/control/ -name '*.go' -and -not -path '*vendor*'| xargs gofmt -w
+
 exit $RC
