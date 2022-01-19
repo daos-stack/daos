@@ -1747,8 +1747,6 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			dkeys[0], num_rec_exts);
 	punch_rec_with_rxnr(dkeys[0], "akey1", /*idx*/0, num_rec_exts,
 			    DAOS_TX_NONE, &req);
-	/* punch non-exist long ext (full-stripe for EC) */
-	punch_rec_with_rxnr(dkeys[0], "akey1", 1 << 20, 1 << 20, DAOS_TX_NONE, &req);
 
 
 	/**
