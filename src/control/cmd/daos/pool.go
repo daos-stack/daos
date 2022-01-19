@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -79,7 +79,7 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 		cmd.log.Debugf("connecting to pool: %s", cmd.PoolID().Label)
 		rc = C.daos_pool_connect2(cLabel, cSysName, flags,
 			&cmd.cPoolHandle, &poolInfo, nil)
-		if rc == 0 {
+		if (rc == 0) {
 			var err error
 			cmd.poolUUID, err = uuidFromC(poolInfo.pi_uuid)
 			if err != nil {
