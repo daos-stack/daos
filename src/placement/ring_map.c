@@ -815,7 +815,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	int rc;
 
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid, NULL, &nr_grps);
+	oc_attr = daos_oclass_attr_find(oid, &nr_grps);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
