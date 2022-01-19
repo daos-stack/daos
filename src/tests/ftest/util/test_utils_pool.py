@@ -101,7 +101,7 @@ class TestPool(TestDaosApiBase):
 
         # Autosize any size/scm_size/nvme_size parameters
         # pylint: disable=too-many-boolean-expressions
-        if ((self.size.value is not None and str(self.size.value).endswith("%"))
+        if ((self.size.value is not None)
                 or (self.scm_size.value is not None
                     and str(self.scm_size.value).endswith("%"))
                 or (self.nvme_size.value is not None
