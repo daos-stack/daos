@@ -35,8 +35,7 @@ then
     done
 fi
 
-find src/control/ -name '*.go' -and -not -path '*vendor*' | xargs gofmt -w
-
-git diff
+# Correct any formatting of go code.
+find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w {} +
 
 exit $RC
