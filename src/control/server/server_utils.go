@@ -160,6 +160,26 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 	return netDevClass, nil
 }
 
+// Detect if any engines share numa nodes and if that's the case, allocate only on the shared numa
+// node and notify user.
+func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []string {
+	nodeMap := make(map[string]bool)
+	nodes := make([]string, 0, len(engineCfgs))
+	for _, ec := range engineCfgs {
+		nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
+		if nodeMap[nn] {
+			log.Infof("Multiple engines assigned to NUMA node %s, "+
+				"allocating all hugepages on this node.", nn)
+			nodes = []string{nn}
+			break
+		}
+		nodeMap[nn] = true
+		nodes = append(nodes, nn)
+	}
+
+	return nodes
+}
+
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	hasBdevs := cfgHasBdevs(srv.cfg)
 
@@ -199,10 +219,18 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	}
 
 	if hasBdevs {
+		// The NrHugepages config value is a total for all engines. Distribute allocation
+		// of hugepages equally across each engine's numa node (as validation ensures that
+		// TargetsCount is equal for each engine).
+		numaNodes := getEngineNUMANodes(srv.log, srv.cfg.Engines)
+
 		// Request a few more hugepages than actually required as not all may be available.
 		prepReq.HugePageCount = (srv.cfg.NrHugepages + common.ExtraHugePages)
+		prepReq.HugePageCount /= len(numaNodes)
+		prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
-		srv.log.Debugf("allocating %d hugepages", prepReq.HugePageCount)
+		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
+			prepReq.HugePageCount, numaNodes)
 	} else if len(srv.cfg.Engines) == 0 && srv.cfg.NrHugepages == 0 {
 		// If nr_hugepages is unset and no engines in config, set minimum needed for
 		// scanning and set number of hugepages for engines to zero for discovery mode.

@@ -20,8 +20,8 @@ import (
 
 const (
 	spdkSetupPath      = "../share/daos/control/setup_spdk.sh"
-	defaultNrHugepages = 4096
 	nrHugepagesEnv     = "_NRHUGE"
+	hugeNodeEnv        = "_HUGENODE"
 	targetUserEnv      = "_TARGET_USER"
 	pciAllowListEnv    = "_PCI_ALLOWED"
 	pciBlockListEnv    = "_PCI_BLOCKED"
@@ -98,15 +98,17 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
-	nrHugepages := req.HugePageCount
-	if nrHugepages < 0 {
-		nrHugepages = defaultNrHugepages
+	if req.HugePageCount < 0 {
+		return errors.New("number of hugepages not specified in request")
 	}
 
 	env := []string{
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-		fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
+		fmt.Sprintf("%s=%d", nrHugepagesEnv, req.HugePageCount),
 		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
+	}
+	if req.HugeNodes != "" {
+		env = append(env, fmt.Sprintf("%s=%s", hugeNodeEnv, req.HugeNodes))
 	}
 	if req.PCIAllowList != "" {
 		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))

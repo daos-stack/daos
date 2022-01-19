@@ -968,16 +968,15 @@ func TestBackend_Prepare(t *testing.T) {
 				},
 			},
 		},
-		// TODO DAOS-9512: re-enable test
-		//"prepare setup; unset hugepages": {
-		//	req: storage.BdevPrepareRequest{
-		//		HugePageCount:         -1,
-		//		TargetUser:            username,
-		//		EnableVMD:             false,
-		//		DisableCleanHugePages: true,
-		//	},
-		//	expErr: errors.New("number of hugepages not specified in request"),
-		//},
+		"prepare setup; unset hugepages": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         -1,
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			expErr: errors.New("number of hugepages not specified in request"),
+		},
 		"prepare setup; user-specified values": {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
