@@ -1701,7 +1701,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
 		 **/
-		D_ERROR("RPC %d failed: "DF_RC"\n", opc, DP_RC(rc));
+		D_ERROR("RPC %d failed: "DF_RC"\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 

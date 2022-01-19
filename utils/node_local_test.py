@@ -4103,7 +4103,8 @@ def test_fi_cont_query(server, conf, wf):
 
     pool = server.get_test_pool_id()
 
-    container = create_cont(conf, pool, ctype='POSIX')
+    #container = create_cont(conf, pool, ctype='POSIX')
+    container = create_cont(conf, pool)
 
     cmd = [join(conf['PREFIX'], 'bin', 'daos'),
            'container',
