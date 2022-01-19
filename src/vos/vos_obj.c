@@ -1902,7 +1902,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct umem_attr	 uma;
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
-	bool			 reprobe = false;
+	bool			 delete = false, invisible = false;
 	int			 rc;
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
@@ -1929,7 +1929,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 
 	if (rc == 1) {
 		/* Incarnation log is empty so delete the key */
-		reprobe = true;
+		delete = true;
 		D_DEBUG(DB_IO, "Removing %s from tree\n",
 			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
 		/** Orphaned values indicate an incarnation log bug.  It happens
@@ -1952,7 +1952,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
 		/* Key no longer exists at epoch but isn't empty */
-		reprobe = true;
+		invisible = true;
 		rc = 0;
 	}
 
@@ -1960,8 +1960,8 @@ end:
 	rc = umem_tx_end(umm, rc);
 
 exit:
-	if (rc == 0 && reprobe)
-		return 1;
+	if (rc == 0 && (delete || invisible))
+		return delete ? 1 : 2;
 
 	return rc;
 }
