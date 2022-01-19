@@ -778,6 +778,7 @@ dtx_handle_reinit(struct dtx_handle *dth)
 {
 	D_ASSERT(dth->dth_ent == NULL);
 	D_ASSERT(dth->dth_pinned == 0);
+	D_ASSERT(dth->dth_already == 0);
 
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
@@ -839,6 +840,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_prepared = prepared ? 1 : 0;
 	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
+	dth->dth_already = 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -1184,7 +1186,8 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 			break;
 		/* Fall through */
 	case DTX_ST_ABORTED:
-		D_GOTO(abort, result = -DER_INPROGRESS);
+		aborted = true;
+		D_GOTO(out, result = -DER_INPROGRESS);
 	default:
 		D_ASSERT(0);
 	}

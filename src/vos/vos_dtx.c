@@ -1426,10 +1426,10 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			 * Reset current dth->dth_ent to bypass cleanup.
 			 */
 			dth->dth_ent = NULL;
+			dth->dth_already = 1;
 			D_GOTO(out, rc = -DER_ALREADY);
 		case DTX_ST_ABORTED:
 			D_ASSERT(dth->dth_ent == NULL);
-			D_ASSERT(dth->dth_aborted);
 			/* Aborted, return -DER_INPROGRESS for client retry. */
 			D_GOTO(out, rc = -DER_INPROGRESS);
 		default:
@@ -1805,14 +1805,14 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (mbs != NULL)
 			dae->dae_maybe_shared = 1;
 
-		/* Leader has not finish the 'prepare' phase. */
 		if (dae->dae_dbd == NULL)
 			return -DER_INPROGRESS;
 
 		if (epoch != NULL) {
-			if (*epoch == 0)
-				*epoch = DAE_EPOCH(dae);
-			else if (*epoch != DAE_EPOCH(dae))
+			daos_epoch_t	e = *epoch;
+
+			*epoch = DAE_EPOCH(dae);
+			if (e != 0 && e != DAE_EPOCH(dae))
 				return -DER_MISMATCH;
 		}
 
@@ -2102,6 +2102,7 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
+	D_ASSERT(epoch != 0);
 
 	d_iov_set(&kiov, dti, sizeof(*dti));
 	d_iov_set(&riov, NULL, 0);
@@ -2121,7 +2122,7 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 	if (dae->dae_aborted)
 		D_GOTO(out, rc = -DER_ALREADY);
 
-	if (DAE_EPOCH(dae) > epoch)
+	if (epoch != DAOS_EPOCH_MAX && epoch != DAE_EPOCH(dae))
 		D_GOTO(out, rc = -DER_NONEXIST);
 
 	umm = vos_cont2umm(cont);
@@ -2680,6 +2681,10 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 			dae = (struct vos_dtx_act_ent *)riov.iov_buf;
 			/* Cannot cleanup 'committed' DTX entry. */
 			if (dae->dae_committable || dae->dae_committed)
+				goto out;
+
+			/* Skip the @dae if it belong to another instance for resent request. */
+			if (DAE_EPOCH(dae) != dth->dth_epoch)
 				goto out;
 
 			rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_BYPASS, &kiov, &dae);
