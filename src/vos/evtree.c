@@ -2787,7 +2787,7 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	rc = 0; /* Assume there is no data */
 	evt_ent_array_for_each(ent, tcx->tc_iter.it_entries) {
 		if (ent->en_minor_epc != EVT_MINOR_EPC_MAX) {
-			D_DEBUG(DB_IO, "Found "DF_ENT", stopping search\n", DP_ENT(ent));
+			D_INFO("Found orphaned extent "DF_ENT"\n", DP_ENT(ent));
 			rc = 1;
 			break;
 		}

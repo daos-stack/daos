@@ -577,6 +577,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			iv.riv_master_rank = pool->sp_iv_ns->iv_master_rank;
 			iv.riv_global_scan_done =
 					is_rebuild_global_scan_done(rgt);
+			iv.riv_global_done = is_rebuild_global_done(rgt);
 			iv.riv_stable_epoch = rgt->rgt_stable_epoch;
 			iv.riv_ver = rgt->rgt_rebuild_ver;
 			iv.riv_leader_term = rgt->rgt_leader_term;
@@ -611,11 +612,11 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 		snprintf(sbuf, RBLD_SBUF_LEN,
 			 "%s [%s] (pool "DF_UUID" ver=%u, toberb_obj="
 			 DF_U64", rb_obj="DF_U64", rec="DF_U64", size="DF_U64
-			 " done %d status %d/%d duration=%d secs)\n",
+			 " done %d status %d/%d epoch "DF_U64" duration=%d secs)\n",
 			 RB_OP_STR(op), str, DP_UUID(pool->sp_uuid), map_ver,
 			 rs->rs_toberb_obj_nr, rs->rs_obj_nr, rs->rs_rec_nr,
 			 rs->rs_size, rs->rs_done, rs->rs_errno,
-			 rs->rs_fail_rank, rs->rs_seconds);
+			 rs->rs_fail_rank, rgt->rgt_stable_epoch, rs->rs_seconds);
 
 		D_INFO("%s", sbuf);
 		if (rs->rs_done || rebuild_gst.rg_abort || rgt->rgt_abort) {
@@ -1071,9 +1072,6 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 		     daos_rebuild_opc_t rebuild_op,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
-	uint32_t	map_ver;
-	d_iov_t		map_buf_iov = {0};
-	daos_prop_t	*prop = NULL;
 	uint64_t	leader_term;
 	int		rc;
 
@@ -1094,47 +1092,6 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 		D_GOTO(out, rc);
 	}
 
-re_dist:
-	rc = ds_pool_map_buf_get(pool->sp_uuid, &map_buf_iov, &map_ver);
-	if (rc) {
-		D_ERROR("pool map broadcast failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
-	/* IV bcast the pool map in case for offline rebuild */
-	rc = ds_pool_iv_map_update(pool, map_buf_iov.iov_buf, map_ver);
-	D_FREE(map_buf_iov.iov_buf);
-	if (rc) {
-		/* If the failure is due to stale group version, then maybe
-		 * the leader upgrade group version during this time, let's
-		 * retry in this case.
-		 */
-		memset(&map_buf_iov, 0, sizeof(map_buf_iov));
-		if (rc == -DER_GRPVER) {
-			D_DEBUG(DB_REBUILD, DF_UUID" redistribute pool map\n",
-				DP_UUID(pool->sp_uuid));
-			dss_sleep(1000);
-			goto re_dist;
-		} else {
-			D_ERROR("pool map broadcast failed: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-	}
-
-	rc = ds_pool_prop_fetch(pool, DAOS_PO_QUERY_PROP_ALL, &prop);
-	if (rc) {
-		D_ERROR("pool prop fetch failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
-	/* Update pool properties by IV */
-	rc = ds_pool_iv_prop_update(pool, prop);
-	if (rc) {
-		D_ERROR("ds_pool_iv_prop_update failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
 	/* broadcast scan RPC to all targets */
 	rc = rebuild_scan_broadcast(pool, *p_rgt, tgts, rebuild_op);
 	if (rc) {
@@ -1143,8 +1100,6 @@ re_dist:
 	}
 
 out:
-	if (prop != NULL)
-		daos_prop_free(prop);
 	return rc;
 }
 
@@ -1158,8 +1113,7 @@ rebuild_task_ult(void *arg)
 	uint64_t				cur_ts = 0;
 	int					rc;
 
-	rc = daos_gettime_coarse(&cur_ts);
-	D_ASSERT(rc == 0);
+	cur_ts = daos_gettime_coarse();
 	if (cur_ts < task->dst_schedule_time) {
 		D_DEBUG(DB_REBUILD, "rebuild task sleep "DF_U64" second\n",
 			task->dst_schedule_time - cur_ts);
@@ -1170,7 +1124,7 @@ rebuild_task_ult(void *arg)
 	if (pool == NULL) {
 		D_ERROR(DF_UUID": failed to look up pool\n",
 			DP_UUID(task->dst_pool_uuid));
-		D_GOTO(out_task, rc);
+		D_GOTO(out_task, rc = -DER_NONEXIST);
 	}
 
 	rc = rebuild_notify_ras_start(&task->dst_pool_uuid, task->dst_map_ver,
@@ -1208,10 +1162,8 @@ rebuild_task_ult(void *arg)
 			DP_UUID(task->dst_pool_uuid), task->dst_map_ver,
 			DP_RC(rc));
 
-		D_ERROR(""DF_UUID" (ver=%u) rebuild failed: "DF_RC"\n",
-			DP_UUID(task->dst_pool_uuid), task->dst_map_ver,
-			DP_RC(rc));
-
+		D_DEBUG(DB_REBUILD, ""DF_UUID" (ver=%u) rebuild failed: "DF_RC"\n",
+			DP_UUID(task->dst_pool_uuid), task->dst_map_ver, DP_RC(rc));
 		if (rgt) {
 			rgt->rgt_abort = 1;
 			rgt->rgt_status.rs_errno = rc;
@@ -1298,8 +1250,14 @@ iv_stop:
 		iv.riv_seconds          = rgt->rgt_status.rs_seconds;
 		iv.riv_stable_epoch	= rgt->rgt_stable_epoch;
 
-		rc = rebuild_iv_update(pool->sp_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
-				       CRT_IV_SYNC_LAZY, true);
+		if (!is_rebuild_global_done(rgt) || rgt->rgt_status.rs_errno != 0 ||
+		    task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND) {
+			rc = rebuild_iv_update(pool->sp_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
+					       CRT_IV_SYNC_EAGER, true);
+		} else {
+			rc = rebuild_iv_update(pool->sp_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
+					       CRT_IV_SYNC_LAZY, true);
+		}
 		if (rc)
 			D_ERROR("iv final update fails"DF_UUID":rc "DF_RC"\n",
 				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
@@ -1604,8 +1562,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 	if (new_task == NULL)
 		return -DER_NOMEM;
 
-	rc = daos_gettime_coarse(&cur_ts);
-	D_ASSERT(rc == 0);
+	cur_ts = daos_gettime_coarse();
 
 	new_task->dst_schedule_time = cur_ts + delay_sec;
 	new_task->dst_map_ver = map_ver;
@@ -1780,7 +1737,6 @@ rebuild_fini_one(void *arg)
 		return 0;
 
 	rebuild_pool_tls_destroy(pool_tls);
-	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
@@ -1848,7 +1804,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
 
 	/* destroy the migrate_tls of 0-xstream */
-	ds_migrate_fini_one(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver);
 	rpt_put(rpt);
 	/* No one should access rpt after rebuild_fini_one.
 	 */
@@ -2117,8 +2073,15 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	pool = ds_pool_lookup(rsi->rsi_pool_uuid);
 	if (pool == NULL) {
-		D_ERROR("Can not find pool.\n");
+		D_ERROR("Can not find pool. "DF_UUID"\n", DP_UUID(rsi->rsi_pool_uuid));
 		return -DER_NONEXIST;
+	}
+
+	if (ds_pool_get_version(pool) < rsi->rsi_rebuild_ver) {
+		D_INFO(DF_UUID" map %u < rsi_rebuild_ver %u\n",
+		       DP_UUID(rsi->rsi_pool_uuid), ds_pool_get_version(pool),
+		       rsi->rsi_rebuild_ver);
+		D_GOTO(out, rc = -DER_BUSY);
 	}
 
 	if (pool->sp_group == NULL) {

@@ -1,22 +1,21 @@
-#!/bin/sh
+#!/bin/sh -e
 
-# Install OS updates and package.  Include basic tools and daos dependencies
-# that come from the core repo.
-# Clean up any repos afterwards to save space.
-# Switch to dnf as it seems a bit faster.
-# libatomic should be in this list, but can not for now due to CI
-# post provisioning issue.
-# *** Keep these in as much alphbetical order as possible ***
+# Install OS updates and packages as required for building DAOS on CentOS 8 and
+# derivatives.  Include basic tools and daos dependencies that come from the core repos.
 
-set -e
+# This script use used by docker but can be invoked from elsewhere, in order to run it
+# interactively then these two commands can be used to set dnf into automatic mode.
+# dnf --assumeyes install dnf-plugins-core
+# dnf config-manager --save --setopt=assumeyes=True
 
-dnf upgrade
-dnf install \
+dnf --nodocs install \
     boost-python3-devel \
+    bzip2 \
     clang \
     clang-tools-extra \
     cmake \
     CUnit-devel \
+    diffutils \
     e2fsprogs \
     file \
     flex \
@@ -46,7 +45,6 @@ dnf install \
     Lmod \
     lz4-devel \
     make \
-    maven \
     meson \
     ndctl \
     ninja-build \
@@ -61,11 +59,21 @@ dnf install \
     python3-distro \
     python3-junit_xml \
     python3-pip \
+    python3-pyelftools \
     python3-pyxattr \
     python3-tabulate \
-    python3-scons \
     python3-yaml \
     sg3_utils \
     valgrind-devel \
+    which \
     yasm
-dnf clean all
+
+# For fedora, java-11 is installed along with maven if we install maven from
+# repo. But we need java-8 (1.8). The 'devel' package also needs to be
+# installed specifically.
+
+if [ -e /etc/fedora-release ]; then
+        dnf install java-1.8.0-openjdk-devel maven-openjdk8
+else
+        dnf install maven
+fi

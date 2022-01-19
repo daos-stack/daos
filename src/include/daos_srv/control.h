@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-/*
+/**
  * Primitives to share between data and control planes.
  */
 
@@ -14,55 +14,80 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <string.h>
 
-/*
+/**
  * Space separated string of CLI options to pass to DPDK when started during
  * spdk_env_init(). These options will override the DPDK defaults.
  */
 extern const char *
 dpdk_cli_override_opts;
 
-enum {
-	/* Device is plugged */
-	NVME_DEV_FL_PLUGGED	= 0x1,
-	/* Device is used by DAOS (present in SMD) */
-	NVME_DEV_FL_INUSE	= 0x2,
-	/* Device is marked as FAULTY */
-	NVME_DEV_FL_FAULTY	= 0x4,
-};
+/** Device state flags */
+#define NVME_DEV_FL_PLUGGED	(1 << 0)
+#define NVME_DEV_FL_INUSE	(1 << 1) /* Used by DAOS (present in SMD) */
+#define NVME_DEV_FL_FAULTY	(1 << 2)
+#define NVME_DEV_FL_IDENTIFY	(1 << 3) /* SSD being identified by LED activity */
 
-enum bio_dev_state {
-	/* fully functional and in-use */
-	BIO_DEV_NORMAL	= 0,
-	/* evicted device */
-	BIO_DEV_FAULTY,
-	/* unplugged device */
-	BIO_DEV_OUT,
-	/* new device not currently in-use */
-	BIO_DEV_NEW,
-};
+/** Device state combinations */
+#define NVME_DEV_STATE_NORMAL (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
+#define NVME_DEV_STATE_FAULTY (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
+#define NVME_DEV_STATE_NEW (NVME_DEV_FL_PLUGGED)
+#define NVME_DEV_STATE_INVALID ((NVME_DEV_STATE_FAULTY | NVME_DEV_FL_IDENTIFY) + 1)
 
-/*
- * Convert device state to human-readable string
- *
- * \param [IN]  state   Device state
- *
- * \return              Static string representing enum value
- */
+#define BIT_SET(x, m) (((x)&(m)) == (m))
+#define BIT_UNSET(x, m) (!BIT_SET(x, m))
+
+#define STR_EQ(x, m) (strcmp(x, m) == 0)
+
 static inline char *
-bio_dev_state_enum_to_str(enum bio_dev_state state)
+nvme_state2str(int state)
 {
-	switch (state) {
-	case BIO_DEV_NORMAL: return "NORMAL";
-	case BIO_DEV_FAULTY: return "EVICTED";
-	case BIO_DEV_OUT:    return "UNPLUGGED";
-	case BIO_DEV_NEW:    return "NEW";
+	/** If unplugged, return early */
+	if BIT_UNSET(state, NVME_DEV_FL_PLUGGED)
+		return "UNPLUGGED";
+
+	/** If identify is set, return combination with faulty taking precedence over new */
+	if (BIT_SET(state, NVME_DEV_FL_IDENTIFY)) {
+		if BIT_SET(state, NVME_DEV_FL_FAULTY)
+			return "EVICTED|IDENTIFY";
+		if BIT_UNSET(state, NVME_DEV_FL_INUSE)
+			return "NEW|IDENTIFY";
+		return "NORMAL|IDENTIFY";
 	}
 
-	return "Undefined state";
+	/** Otherwise, return single state with faulty taking precedence over new */
+	if BIT_SET(state, NVME_DEV_FL_FAULTY)
+		return "EVICTED";
+	if BIT_UNSET(state, NVME_DEV_FL_INUSE)
+		return "NEW";
+
+	return "NORMAL";
 }
 
-/*
+static inline int
+nvme_str2state(char *state)
+{
+	if STR_EQ(state, "NORMAL")
+		return NVME_DEV_STATE_NORMAL;
+	if STR_EQ(state, "NEW")
+		return NVME_DEV_STATE_NEW;
+	if STR_EQ(state, "EVICTED")
+		return NVME_DEV_STATE_FAULTY;
+	if STR_EQ(state, "NORMAL|IDENTIFY")
+		return (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_IDENTIFY);
+	if STR_EQ(state, "NEW|IDENTIFY")
+		return (NVME_DEV_STATE_NEW | NVME_DEV_FL_IDENTIFY);
+	if STR_EQ(state, "EVICTED|IDENTIFY")
+		return (NVME_DEV_STATE_FAULTY | NVME_DEV_FL_IDENTIFY);
+	if STR_EQ(state, "UNPLUGGED")
+		return 0;
+
+	/** not a valid state */
+	return NVME_DEV_STATE_INVALID;
+}
+
+/**
  * Current device health state (health statistics). Periodically updated in
  * bio_bs_monitor(). Used to determine faulty device status.
  * Also retrieved on request via go-spdk bindings from the control-plane.
@@ -128,4 +153,4 @@ struct nvme_stats {
  * \return		Zero on success, negative value on error
  */
 int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
-#endif /* __CONTROL_H_ */
+#endif /** __CONTROL_H_ */

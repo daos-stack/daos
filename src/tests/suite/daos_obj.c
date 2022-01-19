@@ -3191,6 +3191,8 @@ fetch_replica_unavail(void **state)
 	d_rank_t		 rank = 2;
 	char			*buf;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
 	if (!test_runable(arg, 4))
 		skip();
@@ -3762,6 +3764,8 @@ io_pool_map_refresh_trigger(void **state)
 	d_rank_t	leader;
 	d_rank_t	rank = 1;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
@@ -4093,6 +4097,8 @@ io_fetch_retry_another_replica(void **state)
 	char		fetch_buf[32];
 	char		update_buf[32];
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
@@ -4167,7 +4173,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	assert_rc_equal(rc, 0);
 
 	cid = daos_obj_id2class(oid);
-	attr = daos_oclass_attr_find(oid, NULL, NULL);
+	attr = daos_oclass_attr_find(oid, NULL);
 	if (!attr) {
 		rc = -EINVAL;
 		goto out;

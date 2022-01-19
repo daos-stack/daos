@@ -3,8 +3,8 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-1%{?dist}
-%global libfabric_version 1.14.0~rc3-2
+%global mercury_version 2.1.0~rc4-3%{?dist}
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       13%{?relval}%{?dist}
+Release:       18%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -32,7 +32,7 @@ BuildRequires: python36-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: mercury-devel = %{mercury_version}
+BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
@@ -120,6 +120,7 @@ BuildRequires: cunit-devel
 BuildRequires: ipmctl-devel
 BuildRequires: python3-devel
 BuildRequires: python3-distro
+BuildRequires: python-rpm-macros
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
@@ -138,7 +139,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -166,7 +167,7 @@ Requires: ipmctl > 02.00.00.3816
 # When 1.11.2 is released, we can change this to >= 1.11.2
 Requires: libpmemobj = 1.11.0-3%{?dist}
 %endif
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
@@ -179,7 +180,7 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
@@ -229,6 +230,9 @@ Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
+Requires: lua-lmod
+%else
+Requires: Lmod
 %endif
 
 %description client-tests
@@ -278,6 +282,17 @@ Requires: hdf5
 %description serialize
 This is the package needed to use the DAOS serialization and deserialization
 tools, as well as the preserve option for the filesystem copy tool.
+
+%package mofed-shim
+Summary: A shim to bridge MOFED's openmpi to distribution dependency tags
+Provides: libmpi.so.40()(64bit)(openmpi-x86_64)
+Requires: libmpi.so.40()(64bit)
+Provides: libmpi_cxx.so.40()(64bit)(openmpi-x86_64)
+Provides: libmpi_cxx.so.40()(64bit)
+
+%description mofed-shim
+This is the package that bridges the difference between the MOFED openmpi
+"Provides" and distribution-openmpi consumers "Requires".
 
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
@@ -520,7 +535,30 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 # No files in a meta-package
 
+%files mofed-shim
+# No files in a shim package
+
 %changelog
+* Mon Jan 17 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-18
+- Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
+* Thu Dec 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-17
+- Update to v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage
+- Change mercury pinning to be >= instead of strict =
+
+* Thu Dec 16 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-16
+- Add BR: python-rpm-macros for Leap 15 as python3-base dropped that
+  as a R:
+
+* Sat Dec 11 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-15
+- Create a shim package to allow daos openmpi packages built with the
+  distribution openmpi to install on MOFED systems
+
+* Fri Dec 10 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-14
+- Don't make daos-*-tests-openmi a dependency of anything
+  - If they are wanted, they should be installed explicitly, due to
+    potential conflicts with other MPI stacks
+
 * Wed Dec 08 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-13
 - Remove DAOS-9173 workaround from mercury. Apply DAOS-9173 to ofi
 

@@ -604,7 +604,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	*/
 	assert_true(srv_iov->iov_len == sgl->sg_iovs[0].iov_len);
 
-	rc = bio_iod_post(vos_ioh2desc(ioh));
+	rc = bio_iod_post(vos_ioh2desc(ioh), rc);
 end:
 	if (rc == 0 && (arg->ta_flags & TF_ZERO_COPY))
 		rc = vos_update_end(ioh, 0, dkey, rc, NULL, dth);
@@ -668,7 +668,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	dst_iov->iov_len = off;
 	assert_true(dst_iov->iov_buf_len >= dst_iov->iov_len);
 
-	rc = bio_iod_post(vos_ioh2desc(ioh));
+	rc = bio_iod_post(vos_ioh2desc(ioh), 0);
 end:
 	rc = vos_fetch_end(ioh, NULL, rc);
 	if (((flags & VOS_COND_FETCH_MASK) && rc == -DER_NONEXIST) ||
@@ -839,6 +839,7 @@ io_obj_cache_test(void **state)
 	struct vos_object	*objs[20];
 	struct umem_instance	*ummg;
 	struct umem_instance	*umml;
+	struct vos_object	*obj1, *obj2;
 	daos_epoch_range_t	 epr = {0, 1};
 	daos_unit_oid_t		 oids[2];
 	char			*po_name;
@@ -874,6 +875,26 @@ io_obj_cache_test(void **state)
 			  VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
 			  &objs[0], 0);
 	assert_rc_equal(rc, 0);
+
+	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj1);
+	assert_rc_equal(rc, 0);
+	/** Should be prevented because object olready held for discard */
+	expect_assert_failure(vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0],
+						   &obj2));
+	/** Should prevent simultaneous hold for create as well */
+	expect_assert_failure(vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
+					   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
+					   &obj2, 0));
+
+	/** Need to be able to hold for read though or iteration won't work */
+	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
+			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &obj2, 0);
+	vos_obj_discard_release(occ, obj2);
+	vos_obj_discard_release(occ, obj1);
+	/** Now that other one is done, this should work */
+	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj2);
+	assert_rc_equal(rc, 0);
+	vos_obj_discard_release(occ, obj2);
 
 	rc = umem_tx_end(ummg, 0);
 	assert_rc_equal(rc, 0);
