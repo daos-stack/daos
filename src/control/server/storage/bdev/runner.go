@@ -90,7 +90,7 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 	}
 }
 
-// Prepare executes setup script to allocate hugepages and unbind PCI devices
+// Prepare executes setup script to allocate hugepages and rebind PCI devices
 // (that don't have active mountpoints) from generic kernel driver to be
 // used with SPDK. Either all PCI devices will be unbound by default if allow list
 // parameter is not set, otherwise PCI devices can be specified by passing in a
@@ -125,7 +125,7 @@ func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 	return errors.Wrapf(err, "spdk setup failed (%s)", out)
 }
 
-// Reset executes setup script to reset hugepage allocations and unbind PCI devices
+// Reset executes setup script to reset hugepage allocations and rebind PCI devices
 // (that don't have active mountpoints) from SPDK compatible driver e.g. VFIO and
 // bind back to the kernel bdev driver to be used by the OS. Either all PCI devices
 // will be unbound by default if allow list parameter is not set, otherwise PCI
