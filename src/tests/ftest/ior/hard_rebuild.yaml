@@ -72,7 +72,7 @@ ior:
    flags: "-C -k -e -w -g -G 27 -D 150 -Q 1 -vv"
    read_flags: "-C -k -e -r -R -g -G 27 -D 150 -Q 1 -vv"
   test_file: daos:testFile
-  segment_count: 1000000  #2000000
+  segment_count: 800000  #2000000 3F  #1M 1stF
   repetitions: 1
   chunk_block_transfer_sizes:
    # [ChunkSize, BlocksSize, TransferSize]
