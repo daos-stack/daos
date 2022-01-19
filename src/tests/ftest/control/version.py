@@ -18,8 +18,7 @@ class DAOSVersion(TestWithServers):
     :avocado: recursive
     """
     def test_version(self):
-        """Verify version number for dmg, daos, daos_server, and daos_agent
-        against RPM.
+        """Verify version number for dmg, daos, daos_server, and daos_agent against RPM.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
@@ -34,10 +33,12 @@ class DAOSVersion(TestWithServers):
         self.log.info("RPM output = %s", output)
         stdout = output[0]["stdout"][0]
         self.log.info("RPM stdout = %s", stdout)
-        result = re.findall(
-            r"daos-server-[tests-|tests_openmpi-]*([\d.]+)", stdout)
-        rpm_version = result[0]
-        self.log.info("RPM version = %s", rpm_version)
+        result = re.findall(r"daos-server-[tests-|tests_openmpi-]*([\d.]+)", stdout)
+        if not result:
+            errors.append("RPM version is not in the output! {}".format(output))
+        else:
+            rpm_version = result[0]
+            self.log.info("RPM version = %s", rpm_version)
 
         # Get dmg version.
         dmg_cmd = self.get_dmg_command()
@@ -48,8 +49,11 @@ class DAOSVersion(TestWithServers):
             errors.append("dmg version is not in the output! {}".format(output))
 
         result = re.findall(r"dmg version ([\d.]+)", output)
-        dmg_version = result[0]
-        self.log.info("dmg version = %s", dmg_version)
+        if not result:
+            errors.append("dmg version is not in the output! {}".format(output))
+        else:
+            dmg_version = result[0]
+            self.log.info("dmg version = %s", dmg_version)
 
         # Get daos version.
         daos_cmd = self.get_daos_command()
@@ -57,12 +61,14 @@ class DAOSVersion(TestWithServers):
 
         # Verify that "daos version" is in the output.
         if "daos version" not in output:
-            errors.append(
-                "daos version is not in the output! {}".format(output))
+            errors.append("daos version is not in the output! {}".format(output))
 
         result = re.findall(r"daos version ([\d.]+)", output)
-        daos_version = result[0]
-        self.log.info("daos version = %s", daos_version)
+        if not result:
+            errors.append("daos version is not in the output! {}".format(output))
+        else:
+            daos_version = result[0]
+            self.log.info("daos version = %s", daos_version)
 
         # Get daos_agent version.
         daos_agent_cmd = "daos_agent version"
@@ -74,8 +80,11 @@ class DAOSVersion(TestWithServers):
             errors.append("DAOS Agent is not in the output! {}".format(stdout))
 
         result = re.findall(r"DAOS Agent v([\d.]+)", stdout)
-        daos_agent_version = result[0]
-        self.log.info("daos_agent version = %s", daos_agent_version)
+        if not result:
+            errors.append("daos_agent version is not in the output! {}".format(output))
+        else:
+            daos_agent_version = result[0]
+            self.log.info("daos_agent version = %s", daos_agent_version)
 
         # Get daos_server version
         daos_server_cmd = "daos_server version"
@@ -84,12 +93,14 @@ class DAOSVersion(TestWithServers):
 
         # Verify that "DAOS Control Server" is in the output.
         if "DAOS Control Server" not in stdout:
-            errors.append(
-                "DAOS Control Server is not in the output! {}".format(stdout))
+            errors.append("DAOS Control Server is not in the output! {}".format(stdout))
 
         result = re.findall(r"DAOS Control Server v([\d.]+)", stdout)
-        daos_server_version = result[0]
-        self.log.info("daos_server version = %s", daos_server_version)
+        if not result:
+            errors.append("daos_server version is not in the output! {}".format(output))
+        else:
+            daos_server_version = result[0]
+            self.log.info("daos_server version = %s", daos_server_version)
 
         # Verify the tool versions against the RPM.
         tool_versions = [
@@ -108,5 +119,4 @@ class DAOSVersion(TestWithServers):
                 errors.append(msg)
 
         if errors:
-            self.fail("\n---- Errors detected! ----\n{}".format(
-                "\n".join(errors)))
+            self.fail("\n---- Errors detected! ----\n{}".format("\n".join(errors)))
