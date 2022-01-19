@@ -35,7 +35,7 @@ then
     done
 fi
 
-src/control/ -name '*.go' -and -not -path '*vendor*' | xargs gofmt -w
+find src/control/ -name '*.go' -and -not -path '*vendor*' | xargs gofmt -w
 
 git diff
 
