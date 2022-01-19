@@ -37,7 +37,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			WithSystemName(t.Name()).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(mnt),
 			)
