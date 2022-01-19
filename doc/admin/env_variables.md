@@ -60,6 +60,7 @@ Environment variables in this section only apply to the client side.
 |Variable                 |Description|
 |-------------------------|-----------|
 |FI\_MR\_CACHE\_MAX\_COUNT|Enable MR caching in OFI layer. Recommended to be set to 0 (disable) when CRT\_DISABLE\_MEM\_PIN is NOT set to 1. INTEGER. Default to unset.|
+|D\_CLEANUP\_ON\_EXIT|Delay stack cleanup to program exit|
 
 
 ## Debug System (Client & Server)
