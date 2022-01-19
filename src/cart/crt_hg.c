@@ -55,6 +55,51 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
+		.nad_type	= CRT_NA_UCX_RC,
+		.nad_str	= "ucx+rc_v",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_UD,
+		.nad_str	= "ucx+ud_v",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_UD,
+		.nad_str	= "ucx+rc_v,ud_v",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_O,
+		.nad_str	= "ucx+rc",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_UD_O,
+		.nad_str	= "ucx+ud",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_UD_O,
+		.nad_str	= "ucx+rc,ud",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_X,
+		.nad_str	= "ucx+rc_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_UD_X,
+		.nad_str	= "ucx+ud_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_UD_X,
+		.nad_str	= "ucx+rc_x,ud_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
 		.nad_str	= NULL,
 	}
 };
@@ -664,11 +709,18 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
-	if (rc != 0) {
-		D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
-		HG_Finalize(hg_class);
-		D_GOTO(out, rc = -DER_HG);
+	if (crt_is_service() || (provider != CRT_NA_UCX_RC &&
+		provider != CRT_NA_UCX_UD && provider != CRT_NA_UCX_RC_UD &&
+		provider != CRT_NA_UCX_RC_O && provider != CRT_NA_UCX_UD_O &&
+		provider != CRT_NA_UCX_RC_UD_O &&
+		provider != CRT_NA_UCX_RC_X && provider != CRT_NA_UCX_UD_X &&
+		provider != CRT_NA_UCX_RC_UD_X)) {
+		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
+		if (rc != 0) {
+			D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
+			HG_Finalize(hg_class);
+			D_GOTO(out, rc = -DER_HG);
+		}
 	}
 
 	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",

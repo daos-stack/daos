@@ -223,10 +223,10 @@ func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
 	if c.ValidateProvider == nil {
 		return errors.New("missing ValidateProvider method on engine config")
 	}
-	if err := c.ValidateProvider(ctx, c.Fabric.Interface, c.Fabric.Provider); err != nil {
-		return errors.Wrapf(err, "network device %s does not support provider %s",
-			c.Fabric.Interface, c.Fabric.Provider)
-	}
+	//if err := c.ValidateProvider(ctx, c.Fabric.Interface, c.Fabric.Provider); err != nil {
+	//	return errors.Wrapf(err, "network device %s does not support provider %s",
+	//		c.Fabric.Interface, c.Fabric.Provider)
+	//}
 
 	if err := c.Storage.Validate(); err != nil {
 		return errors.Wrap(err, "storage config validation failed")
