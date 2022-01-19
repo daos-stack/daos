@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -x
 
@@ -34,5 +34,9 @@ then
         $CP --quiet --no-tree --file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
     done
 fi
+
+src/control/ -name '*.go' -and -not -path '*vendor*' | xargs gofmt -w
+
+git diff
 
 exit $RC
