@@ -54,9 +54,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	if (oh->doh_caching && len < (1024 * 1024) && oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
 		/* Only do readahead if the requested size is less than 1Mb and
-		 * the file size is > 1Mb
+		 * the file size is > 1Mb.
+		 * Do not use readahead if wb_caching is on either.
 		 */
-		buff_len += READAHEAD_SIZE;
+		if (!fs_handle->dpi_info->di_wb_cache)
+			buff_len += READAHEAD_SIZE;
 	} else {
 		rc = daos_event_init(&ev->de_ev, fs_handle->dpi_eq, NULL);
 		if (rc != -DER_SUCCESS)
