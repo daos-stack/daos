@@ -297,7 +297,6 @@ class DaosServerCommand(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
-                self.enable_vmd = FormattedParameter("--enable-vmd", False)
 
 class DaosServerInformation():
     """An object that stores the daos_server storage and network scan data."""
