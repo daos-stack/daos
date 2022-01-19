@@ -712,13 +712,13 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 					WithTargetCount(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram"),
+							WithStorageClass("ram"),
 					),
 				engine.MockConfig().
 					WithTargetCount(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram"),
+							WithStorageClass("ram"),
 					),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)

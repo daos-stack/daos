@@ -19,12 +19,13 @@ import (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Scan     storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format   storageFormatCmd   `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query    storageQueryCmd    `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	Set      setFaultyCmd       `command:"set" description:"Manually set the device state."`
-	Replace  storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
-	Identify storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
+	Scan       storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format     storageFormatCmd   `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query      storageQueryCmd    `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	NvmeRebind nvmeRebindCmd      `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
+	Set        setFaultyCmd       `command:"set" description:"Manually set the device state."`
+	Replace    storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
+	Identify   storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -154,6 +155,50 @@ func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) er
 		return err
 	}
 	cmd.log.Info(out.String())
+
+	return resp.Errors()
+}
+
+// nvmeRebindCmd is the struct representing the nvme-rebind storage subcommand.
+type nvmeRebindCmd struct {
+	logCmd
+	ctlInvokerCmd
+	hostListCmd
+	jsonOutputCmd
+	PCIAddr string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to rebind."`
+}
+
+// Execute is run when nvmeRebindCmd activates.
+//
+// Rebind NVMe SSD from kernel driver and bind to user-space driver on single server.
+func (cmd *nvmeRebindCmd) Execute(args []string) error {
+	ctx := context.Background()
+
+	if len(cmd.hostlist) != 1 {
+		return errors.New("command expects a single host in hostlist")
+	}
+
+	req := &control.NvmeRebindReq{PCIAddr: cmd.PCIAddr}
+	req.SetHostList(cmd.hostlist)
+
+	resp, err := control.StorageNvmeRebind(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, resp.Errors())
+	}
+
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.log.Error(outErr.String())
+	} else {
+		cmd.log.Info("Command completed successfully")
+	}
 
 	return resp.Errors()
 }
