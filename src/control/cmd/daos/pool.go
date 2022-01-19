@@ -110,7 +110,7 @@ func (cmd *poolBaseCmd) disconnectPool() {
 	if rc == -C.DER_NOMEM {
 		rc = C.daos_pool_disconnect(cmd.cPoolHandle, nil)
 		// DAOS-8866, daos_pool_disconnect() might have failed, but worked anyway.
-		if (rc == -C.DER_NO_HDL) {
+		if rc == -C.DER_NO_HDL {
 			rc = -C.DER_SUCCESS
 		}
 	}
