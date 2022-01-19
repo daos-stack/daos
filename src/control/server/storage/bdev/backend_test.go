@@ -258,8 +258,7 @@ func TestBackend_Scan(t *testing.T) {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
 			test.AssertEqual(t, 1, len(mei.InitCalls), "unexpected number of spdk init calls")
-			// TODO: re-enable when tanabarr/control-spdk-fini-after-init change
-			//test.AssertEqual(t, 1, len(mei.FiniCalls), "unexpected number of spdk fini calls")
+			test.AssertEqual(t, 1, len(mei.FiniCalls), "unexpected number of spdk fini calls")
 		})
 	}
 }
@@ -589,9 +588,8 @@ func TestBackend_Format(t *testing.T) {
 				if diff := cmp.Diff(tc.expInitOpts, mei.InitCalls, defCmpOpts()...); diff != "" {
 					t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 				}
-				// TODO: re-enable when tanabarr/control-spdk-fini-after-init change
-				//test.AssertEqual(t, 1, len(mei.FiniCalls),
-				//	"unexpected number of spdk fini calls")
+				test.AssertEqual(t, 1, len(mei.FiniCalls),
+					"unexpected number of spdk fini calls")
 			}
 		})
 	}

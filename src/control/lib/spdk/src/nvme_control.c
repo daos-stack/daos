@@ -11,7 +11,7 @@
 #include <spdk/pci_ids.h>
 
 #include "nvme_control.h"
-#include "nvme_control_common.h"
+#include "nvme_control_internal.h"
 
 enum lba0_write_result {
 	LBA0_WRITE_PENDING	= 0x0,
@@ -96,9 +96,62 @@ get_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct health_entry *health)
 }
 
 struct ret_t *
+_discover(prober probe, health_getter get_health)
+{
+	struct ctrlr_entry	*ctrlr_entry;
+	struct health_entry	*health_entry;
+	struct ret_t		*ret;
+	int			 rc;
+
+	/*
+	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
+	 *  for each NVMe controller found, giving our application a choice on
+	 *  whether to attach to each controller.  attach_cb will then be
+	 *  called for each controller after the SPDK NVMe driver has completed
+	 *  initializing the controller we chose to attach.
+	 */
+	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
+	if (rc != 0)
+		goto fail;
+
+	if (!g_controllers || !g_controllers->ctrlr)
+		return init_ret(); /* no controllers */
+
+	/*
+	 * Collect NVMe SSD health stats for each probed controller.
+	 * TODO: move to attach_cb?
+	 */
+	ctrlr_entry = g_controllers;
+
+	while (ctrlr_entry) {
+		health_entry = calloc(1, sizeof(struct health_entry));
+		if (health_entry == NULL) {
+			rc = -ENOMEM;
+			goto fail;
+		}
+
+		rc = get_health(ctrlr_entry->ctrlr, health_entry);
+		if (rc != 0) {
+			free(health_entry);
+			goto fail;
+		}
+
+		ctrlr_entry->health = health_entry;
+		ctrlr_entry = ctrlr_entry->next;
+	}
+
+	return collect();
+
+fail:
+	ret = init_ret();
+	ret->rc = rc;
+	return ret;
+}
+
+struct ret_t *
 nvme_discover(void)
 {
-	return _discover(&spdk_nvme_probe, true, &get_health_logs);
+	return _discover(&spdk_nvme_probe, &get_health_logs);
 }
 
 /** callback for write command completion when wiping out a ns */
@@ -289,7 +342,6 @@ nvme_wipe_namespaces(void)
 	}
 
 out:
-	cleanup(true);
 	return ret;
 }
 

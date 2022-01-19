@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2019-2021 Intel Corporation.
+* (C) Copyright 2019-2022 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
 */
@@ -15,7 +15,7 @@
 #include <spdk/env.h>
 #include "nvme_internal.h"
 
-#include "../include/nvme_control_common.h"
+#include "../include/nvme_control_internal.h"
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
@@ -156,8 +156,7 @@ test_discover_null_controllers(void **state)
 {
 	(void)state; /*unused*/
 
-	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			     &mock_get_health_logs);
+	test_ret = _discover(&mock_spdk_nvme_probe_ok, &mock_get_health_logs);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -174,8 +173,7 @@ test_discover_set_controllers(void **state)
 	g_controllers->health = NULL;
 	g_controllers->next = NULL;
 
-	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			     &mock_get_health_logs);
+	test_ret = _discover(&mock_spdk_nvme_probe_ok, &mock_get_health_logs);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -192,8 +190,7 @@ test_discover_probe_fail(void **state)
 	g_controllers->health = NULL;
 	g_controllers->next = NULL;
 
-	test_ret = _discover(&mock_spdk_nvme_probe_fail, false,
-			     &mock_get_health_logs);
+	test_ret = _discover(&mock_spdk_nvme_probe_fail, &mock_get_health_logs);
 	assert_int_equal(test_ret->rc, -1);
 
 	assert_null(test_ret->ctrlrs);
@@ -281,10 +278,8 @@ setup(void **state)
 static int
 teardown(void **state)
 {
-	clean_ret(test_ret);
-	free(test_ret);
-	test_ret = NULL;
-	cleanup(false);
+	nvme_clean_ret(test_ret);
+	nvme_clean_globals();
 
 	return 0;
 }

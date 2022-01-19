@@ -98,7 +98,10 @@ func (w *spdkWrapper) init(log logging.Logger, spdkOpts *spdk.EnvOptions) (resto
 		return nil, errors.Wrap(err, "failed to init spdk env")
 	}
 
-	return restoreOutput, nil
+	return func() {
+		restoreOutput()
+		w.FiniSPDKEnv(log, spdkOpts)
+	}, nil
 }
 
 func newBackend(log logging.Logger, sr *spdkSetupScript) *spdkBackend {

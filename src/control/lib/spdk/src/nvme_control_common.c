@@ -12,9 +12,9 @@
 #include <spdk/util.h>
 #include <daos_srv/control.h>
 
-#include "nvme_control_common.h"
+#include "nvme_control_internal.h"
 
-struct ctrlr_entry	*g_controllers;
+struct ctrlr_entry	*g_controllers = NULL;
 
 bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
@@ -124,34 +124,6 @@ init_ret(void)
 	return ret;
 }
 
-void
-clean_ret(struct ret_t *ret)
-{
-	struct ctrlr_t		*cnext;
-	struct ns_t		*nnext;
-	struct wipe_res_t	*wrnext;
-
-	while (ret && (ret->wipe_results)) {
-		wrnext = ret->wipe_results->next;
-		free(ret->wipe_results);
-		ret->wipe_results = wrnext;
-	}
-
-	while (ret && (ret->ctrlrs)) {
-		while (ret->ctrlrs->nss) {
-			nnext = ret->ctrlrs->nss->next;
-			free(ret->ctrlrs->nss);
-			ret->ctrlrs->nss = nnext;
-		}
-		if (ret->ctrlrs->stats)
-			free(ret->ctrlrs->stats);
-
-		cnext = ret->ctrlrs->next;
-		free(ret->ctrlrs);
-		ret->ctrlrs = cnext;
-	}
-}
-
 int
 get_controller(struct ctrlr_entry **entry, char *addr)
 {
@@ -175,62 +147,6 @@ get_controller(struct ctrlr_entry **entry, char *addr)
 	*entry = centry;
 
 	return 0;
-}
-
-struct ret_t *
-_discover(prober probe, bool detach, health_getter get_health)
-{
-	struct ctrlr_entry	*ctrlr_entry;
-	struct health_entry	*health_entry;
-	struct ret_t		*ret;
-	int			 rc;
-
-	/*
-	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
-	 *  for each NVMe controller found, giving our application a choice on
-	 *  whether to attach to each controller.  attach_cb will then be
-	 *  called for each controller after the SPDK NVMe driver has completed
-	 *  initializing the controller we chose to attach.
-	 */
-	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
-	if (rc != 0)
-		goto fail;
-
-	if (!g_controllers || !g_controllers->ctrlr)
-		return init_ret(); /* no controllers */
-
-	/*
-	 * Collect NVMe SSD health stats for each probed controller.
-	 * TODO: move to attach_cb?
-	 */
-	ctrlr_entry = g_controllers;
-
-	while (ctrlr_entry) {
-		health_entry = calloc(1, sizeof(struct health_entry));
-		if (health_entry == NULL) {
-			rc = -ENOMEM;
-			goto fail;
-		}
-
-		rc = get_health(ctrlr_entry->ctrlr, health_entry);
-		if (rc != 0) {
-			free(health_entry);
-			goto fail;
-		}
-
-		ctrlr_entry->health = health_entry;
-		ctrlr_entry = ctrlr_entry->next;
-	}
-
-	ret = collect();
-	/* TODO: cleanup(detach); */
-	return ret;
-
-fail:
-	cleanup(detach);
-	ret = init_ret();
-	ret->rc = rc;
-	return ret;
 }
 
 static int
@@ -494,12 +410,8 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	return;
 fail:
 	ret->rc = rc;
-	if (ret->rc == 0)
-		/* Catch unexpected failures */
-		ret->rc = -EINVAL;
 	if (ctrlr_tmp)
 		free(ctrlr_tmp);
-	clean_ret(ret);
 	return;
 }
 
@@ -516,7 +428,37 @@ collect(void)
 }
 
 void
-cleanup(bool detach)
+nvme_clean_ret(struct ret_t *ret)
+{
+	struct ctrlr_t		*cnext;
+	struct ns_t		*nnext;
+	struct wipe_res_t	*wrnext;
+
+	while (ret && (ret->wipe_results)) {
+		wrnext = ret->wipe_results->next;
+		free(ret->wipe_results);
+		ret->wipe_results = wrnext;
+	}
+
+	while (ret && (ret->ctrlrs)) {
+		while (ret->ctrlrs->nss) {
+			nnext = ret->ctrlrs->nss->next;
+			free(ret->ctrlrs->nss);
+			ret->ctrlrs->nss = nnext;
+		}
+		if (ret->ctrlrs->stats)
+			free(ret->ctrlrs->stats);
+
+		cnext = ret->ctrlrs->next;
+		free(ret->ctrlrs);
+		ret->ctrlrs = cnext;
+	}
+
+	free(ret);
+}
+
+void
+nvme_clean_globals(void)
 {
 	struct ns_entry			*nentry;
 	struct ctrlr_entry		*centry, *cnext;
@@ -525,7 +467,7 @@ cleanup(bool detach)
 	centry = g_controllers;
 
 	while (centry) {
-		if ((centry->ctrlr) && (detach))
+		if (centry->ctrlr)
 			spdk_nvme_detach_async(centry->ctrlr, &detach_ctx);
 		while (centry->nss) {
 			nentry = centry->nss->next;
@@ -545,4 +487,3 @@ cleanup(bool detach)
 
 	g_controllers = NULL;
 }
-
