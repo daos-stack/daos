@@ -4250,7 +4250,7 @@ def run(wf, args):
                 fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
                 fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
-                
+
                 # Container attribute tests
                 fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
                 fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
