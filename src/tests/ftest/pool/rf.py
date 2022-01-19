@@ -73,7 +73,6 @@ class PoolRedunFacProperty(IorTestBase):
 
             # Create the container and open handle
             self.container.create()
-            self.container.open()
 
             # Verify container redundancy factor property
             self.verify_cont_rf(cont_rf)
