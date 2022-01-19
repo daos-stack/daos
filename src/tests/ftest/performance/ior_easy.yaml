@@ -60,6 +60,7 @@ ior: &ior_base
   read_flags: "-r -R -C -e -g -G 27 -k -Q 1 -v"
   block_size: '150G'
   sw_deadline: 30
+  sw_wearout: 1
   sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
 ior_dfs_sx:
   <<: *ior_base

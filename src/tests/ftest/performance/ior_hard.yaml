@@ -57,6 +57,7 @@ ior: &ior_base
   block_size: '47008'
   segment_count: 10000000
   sw_deadline: 30
+  sw_wearout: 1
   sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
 ior_dfs_sx:
   <<: *ior_base
