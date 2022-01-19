@@ -1746,7 +1746,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 
 	/* create the destination directory if it does not exist */
 	rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-	if ((rc == EEXIST) && (strncmp(dst_path,"/") != 0)) {
+	if ((rc == EEXIST) && (strncmp(dst_path, "/", 2) != 0)) {
 		D_DEBUG("Directory %s exists.\n", dst_path);
 	} else if (rc != 0) {
 		D_GOTO(out, rc = daos_errno2der(rc));
