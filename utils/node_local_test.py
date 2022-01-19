@@ -2672,6 +2672,7 @@ class posix_tests():
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         lineresult = rc.stdout.decode('utf-8').splitlines()
+        assert len(lineresult) == 4
         assert lineresult[1] == '    Directories: 1'
         assert lineresult[2] == '    Files:       1'
         assert lineresult[3] == '    Links:       1'
