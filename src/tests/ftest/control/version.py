@@ -50,7 +50,7 @@ class DAOSVersion(TestWithServers):
 
         result = re.findall(r"dmg version ([\d.]+)", output)
         if not result:
-            errors.append("dmg version is not in the output! {}".format(output))
+            errors.append("Failed to obtain dmg version! {}".format(output))
         else:
             dmg_version = result[0]
             self.log.info("dmg version = %s", dmg_version)
@@ -65,7 +65,7 @@ class DAOSVersion(TestWithServers):
 
         result = re.findall(r"daos version ([\d.]+)", output)
         if not result:
-            errors.append("daos version is not in the output! {}".format(output))
+            errors.append("Failed to obtain daos version! {}".format(output))
         else:
             daos_version = result[0]
             self.log.info("daos version = %s", daos_version)
@@ -81,7 +81,7 @@ class DAOSVersion(TestWithServers):
 
         result = re.findall(r"DAOS Agent v([\d.]+)", stdout)
         if not result:
-            errors.append("daos_agent version is not in the output! {}".format(output))
+            errors.append("Failed to obtain daos_agent version! {}".format(output))
         else:
             daos_agent_version = result[0]
             self.log.info("daos_agent version = %s", daos_agent_version)
@@ -97,7 +97,7 @@ class DAOSVersion(TestWithServers):
 
         result = re.findall(r"DAOS Control Server v([\d.]+)", stdout)
         if not result:
-            errors.append("daos_server version is not in the output! {}".format(output))
+            errors.append("Failed to obtain daos_server version! {}".format(output))
         else:
             daos_server_version = result[0]
             self.log.info("daos_server version = %s", daos_server_version)
