@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -425,11 +425,13 @@ func (cmd *existingContainerCmd) resolveAndConnect(contFlags C.uint, ap *C.struc
 	}
 
 	if err = cmd.openContainer(contFlags); err != nil {
+		cleanupPool()
 		return
 	}
 
 	if ap != nil {
 		if err = copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
+			cleanupPool()
 			return
 		}
 		ap.cont = cmd.cContHandle
