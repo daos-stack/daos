@@ -115,7 +115,7 @@ func (cmd *containerBaseCmd) closeContainer() error {
 	cmd.log.Debugf("closing container: %s", cmd.contUUID)
 
 	rc := C.daos_cont_close(cmd.cContHandle, nil)
-	if (rc == -C.DER_NOMEM) {
+	if rc == -C.DER_NOMEM {
 		rc = C.daos_cont_close(cmd.cContHandle, nil)
 	}
 	return daosError(rc)
