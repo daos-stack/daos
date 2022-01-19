@@ -1688,7 +1688,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 	if (dst_file_dfs->type == POSIX) {
 		rc = symlink(symlink_value, dst_path);
 		if ((rc != 0) && (errno == EEXIST)) {
-			D_DEBUG("Link %s exists.\n", dst_path);
+			D_DEBUG(DB_TRACE, "Link %s exists.\n", dst_path);
 			D_GOTO(out_copy_symlink, rc = -DER_EXIST);
 		} else if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on symlink('%s')",
@@ -1698,7 +1698,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 	} else if (dst_file_dfs->type == DAOS) {
 		rc = dfs_sys_symlink(dst_file_dfs->dfs_sys, symlink_value, dst_path);
 		if (rc == EEXIST) {
-			D_DEBUG"Link %s exists.\n", dst_path);
+			D_DEBUG(DB_TRACE, "Link %s exists.\n", dst_path);
 			D_GOTO(out_copy_symlink, rc = -DER_EXIST);
 		} else if (rc != 0) {
 			DH_PERROR_DER(ap, rc,
@@ -1747,7 +1747,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 	/* create the destination directory if it does not exist */
 	rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
 	if ((rc == EEXIST) && (strncmp(dst_path, "/", 2) != 0)) {
-		D_DEBUG("Directory %s exists.\n", dst_path);
+		D_DEBUG(DB_TRACE, "Directory %s exists.\n", dst_path);
 	} else if (rc != 0) {
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
