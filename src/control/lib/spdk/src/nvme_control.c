@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2018-2021 Intel Corporation.
+* (C) Copyright 2018-2022 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
 */
@@ -139,18 +139,16 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 	/** allocate NVMe queue pair for the controller */
 	qpair = spdk_nvme_ctrlr_alloc_io_qpair(centry->ctrlr, NULL, 0);
 	if (qpair == NULL) {
-		snprintf(res->info, sizeof(res->info),
-			 "spdk_nvme_ctrlr_alloc_io_qpair()\n");
-		res->rc = -1;
+		snprintf(res->info, sizeof(res->info), "spdk_nvme_ctrlr_alloc_io_qpair()\n");
+		res->rc = -ENOMEM;
 		return res;
 	}
 
 	/** allocate a 4K page, with 4K alignment */
 	buf =  spdk_dma_zmalloc(4096, 4096, NULL);
 	if (buf == NULL) {
-		snprintf(res->info, sizeof(res->info),
-			 "spdk_dma_zmalloc()\n");
-		res->rc = -1;
+		snprintf(res->info, sizeof(res->info), "spdk_dma_zmalloc()\n");
+		res->rc = -ENOMEM;
 		spdk_nvme_ctrlr_free_io_qpair(qpair);
 		return res;
 	}
@@ -182,9 +180,8 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 					    4096 / sector_size /** #LBAS */,
 					    write_complete, &data, 0);
 		if (rc != 0) {
-			snprintf(res->info, sizeof(res->info),
-				 "spdk_nvme_ns_cmd_write() (%d)\n", rc);
-			res->rc = -1;
+			snprintf(res->info, sizeof(res->info), "spdk_nvme_ns_cmd_write()\n");
+			res->rc = rc;
 			break;
 		}
 
@@ -192,8 +189,7 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 		while (data.result == LBA0_WRITE_PENDING) {
 			rc = spdk_nvme_qpair_process_completions(qpair, 0);
 			if (rc < 0) {
-				fprintf(stderr,
-					"process completions returns %d\n", rc);
+				fprintf(stderr, "process completions returns %d\n", rc);
 				break;
 			}
 		}
@@ -250,8 +246,10 @@ wipe_ctrlrs(void)
 struct ret_t *
 nvme_wipe_namespaces(void)
 {
-	struct ret_t	*ret = init_ret();
+	struct ret_t	*ret;
 	int		 rc;
+
+	ret = init_ret();
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -262,30 +260,25 @@ nvme_wipe_namespaces(void)
 	 */
 	rc = spdk_nvme_probe(NULL, NULL, probe_cb, attach_cb, NULL);
 	if (rc < 0) {
-		snprintf(ret->info, sizeof(ret->info),
-			 "spdk_nvme_probe() (%d)\n", rc);
-		cleanup(true);
-		ret->rc = -1;
-		return ret;
+		snprintf(ret->info, sizeof(ret->info), "spdk_nvme_probe()\n");
+		ret->rc = rc;
+		goto out;
 	}
 
 	if (g_controllers == NULL) {
-		snprintf(ret->info, sizeof(ret->info),
-			 "no controllers found\n");
-		cleanup(true);
-		ret->rc = -1;
-		return ret;
+		snprintf(ret->info, sizeof(ret->info), "no controllers found\n");
+		ret->rc = -ENOENT;
+		goto out;
 	}
 
 	ret->wipe_results = wipe_ctrlrs();
 	if (ret->wipe_results == NULL) {
-		snprintf(ret->info, sizeof(ret->info),
-			 "no namespaces on controller\n");
-		cleanup(true);
-		ret->rc = -1;
-		return ret;
+		snprintf(ret->info, sizeof(ret->info), "no namespaces on controller\n");
+		ret->rc = -ENOENT;
+		goto out;
 	}
 
+out:
 	cleanup(true);
 	return ret;
 }
@@ -498,8 +491,8 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 			rc = opts_add_pci_addr(&opts, &opts.pci_allowed,
 					       pcil[i]);
 			if (rc < 0) {
-				fprintf(stderr, "spdk env add pci: %d\n", rc);
-				sprintf(ret->info, "DAOS SPDK add pci failed");
+				sprintf(ret->info, "daos_spdk_init(): opts_add_pci_addr()");
+				fprintf(stderr, "%s\n", ret->info);
 				goto out;
 			}
 		}
@@ -509,8 +502,8 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 
 	rc = spdk_env_init(&opts);
 	if (rc < 0) {
-		fprintf(stderr, "spdk env init: %d\n", rc);
-		sprintf(ret->info, "DAOS SPDK init failed");
+		sprintf(ret->info, "daos_spdk_init(): spdk_env_init()");
+		fprintf(stderr, "%s\n", ret->info);
 	}
 
 out:

@@ -173,11 +173,11 @@ struct  _Ctl__SmdDevResp__Device
   /*
    * NVMe device state
    */
-  uint32_t dev_state;
+  char *dev_state;
 };
 #define CTL__SMD_DEV_RESP__DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_dev_resp__device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Ctl__SmdDevResp
@@ -263,11 +263,11 @@ struct  _Ctl__DevStateResp
   /*
    * NVMe device state
    */
-  uint32_t dev_state;
+  char *dev_state;
 };
 #define CTL__DEV_STATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_state_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Ctl__DevReplaceReq
@@ -305,11 +305,11 @@ struct  _Ctl__DevReplaceResp
   /*
    * NVMe device state
    */
-  uint32_t dev_state;
+  char *dev_state;
 };
 #define CTL__DEV_REPLACE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_replace_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Ctl__DevIdentifyReq
@@ -339,11 +339,11 @@ struct  _Ctl__DevIdentifyResp
   /*
    * NVMe device state
    */
-  uint32_t dev_state;
+  char *dev_state;
 };
 #define CTL__DEV_IDENTIFY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__dev_identify_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Ctl__SmdQueryReq
@@ -422,11 +422,11 @@ struct  _Ctl__SmdQueryResp__Device
   /*
    * NVMe device state
    */
-  uint32_t dev_state;
+  char *dev_state;
 };
 #define CTL__SMD_QUERY_RESP__DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_resp__device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, NULL, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, NULL, (char *)protobuf_c_empty_string }
 
 
 struct  _Ctl__SmdQueryResp__Pool

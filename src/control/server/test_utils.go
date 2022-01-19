@@ -163,7 +163,7 @@ func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, en
 			WithTargetCount(1).
 			WithStorage(
 				storage.NewTierConfig().
-					WithBdevClass("nvme").
+					WithStorageClass("nvme").
 					WithBdevDeviceList("foo", "bar"),
 			),
 		)
