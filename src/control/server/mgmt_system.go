@@ -395,7 +395,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.Join dispatch, req:%#v\n", req)
+	svc.log.Debugf("MgmtSvc.Join dispatch, req:%s", mgmtpb.Debug(req))
 
 	replyAddr, err := getPeerListenAddr(ctx, req.GetAddr())
 	if err != nil {
@@ -426,7 +426,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		resp = &r.JoinResp
 	}
 
-	svc.log.Debugf("MgmtSvc.Join dispatch, resp:%#v\n", resp)
+	svc.log.Debugf("MgmtSvc.Join dispatch, resp:%s", mgmtpb.Debug(resp))
 
 	return resp, nil
 }
@@ -520,7 +520,7 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	// Not strictly necessary but helps with debugging.
 	dl, ok := ctx.Deadline()
 	if ok {
-		ranksReq.SetTimeout(dl.Sub(time.Now()))
+		ranksReq.SetTimeout(time.Until(dl))
 	}
 
 	ranksReq.SetHostList(svc.membership.HostList(req.Ranks))

@@ -14,7 +14,6 @@ import (
 
 	"github.com/hashicorp/raft"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -158,11 +157,7 @@ func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *
 // database that does not support raft replication and does all
 // operations in memory.
 func MockDatabase(t *testing.T, log logging.Logger) *Database {
-	localhost := &net.TCPAddr{
-		IP:   net.IPv4(127, 0, 0, 1),
-		Port: build.DefaultControlPort,
-	}
-	return MockDatabaseWithAddr(t, log, localhost)
+	return MockDatabaseWithAddr(t, log, common.LocalhostCtrlAddr())
 }
 
 // TestDatabase returns a database that is backed by temporary storage
