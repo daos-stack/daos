@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -288,9 +288,8 @@ crt_plugin_fini(void)
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-		if (!crt_plugin_gdata.cpg_prog_cbs_old[i])
-			continue;
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
+		if (crt_plugin_gdata.cpg_prog_cbs_old[i])
+			D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
 	}
 
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
@@ -646,7 +645,7 @@ out:
 
 direct_out:
 	if (rc == 0)
-		d_log_fini(); /* d_log_fini is reference counted aack */
+		d_log_fini(); /* d_log_fini is reference counted */
 	else
 		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
 
