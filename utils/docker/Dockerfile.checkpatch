@@ -13,9 +13,9 @@ ARG CB0
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
 # Clean up any repos afterwards to save space.
-RUN dnf -y upgrade &&						\
-    dnf -y install dnf-plugins-core &&				\
+RUN dnf -y install dnf-plugins-core &&				\
     dnf config-manager --save --setopt=install_weak_deps=False && \
+    dnf -y upgrade &&						\
     dnf -y install codespell file findutils git golang-bin	\
 	python3-clustershell python3-pygithub python3-numpy	\
 	python3-paramiko python3-pylint python3-pyxattr		\
