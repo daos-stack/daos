@@ -2,7 +2,7 @@
 
 # Firsly deny everything and then allow only directories and files that we're
 # interested in.  Other files will not be required for the build and they
-# just generate noise and extra work for the docker daemon.
+# just generate noise and extra work for the docker deamon.
 *
 !src
 !utils

@@ -217,7 +217,6 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   branch: 'gofmt',
                                    ignored_files: "src/control/vendor/*:" +
                                                   "src/include/daos/*.pb-c.h:" +
                                                   "src/common/*.pb-c.[ch]:" +
