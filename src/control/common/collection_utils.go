@@ -42,12 +42,8 @@ func (s StringSet) Add(values ...string) {
 
 // Has checks if the passed string is in the StringSet.
 func (s StringSet) Has(val string) bool {
-	for str, _ := range s {
-		if str == val {
-			return true
-		}
-	}
-	return false
+	_, exists := s[val]
+	return exists
 }
 
 func (s StringSet) String() string {
