@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
+import re
 from apricot import TestWithServers
 
 class PoolPDAProperty(TestWithServers):
@@ -27,11 +28,7 @@ class PoolPDAProperty(TestWithServers):
         cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
                                                 self.container.uuid)
         cont_prop_stdout = cont_prop.stdout_text
-        prop_list = cont_prop_stdout.split('\n')[1:]
-        cont_index = [i for i, word in enumerate(prop_list)
-                      if word.startswith(match_str)][0]
-        pda_str = (prop_list[cont_index].split(match_str)[1].strip())
-        pda_value = int(pda_str)
+        pda_value = int(re.search(match_str + ".*([\d]+)", cont_prop_stdout).group(1))
         self.assertEqual(expected_value, pda_value)
 
     def test_pda_pool_property(self):
