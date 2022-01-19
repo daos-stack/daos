@@ -28,7 +28,7 @@ class PoolPDAProperty(TestWithServers):
         cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
                                                 self.container.uuid)
         cont_prop_stdout = cont_prop.stdout_text
-        pda_value = int(re.search(match_str + ".*([\d]+)", cont_prop_stdout).group(1))
+        pda_value = int(re.search(match_str + r".*([\d]+)", cont_prop_stdout).group(1))
         self.assertEqual(expected_value, pda_value)
 
     def test_pda_pool_property(self):
