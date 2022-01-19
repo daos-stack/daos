@@ -708,7 +708,7 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	 * we are the "nominated" replica, start a campaign without waiting for
 	 * the election timeout.
 	 */
-	if (create && nominated(replicas, db_uuid)) {
+	if (create && nominated(replicas, svc->s_db_uuid)) {
 		/* Give others a chance to get ready for voting. */
 		dss_sleep(1 /* ms */);
 		rc = rdb_campaign(svc->s_db);
@@ -840,21 +840,11 @@ int
 ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	      bool create, size_t size, d_rank_list_t *replicas, void *arg)
 {
-	uuid_t			 db_uuid_buf;
 	struct ds_rsvc		*svc = NULL;
-	struct ds_rsvc_class	*impl;
 	d_list_t		*entry;
 	int			 rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-
-	impl = rsvc_class(class);
-	if (!create) {
-		rc = impl->sc_load_uuid(id, db_uuid_buf);
-		if (rc != 0)
-			goto out;
-		db_uuid = db_uuid_buf;
-	}
 
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
@@ -881,13 +871,6 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 		goto out;
 	}
 
-	if (create) {
-		rc = impl->sc_store_uuid(id, db_uuid);
-		if (rc != 0) {
-			stop(svc, create /* destroy */);
-			goto out;
-		}
-	}
 	D_DEBUG(DB_MD, "%s: started replicated service\n", svc->s_name);
 	ds_rsvc_put(svc);
 out:
@@ -954,10 +937,7 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 	if (rc != 0)
 		return -DER_ALREADY;
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
-	rc = stop(svc, destroy);
-	if (!rc && destroy)
-		rc = rsvc_class(class)->sc_delete_uuid(id);
-	return rc;
+	return stop(svc, destroy);
 }
 
 struct stop_ult {

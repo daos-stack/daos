@@ -437,14 +437,12 @@ err_dfs_sys:
 int
 dfs_sys_umount(dfs_sys_t *dfs_sys)
 {
-	int		hash_rc;
-	int		umount_rc;
+	int		rc;
 	d_list_t	*rlink;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
 
-	hash_rc = 0;
 	if (dfs_sys->hash != NULL) {
 		/* Decrease each reference by one. */
 		while (1) {
@@ -455,24 +453,27 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 			d_hash_rec_decref(dfs_sys->hash, rlink);
 		}
 
-		hash_rc = d_hash_table_destroy(dfs_sys->hash, false);
-		if (hash_rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to destroy hash table: "
-				DF_RC"\n", DP_RC(hash_rc));
+		rc = d_hash_table_destroy(dfs_sys->hash, false);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "failed to destroy hash table: "DF_RC"\n", DP_RC(rc));
+			return rc;
 		}
+		dfs_sys->hash = NULL;
 	}
 
-	umount_rc = dfs_umount(dfs_sys->dfs);
-	if (umount_rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", umount_rc);
+	if (dfs_sys->dfs != NULL) {
+		rc = dfs_umount(dfs_sys->dfs);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", rc);
+			return rc;
+		}
+		dfs_sys->dfs = NULL;
 	}
 
+	/* Only free if umount was successful */
 	D_FREE(dfs_sys);
 
-	/** Try to return the rc of whichever call failed */
-	if (hash_rc != 0)
-		return hash_rc;
-	return umount_rc;
+	return 0;
 }
 
 int
@@ -815,10 +816,8 @@ dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list,
 
 listxattr:
 	rc = dfs_listxattr(dfs_sys->dfs, obj, list, &got_size);
-	if (rc != 0) {
-		*size = -1;
+	if (rc != 0)
 		D_GOTO(out_free_obj, rc);
-	}
 
 	if (*size < got_size)
 		rc = ERANGE;
@@ -871,10 +870,8 @@ dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 
 getxattr:
 	rc = dfs_getxattr(dfs_sys->dfs, obj, name, value, &got_size);
-	if (rc != 0) {
-		*size = -1;
+	if (rc != 0)
 		D_GOTO(out_free_obj, rc);
-	}
 
 	if (*size < got_size)
 		rc = ERANGE;
@@ -1012,8 +1009,6 @@ dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf,
 	}
 
 	rc = dfs_get_symlink_value(obj, buf, size);
-	if (rc != 0)
-		*size = -1;
 
 	dfs_release(obj);
 
@@ -1143,7 +1138,6 @@ int
 dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 	     daos_size_t *size, daos_event_t *ev)
 {
-	int		rc;
 	d_iov_t		iov;
 	d_sg_list_t	sgl;
 
@@ -1159,18 +1153,13 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr_out = 1;
 
-	rc = dfs_read(dfs_sys->dfs, obj, &sgl, off, size, ev);
-	if (rc != 0)
-		*size = -1;
-
-	return rc;
+	return dfs_read(dfs_sys->dfs, obj, &sgl, off, size, ev);
 }
 
 int
 dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	      daos_off_t off, daos_size_t *size, daos_event_t *ev)
 {
-	int		rc;
 	d_iov_t		iov;
 	d_sg_list_t	sgl;
 
@@ -1186,11 +1175,7 @@ dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr_out = 1;
 
-	rc = dfs_write(dfs_sys->dfs, obj, &sgl, off, ev);
-	if (rc != 0)
-		*size = -1;
-
-	return rc;
+	return dfs_write(dfs_sys->dfs, obj, &sgl, off, ev);
 }
 
 int

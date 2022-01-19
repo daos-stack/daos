@@ -9,6 +9,9 @@
 
 #include "daos_uns.h"
 
+#define ACL_ACCESS	"system.posix_acl_access"
+#define ACL_DEFAULT	"system.posix_acl_default"
+
 void
 dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		  const char *name, const char *value, size_t size,
@@ -19,8 +22,13 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
-	if (strcmp(name, DUNS_XATTR_NAME) == 0) {
-		struct duns_attr_t	dattr = {};
+	if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
+		struct duns_attr_t dattr = {};
+
+		if (inode->ie_root) {
+			DFUSE_TRA_WARNING(inode, "Attempt to set duns attr on container root");
+			D_GOTO(err, rc = EINVAL);
+		}
 
 		/* Just check this is valid, but don't do anything with it */
 		rc = duns_parse_attr((char *)value, size, &dattr);
@@ -30,8 +38,13 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		duns_attr = true;
 	}
 
-	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
-			  size, flags);
+	if (strncmp(name, ACL_ACCESS, sizeof(ACL_ACCESS)) == 0)
+		D_GOTO(err, rc = ENOTSUP);
+
+	if (strncmp(name, ACL_DEFAULT, sizeof(ACL_DEFAULT)) == 0)
+		D_GOTO(err, rc = ENOTSUP);
+
+	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value, size, flags);
 	if (rc == 0) {
 		/* Optionally remove the dentry to force a new lookup on access.
 		 * If the xattr is to set a UNS entry point, and dentry_dir

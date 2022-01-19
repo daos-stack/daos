@@ -82,7 +82,7 @@ const (
 	BdevFormatUnknownClass
 	BdevFormatFailure
 	BdevBadPCIAddress
-	BdevPCIAddressNotFound
+	BdevNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
 )
@@ -104,13 +104,13 @@ const (
 	ClientConnectionRefused
 	ClientConnectionClosed
 	ClientFormatRunningSystem
+	ClientRpcTimeout
 )
 
 // server fault codes
 const (
 	ServerUnknown Code = iota + 600
 	ServerScmUnmanaged
-	ServerBdevNotFound
 	ServerIommuDisabled
 	ServerWrongSystem
 	ServerPoolScmTooSmall
@@ -143,6 +143,9 @@ const (
 	ServerConfigDuplicateScmMount
 	ServerConfigDuplicateScmDeviceList
 	ServerConfigOverlappingBdevDeviceList
+	ServerConfigBdevCountMismatch
+	ServerConfigTargetCountMismatch
+	ServerConfigHelperStreamCountMismatch
 	ServerConfigFaultDomainInvalid
 	ServerConfigFaultCallbackNotFound
 	ServerConfigFaultCallbackInsecure
@@ -164,4 +167,6 @@ const (
 // security fault codes
 const (
 	SecurityUnknown Code = iota + 900
+	SecurityMissingCertFile
+	SecurityUnreadableCertFile
 )

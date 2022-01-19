@@ -1,0 +1,37 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+  test_clients:
+    - client-E
+timeout: 240
+pool:
+  name: daos_server
+  scm_size: 1G
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+  replication: !mux
+    rf0:
+      properties: rf:0
+      oclass: SX
+    rf2:
+      properties: rf:2
+      oclass: RP_3GX
+telemetry_metrics:
+  # remove this variable and it's use from the code,
+  # DAOS-8592 is resolved.
+  threshold_percent: 7 # 7%
+ior:
+  api: DFS
+  flags: "-v -w -r -k"
+  max_duration: 10
+  transfer_size: 1M
+  block_size: 536870912
+  dfs_destroy: False
+  test_file: /testFile
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"

@@ -285,7 +285,7 @@ public class DaosFile {
     //no limit to max returned entries for now
     String children = client.dfsReadDir(dfsPtr, objId, -1);
     return (children == null || (children = children.trim()).length() == 0) ?
-            new String[]{} : children.split(",");
+            new String[]{} : children.split("//");
   }
 
   /**

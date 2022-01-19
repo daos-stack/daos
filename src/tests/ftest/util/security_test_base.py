@@ -26,7 +26,7 @@ def acl_entry(usergroup, name, perm, permissions=None):
 
     """
     if perm == "random":
-        perm = random.choice(permissions)
+        perm = random.choice(permissions) #nosec
     if perm == "nonexist":
         return ""
     if "group" in usergroup:

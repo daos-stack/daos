@@ -6,6 +6,7 @@
 package drpc_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -20,9 +21,11 @@ func TestDrpc_LabelIsValid(t *testing.T) {
 		label     string
 		expResult bool
 	}{
-		"zero-length": {"", false},
-		"overlength":  {"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBBBBBBBBBBBbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb00000000000000000000000000000000000000000------------------------------------ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", false},
-		"valid":       {"this:is_a_valid_label.", true},
+		"zero-length fails": {"", false},
+		"overlength fails":  {strings.Repeat("x", drpc.MaxLabelLength+1), false},
+		"uuid fails":        {"54f26bfd-628f-4762-a28a-1c42bcb6565b", false},
+		"max-length ok":     {strings.Repeat("x", drpc.MaxLabelLength), true},
+		"valid chars ok":    {"this:is_a_valid-label.", true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotResult := drpc.LabelIsValid(tc.label)

@@ -10,6 +10,21 @@ import random
 import socket
 import time
 
+def get_hostname(host_addr):
+    """Get the hostname of a host.
+
+    Args:
+        host_addr (str): address to resolve into hostname.
+
+    Returns:
+        str: hostname of the host.
+
+    """
+    if not host_addr:
+        return None
+
+    fqdn, _, _ = socket.gethostbyaddr(host_addr.split(":")[0])
+    return fqdn.split(".")[0]
 
 class ManagementServiceResilience(TestWithServers):
     """Test Class Description:
@@ -40,8 +55,10 @@ class ManagementServiceResilience(TestWithServers):
 
         Returns:
             Pool entry, if found, or None.
+
         """
-        for pool_uuid in self.get_dmg_command().pool_list(no_query=True):
+        pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
+        for pool_uuid in pool_uuids:
             if pool_uuid.lower() == search_uuid.lower():
                 return pool_uuid
         return None
@@ -56,27 +73,25 @@ class ManagementServiceResilience(TestWithServers):
         self.log.info("Pool UUID %s on server group: %s",
                         self.pool.uuid, self.server_group)
         # Verify that the pool persisted.
-        if self.find_pool(self.pool.uuid):
-            self.log.info("Found pool in system.")
-        else:
-            self.fail("No pool found in system.")
+        while not self.find_pool(self.pool.uuid):
+            # Occasionally the pool may not be found
+            # immediately after creation if the read
+            # is serviced by a non-leader replica.
+            self.log.info("Pool %s not found yet.", self.pool.uuid)
+            time.sleep(1)
+        self.log.info("Found pool in system.")
 
     def get_leader(self):
         """Fetch the current system leader.
 
         Returns:
             str: hostname of the MS leader, or None
+
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
         l_addr = sys_leader_info["response"]["CurrentLeader"]
 
-        if not l_addr:
-            return None
-
-        l_hostname, _, _ = socket.gethostbyaddr(l_addr.split(":")[0])
-        l_hostname = l_hostname.split(".")[0]
-
-        return l_hostname
+        return get_hostname(l_addr)
 
     def verify_leader(self, replicas):
         """Verify the leader of the MS is in the replicas.
@@ -89,15 +104,13 @@ class ManagementServiceResilience(TestWithServers):
             str: address of the MS leader.
 
         """
-        l_hostname = None
+        l_hostname = self.get_leader()
         start = time.time()
-        while not l_hostname and (time.time() - start) < self.L_QUERY_TIMER:
-            l_hostname = self.get_leader()
-            # Check that the new leader is in the access list
-            if l_hostname not in replicas:
-                self.log.error("Selected leader <%s> is not within the replicas"
-                               " provided to servers", l_hostname)
+        while l_hostname not in replicas and (time.time() - start) < self.L_QUERY_TIMER:
+            self.log.info("Current leader: <%s>; "
+                            "waiting for new leader to step up", l_hostname)
             time.sleep(1)
+            l_hostname = self.get_leader()
 
         elapsed = time.time() - start
         if not l_hostname:
@@ -105,6 +118,45 @@ class ManagementServiceResilience(TestWithServers):
 
         self.log.info("*** found leader (%s) after %.2fs", l_hostname, elapsed)
         return l_hostname
+
+    def verify_dead(self, kill_list):
+        """Verify that the expected list of killed servers are marked dead.
+
+        Args:
+            kill_list (list): list of hostnames of servers to verify are dead.
+
+        Returns:
+            None
+
+        """
+        hostnames = {}
+
+        while True:
+            time.sleep(1)
+            dead_list = []
+            members = self.get_dmg_command().system_query()["response"]["members"]
+            for member in members:
+                if member["addr"] not in hostnames:
+                    hostname = get_hostname(member["addr"])
+                    if hostname is None:
+                        self.fail("Unable to resolve {} to hostname".format(member["addr"]))
+                    hostnames[member["addr"]] = hostname
+
+                if member["state"] == "excluded":
+                    dead_list.append(hostnames[member["addr"]])
+
+            if len(dead_list) != len(kill_list):
+                self.log.info("*** waiting for %d dead servers to be marked dead",
+                                len(kill_list))
+                continue
+
+            for hostname in kill_list:
+                if hostname not in dead_list:
+                    self.log.error("Server %s not found in dead_list", hostname)
+                    self.fail("Found more dead servers than expected!")
+
+            self.log.info("*** detected %d dead servers", len(dead_list))
+            return
 
     def launch_servers(self, resilience_num):
         """Setup and start the daos_servers.
@@ -131,6 +183,10 @@ class ManagementServiceResilience(TestWithServers):
                 },
         }
         self.start_servers(server_groups)
+
+        # Give SWIM some time to stabilize before we start killing stuff (DAOS-9116)
+        time.sleep(2 * len(self.hostlist_servers))
+
         return replicas
 
     def kill_servers(self, leader, replicas, N):
@@ -183,8 +239,9 @@ class ManagementServiceResilience(TestWithServers):
         self.verify_leader(survivors)
         self.get_dmg_command().hostlist = self.hostlist_servers
 
-        # Dump the current system state.
-        self.get_dmg_command().system_query()
+        # Wait until SWIM has marked the replicas as dead in order to
+        # avoid long timeouts and other issues.
+        self.verify_dead(kill_list)
 
         # Finally, verify that quorum has been retained by performing
         # write operations.
@@ -239,8 +296,9 @@ class ManagementServiceResilience(TestWithServers):
         Test Description:
             Test N=1 management service is accessible after 1 instance is removed.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_retained_quorum_N_1
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_retained_quorum_N_1
         """
         # Run test cases
         self.verify_retained_quorum(1)
@@ -252,8 +310,9 @@ class ManagementServiceResilience(TestWithServers):
         Test Description:
             Test N=2 management service is accessible after 2 instances are removed.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_retained_quorum_N_2
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_retained_quorum_N_2
         """
         # Run test cases
         self.verify_retained_quorum(2)
@@ -267,8 +326,9 @@ class ManagementServiceResilience(TestWithServers):
             lost (degraded mode), and then test that quorum can be regained for
             full functionality.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_regained_quorum_N_1
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_regained_quorum_N_1
         """
         # Run test case
         self.verify_regained_quorum(1)
@@ -282,8 +342,9 @@ class ManagementServiceResilience(TestWithServers):
             lost (degraded mode), and then test that quorum can be regained for
             full functionality.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_regained_quorum_N_2
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_regained_quorum_N_2
         """
         # Run test case
         self.verify_regained_quorum(2)

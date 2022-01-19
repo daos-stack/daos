@@ -10,7 +10,7 @@ graphical format.
    your cluster before starting your daos_server(s).
 2. Install and configure [Prometheus](https://prometheus.io/) to collect metrics
    from your DAOS servers. You may use `dmg telemetry config` as a shortcut.
-3. Start Prometheus. You may use `dmg telemetry run` as a shortcut.
+3. Start Prometheus.
 4. Install Grafana according to their installation instructions and start the
    Grafana service: `sudo systemctl start grafana-server`
 5. On Grafana, create a data source called "Prometheus" configured to point at

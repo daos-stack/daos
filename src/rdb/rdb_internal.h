@@ -80,6 +80,8 @@ struct rdb {
 	ABT_thread		d_callbackd;
 	ABT_thread		d_recvd;
 	ABT_thread		d_compactd;
+	size_t			d_ae_max_size;
+	unsigned int		d_ae_max_entries;
 };
 
 /* thresholds of free space for a leader to avoid appending new log entries
@@ -314,6 +316,7 @@ int rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		  daos_key_t *akey, d_iov_t *value);
 int rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		       daos_key_t *akey, d_iov_t *value);
+int rdb_vos_query_key_max(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, daos_key_t *akey);
 int rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		       enum rdb_probe_opc opc, daos_key_t *akey_in,
 		       daos_key_t *akey_out, d_iov_t *value);
@@ -429,6 +432,12 @@ rdb_lc_iter_fetch(daos_handle_t lc, uint64_t index, rdb_oid_t oid,
 		value == NULL ? 0 : value->iov_len);
 	return rdb_vos_iter_fetch(lc, index, oid, opc, akey_in, akey_out,
 				  value);
+}
+
+static inline int
+rdb_lc_query_key_max(daos_handle_t lc, uint64_t index, rdb_oid_t oid, d_iov_t *akey)
+{
+	return rdb_vos_query_key_max(lc, index, oid, akey);
 }
 
 static inline int

@@ -52,6 +52,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 	testCases := map[string][]Component{
 		"/ctl.CtlSvc/StorageScan":              {ComponentAdmin},
 		"/ctl.CtlSvc/StorageFormat":            {ComponentAdmin},
+		"/ctl.CtlSvc/StorageNvmeRebind":        {ComponentAdmin},
 		"/ctl.CtlSvc/NetworkScan":              {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareQuery":            {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareUpdate":           {ComponentAdmin},
@@ -87,6 +88,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/ListPools":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/ListContainers":         {ComponentAdmin},
 		"/mgmt.MgmtSvc/ContSetOwner":           {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCleanup":          {ComponentAdmin},
 		"/RaftTransport/AppendEntries":         {ComponentServer},
 		"/RaftTransport/AppendEntriesPipeline": {ComponentServer},
 		"/RaftTransport/RequestVote":           {ComponentServer},

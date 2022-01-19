@@ -34,7 +34,6 @@ import (
 
 type telemCmd struct {
 	Configure telemConfigCmd `command:"config" description:"Configure telemetry"`
-	Run       telemRunCmd    `command:"run" description:"Launch telemetry system"`
 	Metrics   metricsCmd     `command:"metrics" description:"Interact with metrics"`
 }
 
@@ -305,33 +304,6 @@ func (cmd *telemConfigCmd) Execute(_ []string) error {
 			return err
 		}
 		return nil
-	default:
-		return errors.Errorf("unsupported telemetry system: %q", cmd.System)
-	}
-}
-
-type telemRunCmd struct {
-	telemConfigCmd
-}
-
-func (cmd *telemRunCmd) runTelemetry(bin string, args ...string) error {
-	return unix.Exec(bin, append([]string{bin}, args...), nil)
-}
-
-func (cmd *telemRunCmd) Execute(_ []string) error {
-	switch strings.ToLower(cmd.System) {
-	case "prometheus":
-		promInfo, err := cmd.configurePrometheus()
-		if err != nil {
-			return err
-		}
-
-		cmd.log.Info("Starting Prometheus monitoring...")
-		dataPath := path.Join(filepath.Dir(promInfo.cfgPath), ".prometheus_data")
-		return cmd.runTelemetry(promInfo.binPath,
-			"--config.file", promInfo.cfgPath,
-			"--storage.tsdb.path", dataPath,
-		)
 	default:
 		return errors.Errorf("unsupported telemetry system: %q", cmd.System)
 	}

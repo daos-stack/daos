@@ -33,18 +33,11 @@ var (
 		Priority:    1,
 	}
 	eth1 = &ctlpb.FabricInterface{
-		Provider:    "ofi+sockets",
+		Provider:    "ofi+tcp",
 		Device:      "eth1",
 		Numanode:    1,
 		Netdevclass: 32,
 		Priority:    2,
-	}
-	eth1Native = netdetect.FabricScan{
-		Provider:    "ofi+psm",
-		DeviceName:  "eth1",
-		NUMANode:    1,
-		NetDevClass: 1,
-		Priority:    1,
 	}
 )
 

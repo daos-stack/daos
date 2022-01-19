@@ -23,18 +23,15 @@ func TestProvider_Scan(t *testing.T) {
 	ctrlr3 := storage.MockNvmeController(3)
 
 	for name, tc := range map[string]struct {
-		req           storage.BdevScanRequest
-		forwarded     bool
-		mbc           *MockBackendConfig
-		expRes        *storage.BdevScanResponse
-		expErr        error
-		expVMDEnabled bool
+		req       storage.BdevScanRequest
+		forwarded bool
+		mbc       *MockBackendConfig
+		expRes    *storage.BdevScanResponse
+		expErr    error
 	}{
 		"no devices": {
 			req:    storage.BdevScanRequest{},
 			expRes: &storage.BdevScanResponse{},
-			// TODO DAOS-8040: re-enable VMD
-			// expVMDEnabled: false, // disabled in mock by default
 		},
 		"single device": {
 			req: storage.BdevScanRequest{},
@@ -42,8 +39,6 @@ func TestProvider_Scan(t *testing.T) {
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr1},
 				},
-				// TODO DAOS-8040: re-enable VMD
-				// VmdEnabled: false,
 			},
 			expRes: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
@@ -63,25 +58,6 @@ func TestProvider_Scan(t *testing.T) {
 					ctrlr1, ctrlr2, ctrlr3,
 				},
 			},
-			expVMDEnabled: false,
-		},
-		"multiple devices; vmd enabled": {
-			req:       storage.BdevScanRequest{EnableVMD: true},
-			forwarded: true,
-			mbc: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{
-						ctrlr1, ctrlr2, ctrlr3,
-					},
-				},
-			},
-			expRes: &storage.BdevScanResponse{
-				Controllers: storage.NvmeControllers{
-					ctrlr1, ctrlr2, ctrlr3,
-				},
-			},
-			// TODO DAOS-8040: re-enable VMD
-			// expVMDEnabled: true,
 		},
 		"failure": {
 			req: storage.BdevScanRequest{},
@@ -108,8 +84,6 @@ func TestProvider_Scan(t *testing.T) {
 			if diff := cmp.Diff(tc.expRes, gotRes, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}
-			// TODO DAOS-8040: re-enable VMD
-			// common.AssertEqual(t, tc.expVMDEnabled, p.IsVMDEnabled(), "vmd enabled")
 		})
 	}
 }

@@ -251,6 +251,10 @@ enum {
 	VOS_OF_DEDUP			= (1 << 16),
 	/** Dedup update with memcmp verify mode */
 	VOS_OF_DEDUP_VERIFY		= (1 << 17),
+	/** Ignore fetch only used by shadow fetch to ignore the evt fetch */
+	VOS_OF_SKIP_FETCH		= (1 << 18),
+	/** Operation on EC object (currently only applies to update) */
+	VOS_OF_EC			= (1 << 19),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -322,8 +326,12 @@ enum {
 	VOS_IT_PUNCHED		= (1 << 6),
 	/** Cleanup stale DTX entry. */
 	VOS_IT_CLEANUP_DTX	= (1 << 7),
+	/** Cleanup stale DTX entry. */
+	VOS_IT_FOR_DISCARD	= (1 << 8),
+	/** Entry is not committed */
+	VOS_IT_UNCOMMITTED	= (1 << 9),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 8) - 1,
+	VOS_IT_MASK		= (1 << 10) - 1,
 };
 
 /**

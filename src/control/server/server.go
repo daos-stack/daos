@@ -34,14 +34,18 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
-	err := cfg.Validate(log)
+func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
+	err := cfg.Validate(ctx, log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
 	lookupNetIF := func(name string) (netInterface, error) {
-		return net.InterfaceByName(name)
+		iface, err := net.InterfaceByName(name)
+		if err != nil {
+			return nil, errors.Wrapf(err, "unable to retrieve interface %q", name)
+		}
+		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
@@ -214,7 +218,9 @@ func (srv *server) initStorage() error {
 	}
 
 	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
-	return srv.ctlSvc.Setup()
+	srv.ctlSvc.Setup()
+
+	return nil
 }
 
 func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config) (*EngineInstance, error) {
@@ -226,12 +232,6 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
-
-	// TODO DAOS-8040: re-enable VMD
-	// Indicate whether VMD devices have been detected and can be used.
-	// for _, bc := range cfg.Storage.BdevConfigs() {
-	//	bc.Bdev.VmdEnabled = srv.bdevProvider.IsVMDEnabled()
-	// }
 
 	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
 		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
@@ -259,7 +259,6 @@ func (srv *server) addEngines(ctx context.Context) error {
 	if nvmeScanResp == nil {
 		return errors.New("nil nvme scan response received")
 	}
-	srv.log.Debugf("set bdev cache when creating engine: %v", nvmeScanResp.Controllers)
 
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
@@ -337,7 +336,25 @@ func (srv *server) registerEvents() {
 			srv.mgmtSvc.startJoinLoop(ctx)
 			registerLeaderSubscriptions(srv)
 			srv.log.Debugf("requesting sync GroupUpdate after leader change")
-			srv.mgmtSvc.reqGroupUpdate(ctx, true)
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						// Wait for at least one engine to be ready to service the
+						// GroupUpdate request.
+						for _, ei := range srv.harness.Instances() {
+							if ei.IsReady() {
+								srv.mgmtSvc.reqGroupUpdate(ctx, true)
+								return
+							}
+						}
+						srv.log.Debugf("no engines ready for GroupUpdate; waiting %s", groupUpdateInterval)
+						time.Sleep(groupUpdateInterval)
+					}
+				}
+			}()
 			return nil
 		},
 		func(ctx context.Context) error {
@@ -395,15 +412,23 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *config.Server) error {
-	faultDomain, err := processConfig(log, cfg)
-	if err != nil {
-		return err
-	}
-
 	// Create the root context here. All contexts should inherit from this one so
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
+
+	// Add netdetect context to the root context to be used where required.
+	ctxNetdetect, err := netdetect.Init(ctx)
+	if err != nil {
+		return err
+	}
+	ctx = ctxNetdetect
+	defer netdetect.CleanUp(ctx)
+
+	faultDomain, err := processConfig(ctx, log, cfg)
+	if err != nil {
+		return err
+	}
 
 	srv, err := newServer(ctx, log, cfg, faultDomain)
 	if err != nil {

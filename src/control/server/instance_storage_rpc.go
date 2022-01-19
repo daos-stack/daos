@@ -65,6 +65,8 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 }
 
 func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
+	ei.log.Debugf("instance %d: calling into storage provider to format tiers", ei.Index())
+
 	for _, tr := range ei.storage.FormatBdevTiers() {
 		if tr.Error != nil {
 			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
@@ -83,8 +85,8 @@ func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
 	return
 }
 
-func (ei *EngineInstance) bdevWriteConfig() error {
-	return ei.storage.WriteNvmeConfig()
+func (ei *EngineInstance) bdevWriteNvmeConfig(ctx context.Context) error {
+	return ei.storage.WriteNvmeConfig(ctx, ei.log)
 }
 
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
@@ -153,7 +155,6 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 
 // StorageWriteNvmeConfig writes output NVMe config file used to allocate devices to be used by an
 // engine process.
-func (ei *EngineInstance) StorageWriteNvmeConfig() error {
-	ei.log.Infof("Writing nvme config file for %s instance %d", build.DataPlaneName, ei.Index())
-	return ei.bdevWriteConfig()
+func (ei *EngineInstance) StorageWriteNvmeConfig(ctx context.Context) error {
+	return ei.bdevWriteNvmeConfig(ctx)
 }

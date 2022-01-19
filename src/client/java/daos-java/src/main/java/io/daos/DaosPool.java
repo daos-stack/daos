@@ -18,27 +18,27 @@ public class DaosPool extends Shareable implements Closeable {
 
   private long poolPtr;
 
-  private String uuid;
+  private String id;
 
   // keyed by pool UUID
   private static final Map<String, DaosPool> poolMap = new ConcurrentHashMap<>();
 
   private static final Logger log = LoggerFactory.getLogger(DaosPool.class);
 
-  private DaosPool(String poolUuid) {
-    if (poolUuid.length() != Constants.UUID_LENGTH) {
-      throw new IllegalArgumentException("pool UUID length should be " + Constants.UUID_LENGTH);
+  private DaosPool(String poolId) {
+    if (poolId.length() > Constants.ID_LENGTH) {
+      throw new IllegalArgumentException("pool UUID length should be " + Constants.ID_LENGTH);
     }
-    this.uuid = poolUuid;
+    this.id = poolId;
   }
 
-  protected static DaosPool getInstance(String poolUuid, String serverGroup, int flags)
+  protected static DaosPool getInstance(String poolId, String serverGroup, int flags)
       throws IOException {
-    DaosPool dp = poolMap.get(poolUuid);
+    DaosPool dp = poolMap.get(poolId);
     if (dp == null) {
-      dp = new DaosPool(poolUuid);
-      poolMap.putIfAbsent(poolUuid, dp);
-      dp = poolMap.get(poolUuid);
+      dp = new DaosPool(poolId);
+      poolMap.putIfAbsent(poolId, dp);
+      dp = poolMap.get(poolId);
     }
     synchronized (dp) {
       dp.init(serverGroup, flags);
@@ -55,10 +55,10 @@ public class DaosPool extends Shareable implements Closeable {
       throw new IllegalArgumentException("server group length should be no more than " +
           Constants.SERVER_GROUP_NAME_MAX_LEN);
     }
-    poolPtr = DaosClient.daosOpenPool(uuid, serverGroup, flags);
+    poolPtr = DaosClient.daosOpenPool(id, serverGroup, flags);
     setInited(true);
     if (log.isDebugEnabled()) {
-      log.debug("opened pool {} with ptr {}", uuid, poolPtr);
+      log.debug("opened pool {} with ptr {}", id, poolPtr);
     }
   }
 
@@ -68,15 +68,15 @@ public class DaosPool extends Shareable implements Closeable {
     if (isInited() && poolPtr != 0 && getRefCnt() <= 0) {
       DaosClient.daosClosePool(poolPtr);
       if (log.isDebugEnabled()) {
-        log.debug("pool {} with ptr {} closed", uuid, poolPtr);
+        log.debug("pool {} with ptr {} closed", id, poolPtr);
       }
       setInited(false);
-      poolMap.remove(uuid);
+      poolMap.remove(id);
     }
   }
 
-  public String getUuid() {
-    return uuid;
+  public String getPoolId() {
+    return id;
   }
 
   public long getPoolPtr() {

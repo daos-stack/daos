@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
@@ -20,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -70,6 +72,10 @@ type HostStorageSet struct {
 	HostSet     *hostlist.HostSet `json:"hosts"`
 }
 
+func (hss *HostStorageSet) String() string {
+	return fmt.Sprintf("hosts %s, storage %+v", hss.HostSet, hss.HostStorage)
+}
+
 // NewHostStorageSet returns an initialized HostStorageSet for the given
 // host address and HostStorage configuration.
 func NewHostStorageSet(hostAddr string, hs *HostStorage) (*HostStorageSet, error) {
@@ -85,6 +91,14 @@ func NewHostStorageSet(hostAddr string, hs *HostStorage) (*HostStorageSet, error
 
 // HostStorageMap provides a map of HostStorage keys to HostStorageSet values.
 type HostStorageMap map[uint64]*HostStorageSet
+
+func (hsm HostStorageMap) String() string {
+	var strs []string
+	for _, hss := range hsm {
+		strs = append(strs, hss.String())
+	}
+	return strings.Join(strs, "\n")
+}
 
 // Add inserts the given host address to a matching HostStorageSet or
 // creates a new one.
@@ -414,4 +428,49 @@ func StorageFormat(ctx context.Context, rpcClient UnaryInvoker, req *StorageForm
 	}
 
 	return sfr, nil
+}
+
+type (
+	// NvmeRebindReq contains the parameters for a storage nvme-rebind request.
+	NvmeRebindReq struct {
+		unaryRequest
+		PCIAddr string `json:"pci_addr"`
+	}
+
+	// NvmeRebindResp contains the response from a storage nvme-rebind request.
+	NvmeRebindResp struct {
+		HostErrorsResp
+	}
+)
+
+// StorageNvmeRebind rebinds NVMe SSD from kernel driver and binds to user-space driver on single
+// server.
+func StorageNvmeRebind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeRebindReq) (*NvmeRebindResp, error) {
+	if _, err := hardware.NewPCIAddress(req.PCIAddr); err != nil {
+		return nil, errors.Wrap(err, "invalid pci address in request")
+	}
+
+	pbReq := new(ctlpb.NvmeRebindReq)
+	if err := convert.Types(req, pbReq); err != nil {
+		return nil, err
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).StorageNvmeRebind(ctx, pbReq)
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	snur := new(NvmeRebindResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := snur.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return snur, nil
 }

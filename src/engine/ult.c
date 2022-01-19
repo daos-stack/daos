@@ -172,14 +172,37 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		}
 
 		dx = dss_get_xstream(DSS_MAIN_XS_ID(tid));
-		if (create_ult)
-			rc = sched_create_thread(dx, collective_func, stream,
-						 ABT_THREAD_ATTR_NULL, NULL,
-						 flags);
-		else
+		if (create_ult) {
+			ABT_thread_attr		attr;
+			int			rc1;
+
+			if (flags & DSS_ULT_DEEP_STACK) {
+				rc1 = ABT_thread_attr_create(&attr);
+				if (rc1 != ABT_SUCCESS)
+					D_GOTO(next, rc = dss_abterr2der(rc1));
+
+				rc1 = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
+				D_ASSERT(rc1 == ABT_SUCCESS);
+
+				D_DEBUG(DB_TRACE, "Create collective ult with stacksize %d\n",
+					DSS_DEEP_STACK_SZ);
+
+			} else {
+				attr = ABT_THREAD_ATTR_NULL;
+			}
+
+			rc = sched_create_thread(dx, collective_func, stream, attr, NULL, flags);
+			if (attr != ABT_THREAD_ATTR_NULL) {
+				rc1 = ABT_thread_attr_free(&attr);
+				D_ASSERT(rc1 == ABT_SUCCESS);
+			}
+		} else {
 			rc = sched_create_task(dx, collective_func, stream,
 					       NULL, flags);
+		}
+
 		if (rc != 0) {
+next:
 			stream->st_rc = rc;
 			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
@@ -310,59 +333,77 @@ sched_ult2xs(int xs_type, int tgt_id)
 	switch (xs_type) {
 	case DSS_XS_SELF:
 		return DSS_XS_SELF;
+	case DSS_XS_SYS:
+		return 0;
+	case DSS_XS_SWIM:
+		return 1;
+	case DSS_XS_DRPC:
+		return 2;
 	case DSS_XS_IOFW:
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
 			else
-				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) %
-						       dss_tgt_nr);
-			D_ASSERT(xs_id < DSS_XS_NR_TOTAL &&
-				 xs_id >= dss_sys_xs_nr);
-			return xs_id;
+				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) % dss_tgt_nr);
+			break;
 		}
 
+		/*
+		 * Comment from @liuxuezhao:
+		 *
+		 * This is the case that no helper XS, so for IOFW,
+		 * we either use itself, or use neighbor XS.
+		 *
+		 * Why original code select neighbor XS rather than itself
+		 * is because, when the code is called, I know myself is on
+		 * processing IO request and need IO forwarding, now I am
+		 * processing IO, so likely there is not only one IO (possibly
+		 * more than one IO for specific dkey), I am busy so likely my
+		 * neighbor is not busy (both busy seems only in some special
+		 * multiple dkeys used at same time) can help me do the IO
+		 * forwarding?
+		 *
+		 * But this is just original intention, you guys think it is
+		 * not reasonable? prefer another way that I am processing IO
+		 * and need IO forwarding, OK, just let myself do it ...
+		 *
+		 * Note that we first do IO forwarding and then serve local IO,
+		 * ask neighbor to do IO forwarding seems is helpful to make
+		 * them concurrent, right?
+		 */
 		if (dss_tgt_offload_xs_nr >= dss_tgt_nr)
-			return (dss_sys_xs_nr + dss_tgt_nr + tgt_id);
-		if (dss_tgt_offload_xs_nr > 0)
-			return (dss_sys_xs_nr + dss_tgt_nr +
-				tgt_id % dss_tgt_offload_xs_nr);
+			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id;
+		else if (dss_tgt_offload_xs_nr > 0)
+			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id % dss_tgt_offload_xs_nr;
 		else
-			return ((DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr +
-				dss_sys_xs_nr);
+			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
+		break;
 	case DSS_XS_OFFLOAD:
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
-				xs_id = DSS_MAIN_XS_ID(tgt_id) +
-					dss_tgt_offload_xs_nr / dss_tgt_nr;
+				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;
 			else
-				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) %
-						       dss_tgt_nr);
-			D_ASSERT(xs_id < DSS_XS_NR_TOTAL &&
-				 xs_id >= dss_sys_xs_nr);
-			return xs_id;
+				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) % dss_tgt_nr);
+			break;
 		}
 
 		if (dss_tgt_offload_xs_nr > dss_tgt_nr)
-			return (dss_sys_xs_nr + 2 * dss_tgt_nr +
-				(tgt_id % (dss_tgt_offload_xs_nr -
-					   dss_tgt_nr)));
-		if (dss_tgt_offload_xs_nr > 0)
-			return (dss_sys_xs_nr + dss_tgt_nr +
-				tgt_id % dss_tgt_offload_xs_nr);
+			xs_id = dss_sys_xs_nr + 2 * dss_tgt_nr +
+				(tgt_id % (dss_tgt_offload_xs_nr - dss_tgt_nr));
+		else if (dss_tgt_offload_xs_nr > 0)
+			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id % dss_tgt_offload_xs_nr;
 		else
-			return (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr +
-			       dss_sys_xs_nr;
-	case DSS_XS_SYS:
-		return 0;
-	case DSS_XS_DRPC:
-		return 1;
+			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
+		break;
 	case DSS_XS_VOS:
-		return DSS_MAIN_XS_ID(tgt_id);
+		xs_id = DSS_MAIN_XS_ID(tgt_id);
+		break;
 	default:
 		D_ASSERTF(0, "Invalid xstream type %d.\n", xs_type);
 		return -DER_INVAL;
 	}
+	D_ASSERT(xs_id < DSS_XS_NR_TOTAL && xs_id >= dss_sys_xs_nr);
+	return xs_id;
 }
 
 static int
@@ -372,8 +413,13 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 	ABT_thread_attr		 attr;
 	struct dss_xstream	*dx;
 	int			 rc, rc1;
+	int			 stream_id;
 
-	dx = dss_get_xstream(sched_ult2xs(xs_type, tgt_idx));
+	stream_id = sched_ult2xs(xs_type, tgt_idx);
+	if (stream_id == -DER_INVAL)
+		return stream_id;
+
+	dx = dss_get_xstream(stream_id);
 	if (dx == NULL)
 		return -DER_NONEXIST;
 
@@ -383,8 +429,7 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 			return dss_abterr2der(rc);
 
 		rc = ABT_thread_attr_set_stacksize(attr, stack_size);
-		if (rc != ABT_SUCCESS)
-			D_GOTO(free, rc = dss_abterr2der(rc));
+		D_ASSERT(rc == ABT_SUCCESS);
 
 		D_DEBUG(DB_TRACE, "Create ult stacksize is %zd\n", stack_size);
 	} else {
@@ -392,22 +437,9 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 	}
 
 	rc = sched_create_thread(dx, func, arg, attr, ult, flags);
-
-free:
 	if (attr != ABT_THREAD_ATTR_NULL) {
 		rc1 = ABT_thread_attr_free(&attr);
-		if (rc1 != ABT_SUCCESS)
-			/* The child ULT has already been created,
-			 * we should not return the error for the
-			 * ABT_thread_attr_free() failure; otherwise,
-			 * the caller will free the parameters ("arg")
-			 * that is being used by the child ULT.
-			 *
-			 * So let's ignore the failure, the worse case
-			 * is that we may leak some DRAM.
-			 */
-			D_ERROR("ABT_thread_attr_free failed: %d\n",
-				dss_abterr2der(rc1));
+		D_ASSERT(rc1 == ABT_SUCCESS);
 	}
 
 	return rc;
@@ -545,4 +577,15 @@ dss_ult_create_all(void (*func)(void *), void *arg, bool main)
 	}
 
 	return rc;
+}
+
+int
+dss_offload_exec(int (*func)(void *), void *arg)
+{
+	struct dss_module_info *info = dss_get_module_info();
+
+	D_ASSERT(info != NULL);
+	D_ASSERT(info->dmi_xstream->dx_main_xs);
+
+	return dss_ult_execute(func, arg, NULL, NULL, DSS_XS_OFFLOAD, info->dmi_tgt_id, 0);
 }

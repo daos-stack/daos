@@ -107,17 +107,6 @@ func (svc *mgmtSvc) getPoolService(id string) (*system.PoolService, error) {
 	return ps, nil
 }
 
-// getPoolServiceStorage returns a slice of values representing the
-// per-rank allocation on each storage tier.
-func (svc *mgmtSvc) getPoolServiceStorage(id string) ([]uint64, error) {
-	ps, err := svc.getPoolService(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return ps.Storage.PerRankTierStorage, nil
-}
-
 // getPoolServiceRanks returns a slice of ranks designated as the
 // pool service hosts.
 func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error) {
@@ -230,9 +219,9 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
 		resp.Status = int32(drpc.DaosAlready)
-		if ps.State == system.PoolServiceStateCreating {
+		if ps.State != system.PoolServiceStateReady {
 			resp.Status = int32(drpc.DaosTryAgain)
-			return resp, svc.checkPools(ctx)
+			return resp, svc.checkPools(ctx, ps)
 		}
 		return resp, nil
 	}
@@ -434,17 +423,17 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 // checkPools iterates over the list of pools in the system to check
 // for any that are in an unexpected state. Pools not in the Ready
 // state will be cleaned up and removed from the system.
-//
-// NB: Care should be taken to avoid calling this when it could race
-// with a PoolCreate request.
-func (svc *mgmtSvc) checkPools(ctx context.Context) error {
+func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolService) error {
 	if err := svc.sysdb.CheckLeader(); err != nil {
 		return err
 	}
 
-	psList, err := svc.sysdb.PoolServiceList()
-	if err != nil {
-		return err
+	var err error
+	if len(psList) == 0 {
+		psList, err = svc.sysdb.PoolServiceList(true)
+		if err != nil {
+			return errors.Wrap(err, "failed to fetch pool service list")
+		}
 	}
 
 	svc.log.Debugf("checking %d pools", len(psList))
@@ -459,9 +448,11 @@ func (svc *mgmtSvc) checkPools(ctx context.Context) error {
 		// the cleanup mode of PoolDestroy(), which will cause the
 		// destroy RPC to be sent to all ranks and then the service
 		// will be removed from the system.
-		ps.State = system.PoolServiceStateDestroying
-		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-			return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
+		if ps.State != system.PoolServiceStateDestroying {
+			ps.State = system.PoolServiceStateDestroying
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
+			}
 		}
 
 		// Attempt to destroy the pool.
@@ -498,6 +489,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 	req.SetUUID(uuid)
 
+	resp := &mgmtpb.PoolDestroyResp{}
 	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
 		// If we already tried to destroy the pool but it failed for some
@@ -506,26 +498,52 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
 		inCleanupMode = true
 	} else {
+		req.SvcRanks = system.RanksToUint32(ps.Replicas)
+
+		// Perform separate PoolEvict _before_ possible transition to destroying state.
+		evreq := &mgmtpb.PoolEvictReq{}
+		evreq.Sys = req.Sys
+		evreq.Id = req.Id
+		evreq.SvcRanks = req.SvcRanks
+		evreq.Destroy = true
+		evreq.ForceDestroy = req.Force
+		svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolEvict, evreq:%+v\n", evreq)
+		evresp, err := svc.PoolEvict(ctx, evreq)
+		if err != nil {
+			svc.log.Debugf("svc.PoolEvict failed\n")
+			return nil, err
+		}
+		ds := drpc.DaosStatus(evresp.Status)
+		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
+
+		// Transition pool state (unless evict returned busy, and not force destroying).
+		if !(ds == drpc.DaosBusy && !req.Force) {
+			ps.State = system.PoolServiceStateDestroying
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+			}
+		}
+
+		// If the destroy request is being forced, we should additionally zap the label
+		// so the entry doesn't prevent a new pool with the same label from being created.
 		if req.Force {
-			// If the destroy request is being forced, we should zap
-			// the label so that the entry doesn't prevent a new pool
-			// with the same label from being created.
 			ps.PoolLabel = ""
 		}
 
-		ps.State = system.PoolServiceStateDestroying
-		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-			return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+		if ds != drpc.DaosSuccess {
+			svc.log.Errorf("PoolEvict (first step of destroy) failed: %s", ds)
+			resp.Status = int32(ds)
+			return resp, nil
 		}
-		req.SvcRanks = system.RanksToUint32(ps.Replicas)
 	}
 
+	// Now on to the rest of the pool destroy, issue drpc.MethodPoolDestroy.
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy, req:%+v\n", req)
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolDestroyResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolDestroy response")
 	}
@@ -537,6 +555,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	case drpc.DaosSuccess, drpc.DaosNotLeader, drpc.DaosNotReplica:
 		if ds == drpc.DaosNotLeader || ds == drpc.DaosNotReplica {
 			// If we're not cleaning up, then this is an error.
+			// Note: Unlikely to see !inCleanupMode (evict would have seen first?)
 			if !inCleanupMode {
 				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
 				break
@@ -943,7 +962,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	}
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", req)
 
-	psList, err := svc.sysdb.PoolServiceList()
+	psList, err := svc.sysdb.PoolServiceList(false)
 	if err != nil {
 		return nil, err
 	}

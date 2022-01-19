@@ -1,28 +1,28 @@
 # Self-healing (aka Rebuild)
 
 In DAOS, if the data is replicated with multiple copies on different
-targets, once one of the target failed, the data on it will be rebuilt
+targets, once one of the targets fails, it's data will be rebuilt
 on the other targets automatically, so the data redundancy will not be
-impacted due to the target failure. In future, DAOS will also support
-Erasure Coding to protect the data, then the rebuild process might be
+impacted due to the target failure. In future versions, DAOS will also support
+Erasure Coding to protect the data; then the rebuild process might be
 updated accordingly.
 
 ## Rebuild Detection
 
 When a target failed, it should be detected promptly and
-notify the pool (Raft) leader, then the leader will exclude
+notify the pool (Raft) leader, and then the leader will exclude
 the target from the pool and trigger the rebuild process
 immediately.
 
-### Current status and longterm goal
+### Current status and long-term goal
 
 Currently, since the raft leader can not exclude the target
 automatically, the sysadmin has to manually exclude the target
-from the pool, which then trigger the rebuild.
+from the pool, which then triggers the rebuild.
 
-In future, the leader should be able to detect the target failure
+In the future, the leader should be able to detect the target failure
 promptly and then trigger the rebuild automatically by itself,
-without the help of sysadmin.
+without the help of the sysadmin.
 
 ## Rebuild process
 
@@ -32,9 +32,9 @@ The rebuild is divided into 2 phases, scan and pull.
 
 Initially, the leader will propagate the failure notification
 to all other surviving targets by a collective RPC. Any target
-that receives this RPC will start to scan its own object table
-to determine the object losts data redundancy on the faulty
-target, if it does, then send their IDs and related metadata
+that receives this RPC will start to scan its object table
+to determine the objects lost data redundancy on the faulty
+target. If it does, send their IDs and related metadata
 to the rebuild targets(rebuild initiator). As for how to choose
 the rebuild target for faulty target, it will be described in
 placement/README.md
@@ -44,15 +44,15 @@ placement/README.md
 Once the rebuild initiators get the object list from the scanning
 target, it will pull the data of these objects from other
 replicas and then write data locally. Each target will report
-its rebuild status, rebuilding objects, records, is\_finished?
+its rebuild status, rebuilding objects, records, is_finished?
 etc, to the pool leader. Once the leader learned all of targets
 finished its scanning and rebuilding phase, it will notify all targets
 the rebuild has finished, and they can release all of the resources
-hold during rebuild process.
+held during the rebuild process.
 
 <a id="f10.18"></a>
 **Rebuild Protocol**
-![../../doc/graph/Fig_059.png](../../doc/graph/Fig_059.png "Rebuild Protocol")
+![../../docs/graph/Fig_059.png](../../docs/graph/Fig_059.png "Rebuild Protocol")
 
 The <a href="#f10.18">figure</a> above is an example of this process:
 There are five objects in the cluster: object A is 3-way replicated,
@@ -61,10 +61,10 @@ target-0, which is the Raft leader, broadcasted the failure to all
 surviving targets to notify them to enter the degraded mode and scan:
 
 - Target-0 found that object D lost a replica and calculated out target-1 is
-the rebuild target for D, so it sent object Dâs ID and its metadata to
+the rebuild target for D, so it sent object D's ID and its metadata to
 target-1.
 - Target-1 found that object A lost a replica and calculated out target-3 is
-the rebuild target for A, so it sent object Aâs ID and its metadata to
+the rebuild target for A, so it sent object A's ID and its metadata to
 target-3.
 - Target-4 found objects A and C lost replicas and it calculated out target-3
 is the rebuild target for both objects A and C, so it sent IDs for objects A
@@ -92,7 +92,7 @@ the failure, it will switch to other replicas if available.
 - A target in rebuild does not need to re-scan its objects or reset rebuild
 progress for the current failure if another failure has occurred.
 - When there are multiple failures, if the number of failed targets from
-different domains exceeds the fault tolerance level, then there could be
+different domains exceeds the fault tolerance level, there could be
 unrecoverable errors and applications could suffer from data loss. In this
 case, upper layer stack software could see errors while sending I/O to the
 object that could have missing data.
@@ -101,7 +101,7 @@ The following <a href="#f10.20">figure</a> is an example of this protocol.
 
 <a id="f10.20"></a>
 **Multi-failure protocol**
-![../../doc/graph/Fig_061.png](../../doc/graph/Fig_061.png "Multi-failure protocol")
+![../../docs/graph/Fig_061.png](../../docs/graph/Fig_061.png "Multi-failure protocol")
 
 - In this example, object A is 2-way replicated, object B, C and D are 3-way
 replicated.

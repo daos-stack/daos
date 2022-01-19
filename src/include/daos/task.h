@@ -22,12 +22,9 @@ struct daos_task_args {
 	uint32_t			ta_opc;
 	union {
 		/** Management */
-		daos_pool_create_t	pool_create;
-		daos_pool_destroy_t	pool_destroy;
 		daos_set_params_t	mgmt_set_params;
 		daos_pool_replicas_t	pool_add_replicas;
 		daos_pool_replicas_t	pool_remove_replicas;
-		daos_mgmt_list_pools_t	mgmt_list_pools;
 		daos_mgmt_get_bs_state_t mgmt_get_bs_state;
 
 		/** Pool */
@@ -67,7 +64,7 @@ struct daos_task_args {
 		daos_tx_restart_t	tx_restart;
 
 		/** Object */
-		daos_obj_register_class_t obj_reg_class;
+		struct daos_obj_register_class_t obj_reg_class;
 		daos_obj_query_class_t	obj_query_class;
 		daos_obj_list_class_t	obj_list_class;
 		daos_obj_open_t		obj_open;

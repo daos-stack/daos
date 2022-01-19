@@ -38,6 +38,7 @@ struct test_t {
 	bool			 t_save_cfg;
 	bool			 t_use_cfg;
 	bool			 t_register_swim_callback;
+	bool			 t_use_daos_agent_env;
 	int			 t_get_swim_status;
 	int			 t_shutdown_delay;
 	d_rank_t		 cg_ranks[MAX_NUM_RANKS];
@@ -768,6 +769,7 @@ test_parse_args(int argc, char **argv)
 
 	test_g.cg_num_ranks = 0;
 	test_g.t_use_cfg = true;
+	test_g.t_use_daos_agent_env = false;
 	test_g.t_shutdown_delay = 0;
 
 	/* SWIM testing options */

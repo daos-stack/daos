@@ -8,6 +8,9 @@
 #define __CMD_DAOS_UTIL_H__
 
 #define D_LOGFAC	DD_FAC(client)
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +33,7 @@
 #include "daos_hdlr.h"
 
 int resolve_duns_path(struct cmd_args_s *ap);
+int resolve_duns_pool(struct cmd_args_s *ap);
 
 /* cgo is unable to work directly with preprocessor macros
  * so we have to provide these glue helpers.

@@ -4,6 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import agent_utils as agu
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
@@ -12,7 +13,7 @@ from dfuse_utils import Dfuse
 
 
 class DfuseTestBase(TestWithServers):
-    """Runs HDF5 vol test suites.
+    """Runs Dfuse test suites.
 
     :avocado: recursive
     """
@@ -21,6 +22,13 @@ class DfuseTestBase(TestWithServers):
         """Initialize a TestWithServers object."""
         super().__init__(*args, **kwargs)
         self.dfuse = None
+
+    def setUp(self):
+        """Setup Test Case"""
+        super().setUp()
+        # using localhost as client if client list is empty
+        if self.hostlist_clients is None:
+            self.hostlist_clients = agu.include_local_host(None)
 
     def stop_job_managers(self):
         """Stop the test job manager followed by dfuse.

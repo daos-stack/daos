@@ -11,3 +11,6 @@ server_config:
   name: daos_server
   servers:
     targets: 8
+pool:
+  control_method: dmg
+  size: 1G

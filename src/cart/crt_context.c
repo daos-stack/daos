@@ -274,13 +274,27 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 	if (crt_is_service() &&
 	    crt_gdata.cg_auto_swim_disable == 0 &&
-	    ctx->cc_idx == CRT_DEFAULT_PROGRESS_CTX_IDX) {
-		rc = crt_swim_init(CRT_DEFAULT_PROGRESS_CTX_IDX);
+	    ctx->cc_idx == crt_gdata.cg_swim_crt_idx) {
+		rc = crt_swim_init(crt_gdata.cg_swim_crt_idx);
 		if (rc) {
 			D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
 			crt_context_destroy(ctx, true);
 			D_GOTO(out, rc);
 		}
+
+		if (provider == CRT_NA_OFI_SOCKETS || provider == CRT_NA_OFI_TCP_RXM) {
+			struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+
+			D_DEBUG(DB_TRACE, "Slow network provider is detected, "
+					  "increase SWIM timeouts by twice.\n");
+
+			swim_suspect_timeout_set(swim_suspect_timeout_get() * 2);
+			swim_ping_timeout_set(swim_ping_timeout_get() * 2);
+			swim_period_set(swim_period_get() * 2);
+			csm->csm_ctx->sc_default_ping_timeout *= 2;
+		}
+
 	}
 
 	*crt_ctx = (crt_context_t)ctx;
@@ -314,10 +328,32 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 	return 0;
 }
 
+bool
+crt_rpc_completed(struct crt_rpc_priv *rpc_priv)
+{
+	bool	rc = false;
+
+	D_SPIN_LOCK(&rpc_priv->crp_lock);
+	if (rpc_priv->crp_completed) {
+		rc = true;
+	} else {
+		rpc_priv->crp_completed = 1;
+		rc = false;
+	}
+	D_SPIN_UNLOCK(&rpc_priv->crp_lock);
+
+	return rc;
+}
+
 void
 crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
 	D_ASSERT(rpc_priv != NULL);
+
+	if (crt_rpc_completed(rpc_priv)) {
+		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
+		return;
+	}
 
 	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
@@ -338,8 +374,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
 		if (cbinfo.cci_rc != 0)
-			RPC_ERROR(rpc_priv, "failed, " DF_RC "\n",
-				  DP_RC(cbinfo.cci_rc));
+			RPC_CERROR(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
+				   "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: "
@@ -373,6 +409,13 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	D_ASSERT(rlink != NULL);
 	D_ASSERT(arg != NULL);
 	epi = epi_link2ptr(rlink);
+
+	/*
+	 * DAOS-7306: This mutex is needed in order to avoid double
+	 * completions that would happen otherwise. safe list processing
+	 * is not sufficient to avoid the race
+	 */
+	D_MUTEX_LOCK(&epi->epi_mutex);
 	ctx = epi->epi_ctx;
 	D_ASSERT(ctx != NULL);
 
@@ -396,6 +439,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 
 	/* abort RPCs in waitq */
 	msg_logged = false;
+
 	d_list_for_each_entry_safe(rpc_priv, rpc_next, &epi->epi_req_waitq,
 				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_wait_num > 0);
@@ -446,9 +490,11 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		    d_list_empty(&epi->epi_req_q)) {
 			wait = 0;
 		} else {
+			D_MUTEX_UNLOCK(&epi->epi_mutex);
 			D_MUTEX_UNLOCK(&ctx->cc_mutex);
 			rc = crt_progress(ctx, 1);
 			D_MUTEX_LOCK(&ctx->cc_mutex);
+			D_MUTEX_LOCK(&epi->epi_mutex);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("crt_progress failed, rc %d.\n", rc);
 				break;
@@ -463,6 +509,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	}
 
 out:
+	D_MUTEX_UNLOCK(&epi->epi_mutex);
 	return rc;
 }
 
@@ -505,6 +552,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_DEBUG(DB_TRACE, "destroy context (idx %d, force %d), "
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
+		if (i > 5)
+			D_ERROR("destroy context (idx %d, force %d) "
+				"takes too long time. This is attempt %d of %d.\n",
+				ctx->cc_idx, force, i, CRT_SWIM_FLUSH_ATTEMPTS);
 		/* Flush SWIM RPC already sent */
 		rc = crt_context_flush(crt_ctx, timeout_sec);
 		if (rc)
@@ -707,31 +758,6 @@ crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv)
 	}
 }
 
-static void
-crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
-{
-	struct crt_timeout_cb_priv	*cbs_timeout;
-	crt_timeout_cb			 cb_func;
-	void				*cb_args;
-	size_t				 cbs_size;
-	size_t				 i;
-
-	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || rpc_priv == NULL))
-		return;
-
-	cbs_size = crt_plugin_gdata.cpg_timeout_size;
-	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
-
-	for (i = 0; i < cbs_size; i++) {
-		cb_func = cbs_timeout[i].ctcp_func;
-		cb_args = cbs_timeout[i].ctcp_args;
-		/* check for and execute timeout callbacks here */
-		if (cb_func != NULL)
-			cb_func(rpc_priv->crp_pub.cr_ctx, &rpc_priv->crp_pub,
-				cb_args);
-	}
-}
-
 static bool
 crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 {
@@ -875,38 +901,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (crt_gdata.cg_swim_inited) {
-		struct crt_grp_priv	*gp = crt_gdata.cg_grp->gg_primary_grp;
-		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
-		swim_id_t		 self_id = swim_self_get(csm->csm_ctx);
-
-		/*
-		 * Check for network idle in SWIM context.
-		 * If the time passed from last received RPC till now is more
-		 * than 2/3 of suspicion timeout suspends eviction.
-		 * The max_delay should be less suspicion timeout to guarantee
-		 * the already suspected members will not be expired.
-		 */
-		if (crt_ctx->cc_idx == csm->csm_crt_ctx_idx &&
-		    crt_ctx->cc_last_unpack_hlc != 0 &&
-		    self_id != SWIM_ID_INVALID) {
-			uint64_t delay = crt_hlc2msec(crt_hlc_get() -
-						   crt_ctx->cc_last_unpack_hlc);
-			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
-
-			if (delay > max_delay) {
-				D_ERROR("Network outage detected (idle during "
-					"%lu.%lu sec >  maximum allowed "
-					"%lu.%lu sec). Suspend SWIM eviction "
-					"until network stabilized.\n",
-					delay / 1000, delay % 1000,
-					max_delay / 1000, max_delay % 1000);
-				crt_swim_suspend_all();
-				crt_ctx->cc_last_unpack_hlc = 0;
-			}
-		}
-	}
-
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
 
@@ -941,8 +935,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag);
 
-		/* check for and execute RPC timeout callbacks here */
-		crt_exec_timeout_cb(rpc_priv);
 		crt_req_timeout_hdlr(rpc_priv);
 		RPC_DECREF(rpc_priv);
 	}
@@ -1305,23 +1297,23 @@ crt_context_empty(int provider, int locked)
 	return rc;
 }
 
-static void
-crt_exec_progress_cb(struct crt_context *ctx)
+static int64_t
+crt_exec_progress_cb(struct crt_context *ctx, int64_t timeout)
 {
 	struct crt_prog_cb_priv	*cbs_prog;
 	crt_progress_cb		 cb_func;
 	void			*cb_args;
-	size_t i, cbs_size;
-	int ctx_idx;
-	int rc;
+	size_t			 cbs_size, i;
+	int			 ctx_idx;
+	int			 rc;
 
 	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || ctx == NULL))
-		return;
+		return timeout;
 
 	rc = crt_context_idx(ctx, &ctx_idx);
 	if (unlikely(rc)) {
 		D_ERROR("crt_context_idx() failed, rc: %d.\n", rc);
-		return;
+		return timeout;
 	}
 
 	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
@@ -1332,8 +1324,10 @@ crt_exec_progress_cb(struct crt_context *ctx)
 		cb_args = cbs_prog[i].cpcp_args;
 		/* check for and execute progress callbacks here */
 		if (cb_func != NULL)
-			cb_func(ctx, cb_args);
+			timeout = cb_func(ctx, timeout, cb_args);
 	}
+
+	return timeout;
 }
 
 int
@@ -1367,23 +1361,9 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	ctx = crt_ctx;
 
 	/** Progress with callback and non-null timeout */
-	if (timeout < 0) {
-		/**
-		 * For infinite timeout, use a mercury timeout of 1 ms to avoid
-		 * being blocked indefinitely if another thread has called
-		 * crt_hg_progress() behind our back
-		 */
-		hg_timeout = 1000;
-	} else if (timeout == 0) {
-		hg_timeout = 0;
-	} else { /** timeout > 0 */
+	if (timeout > 0) {
 		now = d_timeus_secdiff(0);
 		end = now + timeout;
-		/** similarly, probe more frequently if timeout is large */
-		if (timeout > 1000 * 1000)
-			hg_timeout = 1000 * 1000;
-		else
-			hg_timeout = timeout;
 	}
 
 	/**
@@ -1399,7 +1379,24 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	/** loop until callback returns non-null value */
 	while ((rc = cond_cb(arg)) == 0) {
 		crt_context_timeout_check(ctx);
-		crt_exec_progress_cb(ctx);
+		timeout = crt_exec_progress_cb(ctx, timeout);
+
+		if (timeout < 0) {
+			/**
+			 * For infinite timeout, use a mercury timeout of 1 ms to avoid
+			 * being blocked indefinitely if another thread has called
+			 * crt_hg_progress() behind our back
+			 */
+			hg_timeout = 1000;
+		} else if (timeout == 0) {
+			hg_timeout = 0;
+		} else { /** timeout > 0 */
+			/** similarly, probe more frequently if timeout is large */
+			if (timeout > 1000 * 1000)
+				hg_timeout = 1000 * 1000;
+			else
+				hg_timeout = timeout;
+		}
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
 		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
@@ -1419,12 +1416,6 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 				break;
 			return -DER_TIMEDOUT;
 		}
-
-		/** adjust timeout */
-		if (end - now > 1000 * 1000)
-			hg_timeout = 1000 * 1000;
-		else
-			hg_timeout = end - now;
 	}
 
 	if (rc > 0)
@@ -1460,7 +1451,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
 	 * progress
 	 */
 	crt_context_timeout_check(ctx);
-	crt_exec_progress_cb(ctx);
+	timeout = crt_exec_progress_cb(ctx, timeout);
 
 	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
 		/** call progress once again with the real timeout */
@@ -1567,63 +1558,6 @@ out_unlock:
 
 	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 out:
-	return rc;
-}
-
-/**
- * to use this function, the user has to:
- * 1) define a callback function user_cb
- * 2) call crt_register_timeout_cb_core(user_cb);
- */
-int
-crt_register_timeout_cb(crt_timeout_cb func, void *args)
-{
-	struct crt_timeout_cb_priv *cbs_timeout;
-	size_t i, cbs_size;
-	int rc = 0;
-
-	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
-
-	cbs_size = crt_plugin_gdata.cpg_timeout_size;
-	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
-
-	for (i = 0; i < cbs_size; i++) {
-		if (cbs_timeout[i].ctcp_func == func &&
-		    cbs_timeout[i].ctcp_args == args) {
-			D_GOTO(out_unlock, rc = -DER_EXIST);
-		}
-	}
-
-	for (i = 0; i < cbs_size; i++) {
-		if (cbs_timeout[i].ctcp_func == NULL) {
-			cbs_timeout[i].ctcp_args = args;
-			cbs_timeout[i].ctcp_func = func;
-			D_GOTO(out_unlock, rc = 0);
-		}
-	}
-
-	D_FREE(crt_plugin_gdata.cpg_timeout_cbs_old);
-
-	crt_plugin_gdata.cpg_timeout_cbs_old = cbs_timeout;
-	cbs_size += CRT_CALLBACKS_NUM;
-
-	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
-	if (cbs_timeout == NULL) {
-		crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
-		D_GOTO(out_unlock, rc = -DER_NOMEM);
-	}
-
-	if (i > 0)
-		memcpy(cbs_timeout, crt_plugin_gdata.cpg_timeout_cbs_old,
-		       i * sizeof(*cbs_timeout));
-	cbs_timeout[i].ctcp_args = args;
-	cbs_timeout[i].ctcp_func = func;
-
-	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
-	crt_plugin_gdata.cpg_timeout_size = cbs_size;
-
-out_unlock:
-	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 

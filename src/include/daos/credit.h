@@ -90,7 +90,18 @@ struct credit_context {
 	struct io_credit	*tsc_credits[DTS_CRED_MAX];
 	/** initialization steps, internal use only */
 	int			 tsc_init;
+	struct io_engine	*tsc_engine;
 	/** OUTPUT END */
+};
+
+struct io_engine {
+	char	*ie_name;
+	int	(*ie_init)(void);
+	void	(*ie_fini)(void);
+	int	(*ie_pool_init)(struct credit_context *);
+	void	(*ie_pool_fini)(struct credit_context *);
+	int	(*ie_cont_init)(struct credit_context *);
+	void	(*ie_cont_fini)(struct credit_context *);
 };
 
 int credits_init(struct credit_context *tsc);
@@ -109,5 +120,7 @@ int credit_drain(struct credit_context *tsc);
 
 /** return an unused credit */
 void credit_return(struct credit_context *tsc, struct io_credit *cred);
+
+extern struct io_engine vos_engine;
 
 #endif /* __CREDIT_H__ */

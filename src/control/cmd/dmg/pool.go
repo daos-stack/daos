@@ -10,6 +10,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/dustin/go-humanize"
@@ -25,21 +27,21 @@ import (
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
-	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
-	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
-	Evict        PoolEvictCmd        `command:"evict" alias:"ev" description:"Evict all pool connections to a DAOS pool"`
+	Create       PoolCreateCmd       `command:"create" description:"Create a DAOS pool"`
+	Destroy      PoolDestroyCmd      `command:"destroy" description:"Destroy a DAOS pool"`
+	Evict        PoolEvictCmd        `command:"evict" description:"Evict all pool connections to a DAOS pool"`
 	List         PoolListCmd         `command:"list" alias:"ls" description:"List DAOS pools"`
-	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
-	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
-	Drain        PoolDrainCmd        `command:"drain" alias:"d" description:"Drain targets from a rank"`
-	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate targets for a rank"`
-	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
-	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
-	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
-	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"ua" description:"Update entries in a DAOS pool's Access Control List"`
-	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" alias:"da" description:"Delete an entry from a DAOS pool's Access Control List"`
-	SetProp      PoolSetPropCmd      `command:"set-prop" alias:"sp" description:"Set pool property"`
-	GetProp      PoolGetPropCmd      `command:"get-prop" alias:"gp" description:"Get pool properties"`
+	Extend       PoolExtendCmd       `command:"extend" description:"Extend a DAOS pool to include new ranks."`
+	Exclude      PoolExcludeCmd      `command:"exclude" description:"Exclude targets from a rank"`
+	Drain        PoolDrainCmd        `command:"drain" description:"Drain targets from a rank"`
+	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a rank"`
+	Query        PoolQueryCmd        `command:"query" description:"Query a DAOS pool"`
+	GetACL       PoolGetACLCmd       `command:"get-acl" description:"Get a DAOS pool's Access Control List"`
+	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" description:"Overwrite a DAOS pool's Access Control List"`
+	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" description:"Update entries in a DAOS pool's Access Control List"`
+	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" description:"Delete an entry from a DAOS pool's Access Control List"`
+	SetProp      PoolSetPropCmd      `command:"set-prop" description:"Set pool property"`
+	GetProp      PoolGetPropCmd      `command:"get-prop" description:"Get pool properties"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -48,19 +50,26 @@ type PoolCreateCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	GroupName  string           `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
-	UserName   string           `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
-	PoolLabel  string           `short:"p" long:"label" description:"Unique label for pool"`
-	Properties PoolSetPropsFlag `short:"P" long:"properties" description:"Pool properties to be set"`
-	ACLFile    string           `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	Size       string           `short:"z" long:"size" description:"Total size of DAOS pool (auto)"`
-	TierRatio  string           `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
-	NumRanks   uint32           `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
-	NumSvcReps uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
-	ScmSize    string           `short:"s" long:"scm-size" description:"Per-server SCM allocation for DAOS pool (manual)"`
-	NVMeSize   string           `short:"n" long:"nvme-size" description:"Per-server NVMe allocation for DAOS pool (manual)"`
-	RankList   string           `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
+	GroupName     string           `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
+	UserName      string           `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
+	PoolLabelFlag string           `short:"p" long:"label" description:"Unique label for pool (deprecated, use positional argument)"`
+	Properties    PoolSetPropsFlag `short:"P" long:"properties" description:"Pool properties to be set"`
+	ACLFile       string           `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
+	Size          string           `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
+	TierRatio     string           `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
+	NumRanks      uint32           `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
+	NumSvcReps    uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
+	ScmSize       string           `short:"s" long:"scm-size" description:"Per-server SCM allocation for DAOS pool (manual)"`
+	NVMeSize      string           `short:"n" long:"nvme-size" description:"Per-server NVMe allocation for DAOS pool (manual)"`
+	RankList      string           `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
+
+	Args struct {
+		PoolLabel string `positional-arg-name:"<pool label>"`
+	} `positional-args:"yes"`
 }
+
+// Regexp allowing to define the size of a new pool as the percentage of the overall available storage
+var allFlagPattern = regexp.MustCompile(`^\s*(\d{1,3})\s*%\s*$`)
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
@@ -71,13 +80,17 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		return errors.New("either --size or --scm-size must be supplied")
 	}
 
-	if cmd.PoolLabel != "" {
+	if cmd.PoolLabelFlag != "" {
+		cmd.Args.PoolLabel = cmd.PoolLabelFlag
+	}
+
+	if cmd.Args.PoolLabel != "" {
 		for _, prop := range cmd.Properties.ToSet {
 			if prop.Name == "label" {
-				return errors.New("can't use both --label and --properties label:")
+				return errors.New("can't set label property with label argument")
 			}
 		}
-		if err := cmd.Properties.UnmarshalFlag(fmt.Sprintf("label:%s", cmd.PoolLabel)); err != nil {
+		if err := cmd.Properties.UnmarshalFlag(fmt.Sprintf("label:%s", cmd.Args.PoolLabel)); err != nil {
 			return err
 		}
 	}
@@ -102,7 +115,57 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		return errors.Wrap(err, "parsing rank list")
 	}
 
-	if cmd.Size != "" {
+	switch {
+	case allFlagPattern.MatchString(cmd.Size):
+		if cmd.NumRanks > 0 {
+			return errIncompatFlags("size", "num-ranks")
+		}
+
+		// TODO (DAOS-9557) Update the protocol to allow filtering on ranks to use.  To
+		// implement this feature the procotol should be changed to define if a SCM
+		// namespace is associated with one rank or not. If yes, it should define with which
+		// rank the SCM namespace is associated.
+		if cmd.RankList != "" {
+			return errIncompatFlags("size", "ranks")
+		}
+
+		storageRatioString := allFlagPattern.FindStringSubmatch(cmd.Size)[1]
+		storageRatio, _ := strconv.ParseInt(storageRatioString, 10, 32)
+		if storageRatio <= 0 || storageRatio > 100 {
+			msg := "Creating DAOS pool with invalid full size ratio %d%%:"
+			msg += " allowed range 0 < ratio <= 100"
+			return errors.Errorf(msg, storageRatio)
+		}
+
+		// TODO (DAOS-9556) Update the protocol with a new message allowing to perform the
+		// queries of storage request and the pool creation from the management server
+		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(),
+			cmd.ctlInvoker)
+		if err != nil {
+			return err
+		}
+
+		if storageRatio != 100 {
+			scmBytes = uint64(storageRatio) * scmBytes / uint64(100)
+			nvmeBytes = uint64(storageRatio) * nvmeBytes / uint64(100)
+		}
+
+		// Extra storage space needed for metadata such as the VOS file
+		if scmBytes < control.PoolMetadataBytes {
+			missingBytes := control.PoolMetadataBytes - scmBytes
+			msg := "Not enough SMC storage available with ratio %s%%:"
+			msg += " at least %s of SCM storage (%s missing) is needed"
+			return errors.Errorf(msg,
+				cmd.Size,
+				humanize.Bytes(control.PoolMetadataBytes),
+				humanize.Bytes(missingBytes))
+		}
+		scmBytes -= control.PoolMetadataBytes
+
+		cmd.updateRequest(req, scmBytes, nvmeBytes)
+
+		cmd.log.Infof("Creating DAOS pool with %d%% of all storage", storageRatio)
+	case cmd.Size != "":
 		// auto-selection of storage values
 		req.TotalBytes, err = humanize.ParseBytes(cmd.Size)
 		if err != nil {
@@ -140,38 +203,32 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 		cmd.log.Infof("Creating DAOS pool with automatic storage allocation: "+
 			"%s total, %s tier ratio", humanize.Bytes(req.TotalBytes), cmd.TierRatio)
-	} else {
+	default:
 		// manual selection of storage values
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("nranks", "scm-size")
 		}
 
-		ScmBytes, err := humanize.ParseBytes(cmd.ScmSize)
+		scmBytes, err := humanize.ParseBytes(cmd.ScmSize)
 		if err != nil {
 			return errors.Wrap(err, "failed to parse pool SCM size")
 		}
 
-		var NvmeBytes uint64
+		var nvmeBytes uint64
 		if cmd.NVMeSize != "" {
-			NvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
+			nvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
 			if err != nil {
 				return errors.Wrap(err, "failed to parse pool NVMe size")
 			}
 		}
 
-		req.TierBytes = []uint64{ScmBytes, NvmeBytes}
-		req.TotalBytes = 0
-		req.TierRatio = nil
+		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		scmRatio := float64(ScmBytes) / float64(NvmeBytes)
-
-		if scmRatio < storage.MinScmToNVMeRatio {
-			cmd.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
-				"performance will suffer!\n", storage.MinScmToNVMeRatio*100)
-		}
 		cmd.log.Infof("Creating DAOS pool with manual per-server storage allocation: "+
-			"%s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(ScmBytes),
-			humanize.Bytes(NvmeBytes), scmRatio*100)
+			"%s SCM, %s NVMe (%0.2f%% ratio)",
+			humanize.Bytes(scmBytes),
+			humanize.Bytes(nvmeBytes),
+			scmRatio*100)
 	}
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)
@@ -191,6 +248,30 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	cmd.log.Info(bld.String())
 
 	return nil
+}
+
+func (cmd *PoolCreateCmd) updateRequest(req *control.PoolCreateReq,
+	scmBytes uint64,
+	nvmeBytes uint64) float64 {
+	if nvmeBytes == 0 {
+		cmd.log.Info("Creating DAOS pool without NVME storage")
+	}
+
+	scmRatio := 1.0
+	if nvmeBytes > 0 {
+		scmRatio = float64(scmBytes) / float64(nvmeBytes)
+	}
+
+	if scmRatio < storage.MinScmToNVMeRatio {
+		cmd.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
+			"performance will suffer!\n", storage.MinScmToNVMeRatio*100)
+	}
+
+	req.TierBytes = []uint64{scmBytes, nvmeBytes}
+	req.TotalBytes = 0
+	req.TierRatio = nil
+
+	return scmRatio
 }
 
 // PoolListCmd represents the command to fetch a list of all DAOS pools in the system.

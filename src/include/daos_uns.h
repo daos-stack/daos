@@ -121,6 +121,8 @@ struct duns_attr_t {
 /** Length of the extended attribute */
 #define DUNS_MAX_XATTR_LEN	170
 
+#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
+
 /**
  * Create a special directory (POSIX) or file (HDF5) depending on the container type, and create a
  * new DAOS container. The uuid of the container can be either passed in \a attrp->da_cuuid
@@ -200,7 +202,7 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);
  * using duns_resolve_path().
  *
  * \param[in]	attrp	Attr pointer
- * \param[in]   sys	DAOS System name
+ * \param[in]	sys	DAOS System name
  *
  * \return              0 on Success. errno code on failure.
  */

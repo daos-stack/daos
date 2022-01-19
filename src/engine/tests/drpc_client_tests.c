@@ -86,6 +86,12 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 void
 sched_req_sleep(struct sched_request *req, uint32_t msecs)
 {
+	struct timespec ts;
+
+	ts.tv_sec = msecs / 1000;
+	ts.tv_nsec = msecs % 1000;
+	ts.tv_nsec *= (1000 * 1000);
+	nanosleep(&ts, NULL);
 }
 
 void
@@ -131,16 +137,9 @@ test_drpc_call_connect_fails(void **state)
 	Drpc__Response	*resp;
 	int		 rc;
 
-	/*
-	 * errno is not set for the dss_drpc_thread; connect_return = -1 also
-	 * isn't working.
-	 */
-	skip();
-
 	assert_rc_equal(drpc_init(), 0);
 
-	connect_return = -1;
-	errno = EACCES;
+	connect_return = -EACCES;
 
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
 			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
@@ -159,13 +158,9 @@ test_drpc_call_sendmsg_fails(void **state)
 	Drpc__Response	*resp;
 	int		 rc;
 
-	/* See test_drpc_call_connect_fails. */
-	skip();
-
 	assert_rc_equal(drpc_init(), 0);
 
-	sendmsg_return = -1;
-	errno = EACCES;
+	sendmsg_return = -EACCES;
 
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
 			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
@@ -314,9 +309,6 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	uuid_t		 pool_uuid;
 	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
 	d_rank_list_t	*svc_ranks;
-
-	/* Skip for DAOS-7424 */
-	skip();
 
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);

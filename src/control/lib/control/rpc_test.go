@@ -35,6 +35,7 @@ type testRequest struct {
 	toMS     bool
 	HostList []string
 	Deadline time.Time
+	Timeout  time.Duration
 	Sys      string
 }
 
@@ -51,11 +52,16 @@ func (tr *testRequest) getHostList() []string {
 }
 
 func (tr *testRequest) SetTimeout(to time.Duration) {
+	tr.Timeout = to
 	tr.Deadline = time.Now().Add(to)
 }
 
 func (tr *testRequest) getDeadline() time.Time {
 	return tr.Deadline
+}
+
+func (tr *testRequest) getTimeout() time.Duration {
+	return tr.Timeout
 }
 
 func (tr *testRequest) SetSystem(sys string) {
@@ -187,7 +193,13 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				}
 			}
 
-			testDeadline, ok := t.Deadline()
+			deadliner, ok := (interface{})(t).(interface{ Deadline() (time.Time, bool) })
+			if !ok {
+				t.Log("go version < 1.15; skipping stragglers check")
+				return
+			}
+
+			testDeadline, ok := deadliner.Deadline()
 			if !ok {
 				panic("no deadline")
 			}
@@ -280,7 +292,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 					return defaultMessage, nil
 				},
 			},
-			expErr: context.DeadlineExceeded,
+			expErr: errors.New("timed out"),
 		},
 		"parent context canceled": {
 			withCancel: func() *ctxCancel {
@@ -398,7 +410,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 					return nil, errNotLeaderNoLeader
 				},
 			},
-			expErr: context.DeadlineExceeded,
+			expErr: FaultRpcTimeout(new(testRequest)),
 		},
 		"request to non-replicas eventually discovers at least one replica": {
 			req: &testRequest{
