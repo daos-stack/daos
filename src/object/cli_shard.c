@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2021 Intel Corporation.
+ *  (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1701,7 +1701,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
 		 **/
-		D_ERROR("RPC %d failed: %d\n", opc, ret);
+		D_ERROR("RPC %d failed: "DF_RC"\n", opc, DP_RC(rc));
 		D_GOTO(out, ret);
 	}
 
