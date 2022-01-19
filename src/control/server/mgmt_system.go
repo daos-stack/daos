@@ -181,8 +181,8 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 					svc.log.Errorf("sync GroupUpdate failed: %s", err)
 					continue
 				}
+				groupUpdateNeeded = false
 			}
-			groupUpdateNeeded = false
 		case <-groupUpdateTimer.C:
 			if !groupUpdateNeeded {
 				continue

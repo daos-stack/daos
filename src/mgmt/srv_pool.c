@@ -191,7 +191,16 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	/* Remove any targets not found in pg_ranks */
 	d_rank_list_filter(pg_ranks, filtered_targets, false /* exclude */);
 	if (!d_rank_list_identical(filtered_targets, targets)) {
-		D_ERROR("some ranks not found in cart primary group\n");
+		struct d_string_buffer_t tgt_buf = {0};
+
+		rc = d_rank_list_to_str(filtered_targets, &tgt_buf);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		D_ERROR(DF_UUID": targets not in cart primary group: %s\n",
+			DP_UUID(pool_uuid), tgt_buf.str);
+
+		d_free_string(&tgt_buf);
 		D_GOTO(out, rc = -DER_OOG);
 	}
 

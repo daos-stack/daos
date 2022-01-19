@@ -394,6 +394,7 @@ d_rank_list_t *d_rank_list_alloc(uint32_t size);
 d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
 int d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src);
+int d_rank_list_to_str(d_rank_list_t *rank_list, struct d_string_buffer_t *buf);
 void d_rank_list_shuffle(d_rank_list_t *rank_list);
 void d_rank_list_sort(d_rank_list_t *rank_list);
 bool d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx);

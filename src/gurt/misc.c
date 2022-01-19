@@ -461,6 +461,80 @@ d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank)
 	return false;
 }
 
+/* print the rank list to a string buffer */
+int
+d_rank_list_to_str(d_rank_list_t *rank_list, struct d_string_buffer_t *buf)
+{
+	int				 i;
+	uint32_t		 last;
+	d_rank_list_t	*sorted;
+	bool			 in_range = false;
+	int				 rc = 0;
+
+	if (rank_list == NULL) {
+		D_ERROR("rank_list cannot be NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (buf == NULL) {
+		D_ERROR("buf cannot be NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = d_rank_list_dup(&sorted, rank_list);
+	if (rc != 0) {
+		D_ERROR("failed to dup rank_list\n");
+		D_GOTO(out, rc);
+	}
+	d_rank_list_sort(sorted);
+
+	rc = d_write_string_buffer(buf, "[");
+	if (rc != 0)
+		D_GOTO(free_sorted, rc);
+	for (i = 0; i < sorted->rl_nr; i++) {
+		if (i == 0) {
+			rc = d_write_string_buffer(buf, "%d", sorted->rl_ranks[i]);
+			if (rc != 0)
+				D_GOTO(free_sorted, rc);
+			last = sorted->rl_ranks[i];
+			continue;
+		}
+
+		if (sorted->rl_ranks[i] == last + 1) {
+			last = sorted->rl_ranks[i];
+			in_range = true;
+			continue;
+		}
+
+		if (in_range) {
+			rc = d_write_string_buffer(buf, "-%d", last);
+			if (rc != 0)
+				D_GOTO(free_sorted, rc);
+			in_range = false;
+			last = sorted->rl_ranks[i];
+		}
+
+		rc = d_write_string_buffer(buf, ",%d", sorted->rl_ranks[i]);
+		if (rc != 0)
+			D_GOTO(free_sorted, rc);
+		last = sorted->rl_ranks[i];
+	}
+
+	if (in_range) {
+		rc = d_write_string_buffer(buf, "-%d", last);
+		if (rc != 0)
+			D_GOTO(free_sorted, rc);
+	}
+
+	rc = d_write_string_buffer(buf, "]");
+
+free_sorted:
+	d_rank_list_free(sorted);
+
+out:
+	return rc;
+}
+
 /*
  * query the idx of rank within the rank_list.
  *

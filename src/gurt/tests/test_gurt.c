@@ -2019,6 +2019,65 @@ test_gurt_string_buffer(void **state)
 	assert_null(str_buf.str);
 }
 
+static void
+test_gurt_rank_list_to_str(void **state)
+{
+	int rc;
+	struct d_string_buffer_t str_buf = {0};
+	d_rank_list_t *rank_list;
+
+	/* empty list */
+	rank_list = d_rank_list_alloc(0);
+	rc = d_rank_list_to_str(rank_list, &str_buf);
+	assert_return_code(rc, 0);
+	check_string_buffer(&str_buf, 2, 64, "[]");
+	d_rank_list_free(rank_list);
+
+	/* single element list */
+	rank_list = d_rank_list_alloc(1);
+	rank_list->rl_ranks[0] = 1;
+	rc = d_rank_list_to_str(rank_list, &str_buf);
+	assert_return_code(rc, 0);
+	check_string_buffer(&str_buf, 3, 64, "[1]");
+	d_rank_list_free(rank_list);
+
+	/* multiple element list (contiguous) */
+	rank_list = d_rank_list_alloc(3);
+	rank_list->rl_ranks[0] = 1;
+	rank_list->rl_ranks[1] = 2;
+	rank_list->rl_ranks[2] = 3;
+	rc = d_rank_list_to_str(rank_list, &str_buf);
+	assert_return_code(rc, 0);
+	check_string_buffer(&str_buf, 5, 64, "[1-3]");
+	d_rank_list_free(rank_list);
+
+	/* multiple element list (non-contiguous) */
+	rank_list = d_rank_list_alloc(3);
+	rank_list->rl_ranks[0] = 1;
+	rank_list->rl_ranks[1] = 3;
+	rank_list->rl_ranks[2] = 5;
+	rc = d_rank_list_to_str(rank_list, &str_buf);
+	assert_return_code(rc, 0);
+	check_string_buffer(&str_buf, 7, 64, "[1,3,5]");
+	d_rank_list_free(rank_list);
+
+	/* multiple element list (mixed, unsorted) */
+	rank_list = d_rank_list_alloc(7);
+	rank_list->rl_ranks[0] = 1;
+	rank_list->rl_ranks[1] = 11;
+	rank_list->rl_ranks[2] = 9;
+	rank_list->rl_ranks[3] = 3;
+	rank_list->rl_ranks[4] = 10;
+	rank_list->rl_ranks[5] = 2;
+	rank_list->rl_ranks[6] = 5;
+	rc = d_rank_list_to_str(rank_list, &str_buf);
+	assert_return_code(rc, 0);
+	check_string_buffer(&str_buf, 12, 64, "[1-3,5,9-11]");
+	d_rank_list_free(rank_list);
+
+	d_free_string(&str_buf);
+}
+
 enum {
 	HASH_MURMUR,
 	HASH_STRING,
@@ -2138,6 +2197,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_hash_parallel_refcounting),
 		cmocka_unit_test(test_gurt_atomic),
 		cmocka_unit_test(test_gurt_string_buffer),
+		cmocka_unit_test(test_gurt_rank_list_to_str),
 		cmocka_unit_test(test_hash_perf),
 	};
 
