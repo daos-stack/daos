@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -109,6 +109,10 @@ func (cmd *poolBaseCmd) disconnectPool() {
 	rc := C.daos_pool_disconnect(cmd.cPoolHandle, nil)
 	if rc == -C.DER_NOMEM {
 		rc = C.daos_pool_disconnect(cmd.cPoolHandle, nil)
+		// DAOS-8866, daos_pool_disconnect() might have failed, but worked anyway.
+		if (rc == -C.DER_NO_HDL) {
+			rc = -C.DER_SUCCESS
+		}
 	}
 
 	if err := daosError(rc); err != nil {

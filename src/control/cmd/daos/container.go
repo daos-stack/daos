@@ -113,7 +113,12 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 
 func (cmd *containerBaseCmd) closeContainer() error {
 	cmd.log.Debugf("closing container: %s", cmd.contUUID)
-	return daosError(C.daos_cont_close(cmd.cContHandle, nil))
+
+	rc := C.daos_cont_close(cmd.cContHandle, nil)
+	if (rc == -C.DER_NOMEM) {
+		rc = C.daos_cont_close(cmd.cContHandle, nil)
+	}
+	return daosError(rc)
 }
 
 func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
