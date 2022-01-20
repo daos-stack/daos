@@ -756,10 +756,11 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
     dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
+    module_load = "module load {}".format(self.mpi_module)
     dfuse_start_cmds = [
         "clush -S -w $SLURM_JOB_NODELIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
-        "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{}\"".format(
-            dfuse.mount_dir.value, dfuse_env, dfuse.__str__()),
+        "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{};{}\"".format(
+            dfuse.mount_dir.value, dfuse_env, module_load, dfuse.__str__()),
         "sleep 10",
         "clush -S -w $SLURM_JOB_NODELIST \"df -h {}\"".format(dfuse.mount_dir.value),
     ]
@@ -839,8 +840,6 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     vol = False
     ior_params = os.path.join(os.sep, "run", job_spec, "*")
     ior_timeout = self.params.get("job_timeout", ior_params, 10)
-    mpi_module = self.params.get(
-        "mpi_module", "/run/*", default="mpi/mpich-x86_64")
     # IOR job specs with a list of parameters; update each value
     api_list = self.params.get("api", ior_params)
     tsize_list = self.params.get("transfer_size", ior_params)
@@ -898,7 +897,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         self.soaktest_dir, self.test_name + "_" + log_name +
                         "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                     env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
-                    sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
+                    sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
                     # include dfuse cmdlines
                     if api in ["HDF5-VOL", "POSIX"]:
                         dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -947,8 +946,6 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     """
     commands = []
     mdtest_params = os.path.join(os.sep, "run", job_spec, "*")
-    mpi_module = self.params.get(
-        "mpi_module", "/run/*", default="mpi/mpich-x86_64")
     # mdtest job specs with a list of parameters; update each value
     api_list = self.params.get("api", mdtest_params)
     write_bytes_list = self.params.get("write_bytes", mdtest_params)
@@ -1000,7 +997,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                         env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
                         sbatch_cmds = [
-                            "module purge", "module load {}".format(mpi_module)]
+                            "module purge", "module load {}".format(self.mpi_module)]
                         # include dfuse cmdlines
 
                         if api in ["POSIX"]:

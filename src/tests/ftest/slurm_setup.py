@@ -20,16 +20,14 @@ from avocado.utils.distro import detect
 
 distro_info = detect()
 SLURM_CONF = "/etc/slurm/slurm.conf"
-
+PACKAGE_VERSION = None
 if "suse" in distro_info.name.lower():
     distro = "suse.lp153"
-    PACKAGE_VERSION = "21.08.5.1-1.{}.x86_64".format(distro)
 elif "centos" in distro_info.name.lower() and distro_info.version == "7":
     distro = "el7"
     PACKAGE_VERSION = "18.08.8-1.{}.x86_64".format(distro)
 elif "centos" in distro_info.name.lower() and distro_info.version == "8":
     distro = "el8"
-    PACKAGE_VERSION = "21.08.5.1-1.{}.x86_64".format(distro)
 
 PACKAGE_LIST = ["slurm", "slurm-example-configs",
                 "slurm-slurmctld", "slurm-slurmd"]
