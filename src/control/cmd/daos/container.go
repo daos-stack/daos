@@ -111,14 +111,19 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 	return daosError(rc)
 }
 
-func (cmd *containerBaseCmd) closeContainer() error {
+func (cmd *containerBaseCmd) closeContainer() {
 	cmd.log.Debugf("closing container: %s", cmd.contUUID)
-
+	// Hack for NLT fault injection testing: If the rc
+	// is -DER_NOMEM, retry once in order to actually
+	// shut down and release resources.
 	rc := C.daos_cont_close(cmd.cContHandle, nil)
 	if rc == -C.DER_NOMEM {
 		rc = C.daos_cont_close(cmd.cContHandle, nil)
 	}
-	return daosError(rc)
+
+	if err := daosError(rc); err != nil {
+		cmd.log.Errorf("container close failed: %s", err)
+	}
 }
 
 func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
