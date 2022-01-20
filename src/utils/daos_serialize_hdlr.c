@@ -56,7 +56,7 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 	daos_cont_serialize = dlsym(handle, "daos_cont_serialize");
 	if (daos_cont_serialize == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup lookup daos_cont_serialize: %s", dlerror());
+		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize: %s", dlerror());
 		D_GOTO(out, rc);
 	}
 	rc = (*daos_cont_serialize)(props, num_attrs, names, (char **)buffers, sizes,
@@ -217,7 +217,6 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 	bool			label_passed = false;
 	struct dm_stats		stats = {0};
 	daos_prop_t		*props = NULL;
-	char			c_str[130];
 
 	/* check if label was passed in using --cont-label */
 	if (strlen(ap->cont_str) > 0)
@@ -250,12 +249,11 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out_pool, rc);
 	}
 
-	uuid_unparse(cont_uuid, c_str);
-	D_PRINT("Successfully created container %s\n", c_str);
+	D_PRINT("Successfully created container "DF_UUID"\n", DP_UUID(cont_uuid));
 
 	rc = daos_cont_open(ca.dst_poh, cont_uuid, DAOS_COO_RW, &ca.dst_coh, &src_cont_info, NULL);
 	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "failed to open container %s", c_str);
+		DH_PERROR_DER(ap, rc, "failed to open container "DF_UUID, DP_UUID(cont_uuid));
 		D_GOTO(out_pool, rc);
 	}
 
