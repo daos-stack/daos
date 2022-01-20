@@ -393,7 +393,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			D_DEBUG(DB_ALL, "ENV %s not found.\n", CRT_PHY_ADDR_ENV);
 			goto do_init;
 		} else {
-			D_DEBUG(DB_ALL, "EVN %s: %s.\n", CRT_PHY_ADDR_ENV,addr_env);
+			D_DEBUG(DB_ALL, "EVN %s: %s.\n", CRT_PHY_ADDR_ENV, addr_env);
 		}
 
 		provider_found = false;

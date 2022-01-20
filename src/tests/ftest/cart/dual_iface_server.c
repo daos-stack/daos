@@ -260,10 +260,10 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		error_exit();
 	}
 
-	init_opts.cio_provider = (char*)str_provider;
-	init_opts.cio_interface = (char*)str_interface;
-	init_opts.cio_domain = (char*)str_domain;
-	init_opts.cio_port = (char*)str_port;
+	init_opts.cio_provider = (char *)str_provider;
+	init_opts.cio_interface = (char *)str_interface;
+	init_opts.cio_domain = (char *)str_domain;
+	init_opts.cio_port = (char *)str_port;
 
 	rc = crt_init_opt("server_grp", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE,
 			  &init_opts);
