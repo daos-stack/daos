@@ -15,7 +15,8 @@ from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from data_mover_utils import DcpCommand,DsyncCommand,FsCopy,ContClone,ContSerialize,ContDeserialize
+from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
+from data_mover_utils import ContSerialize, ContDeserialize
 from data_mover_utils import DserializeCommand, DdeserializeCommand
 from data_mover_utils import uuid_from_obj
 from duns_utils import format_path

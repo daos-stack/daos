@@ -50,13 +50,13 @@ serialize_cont(struct cmd_args_s *ap, daos_prop_t *props, struct dm_stats *stats
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		DH_PERROR_DER(ap, rc, "Failed to open "LIBSERIALIZE": %s", dlerror());
 		D_GOTO(out, rc);
 	}
 	daos_cont_serialize = dlsym(handle, "daos_cont_serialize");
 	if (daos_cont_serialize == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_serialize");
+		DH_PERROR_DER(ap, rc, "Failed to lookup lookup daos_cont_serialize: %s", dlerror());
 		D_GOTO(out, rc);
 	}
 	rc = (*daos_cont_serialize)(props, num_attrs, names, (char **)buffers, sizes,
@@ -82,18 +82,22 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
 	daos_cont_info_t	src_cont_info = {0};
 	struct dm_args		ca = {0};
 	struct dm_stats		stats = {0};
-	size_t			size = 0;
+	size_t			output_path_len = 0;
 	char			*filename = NULL;
 	daos_prop_t		*props = NULL;
 
-	/* if output path is not passed in use current working dir */
+	/* Default output path to current working dir */
 	if (ap->output_path == NULL) {
-		ap->output_path = getcwd(ap->output_path, size);
-		if (ap->output_path == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+		ap->output_path = getcwd(ap->output_path, output_path_len);
+		if (ap->output_path == NULL) {
+			rc = daos_errno2der(errno);
+			DH_PERROR_DER(ap, rc, "Failed to get current working directory");
+			D_GOTO(out, rc);
+		}
 	} else {
 		rc = mkdir(ap->output_path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-		if (rc != 0 && errno != EEXIST) {
+		if (rc && errno != EEXIST) {
+			rc = daos_errno2der(errno);
 			DH_PERROR_DER(ap, rc, "Failed to create output directory");
 			D_GOTO(out, rc);
 		}
@@ -112,7 +116,7 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
 	}
 	rc = dm_parse_path(NULL, src_str, src_str_len, &ca.src_pool, &ca.src_cont);
 	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "failed to parse path");
+		DH_PERROR_DER(ap, rc, "failed to parse source path");
 		D_GOTO(out, rc);
 	}
 
@@ -126,7 +130,7 @@ cont_serialize_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_open(ca.src_poh, ca.src_cont, DAOS_COO_RW,
 			    &ca.src_coh, &src_cont_info, NULL);
 	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "failed to open container\n");
+		DH_PERROR_DER(ap, rc, "failed to open container");
 		D_GOTO(out_pool, rc);
 	}
 
@@ -179,16 +183,17 @@ deserialize_cont(struct cmd_args_s *ap, struct dm_stats *stats, struct dm_args *
 	int		rc = 0;
 	void		*handle = NULL;
 	int (*daos_cont_deserialize)(int *, int *, int *, uint64_t *, daos_handle_t, char *);
+
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		DH_PERROR_DER(ap, rc, "Failed to open "LIBSERIALIZE": %s", dlerror());
 		D_GOTO(out, rc);
 	}
 	daos_cont_deserialize = dlsym(handle, "daos_cont_deserialize");
 	if (daos_cont_deserialize == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_deserialize");
+		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize: %s", dlerror());
 		D_GOTO(out, rc);
 	}
 	rc = (*daos_cont_deserialize)(&stats->total_oids, &stats->total_dkeys, &stats->total_akeys,
@@ -231,7 +236,7 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 	/* deserialize cont props to pass to cont create */
 	rc = dm_deserialize_cont_md(ap, &ca, ap->path, &props);
 	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "failed to deserialize cont properties\n");
+		DH_PERROR_DER(ap, rc, "failed to deserialize cont properties");
 		D_GOTO(out_pool, rc);
 	}
 
@@ -241,7 +246,7 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 	else
 		rc = daos_cont_create(ca.dst_poh, cont_uuid, props, NULL);
 	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "failed to create container\n");
+		DH_PERROR_DER(ap, rc, "failed to create container");
 		D_GOTO(out_pool, rc);
 	}
 
@@ -250,7 +255,7 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 
 	rc = daos_cont_open(ca.dst_poh, cont_uuid, DAOS_COO_RW, &ca.dst_coh, &src_cont_info, NULL);
 	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "failed to open container %s\n", c_str);
+		DH_PERROR_DER(ap, rc, "failed to open container %s", c_str);
 		D_GOTO(out_pool, rc);
 	}
 
