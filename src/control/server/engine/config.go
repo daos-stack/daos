@@ -41,6 +41,12 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.Provider == "" {
 		fc.Provider = other.Provider
 	}
+	if fc.Provider == "ofi+tcp" {
+		fc.Provider = "ofi+tcp;ofi_rxm"
+	}
+	if fc.Provider == "ofi+verbs" {
+		fc.Provider = "ofi+verbs;ofi_rxm"
+	}
 	if fc.Interface == "" {
 		fc.Interface = other.Interface
 	}
