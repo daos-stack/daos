@@ -339,7 +339,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on CentOS 8') {
+                stage('Build RPM on CentOS 8.3.2011') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -358,7 +358,8 @@ pipeline {
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            buildRpmPost condition: 'success',
+                                         target: 'centos8'
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'
@@ -367,10 +368,12 @@ pipeline {
                             buildRpmPost condition: 'failure'
                         }
                         unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
+                            buildRpmPost condition: 'unsuccessful',
+                                         target: 'centos8'
                         }
                         cleanup {
-                            buildRpmPost condition: 'cleanup'
+                            buildRpmPost condition: 'cleanup',
+                                         target: 'centos8'
                         }
                     }
                 }
@@ -815,6 +818,20 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
+                stage('Test CentOS 8.4.2105 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'el8.4',
+                                daos_pkg_version: daosPackagesVersion("centos8", next_version)
+                   }
+                } // stage('Test CentOS 8.4.2105 RPMs')
                 stage('Test Leap 15.2 RPMs') {
                     when {
                         beforeAgent true

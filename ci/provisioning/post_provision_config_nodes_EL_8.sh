@@ -10,7 +10,7 @@ bootstrap_dnf() {
     version="$(lsb_release -sr)"
     version=${version%.*}
     if dnf repolist | grep "repo.dc.hpdd.intel.com_repository_centos-${version}-x86_64-group_"; then
-        rm -f /etc/yum.repos.d/repo.dc.hpdd.intel.com_repository_{centos-8.4,daos-stack-centos-8}-x86_64-group_.repo
+        rm -f /etc/yum.repos.d/repo.dc.hpdd.intel.com_repository_{centos-"${version}"-x86_64,daos-stack-centos-8-x86_64-stable}-group_.repo
         for repo in centos-${version}-{base,extras,powertools} epel-el-8; do
             my_repo="${REPOSITORY_URL}repository/$repo-x86_64-proxy"
             my_name="${my_repo#*//}"
@@ -33,7 +33,44 @@ repo_gpgcheck=0
 gpgcheck=0" >> /etc/yum.repos.d/local-daos-group.repo
     fi
 
+    # provisionNodes() will fall-back and install the version without the
+    # point release if it fails to install an image with a point release
+    # so update the version (should be $releasever) in the repo files and
+    # dnf upgrade will take care of the rest
+
+    # but don't do it on the RPM test stages as they are meant to run on
+    # specific version
+    if [[ ${STAGE_NAME:-} != Test\ CentOS\ 8.*\ RPMs ]]; then
+        # use the EL8-version: commit pragma version if specified
+        version="$(echo "$COMMIT_MESSAGE" | sed -ne '/^EL8-version: */s/.*: *//p')"
+        if [ -n "$version" ]; then
+            if [ "$version" != "8.5.2111" ] && [[ $version = *.*.* ]]; then
+                version=${version%.*}
+            fi
+            cur_version="$(lsb_release -sr)"
+            if [ "$cur_version" != "8.5.2111" ] && [[ $cur_version = *.*.* ]]; then
+                cur_version=${cur_version%.*}
+            fi
+            # this should be a NOOP if the test image is for the EL8-version requested
+            # if not, this will cause it to be upgraded to that version
+            # shellcheck disable=SC1087
+            sed -E -i -e "s/((\/|_)centos-)$cur_version[^-]*/\1$version/g" /etc/yum.repos.d/*.repo
+        fi
+    fi
+
+    dnf repolist
+
     dnf -y erase openmpi opensm-libs
+
+    # perftest causes MOFED/distro conflicts:
+    # Problem: package perftest-4.5-1.el8.x86_64 requires libefa.so.1()(64bit), but none of the providers can be installed
+    #  - package perftest-4.5-1.el8.x86_64 requires libefa.so.1(EFA_1.1)(64bit), but none of the providers can be installed
+    #  - cannot install both libibverbs-35.0-1.el8.x86_64 and libibverbs-54mlnx1-1.54103.x86_64
+    #  - cannot install the best update candidate for package perftest-4.5-0.6.gbb9a707.54103.x86_64
+    #  - problem with installed package libibverbs-54mlnx1-1.54103.x86_64
+    if rpm -q perftest; then
+        dnf -y erase perftest
+    fi
 }
 
 group_repo_post() {
@@ -123,6 +160,9 @@ post_provision_config_nodes() {
         dump_repos
         exit 1
     fi
+
+    # show the final version once dnf upgrade is done
+    lsb_release -a
 
     if [ -f /etc/do-release ]; then
         cat /etc/do-release
