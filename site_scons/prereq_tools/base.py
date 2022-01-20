@@ -1389,7 +1389,7 @@ class _Component():
             patchnum += 1
             patches.append(patch_path)
             if os.path.exists(patch_path):
-                  continue
+                continue
             command = ['curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
                        % (patch_path, raw)]
             if not RUNNER.run_commands(command):
