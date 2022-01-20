@@ -3415,8 +3415,10 @@ io_obj_key_query(void **state)
 	assert_rc_equal(rc, 0);
 
 	dkey_val = 10;
+	val_iov.iov_buf_len += 1024;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
+	d_iov_set(&val_iov, &update_var, sizeof(update_var));
 
 	recx.rx_idx = 50;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
