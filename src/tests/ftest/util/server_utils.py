@@ -921,13 +921,13 @@ class DaosServerManager(SubprocessManager):
             nvme_size.  This is intended to allow testing of these combinations.
 
         Args:
-            size (object): the str, int, or None value for the dmp pool create
+            size (object): the str, int, or None value for the dmg pool create
                 size parameter.
-            tier_ratio (object): the int or None value for the dmp pool create
+            tier_ratio (object): the int or None value for the dmg pool create
                 size parameter.
-            scm_size (object): the str, int, or None value for the dmp pool
+            scm_size (object): the str, int, or None value for the dmg pool
                 create scm_size parameter.
-            nvme_size (object): the str, int, or None value for the dmp pool
+            nvme_size (object): the str, int, or None value for the dmg pool
                 create nvme_size parameter.
             min_targets (int, optional): the minimum number of targets per
                 engine that can be configured. Defaults to 1.
