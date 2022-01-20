@@ -415,8 +415,6 @@ def get_base_env(clean=False):
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
-DEFAULT_AGENT_DIR = '/var/run/daos_agent'
-
 class DaosPool():
     """Class to store data about daos pools"""
     def __init__(self, server, pool_uuid, label):
@@ -480,10 +478,7 @@ class DaosServer():
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
 
-        if os.access(DEFAULT_AGENT_DIR, os.W_OK):
-            self.agent_dir = DEFAULT_AGENT_DIR
-        else:
-            self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
+        self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
 
         self._yaml_file = None
         self._io_server_dir = None
@@ -1972,9 +1967,6 @@ class posix_tests():
                  stat.S_IRUSR]
 
         for mode in modes:
-            print(os.stat(fname))
-            print('Setting mode to 0{}'.format(oct(mode)))
-            print(os.stat(fname))
             os.chmod(fname, mode)
             attr = os.stat(fname)
             assert stat.S_IMODE(attr.st_mode) == mode

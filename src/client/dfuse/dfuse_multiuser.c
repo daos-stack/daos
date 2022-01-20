@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,8 +14,7 @@ dfuse_get_uid(struct dfuse_inode_entry *ie)
 	daos_size_t		size = sizeof(entry);
 	int rc;
 
-	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_XID_XATTR_NAME,
-			  &entry, &size);
+	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_XID_XATTR_NAME, &entry, &size);
 
 	if (rc == 0 && size != sizeof(entry)) {
 		rc = EIO;
@@ -78,8 +77,7 @@ dfuse_cb_mknod_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_DEBUG(ie, "directory '%s' mode 0%o", name, mode);
 
-	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-			   mode, O_CREAT | O_RDWR,
+	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name, mode, O_CREAT | O_RDWR,
 			   0, 0, NULL, &ie->ie_obj, &ie->ie_stat);
 	if (rc)
 		D_GOTO(err, rc);
@@ -96,8 +94,7 @@ dfuse_cb_mknod_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-			    &ie->ie_stat.st_ino);
+	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
@@ -105,11 +102,9 @@ dfuse_cb_mknod_with_id(fuse_req_t req, struct dfuse_inode_entry *parent,
 	return;
 
 unlink:
-	cleanup_rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name,
-				false, &oid);
+	cleanup_rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name, false, &oid);
 	if (cleanup_rc != 0)
-		DFUSE_TRA_ERROR(parent,
-				"Created but could not unlink %s: %d, %s",
+		DFUSE_TRA_ERROR(parent, "Created but could not unlink %s: %d, %s",
 				name, rc, strerror(rc));
 
 	dfs_release(ie->ie_obj);

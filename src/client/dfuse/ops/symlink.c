@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,8 +56,7 @@ dfuse_cb_symlink_safe(fuse_req_t req, const char *link,
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	int rc;
 
-	if ((ctx->uid != parent->ie_stat.st_uid) ||
-	    ctx->gid != parent->ie_stat.st_gid)
+	if ((ctx->uid != parent->ie_stat.st_uid) || ctx->gid != parent->ie_stat.st_gid)
 		D_GOTO(out, rc = ENOTSUP);
 
 	dfuse_cb_symlink(req, link, parent, name);

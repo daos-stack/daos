@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -657,8 +657,6 @@ duns_set_fuse_acl(const char *path, daos_handle_t coh)
 		return 0;
 	}
 
-	printf("Setting ACL for new container\n");
-
 	rc = daos_acl_uid_to_principal(stbuf.st_uid, &name);
 	if (rc != 0)
 		return rc;
@@ -679,8 +677,7 @@ duns_set_fuse_acl(const char *path, daos_handle_t coh)
 
 	rc = daos_cont_update_acl(coh, acl, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_update_acl() failed, " DF_RC "\n",
-			DP_RC(rc));
+		D_ERROR("daos_cont_update_acl() failed, " DF_RC "\n", DP_RC(rc));
 	}
 
 	daos_acl_free(acl);
@@ -984,12 +981,11 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		rc = stat(path, &finfo);
 		if (rc) {
 			rc = errno;
-			if (rc == ENOTSUP) {
+			if (rc == ENOTSUP)
 				D_INFO("Path is not in a filesystem that supports the DAOS unified "
 					"namespace\n");
-			} else {
+			else
 				D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
-			}
 			goto err_link;
 		}
 	}

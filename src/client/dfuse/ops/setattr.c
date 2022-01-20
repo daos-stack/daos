@@ -8,11 +8,10 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
-		 struct stat *attr, int to_set)
+dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr, int to_set)
 {
-	int			dfs_flags = 0;
-	int			rc;
+	int	dfs_flags = 0;
+	int	rc;
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
@@ -68,7 +67,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 			if (!set_both) {
 				rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj,
-						DFUSE_XID_XATTR_NAME, &entry, &size);
+						  DFUSE_XID_XATTR_NAME, &entry, &size);
 				if (rc && rc != ENODATA)
 					D_GOTO(err, rc);
 			}
@@ -97,23 +96,20 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	}
 
 	if (to_set & FUSE_SET_ATTR_MODE) {
-		DFUSE_TRA_DEBUG(ie, "mode %#o %#o",
-				attr->st_mode, ie->ie_stat.st_mode);
+		DFUSE_TRA_DEBUG(ie, "mode %#o %#o", attr->st_mode, ie->ie_stat.st_mode);
 
 		to_set &= ~FUSE_SET_ATTR_MODE;
 		dfs_flags |= DFS_SET_ATTR_MODE;
 	}
 
 	if (to_set & FUSE_SET_ATTR_ATIME) {
-		DFUSE_TRA_DEBUG(ie, "atime %#lx",
-				attr->st_atime);
+		DFUSE_TRA_DEBUG(ie, "atime %#lx", attr->st_atime);
 		to_set &= ~(FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_ATIME_NOW);
 		dfs_flags |= DFS_SET_ATTR_ATIME;
 	}
 
 	if (to_set & FUSE_SET_ATTR_MTIME) {
-		DFUSE_TRA_DEBUG(ie, "mtime %#lx",
-				attr->st_mtime);
+		DFUSE_TRA_DEBUG(ie, "mtime %#lx", attr->st_mtime);
 		to_set &= ~(FUSE_SET_ATTR_MTIME | FUSE_SET_ATTR_MTIME_NOW);
 		dfs_flags |= DFS_SET_ATTR_MTIME;
 	}
