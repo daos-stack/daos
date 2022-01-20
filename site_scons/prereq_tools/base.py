@@ -1387,12 +1387,13 @@ class _Component():
             patch_name = "%s_patch_%03d" % (self.name, patchnum)
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
-            command = ['rm -f %s' % patch_path,
-                       'curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
+            patches.append(patch_path)
+            if os.path.exists(patch_path):
+                  continue
+            command = ['curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
                        % (patch_path, raw)]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
-            patches.append(patch_path)
         return patches
 
     def get(self):
