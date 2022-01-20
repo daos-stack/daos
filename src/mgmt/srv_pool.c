@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -167,7 +167,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp,
 		    int domains_nr, uint32_t *domains)
 {
-	d_rank_list_t			*filtered_targets = NULL;
+	d_rank_list_t			*oog_ranks = NULL;
 	d_rank_list_t			*pg_ranks = NULL;
 	uint32_t			pg_size;
 	int				rc;
@@ -189,17 +189,17 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	D_ERROR(DF_UUID": pg_ranks: %s\n", DP_UUID(pool_uuid), pg_buf.str);
 	d_free_string(&pg_buf);
 
-	rc = d_rank_list_dup(&filtered_targets, targets);
+	rc = d_rank_list_dup(&oog_ranks, targets);
 	if (rc) {
 		rc = -DER_NOMEM;
 		D_GOTO(out, rc);
 	}
-	/* Remove any targets not found in pg_ranks */
-	d_rank_list_filter(pg_ranks, filtered_targets, false /* exclude */);
-	if (!d_rank_list_identical(filtered_targets, targets)) {
+	/* Find any targets not included in pg_ranks */
+	d_rank_list_filter(pg_ranks, oog_ranks, true /* exclude */);
+	if (oog_ranks->rl_nr > 0) {
 		struct d_string_buffer_t tgt_buf = {0};
 
-		rc = d_rank_list_to_str(filtered_targets, &tgt_buf);
+		rc = d_rank_list_to_str(oog_ranks, &tgt_buf);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -245,7 +245,7 @@ out_svcp:
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 	}
 out:
-	d_rank_list_free(filtered_targets);
+	d_rank_list_free(oog_ranks);
 	d_rank_list_free(pg_ranks);
 	D_DEBUG(DB_MGMT, "create pool "DF_UUID": "DF_RC"\n", DP_UUID(pool_uuid),
 		DP_RC(rc));
