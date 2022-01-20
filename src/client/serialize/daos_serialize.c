@@ -279,12 +279,12 @@ serialize_uint(hid_t file_id, uint64_t val, const char *prop_str)
 	attr_dims[0] = 1;
 	attr_dtype = H5Tcopy(H5T_NATIVE_UINT64);
 	if (attr_dtype < 0) {
-		D_ERROR("failed to attribute datatype\n");
+		D_ERROR("failed to create attribute datatype\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
 	if (attr_dspace < 0) {
-		D_ERROR("failed to create dataspace\n");
+		D_ERROR("failed to create attribute dataspace\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype,
@@ -296,7 +296,7 @@ serialize_uint(hid_t file_id, uint64_t val, const char *prop_str)
 	status = H5Awrite(usr_attr, attr_dtype, &val);
 	if (status < 0) {
 		rc = -DER_IO;
-		D_ERROR("failed to write attr "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to write attribute "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 out:
@@ -439,11 +439,7 @@ obj_is_kv(daos_obj_id_t oid)
 	daos_ofeat_t ofeat;
 
 	ofeat = (oid.hi & OID_FMT_FEAT_MASK) >> OID_FMT_FEAT_SHIFT;
-	if ((ofeat & DAOS_OF_KV_FLAT) &&
-	    !(ofeat & DAOS_OF_ARRAY_BYTE) && !(ofeat & DAOS_OF_ARRAY)) {
-		return true;
-	}
-	return false;
+	return ofeat & DAOS_OF_KV_FLAT & !DAOS_OF_ARRAY_BYTE & !DAOS_OF_ARRAY;
 #endif
 }
 
@@ -564,7 +560,7 @@ daos_cont_serialize_md(char *filename, daos_prop_t *props, int num_attrs,
 		}
 		usr_attr_val_vtype = H5Tvlen_create(H5T_NATIVE_OPAQUE);
 		if (usr_attr_val_vtype < 0) {
-			D_ERROR("failed to variable length type\n");
+			D_ERROR("failed to create variable length type\n");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 		status = H5Tinsert(usr_attr_memtype, "Attribute Name",
@@ -2803,7 +2799,6 @@ cont_deserialize_keys(struct hdf5_args *hdf5, uint64_t *total_dkeys_this_oid, ui
 			(*bytes_written) += kv_single_size;
 		} else {
 			for (k = 0; k < total_akeys_this_dkey; k++) {
-				/* TODO call cont_deserialize_akeys here */
 				rc = cont_deserialize_akeys(hdf5, diov, &ak_off, k, oh,
 							    total_akeys, bytes_written);
 				if (rc != 0) {
