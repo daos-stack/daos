@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -42,8 +41,6 @@ var defConfigCmpOpts = []cmp.Option{
 		security.CertificateConfig{},
 	),
 	cmpopts.IgnoreFields(Server{}, "Path"),
-	cmpopts.IgnoreFields(engine.Config{}, "GetNetDevCls", "ValidateProvider",
-		"GetIfaceNumaNode"),
 }
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
@@ -136,10 +133,6 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				for _, eCfg := range configA.Engines {
-					eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-				}
 				err = configA.Validate(context.TODO(), log)
 			}
 
@@ -159,10 +152,6 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				for _, eCfg := range configB.Engines {
-					eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-				}
 				err = configB.Validate(context.TODO(), log)
 			}
 
@@ -478,11 +467,6 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			config = tt.extraConfig(config)
 
-			for _, eCfg := range config.Engines {
-				eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-					WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-			}
-
 			CmpErr(t, tt.expErr, config.Validate(context.TODO(), log))
 		})
 	}
@@ -756,11 +740,6 @@ func TestServerConfig_Parsing(t *testing.T) {
 			}
 			config = tt.extraConfig(config)
 
-			for _, eCfg := range config.Engines {
-				eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-					WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-			}
-
 			CmpErr(t, tt.expValidateErr, config.Validate(context.TODO(), log))
 
 			if tt.expCheck != nil {
@@ -962,116 +941,6 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 
 			gotErr := conf.Validate(context.TODO(), log)
 			CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
-func getDeviceClassStub(netdev string) (uint32, error) {
-	switch netdev {
-	case "eth0":
-		return netdetect.Ether, nil
-	case "eth1":
-		return netdetect.Ether, nil
-	case "ib0":
-		return netdetect.Infiniband, nil
-	case "ib1":
-		return netdetect.Infiniband, nil
-	default:
-		return 0, nil
-	}
-}
-
-func TestServerConfig_NetworkDeviceClass(t *testing.T) {
-	configA := func() *engine.Config {
-		return engine.MockConfig().
-			WithLogFile("a").
-			WithStorage(
-				storage.NewTierConfig().
-					WithStorageClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint("a"),
-			).
-			WithFabricInterfacePort(42).
-			WithGetNetDevCls(getDeviceClassStub)
-	}
-	configB := func() *engine.Config {
-		return engine.MockConfig().
-			WithLogFile("b").
-			WithStorage(
-				storage.NewTierConfig().
-					WithStorageClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint("b"),
-			).
-			WithFabricInterfacePort(43).
-			WithGetNetDevCls(getDeviceClassStub)
-	}
-
-	for name, tc := range map[string]struct {
-		configA      *engine.Config
-		configB      *engine.Config
-		expNetDevCls uint32
-		expErr       error
-	}{
-		"successful validation with matching Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib1"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expNetDevCls: netdetect.Infiniband,
-		},
-		"successful validation with matching Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth0"),
-			configB: configB().
-				WithFabricInterface("eth1"),
-			expNetDevCls: netdetect.Ether,
-		},
-		"mismatching net dev class with primary server as ib0 / Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib0"),
-			configB: configB().
-				WithFabricInterface("eth0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth0"),
-		},
-		"mismatching net dev class with primary server as eth0 / Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth0"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
-		},
-		"mismatching net dev class with primary server as ib1 / Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib1"),
-			configB: configB().
-				WithFabricInterface("eth1"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth1"),
-		},
-		"mismatching net dev class with primary server as eth1 / Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth1"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			gotNetDevCls, gotErr := DefaultServer().
-				WithFabricProvider("test").
-				WithEngines(tc.configA, tc.configB).
-				CheckFabric(context.Background(), log)
-
-			CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
-			}
-
-			AssertEqual(t, tc.expNetDevCls, gotNetDevCls,
-				"unexpected config network device class")
 		})
 	}
 }
