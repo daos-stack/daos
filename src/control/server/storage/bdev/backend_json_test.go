@@ -194,7 +194,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithFabricInterfacePort(42).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmMountPoint(mockMntpt),
 					cfg,

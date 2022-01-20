@@ -42,7 +42,7 @@ func genMinimalConfig() *config.Server {
 			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("/mnt/daos"),
 				).
@@ -59,7 +59,7 @@ func genDefaultExpected() *config.Server {
 			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("/mnt/daos"),
 				).
