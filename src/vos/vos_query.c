@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -532,7 +532,8 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 
 	cont = vos_hdl2cont(coh);
 
-	vos_ts_set_add(query->qt_ts_set, cont->vc_ts_idx, NULL, 0);
+	rc = vos_ts_set_add(query->qt_ts_set, cont->vc_ts_idx, NULL, 0);
+	D_ASSERT(rc == 0);
 
 	query->qt_bound = MAX(obj_epr.epr_hi, bound);
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
