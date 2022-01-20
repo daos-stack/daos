@@ -805,12 +805,16 @@ test_all_ec_agg(void **statep)
 	if (!test_runable(arg, 5))
 		return;
 
-	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
 	setup_ec_agg_tests(statep, &ctx);
 	test_filled_stripe(&ctx);
 	test_half_stripe(&ctx);
 	test_partial_stripe(&ctx);
 	test_range_punch(&ctx);
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_FORCE_EC_AGG | DAOS_FAIL_ALWAYS,
+			      0, NULL);
 	print_message("sleep 45 seconds for aggregation ...\n");
 	sleep(45);
 	print_message("verification after aggregation\n");
@@ -819,6 +823,8 @@ test_all_ec_agg(void **statep)
 	verify_1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
 	verify_rp1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
 	cleanup_ec_agg_tests(&ctx);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      0, 0, NULL);
 }
 
 static void
