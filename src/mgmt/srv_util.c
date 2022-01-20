@@ -56,6 +56,11 @@ ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
 		D_ERROR("failed to update group (op=%d version=%u): %d\n",
 			op, version, rc);
 
+	struct d_string_buffer_t buf = {0};
+	d_rank_list_to_str(ranks, &buf);
+	D_DEBUG(DB_MGMT, "version %u ranks: %s\n", version, buf.str);
+	d_free_string(&buf);
+
 out:
 	if (uris != NULL)
 		D_FREE(uris);

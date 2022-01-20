@@ -183,6 +183,12 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		rc = -DER_NOMEM;
 		D_GOTO(out, rc);
 	}
+
+	struct d_string_buffer_t pg_buf = {0};
+	d_rank_list_to_str(pg_ranks, &pg_buf);
+	D_ERROR(DF_UUID": pg_ranks: %s\n", DP_UUID(pool_uuid), pg_buf.str);
+	d_free_string(&pg_buf);
+
 	rc = d_rank_list_dup(&filtered_targets, targets);
 	if (rc) {
 		rc = -DER_NOMEM;
