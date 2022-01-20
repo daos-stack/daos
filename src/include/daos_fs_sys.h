@@ -140,11 +140,12 @@ dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode);
  * \param[in]	path	Link path of object.
  * \param[in]	uid	change owner of file (-1 to leave unchanged).
  * \param[in]	gid	change group of file (-1 to leave unchanged).
+ * \param[in]	flags	(O_NOFOLLOW)
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid);
+dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid, int flags);
 
 /**
  * set stat attributes for a file and fetch new values.

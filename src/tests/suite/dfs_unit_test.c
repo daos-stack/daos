@@ -1041,7 +1041,9 @@ static void
 dfs_test_chown(void **state)
 {
 	test_arg_t	*arg = *state;
-	dfs_obj_t	*obj;
+	dfs_obj_t	*obj, *sym;
+	char		*filename = "chown_test";
+	char		*symname = "sym_chown_test";
 	struct stat	stbuf;
 	uid_t		orig_uid;
 	gid_t		orig_gid;
@@ -1050,49 +1052,76 @@ dfs_test_chown(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	rc = dfs_open(dfs_mt, NULL, "chown_test", S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
 		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
 	assert_int_equal(rc, 0);
 
 	orig_uid = stbuf.st_uid;
 	orig_gid = stbuf.st_gid;
 
 	/** should succeed but not change anything */
-	rc = dfs_chown(dfs_mt, NULL, "chown_test", -1, -1);
+	rc = dfs_chown(dfs_mt, NULL, filename, -1, -1, 0);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, orig_uid);
 	assert_int_equal(stbuf.st_gid, orig_gid);
 
 	/** set uid to 0 */
-	rc = dfs_chown(dfs_mt, NULL, "chown_test", 0, -1);
+	rc = dfs_chown(dfs_mt, NULL, filename, 0, -1, 0);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 0);
 	assert_int_equal(stbuf.st_gid, orig_gid);
 
 	/** set gid to 0 */
-	rc = dfs_chown(dfs_mt, NULL, "chown_test", -1, 0);
+	rc = dfs_chown(dfs_mt, NULL, filename, -1, 0, 0);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 0);
 	assert_int_equal(stbuf.st_gid, 0);
 
 	/** set uid to 1, gid to 2 */
-	rc = dfs_chown(dfs_mt, NULL, "chown_test", 1, 2);
+	rc = dfs_chown(dfs_mt, NULL, filename, 1, 2, 0);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, "chown_test", &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 1);
 	assert_int_equal(stbuf.st_gid, 2);
 
+	/** create a symlink to that file */
+	rc = dfs_open(dfs_mt, NULL, symname, S_IFLNK | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, filename, &sym);
+	assert_int_equal(rc, 0);
+
+	/** chown of file through symlink */
+	rc = dfs_chown(dfs_mt, NULL, symname, 3, 4, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+
+	/** chown of symlink itself */
+	rc = dfs_chown(dfs_mt, NULL, symname, 5, 6, O_NOFOLLOW);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+	rc = dfs_stat(dfs_mt, NULL, symname, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 5);
+	assert_int_equal(stbuf.st_gid, 6);
+
 	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(sym);
 	assert_int_equal(rc, 0);
 }
 

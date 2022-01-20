@@ -723,7 +723,7 @@ dfs_sys_test_chown(void **state)
 	assert_int_equal(rc, 0);
 
 	/** set uid to 1, gid to 2 */
-	rc = dfs_sys_chown(dfs_sys_mt, dir1, 1, 2);
+	rc = dfs_sys_chown(dfs_sys_mt, dir1, 1, 2, 0);
 	assert_int_equal(rc, 0);
 	rc = dfs_sys_stat(dfs_sys_mt, dir1, 0, &stbuf);
 	assert_int_equal(rc, 0);

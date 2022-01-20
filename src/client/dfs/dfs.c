@@ -65,9 +65,9 @@
 #define CTIME_IDX	(MTIME_IDX + sizeof(time_t))
 #define CSIZE_IDX	(CTIME_IDX + sizeof(time_t))
 #define OCLASS_IDX	(CSIZE_IDX + sizeof(daos_size_t))
-#define UID_IDX		(OCLASS_IDX + sizeof(uid_t))
-#define GID_IDX		(UID_IDX + sizeof(gid_t))
-#define SYML_IDX	(GID_IDX + sizeof(daos_oclass_id_t))
+#define UID_IDX		(OCLASS_IDX + sizeof(daos_oclass_id_t))
+#define GID_IDX		(UID_IDX + sizeof(uid_t))
+#define SYML_IDX	(GID_IDX + sizeof(gid_t))
 
 /** Parameters for dkey enumeration */
 #define ENUM_DESC_NR	10
@@ -3901,6 +3901,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 		orig_mode = sym->mode;
 		entry_name = sym->name;
+		len = strlen(entry_name);
 	} else {
 		orig_mode = entry.mode;
 		entry_name = name;
@@ -3946,7 +3947,7 @@ out:
 }
 
 int
-dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid)
+dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid, int flags)
 {
 	daos_handle_t		oh;
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -4004,26 +4005,23 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid)
 		D_GOTO(out, rc = 0);
 
 	/** resolve symlink */
-	if (S_ISLNK(entry.mode)) {
+	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
 		D_ASSERT(entry.value);
-
-		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym,
-				     NULL, NULL, 0);
+		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
 		if (rc) {
 			D_ERROR("Failed to lookup symlink %s\n", entry.value);
 			D_FREE(entry.value);
 			return rc;
 		}
 
-		rc = daos_obj_open(dfs->coh, sym->parent_oid, DAOS_OO_RW,
-				   &oh, NULL);
+		rc = daos_obj_open(dfs->coh, sym->parent_oid, DAOS_OO_RW, &oh, NULL);
 		D_FREE(entry.value);
 		if (rc) {
 			dfs_release(sym);
 			return daos_der2errno(rc);
 		}
-
 		entry_name = sym->name;
+		len = strlen(entry_name);
 	} else {
 		entry_name = name;
 	}
@@ -4063,7 +4061,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid)
 	}
 
 out:
-	if (S_ISLNK(entry.mode)) {
+	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
 		dfs_release(sym);
 		daos_obj_close(oh, NULL);
 	}

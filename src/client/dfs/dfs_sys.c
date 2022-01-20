@@ -639,7 +639,7 @@ dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode)
 }
 
 int
-dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid)
+dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid, int flags)
 {
 	int		rc;
 	struct sys_path	sys_path;
@@ -653,7 +653,7 @@ dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid)
 	if (rc != 0)
 		return rc;
 
-	rc = dfs_chown(dfs_sys->dfs, sys_path.parent, sys_path.name, uid, gid);
+	rc = dfs_chown(dfs_sys->dfs, sys_path.parent, sys_path.name, uid, gid, flags);
 
 	sys_path_free(dfs_sys, &sys_path);
 
