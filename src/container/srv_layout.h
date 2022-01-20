@@ -32,7 +32,7 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_CONT_MD_VERSION 4
+#define DS_CONT_MD_VERSION 5
 
 /* Lowest compatible layout version */
 #define DS_CONT_MD_VERSION_LOW 4
