@@ -296,13 +296,7 @@ def set_provider_environment(interface, args):
                         provider = "ofi+tcp"
                         break
         else:
-            command = " | ".join(["opahfirev", "grep 'Location:'"])
-            task = get_remote_output(list(args.test_servers), command)
-            if check_remote_output(task, command):
-                print("Detected Omni-Path adapters - using sockets")
-                provider = "ofi+sockets"
-            else:
-                print("No Infiniband devices found - using tcp")
+            print("No Infiniband devices found - using tcp")
         print("  Found {} provider for {}".format(provider, interface))
 
     # Update env definitions
