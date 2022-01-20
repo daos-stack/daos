@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -227,10 +227,10 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/1").
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(16),
 				storage.NewTierConfig().
-					WithBdevClass("nvme").
+					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
 					WithBdevBusidRange("0x80-0x8f"),
 			).
@@ -255,10 +255,10 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/2").
-					WithScmClass("dcpm").
+					WithStorageClass("dcpm").
 					WithScmDeviceList("/dev/pmem1"),
 				storage.NewTierConfig().
-					WithBdevClass("file").
+					WithStorageClass("file").
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
 					WithBdevFileSize(16),
 			).
@@ -637,11 +637,11 @@ func TestServerConfig_Parsing(t *testing.T) {
 						WithFabricInterfacePort(20000).
 						WithStorage(
 							storage.NewTierConfig().
-								WithScmClass("ram").
+								WithStorageClass("ram").
 								WithScmRamdiskSize(1).
 								WithScmMountPoint("/mnt/daos/2"),
 							storage.NewTierConfig().
-								WithBdevClass("nvme").
+								WithStorageClass("nvme").
 								WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
 						))
 			},
@@ -854,7 +854,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("a"),
 			)
@@ -866,7 +866,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("b"),
 			)
@@ -898,7 +898,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmDeviceList("a").
 						WithScmMountPoint(configA().Storage.Tiers.ScmConfigs()[0].Scm.MountPoint),
 				),
@@ -908,14 +908,14 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configA: configA().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint("aa").
 						WithScmDeviceList("a"),
 				),
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint("bb").
 						WithScmDeviceList("a"),
 				),
@@ -925,13 +925,13 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configA: configA().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(1)),
 				),
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
 				),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
@@ -940,13 +940,13 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configA: configA().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
 				),
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
 				),
 			expErr: errors.New("bdev_list contains duplicate pci addresses"),
@@ -987,7 +987,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 			WithLogFile("a").
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("a"),
 			).
@@ -999,7 +999,7 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 			WithLogFile("b").
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("b"),
 			).

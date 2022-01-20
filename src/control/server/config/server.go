@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -423,7 +423,7 @@ func (cfg *Server) Validate(ctx context.Context, log logging.Logger) (err error)
 			if ec.LegacyStorage.ScmClass != storage.ClassNone {
 				tierCfgs = append(tierCfgs,
 					storage.NewTierConfig().
-						WithScmClass(ec.LegacyStorage.ScmClass.String()).
+						WithStorageClass(ec.LegacyStorage.ScmClass.String()).
 						WithScmDeviceList(ec.LegacyStorage.ScmConfig.DeviceList...).
 						WithScmMountPoint(ec.LegacyStorage.MountPoint).
 						WithScmRamdiskSize(ec.LegacyStorage.RamdiskSize),
@@ -443,7 +443,7 @@ func (cfg *Server) Validate(ctx context.Context, log logging.Logger) (err error)
 			default:
 				tierCfgs = append(tierCfgs,
 					storage.NewTierConfig().
-						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
+						WithStorageClass(ec.LegacyStorage.BdevClass.String()).
 						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
 						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
 						WithBdevFileSize(ec.LegacyStorage.FileSize).

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -195,7 +195,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				engineCfgs[i] = engine.MockConfig().
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram").
+							WithStorageClass("ram").
 							WithScmRamdiskSize(1).
 							WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i))),
 					)

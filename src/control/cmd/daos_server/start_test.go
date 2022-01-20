@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -42,7 +42,7 @@ func genMinimalConfig() *config.Server {
 			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("/mnt/daos"),
 				).
@@ -59,7 +59,7 @@ func genDefaultExpected() *config.Server {
 			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("/mnt/daos"),
 				).

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -134,12 +134,12 @@ func TestConstructedConfig(t *testing.T) {
 		WithModules("foo,bar,baz").
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmRamdiskSize(42).
 				WithScmMountPoint("/mnt/daostest").
 				WithScmDeviceList("/dev/a", "/dev/b"),
 			storage.NewTierConfig().
-				WithBdevClass("kdev").
+				WithStorageClass("kdev").
 				WithBdevDeviceCount(2).
 				WithBdevFileSize(20).
 				WithBdevDeviceList("/dev/c", "/dev/d"),
@@ -204,7 +204,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram"),
+						WithStorageClass("ram"),
 				),
 			expErr: errors.New("scm_mount"),
 		},
@@ -212,7 +212,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("test"),
 				),
@@ -221,7 +221,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmMountPoint("test"),
 				),
 			expErr: errors.New("scm_size"),
@@ -230,7 +230,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(0).
 						WithScmMountPoint("test"),
 				),
@@ -240,7 +240,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmDeviceList("foo", "bar").
 						WithScmMountPoint("test"),
@@ -251,7 +251,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmMountPoint("test"),
 				),
@@ -260,7 +260,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo", "bar").
 						WithScmMountPoint("test"),
 				),
@@ -270,7 +270,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmMountPoint("test"),
 				),
 			expErr: errors.New("scm_list"),
@@ -279,7 +279,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("test"),
@@ -304,7 +304,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("dcpm").
+					WithStorageClass("dcpm").
 					WithScmDeviceList("foo").
 					WithScmMountPoint("test"),
 			)
@@ -320,7 +320,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvmed"),
+						WithStorageClass("nvmed"),
 				),
 			expErr: errors.New("no storage class"),
 		},
@@ -329,7 +329,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme"),
+						WithStorageClass("nvme"),
 				),
 			expEmptyCfgPath: true,
 		},
@@ -337,7 +337,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme").
+						WithStorageClass("nvme").
 						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
 				),
 		},
@@ -345,7 +345,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme").
+						WithStorageClass("nvme").
 						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(1)),
 				),
 			expErr: errors.New("bdev_list"),
@@ -354,7 +354,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("nvme").
+						WithStorageClass("nvme").
 						WithBdevDeviceList(common.MockPCIAddr(1), "0000:00:00"),
 				),
 			expErr: errors.New("unexpected pci address"),
@@ -363,7 +363,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("kdev"),
+						WithStorageClass("kdev"),
 				),
 			expErr: errors.New("kdev requires non-empty bdev_list"),
 		},
@@ -371,7 +371,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("kdev").
+						WithStorageClass("kdev").
 						WithBdevDeviceList("/dev/sda"),
 				),
 			expCls: storage.ClassKdev,
@@ -380,7 +380,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevDeviceList("bdev1"),
 				),
 			expErr: errors.New("file requires non-zero bdev_size"),
@@ -389,7 +389,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevDeviceList("bdev1").
 						WithBdevFileSize(-1),
 				),
@@ -399,7 +399,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevFileSize(10),
 				),
 			expErr: errors.New("file requires non-empty bdev_list"),
@@ -408,7 +408,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass("file").
+						WithStorageClass("file").
 						WithBdevFileSize(10).
 						WithBdevDeviceList("bdev1", "bdev2"),
 				),
@@ -458,7 +458,7 @@ func TestConfig_Validation(t *testing.T) {
 		WithFabricInterfacePort(42).
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmRamdiskSize(1).
 				WithScmMountPoint("/foo/bar"),
 		)
