@@ -195,7 +195,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				engineCfgs[i] = engine.MockConfig().
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram").
+							WithStorageClass("ram").
 							WithScmRamdiskSize(1).
 							WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i))),
 					)
