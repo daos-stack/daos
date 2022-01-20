@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,7 +196,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			/* The leader does not have related DTX info, we may miss related DTX abort
 			 * request, let's abort it locally.
 			 */
-			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, DAOS_EPOCH_MAX);
+			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
 			if (rc1 < 0 && rc1 != -DER_NONEXIST && dra->dra_abt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, dra->dra_abt_list);
 			else
