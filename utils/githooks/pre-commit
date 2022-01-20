@@ -4,7 +4,6 @@
 if [ -n "${NO_PRE_COMMIT:=""}" ]; then
     exit 0
 fi
-echo "Did not exit"
 
 regex='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
 year=$(date +%Y)
@@ -12,9 +11,7 @@ errors=0
 
 files=$(git diff --diff-filter=AM --name-only --cached -- \
        '*.c' '*.h' '*.go' 'Makefile' '*.py' '*.proto' '*.java')
-echo files="$files"
 for file in $files; do
-    echo $file
     if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]] || \
        [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]]; then
         continue
