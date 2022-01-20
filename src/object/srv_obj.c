@@ -1482,6 +1482,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			parity_list = vos_ioh2recx_list(ioh);
 			if (parity_list != NULL) {
 				daos_recx_ep_list_set(parity_list, orw->orw_nr, 0, 0);
+				daos_recx_ep_list_merge(parity_list, orw->orw_nr);
 				orwo->orw_rels.ca_arrays = parity_list;
 				orwo->orw_rels.ca_count = orw->orw_nr;
 			}
@@ -1539,6 +1540,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			}
 			daos_recx_ep_list_set(recov_lists, orw->orw_nr,
 					      recov_epoch, recov_snap);
+			daos_recx_ep_list_merge(recov_lists, orw->orw_nr);
 			orwo->orw_rels.ca_arrays = recov_lists;
 			orwo->orw_rels.ca_count = orw->orw_nr;
 		}
@@ -1690,7 +1692,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 again:
 	if (pin) {
-		rc = vos_dtx_pin(dth, false);
+		rc = vos_dtx_attach(dth, false);
 		if (rc != 0)
 			return rc;
 	}
@@ -1706,7 +1708,7 @@ again:
 			 * that will avoid race with the resent RPC during the
 			 * DTX refresh.
 			 */
-			rc1 = vos_dtx_pin(dth, false);
+			rc1 = vos_dtx_attach(dth, false);
 			if (rc1 != 0)
 				return -DER_INPROGRESS;
 		}
@@ -1985,21 +1987,20 @@ static int
 obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
-	bool			 priv;
 	uint32_t                 nr_grps;
 
-	oca = daos_oclass_attr_find(oid, &priv, &nr_grps);
+	oca = daos_oclass_attr_find(oid, &nr_grps);
 	if (!oca)
 		return -DER_INVAL;
 
 	ioc->ioc_oca = *oca;
 	ioc->ioc_oca.ca_grp_nr = nr_grps;
-	if (daos_oclass_is_ec(oca) && !priv) {
-		/* don't ovewrite cell size of private class */
-		D_ASSERT(ioc->ioc_coc != NULL);
+	D_ASSERT(ioc->ioc_coc != NULL);
+	if (daos_oclass_is_ec(oca)) {
 		ioc->ioc_oca.u.ec.e_len = ioc->ioc_coc->sc_props.dcp_ec_cell_sz;
 		D_ASSERT(ioc->ioc_oca.u.ec.e_len != 0);
 	}
+
 	return 0;
 }
 
@@ -2263,9 +2264,9 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
-				       &orw->orw_epoch, NULL);
+		daos_epoch_t	e = orw->orw_epoch;
 
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti, &e, NULL);
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
 			D_GOTO(out, rc = 0);
@@ -2277,7 +2278,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			/* Abort it by force with MAX epoch to guarantee
 			 * that it can be aborted.
 			 */
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, &orw->orw_dti, DAOS_EPOCH_MAX);
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &orw->orw_dti, e);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -2853,15 +2854,18 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		/* object iteration for rebuild or consistency verification. */
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
+		param.ip_flags |= VOS_IT_RECX_VISIBLE;
 		if (daos_anchor_get_flags(&anchors[0].ia_dkey) &
 		      DIOF_WITH_SPEC_EPOCH) {
 			/* For obj verification case. */
-			param.ip_flags |= VOS_IT_RECX_VISIBLE;
 			param.ip_epc_expr = VOS_IT_EPC_RR;
 		} else {
 			param.ip_epc_expr = VOS_IT_EPC_RE;
 		}
 		recursive = true;
+
+		if (daos_oclass_is_ec(&ioc->ioc_oca))
+			enum_arg->ec_cell_sz = ioc->ioc_oca.u.ec.e_len;
 		enum_arg->chk_key2big = 1;
 		enum_arg->need_punch = 1;
 		enum_arg->copy_data_cb = vos_iter_copy;
@@ -3154,7 +3158,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 
 again:
 	if (pin) {
-		rc = vos_dtx_pin(dth, false);
+		rc = vos_dtx_attach(dth, false);
 		if (rc != 0)
 			return rc;
 	}
@@ -3202,7 +3206,7 @@ again:
 			 * that will avoid race with the resent RPC during the
 			 * DTX refresh.
 			 */
-			rc1 = vos_dtx_pin(dth, false);
+			rc1 = vos_dtx_attach(dth, false);
 			if (rc1 != 0)
 				return -DER_INPROGRESS;
 		}
@@ -3241,9 +3245,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti,
-				       &opi->opi_epoch, NULL);
+		daos_epoch_t	e = opi->opi_epoch;
 
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &e, NULL);
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
 			D_GOTO(out, rc = 0);
@@ -3255,7 +3259,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 			/* Abort it by force with MAX epoch to guarantee
 			 * that it can be aborted.
 			 */
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, DAOS_EPOCH_MAX);
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, e);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -4214,7 +4218,7 @@ ds_cpd_handle_one_wrap(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 
 again:
 	if (pin) {
-		rc = vos_dtx_pin(dth, false);
+		rc = vos_dtx_attach(dth, false);
 		if (rc != 0)
 			return rc;
 	}
@@ -4228,7 +4232,7 @@ again:
 		if (!dth->dth_pinned) {
 			int	rc1;
 
-			rc1 = vos_dtx_pin(dth, false);
+			rc1 = vos_dtx_attach(dth, false);
 			if (rc1 != 0)
 				return -DER_INPROGRESS;
 		}
@@ -4249,6 +4253,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	struct daos_cpd_sub_head	*dcsh = ds_obj_cpd_get_dcsh(rpc, 0);
 	struct daos_cpd_disp_ent	*dcde = ds_obj_cpd_get_dcde(rpc, 0, 0);
 	struct daos_cpd_sub_req		*dcsr = ds_obj_cpd_get_dcsr(rpc, 0);
+	daos_epoch_t			 e = dcsh->dcsh_epoch.oe_value;
 	uint32_t			 dtx_flags = DTX_DIST;
 	int				 rc = 0;
 	int				 rc1 = 0;
@@ -4260,9 +4265,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
 
 	if (oci->oci_flags & ORF_RESEND) {
-		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid,
-					&dcsh->dcsh_epoch.oe_value, NULL);
-
+		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &e, NULL);
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc1 == -DER_ALREADY || rc1 == 0)
 			D_GOTO(out, rc = 0);
@@ -4292,8 +4295,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		/* For resent RPC, abort it firstly if exist but with different
 		 * (old) epoch, then re-execute with new epoch.
 		 */
-		rc = vos_dtx_abort(ioc->ioc_vos_coh, &dcsh->dcsh_xid, DAOS_EPOCH_MAX);
-
+		rc = vos_dtx_abort(ioc->ioc_vos_coh, &dcsh->dcsh_xid, e);
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
 		break;
@@ -4319,7 +4321,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	 * generate DTX entry for DTX recovery. Similarly for noop case.
 	 */
 	if (rc == 0 && (dth->dth_modification_cnt == 0 || !dth->dth_active))
-		rc = vos_dtx_pin(dth, true);
+		rc = vos_dtx_attach(dth, true);
 
 	rc = dtx_end(dth, ioc->ioc_coc, rc);
 
@@ -4356,12 +4358,8 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 			 */
 			if (dcde->dcde_write_cnt != 0) {
 				rc = obj_capa_check(ioc->ioc_coh, true, false);
-				if (rc != 0) {
-					if (comp_cb != NULL)
-						comp_cb(dlh, idx, rc);
-
-					return rc;
-				}
+				if (rc != 0)
+					goto comp;
 			}
 
 			dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
@@ -4378,6 +4376,7 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 						    &dlh->dlh_handle, pin);
 		}
 
+comp:
 		if (comp_cb != NULL)
 			comp_cb(dlh, idx, rc);
 

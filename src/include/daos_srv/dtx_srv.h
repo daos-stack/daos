@@ -81,6 +81,12 @@ struct dtx_handle {
 					 dth_for_migration:1,
 					 /* Has prepared locally, for resend. */
 					 dth_prepared:1,
+					 /* The DTX handle has been verified. */
+					 dth_verified:1,
+					 /* The DTX handle is aborted. */
+					 dth_aborted:1,
+					 /* The modification is done by others. */
+					 dth_already:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -130,6 +136,7 @@ struct dtx_handle {
 struct dtx_sub_status {
 	struct daos_shard_tgt		dss_tgt;
 	int				dss_result;
+	uint32_t			dss_comp:1;
 };
 
 struct dtx_leader_handle;

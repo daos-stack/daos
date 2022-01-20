@@ -1,10 +1,15 @@
-name: Test landings and prepare docker images.
+name: Landings
 
+# Run on landings, or when this action itself is changed.
 on:
   push:
     branches:
       - master
       - release/*
+  pull_request:
+    paths:
+      - .github/workflows/landing-builds.yml
+      - utils/docker/Dockerfile.*
 
 jobs:
 
@@ -20,7 +25,7 @@ jobs:
   # Distros where we build on PR should be covered here as the cache is populated for PRs to read,
   # for distros where we only want to build on master and not PRs see the Build-branch job below.
   Prepare:
-    name: Build docker images
+    name: Create Docker images
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
@@ -34,7 +39,6 @@ jobs:
           - distro: rocky
             base: centos.8
             with: rockylinux/rockylinux:8
-            java: yes
           - distro: fedora
             base: centos.8
             with: fedora:35
@@ -45,13 +49,11 @@ jobs:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
-    outputs:
-      key: ${{ steps.commit-hash.outputs.key }}
-      restore: ${{ steps.commit-hash.outputs.restore }}
-      restore_prev: ${{ steps.commit-hash.outputs.restore_prev }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        fetch-depth: 500
     - name: Setup git hash
       run: ./ci/gha_helper.py --single
       id: commit-hash
@@ -90,6 +92,7 @@ jobs:
       uses: actions/checkout@v2
       with:
         submodules: true
+        fetch-depth: 500
     - name: Setup git hash
       run: ./ci/gha_helper.py --single
       id: commit-hash
@@ -108,7 +111,11 @@ jobs:
                           --build-arg DAOS_KEEP_SRC=yes
                           --tag build-image
     - name: Build and Test
-      run: ./utils/run_in_ga_wrapper.sh
+      run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+            --env COMPILER --env DEPS_JOBS --user root:root build-image ./daos/utils/run_in_ga.sh
+    - name: Fetch results
+      if: always()
+      run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
     - name: Publish NLT test results
       if: always()
       uses: EnricoMi/publish-unit-test-result-action@v1.17
@@ -119,12 +126,12 @@ jobs:
         fail_on: nothing
 
   Build:
-    name: Build DAOS
+    name: Build DAOS in image
     needs: Prepare
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         distro: [ubuntu.20.04, rocky, fedora, leap.15]
         compiler: [clang, gcc]
@@ -132,30 +139,26 @@ jobs:
           - distro: ubuntu.20.04
             base: ubuntu.20.04
             with: ubuntu.20.04
-            java: yes
           - distro: rocky
             base: centos.8
             with: rockylinux/rockylinux:8
-            java: yes
           - distro: fedora
             base: centos.8
             with: fedora:35
-            java: no
           - distro: leap.15
             base: leap.15
             with: leap.15
-            java: yes
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
-      DAOS_JAVA_BUILD: ${{ matrix.java }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
       with:
         submodules: true
+        fetch-depth: 500
     - name: Setup git hash
       run: ./ci/gha_helper.py --single
       id: commit-hash
@@ -173,11 +176,13 @@ jobs:
                           --build-arg BASE_DISTRO
                           --build-arg DAOS_JAVA_BUILD=no
                           --build-arg COMPILER
+                          --build-arg DAOS_KEEP_SRC=yes
+                          --tag build-image
     - name: Build Java in docker.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                           --build-arg DEPS_JOBS
                           --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD
+                          --build-arg DAOS_JAVA_BUILD=yes
                           --build-arg COMPILER
     - name: Build debug in docker.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
@@ -193,13 +198,16 @@ jobs:
                           --build-arg DAOS_JAVA_BUILD=no
                           --build-arg DAOS_BUILD_TYPE=dev
                           --build-arg COMPILER
+# Fails with Ubuntu still for the spdk issue.
+#    - name: Run NLT
+#      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
+#               build-image ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy
 
   Build-branch:
-    name: Build DAOS without docker.
+    name: Build DAOS
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
         distro: [centos.7, centos.8, alma]
         include:
@@ -231,6 +239,8 @@ jobs:
                           --build-arg BASE_DISTRO
                           --build-arg DAOS_JAVA_BUILD=no
                           --build-arg COMPILER=clang
+                          --build-arg DAOS_KEEP_SRC=yes
+                          --tag build-image
     - name: Build Java in docker.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                           --build-arg DEPS_JOBS
@@ -271,3 +281,6 @@ jobs:
                           --build-arg DAOS_JAVA_BUILD=no
                           --build-arg DAOS_BUILD_TYPE=dev
                           --build-arg COMPILER=gcc
+    - name: Run NLT
+      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
+               build-image ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy

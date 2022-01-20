@@ -445,7 +445,7 @@ out:
 		test_teardown((void **)&args[i]);
 }
 
-#define EC_CELL_SIZE	1048576
+#define EC_CELL_SIZE	DAOS_EC_CELL_DEF
 static void
 degrade_ec_partial_update_agg(void **state)
 {
@@ -658,7 +658,7 @@ degrade_ec_agg_punch(void **state, int shard)
 			punch_akey(dkey, "a_key", DAOS_TX_NONE, &req);
 		if (i == 4) {
 			recx.rx_nr = EC_CELL_SIZE;
-			recx.rx_idx = i * 1048576;
+			recx.rx_idx = i * EC_CELL_SIZE;
 			punch_recxs(dkey, "a_key", &recx, 1, DAOS_TX_NONE, &req);
 		}
 	}
