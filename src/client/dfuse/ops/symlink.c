@@ -31,7 +31,6 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	DFUSE_TRA_INFO(ie, "obj is %p", ie->ie_obj);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_store_relaxed(&ie->ie_ref, 1);

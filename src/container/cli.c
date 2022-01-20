@@ -45,7 +45,11 @@ dc_cont_init(void)
 void
 dc_cont_fini(void)
 {
-	daos_rpc_unregister(&cont_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&cont_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 /*
@@ -770,10 +774,8 @@ cont_open_complete(tse_task_t *task, void *data)
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
 	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
-	/* TODO */
-	arg->coa_info->ci_nsnapshots = 0;
-	arg->coa_info->ci_snapshots = NULL;
-	arg->coa_info->ci_lsnapshot = 0;
+	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
+	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1157,13 +1159,10 @@ cont_query_complete(tse_task_t *task, void *data)
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
-	arg->cqa_info->ci_hae = out->cqo_hae;
 	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
-	/* TODO */
-	arg->cqa_info->ci_nsnapshots = 0;
-	arg->cqa_info->ci_snapshots = NULL;
-	arg->cqa_info->ci_lsnapshot = 0;
+	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
+	arg->cqa_info->ci_lsnapshot = out->cqo_lsnapshot;
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1302,8 +1301,6 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
 	in->cqi_bits = cont_query_bits(args->prop);
-	if (args->info != NULL)
-		in->cqi_bits |= DAOS_CO_QUERY_TGT;
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -1755,13 +1752,13 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		rc = dc_task_resched(task);
+		rc = dc_task_depend(task, 1, &ptask);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
 		}
 
-		rc = dc_task_depend(task, 1, &ptask);
+		rc = dc_task_resched(task);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
@@ -1810,7 +1807,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	if (tgt_cnt == 0 || tgts == NULL)
 		return -DER_INVAL;
 
-	*rank = tgts[rand() % tgt_cnt].ta_comp.co_rank;
+	*rank = tgts[d_rand() % tgt_cnt].ta_comp.co_rank;
 
 	D_FREE(tgts);
 
@@ -1925,7 +1922,7 @@ struct dc_cont_glob {
 static inline daos_size_t
 dc_cont_glob_buf_size()
 {
-       return sizeof(struct dc_cont_glob);
+	return sizeof(struct dc_cont_glob);
 }
 
 static inline void
@@ -2500,12 +2497,13 @@ dc_cont_get_attr(tse_task_t *task)
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
-		D_GOTO(out, rc);
+		D_GOTO(out_rpc, rc);
 	}
 	for (i = 0 ; i < args->n ; i++) {
 		uint64_t len;
@@ -2514,22 +2512,21 @@ dc_cont_get_attr(tse_task_t *task)
 		in->cagi_key_length += len + 1;
 		D_STRNDUP(new_names[i], args->names[i], len);
 		if (new_names[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_names[i], sizeof(char *));
 		if (rc) {
 			D_FREE(new_names[i]);
-			D_GOTO(out, rc);
+			D_GOTO(out_rpc, rc);
 		}
 	}
 
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
 			      CRT_BULK_RW, &in->cagi_bulk);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, &cb_args);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
 
 	cb_args.cra_bulk = in->cagi_bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
@@ -2542,6 +2539,8 @@ dc_cont_get_attr(tse_task_t *task)
 	crt_req_addref(cb_args.cra_rpc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
+out_rpc:
+	cont_req_cleanup(CLEANUP_RPC, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to get container attributes: "DF_RC"\n",
@@ -2949,6 +2948,9 @@ dc_cont_list_snap(tse_task_t *task)
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
+
+		/* TODO: iovs for names[] and list_snap bulk create function */
+
 		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->sli_bulk);
 		if (rc != 0) {

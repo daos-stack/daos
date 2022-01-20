@@ -81,9 +81,9 @@ extern struct dss_module_key vos_module_key;
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
 
-/** Up to 1 million lid entries split into 16 expansion slots */
+/** Up to 1 million lid entries split into 2048 expansion slots */
 #define DTX_ARRAY_LEN		(1 << 20) /* Total array slots for DTX lid */
-#define DTX_ARRAY_NR		(1 << 4)  /* Number of expansion arrays */
+#define DTX_ARRAY_NR		(1 << 11)  /* Number of expansion arrays */
 
 enum {
 	/** Used for marking an in-tree record committed */
@@ -100,8 +100,16 @@ enum {
  */
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
+/*
+ * Default size (in blocks) threshold for merging NVMe records, we choose
+ * 256 blocks as default value since the default DFS chunk size is 1MB.
+ */
+#define VOS_MW_NVME_THRESH	256		/* 256 * VOS_BLK_SZ = 1MB */
+
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
 #define VOS_AGG_CREDITS_MAX	32
+
+extern unsigned int vos_agg_nvme_thresh;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -126,6 +134,11 @@ agg_reserve_space(daos_size_t *rsrvd)
 	rsrvd[DAOS_MEDIA_NVME]	+= size;
 }
 
+struct vos_pool_metrics {
+	void	*vp_vea_metrics;
+	/* TODO: add more metrics for VOS */
+};
+
 /**
  * VOS pool (DRAM)
  */
@@ -145,6 +158,8 @@ struct vos_pool {
 	struct umem_attr	vp_uma;
 	/** memory class instance of the pool */
 	struct umem_instance	vp_umm;
+	/** Size of pool file */
+	uint64_t		vp_size;
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
 	/** GC statistics of this pool */
@@ -165,6 +180,7 @@ struct vos_pool {
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
+	struct vos_metrics	*vp_metrics;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
 };
@@ -210,10 +226,13 @@ struct vos_container {
 	daos_epoch_range_t	vc_epr_aggregation;
 	/* Current ongoing discard EPR */
 	daos_epoch_range_t	vc_epr_discard;
+	/* Last timestamp when VOS aggregation reporting ENOSPACE */
+	uint64_t		vc_agg_nospc_ts;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
 				vc_reindex_cmt_dtx:1;
+	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
 };
 
@@ -249,41 +268,15 @@ struct vos_dtx_act_ent {
 	daos_epoch_t			 dae_start_time;
 	/* Link into container::vc_dtx_act_list. */
 	d_list_t			 dae_link;
+	/* Back pointer to the DTX handle. */
+	struct dtx_handle		*dae_dth;
 
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
-					 dae_prepared:1,
-					 dae_resent:1;
+					 dae_prepared:1;
 };
-
-#ifdef VOS_STANDALONE
-#define VOS_TIME_START(start, op)		\
-do {						\
-	if (vos_tls_get()->vtl_dp == NULL)	\
-		break;				\
-	start = daos_get_ntime();		\
-} while (0)
-
-#define VOS_TIME_END(start, op)			\
-do {						\
-	struct daos_profile *dp;		\
-	int time_msec;				\
-						\
-	dp = vos_tls_get()->vtl_dp;		\
-	if ((dp) == NULL || start == 0)		\
-		break;				\
-	time_msec = (daos_get_ntime() - start)/1000; \
-	daos_profile_count(dp, op, time_msec);	\
-} while (0)
-
-#else
-
-#define VOS_TIME_START(start, op) D_TIME_START(start, op)
-#define VOS_TIME_END(start, op) D_TIME_END(start, op)
-
-#endif
 
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
 #define DAE_OID(dae)		((dae)->dae_base.dae_oid)
@@ -308,12 +301,12 @@ struct vos_dtx_cmt_ent {
 
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
-					 dce_invalid:1,
-					 dce_resent:1;
+					 dce_invalid:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
+#define DCE_HANDLE_TIME(dce)	((dce)->dce_base.dce_handle_time)
 
 extern int vos_evt_feats;
 
@@ -321,9 +314,6 @@ extern int vos_evt_feats;
 
 #define VOS_KEY_CMP_UINT64_SET	(BTR_FEAT_UINT_KEY)
 #define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
-#define VOS_OFEAT_SHIFT		48
-#define VOS_OFEAT_MASK		(0x0ffULL   << VOS_OFEAT_SHIFT)
-#define VOS_OFEAT_BITS		(0x0ffffULL << VOS_OFEAT_SHIFT)
 
 /** Iterator ops for objects and OIDs */
 extern struct vos_iter_ops vos_oi_iter_ops;
@@ -492,11 +482,10 @@ int
 vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
 
 int
-vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count, daos_epoch_t epoch,
-			bool resent, bool *rm_cos,
-			struct vos_dtx_act_ent **daes,
-			struct vos_dtx_cmt_ent **dces);
+vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
+			int count, daos_epoch_t epoch, bool rm_cos[],
+			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
+
 void
 vos_dtx_post_handle(struct vos_container *cont,
 		    struct vos_dtx_act_ent **daes,
@@ -804,8 +793,10 @@ struct vos_iterator {
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
+				 it_for_discard:1,
 				 it_for_migration:1,
 				 it_cleanup_stale_dtx:1,
+				 it_show_uncommitted:1,
 				 it_ignore_uncommitted:1;
 };
 
@@ -999,7 +990,7 @@ key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
-	       uint64_t flags, struct vos_ts_set *ts_set,
+	       uint64_t flags, struct vos_ts_set *ts_set, umem_off_t *known_key,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
@@ -1059,6 +1050,8 @@ vos_iter_intent(struct vos_iterator *iter)
 {
 	if (iter->it_for_purge)
 		return DAOS_INTENT_PURGE;
+	if (iter->it_for_discard)
+		return DAOS_INTENT_DISCARD;
 	if (iter->it_ignore_uncommitted)
 		return DAOS_INTENT_IGNORE_NONCOMMITTED;
 	if (iter->it_for_migration)
@@ -1093,8 +1086,8 @@ gc_reserve_space(daos_size_t *rsrvd);
  * Aggregate the creation/punch records in the current entry of the object
  * iterator
  *
- * \param ih[IN]	Iterator handle
- * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param ih[IN]		Iterator handle
+ * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1102,14 +1095,14 @@ gc_reserve_space(daos_size_t *rsrvd);
  *			negative value otherwise
  */
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard);
+oi_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
  * iterator
  *
- * \param ih[IN]	Iterator handle
- * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param ih[IN]		Iterator handle
+ * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1117,7 +1110,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  *			negative value otherwise
  */
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /** Internal bit for initializing iterator from open tree handle */
 #define VOS_IT_KEY_TREE	(1 << 31)
@@ -1133,15 +1126,16 @@ D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
  *  \param toh[IN]			Open key tree handle
  *  \param type[IN]			Iterator type (VOS_ITER_AKEY/DKEY only)
  *  \param epr[IN]			Valid epoch range for iteration
- *  \param ignore_inprogress[IN]	Fail if there are uncommitted entries
+ *  \param show_uncommitted[IN]		Return uncommitted entries marked as instead of failing
  *  \param cb[IN]			Callback for key
  *  \param arg[IN]			argument to pass to callback
  *  \param dth[IN]			dtx handle
+ *  \param anchor[IN]			Option anchor from where to start iterator
  */
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
-		const daos_epoch_range_t *epr, bool ignore_inprogress,
-		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth);
+		const daos_epoch_range_t *epr, bool show_uncommitted,
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth, daos_anchor_t *anchor);
 
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
@@ -1262,5 +1256,53 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 
 int
 vos_pool_settings_init(void);
+
+/** Raise a RAS event on incompatible durable format
+ *
+ * \param[in] type		Type of object with layout format
+ *				incompatibility (e.g. VOS pool)
+ * \param[in] version		Version of the object
+ * \param[in] min_version	Minimum supported version
+ * \param[in] max_version	Maximum supported version
+ * \param[in] pool		(Optional) associated pool uuid
+ */
+void
+vos_report_layout_incompat(const char *type, int version, int min_version,
+			   int max_version, uuid_t *uuid);
+
+#define VOS_NOTIFY_RAS_EVENTF(...)			\
+	do {						\
+		if (ds_notify_ras_eventf == NULL)	\
+			break;				\
+		ds_notify_ras_eventf(__VA_ARGS__);	\
+	} while (0)					\
+
+static inline int
+vos_offload_exec(int (*func)(void *), void *arg)
+{
+	if (dss_offload_exec != NULL)
+		return dss_offload_exec(func, arg);
+	else
+		return func(arg);
+}
+
+/* vos_csum_recalc.c */
+
+struct csum_recalc {
+	struct evt_extent	 cr_log_ext;
+	struct evt_extent	*cr_phy_ext;
+	struct dcs_csum_info	*cr_phy_csum;
+	daos_off_t		 cr_phy_off;
+};
+
+struct csum_recalc_args {
+	struct bio_sglist	*cra_bsgl;	/* read sgl */
+	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
+	struct csum_recalc	*cra_recalcs;   /* recalc info */
+	unsigned int		 cra_seg_cnt;   /* # of read segments */
+	int			 cra_rc;	/* return code */
+};
+
+int vos_csum_recalc_fn(void *recalc_args);
 
 #endif /* __VOS_INTERNAL_H__ */

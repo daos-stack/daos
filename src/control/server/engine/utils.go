@@ -49,7 +49,7 @@ const (
 )
 
 var logMasksValidLevels = []string{
-	"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERR", "CRIT", "ALRT", "EMRG", "EMIT",
+	"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERROR", "ERR", "CRIT", "ALRT", "EMRG", "EMIT",
 }
 
 func isValidLevel(level string) bool {
@@ -71,8 +71,8 @@ func errUnknownLogLevel(level string) error {
 // The input string should look like: PREFIX1=LEVEL1,PREFIX2=LEVEL2,...
 // LEVELs are validated here whilst PREFIX (facility) is validated server side.
 func ValidateLogMasks(masks string) error {
-	if len(masks) == 0 {
-		return errors.New("empty log masks string")
+	if masks == "" {
+		return nil
 	}
 	if len(masks) > logMasksStrMaxLen {
 		return errors.Errorf("log masks string exceeds maximum length (%d>%d)",

@@ -192,10 +192,10 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			engineCfgs := make([]*engine.Config, maxEngines)
 			for i := 0; i < maxEngines; i++ {
-				engineCfgs[i] = engine.NewConfig().
+				engineCfgs[i] = engine.MockConfig().
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram").
+							WithStorageClass("ram").
 							WithScmRamdiskSize(1).
 							WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i))),
 					)
@@ -548,7 +548,9 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 
 			h := NewEngineHarness(log)
 			for _, mic := range tc.mics {
-				h.AddInstance(NewMockInstance(mic))
+				if err := h.AddInstance(NewMockInstance(mic)); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())

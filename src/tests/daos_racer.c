@@ -66,7 +66,7 @@ int			obj_cnt_per_class = 2;
  */
 int			cond_pct = 20;
 
-static uint16_t
+static daos_oclass_id_t
 oclass_get(unsigned int random)
 {
 	uint16_t idx = random % OBJ_CNT;
@@ -473,7 +473,6 @@ main(int argc, char **argv)
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	unsigned	duration = 60; /* seconds */
 	double		expire = 0;
-	daos_prop_t	*prop;
 	int		idx;
 	struct racer_sub_tests	sub_tests[TEST_SIZE] = { 0 };
 	int		rc;
@@ -556,15 +555,9 @@ main(int argc, char **argv)
 			(unsigned int)(nvme_size >> 20));
 	}
 
-	rc = dts_ctx_init(&ts_ctx);
+	rc = dts_ctx_init(&ts_ctx, NULL);
 	if (rc)
 		D_GOTO(out, rc);
-
-	prop = daos_prop_alloc(1);
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
-	prop->dpp_entries[0].dpe_val = 1024;
-	daos_cont_set_prop(ts_ctx.tsc_coh, prop, NULL);
-	daos_prop_free(prop);
 
 	sub_tests_init(sub_tests, 0xFFFF);
 	expire = dts_time_now() + duration;

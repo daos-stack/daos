@@ -21,6 +21,7 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <sys/stat.h>
 
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX
@@ -100,6 +101,26 @@ typedef struct {
  */
 int
 dfs_cont_create(daos_handle_t poh, uuid_t *uuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs);
+
+/**
+ * Create a DFS container with label \a label. This is the same as dfs_container_create() with the
+ * label property set in \a attr->da_props.
+ *
+ * \param[in]	poh	Pool open handle.
+ * \param[in]	label	Required, label property of the new container.
+ *			Supersedes any label specified in \a cont_prop.
+ * \param[in]	attr	Optional set of properties and attributes to set on the container.
+ *			Pass NULL if none.
+ * \param[out]	uuid	Optional pointer to uuid_t to hold the implementation-generated container
+ *			UUID.
+ * \param[out]	coh	Optionally leave the container open and return its hdl.
+ * \param[out]	dfs	Optionally mount DFS on the container and return the dfs handle.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
+			   uuid_t *uuid, daos_handle_t *coh, dfs_t **dfs);
 
 /**
  * Mount a file system over DAOS. The pool and container handle must remain
@@ -872,28 +893,6 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
  */
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
-
-/**
- * Mount a DFS namespace in a special container designated as the root
- * container. If the root container does not exist, this call creates it.
- *
- * \param[in]   poh     Pool connection handle
- * \param[out]  dfs     Pointer to the root DFS created.
- *
- * \return              0 on success, errno code on failure.
- */
-int
-dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs);
-
-/**
- * Unmount the root DFS.
- *
- * \param[in]	dfs	Pointer to the root DFS file system.
- *
- * \return		0 on success, errno code on failure.
- */
-int
-dfs_umount_root_cont(dfs_t *dfs);
 
 int
 dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,

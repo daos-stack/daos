@@ -7,6 +7,8 @@
 package spdk
 
 import (
+	"sync"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -18,7 +20,9 @@ type MockEnvCfg struct {
 
 // MockEnvImpl is a mock implementation of the Env interface.
 type MockEnvImpl struct {
-	Cfg MockEnvCfg
+	sync.RWMutex
+	Cfg      MockEnvCfg
+	CallOpts []*EnvOptions
 }
 
 // InitSPDKEnv initializes the SPDK environment.
@@ -26,6 +30,11 @@ func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	if e.Cfg.InitErr == nil {
 		log.Debugf("mock spdk init go opts: %+v", opts)
 	}
+
+	e.Lock()
+	e.CallOpts = append(e.CallOpts, opts)
+	e.Unlock()
+
 	return e.Cfg.InitErr
 }
 
@@ -45,13 +54,6 @@ type MockNvmeCfg struct {
 // MockNvmeImpl is an implementation of the Nvme interface.
 type MockNvmeImpl struct {
 	Cfg MockNvmeCfg
-}
-
-// CleanLockfiles removes SPDK lockfiles after binding operations.
-func (n *MockNvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
-	log.Debugf("mock clean lockfiles pci addresses: %v", pciAddrs)
-
-	return nil
 }
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,

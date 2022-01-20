@@ -1358,13 +1358,13 @@ cond_test(void **state)
 	start_epoch = epoch + 1;
 }
 
-/** Making the oid generation deterministic, I get to 304 before I hit a false
+/** Making the oid generation deterministic, I get to 102 before I hit a false
  *  collision on the oid.   This may indicate the hashing needs to be improved
  *  but for now, it's good enough.  In general, the chance of a single
  *  collision is very high well before we get close to saturation due
  *  to the birthday paradox.
  */
-#define NUM_OIDS 304
+#define NUM_OIDS 102
 static void
 multiple_oid_cond_test(void **state)
 {
@@ -1572,7 +1572,8 @@ remove_test(void **state)
 		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
 	epr.epr_lo = 0;
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL, true);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL,
+			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 
 	/* Should get same result after aggregation */
 	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
@@ -2376,7 +2377,7 @@ start_over:
 		if ((epoch - 200) < epr.epr_lo)
 			continue;
 		epr.epr_hi = epoch - 200;
-		rc = vos_aggregate(coh, &epr, NULL, NULL, NULL, false);
+		rc = vos_aggregate(coh, &epr, NULL, NULL, 0);
 		assert_rc_equal(rc, 0);
 	}
 	for (i = 0; i < NR_TX - 1; i++) {

@@ -9,6 +9,8 @@ def scons():
 
     denv = env.Clone()
 
+    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
+
     prereqs.require(denv, 'protobufc', 'hwloc')
 
     #pylint: disable=invalid-name

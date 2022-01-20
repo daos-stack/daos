@@ -27,7 +27,7 @@ public final class Constants {
 
   public static final int KEY_LIST_LEN_DEFAULT = 64;
 
-  public static final int UUID_LENGTH = 36;
+  public static final int ID_LENGTH = 127;
 
   public static final int SERVER_GROUP_NAME_MAX_LEN = 1024;
 
@@ -40,7 +40,6 @@ public final class Constants {
   public static final int KEY_LIST_MAX_BUF_PER_CALL = 64 * 1024;
 
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
-  public static final String POOL_DEFAULT_RANKS = "0";
 
   public static final String DUNS_XATTR_NAME = "user.daos";
   public static final String DUNS_XATTR_FMT = "DAOS.%s://%36s/%36s";
@@ -110,8 +109,13 @@ public final class Constants {
   public static final int UNS_ATTR_VALUE_MAX_LEN = 64 * 1024;
   public static final int UNS_ATTR_VALUE_MAX_LEN_DEFAULT = 1024;
 
+  public static final String UNS_ID_PREFIX = "uns-id";
+
   public static final int RET_CODE_SUCCEEDED = 0;
 
   public static final int DEFAULT_NUMBER_OF_EVENTS_PER_EQ = 128;
   public static final String CFG_NUMBER_OF_EVENTS_PER_EQ = "eq.events";
+
+  public static final String CFG_DAOS_TIMEOUT = "daos.timeout";
+  public static final String DEFAULT_DAOS_TIMEOUT_MS = "60000";
 }

@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -38,10 +39,11 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
-	Start   startCmd   `command:"start" description:"Start daos_server"`
-	Network networkCmd `command:"network" description:"Perform network device scan based on fabric provider"`
-	Version versionCmd `command:"version" description:"Print daos_server version"`
+	Storage  storageCmd              `command:"storage" description:"Perform tasks related to locally-attached storage"`
+	Start    startCmd                `command:"start" description:"Start daos_server"`
+	Network  networkCmd              `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version  versionCmd              `command:"version" description:"Print daos_server version"`
+	DumpTopo cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 }
 
 type versionCmd struct{}
@@ -103,14 +105,14 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			logCmd.setLog(log)
 		}
 
-		if opts.ConfigPath == "" {
-			defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
-			if _, err := os.Stat(defaultConfigPath); err == nil {
-				opts.ConfigPath = defaultConfigPath
-			}
-		}
-
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
+			if opts.ConfigPath == "" {
+				defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
+				if _, err := os.Stat(defaultConfigPath); err == nil {
+					opts.ConfigPath = defaultConfigPath
+				}
+			}
+
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
@@ -121,6 +123,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 					return errors.Wrap(err, "failed to set CLI config overrides")
 				}
 			}
+		} else if opts.ConfigPath != "" {
+			return errors.Errorf("DAOS Server config has been supplied but this command will not use it")
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

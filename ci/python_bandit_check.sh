@@ -2,11 +2,8 @@
 
 set -uex
 
-gitfiles=(.)
-if [ -e '.git' ]; then
-  gitfiles=($(git ls-tree --name-only HEAD))
-fi
+git clean -dxf
 
-bandit --format xml -o bandit.xml -r "${gitfiles[@]}" \
-       --exclude utils/rpms/_topdir \
-       -c src/tests/ftest/security/bandit.config || true
+bandit --format xml -o bandit.xml -r . \
+       --exclude ./utils/rpms/_topdir \
+       -c ci/bandit.config || true

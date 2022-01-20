@@ -24,8 +24,7 @@ test_swim(void **state)
 {
 	int rc;
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			    CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert_int_equal(rc, 0);
 
 	rc = crt_swim_init(0);
@@ -61,7 +60,7 @@ init_tests(void **state)
 	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
 	srand(seed);
 
-	setenv("CRT_PHY_ADDR_STR", "ofi+sockets", 1);
+	setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
 	setenv("OFI_INTERFACE", "lo", 1);
 
 	return 0;

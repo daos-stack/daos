@@ -69,8 +69,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "version", "telemetry config", "telemetry run", "config generate",
 				"manpage":
 				return
-			case "storage prepare":
-				testArgs = append(testArgs, "--force")
+			case "storage nvme-rebind":
+				testArgs = append(testArgs, "-l", "foo.com", "-a", common.MockPCIAddr())
 			case "storage query target-health":
 				testArgs = append(testArgs, []string{"-r", "0", "-t", "0"}...)
 			case "storage query device-health":
@@ -101,6 +101,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, []string{"--user", "foo", "--pool", common.MockUUID(), "--cont", common.MockUUID()}...)
 			case "telemetry metrics list", "telemetry metrics query":
 				return // These commands query via http directly
+			case "system cleanup":
+				testArgs = append(testArgs, "hostname")
 			}
 
 			// replace os.Stdout so that we can verify the generated output

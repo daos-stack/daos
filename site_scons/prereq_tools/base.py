@@ -56,9 +56,9 @@ from SCons.Errors import UserError
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess
+import subprocess #nosec
 try:
-    from subprocess import DEVNULL
+    from subprocess import DEVNULL #nosec
 except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
@@ -428,7 +428,7 @@ class WebRetriever():
             return False
 
         with open(filename, "rb") as src:
-            hexdigest = hashlib.md5(src.read()).hexdigest()
+            hexdigest = hashlib.md5(src.read()).hexdigest() #nosec
 
         if hexdigest != self.md5:
             print("Removing existing file %s: md5 %s != %s" % (filename,
@@ -614,7 +614,8 @@ class PreReqComponent():
         for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
                     "http_proxy", "https_proxy",
                     "PKG_CONFIG_PATH", "MODULEPATH",
-                    "MODULESHOME", "MODULESLOADED"]:
+                    "MODULESHOME", "MODULESLOADED",
+                    "I_MPI_ROOT"]:
             value = os.environ.get(var)
             if value:
                 real_env[var] = value

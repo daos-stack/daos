@@ -14,7 +14,7 @@ Build-Depends: debhelper (>= 10),
                scons,
                uuid-dev
 Standards-Version: 4.1.2
-Homepage: https://wiki.hpdd.intel.com/display/DC/DAOS+Community+Home
+Homepage: https://docs.daos.io/
 Vcs-Git: https://github.com/daos-stack/cart.git
 Vcs-Browser: https://github.com/daos-stack/cart.git
 

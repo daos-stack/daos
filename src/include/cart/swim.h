@@ -203,8 +203,8 @@ int swim_updates_parse(struct swim_context *ctx, swim_id_t from,
  * @param[in]  ctx	SWIM context pointer from swim_init()
  * @param[in]  id	IDs of selected target for message
  * @param[in]  to	IDs of message to send to
- * @param[in]  upds	SWIM updates from other group member
- * @param[in]  nupds	the count of SWIM updates
+ * @param[out] pupds	Pointer to SWIM updates from other group member
+ * @param[out] pnupds	Pointer to the count of SWIM updates
  * @returns		0 on success, negative error ID otherwise
  */
 int swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
@@ -220,9 +220,26 @@ int swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
  */
 int swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to);
 
+/**
+ * Store information about ipinged member for subsequent reply or timeout
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  from_id	IDs of member from this iping request
+ * @param[in]  to_id	IDs of message to send to
+ * @param[in]  args	the data passed to reply or timeout handler
+ * @returns		0 on success, negative error ID otherwise
+ */
 int swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id,
 			swim_id_t to_id, void *args);
 
+/**
+ * Reply to stored member about status of iping
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  from_id	IDs of member from this iping request
+ * @param[in]  ret_rc	result of iping
+ * @returns		0 on success, negative error ID otherwise
+ */
 int swim_ipings_reply(struct swim_context *ctx, swim_id_t from_id, int ret_rc);
 
 /**
@@ -248,6 +265,16 @@ int swim_progress(struct swim_context *ctx, int64_t timeout);
  */
 int swim_net_glitch_update(struct swim_context *ctx, swim_id_t id,
 			   uint64_t delay);
+
+/**
+ * Notify SWIM about new remote member.
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  id	IDs of new member in inactive state
+ * @returns		0 on success, negative error ID otherwise
+ */
+int swim_member_new_remote(struct swim_context *ctx, swim_id_t id);
+
 /** @} */
 
 #ifdef __cplusplus

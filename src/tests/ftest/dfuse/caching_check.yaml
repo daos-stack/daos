@@ -1,0 +1,44 @@
+hosts:
+    test_servers:
+        - server-A
+        - server-B
+        - server-C
+    test_clients:
+        - client-D
+timeout: 240
+server_config:
+    name: daos_server
+    servers:
+        log_mask: INFO
+        bdev_class: nvme
+        bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
+pool:
+    mode: 146 # 146 is RW
+    name: daos_server
+    scm_size: 20%
+    nvme_size: 40%
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
+ior:
+    client_processes:
+        np_16:
+            np: 16
+    test_file: testFile
+    repetitions: 1
+    api: POSIX
+    dfs_destroy: False
+    transfer_size: '1M'
+    block_size: '64M'
+    dfs_oclass: "EC_2P1G1"
+    read_x: 10 # 1000%
+    iorflags:
+      - "-v -w -k"
+      - "-v -r -k"
+dfuse:
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_caching: True
+    disable_wb_caching: True

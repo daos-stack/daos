@@ -1,0 +1,58 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+  test_clients:
+    - client-F
+    - client-G
+    - client-H
+timeout: 750
+server_config:
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+pool:
+  name: daos_server
+  scm_size: 40G
+  nvme_size: 400G
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+largefilecount:
+  api:
+    - DFS
+    - POSIX
+  object_class:
+    - SX
+    - EC_2P1GX
+ior:
+  np: 30
+  dfs_destroy: False
+  flags: "-v -D 300 -W -w -r -R -F"
+  test_file: /testFile
+  repetitions: 1
+  transfer_size: '1M'
+  block_size: '2G'
+dfuse:
+  mount_dir: "/tmp/daos_dfuse/"
+  disable_caching: True
+
+mdtest:
+  client_processes:
+    np: 30
+  num_of_files_dirs: 1667      # creating total of 50K files
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: False
+  manager: "MPICH"
+  flags: "-F -C"
+  write_bytes: 4096
+  read_bytes: 4096
+  depth: 0

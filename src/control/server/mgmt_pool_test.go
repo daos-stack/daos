@@ -97,7 +97,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 		"destroying": {
 			state: system.PoolServiceStateDestroying,
 			expResp: &mgmtpb.PoolCreateResp{
-				Status: int32(drpc.DaosAlready),
+				Status: int32(drpc.DaosTryAgain),
 			},
 		},
 	} {
@@ -227,12 +227,12 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			engineCfg := engine.NewConfig().WithTargetCount(testTargetCount)
+			engineCfg := engine.MockConfig().WithTargetCount(testTargetCount)
 			if !tc.disableNVMe {
 				engineCfg = engineCfg.
 					WithStorage(
 						storage.NewTierConfig().
-							WithBdevClass("nvme").
+							WithStorageClass("nvme").
 							WithBdevDeviceList("foo", "bar"),
 					)
 			}
@@ -419,11 +419,11 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			defer cancel()
 
 			if tc.mgmtSvc == nil {
-				engineCfg := engine.NewConfig().
+				engineCfg := engine.MockConfig().
 					WithTargetCount(tc.targetCount).
 					WithStorage(
 						storage.NewTierConfig().
-							WithBdevClass("nvme").
+							WithStorageClass("nvme").
 							WithBdevDeviceList("foo", "bar"),
 					)
 				r := engine.NewTestRunner(nil, engineCfg)
@@ -492,14 +492,14 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	defer cancel()
 
 	mgmtSvc := newTestMgmtSvc(t, log)
-	ec := engine.NewConfig().
+	ec := engine.MockConfig().
 		WithTargetCount(1).
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmMountPoint("/foo/bar"),
 			storage.NewTierConfig().
-				WithBdevClass("nvme").
+				WithStorageClass("nvme").
 				WithBdevDeviceList("foo", "bar"),
 		)
 	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil)
@@ -580,11 +580,14 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 		return &s
 	}
 
+	// Note: PoolDestroy will invoke one or two dRPCs (evict, evict+destroy)
+	// expDrpcEvReq is here for those cases in which just the evict dRPC is run
 	for name, tc := range map[string]struct {
 		mgmtSvc       *mgmtSvc
 		setupMockDrpc func(_ *mgmtSvc, _ error)
 		poolSvc       *system.PoolService
 		req           *mgmtpb.PoolDestroyReq
+		expDrpcEvReq  *mgmtpb.PoolEvictReq
 		expDrpcReq    *mgmtpb.PoolDestroyReq
 		expResp       *mgmtpb.PoolDestroyResp
 		expSvcState   *system.PoolServiceState
@@ -625,15 +628,37 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			req:    &mgmtpb.PoolDestroyReq{},
 			expErr: errors.New("empty pool id"),
 		},
-		"fails due to engine error": {
+		// Note: evict dRPC fails, still expect a PoolDestroyResp from PoolDestroy
+		"evict dRPC fails with -DER_BUSY due to open handles force=false, pool still ready": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},
-			expDrpcReq: &mgmtpb.PoolDestroyReq{
-				Sys:      build.DefaultSystemName,
-				Id:       mockUUID,
-				SvcRanks: []uint32{0, 1, 2},
+			expDrpcEvReq: &mgmtpb.PoolEvictReq{
+				Sys:          build.DefaultSystemName,
+				Id:           mockUUID,
+				SvcRanks:     []uint32{0, 1, 2},
+				Destroy:      true,
+				ForceDestroy: false,
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
+					Status: int32(drpc.DaosBusy),
+				}, nil)
+			},
+			expResp: &mgmtpb.PoolDestroyResp{
+				Status: int32(drpc.DaosBusy),
+			},
+			expSvcState: stateAddr(system.PoolServiceStateReady),
+		},
+		"evict dRPC fails due to engine error": {
+			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},
+			expDrpcEvReq: &mgmtpb.PoolEvictReq{
+				Sys:          build.DefaultSystemName,
+				Id:           mockUUID,
+				SvcRanks:     []uint32{0, 1, 2},
+				Destroy:      true,
+				ForceDestroy: false,
+			},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
 					Status: int32(drpc.DaosMiscError),
 				}, nil)
 			},
@@ -642,15 +667,85 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			expSvcState: stateAddr(system.PoolServiceStateDestroying),
 		},
-		"fails with -DER_NOTLEADER on first try": {
+		"force=true, evict dRPC fails due to engine error": {
+			req: &mgmtpb.PoolDestroyReq{Id: mockUUID, Force: true},
+			expDrpcEvReq: &mgmtpb.PoolEvictReq{
+				Sys:          build.DefaultSystemName,
+				Id:           mockUUID,
+				SvcRanks:     []uint32{0, 1, 2},
+				Destroy:      true,
+				ForceDestroy: true,
+			},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
+					Status: int32(drpc.DaosMiscError),
+				}, nil)
+			},
+			expResp: &mgmtpb.PoolDestroyResp{
+				Status: int32(drpc.DaosMiscError),
+			},
+			expSvcState: stateAddr(system.PoolServiceStateDestroying),
+		},
+		"already destroying, destroy dRPC fails due to engine error": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},
 			expDrpcReq: &mgmtpb.PoolDestroyReq{
 				Sys:      build.DefaultSystemName,
 				Id:       mockUUID,
-				SvcRanks: []uint32{0, 1, 2},
+				SvcRanks: []uint32{0, 1, 2, 3, 4, 5, 6, 7},
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
+					Status: int32(drpc.DaosMiscError),
+				}, nil)
+			},
+			poolSvc: &system.PoolService{
+				PoolUUID: uuid.MustParse(mockUUID),
+				Replicas: []system.Rank{0, 1, 2},
+				State:    system.PoolServiceStateDestroying,
+				Storage: &system.PoolServiceStorage{
+					CreationRankStr: system.MustCreateRankSet("0-7").String(),
+				},
+			},
+			expResp: &mgmtpb.PoolDestroyResp{
+				Status: int32(drpc.DaosMiscError),
+			},
+		},
+		"force=true already destroying, destroy dRPC fails due to engine error": {
+			req: &mgmtpb.PoolDestroyReq{Id: mockUUID, Force: true},
+			expDrpcReq: &mgmtpb.PoolDestroyReq{
+				Sys:      build.DefaultSystemName,
+				Id:       mockUUID,
+				SvcRanks: []uint32{0, 1, 2, 3, 4, 5, 6, 7},
+				Force:    true,
+			},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
+					Status: int32(drpc.DaosMiscError),
+				}, nil)
+			},
+			poolSvc: &system.PoolService{
+				PoolUUID: uuid.MustParse(mockUUID),
+				Replicas: []system.Rank{0, 1, 2},
+				State:    system.PoolServiceStateDestroying,
+				Storage: &system.PoolServiceStorage{
+					CreationRankStr: system.MustCreateRankSet("0-7").String(),
+				},
+			},
+			expResp: &mgmtpb.PoolDestroyResp{
+				Status: int32(drpc.DaosMiscError),
+			},
+		},
+		"evict dRPC fails with -DER_NOTLEADER on first try": {
+			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},
+			expDrpcEvReq: &mgmtpb.PoolEvictReq{
+				Sys:          build.DefaultSystemName,
+				Id:           mockUUID,
+				SvcRanks:     []uint32{0, 1, 2},
+				Destroy:      true,
+				ForceDestroy: false,
+			},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
 					Status: int32(drpc.DaosNotLeader),
 				}, nil)
 			},
@@ -659,7 +754,8 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			expSvcState: stateAddr(system.PoolServiceStateDestroying),
 		},
-		"already destroying, fails with -DER_NOTLEADER in cleanup": {
+		// Note: expect PoolDestroy() converts to successful status in this case
+		"already destroying, destroy dRPC fails with -DER_NOTLEADER in cleanup": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},
 			expDrpcReq: &mgmtpb.PoolDestroyReq{
 				Sys:      build.DefaultSystemName,
@@ -681,15 +777,17 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			expResp: &mgmtpb.PoolDestroyResp{},
 		},
-		"fails with -DER_NOTREPLICA on first try": {
+		"evict dRPC fails with -DER_NOTREPLICA on first try": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},
-			expDrpcReq: &mgmtpb.PoolDestroyReq{
-				Sys:      build.DefaultSystemName,
-				Id:       mockUUID,
-				SvcRanks: []uint32{0, 1, 2},
+			expDrpcEvReq: &mgmtpb.PoolEvictReq{
+				Sys:          build.DefaultSystemName,
+				Id:           mockUUID,
+				SvcRanks:     []uint32{0, 1, 2},
+				Destroy:      true,
+				ForceDestroy: false,
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
 					Status: int32(drpc.DaosNotReplica),
 				}, nil)
 			},
@@ -698,7 +796,8 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			expSvcState: stateAddr(system.PoolServiceStateDestroying),
 		},
-		"already destroying, fails with -DER_NOTREPLICA in cleanup": {
+		// Note: expect PoolDestroy() converts to successful status in this case
+		"already destroying, destroy dRPC fails with -DER_NOTREPLICA in cleanup": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},
 			expDrpcReq: &mgmtpb.PoolDestroyReq{
 				Sys:      build.DefaultSystemName,
@@ -720,7 +819,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			expResp: &mgmtpb.PoolDestroyResp{},
 		},
-		"already destroying, succeeds": {
+		"already destroying, destroy dRPC succeeds": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},
 			expDrpcReq: &mgmtpb.PoolDestroyReq{
 				Sys:      build.DefaultSystemName,
@@ -737,12 +836,23 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				},
 			},
 		},
+		// Note: PoolDestroy() is going to run both evict and destroy dRPCs each of which will succeed
 		"successful destroy": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID},
 			expDrpcReq: &mgmtpb.PoolDestroyReq{
 				Sys:      build.DefaultSystemName,
 				Id:       mockUUID,
 				SvcRanks: []uint32{0, 1, 2},
+			},
+			expResp: &mgmtpb.PoolDestroyResp{},
+		},
+		"force=true, successful destroy": {
+			req: &mgmtpb.PoolDestroyReq{Id: mockUUID, Force: true},
+			expDrpcReq: &mgmtpb.PoolDestroyReq{
+				Sys:      build.DefaultSystemName,
+				Id:       mockUUID,
+				SvcRanks: []uint32{0, 1, 2},
+				Force:    true,
 			},
 			expResp: &mgmtpb.PoolDestroyResp{},
 		},
@@ -774,11 +884,6 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			expDrpcReq := tc.expDrpcReq
-			if expDrpcReq == nil {
-				expDrpcReq = tc.req
-			}
-
 			gotResp, gotErr := tc.mgmtSvc.PoolDestroy(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -806,9 +911,19 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 					t.Fatal(err)
 				}
 				if diff := cmp.Diff(tc.expDrpcReq, gotReq, cmpOpts...); diff != "" {
-					t.Fatalf("unexpected dRPC call (-want, +got):\n%s\n", diff)
+					t.Fatalf("unexpected destroy dRPC call (-want, +got):\n%s\n", diff)
 				}
 			}
+			if tc.expDrpcEvReq != nil {
+				gotReq := new(mgmtpb.PoolEvictReq)
+				if err := proto.Unmarshal(getLastMockCall(tc.mgmtSvc).Body, gotReq); err != nil {
+					t.Fatal(err)
+				}
+				if diff := cmp.Diff(tc.expDrpcEvReq, gotReq, cmpOpts...); diff != "" {
+					t.Fatalf("unexpected evict dRPC call (-want, +got):\n%s\n", diff)
+				}
+			}
+
 		})
 	}
 }

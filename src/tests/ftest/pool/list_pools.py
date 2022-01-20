@@ -25,8 +25,8 @@ class ListPoolsTest(TestWithServers):
         the UUIDs and service replicas returned at create time.
 
         Args:
-            rank_lists (List of list of integer): Rank lists.
-            sr (String, optional): Service replicas. Defaults to None.
+            rank_lists (list): Rank lists. List of list of int.
+            sr (str, optional): Service replicas. Defaults to None.
 
         Raises:
             CommandFailure: if there was an error destoying pools
@@ -35,24 +35,33 @@ class ListPoolsTest(TestWithServers):
         """
         # Iterate rank lists to create pools. Store the created pool information
         # as a dictionary of pool UUID keys with a service replica list value.
+        self.pool = []
         expected_uuids = {}
         for rank_list in rank_lists:
-            data = self.get_dmg_command().pool_create(
-                scm_size="1G", target_list=rank_list, svcn=sr)
-            expected_uuids[data["uuid"]] = [
-                int(svc) for svc in data["svc"].split(",")]
+            self.pool.append(self.get_pool(create=False))
+            self.pool[-1].target_list.update(rank_list)
+            self.pool[-1].svcn.update(sr)
+            self.pool[-1].create()
+            expected_uuids[self.pool[-1].uuid.lower()] = self.pool[-1].svc_ranks
 
         # Verify the 'dmg pool info' command lists the correct created pool
         # information.  The DmgCommand.pool_info() method returns the command
         # output as a dictionary of pool UUID keys with service replica list
         # values.
-        detected_uuids = self.get_dmg_command().pool_list()
+        detected_uuids = {}
+        try:
+            for data in self.get_dmg_command().get_pool_list_all():
+                detected_uuids[data["uuid"]] = data["svc_reps"]
+        except KeyError as error:
+            self.fail("Error parsing dmg pool list output: {}".format(error))
+
         self.log.info("Expected pool info: %s", str(expected_uuids))
         self.log.info("Detected pool info: %s", str(detected_uuids))
 
         # Destroy all the pools
-        for uuid in expected_uuids:
-            self.get_dmg_command().pool_destroy(uuid)
+        if self.destroy_pools(self.pool):
+            self.fail("Error destroying pools")
+        self.pool = []
 
         # Compare the expected and detected pool information
         self.assertEqual(

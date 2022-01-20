@@ -255,8 +255,23 @@ static inline int
 evt_is_empty(struct evt_root *root)
 {
 	D_ASSERT(root != NULL);
+
 	return root->tr_depth == 0;
 }
+
+/** Return true if the tree has any data.   Removal records are
+ *  not considered data.  This is needed for assurance that
+ *  aggregation is not removing any orphaned data.
+ *
+ *  \param root[in]	Tree root
+ *  \param uma[in]	Memory attributes
+ *
+ *  \return		1 if it has data
+ *			0 if it is is empty or has only has removal records
+ *			negative error code on error
+ */
+int
+evt_has_data(struct evt_root *root, struct umem_attr *uma);
 
 enum evt_feats {
 	/** rectangles are Sorted by their Start Offset */
@@ -395,7 +410,7 @@ evt_vis2dbg(int flag)
 
 	switch (flag & flags) {
 	default:
-		D_ASSERT(0);
+		D_ASSERTF(0, "unexpected flag %x\n", flag);
 	case 0:
 		break;
 	case EVT_PARTIAL:
@@ -650,8 +665,12 @@ enum {
 	EVT_ITER_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
 	EVT_ITER_FOR_MIGRATION	= (1 << 6),
+	/** The iterator is for data discard */
+	EVT_ITER_FOR_DISCARD	= (1 << 7),
 	/** Skip visible data (Only valid with EVT_ITER_VISIBLE) */
-	EVT_ITER_SKIP_DATA	= (1 << 7),
+	EVT_ITER_SKIP_DATA	= (1 << 8),
+	/** Only process removals */
+	EVT_ITER_REMOVALS	= (1 << 9),
 };
 
 D_CASSERT((int)EVT_VISIBLE == (int)EVT_ITER_VISIBLE);

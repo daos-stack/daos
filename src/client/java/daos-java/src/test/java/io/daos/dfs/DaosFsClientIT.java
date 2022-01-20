@@ -37,21 +37,6 @@ public class DaosFsClientIT {
   }
 
   @Test
-  public void testCreateFsClientFromRootContainer() throws Exception {
-    DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
-    builder.poolId(poolId);
-    DaosFsClient client = null;
-    try {
-      client = builder.build();
-      Assert.assertTrue(client != null);
-    } finally {
-      if (client != null) {
-        client.close();
-      }
-    }
-  }
-
-  @Test
   public void testFsClientCachePerPoolAndContainer() throws Exception {
     DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder();
     builder.poolId(poolId).containerId(contId);

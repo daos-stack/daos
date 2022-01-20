@@ -93,7 +93,8 @@ struct ds_iv_entry {
 	/* link to the namespace */
 	d_list_t		iv_link;
 	unsigned int		iv_ref;
-	unsigned int		iv_valid:1;
+	unsigned int		iv_valid:1,
+				iv_to_delete:1;
 };
 
 /**

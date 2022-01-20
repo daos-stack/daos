@@ -42,7 +42,7 @@ class VolTestBase(DfuseTestBase):
         # Assign the test to run
         self.job_manager.job = ExecutableCommand(
             namespace=None, command=testname, path=test_repo,
-            check_results=["FAILED"])
+            check_results=["FAILED", "stderr"])
 
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(self.pool.uuid)

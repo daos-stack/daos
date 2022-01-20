@@ -8,7 +8,7 @@ def scons():
     if not prereqs.client_requested():
         return
 
-    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
+    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
 
     daos_build.add_build_rpath(env)
     daos_build.add_build_rpath(base_env)
@@ -41,13 +41,6 @@ def scons():
     libs += ['daos_cmd_hdlrs']
 
     Export('daos_hdlrs_lib')
-
-    Import('cmd_parser', 'dc_credit')
-    daos_obj = [cmd_parser, dc_credit]
-    daos_src = ['daos.c', 'daos_obj_ctl.c']
-
-    daos = daos_build.program(denv, 'daos_old', [daos_src, daos_obj], LIBS=libs)
-    denv.Install('$PREFIX/bin/', daos)
 
 if __name__ == "SCons.Script":
     scons()

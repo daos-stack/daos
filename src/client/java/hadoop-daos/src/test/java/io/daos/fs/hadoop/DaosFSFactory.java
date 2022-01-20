@@ -15,11 +15,16 @@ import java.io.IOException;
  *
  */
 public class DaosFSFactory {
-  public final static String defaultPoolId = "bce96e2f-5a52-4aeb-b0b4-8994eee79a5f";
-  public final static String defaultContId = "e7814443-c8a1-4014-b94b-571ac7f5cff3";
+  public final static String defaultPoolId = "a9cbecc6-6ee6-4bf6-9be4-58e0c73ea4cb";
+  public final static String defaultContId = "30059a26-df7f-4e65-9870-705105fd67b7";
   public final static String pooluuid = System.getProperty("pool_id", defaultPoolId);
   public final static String contuuid = System.getProperty("cont_id", defaultContId);
-  public final static String svc = "0";
+  public static final String defaultPoolLabel = "pool1";
+  public static final String defaultContLabel = "cont1";
+  public final static String poolLabel = System.getProperty("pool_label", defaultPoolLabel);
+  public final static String contLabel = System.getProperty("cont_label", defaultContLabel);
+
+  public static final String DAOS_URI = "daos://" + DaosFSFactory.getPooluuid() + "/" + DaosFSFactory.getContuuid();
 
   private static FileSystem createFS() throws IOException {
     Configuration conf = new Configuration();
@@ -32,10 +37,10 @@ public class DaosFSFactory {
   }
 
   public static void config(Configuration conf, boolean async) {
-    conf.set(Constants.DAOS_POOL_UUID, pooluuid);
-    conf.set(Constants.DAOS_CONTAINER_UUID, contuuid);
-    conf.set(Constants.DAOS_POOL_SVC, svc);
+    conf.set(Constants.DAOS_POOL_ID, pooluuid);
+    conf.set(Constants.DAOS_CONTAINER_ID, contuuid);
     conf.set(Constants.DAOS_IO_ASYNC, String.valueOf(async));
+    conf.setBoolean(Constants.DAOS_WITH_UNS_PREFIX, false);
   }
 
   public synchronized static FileSystem getFS() throws IOException {
@@ -82,4 +87,13 @@ public class DaosFSFactory {
   public static String getContuuid() {
     return contuuid;
   }
+
+  public static String getPoolLabel() {
+    return poolLabel;
+  }
+
+  public static String getContLabel() {
+    return contLabel;
+  }
+
 }

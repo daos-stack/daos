@@ -34,10 +34,7 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 	char            *dir_name = NULL;
 	int		rc, rc2;
 
-	if (ap->fs_op == FS_GET_ATTR)
-		flags = O_RDONLY;
-	else
-		flags = O_RDWR;
+	flags = O_RDWR;
 
 	rc = dfs_mount(ap->pool, ap->cont, flags, &dfs);
 	if (rc) {
@@ -53,29 +50,6 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 	}
 
 	switch (ap->fs_op) {
-	case FS_GET_ATTR:
-	{
-		dfs_obj_info_t	info;
-		char		oclass_name[16];
-
-		rc = dfs_lookup(dfs, ap->dfs_path, flags, &obj, NULL, NULL);
-		if (rc) {
-			fprintf(ap->errstream, "failed to lookup %s (%s)\n",
-				ap->dfs_path, strerror(rc));
-			D_GOTO(out_umount, rc);
-		}
-
-		rc = dfs_obj_get_info(dfs, obj, &info);
-		if (rc) {
-			fprintf(ap->errstream, "failed to get obj info (%s)\n", strerror(rc));
-			D_GOTO(out_release, rc);
-		}
-
-		daos_oclass_id2name(info.doi_oclass_id, oclass_name);
-		fprintf(ap->outstream, "Object Class = %s\n", oclass_name);
-		fprintf(ap->outstream, "Object Chunk Size = %zu\n", info.doi_chunk_size);
-		break;
-	}
 	case FS_RESET_ATTR:
 	case FS_RESET_CHUNK_SIZE:
 	case FS_RESET_OCLASS:
@@ -166,8 +140,6 @@ out_release:
 	rc2 = dfs_release(obj);
 	if (rc2 != 0)
 		fprintf(ap->errstream, "failed to release dfs obj\n");
-	if (rc == 0)
-		rc = rc2;
 out_names:
 	D_FREE(name);
 	D_FREE(dir_name);
@@ -175,7 +147,55 @@ out_umount:
 	rc2 = dfs_umount(dfs);
 	if (rc2 != 0)
 		fprintf(ap->errstream, "failed to umount DFS container\n");
-	if (rc == 0)
-		rc = rc2;
+	return rc;
+}
+
+int
+fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs)
+{
+	int		 flags = O_RDONLY;
+	int		 rc;
+	int		 rc2;
+	dfs_t		*dfs;
+	dfs_obj_t	*obj;
+
+	D_ASSERT(ap != NULL);
+	D_ASSERT(attrs != NULL);
+
+	rc = dfs_mount(ap->pool, ap->cont, flags, &dfs);
+	if (rc) {
+		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n",
+			ap->cont_str, strerror(rc), rc);
+		return rc;
+	}
+
+	if (ap->dfs_prefix) {
+		rc = dfs_set_prefix(dfs, ap->dfs_prefix);
+		if (rc)
+			D_GOTO(out_umount, rc);
+	}
+
+	rc = dfs_lookup(dfs, ap->dfs_path, flags, &obj, NULL, NULL);
+	if (rc) {
+		fprintf(ap->errstream, "failed to lookup %s (%s)\n",
+			ap->dfs_path, strerror(rc));
+		D_GOTO(out_umount, rc);
+	}
+
+	rc = dfs_obj_get_info(dfs, obj, attrs);
+	if (rc) {
+		fprintf(ap->errstream, "failed to get obj info (%s)\n",
+			strerror(rc));
+		D_GOTO(out_release, rc);
+	}
+
+out_release:
+	rc2 = dfs_release(obj);
+	if (rc2 != 0)
+		fprintf(ap->errstream, "failed to release dfs obj\n");
+out_umount:
+	rc2 = dfs_umount(dfs);
+	if (rc2 != 0)
+		fprintf(ap->errstream, "failed to umount DFS container\n");
 	return rc;
 }

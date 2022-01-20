@@ -126,10 +126,13 @@ static void
 hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct hash_hdl *hdl = hash_hdl_obj(rlink);
+	int		rc = 0;
 
 	D_DEBUG(DB_TRACE, "name=%s\n", hdl->name);
 
-	dfs_release(hdl->obj);
+	rc = dfs_release(hdl->obj);
+	if (rc == ENOMEM)
+		dfs_release(hdl->obj);
 	D_FREE(hdl->name);
 	D_FREE(hdl);
 }
@@ -213,7 +216,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	hdl->name_len = sys_path->dir_name_len;
 	D_STRNDUP(hdl->name, sys_path->dir_name, sys_path->dir_name_len);
 	if (hdl->name == NULL)
-		D_GOTO(free_hdl, ENOMEM);
+		D_GOTO(free_hdl, rc = ENOMEM);
 
 	/* Start with 2 so we have exactly 1 reference left
 	 * when dfs_sys_umount is called.
@@ -224,8 +227,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR, &hdl->obj,
 			&mode, NULL);
 	if (rc != 0) {
-		D_ERROR("dfs_lookup() %s failed: %s\n",
-			sys_path->dir_name, strerror(rc));
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path->dir_name, rc);
 		D_GOTO(free_hdl_name, rc);
 	}
 
@@ -435,14 +437,12 @@ err_dfs_sys:
 int
 dfs_sys_umount(dfs_sys_t *dfs_sys)
 {
-	int		hash_rc;
-	int		umount_rc;
+	int		rc;
 	d_list_t	*rlink;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
 
-	hash_rc = 0;
 	if (dfs_sys->hash != NULL) {
 		/* Decrease each reference by one. */
 		while (1) {
@@ -453,24 +453,27 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 			d_hash_rec_decref(dfs_sys->hash, rlink);
 		}
 
-		hash_rc = d_hash_table_destroy(dfs_sys->hash, false);
-		if (hash_rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to destroy hash table: "
-				DF_RC"\n", DP_RC(hash_rc));
+		rc = d_hash_table_destroy(dfs_sys->hash, false);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "failed to destroy hash table: "DF_RC"\n", DP_RC(rc));
+			return rc;
 		}
+		dfs_sys->hash = NULL;
 	}
 
-	umount_rc = dfs_umount(dfs_sys->dfs);
-	if (umount_rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", umount_rc);
+	if (dfs_sys->dfs != NULL) {
+		rc = dfs_umount(dfs_sys->dfs);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", rc);
+			return rc;
+		}
+		dfs_sys->dfs = NULL;
 	}
 
+	/* Only free if umount was successful */
 	D_FREE(dfs_sys);
 
-	/** Try to return the rc of whichever call failed */
-	if (hash_rc != 0)
-		return hash_rc;
-	return umount_rc;
+	return 0;
 }
 
 int
@@ -813,10 +816,8 @@ dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list,
 
 listxattr:
 	rc = dfs_listxattr(dfs_sys->dfs, obj, list, &got_size);
-	if (rc != 0) {
-		*size = -1;
+	if (rc != 0)
 		D_GOTO(out_free_obj, rc);
-	}
 
 	if (*size < got_size)
 		rc = ERANGE;
@@ -869,10 +870,8 @@ dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 
 getxattr:
 	rc = dfs_getxattr(dfs_sys->dfs, obj, name, value, &got_size);
-	if (rc != 0) {
-		*size = -1;
+	if (rc != 0)
 		D_GOTO(out_free_obj, rc);
-	}
 
 	if (*size < got_size)
 		rc = ERANGE;
@@ -1010,8 +1009,6 @@ dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf,
 	}
 
 	rc = dfs_get_symlink_value(obj, buf, size);
-	if (rc != 0)
-		*size = -1;
 
 	dfs_release(obj);
 
@@ -1129,14 +1126,18 @@ out_free_path:
 int
 dfs_sys_close(dfs_obj_t *obj)
 {
-	return dfs_release(obj);
+	int rc = 0;
+
+	rc = dfs_release(obj);
+	if (rc == ENOMEM)
+		dfs_release(obj);
+	return rc;
 }
 
 int
 dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 	     daos_size_t *size, daos_event_t *ev)
 {
-	int		rc;
 	d_iov_t		iov;
 	d_sg_list_t	sgl;
 
@@ -1152,18 +1153,13 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr_out = 1;
 
-	rc = dfs_read(dfs_sys->dfs, obj, &sgl, off, size, ev);
-	if (rc != 0)
-		*size = -1;
-
-	return rc;
+	return dfs_read(dfs_sys->dfs, obj, &sgl, off, size, ev);
 }
 
 int
 dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	      daos_off_t off, daos_size_t *size, daos_event_t *ev)
 {
-	int		rc;
 	d_iov_t		iov;
 	d_sg_list_t	sgl;
 
@@ -1179,11 +1175,7 @@ dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr_out = 1;
 
-	rc = dfs_write(dfs_sys->dfs, obj, &sgl, off, ev);
-	if (rc != 0)
-		*size = -1;
-
-	return rc;
+	return dfs_write(dfs_sys->dfs, obj, &sgl, off, ev);
 }
 
 int
@@ -1393,6 +1385,8 @@ dfs_sys_closedir(DIR *dirp)
 	sys_dir = (struct dfs_sys_dir *)dirp;
 
 	rc = dfs_release(sys_dir->obj);
+	if (rc == ENOMEM)
+		dfs_release(sys_dir->obj);
 
 	D_FREE(sys_dir);
 

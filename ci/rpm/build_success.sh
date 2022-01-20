@@ -16,6 +16,8 @@ fi
 : "${TARGET:=centos7}"
 
 artdir="${PWD}/artifacts/${TARGET}"
+rm -rf "$artdir"
+mkdir -p "$artdir"
 
 if [ -d /var/cache/pbuilder/ ]; then
     mockroot=/var/cache/pbuilder/

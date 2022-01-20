@@ -7,7 +7,7 @@
 from collections import defaultdict
 import yaml
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from command_utils import CommandFailure
 from dmg_utils import DmgCommand
 
@@ -192,26 +192,39 @@ class ConfigGenerateOutput(TestWithServers):
 
         errors = []
 
+        scm_found = False
+        nvme_found = False
+
         # Iterate engines and verify scm_list, bdev_list, and fabric_iface.
         engines = generated_yaml["engines"]
         for engine in engines:
-            # Verify the scm_list value is in the SCM Namespace set. e.g.,
-            # if the value is /dev/pmem0, check pmem0 is in the set.
-            scm_list = engine["scm_list"]
-            for scm_dev in scm_list:
-                device_name = scm_dev.split("/")[-1]
-                if device_name not in self.scm_namespace_set:
-                    errors.append(
-                        "Cannot find SCM device name {} in expected set {}"\
-                            .format(device_name, self.scm_namespace_set))
+            for storage in engine["storage"]:
+                if storage["class"] == "dcpm":
+                    # Verify the scm_list value is in the SCM Namespace set. e.g.,
+                    # if the value is /dev/pmem0, check pmem0 is in the set.
+                    scm_list = storage["scm_list"]
+                    for scm_dev in scm_list:
+                        device_name = scm_dev.split("/")[-1]
+                        if device_name not in self.scm_namespace_set:
+                            errors.append(
+                                "Cannot find SCM device name {} in expected set {}"\
+                                    .format(device_name, self.scm_namespace_set))
+                        scm_found = True
 
-            # Verify the bdev_list values are in the NVMe PCI address set.
-            bdev_list = engine["bdev_list"]
-            for pci_addr in bdev_list:
-                if pci_addr not in self.pci_address_set:
-                    errors.append(
-                        "Cannot find PCI address {} in expected set {}".format(
-                            pci_addr, self.pci_address_set))
+                # Verify the bdev_list values are in the NVMe PCI address set.
+                if storage["class"] == "nvme":
+                    bdev_list = storage["bdev_list"]
+                    for pci_addr in bdev_list:
+                        if pci_addr not in self.pci_address_set:
+                            errors.append(
+                                "Cannot find PCI address {} in expected set {}".format(
+                                    pci_addr, self.pci_address_set))
+                        nvme_found = True
+
+            if not scm_found:
+                errors.append("No SCM devices found")
+            if not nvme_found:
+                errors.append("No NVMe devices found")
 
             # Verify fabric interface values are in the interface set.
             fabric_iface = engine["fabric_iface"]
@@ -239,7 +252,6 @@ class ConfigGenerateOutput(TestWithServers):
 
         self.check_errors(errors)
 
-    @skipForTicket("DAOS-7792")
     def test_access_points_odd(self):
         """Test --access-points with odd number of APs.
 
@@ -406,7 +418,7 @@ class ConfigGenerateOutput(TestWithServers):
         # Iterate the engines and verify that there's no bdev_list field.
         engines = generated_yaml["engines"]
         for engine in engines:
-            if "bdev_list" in engine:
+            if "bdev_list" in engine["storage"]:
                 errors.append("bdev_list field exists with --min-ssds=0!")
 
         self.check_errors(errors)
@@ -471,7 +483,7 @@ class ConfigGenerateOutput(TestWithServers):
                             "Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in \
                         self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+sockets by
+                        # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
                             " {}; fabric_iface = {}".format(
@@ -519,7 +531,7 @@ class ConfigGenerateOutput(TestWithServers):
                             "Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in \
                         self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+sockets by
+                        # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
                             " {}; fabric_iface = {}".format(

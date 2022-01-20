@@ -303,6 +303,7 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool list command object."""
                 super().__init__("/run/dmg/pool/list/*", "list")
                 self.no_query = FormattedParameter("--no-query", False)
+                self.verbose = FormattedParameter("--verbose", False)
 
         class OverwriteAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool overwrite-acl command."""
@@ -505,6 +506,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.StopSubCommand()
             elif self.sub_command.value == "erase":
                 self.sub_command_class = self.EraseSubCommand()
+            elif self.sub_command.value == "cleanup":
+                self.sub_command_class = self.CleanupSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -530,6 +533,15 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg system query command object."""
                 super().__init__("/run/dmg/system/query/*", "query")
                 self.ranks = FormattedParameter("--ranks={}")
+                self.verbose = FormattedParameter("--verbose", False)
+
+        class CleanupSubCommand(CommandWithParameters):
+            """Defines an object for the dmg system cleanup command."""
+
+            def __init__(self):
+                """Create a dmg system cleanup command object."""
+                super().__init__("/run/dmg/system/cleanup/*", "cleanup")
+                self.machinename = FormattedParameter("{}", None)
                 self.verbose = FormattedParameter("--verbose", False)
 
         class StartSubCommand(CommandWithParameters):
