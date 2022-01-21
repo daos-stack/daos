@@ -20,738 +20,15 @@
 #include <math.h>
 #include "pipeline_rpc.h"
 
-#if 0
-static void
-pipeline_filter_get_data(daos_filter_part_t *part, d_iov_t *dkey,
-			 uint32_t nr_iods, daos_iod_t *iods, d_sg_list_t *akeys,
-			 uint32_t const_idx, d_iov_t **data_item)
-{
-	uint32_t i;
-
-	*data_item = NULL;
-	if (!strncmp((char *) part->part_type.iov_buf, "DAOS_FILTER_DKEY",
-		     part->part_type.iov_len))
-	{
-		*data_item = dkey;
-	}
-	else if (!strncmp((char *) part->part_type.iov_buf, "DAOS_FILTER_AKEY",
-			  part->part_type.iov_len))
-	{
-		for (i = 0; i < nr_iods; i++)
-		{
-			if (!strncmp((char *) part->akey.iov_buf,
-				     (char *) iods[i].iod_name.iov_buf,
-				              iods[i].iod_name.iov_len))
-			{
-				*data_item = akeys[i].sg_iovs;
-				break;
-			}
-		}
-	}
-	else if (!strncmp((char *) part->part_type.iov_buf, "DAOS_FILTER_CONST",
-			  part->part_type.iov_len) &&
-		const_idx < part->num_constants)
-	{
-		*data_item = &(part->constant[const_idx]);
-	}
-}
-
-static int
-pipeline_filter_like(d_iov_t *left, d_iov_t *right)
-{
-	char *left_val, *right_val;
-	size_t left_data_size, right_data_size;
-	size_t left_pos, right_pos, right_anchor;
-	uint8_t right_anchor_set;
-	uint8_t scaping;
-
-	left_val		= (char *) left->iov_buf;
-	right_val		= (char *) right->iov_buf;
-	left_data_size		= left->iov_len;
-	right_data_size		= right->iov_len;
-	left_pos 		= 0;
-	right_pos		= 0;
-	right_anchor		= 0;
-	right_anchor_set	= 0;
-	scaping			= 0;
-
-	while (left_pos < left_data_size && right_pos < right_data_size)
-	{
-		if (right_val[right_pos] == '\\') {
-			scaping = 1;
-			right_pos++;
-			if (right_pos == right_data_size)
-			{
-				return 1; /** We should never reach this. */
-			}
-		}
-		if (right_val[right_pos] == '%' && scaping == 0)
-		{
-			right_anchor_set = 1;
-			right_anchor = ++right_pos;
-			if (right_pos == right_data_size)
-			{
-				return 0; /** '%' is at the end. Pass. */
-			}
-		}
-		if ((right_val[right_pos] == '_' && scaping == 0) ||
-		     left_val[left_pos] == right_val[right_pos])
-		{
-			left_pos++;
-			right_pos++;
-		}
-		else if (!right_anchor_set)
-		{
-			return 1; /** Mismatch and no wildcard. No pass. */
-		}
-		else
-		{
-			right_pos = right_anchor;
-			left_pos++;
-		}
-		scaping = 0;
-	}
-	if (left_pos == left_data_size && right_pos == right_data_size)
-	{
-		return 0; /** Function pass. */
-	}
-	return 1; /** No pass. */
-}
-
-static int
-pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right,
-		    size_t offset_left, size_t size_left,
-		    size_t offset_right, size_t size_right,
-		    const char *data_type, size_t data_type_s)
-{
-	size_t cmp_size;
-	char *left_s, *right_s;
-
-	left_s  = (char *) d_left->iov_buf;
-	right_s = (char *) d_right->iov_buf;
-	left_s  = &left_s[offset_left];
-	right_s = &right_s[offset_right];
-	cmp_size = (size_left <= size_right) ? size_left : size_right;
-
-	/** Typed comparison */
-
-	if (!strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER1", data_type_s))
-	{
-		signed char *left_i, *right_i;
-		left_i  = (signed char *) left_s;
-		right_i = (signed char *) right_s;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER2", data_type_s))
-	{
-		short int *left_i, *right_i;
-		left_i  = (short int *) left_s;
-		right_i = (short int *) right_s;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER4", data_type_s))
-	{
-		int *left_i, *right_i;
-		left_i  = (int *) left_s;
-		right_i = (int *) right_s;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER8", data_type_s))
-	{
-		long long int *left_i, *right_i;
-		left_i  = (long long int *) left_s;
-		right_i = (long long int *) right_s;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_REAL4", data_type_s))
-	{
-		float *left_f, *right_f;
-		left_f  = (float *) left_s;
-		right_f = (float *) right_s;
-		if      (*left_f < *right_f)  return -1;
-		else if (*left_f == *right_f) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_REAL8", data_type_s))
-	{
-		double *left_f, *right_f;
-		left_f  = (double *) left_s;
-		right_f = (double *) right_s;
-		if      (*left_f < *right_f)  return -1;
-		else if (*left_f == *right_f) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_STRING", data_type_s))
-	{
-		return strcmp(left_s, right_s);
-	}
-
-	/** -- Raw cmp byte by byte */
-
-	return memcmp(left_s, right_s, cmp_size);
-}
-
-static int
-pipeline_filter_func(daos_filter_t *filter, d_iov_t *dkey, uint32_t nr_iods,
-		     daos_iod_t *iods, d_sg_list_t *akeys, uint32_t *part_idx)
-{
-	uint32_t		i;
-	uint32_t		comparisons = 1;
-	int			rc;
-	daos_filter_part_t	*part;
-	daos_filter_part_t	*left;
-	daos_filter_part_t	*right;
-	d_iov_t			*d_left;
-	d_iov_t			*d_right;
-
-	part = filter->parts[*part_idx];
-	*part_idx += 1;
-	left = filter->parts[*part_idx];
-	*part_idx += 1;
-	right = filter->parts[*part_idx];
-
-	/** -- Check if we have multiple constants to check */
-
-	if (!strncmp((char *) right->part_type.iov_buf, "DAOS_FILTER_CONST",
-		     right->part_type.iov_len) &&
-	    right->num_constants > 1)
-	{
-		comparisons = right->num_constants;
-	}
-
-	pipeline_filter_get_data(left, dkey, nr_iods, iods, akeys, 0, &d_left);
-	for (i = 0; i < comparisons; i++)
-	{
-		pipeline_filter_get_data(right, dkey, nr_iods, iods, akeys,
-					 i, &d_right);
-
-		if (d_left == NULL || d_right == NULL)
-		{
-			return -DER_INVAL;
-		}
-		if (strncmp((char *) left->data_type.iov_buf,
-			    (char *) right->data_type.iov_buf,
-			    left->data_type.iov_len))
-		{
-			return -DER_INVAL;
-		}
-		if (!strncmp((char *) part->part_type.iov_buf,
-			     "DAOS_FILTER_FUNC_LIKE",
-			     part->part_type.iov_len))
-		{
-			/** filter 'LIKE' only works for strings */
-			if (strncmp((char *) left->data_type.iov_buf,
-				    "DAOS_FILTER_TYPE_STRING",
-				    left->data_type.iov_len) ||
-			    strncmp((char *) right->data_type.iov_buf,
-				    "DAOS_FILTER_TYPE_STRING",
-				    right->data_type.iov_len))
-			{
-				return -DER_INVAL;
-			}
-			rc = pipeline_filter_like(d_left, d_right);
-		}
-		else
-		{
-			rc = pipeline_filter_cmp(d_left, d_right,
-						 left->data_offset,
-						 left->data_len,
-						 right->data_offset,
-						 right->data_len,
-						 (char *) left->data_type.iov_buf,
-						 left->data_type.iov_len);
-		}
-
-		if (!strncmp((char *) part->part_type.iov_buf,
-			     "DAOS_FILTER_FUNC_EQ",
-			     part->part_type.iov_len) ||
-		    !strncmp((char *) part->part_type.iov_buf,
-			     "DAOS_FILTER_FUNC_IN",
-			     part->part_type.iov_len) ||
-		    !strncmp((char *) part->part_type.iov_buf,
-			     "DAOS_FILTER_FUNC_LIKE",
-			     part->part_type.iov_len))
-		{
-			if (rc == 0) return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_NE",
-				  part->part_type.iov_len))
-		{
-			if (rc != 0) return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_LT",
-				  part->part_type.iov_len))
-		{
-			if (rc < 0)  return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_LE",
-				  part->part_type.iov_len))
-		{
-			if (rc <= 0) return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_GE",
-				  part->part_type.iov_len))
-		{
-			if (rc >= 0) return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_GT",
-				  part->part_type.iov_len))
-		{
-			if (rc > 0)  return 0;
-		}
-	}
-
-	return 1; /** Filter does not pass. */
-}
-
-static int
-pipeline_filter_isnull(daos_filter_t *filter, d_iov_t *dkey, uint32_t nr_iods,
-		       daos_iod_t *iods, d_sg_list_t *akeys, uint32_t *part_idx)
-{
-	daos_filter_part_t	*part;
-	d_iov_t			*data;
-	char			*part_type;
-	size_t			part_type_s;
-
-	*part_idx += 1;
-	part = filter->parts[*part_idx];
-
-	part_type   = (char *) part->part_type.iov_buf;
-	part_type_s = part->part_type.iov_len;
-
-	if (!strncmp(part_type, "DAOS_FILTER_DKEY", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_CONST", part_type_s))
-	{
-		return 1; /**
-			   *  dkeys or constants can't be null in this context
-			   */
-	}
-
-	pipeline_filter_get_data(part, dkey, nr_iods, iods, akeys, 0, &data);
-
-	return data == NULL ? 0 : 1;
-}
-
-static int
-pipeline_filter(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
-		daos_iod_t *iods, d_sg_list_t *akeys, uint32_t *part_idx)
-{
-	char *part_type = (char *) filter->parts[*part_idx]->part_type.iov_buf;
-	size_t part_type_s = filter->parts[*part_idx]->part_type.iov_len;
-
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))
-	{
-		return pipeline_filter_func(filter, dkey, *nr_iods, iods, akeys,
-					    part_idx);
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s))
-	{
-		*part_idx += 1;
-		return pipeline_filter_isnull(filter, dkey, *nr_iods, iods,
-					      akeys, part_idx);
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s))
-	{
-		int rc;
-		*part_idx += 1;
-		if ((rc = pipeline_filter_isnull(filter, dkey, *nr_iods, iods,
-						 akeys, part_idx)) < 0)
-		{
-			return rc; /** error */
-		}
-		return 1 - rc;
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s))
-	{
-		int rc;
-		*part_idx += 1;
-		if ((rc = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc; /** error */
-		}
-		return 1 - rc; /** NOT */
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s))
-	{
-		int rc_l, rc_r;
-		*part_idx += 1;
-		if ((rc_l = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc_l; /** error */
-		}
-		*part_idx += 1;
-		if ((rc_r = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc_r; /** error */
-		}
-		return (rc_l == 0 && rc_r == 0) ? 0 : 1; /** AND */
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s))
-	{
-		int rc_l, rc_r;
-		*part_idx += 1;
-		if ((rc_l = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc_l; /** error */
-		}
-		*part_idx += 1;
-		if ((rc_r = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc_r; /** error */
-		}
-		return (rc_l == 0 || rc_r == 0) ? 0 : 1; /** OR */
-	}
-
-	return -DER_NOSYS; /** Unsupported function. */
-}
-
-static int
-pipeline_filters(daos_pipeline_t *pipeline, d_iov_t *dkey, uint32_t *nr_iods,
-		 daos_iod_t *iods, d_sg_list_t *akeys)
-{
-	int		rc;
-	uint32_t	part_idx;
-	uint32_t 	i;
-
-	if (pipeline->num_filters == 0)
-	{
-		return 0; /** No filters means all records pass */
-	}
-
-	for (i = 0; i < pipeline->num_filters; i++)
-	{
-		part_idx = 0;
-		if ((rc = pipeline_filter(pipeline->filters[i], dkey, nr_iods,
-					  iods, akeys, &part_idx)))
-		{
-			return rc; /** error, or filter does not pass */
-		}
-	}
-
-	return 0;
-}
-
-static int
-read_iov_as_double(char *data, size_t offset, char *type, size_t type_s,
-		   double *result)
-{
-	char *data_ = &data[offset];
-
-	if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER1", type_s))
-	{
-		signed char *val = (signed char *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER2", type_s))
-	{
-		short int *val = (short int *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER4", type_s))
-	{
-		int *val = (int *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER8", type_s))
-	{
-		long long int *val = (long long int *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_REAL4", type_s))
-	{
-		float *val = (float *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_REAL8", type_s))
-	{
-		double *val = (double *) data_;
-		*result = *val;
-	}
-	else
-	{
-		return -DER_INVAL;
-	}
-	return 0;
-}
-
-static int
-pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
-		     daos_iod_t *iods, d_sg_list_t *akeys, uint32_t *part_idx,
-		     double *total)
-{
-	int			rc;
-	daos_filter_part_t	*part = filter->parts[*part_idx];
-	char			*part_type = (char *) part->part_type.iov_buf;
-	size_t			part_type_s = part->part_type.iov_len;
-	double			total_rec;
-
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
-	{
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_rec)))
-		{
-			return rc; /** error */
-		}
-		*total += total_rec;
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s))
-	{
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_rec)))
-		{
-			return rc; /** error */
-		}
-		if (total_rec > *total)
-		{
-			*total = total_rec;
-		}
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s))
-	{
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_rec)))
-		{
-			return rc; /** error */
-		}
-		if (total_rec < *total)
-		{
-			*total = total_rec;
-		}
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_DKEY", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_AKEY", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_CONST", part_type_s))
-	{
-		d_iov_t *data;
-
-		pipeline_filter_get_data(part, dkey, *nr_iods, iods, akeys, 0,
-					 &data);
-		if ((rc = read_iov_as_double((char *) data->iov_buf,
-					     part->data_offset,
-					     (char  *) part->data_type.iov_buf,
-					     part->data_type.iov_len,
-					     total)))
-		{
-			return rc; /** error */
-		}
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s))
-	{
-		double total_left_rec, total_right_rec;
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_left_rec)))
-		{
-			return rc; /** error */
-		}
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_right_rec)))
-		{
-			return rc; /** error */
-		}
-		*total += total_left_rec + total_right_rec; /** ADD */
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s))
-	{
-		double total_left_rec, total_right_rec;
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_left_rec)))
-		{
-			return rc; /** error */
-		}
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_right_rec)))
-		{
-			return rc; /** error */
-		}
-		*total += total_left_rec - total_right_rec; /** SUB */
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s))
-	{
-		double total_left_rec, total_right_rec;
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_left_rec)))
-		{
-			return rc; /** error */
-		}
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_right_rec)))
-		{
-			return rc; /** error */
-		}
-		*total += total_left_rec * total_right_rec; /** MUL */
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s))
-	{
-		double total_left_rec, total_right_rec;
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_left_rec)))
-		{
-			return rc; /** error */
-		}
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_right_rec)))
-		{
-			return rc; /** error */
-		}
-		if (total_right_rec == 0.0)
-		{
-			return -DER_DIV_BY_ZERO;
-		}
-
-		*total += total_left_rec / total_right_rec; /** DIV */
-	}
-	else
-	{
-		return -DER_NOSYS; /** Unsupported function. */
-	}
-
-	return 0;
-}
-
-static int
-pipeline_aggregations(daos_pipeline_t *pipeline, d_iov_t *dkey,
-		      uint32_t *nr_iods, daos_iod_t *iods, d_sg_list_t *akeys,
-		      d_sg_list_t *sgl_agg)
-{
-	int		rc;
-	uint32_t	i;
-	uint32_t	part_idx;
-
-	if (pipeline->num_aggr_filters == 0)
-	{
-		return 0; /** No filters means no aggregation */
-	}
-	for (i = 0; i < pipeline->num_aggr_filters; i++)
-	{
-		part_idx = 0;
-		if ((rc = pipeline_aggregation(
-				       pipeline->aggr_filters[i], dkey, nr_iods,
-				       iods, akeys, &part_idx,
-				       (double *) sgl_agg[i].sg_iovs->iov_buf
-					      )) < 0)
-		{
-			return rc; /** error */
-		}
-	}
-
-	return 0;
-}
-
-static void
-pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total,
-			      d_sg_list_t *sgl_agg)
-{
-	uint32_t		i;
-	double			*buf;
-	char			*part_type;
-	size_t			part_type_s;
-
-	for (i = 0; i < pipeline->num_aggr_filters; i++)
-	{
-		part_type = (char *) pipeline->aggr_filters[i]->parts[0]->part_type.iov_buf;
-		part_type_s = pipeline->aggr_filters[i]->parts[0]->part_type.iov_len;
-		if (!strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
-		{
-			buf = (double *) sgl_agg[i].sg_iovs->iov_buf;
-			*buf = *buf / total;
-		}
-	}
-}
-
-static void
-pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
-{
-	uint32_t		i;
-	double			*buf;
-	daos_filter_part_t	*part;
-	char			*part_type;
-	size_t			part_type_s;
-
-	for (i = 0; i < pipeline->num_aggr_filters; i++)
-	{
-		part      = pipeline->aggr_filters[i]->parts[0];
-		buf       = (double *) sgl_agg[i].sg_iovs->iov_buf;
-		part_type   = (char *) part->part_type.iov_buf;
-		part_type_s = part->part_type.iov_len;
-
-		if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s))
-		{
-			*buf = -INFINITY;
-		}
-		else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s))
-		{
-			*buf = INFINITY;
-		}
-		else
-		{
-			*buf = 0;
-		}
-	}
-}
-#endif
-
-/**************************/
-
-
-int dc_pipeline_check(daos_pipeline_t *pipeline)
-{
-	return d_pipeline_check(pipeline);
-}
 
 struct pipeline_auxi_args {
-	int		opc;                 // I AM SETTING BUT NOT REALLY USING THIS YET
-	uint32_t	map_ver_req;         // FOR IO RETRY
-	daos_obj_id_t	omd_id;              // I AM SETTING BUT NOT REALLY USING THIS YET
-	tse_task_t	*api_task;           // FOR IO RETRY
-	d_list_t	shard_task_head;
+	int			opc;
+	uint32_t		map_ver_req;         // FOR IO RETRY
+	daos_obj_id_t		omd_id;              // I AM SETTING BUT NOT REALLY USING THIS YET
+	tse_task_t		*api_task;           // FOR IO RETRY
+	pthread_rwlock_t	*cb_rwlock;
+	bool			*cb_first;
+	d_list_t		shard_task_head;
 };
 
 struct shard_pipeline_run_args {
@@ -770,18 +47,42 @@ struct shard_pipeline_run_args {
 };
 
 struct pipeline_run_cb_args {
+	uint32_t		shard;
 	crt_rpc_t		*rpc;
 	unsigned int		*map_ver; // I AM SETTING BUT NOT REALLY USING THIS YET
+	daos_pipeline_run_t	*api_args;
+	uint32_t		nr_iods;
+	uint32_t		nr_kds;
+	uint32_t		shard_nr_kds;
+	bool			*first;
+	pthread_rwlock_t	*rwlock;
 };
+
+struct pipeline_comp_cb_args {
+	bool			*shard_cb_first;
+	pthread_rwlock_t	*rwlock;
+};
+
+int dc_pipeline_check(daos_pipeline_t *pipeline)
+{
+	return d_pipeline_check(pipeline);
+}
 
 static int
 pipeline_comp_cb(tse_task_t *task, void *data)
 {
+	struct pipeline_comp_cb_args	*cb_args;
+
+	cb_args = (struct pipeline_comp_cb_args *) data;
 	if (task->dt_result != 0)
 	{
 		D_DEBUG(DB_IO, "pipeline_comp_db task=%p result=%d\n",
 			task, task->dt_result);
 	}
+
+	D_RWLOCK_DESTROY(cb_args->rwlock);
+	D_FREE(cb_args->rwlock);
+	D_FREE(cb_args->shard_cb_first);
 
 	return 0;
 }
@@ -790,14 +91,28 @@ static int
 pipeline_shard_run_cb(tse_task_t *task, void *data)
 {
 	struct pipeline_run_cb_args	*cb_args;
+	daos_pipeline_run_t		*api_args;
 	struct pipeline_run_in		*pri;
 	struct pipeline_run_out		*pro;
 	int				opc;
 	int				ret = task->dt_result;
 	int				rc = 0;
 	crt_rpc_t			*rpc;
+	uint32_t			nr_iods;
+	uint32_t			nr_kds;
+	uint32_t			shard_nr_kds;
+	uint32_t			nr_recx;
+	uint32_t			shard_nr_recx;
+	uint32_t			nr_agg;
+	daos_key_desc_t			*kds_ptr;
+	d_sg_list_t			*sgl_keys_ptr;
+	d_sg_list_t			*sgl_recx_ptr;
+	uint32_t			out_nr_recx;
+	daos_anchor_t			*sub_anchors;
+
 
 	cb_args		= (struct pipeline_run_cb_args *) data;
+	api_args	= cb_args->api_args;
 	rpc		= cb_args->rpc;
 	pri		= crt_req_get(rpc);
 	D_ASSERT(pri != NULL);
@@ -809,8 +124,28 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		D_GOTO(out, ret);
 	}
 
-	pro = (struct pipeline_run_out *) crt_reply_get(rpc);
-	rc  = pro->pro_ret; // get status
+	pro		= (struct pipeline_run_out *) crt_reply_get(rpc);
+	rc		= pro->pro_ret; // get status
+
+	nr_iods 	= cb_args->nr_iods;
+	nr_kds		= cb_args->nr_kds;
+	shard_nr_kds	= cb_args->shard_nr_kds;
+	nr_recx		= nr_iods;
+	if (nr_kds != 0)
+	{
+		nr_recx		*= nr_kds;
+	}
+	shard_nr_recx	= nr_iods;
+	if (shard_nr_kds != 0)
+	{
+		shard_nr_recx	*= shard_nr_kds;
+	}
+	nr_agg		= api_args->pipeline.num_aggr_filters;
+
+	D_ASSERT(pro->pro_nr_kds <= shard_nr_kds);
+	D_ASSERT(pro->pro_nr_kds == pro->pro_kds.ca_count);
+	D_ASSERT(pro->pro_sgl_recx.ca_count <= shard_nr_recx);
+	D_ASSERT(pro->pro_sgl_agg.ca_count == nr_agg);
 
 	if (rc != 0)
 	{
@@ -830,9 +165,73 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	fprintf(stdout, "(shard callback) RESULT = %u\n", pro->pro_pad32_1);
-	fflush(stdout);
+	D_RWLOCK_WRLOCK(cb_args->rwlock);
 
+	kds_ptr		= &api_args->kds[*api_args->nr_kds];
+	sgl_keys_ptr	= &api_args->sgl_keys[*api_args->nr_kds];
+	if (nr_kds > 0 && api_args->pipeline.num_aggr_filters == 0)
+	{
+		out_nr_recx	= (*api_args->nr_kds) * nr_iods;
+		sgl_recx_ptr	= &api_args->sgl_recx[out_nr_recx];
+	}
+	else
+	{
+		sgl_recx_ptr	= api_args->sgl_recx; /** only one record */
+	}
+
+	if (pro->pro_nr_kds > 0)
+	{
+		memcpy((void *) kds_ptr, (void *) pro->pro_kds.ca_arrays,
+		       sizeof(*kds_ptr) * (pro->pro_nr_kds));
+
+		rc = daos_sgls_copy_data_out(sgl_keys_ptr,
+					     shard_nr_kds,
+					     pro->pro_sgl_keys.ca_arrays,
+					     pro->pro_nr_kds);
+		if (rc != 0)
+		{
+			D_GOTO(unlock, rc);
+		}
+	}
+	rc = daos_sgls_copy_data_out(sgl_recx_ptr,
+				     shard_nr_recx,
+				     pro->pro_sgl_recx.ca_arrays,
+				     pro->pro_sgl_recx.ca_count);
+	if (rc != 0)
+	{
+		D_GOTO(unlock, rc);
+	}
+	rc = daos_sgls_copy_data_out(api_args->sgl_agg,
+				     nr_agg,
+				     pro->pro_sgl_agg.ca_arrays,
+				     pro->pro_sgl_agg.ca_count);
+	if (rc != 0)
+	{
+		D_GOTO(unlock, rc);
+	}
+
+	if (*cb_args->first)
+	{
+		*api_args->nr_kds	= 0;
+		*cb_args->first		= false;
+	}
+	*api_args->nr_kds	+= pro->pro_nr_kds;
+
+	/**
+	 * TODO: nr_iods and iods are left as they are for now. Once pipeline
+	 *       is able to filter/aggregate akeys by a provided dkey, then
+	 *       outputing iods and nr_iods will make sense. For now, this is
+	 *       IN only.
+	 *
+	 *       api_args->nr_iods =
+	 *       api_args->iods =
+	 */
+
+	sub_anchors = (daos_anchor_t *) api_args->anchor->da_sub_anchors;
+	sub_anchors[cb_args->shard] = pro->pro_anchor;
+
+unlock:
+	D_RWLOCK_UNLOCK(cb_args->rwlock);
 out:
 	crt_req_decref(rpc);
 	if (ret == 0) // see -->> obj_retry_error(int err)
@@ -888,7 +287,7 @@ shard_pipeline_run_task(tse_task_t *task)
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 	crt_ctx	= daos_task2ctx(task);
-	opcode	= DAOS_RPC_OPCODE(DAOS_PIPELINE_RPC_RUN,
+	opcode	= DAOS_RPC_OPCODE(args->pipeline_auxi->opc, //DAOS_PIPELINE_RPC_RUN,
 				  DAOS_PIPELINE_MODULE,
 				  DAOS_PIPELINE_VERSION);
 
@@ -916,25 +315,14 @@ shard_pipeline_run_task(tse_task_t *task)
 		D_GOTO(out, rc);
 	}
 
-	/** -- register call back function for this particular shard task */
-
-	crt_req_addref(req);
-	cb_args.rpc		= req;
-	cb_args.map_ver		= &args->pra_map_ver;
-
-	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args,
-				       sizeof(cb_args));
-	if (rc != 0)
-	{
-		D_GOTO(out_req, rc);
-	}
-
-	/** -- calculating nr_kds for this shard */
+	/** -- calculating nr_iods, nr_kds for this shard */
 
 	D_ASSERT(args->pra_shards > 0 && args->pra_shard >= 0);
 	D_ASSERT(args->pra_shard < args->pra_shards);
 
+	nr_iods		= *(args->pra_api_args->nr_iods);
 	nr_kds		= *(args->pra_api_args->nr_kds);
+
 	shard_nr_kds	= nr_kds / args->pra_shards;
 	if (shard_nr_kds * args->pra_shards < nr_kds)
 	{
@@ -943,6 +331,26 @@ shard_pipeline_run_task(tse_task_t *task)
 		{
 			shard_nr_kds = nr_kds % shard_nr_kds;
 		}
+	}
+
+	/** -- register call back function for this particular shard task */
+
+	crt_req_addref(req);
+	cb_args.shard		= args->pra_shard;
+	cb_args.rpc		= req;
+	cb_args.map_ver		= &args->pra_map_ver;
+	cb_args.api_args	= args->pra_api_args;
+	cb_args.nr_iods	= nr_iods;
+	cb_args.nr_kds		= nr_kds;
+	cb_args.shard_nr_kds	= shard_nr_kds;
+	cb_args.rwlock		= args->pipeline_auxi->cb_rwlock;
+	cb_args.first		= args->pipeline_auxi->cb_first;
+
+	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+	{
+		D_GOTO(out_req, rc);
 	}
 
 	/** -- sending the RPC */
@@ -958,7 +366,6 @@ shard_pipeline_run_task(tse_task_t *task)
 	pri->pri_epr		= (daos_epoch_range_t)
 				 { .epr_lo	= 0,
 				   .epr_hi	= DAOS_EPOCH_MAX };
-	pri->pri_target		= args->pra_target;
 	if (args->pra_api_args->dkey != NULL)
 	{
 		pri->pri_dkey	= *(args->pra_api_args->dkey);
@@ -970,7 +377,6 @@ shard_pipeline_run_task(tse_task_t *task)
 				   .iov_buf_len		= 0,
 				   .iov_len		= 0 };
 	}
-	nr_iods			= *(args->pra_api_args->nr_iods);
 	pri->pri_iods.nr	= nr_iods;
 	pri->pri_iods.iods	= args->pra_api_args->iods;
 	pri->pri_sgl_keys.nr	= shard_nr_kds;
@@ -1125,7 +531,8 @@ out:
 
 static void
 pipeline_create_auxi(tse_task_t *api_task, uint32_t map_ver,
-		     struct daos_obj_md *obj_md,
+		     struct daos_obj_md *obj_md, pthread_rwlock_t *cb_rwlock,
+		     bool *shard_cb_first,
 		     struct pipeline_auxi_args **pipeline_auxi)
 {
 	struct pipeline_auxi_args	*p_auxi;
@@ -1136,6 +543,8 @@ pipeline_create_auxi(tse_task_t *api_task, uint32_t map_ver,
 	p_auxi->map_ver_req	= map_ver;
 	p_auxi->omd_id		= obj_md->omd_id;
 	p_auxi->api_task	= api_task;
+	p_auxi->cb_rwlock	= cb_rwlock;
+	p_auxi->cb_first	= shard_cb_first;
 	head = &p_auxi->shard_task_head;
 	D_INIT_LIST_HEAD(head);
 
@@ -1163,6 +572,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	bool				priv;
 	struct shard_task_sched_args	sched_arg;
 	int				total_shards;
+	struct pipeline_comp_cb_args	comp_cb_args;
 
 
 	coh	= dc_obj_hdl2cont_hdl(api_args->oh);
@@ -1201,11 +611,27 @@ dc_pipeline_run(tse_task_t *api_task)
 		map_ver = layout->ol_ver;
 	}
 
-	pipeline_create_auxi(api_task, map_ver, &obj_md, &pipeline_auxi);
+	D_ALLOC(comp_cb_args.rwlock, sizeof(pthread_rwlock_t));
+	D_ALLOC(comp_cb_args.shard_cb_first, sizeof(bool));
+	if (comp_cb_args.rwlock == NULL || comp_cb_args.shard_cb_first == NULL)
+	{
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	rc = D_RWLOCK_INIT(comp_cb_args.rwlock, NULL);
+	if (rc != 0)
+	{
+		D_GOTO(out, rc);
+	}
+	*comp_cb_args.shard_cb_first = true;
+
+	pipeline_create_auxi(api_task, map_ver, &obj_md, comp_cb_args.rwlock,
+			     comp_cb_args.shard_cb_first, &pipeline_auxi);
 
 	/** -- Register completion call back function for full operation */
 
-	rc = tse_task_register_comp_cb(api_task, pipeline_comp_cb, NULL, 0);
+	rc = tse_task_register_comp_cb(api_task, pipeline_comp_cb,
+				       comp_cb_args.rwlock,
+				       sizeof(comp_cb_args));
 	if (rc != 0)
 	{
 		D_ERROR("task %p, register_comp_cb "DF_RC"\n", api_task, DP_RC(rc));

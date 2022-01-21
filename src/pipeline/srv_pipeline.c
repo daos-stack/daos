@@ -170,49 +170,20 @@ pipeline_compile(daos_pipeline_t *pipeline)
 	return;
 }
 
-static void
-pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
-{
-	uint32_t		i;
-	double			*buf;
-	daos_filter_part_t	*part;
-	char			*part_type;
-	size_t			part_type_s;
-
-	for (i = 0; i < pipeline->num_aggr_filters; i++)
-	{
-		part      = pipeline->aggr_filters[i]->parts[0];
-		buf       = (double *) sgl_agg[i].sg_iovs->iov_buf;
-		part_type   = (char *) part->part_type.iov_buf;
-		part_type_s = part->part_type.iov_len;
-
-		if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s))
-		{
-			*buf = -INFINITY;
-		}
-		else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s))
-		{
-			*buf = INFINITY;
-		}
-		else
-		{
-			*buf = 0;
-		}
-	}
-}
-
-int
+// TODO: This code still assumes dkey!=NULL. The code for dkey=NULL has to be
+// written
+static int
 ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		daos_pipeline_t pipeline, daos_epoch_range_t epr, uint64_t flags,
 		daos_key_t *dkey, uint32_t *nr_iods, daos_iod_t *iods,
 		daos_anchor_t *anchor, uint32_t *nr_kds, daos_key_desc_t *kds,
-		d_sg_list_t *sgl_keys, d_sg_list_t *sgl_recx,
+		d_sg_list_t *sgl_keys, uint32_t *nr_recx, d_sg_list_t *sgl_recx,
 		d_sg_list_t *sgl_agg)
 {
 	int				rc;
-	uint32_t			i;
 	uint32_t			nr_kds_pass;
 	d_iov_t				d_key_iter;
+	d_iov_t				*d_key_ptr;
 	d_sg_list_t			*sgl_recx_iter;
 	uint32_t			sgl_recx_idx;
 	struct vos_iter_anchors		anchors;
@@ -240,7 +211,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		D_GOTO(exit, rc = 0);	/** nothing to return */
 	}
 
-	/** -- Init all aggregation counters. */
+	/** -- init all aggregation counters */
 
 	pipeline_aggregations_init(&pipeline, sgl_agg);
 
@@ -282,37 +253,82 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 			continue; /** nothing returned; no more records? */
 		}
 
-		printf("dkey = %.*s\n", (int)d_key_iter.iov_len, (char *)d_key_iter.iov_buf);
-		fflush(stdout);
-		for (i = 0; i < (*nr_iods)-1; i++)
+		/** -- doing filtering... */
+
+		rc = pipeline_filters(&pipeline, &d_key_iter, nr_iods, iods,
+				      sgl_recx_iter);
+		if (rc < 0)
 		{
-			printf("k:%.*s v:%.*s  ", (int)iods[i].iod_name.iov_len,
-						  (char *)iods[i].iod_name.iov_buf,
-						  (int)sgl_recx_iter[i].sg_iovs->iov_len,
-						  (char *)sgl_recx_iter[i].sg_iovs->iov_buf);
-			fflush(stdout);
+			D_GOTO(exit, rc); /** error */
 		}
-		printf("k:%.*s v:%d  ", (int)iods[i].iod_name.iov_len,
-					  (char *)iods[i].iod_name.iov_buf,
-					  *((int *)sgl_recx_iter[i].sg_iovs->iov_buf));
-		fflush(stdout);
-		printf("\n");
-		fflush(stdout);
+		if (rc == 1)
+		{
+			continue; /** record does not pass filters */
+		}
 
-		break;
+		/** -- dkey+akey pass filters */
 
-		/** this is here for the case where dkey is provided by the
-		 *  user. */
-		/*
-		rc = pipeline_obj_fetch(vos_coh, oid, epr.epr_hi,
-					sgl_keys_iter.sg_iovs, *nr_iods, iods);
-		if (rc != 0)
+		nr_kds_pass++;
+
+		/** -- aggregations */
+
+		rc = pipeline_aggregations(&pipeline, &d_key_iter, nr_iods,
+					   iods, sgl_recx_iter, sgl_agg);
+		if (rc < 0)
 		{
 			D_GOTO(exit, rc);
-		}*/
+		}
 
+		/**
+		 * -- Returning matching records. We don't need to return all
+		 *     matching records if aggregation is being performed: at
+		 *     most one is returned.
+		 */
+
+		if (*nr_kds > 0) /** saving dkey info */
+		{
+			d_key_ptr = sgl_keys[sgl_recx_idx].sg_iovs;
+			memcpy(d_key_ptr->iov_buf, d_key_iter.iov_buf,
+			       d_key_iter.iov_len);
+			d_key_ptr->iov_len	= d_key_iter.iov_len;
+			d_key_ptr->iov_buf_len	= d_key_iter.iov_buf_len;
+
+			sgl_keys[sgl_recx_idx].sg_nr_out = 1;
+			kds[sgl_recx_idx].kd_key_len = d_key_iter.iov_len;
+		}
+
+		if (*nr_kds > 0 && pipeline.num_aggr_filters == 0)
+		{
+			sgl_recx_idx++;
+		}
 	}
 
+	/**
+	 * -- fixing averages: during aggregation, we don't know how many
+	 *    records will pass the filters
+	 */
+
+	pipeline_aggregations_fixavgs(&pipeline, (double) nr_kds_pass, sgl_agg);
+
+	/** -- backing up anchor */
+
+	*anchor = anchors.ia_dkey;
+
+	/** -- kds returned */
+
+	if (*nr_kds > 0 && pipeline.num_aggr_filters == 0)
+	{
+		*nr_kds = nr_kds_pass;
+	}
+	else if (*nr_kds > 0 && pipeline.num_aggr_filters > 0)
+	{
+		*nr_kds = 1;
+	}
+	/* else: we leave *nr_kds at 0 */
+
+	*nr_recx = sgl_recx_idx == 0 ? 1 : sgl_recx_idx;
+
+	rc = 0;
 exit:
 	return rc;
 }
@@ -328,10 +344,11 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	daos_handle_t			vos_coh;
 	uint32_t			i;
 	uint32_t			nr_iods;
-	daos_key_desc_t			*kds;
+	daos_key_desc_t			*kds = NULL;
 	uint32_t			nr_kds;
 	d_sg_list_t			*sgl_keys = NULL;
 	d_sg_list_t			*sgl_recx = NULL;
+	uint32_t			nr_recx;
 	d_sg_list_t			*sgl_aggr = NULL;
 
 
@@ -355,10 +372,13 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 
 	nr_iods		= pri->pri_iods.nr;
 	nr_kds		= pri->pri_sgl_keys.nr;
-	D_ALLOC_ARRAY(kds, nr_kds);
-	if (kds == NULL)
+	if (nr_kds)
 	{
-		D_GOTO(exit, rc = -DER_NOMEM);
+		D_ALLOC_ARRAY(kds, nr_kds);
+		if (kds == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
 	}
 	sgl_keys	= pri->pri_sgl_keys.sgls;
 	for (i = 0; i < nr_kds; i++)
@@ -371,7 +391,12 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 		}
 	}
 	sgl_recx	= pri->pri_sgl_recx.sgls;
-	for (i = 0; i < nr_kds*nr_iods; i++)
+	nr_recx		= nr_iods;
+	if (nr_kds > 0 && pri->pri_pipe.num_aggr_filters == 0)
+	{
+		nr_recx *= nr_kds;
+	}
+	for (i = 0; i < nr_recx; i++)
 	{
 		D_ALLOC_ARRAY(sgl_recx[i].sg_iovs->iov_buf,
 			      sgl_recx[i].sg_iovs->iov_len);
@@ -390,26 +415,32 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 			D_GOTO(exit, rc = -DER_NOMEM);
 		}
 	}
-if (pri->pri_target)
-{
-	D_GOTO(exit, rc = 0);
-}
+
 	/** -- calling pipeline run */
 	rc = ds_pipeline_run(vos_coh, pri->pri_oid, pri->pri_pipe, pri->pri_epr,
 			     pri->pri_flags, &pri->pri_dkey, &nr_iods,
 			     pri->pri_iods.iods, &pri->pri_anchor, &nr_kds, kds,
-			     sgl_keys, sgl_recx, sgl_aggr);
-	if (rc != 0)
-	{
-		D_GOTO(exit, rc);
-	}
+			     sgl_keys, &nr_recx, sgl_recx, sgl_aggr);
 
 exit:
-	pro->pro_pad32_1	= 0 + pri->pri_target; // TODO: delete this
-
-	// TODO: Free stuff
-
+	if (likely(rc == 0))
+	{
+		pro->pro_nr_kds			= nr_kds;
+		pro->pro_iods.nr		= nr_iods;
+		pro->pro_iods.iods		= pri->pri_iods.iods;
+		pro->pro_anchor			= pri->pri_anchor;
+		pro->pro_kds.ca_count		= nr_kds;
+		pro->pro_kds.ca_arrays		= kds;
+		pro->pro_sgl_keys.ca_count	= nr_kds;
+		pro->pro_sgl_keys.ca_arrays	= sgl_keys;
+		pro->pro_sgl_recx.ca_count	= nr_recx;
+		pro->pro_sgl_recx.ca_arrays	= sgl_recx;
+		pro->pro_sgl_agg.ca_count	= pri->pri_pipe.num_aggr_filters;
+		pro->pro_sgl_agg.ca_arrays	= sgl_aggr;
+		//pro->pro_epoch // TODO
+	}
 	pro->pro_ret = rc;
+
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 	{
