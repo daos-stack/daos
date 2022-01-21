@@ -1685,8 +1685,11 @@ class DaosContainer():
         func = self.context.get_function('query-cont')
 
         if cb_func is None:
-            ret = func(
-                self.coh, ctypes.byref(self.info), ctypes.byref(daos_property), None)
+            if daos_property:
+                ret = func(
+                    self.coh, ctypes.byref(self.info), ctypes.byref(daos_property), None)
+            else:
+                ret = func(self.coh, ctypes.byref(self.info), None, None)
             if ret != 0:
                 raise DaosApiError(
                     "Container query returned non-zero. RC: {0}".format(ret))
