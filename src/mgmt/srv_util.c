@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,7 @@ ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
 	uint32_t		version_current;
 	d_rank_list_t	       *ranks = NULL;
 	char		      **uris = NULL;
+	struct d_string_buffer_t ranks_buf = {0};
 	int			i;
 	int			rc;
 
@@ -56,10 +57,9 @@ ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
 		D_ERROR("failed to update group (op=%d version=%u): %d\n",
 			op, version, rc);
 
-	struct d_string_buffer_t buf = {0};
-	d_rank_list_to_str(ranks, &buf);
-	D_DEBUG(DB_MGMT, "version %u ranks: %s\n", version, buf.str);
-	d_free_string(&buf);
+	if (d_rank_list_to_str(ranks, &ranks_buf) == 0)
+		D_DEBUG(DB_MGMT, "version %u ranks: %s\n", version, ranks_buf.str);
+	d_free_string(&ranks_buf);
 
 out:
 	if (uris != NULL)

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -190,7 +190,7 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 
 	if (src_set == NULL || dst_set == NULL)
 		return;
-	if (src_set->rl_ranks == NULL || dst_set->rl_ranks == NULL)
+	if (dst_set->rl_ranks == NULL)
 		return;
 
 	rank_num = dst_set->rl_nr;
@@ -450,7 +450,7 @@ d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank)
 {
 	uint32_t	rank_num, i;
 
-	if (rank_list == NULL)
+	if (rank_list == NULL || rank_list->rl_ranks == NULL)
 		return false;
 
 	rank_num = rank_list->rl_nr;

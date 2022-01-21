@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2078,6 +2078,133 @@ test_gurt_rank_list_to_str(void **state)
 	d_free_string(&str_buf);
 }
 
+static void
+setup_lists(d_rank_list_t **src, d_rank_list_t **dst, d_rank_list_t **exp, int s, int d, int e)
+{
+	*src = d_rank_list_alloc(s);
+	*dst = d_rank_list_alloc(d);
+	*exp = d_rank_list_alloc(e);
+}
+
+static void
+free_lists(d_rank_list_t *src, d_rank_list_t *dst, d_rank_list_t *exp)
+{
+	d_rank_list_free(src);
+	d_rank_list_free(dst);
+	d_rank_list_free(exp);
+}
+
+static void
+test_gurt_rank_list_filter(void **state)
+{
+	d_rank_list_t *src, *dst, *exp;
+
+	/* empty src, exclude = true */
+	setup_lists(&src, &dst, &exp, 0, 1, 1);
+	dst->rl_ranks[0] = 1;
+	exp->rl_ranks[0] = 1;
+	d_rank_list_filter(src, dst, true);
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+
+	/* empty src, exclude = false */
+	setup_lists(&src, &dst, &exp, 0, 1, 0);
+	dst->rl_ranks[0] = 1;
+	d_rank_list_filter(src, dst, false);
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+
+	/* src = dst, exclude = true, src = dst = empty */
+	setup_lists(&src, &dst, &exp, 0, 0, 0);
+	d_rank_list_filter(src, dst, true);
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+
+	/* src = dst, exclude = false, src = dst = empty */
+	setup_lists(&src, &dst, &exp, 0, 0, 0);
+	d_rank_list_filter(src, dst, false);
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+
+	/* src = dst, exclude = true */
+	setup_lists(&src, &dst, &exp, 1, 1, 0);
+	d_rank_list_filter(src, dst, true);
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+
+	/* src = dst, exclude = false */
+	setup_lists(&src, &dst, &exp, 1, 1, 1);
+	src->rl_ranks[0] = 1;
+	dst->rl_ranks[0] = 1;
+	exp->rl_ranks[0] = 1;
+	d_rank_list_filter(src, dst, false);
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+
+	/* src = dst, exclude = true, src = dst = non-empty */
+	setup_lists(&src, &dst, &exp, 1, 1, 0);
+	src->rl_ranks[0] = 1;
+	dst->rl_ranks[0] = 1;
+	d_rank_list_filter(src, dst, true);
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+
+	/* src != dst, exclude = true */
+	setup_lists(&src, &dst, &exp, 2, 2, 2);
+	src->rl_ranks[0] = 1;
+	src->rl_ranks[1] = 2;
+	dst->rl_ranks[0] = 3;
+	dst->rl_ranks[1] = 4;
+	exp->rl_ranks[0] = 3;
+	exp->rl_ranks[1] = 4;
+	d_rank_list_filter(src, dst, true);
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+
+	/* src != dst, exclude = false */
+	setup_lists(&src, &dst, &exp, 2, 2, 0);
+	src->rl_ranks[0] = 1;
+	src->rl_ranks[1] = 2;
+	dst->rl_ranks[0] = 3;
+	dst->rl_ranks[1] = 4;
+	d_rank_list_filter(src, dst, false);
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+
+	/* find dst missing from src (e.g. OOG check) */
+	d_rank_list_t *tgts;
+	setup_lists(&src, &tgts, &exp, 4, 4, 1);
+	/* e.g. pg_ranks */
+	src->rl_ranks[0] = 0;
+	src->rl_ranks[1] = 1;
+	src->rl_ranks[2] = 2;
+	src->rl_ranks[3] = 3;
+	/* e.g. targets */
+	tgts->rl_ranks[0] = 1;
+	tgts->rl_ranks[1] = 2;
+	tgts->rl_ranks[2] = 3;
+	tgts->rl_ranks[3] = 4;
+
+	d_rank_list_dup(&dst, tgts);
+	assert_non_null(dst);
+
+	/* first check to see that dst != tgts after filter */
+	d_rank_list_filter(src, dst, false);
+	assert_false(d_rank_list_identical(dst, tgts));
+
+	/* next, filter again to get the missing ranks */
+	d_rank_list_free(dst);
+	d_rank_list_dup(&dst, tgts);
+	assert_non_null(dst);
+	d_rank_list_filter(src, dst, true);
+
+	/* we should see only the missing ranks in dst */
+	exp->rl_ranks[0] = 4;
+	assert_true(d_rank_list_identical(dst, exp));
+	free_lists(src, dst, exp);
+	d_rank_list_free(tgts);
+}
+
 enum {
 	HASH_MURMUR,
 	HASH_STRING,
@@ -2198,6 +2325,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_atomic),
 		cmocka_unit_test(test_gurt_string_buffer),
 		cmocka_unit_test(test_gurt_rank_list_to_str),
+		cmocka_unit_test(test_gurt_rank_list_filter),
 		cmocka_unit_test(test_hash_perf),
 	};
 
