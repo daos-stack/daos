@@ -3910,7 +3910,7 @@ class AllocFailTest():
 
     def _run_cmd(self,
                  loc,
-                 valgrind=True):
+                 valgrind=False):
         """Run the test with FI enabled
         """
 
@@ -3937,7 +3937,7 @@ class AllocFailTest():
             aftf.vh = ValgrindHelper(self.conf)
             # Turn off leak checking in this case, as we're just interested in
             # why it crashed.
-            aftf.vh.full_check = True
+            aftf.vh.full_check = False
 
         aftf.start()
 
