@@ -29,7 +29,7 @@ popd
 
 cp "$TMP_DIR"/*.json .
 cp "$TMP_DIR"/*.xml .
-sudo chmod -R o+r "$TMP_DIR"/nlt_logs
+chmod -R o+r "$TMP_DIR"/nlt_logs
 cp -r "$TMP_DIR"/nlt_logs .
 
 exit $RC
