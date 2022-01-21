@@ -410,7 +410,7 @@ class DaosServerManager(SubprocessManager):
         #   - the time out is reached (failure)
         #   - the subprocess is no longer running (failure)
         while not complete and not timed_out \
-                and (sub_process is not None and sub_process.poll() is None):
+                and (sub_process is None or sub_process.poll() is None):
             detected = self.detect_engine_states(expected_states)
             complete = detected == self.manager.job.pattern_count
             timed_out = time.time() - start > self.manager.job.pattern_timeout.value
