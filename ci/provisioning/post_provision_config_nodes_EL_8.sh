@@ -94,22 +94,22 @@ distro_custom() {
 #  OpenMPI module for use with 'environment-modules' package:
 #
 conflict		mpi
-prepend-path		PATH		/usr/mpi/gcc/openmpi-4.1.2a1/bin
-prepend-path		LD_LIBRARY_PATH	/usr/mpi/gcc/openmpi-4.1.2a1/lib64
-prepend-path		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-4.1.2a1/lib64/pkgconfig
+prepend-path		PATH		/usr/mpi/gcc/openmpi-4.1.2rc2/bin
+prepend-path		LD_LIBRARY_PATH	/usr/mpi/gcc/openmpi-4.1.2rc2/lib64
+prepend-path		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-4.1.2rc2/lib64/pkgconfig
 prepend-path		PYTHONPATH	/usr/lib64/python2.7/site-packages/openmpi
-prepend-path		MANPATH		/usr/mpi/gcc/openmpi-4.1.2a1/share/man
-setenv			MPI_BIN		/usr/mpi/gcc/openmpi-4.1.2a1/bin
-setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-4.1.2a1/etc
-setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-4.1.2a1/lib64
-setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-4.1.2a1/include
-setenv			MPI_LIB		/usr/mpi/gcc/openmpi-4.1.2a1/lib64
-setenv			MPI_MAN			/usr/mpi/gcc/openmpi-4.1.2a1/share/man
+prepend-path		MANPATH		/usr/mpi/gcc/openmpi-4.1.2rc2/share/man
+setenv			MPI_BIN		/usr/mpi/gcc/openmpi-4.1.2rc2/bin
+setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-4.1.2rc2/etc
+setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-4.1.2rc2/lib64
+setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-4.1.2rc2/include
+setenv			MPI_LIB		/usr/mpi/gcc/openmpi-4.1.2rc2/lib64
+setenv			MPI_MAN			/usr/mpi/gcc/openmpi-4.1.2rc2/share/man
 setenv			MPI_PYTHON_SITEARCH	/usr/lib64/python2.7/site-packages/openmpi
 setenv			MPI_PYTHON2_SITEARCH	/usr/lib64/python2.7/site-packages/openmpi
 setenv			MPI_COMPILER	openmpi-x86_64
 setenv			MPI_SUFFIX	_openmpi
-setenv			MPI_HOME	/usr/mpi/gcc/openmpi-4.1.2a1
+setenv			MPI_HOME	/usr/mpi/gcc/openmpi-4.1.2rc2
 EOF
     fi
 }
