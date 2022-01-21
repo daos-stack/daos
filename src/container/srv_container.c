@@ -3573,9 +3573,9 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0 /* id */,
 				    &svc, &out->co_hint);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": rpc %p: hdl="DF_UUID" opc=%u find leader\n",
+		D_ERROR(DF_CONT": rpc: %p hdl="DF_UUID" opc=%u find leader "DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid),
-			rpc, DP_UUID(in->ci_hdl), opc);
+			rpc, DP_UUID(in->ci_hdl), opc, DP_RC(rc));
 		D_GOTO(out_pool_hdl, rc);
 	}
 

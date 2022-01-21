@@ -3736,7 +3736,10 @@ class AllocFailTestRun():
             # If a fault wasn't injected then check output is as expected.
             # It's not possible to log these as warnings, because there is
             # no src line to log them against, so simply assert.
-            assert self.returncode == 0, self
+            if self.vh:
+                assert self.returncode in (0, 42) , self
+            else:
+                assert self.returncode == 0, self
 
             if self.aft.check_post_stdout:
                 assert self.stderr == b''
@@ -3907,7 +3910,7 @@ class AllocFailTest():
 
     def _run_cmd(self,
                  loc,
-                 valgrind=False):
+                 valgrind=True):
         """Run the test with FI enabled
         """
 
@@ -3934,7 +3937,7 @@ class AllocFailTest():
             aftf.vh = ValgrindHelper(self.conf)
             # Turn off leak checking in this case, as we're just interested in
             # why it crashed.
-            aftf.vh.full_check = False
+            aftf.vh.full_check = True
 
         aftf.start()
 

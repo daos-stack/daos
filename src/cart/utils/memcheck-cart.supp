@@ -198,6 +198,12 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
+   fun:main.createWriteStream.*
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Addr2
    fun:runtime.memmove
 }
