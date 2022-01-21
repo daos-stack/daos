@@ -573,6 +573,8 @@ obj_ec_recx_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
 
 	if (recx_array->oer_stripe_total == 0)
 		D_GOTO(out, rc = 0);
+	if (iod->iod_size == DAOS_REC_ANY) /* punch case */
+		D_GOTO(out, rc = 0);
 	singv = (iod->iod_type == DAOS_IOD_SINGLE);
 	if (singv) {
 		cell_bytes = obj_ec_singv_cell_bytes(iod->iod_size, oca);
@@ -1574,6 +1576,9 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	struct obj_ec_codec *codec;
 	uint32_t	i;
 	int		rc;
+
+	if (reasb_req->orr_usgls == NULL) /* punch case */
+		return 0;
 
 	codec = codec_get(reasb_req, reasb_req->orr_oid);
 	if (codec == NULL) {
