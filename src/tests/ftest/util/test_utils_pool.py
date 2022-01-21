@@ -9,7 +9,7 @@ from time import sleep, time
 import ctypes
 import json
 
-from test_utils_base import TestDaosApiBase
+from test_utils_base import TestDaosApiBase, LabelGenerator
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
