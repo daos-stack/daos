@@ -7,11 +7,16 @@
 package storage
 
 import (
+	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 const (
@@ -112,9 +117,9 @@ func (tc *TierConfig) WithTier(tier int) *TierConfig {
 	return tc
 }
 
-// WithScmClass defines the type of SCM storage to be configured.
-func (tc *TierConfig) WithScmClass(scmClass string) *TierConfig {
-	tc.Class = Class(scmClass)
+// WithStorageClass defines the type of storage (scm or bdev) to be configured.
+func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
+	tc.Class = Class(cls)
 	return tc
 }
 
@@ -134,12 +139,6 @@ func (tc *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
 // WithScmDeviceList sets the list of devices to be used for SCM storage.
 func (tc *TierConfig) WithScmDeviceList(devices ...string) *TierConfig {
 	tc.Scm.DeviceList = devices
-	return tc
-}
-
-// WithBdevClass defines the type of block device storage to be used.
-func (tc *TierConfig) WithBdevClass(bdevClass string) *TierConfig {
-	tc.Class = Class(bdevClass)
 	return tc
 }
 
@@ -163,7 +162,7 @@ func (tc *TierConfig) WithBdevFileSize(size int) *TierConfig {
 
 // WithBdevBusidRange sets the bus-ID range to be used to filter hot plug events.
 func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
-	tc.Bdev.BusidRange = rangeStr
+	tc.Bdev.BusidRange = MustNewBdevBusRange(rangeStr)
 	return tc
 }
 
@@ -260,12 +259,66 @@ func (sc *ScmConfig) Validate(class Class) error {
 	return nil
 }
 
+// BdevBusRange represents a bus-ID range to be used to filter hot plug events.
+type BdevBusRange struct {
+	hardware.PCIBus
+}
+
+func (br *BdevBusRange) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var tmp string
+	if err := unmarshal(&tmp); err != nil {
+		return err
+	}
+
+	lo, hi, err := parsePCIBusRange(tmp, hardware.PCIAddrBusBitSize)
+	if err != nil {
+		return errors.Wrapf(err, "failed to parse bus range %q", tmp)
+	}
+
+	br.LowAddress.Bus = lo
+	br.HighAddress.Bus = hi
+
+	return nil
+}
+
+func (br *BdevBusRange) MarshalYAML() (interface{}, error) {
+	return br.String(), nil
+}
+
+func (br *BdevBusRange) String() string {
+	if br == nil {
+		return ""
+	}
+	return fmt.Sprintf("0x%02x-0x%02x", br.LowAddress.Bus, br.HighAddress.Bus)
+}
+
+// NewBdevBusRange creates a new BdevBusRange from a string.
+func NewBdevBusRange(rangeStr string) (*BdevBusRange, error) {
+	br := &BdevBusRange{}
+	if err := br.UnmarshalYAML(func(v interface{}) error {
+		return yaml.Unmarshal([]byte(rangeStr), v)
+	}); err != nil {
+		return nil, err
+	}
+
+	return br, nil
+}
+
+// MustNewBdevBusRange creates a new BdevBusRange from a string. Panics on error.
+func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
+	br, err := NewBdevBusRange(rangeStr)
+	if err != nil {
+		panic(err)
+	}
+	return br
+}
+
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	DeviceList  []string `yaml:"bdev_list,omitempty"`
-	DeviceCount int      `yaml:"bdev_number,omitempty"`
-	FileSize    int      `yaml:"bdev_size,omitempty"`
-	BusidRange  string   `yaml:"bdev_busid_range,omitempty"`
+	DeviceList  []string      `yaml:"bdev_list,omitempty"`
+	DeviceCount int           `yaml:"bdev_number,omitempty"`
+	FileSize    int           `yaml:"bdev_size,omitempty"`
+	BusidRange  *BdevBusRange `yaml:"bdev_busid_range,omitempty"`
 }
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
@@ -308,7 +361,7 @@ func (bc *BdevConfig) Validate(class Class) error {
 			return err
 		}
 	case ClassNvme:
-		if _, err := common.NewPCIAddressSet(bc.DeviceList...); err != nil {
+		if _, err := hardware.NewPCIAddressSet(bc.DeviceList...); err != nil {
 			return errors.Wrapf(err, "parse pci addresses %v", bc.DeviceList)
 		}
 	default:
@@ -316,6 +369,36 @@ func (bc *BdevConfig) Validate(class Class) error {
 	}
 
 	return nil
+}
+
+// parsePCIBusRange takes a string of format <Begin-End> and returns the begin and end values.
+// Number base is detected from the string prefixes e.g. 0x for hexadecimal.
+// bitSize parameter sets a cut-off for the return values e.g. 8 for uint8.
+func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
+	if numRange == "" {
+		return 0, 0, nil
+	}
+
+	split := strings.Split(numRange, "-")
+	if len(split) != 2 {
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
+	}
+
+	begin, err := strconv.ParseUint(split[0], 0, bitSize)
+	if err != nil {
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+	}
+
+	end, err := strconv.ParseUint(split[1], 0, bitSize)
+	if err != nil {
+		return 0, 0, errors.Wrapf(err, "parse busid range %q", numRange)
+	}
+
+	if begin > end {
+		return 0, 0, errors.Errorf("invalid busid range %q", numRange)
+	}
+
+	return uint8(begin), uint8(end), nil
 }
 
 type Config struct {
@@ -368,12 +451,6 @@ func (c *Config) Validate() error {
 	}
 
 	c.VosEnv = "NVME"
-
-	// if the first bdev config is of class nvme, validate bus-id range params
-	_, _, err := common.GetRangeLimits(fbc.Bdev.BusidRange, common.PCIAddrBusBitSize)
-	if err != nil {
-		return errors.Wrap(err, "parse busid range limits")
-	}
 
 	return nil
 }

@@ -221,7 +221,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: common.MockPCIAddrs(1, 2),
-					BusidRange: "0x80-0x8f",
+					BusidRange: storage.MustNewBdevBusRange("0x80-0x8f"),
 				},
 			},
 			enableVmd: true,
@@ -295,7 +295,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: common.MockPCIAddrs(1, 2),
-					BusidRange: "0x80-0x8f",
+					BusidRange: storage.MustNewBdevBusRange("0x80-0x8f"),
 				},
 			},
 			enableHotplug: true,
@@ -461,7 +461,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				WithFabricInterfacePort(42).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmMountPoint("scmmnt"),
 					&tc.confIn,

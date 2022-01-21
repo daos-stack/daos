@@ -73,21 +73,17 @@ jobs:
           - distro: rocky
             base: centos.8
             with: rockylinux/rockylinux:8
-            java: yes
           - distro: fedora
             base: centos.8
             with: fedora:35
-            java: no
           - distro: leap.15
             base: leap.15
             with: leap.15
-            java: yes
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
-      DAOS_JAVA_BUILD: ${{ matrix.java }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -119,7 +115,7 @@ jobs:
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                           --build-arg DEPS_JOBS
                           --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD
+                          --build-arg DAOS_JAVA_BUILD=yes
                           --build-arg COMPILER
     - name: Build debug in docker.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}

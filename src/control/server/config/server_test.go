@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -42,8 +41,6 @@ var defConfigCmpOpts = []cmp.Option{
 		security.CertificateConfig{},
 	),
 	cmpopts.IgnoreFields(Server{}, "Path"),
-	cmpopts.IgnoreFields(engine.Config{}, "GetNetDevCls", "ValidateProvider",
-		"GetIfaceNumaNode"),
 }
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
@@ -136,10 +133,6 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				for _, eCfg := range configA.Engines {
-					eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-				}
 				err = configA.Validate(context.TODO(), log)
 			}
 
@@ -159,10 +152,6 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				for _, eCfg := range configB.Engines {
-					eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-						WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-				}
 				err = configB.Validate(context.TODO(), log)
 			}
 
@@ -207,7 +196,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
-		WithFabricProvider("ofi+verbs;ofi_rxm").
+		WithFabricProvider("ofi+verbs").
 		WithCrtCtxShareAddr(0).
 		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
@@ -227,16 +216,16 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/1").
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(16),
 				storage.NewTierConfig().
-					WithBdevClass("nvme").
+					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
 					WithBdevBusidRange("0x80-0x8f"),
 			).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
-			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(0).
@@ -255,17 +244,17 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithStorage(
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/2").
-					WithScmClass("dcpm").
+					WithStorageClass("dcpm").
 					WithScmDeviceList("/dev/pmem1"),
 				storage.NewTierConfig().
-					WithBdevClass("file").
+					WithStorageClass("file").
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
 					WithBdevFileSize(16),
 			).
 			WithPinnedNumaNode(1).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
-			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(1).
@@ -478,11 +467,6 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			config = tt.extraConfig(config)
 
-			for _, eCfg := range config.Engines {
-				eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-					WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-			}
-
 			CmpErr(t, tt.expErr, config.Validate(context.TODO(), log))
 		})
 	}
@@ -637,11 +621,11 @@ func TestServerConfig_Parsing(t *testing.T) {
 						WithFabricInterfacePort(20000).
 						WithStorage(
 							storage.NewTierConfig().
-								WithScmClass("ram").
+								WithStorageClass("ram").
 								WithScmRamdiskSize(1).
 								WithScmMountPoint("/mnt/daos/2"),
 							storage.NewTierConfig().
-								WithBdevClass("nvme").
+								WithStorageClass("nvme").
 								WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
 						))
 			},
@@ -649,9 +633,9 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"bad busid range": {
 			// fail first engine storage
-			inTxt:          "    bdev_busid_range: 0x80-0x8f",
-			outTxt:         "    bdev_busid_range: 0x80-0x8g",
-			expValidateErr: errors.New("\"0x8g\": invalid syntax"),
+			inTxt:       "    bdev_busid_range: 0x80-0x8f",
+			outTxt:      "    bdev_busid_range: 0x80-0x8g",
+			expParseErr: errors.New("\"0x8g\": invalid syntax"),
 		},
 		"legacy storage; empty bdev_list": {
 			legacyStorage: true,
@@ -713,9 +697,9 @@ func TestServerConfig_Parsing(t *testing.T) {
 					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
 				}
 
-				want := "0x00-0x80"
+				want := storage.MustNewBdevBusRange("0x00-0x80")
 				got := c.Engines[0].Storage.Tiers.BdevConfigs()[0].Bdev.BusidRange
-				if want != got {
+				if want.String() != got.String() {
 					return errors.Errorf("want %s bus-id range, got %s", want, got)
 				}
 
@@ -755,11 +739,6 @@ func TestServerConfig_Parsing(t *testing.T) {
 				return
 			}
 			config = tt.extraConfig(config)
-
-			for _, eCfg := range config.Engines {
-				eCfg.WithValidateProvider(netdetect.ValidateProviderStub).
-					WithGetIfaceNumaNode(netdetect.MockGetIfaceNumaNode)
-			}
 
 			CmpErr(t, tt.expValidateErr, config.Validate(context.TODO(), log))
 
@@ -854,7 +833,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("a"),
 			)
@@ -866,7 +845,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint("b"),
 			)
@@ -898,7 +877,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmDeviceList("a").
 						WithScmMountPoint(configA().Storage.Tiers.ScmConfigs()[0].Scm.MountPoint),
 				),
@@ -908,14 +887,14 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configA: configA().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint("aa").
 						WithScmDeviceList("a"),
 				),
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint("bb").
 						WithScmDeviceList("a"),
 				),
@@ -925,13 +904,13 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configA: configA().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(1)),
 				),
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
 				),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
@@ -940,13 +919,13 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			configA: configA().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
 				),
 			configB: configB().
 				WithStorage(
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
 				),
 			expErr: errors.New("bdev_list contains duplicate pci addresses"),
@@ -962,116 +941,6 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 
 			gotErr := conf.Validate(context.TODO(), log)
 			CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
-func getDeviceClassStub(netdev string) (uint32, error) {
-	switch netdev {
-	case "eth0":
-		return netdetect.Ether, nil
-	case "eth1":
-		return netdetect.Ether, nil
-	case "ib0":
-		return netdetect.Infiniband, nil
-	case "ib1":
-		return netdetect.Infiniband, nil
-	default:
-		return 0, nil
-	}
-}
-
-func TestServerConfig_NetworkDeviceClass(t *testing.T) {
-	configA := func() *engine.Config {
-		return engine.MockConfig().
-			WithLogFile("a").
-			WithStorage(
-				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint("a"),
-			).
-			WithFabricInterfacePort(42).
-			WithGetNetDevCls(getDeviceClassStub)
-	}
-	configB := func() *engine.Config {
-		return engine.MockConfig().
-			WithLogFile("b").
-			WithStorage(
-				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint("b"),
-			).
-			WithFabricInterfacePort(43).
-			WithGetNetDevCls(getDeviceClassStub)
-	}
-
-	for name, tc := range map[string]struct {
-		configA      *engine.Config
-		configB      *engine.Config
-		expNetDevCls uint32
-		expErr       error
-	}{
-		"successful validation with matching Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib1"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expNetDevCls: netdetect.Infiniband,
-		},
-		"successful validation with matching Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth0"),
-			configB: configB().
-				WithFabricInterface("eth1"),
-			expNetDevCls: netdetect.Ether,
-		},
-		"mismatching net dev class with primary server as ib0 / Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib0"),
-			configB: configB().
-				WithFabricInterface("eth0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth0"),
-		},
-		"mismatching net dev class with primary server as eth0 / Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth0"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
-		},
-		"mismatching net dev class with primary server as ib1 / Infiniband": {
-			configA: configA().
-				WithFabricInterface("ib1"),
-			configB: configB().
-				WithFabricInterface("eth1"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Infiniband, netdetect.Ether, "eth1"),
-		},
-		"mismatching net dev class with primary server as eth1 / Ethernet": {
-			configA: configA().
-				WithFabricInterface("eth1"),
-			configB: configB().
-				WithFabricInterface("ib0"),
-			expErr: FaultConfigInvalidNetDevClass(1, netdetect.Ether, netdetect.Infiniband, "ib0"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			gotNetDevCls, gotErr := DefaultServer().
-				WithFabricProvider("test").
-				WithEngines(tc.configA, tc.configB).
-				CheckFabric(context.Background(), log)
-
-			CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
-			}
-
-			AssertEqual(t, tc.expNetDevCls, gotNetDevCls,
-				"unexpected config network device class")
 		})
 	}
 }

@@ -218,8 +218,8 @@ func MockGetTopology(context.Context) (*hardware.Topology, error) {
 				WithPCIBuses(
 					[]*hardware.PCIBus{
 						{
-							LowAddress:  *common.MustNewPCIAddress("0000:00:00.0"),
-							HighAddress: *common.MustNewPCIAddress("0000:07:00.0"),
+							LowAddress:  *hardware.MustNewPCIAddress("0000:00:00.0"),
+							HighAddress: *hardware.MustNewPCIAddress("0000:07:00.0"),
 						},
 					},
 				),
@@ -227,8 +227,8 @@ func MockGetTopology(context.Context) (*hardware.Topology, error) {
 				WithPCIBuses(
 					[]*hardware.PCIBus{
 						{
-							LowAddress:  *common.MustNewPCIAddress("0000:80:00.0"),
-							HighAddress: *common.MustNewPCIAddress("0000:8f:00.0"),
+							LowAddress:  *hardware.MustNewPCIAddress("0000:80:00.0"),
+							HighAddress: *hardware.MustNewPCIAddress("0000:8f:00.0"),
 						},
 					},
 				),

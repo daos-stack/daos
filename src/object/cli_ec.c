@@ -573,6 +573,8 @@ obj_ec_recx_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
 
 	if (recx_array->oer_stripe_total == 0)
 		D_GOTO(out, rc = 0);
+	if (iod->iod_size == DAOS_REC_ANY) /* punch case */
+		D_GOTO(out, rc = 0);
 	singv = (iod->iod_type == DAOS_IOD_SINGLE);
 	if (singv) {
 		cell_bytes = obj_ec_singv_cell_bytes(iod->iod_size, oca);
@@ -1573,6 +1575,9 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	uint32_t	i;
 	int		rc;
 
+	if (reasb_req->orr_usgls == NULL) /* punch case */
+		return 0;
+
 	codec = codec_get(reasb_req, reasb_req->orr_oid);
 	if (codec == NULL) {
 		D_ERROR(DF_OID" can not get codec.\n",
@@ -1931,7 +1936,6 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		parity_lists = reasb_req->orr_parity_lists;
 		if (parity_lists == NULL)
 			rc = -DER_NOMEM;
-		daos_recx_ep_lists_merge(parity_lists, nr);
 		goto out;
 	}
 
@@ -1939,7 +1943,6 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		rc = -DER_FETCH_AGAIN;
 		D_ERROR("simulate parity list mismatch, "DF_RC"\n", DP_RC(rc));
 	} else {
-		daos_recx_ep_lists_merge(recx_lists, nr);
 		rc = obj_ec_parity_lists_match(parity_lists, recx_lists, nr);
 		if (rc) {
 			D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));

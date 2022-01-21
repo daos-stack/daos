@@ -1350,11 +1350,11 @@ static const ProtobufCFieldDescriptor ctl__smd_dev_resp__device__field_descripto
     "dev_state",
     5,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
     offsetof(Ctl__SmdDevResp__Device, dev_state),
     NULL,
-    NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -1638,11 +1638,11 @@ static const ProtobufCFieldDescriptor ctl__dev_state_resp__field_descriptors[3] 
     "dev_state",
     4,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevStateResp, dev_state),
     NULL,
-    NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -1767,11 +1767,11 @@ static const ProtobufCFieldDescriptor ctl__dev_replace_resp__field_descriptors[3
     "dev_state",
     4,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevReplaceResp, dev_state),
     NULL,
-    NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -1870,11 +1870,11 @@ static const ProtobufCFieldDescriptor ctl__dev_identify_resp__field_descriptors[
     "dev_state",
     4,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
     offsetof(Ctl__DevIdentifyResp, dev_state),
     NULL,
-    NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -2128,11 +2128,11 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__device__field_descrip
     "dev_state",
     6,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
     offsetof(Ctl__SmdQueryResp__Device, dev_state),
     NULL,
-    NULL,
+    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
