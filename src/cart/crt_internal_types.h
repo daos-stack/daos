@@ -283,7 +283,7 @@ struct crt_opc_map {
 };
 
 
-int crt_na_ofi_config_init(int provider);
+int crt_na_ofi_config_init(int provider, crt_init_options_t *opt);
 void crt_na_ofi_config_fini(int provider);
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */
