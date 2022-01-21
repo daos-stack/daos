@@ -1,10 +1,11 @@
 #!/usr/bin/python
 """
-(C) Copyright 2019-2021 Intel Corporation.
+(C) Copyright 2019-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import logging
 import os
 import time
 from datetime import datetime, timedelta
@@ -20,12 +21,13 @@ from ClusterShell.NodeSet import NodeSet
 from getpass import getuser
 import socket
 from agent_utils import include_local_host
-from utils import DDHHMMSS_format, add_pools, get_remote_logs, \
+from utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
-    create_mdtest_cmdline, reserved_file_copy, run_metrics_check
+    create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
+    get_journalctl, get_daos_server_logs
 
 
 class SoakTestBase(TestWithServers):
@@ -40,13 +42,13 @@ class SoakTestBase(TestWithServers):
         """Initialize a SoakBase object."""
         super().__init__(*args, **kwargs)
         self.failed_job_id_list = None
-        self.test_log_dir = None
+        self.soaktest_dir = None
         self.exclude_slurm_nodes = None
         self.loop = None
-        self.log_dir = None
-        self.outputsoakdir = None
+        self.outputsoak_dir = None
         self.test_name = None
         self.test_timeout = None
+        self.start_time = None
         self.end_time = None
         self.soak_results = None
         self.srun_params = None
@@ -75,13 +77,12 @@ class SoakTestBase(TestWithServers):
         self.exclude_slurm_nodes = []
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
-        self.log_dir = get_log_file("soak")
-        self.outputsoakdir = self.outputdir + "/soak"
+        self.outputsoak_dir = self.outputdir + "/soak"
         # Create the remote log directories on all client nodes
-        self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
-        self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
-        self.sharedlog_dir = self.tmp + "/soak"
-        self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
+        self.soak_dir = self.base_test_dir + "/soak"
+        self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
+        self.sharedsoak_dir = self.tmp + "/soak"
+        self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
         self.dmg_command = self.get_dmg_command()
         # Fail if slurm partition is not defined
@@ -125,23 +126,6 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info("<<preTearDown Started>> at %s", time.ctime())
         errors = []
-        # verify reserved container data
-        if self.resv_cont:
-            final_resv_file = os.path.join(self.test_dir, "final", "resv_file")
-            try:
-                reserved_file_copy(self, final_resv_file, self.pool[0], self.resv_cont)
-            except CommandFailure as error:
-                self.soak_errors.append("<<FAILED: Soak reserved container read failed>>")
-
-            if not cmp(self.initial_resv_file, final_resv_file):
-                self.soak_errors.append("<<FAILED: Data verification error on reserved pool"
-                                        " after SOAK completed>>")
-            for file in [self.initial_resv_file, final_resv_file]:
-                os.remove(file)
-            self.container.append(self.resv_cont)
-
-        # display final metrics
-        run_metrics_check(self, prefix="final")
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
             job_id = " ".join([str(job) for job in self.failed_job_id_list])
@@ -157,6 +141,39 @@ class SoakTestBase(TestWithServers):
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
+
+        # verify reserved container data
+        if self.resv_cont:
+            final_resv_file = os.path.join(self.test_dir, "final", "resv_file")
+            try:
+                reserved_file_copy(self, final_resv_file, self.pool[0], self.resv_cont)
+            except CommandFailure as error:
+                self.soak_errors.append("<<FAILED: Soak reserved container read failed>>")
+
+            if not cmp(self.initial_resv_file, final_resv_file):
+                self.soak_errors.append("<<FAILED: Data verification error on reserved pool"
+                                        " after SOAK completed>>")
+
+            for file in [self.initial_resv_file, final_resv_file]:
+                os.remove(file)
+
+            self.container.append(self.resv_cont)
+
+        # display final metrics
+        run_metrics_check(self, prefix="final")
+        # Gather server logs
+        get_daos_server_logs(self)
+        # Gather journalctl logs
+        hosts = list(set(self.hostlist_servers))
+        since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
+        until = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.end_time))
+        for type in ["kernel", "daos_server"]:
+            get_journalctl(self, hosts, since, until, type, logging=True)
+        # Gather client daos logs with resource manager
+        get_remote_dir(
+            self, self.base_test_dir, self.outputsoak_dir, self.hostlist_clients,
+            shared_dir=self.sharedsoak_dir, rm_remote=False, append="/daos_logs-")
+
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
         if self.soak_errors:
@@ -405,7 +422,6 @@ class SoakTestBase(TestWithServers):
                                 offline_harasser, self.pool)
                             # wait 2 minutes to issue next harasser
                             time.sleep(120)
-
             # check journalctl for events;
             until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             event_check_messages = run_event_check(self, since, until)
@@ -425,7 +441,7 @@ class SoakTestBase(TestWithServers):
                         "<< Job %s failed with status %s>>", job, result)
             # gather all the logfiles for this pass and cleanup test nodes
             try:
-                get_remote_logs(self)
+                get_remote_dir(self, self.soaktest_dir, self.outputsoak_dir, self.hostlist_clients)
             except SoakTestError as error:
                 self.log.info("Remote copy failed with %s", error)
             self.soak_results = {}
@@ -452,19 +468,22 @@ class SoakTestBase(TestWithServers):
         """
         job_script_list = []
         # Update the remote log directories from new loop/pass
-        self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
-        self.test_log_dir = self.log_dir + "/pass" + str(self.loop)
-        local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
+        self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
+        self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
+        outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), "mkdir -p {}".format(
-                self.test_log_dir), self.srun_params)
+                self.soaktest_dir), self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: logfile directory not"
                 "created on clients>>: {}".format(self.hostlist_clients))
-        # Create local log directory
-        os.makedirs(local_pass_dir)
-        os.makedirs(self.sharedsoakdir)
+        # Create local avocado log directory for this pass
+        os.makedirs(outputsoaktest_dir)
+        # Create shared log directory for this pass
+        os.makedirs(self.sharedsoaktest_dir)
+        # Create local test log directory for this pass
+        os.makedirs(self.soaktest_dir)
         # create the batch scripts
         job_script_list = self.job_setup(jobs, pools)
         # randomize job list
@@ -506,6 +525,7 @@ class SoakTestBase(TestWithServers):
         self.soak_errors = []
         self.check_errors = []
         self.used = []
+        self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
         test_to = self.params.get("test_timeout", test_param + "*")
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get(
@@ -543,13 +563,13 @@ class SoakTestBase(TestWithServers):
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
             NodeSet.fromlist(self.hostlist_clients), "rm -rf {}".format(
-                self.log_dir), self.srun_params)
+                self.soak_dir), self.srun_params)
         if result.exit_status > 0:
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(self.hostlist_clients))
         # cleanup test_node
-        for log_dir in [self.log_dir, self.sharedlog_dir]:
+        for log_dir in [self.soak_dir, self.sharedsoak_dir]:
             cmd = "rm -rf {}".format(log_dir)
             try:
                 result = run_command(cmd, timeout=30)
@@ -560,9 +580,9 @@ class SoakTestBase(TestWithServers):
         # Baseline metrics data
         run_metrics_check(self, prefix="initial")
         # Initialize time
-        start_time = time.time()
+        self.start_time = time.time()
         self.test_timeout = int(3600 * test_to)
-        self.end_time = start_time + self.test_timeout
+        self.end_time = self.start_time + self.test_timeout
         self.log.info("<<START %s >> at %s", self.test_name, time.ctime())
         while time.time() < self.end_time:
             # Start new pass
@@ -621,4 +641,4 @@ class SoakTestBase(TestWithServers):
             self.loop += 1
         self.log.info(
             "<<<<SOAK TOTAL TEST TIME = %s>>>>", DDHHMMSS_format(
-                time.time() - start_time))
+                time.time() - self.start_time))
