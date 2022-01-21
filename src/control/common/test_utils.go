@@ -177,6 +177,15 @@ func DefaultCmpOpts() []cmp.Option {
 	}
 }
 
+// CmpOptIgnoreField creates a cmp.Option that allows go-cmp comparisons to ignore a specific field.
+func CmpOptIgnoreField(field string) cmp.Option {
+	return cmp.FilterPath(
+		func(p cmp.Path) bool {
+			return p.Last().String() == field || p.Last().String() == ("."+field)
+		},
+		cmp.Ignore())
+}
+
 // CreateTestDir creates a temporary test directory.
 // It returns the path to the directory and a cleanup function.
 func CreateTestDir(t *testing.T) (string, func()) {

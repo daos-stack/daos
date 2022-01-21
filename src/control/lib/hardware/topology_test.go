@@ -93,6 +93,81 @@ func TestHardware_Topology_AllDevices(t *testing.T) {
 	}
 }
 
+func TestTopology_NumNUMANodes(t *testing.T) {
+	for name, tc := range map[string]struct {
+		topo      *Topology
+		expResult int
+	}{
+		"nil": {},
+		"empty": {
+			topo: &Topology{},
+		},
+		"one": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					0: MockNUMANode(0, 8),
+				},
+			},
+			expResult: 1,
+		},
+		"multiple": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					0: MockNUMANode(0, 8),
+					1: MockNUMANode(1, 8),
+					2: MockNUMANode(2, 8),
+				},
+			},
+			expResult: 3,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expResult, tc.topo.NumNUMANodes(), "")
+		})
+	}
+}
+
+func TestTopology_NumCoresPerNUMA(t *testing.T) {
+	for name, tc := range map[string]struct {
+		topo      *Topology
+		expResult int
+	}{
+		"nil": {},
+		"empty": {
+			topo: &Topology{},
+		},
+		"no cores": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					0: MockNUMANode(0, 0),
+				},
+			},
+		},
+		"one NUMA": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					0: MockNUMANode(0, 6),
+				},
+			},
+			expResult: 6,
+		},
+		"multiple NUMA": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					0: MockNUMANode(0, 8),
+					1: MockNUMANode(1, 8),
+					2: MockNUMANode(2, 8),
+				},
+			},
+			expResult: 8,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expResult, tc.topo.NumCoresPerNUMA(), "")
+		})
+	}
+}
+
 func TestHardware_DeviceType_String(t *testing.T) {
 	for name, tc := range map[string]struct {
 		devType   DeviceType

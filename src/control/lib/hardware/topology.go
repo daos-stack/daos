@@ -45,6 +45,27 @@ func (t *Topology) AllDevices() map[string]*PCIDevice {
 	return devsByName
 }
 
+// NumNUMANodes gets the number of NUMA nodes in the system topology.
+func (t *Topology) NumNUMANodes() int {
+	if t == nil {
+		return 0
+	}
+	return len(t.NUMANodes)
+}
+
+// NumCoresPerNUMA gets the number of cores per NUMA node.
+func (t *Topology) NumCoresPerNUMA() int {
+	if t == nil {
+		return 0
+	}
+
+	for _, numa := range t.NUMANodes {
+		return len(numa.Cores)
+	}
+
+	return 0
+}
+
 type (
 	// CPUCore represents a CPU core within a NUMA node.
 	CPUCore struct {
