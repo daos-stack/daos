@@ -60,16 +60,14 @@ pdcp -w ^hosts install_*.sh ~
 if [[ ! -d /usr/local/mpifileutils/install/bin ]]
 then
   printf "\nRun install_mpifileutils.sh on client nodes\n\n"
-  sudo ./install_mpifileutils.sh
-  pdsh -w ^hosts_no_first "sudo ./install_mpifileutils.sh"
+  pdsh -w ^hosts "sudo ./install_mpifileutils.sh"
 fi
 
 # Install IO500 if not already installed
 if [[ ! -d "${IO500_DIR}" ]]
 then
   printf "\nRun install_${IO500_VERSION_TAG,,}.sh on client nodes\n\n"
-  sudo "./install_${IO500_VERSION_TAG}.sh"
-  pdsh -w ^hosts_no_first "sudo ./install_${IO500_VERSION_TAG,,}.sh"
+  pdsh -w ^hosts "sudo ./install_${IO500_VERSION_TAG,,}.sh"
 fi
 
 cleanup

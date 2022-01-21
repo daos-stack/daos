@@ -97,8 +97,6 @@ do
     echo ${CLIENT_NAME}-$(printf %04d ${i})>>hosts
 done
 
-cat hosts | tail -n+2 > hosts_no_first
-
 for ((i=1; i <= ${DAOS_SERVER_INSTANCE_COUNT} ; i++))
 do
     SERVERS+="${SERVER_NAME}-$(printf %04d ${i}) "
