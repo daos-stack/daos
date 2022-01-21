@@ -986,7 +986,7 @@ typedef struct {
 	daos_iod_t		*iods;
 	/** anchor to start from last returned key */
 	daos_anchor_t		*anchor;
-	/** numberr of keys in kds and sgl_keys */
+	/** number of keys in kds and sgl_keys */
 	uint32_t		*nr_kds;
 	/** keys' metadata */
 	daos_key_desc_t		*kds;
