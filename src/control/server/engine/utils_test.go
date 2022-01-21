@@ -18,9 +18,7 @@ func TestValidateLogMasks(t *testing.T) {
 		masks  string
 		expErr error
 	}{
-		"empty": {
-			expErr: errors.New("empty log masks"),
-		},
+		"empty": {},
 		"single level; no prefix": {
 			masks: "DEBUG",
 		},

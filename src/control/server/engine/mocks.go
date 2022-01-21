@@ -13,6 +13,13 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 )
 
+// MockConfig returns an I/O Engine config set up for testing.
+func MockConfig() *Config {
+	return &Config{
+		HelperStreamCount: maxHelperStreamCount,
+	}
+}
+
 type (
 	TestRunnerConfig struct {
 		StartCb    func()

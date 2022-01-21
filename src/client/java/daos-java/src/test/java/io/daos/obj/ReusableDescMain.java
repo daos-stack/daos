@@ -1,6 +1,5 @@
 package io.daos.obj;
 
-
 import io.daos.DaosClient;
 import io.netty.buffer.ByteBuf;
 

@@ -18,7 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -27,22 +27,22 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		{
 			MsRanks: []uint32{0, 1, 3},
 			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+sockets",
-				NetDevClass: netdetect.Ether,
+				Provider:    "ofi+tcp",
+				NetDevClass: uint32(hardware.Ether),
 			},
 		},
 		{
 			MsRanks: []uint32{0},
 			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+sockets",
-				NetDevClass: netdetect.Ether,
+				Provider:    "ofi+tcp",
+				NetDevClass: uint32(hardware.Ether),
 			},
 		},
 		{
 			MsRanks: []uint32{2, 3},
 			ClientNetHint: &mgmtpb.ClientNetHint{
-				Provider:    "ofi+sockets",
-				NetDevClass: netdetect.Ether,
+				Provider:    "ofi+tcp",
+				NetDevClass: uint32(hardware.Ether),
 			},
 		},
 	}
@@ -61,8 +61,9 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 	testFI := &FabricInterface{
 		Name:        "test0",
-		Domain:      "",
-		NetDevClass: netdetect.Ether,
+		Domain:      "test0",
+		NetDevClass: hardware.Ether,
+		Providers:   []string{"ofi+tcp"},
 	}
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
@@ -151,8 +152,9 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 				0: {
 					&FabricInterface{
 						Name:        "test0",
-						Domain:      "",
-						NetDevClass: netdetect.Ether,
+						Domain:      "test0",
+						NetDevClass: hardware.Ether,
+						Providers:   []string{"ofi+tcp"},
 					},
 				},
 			},
@@ -166,8 +168,8 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 						Message: &mgmtpb.GetAttachInfoResp{
 							MsRanks: []uint32{0, 1, 3},
 							ClientNetHint: &mgmtpb.ClientNetHint{
-								Provider:    "ofi+sockets",
-								NetDevClass: netdetect.Ether,
+								Provider:    "ofi+tcp",
+								NetDevClass: uint32(hardware.Ether),
 							},
 						},
 					},

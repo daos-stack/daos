@@ -7,17 +7,10 @@
 package netdetect
 
 /*
-#cgo LDFLAGS: -lhwloc -lfabric
+#cgo LDFLAGS: -lhwloc
 #include <stdlib.h>
 #include <hwloc.h>
 #include <stdio.h>
-#include <rdma/fabric.h>
-#include <rdma/fi_domain.h>
-#include <rdma/fi_endpoint.h>
-#include <rdma/fi_cm.h>
-#include <rdma/fi_tagged.h>
-#include <rdma/fi_rma.h>
-#include <rdma/fi_errno.h>
 
 #if HWLOC_API_VERSION >= 0x00020000
 
@@ -78,24 +71,6 @@ hwloc_obj_t cmpt_get_child(hwloc_obj_t node, int idx)
 	return node->parent->children[idx];
 }
 #endif
-
-#define getHFIUnitError -2
-typedef struct {
-	uint64_t reserved_1;
-	uint8_t  reserved_2;
-	int8_t   unit;
-	uint8_t  port;
-	uint8_t  reserved_3;
-	uint32_t service;
-} psmx2_ep_name;
-
-int getHFIUnit(void *src_addr) {
-	psmx2_ep_name *psmx2;
-	psmx2 = (psmx2_ep_name *)src_addr;
-	if (!psmx2)
-		return getHFIUnitError;
-	return psmx2->unit;
-}
 */
 import "C"
 
@@ -108,7 +83,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"unsafe"
@@ -124,28 +98,7 @@ const (
 	direct = iota
 	sibling
 	bestfit
-	libFabricMajorVersion     = 1
-	libFabricMinorVersion     = 7
-	allHFIUsed                = -1
-	badAddress                = C.getHFIUnitError
-	topologyKey           key = 0
-	// ARP protocol hardware identifiers: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
-	Netrom     = 0
-	Ether      = 1
-	Eether     = 2
-	Ax25       = 3
-	Pronet     = 4
-	Chaos      = 5
-	IEEE802    = 6
-	Arcnet     = 7
-	Appletlk   = 8
-	Dlci       = 15
-	Atm        = 19
-	Metricom   = 23
-	IEEE1394   = 24
-	Eui64      = 27
-	Infiniband = 32
-	Loopback   = 772
+	topologyKey key = 0
 )
 
 // alwaysExclude is a regexp to match always-excluded devices
@@ -157,20 +110,6 @@ type DeviceAffinity struct {
 	CPUSet     string
 	NodeSet    string
 	NUMANode   uint
-}
-
-// FabricScan data encapsulates the results of the fabric scanning
-type FabricScan struct {
-	Provider    string `json:"provider"`
-	DeviceName  string `json:"device"`
-	Domain      string `json:"domain"`
-	NUMANode    uint   `json:"numanode"`
-	Priority    int    `json:"priority"`
-	NetDevClass uint32 `json:"netdevclass"`
-}
-
-func (fs *FabricScan) String() string {
-	return fmt.Sprintf("prov: %s dev: %s dom: %s numa: %d", fs.Provider, fs.DeviceName, fs.Domain, fs.NUMANode)
 }
 
 // DeviceScan caches initialization data for later hwloc usage
@@ -307,25 +246,6 @@ func HasNUMA(ctx context.Context) bool {
 		return false
 	}
 	return ndc.numaAware
-}
-
-// NumNumaNodes returns the number of detected NUMA nodes, or 0 if none.
-func NumNumaNodes(ctx context.Context) int {
-	ndc, err := getContext(ctx)
-	if err != nil || !HasNUMA(ctx) {
-		return 0
-	}
-	return ndc.numNUMANodes
-}
-
-// CoresPerNuma returns the number of cores on each NUMA node, or 0 if not NUMA
-// aware.
-func CoresPerNuma(ctx context.Context) int {
-	ndc, err := getContext(ctx)
-	if err != nil || !HasNUMA(ctx) {
-		return 0
-	}
-	return ndc.coresPerNuma
 }
 
 // Cleanup releases the hwloc topology resources
@@ -691,50 +611,6 @@ func GetNUMASocketIDForPid(ctx context.Context, pid int32) (int, error) {
 	return 0, errors.Errorf("NUMA Node data is unavailable.")
 }
 
-// GetDeviceAlias is a wrapper for getDeviceAliasWithSystemList.  This interface
-// specifies an empty additionalSystemDevices list which allows for the default behavior we want
-// for normal use.  Test functions can call getDeviceAliasWithSystemList() directly and specify
-// an arbitrary additionalSystemDevice list as necessary.
-func GetDeviceAlias(ctx context.Context, device string) (string, error) {
-	additionalSystemDevices := []string{}
-	return getDeviceAliasWithSystemList(ctx, device, additionalSystemDevices)
-}
-
-// getDeviceAliasWithSystemList finds an alias for the device name provided.
-// For example, the device alias for "ib0" is a sibling node in the hwloc topology
-// with the name "hfi1_0".  Any devices specified by additionalSystemDevices are added
-// to the system device list that is automatically determined.
-func getDeviceAliasWithSystemList(ctx context.Context, device string, additionalSystemDevices []string) (string, error) {
-	var node C.hwloc_obj_t
-
-	log.Debugf("Searching for a device alias for: %s", device)
-
-	ndc, err := getContext(ctx)
-	if err != nil {
-		return "", errors.Errorf("hwloc topology not initialized")
-	}
-
-	ndc.deviceScanCfg.targetDevice = device
-
-	// The loopback device isn't a physical device that hwloc will find in the topology
-	// If "lo" is specified, it is treated specially.
-	if ndc.deviceScanCfg.targetDevice == "lo" {
-		return "lo", nil
-	}
-
-	// Add any additional system devices to the map
-	for _, deviceName := range additionalSystemDevices {
-		ndc.deviceScanCfg.systemDeviceNamesMap[deviceName] = struct{}{}
-	}
-
-	node = getNodeAlias(ndc.deviceScanCfg)
-	if node == nil {
-		return "", errors.Errorf("unable to find an alias for: %s", ndc.deviceScanCfg.targetDevice)
-	}
-	log.Debugf("Device alias for %s is %s", device, C.GoString(node.name))
-	return C.GoString(node.name), nil
-}
-
 // GetAffinityForDevice searches the system topology reported by hwloc
 // for the device specified by netDeviceName and returns the corresponding
 // name, cpuset, nodeset, and NUMA node ID information.
@@ -886,6 +762,13 @@ func convertMercuryToLibFabric(provider string) (string, error) {
 		return "", errors.New("fabric provider was empty")
 	}
 
+	// automatically append rxm if not specified in yaml file
+	if provider == "ofi+tcp" {
+		provider = "ofi+tcp;ofi_rxm"
+	} else if provider == "ofi+verbs" {
+		provider = "ofi+verbs;ofi_rxm"
+	}
+
 	tmp := strings.Split(provider, ";")
 	for _, subProvider := range tmp {
 		libFabricProviderList += mercuryToLibFabric(subProvider) + ";"
@@ -938,18 +821,6 @@ func convertLibFabricToMercury(provider string) (string, error) {
 	return "", errors.Errorf("failed to convert the libfabric provider list '%s' to any mercury provider", provider)
 }
 
-// ValidateProviderStub is used for most unit testing to replace ValidateProviderConfig because the network configuration
-// validation depends upon physical hardware resources and configuration on the target machine
-// that are either not known or static in the test environment
-func ValidateProviderStub(ctx context.Context, device string, provider string) error {
-	// Call the full function to get the results without generating any hard errors
-	err := ValidateProviderConfig(ctx, device, provider)
-	if err != nil {
-		log.Debugf("ValidateProviderConfig (device: %s, provider %s) returned error: %v", device, provider, err)
-	}
-	return nil
-}
-
 // deviceProviderMatch is a helper function to consolidate this functionality used by the provider validation
 func deviceProviderMatch(deviceScanCfg DeviceScan, provider string, systemDevice string) bool {
 	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
@@ -971,402 +842,4 @@ func getHFIDeviceCount(hwlocDeviceNames []string) int {
 		}
 	}
 	return hfiDeviceCount
-}
-
-// ValidateProviderConfig confirms that the given network device supports the chosen provider
-func ValidateProviderConfig(ctx context.Context, device string, provider string) error {
-	var fi *C.struct_fi_info
-	var hints *C.struct_fi_info
-
-	if provider == "" {
-		return errors.New("provider required")
-	}
-
-	// Allow provider 'sm' (shared memory) to pass validation without passing any of the checks
-	// The provider is valid to use, but does not use devices.  Therefore, it is handled specially to avoid
-	// flagging it as an error.
-	if provider == "sm" {
-		return nil
-	}
-
-	if device == "" {
-		return errors.New("device required")
-	}
-
-	// convert the Mercury provider string into a libfabric provider string
-	// to aid in matching it against the libfabric providers
-	libfabricProviderList, err := convertMercuryToLibFabric(provider)
-	if err != nil {
-		return err
-	}
-
-	hints = C.fi_allocinfo()
-	if hints == nil {
-		return errors.New("unable to initialize lib fabric - failed to allocinfo")
-	}
-	defer C.fi_freeinfo(hints)
-
-	hints.fabric_attr.prov_name = C.strdup(C.CString(libfabricProviderList))
-	C.fi_getinfo(C.uint(libFabricMajorVersion<<16|libFabricMinorVersion), nil, nil, 0, hints, &fi)
-	if fi == nil {
-		return errors.New("unable to initialize lib fabric")
-	}
-	defer C.fi_freeinfo(fi)
-
-	ndc, err := getContext(ctx)
-	if err != nil {
-		return errors.New("hwloc topology not initialized")
-	}
-
-	if _, found := ndc.deviceScanCfg.systemDeviceNamesMap[device]; !found {
-		return errors.Errorf("device: %s is an invalid device name", device)
-	}
-
-	hfiDeviceCount := getHFIDeviceCount(ndc.deviceScanCfg.hwlocDeviceNames)
-
-	// iterate over the libfabric records that match this provider
-	// and look for one that has a matching device name
-	// The device names returned from libfabric may be device names such as "hfi1_0" that maps to a system device "ib0"
-	// or may be a decorated device name such as "hfi1_0-dgram" that maps to "hfi1_0" that maps to a system device "ib0"
-	// In order to find a device and provider match, the libfabric device name must be converted into a system device name.
-	// GetAffinityForDevice() is used to provide this conversion inside deviceProviderMatch()
-	for ; fi != nil; fi = fi.next {
-		if fi.domain_attr == nil || fi.domain_attr.name == nil || fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
-			continue
-		}
-		ndc.deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
-
-		// Implements a workaround to handle the current psm2 provider behavior
-		// that reports fi.domain_attr.name as "psm2" instead of an actual device
-		// name like "hfi1_0".
-		//
-		// The work around behaves in two different ways depending on the data available.
-		// When the value of fi.src_addr.unit is 0 or greater, it is used to explicitly
-		// define an hfi1_ unit by appending that number to the "hfi1_" string.
-		//
-		// When the value of fi.src_addr.unit is -1, it means that all hfi1_x units in the system
-		// are supported by the psm2 provider.  In this case, we need to know how many hfi1_x units
-		// there are, and can look for a provider/device match against each item in the list.
-		//
-		// Note that "hfi1_x" is converted to a system device name such as "ibx"
-		// by the call to GetAffinityForDevice() as part of deviceProviderMatch()
-		if C.GoString(fi.fabric_attr.prov_name) == "psm2" {
-			if strings.Contains(ndc.deviceScanCfg.targetDevice, "psm2") {
-				log.Debugf("psm2 provider and psm2 device found.")
-				hfiUnit := C.getHFIUnit(fi.src_addr)
-				switch hfiUnit {
-				case allHFIUsed:
-					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
-						ndc.deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
-						if deviceProviderMatch(ndc.deviceScanCfg, provider, device) {
-							return nil
-						}
-					}
-					continue
-				case badAddress:
-					log.Debugf("The fi.src_addr was null - not adding hfi1_n scan result")
-					continue
-				default: // The hfi unit is stated explicitly
-					log.Debugf("Found hfi1_%d (actual)", hfiUnit)
-					ndc.deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", hfiUnit)
-					if deviceProviderMatch(ndc.deviceScanCfg, provider, device) {
-						return nil
-					}
-					continue
-				}
-			}
-		}
-
-		if deviceProviderMatch(ndc.deviceScanCfg, provider, device) {
-			return nil
-		}
-	}
-	return errors.Errorf("Device %s does not support provider: %s", device, provider)
-}
-
-// ValidateNUMAStub is used for most unit testing to replace ValidateNUMAConfig because the network configuration
-// validation depends upon physical hardware resources and configuration on the target machine
-// that are either not known or static in the test environment
-func ValidateNUMAStub(ctx context.Context, device string, numaNode uint) error {
-
-	err := ValidateNUMAConfig(ctx, device, numaNode)
-	if err != nil {
-		log.Debugf("ValidateNUMAConfig (device: %s, NUMA: %d) returned error: %v", device, numaNode, err)
-	}
-	return nil
-}
-
-// ValidateNUMAConfig confirms that the given network device matches the NUMA ID given.
-func ValidateNUMAConfig(ctx context.Context, device string, numaNode uint) error {
-	var err error
-
-	if device == "" {
-		return errors.New("device required")
-	}
-
-	ndc, err := getContext(ctx)
-	if err != nil {
-		return errors.New("hwloc topology not initialized")
-	}
-
-	// If the system isn't NUMA aware, skip validation
-	if !ndc.numaAware {
-		log.Debugf("The system is not NUMA aware.  Device/NUMA validation skipped.\n")
-		return nil
-	}
-
-	if _, found := ndc.deviceScanCfg.systemDeviceNamesMap[device]; !found {
-		return errors.Errorf("device: %s is an invalid device name", device)
-	}
-
-	ndc.deviceScanCfg.targetDevice = device
-	deviceAffinity, err := GetAffinityForDevice(ndc.deviceScanCfg)
-	if err != nil {
-		return err
-	}
-
-	if deviceAffinity.NUMANode != numaNode {
-		return errors.Errorf("The NUMA node for device %s does not match the provided value %d.", device, numaNode)
-	}
-	return nil
-}
-
-func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int, resultsMap map[string]struct{}, excludeMap map[string]struct{}) (*FabricScan, error) {
-	if _, skip := excludeMap[deviceScanCfg.targetDevice]; skip {
-		return nil, errors.New("excluded device entry by map")
-	}
-	if alwaysExclude.MatchString(deviceScanCfg.targetDevice) {
-		return nil, errors.New("excluded device entry by regexp")
-	}
-
-	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
-	if err != nil {
-		return nil, err
-	}
-
-	if deviceScanCfg.targetDevice != deviceAffinity.DeviceName {
-		log.Debugf("The target device name has been converted to system device name: %s", deviceAffinity.DeviceName)
-	}
-
-	// Convert the libfabric provider list to a Mercury compatible provider list
-	mercuryProviderList, err := convertLibFabricToMercury(provider)
-	if err != nil {
-		// An error while converting a libfabric provider to a mercury provider is not fatal.
-		// In this case, we want to omit this libfabric record from our results because it has no
-		// mercury equivalent provider.  There are many providers in libfabric that have no mercury
-		// equivalent, and we want to filter those out right here.
-		return nil, err
-	}
-
-	devClass, err := GetDeviceClass(deviceAffinity.DeviceName)
-	if err != nil {
-		return nil, err
-	}
-
-	scanResults := &FabricScan{
-		Provider:    mercuryProviderList,
-		DeviceName:  deviceAffinity.DeviceName,
-		NUMANode:    deviceAffinity.NUMANode,
-		Priority:    devCount,
-		NetDevClass: devClass,
-	}
-
-	if _, skip := excludeMap[scanResults.DeviceName]; skip {
-		return nil, errors.New("excluded device entry by map")
-	}
-	if alwaysExclude.MatchString(scanResults.DeviceName) {
-		return nil, errors.New("excluded device entry by regexp")
-	}
-
-	results := scanResults.String()
-
-	if _, found := resultsMap[results]; found {
-		return nil, errors.New("duplicate entry")
-	}
-
-	resultsMap[results] = struct{}{}
-	return scanResults, nil
-}
-
-// ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
-func ScanFabric(ctx context.Context, provider string, excludes ...string) ([]*FabricScan, error) {
-	var ScanResults []*FabricScan
-	var fi *C.struct_fi_info
-	var hints *C.struct_fi_info
-	var devCount int
-
-	resultsMap := make(map[string]struct{})
-
-	hints = C.fi_allocinfo()
-	if hints == nil {
-		return ScanResults, errors.New("unable to initialize lib fabric - failed to allocinfo")
-	}
-	defer C.fi_freeinfo(hints)
-
-	// If a provider was given, then set the libfabric search hint to match the provider
-	if provider != "" {
-		log.Debugf("Input provider string: %s", provider)
-		libfabricProviderList, err := convertMercuryToLibFabric(provider)
-		if err != nil {
-			return ScanResults, err
-		}
-		log.Debugf("Final libFabricProviderList is %s", libfabricProviderList)
-		hints.fabric_attr.prov_name = C.strdup(C.CString(libfabricProviderList))
-	}
-
-	// Initialize libfabric and perform the scan
-	C.fi_getinfo(C.uint(libFabricMajorVersion<<16|libFabricMinorVersion), nil, nil, 0, hints, &fi)
-	if fi == nil {
-		log.Debugf("libfabric found no records matching the specified provider")
-		return ScanResults, nil
-	}
-	defer C.fi_freeinfo(fi)
-
-	ndc, err := getContext(ctx)
-	if err != nil {
-		return ScanResults, nil
-	}
-
-	hfiDeviceCount := getHFIDeviceCount(ndc.deviceScanCfg.hwlocDeviceNames)
-	log.Debugf("There are %d hfi1 devices in the system", hfiDeviceCount)
-
-	excludeMap := make(map[string]struct{})
-	for _, iface := range excludes {
-		excludeMap[iface] = struct{}{}
-	}
-
-	for ; fi != nil; fi = fi.next {
-		if fi.domain_attr == nil || fi.domain_attr.name == nil || fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
-			continue
-		}
-		ndc.deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
-		// Implements a workaround to handle the current psm2 provider behavior
-		// that reports fi.domain_attr.name as "psm2" instead of an actual device
-		// name like "hfi1_0".
-		//
-		// The work around behaves in two different ways depending on the data available.
-		// When the value of fi.src_addr.unit is 0 or greater, it is used to explicitly
-		// define an hfi1_ unit by appending that number to the "hfi1_" string.
-		//
-		// When the value of fi.src_addr.unit is -1, it means that all hfi1_x units in the system
-		// are supported by the psm2 provider.  In this case, we need to know how many hfi1_x units
-		// there are, and create a fabric scan entry for each one.  By querying the device names from
-		// hwloc, we can count the number of devices matching "hfi1_" and create a device scan
-		// entry for each one.
-		if provider == "" {
-			provider = "All"
-		}
-
-		if strings.Contains(C.GoString(fi.fabric_attr.prov_name), "psm2") {
-			if strings.Contains(ndc.deviceScanCfg.targetDevice, "psm2") {
-				log.Debugf("psm2 provider and psm2 device found.")
-				hfiUnit := C.getHFIUnit(fi.src_addr)
-				switch hfiUnit {
-				case allHFIUsed:
-					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
-						ndc.deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
-						devScanResults, err := createFabricScanEntry(ndc.deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
-						if err != nil {
-							continue
-						}
-						log.Debugf("scan result: %v\n", devScanResults)
-						ScanResults = append(ScanResults, devScanResults)
-						devCount++
-					}
-					continue
-				case badAddress:
-					log.Debugf("The fi.src_addr was null - not adding hfi1_n scan result")
-					continue
-				default: // The hfi unit is stated explicitly
-					log.Debugf("Found hfi1_%d (actual)", hfiUnit)
-					ndc.deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", hfiUnit)
-					continue
-				}
-			}
-		}
-
-		devScanResults, err := createFabricScanEntry(ndc.deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount, resultsMap, excludeMap)
-		if err != nil {
-			continue
-		}
-		devScanResults.Domain = C.GoString(fi.domain_attr.name)
-		ScanResults = append(ScanResults, devScanResults)
-		devCount++
-	}
-
-	if len(ScanResults) == 0 {
-		log.Debugf("libfabric found records matching provider \"%s\" but there were no valid system devices that matched.", provider)
-	}
-	return ScanResults, nil
-}
-
-// GetDeviceDomain returns the domain name of the device, based on the connection
-// made between the device info and the fabric scan. Note that the domain name may
-// be identical to the device name if the provider does not support domains.
-func GetDeviceDomain(ctx context.Context, provider, device string) (string, error) {
-	results, err := ScanFabric(ctx, provider)
-	if err != nil {
-		return "", err
-	}
-
-	for _, res := range results {
-		if res.DeviceName == device {
-			return res.Domain, nil
-		}
-	}
-
-	return "", errors.Errorf("device %s not found in fabric", device)
-}
-
-// GetDeviceClass determines the device type according to what's stored in the filesystem
-// Returns an integer value corresponding to its ARP protocol hardware identifier
-// found here: https://elixir.free-electrons.com/linux/v4.0/source/include/uapi/linux/if_arp.h#L29
-func GetDeviceClass(netdev string) (uint32, error) {
-	devClass, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%s/type", netdev))
-	if err != nil {
-		return 0, err
-	}
-
-	res, err := strconv.Atoi(strings.TrimSpace(string(devClass)))
-	return uint32(res), err
-}
-
-// Convert a network device class ID to a string identifier
-func DevClassName(class uint32) string {
-	switch class {
-	case Netrom:
-		return "NETROM"
-	case Ether:
-		return "ETHER"
-	case Eether:
-		return "EETHER"
-	case Ax25:
-		return "AX25"
-	case Pronet:
-		return "PRONET"
-	case Chaos:
-		return "CHAOS"
-	case IEEE802:
-		return "IEEE802"
-	case Arcnet:
-		return "ARCNET"
-	case Appletlk:
-		return "APPLETLK"
-	case Dlci:
-		return "DLCI"
-	case Atm:
-		return "ATM"
-	case Metricom:
-		return "METRICOM"
-	case IEEE1394:
-		return "IEEE1394"
-	case Eui64:
-		return "EUI64"
-	case Infiniband:
-		return "INFINIBAND"
-	case Loopback:
-		return "LOOPBACK"
-	default:
-		return "UNKNOWN"
-	}
 }
