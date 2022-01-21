@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -410,7 +410,6 @@ class TestPool(TestDaosApiBase):
         Sets the self.info attribute.
         """
         if self.pool:
-            self.log.info("Connecting to pool %s", self.identifier)
             self.connect()
             self.log.info("Querying pool %s", self.identifier)
             self._call_method(self.pool.pool_query, {})
