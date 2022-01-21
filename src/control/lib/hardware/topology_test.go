@@ -176,15 +176,18 @@ func TestHardware_Topology_AddDevice(t *testing.T) {
 		numaNode  uint
 		device    *PCIDevice
 		expResult *Topology
+		expErr    error
 	}{
 		"nil topology": {
 			device: &PCIDevice{
 				Name:    "test",
 				PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
 			},
+			expErr: errors.New("nil"),
 		},
 		"nil input": {
 			topo:      &Topology{},
+			expErr:    errors.New("nil"),
 			expResult: &Topology{},
 		},
 		"add to empty": {
@@ -238,8 +241,9 @@ func TestHardware_Topology_AddDevice(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tc.topo.AddDevice(tc.numaNode, tc.device)
+			err := tc.topo.AddDevice(tc.numaNode, tc.device)
 
+			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.topo); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -287,13 +291,16 @@ func TestHardware_Topology_Merge(t *testing.T) {
 		topo      *Topology
 		input     *Topology
 		expResult *Topology
+		expErr    error
 	}{
 		"nil base": {
-			input: &Topology{},
+			input:  &Topology{},
+			expErr: errors.New("nil"),
 		},
 		"nil input": {
 			topo:      &Topology{},
 			expResult: &Topology{},
+			expErr:    errors.New("nil"),
 		},
 		"all empties": {
 			topo:      &Topology{},
@@ -310,6 +317,51 @@ func TestHardware_Topology_Merge(t *testing.T) {
 			expResult: &Topology{
 				NUMANodes: NodeMap{
 					testNuma(0).ID: testNuma(0),
+				},
+			},
+		},
+		"add to existing NUMA node": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					1: MockNUMANode(1, 4).
+						WithCPUCores([]CPUCore{}).
+						WithPCIBuses([]*PCIBus{
+							{
+								LowAddress:  *MustNewPCIAddress("0000:00:00.0"),
+								HighAddress: *MustNewPCIAddress("0000:05:00.0"),
+							},
+						}),
+				},
+			},
+			input: &Topology{
+				NUMANodes: NodeMap{
+					1: MockNUMANode(1, 0).
+						WithDevices([]*PCIDevice{
+							{
+								Name:      "test0",
+								PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
+								LinkSpeed: 60,
+							},
+						}),
+				},
+			},
+			expResult: &Topology{
+				NUMANodes: NodeMap{
+					1: MockNUMANode(1, 4).
+						WithDevices([]*PCIDevice{
+							{
+								Name:      "test0",
+								PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
+								LinkSpeed: 60,
+							},
+						}).
+						WithCPUCores([]CPUCore{}).
+						WithPCIBuses([]*PCIBus{
+							{
+								LowAddress:  *MustNewPCIAddress("0000:00:00.0"),
+								HighAddress: *MustNewPCIAddress("0000:05:00.0"),
+							},
+						}),
 				},
 			},
 		},
@@ -441,8 +493,9 @@ func TestHardware_Topology_Merge(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tc.topo.Merge(tc.input)
+			err := tc.topo.Merge(tc.input)
 
+			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.topo, common.CmpOptIgnoreFieldAnyType("NUMANode")); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}

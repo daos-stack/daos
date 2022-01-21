@@ -105,8 +105,8 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 
 		numaID, err := s.getNUMANode(path)
 		if err != nil {
-			s.log.Debug(err.Error())
-			return nil
+			s.log.Debugf("using default NUMA node, unable to get: %s", err.Error())
+			numaID = 0
 		}
 
 		pciAddr, err := s.getPCIAddress(path)
@@ -118,9 +118,7 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 
 		s.log.Debugf("adding device found at %q (type %s, NUMA node %d)", path, dev.Type, numaID)
 
-		topo.AddDevice(uint(numaID), dev)
-
-		return nil
+		return topo.AddDevice(uint(numaID), dev)
 	})
 
 	if err == io.EOF || err == nil {
@@ -173,7 +171,7 @@ func (s *Provider) getNUMANode(path string) (uint, error) {
 	numaPath := filepath.Join(path, "device", "numa_node")
 	numaBytes, err := ioutil.ReadFile(numaPath)
 	if err != nil {
-		return 0, errors.Wrapf(err, "couldn't read %q", numaPath)
+		return 0, err
 	}
 	numaStr := strings.TrimSpace(string(numaBytes))
 
@@ -191,10 +189,15 @@ func (s *Provider) getPCIAddress(path string) (*hardware.PCIAddress, error) {
 		return nil, errors.Wrap(err, "couldn't get PCI device")
 	}
 
-	pciAddr, err := hardware.NewPCIAddress(filepath.Base(pciPath))
-	if err != nil {
-		return nil, errors.Wrapf(err, "%q not parsed as PCI address", pciAddr)
+	var pciAddr *hardware.PCIAddress
+	for pciPath != s.sysPath("devices") {
+		pciAddr, err = hardware.NewPCIAddress(filepath.Base(pciPath))
+		if err == nil {
+			return pciAddr, nil
+		}
+
+		pciPath = filepath.Dir(pciPath)
 	}
 
-	return pciAddr, nil
+	return nil, errors.Errorf("unable to parse PCI address from %q", path)
 }

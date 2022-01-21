@@ -368,8 +368,19 @@ func TestProvider_GetTopology(t *testing.T) {
 				path := setupPCIDev(t, root, validPCIAddr, "net", "net0")
 				setupClassLink(t, root, "net", path)
 			},
-			p:         &Provider{},
-			expResult: &hardware.Topology{},
+			p: &Provider{},
+			expResult: &hardware.Topology{
+				NUMANodes: hardware.NodeMap{
+					0: hardware.MockNUMANode(0, 0).
+						WithDevices([]*hardware.PCIDevice{
+							{
+								Name:    "net0",
+								Type:    hardware.DeviceTypeNetInterface,
+								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+							},
+						}),
+				},
+			},
 		},
 		"no PCI device link": {
 			setup: func(t *testing.T, root string) {
@@ -384,14 +395,54 @@ func TestProvider_GetTopology(t *testing.T) {
 			p:         &Provider{},
 			expResult: &hardware.Topology{},
 		},
-		"device link not valid PCI addr": {
+		"no PCI addr": {
 			setup: func(t *testing.T, root string) {
-				path := setupPCIDev(t, root, "junk", "net", "net0")
+				class := "net"
+				dev := "net0"
+				pciPath := filepath.Join(root, "devices", "pci0000:00", "junk")
+				path := filepath.Join(pciPath, class, dev)
+				if err := os.MkdirAll(path, 0755); err != nil {
+					t.Fatal(err)
+				}
+
+				if err := os.Symlink(pciPath, filepath.Join(path, "device")); err != nil {
+					t.Fatal(err)
+				}
 				setupNUMANode(t, path, "2\n")
 				setupClassLink(t, root, "net", path)
 			},
 			p:         &Provider{},
 			expResult: &hardware.Topology{},
+		},
+		"device is virtio below PCI": {
+			setup: func(t *testing.T, root string) {
+				class := "net"
+				dev := "net0"
+				pciPath := getPCIPath(root, validPCIAddr)
+				virtioPath := filepath.Join(pciPath, "virtio0")
+				path := filepath.Join(virtioPath, class, dev)
+				if err := os.MkdirAll(path, 0755); err != nil {
+					t.Fatal(err)
+				}
+
+				if err := os.Symlink(virtioPath, filepath.Join(path, "device")); err != nil {
+					t.Fatal(err)
+				}
+				setupClassLink(t, root, "net", path)
+			},
+			p: &Provider{},
+			expResult: &hardware.Topology{
+				NUMANodes: hardware.NodeMap{
+					0: hardware.MockNUMANode(0, 0).
+						WithDevices([]*hardware.PCIDevice{
+							{
+								Name:    "net0",
+								Type:    hardware.DeviceTypeNetInterface,
+								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+							},
+						}),
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

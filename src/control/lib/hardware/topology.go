@@ -68,9 +68,13 @@ func (t *Topology) NumCoresPerNUMA() int {
 }
 
 // AddDevice adds a device to the topology.
-func (t *Topology) AddDevice(numaID uint, device *PCIDevice) {
-	if t == nil || device == nil {
-		return
+func (t *Topology) AddDevice(numaID uint, device *PCIDevice) error {
+	if t == nil {
+		return errors.New("nil Topology")
+	}
+
+	if device == nil {
+		return errors.New("nil PCIDevice")
 	}
 
 	if t.NUMANodes == nil {
@@ -88,12 +92,18 @@ func (t *Topology) AddDevice(numaID uint, device *PCIDevice) {
 	}
 
 	numa.AddDevice(device)
+
+	return nil
 }
 
 // Merge updates the contents of the initial topology from the incoming topology.
-func (t *Topology) Merge(newTopo *Topology) {
-	if t == nil || newTopo == nil {
-		return
+func (t *Topology) Merge(newTopo *Topology) error {
+	if t == nil {
+		return errors.New("nil original Topology")
+	}
+
+	if newTopo == nil {
+		return errors.New("nil new Topology")
 	}
 
 	for numaID, node := range newTopo.NUMANodes {
@@ -136,6 +146,10 @@ func (t *Topology) Merge(newTopo *Topology) {
 			}
 		}
 
+		if current.PCIDevices == nil {
+			current.PCIDevices = make(PCIDevices)
+		}
+
 		for key, newDevs := range node.PCIDevices {
 			oldDevs := current.PCIDevices[key]
 			for _, newDev := range newDevs {
@@ -155,11 +169,14 @@ func (t *Topology) Merge(newTopo *Topology) {
 					}
 				}
 				if !devExists {
-					current.PCIDevices.Add(newDev)
+					if err := current.PCIDevices.Add(newDev); err != nil {
+						return err
+					}
 				}
 			}
 		}
 	}
+	return nil
 }
 
 type (
