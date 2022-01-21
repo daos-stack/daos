@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"syscall"
 	"testing"
 	"time"
@@ -938,7 +939,6 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         -1,
 				TargetUser:            username,
 				EnableVMD:             false,
 				DisableCleanHugePages: true,
@@ -1216,6 +1216,21 @@ func TestBackend_Prepare(t *testing.T) {
 				},
 			},
 		},
+		"prepare setup; -1 huge pages": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount: -1,
+				TargetUser:    username,
+			},
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+					},
+				},
+			},
+		},
 		"prepare setup; huge page clean enabled; clean fail": {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
@@ -1270,8 +1285,19 @@ func TestBackend_Prepare(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expScriptCalls, calls); diff != "" {
-				t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
+			if len(*tc.expScriptCalls) != len(*calls) {
+				t.Fatalf("\nunmatched number of calls (-want, +got):\n%s\n",
+					cmp.Diff(tc.expScriptCalls, calls))
+			}
+			for i, expected := range *tc.expScriptCalls {
+				// env list doesn't need to be ordered
+				sort.Strings(expected.Env)
+				actual := (*calls)[i]
+				sort.Strings(actual.Env)
+
+				if diff := cmp.Diff(expected, actual); diff != "" {
+					t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
+				}
 			}
 
 		})
