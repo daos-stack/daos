@@ -229,7 +229,7 @@ Java_io_daos_DaosClient_daosGetContAttrs(JNIEnv *env,
 	memcpy(&coh, &contHandle, sizeof(coh));
 	rc = daos_cont_get_attr(coh, n,
 				(const char * const *)names,
-	 			(void * const *)values,
+				(void * const *)values,
 				sizes, NULL);
 	if (rc) {
 		throw_base(env, "Failed to get attributes from container", rc, 0, 0);
