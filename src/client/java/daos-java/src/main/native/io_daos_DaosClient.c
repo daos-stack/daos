@@ -549,14 +549,7 @@ JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosFinalize(JNIEnv *env,
 				     jclass clientClass)
 {
-	int rc = daos_eq_lib_fini();
-
-	if (rc) {
-		printf("Failed to finalize EQ lib rc: %d\n", rc);
-		printf("error msg: %.256s\n", d_errstr(rc));
-	}
-
-	rc = daos_fini();
+	int rc = daos_fini();
 	if (rc) {
 		printf("Failed to finalize daos rc: %d\n", rc);
 		printf("error msg: %.256s\n", d_errstr(rc));
