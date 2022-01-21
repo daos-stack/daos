@@ -13,7 +13,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@skip-centos-7") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -889,7 +888,6 @@ pipeline {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                parallel_build: true,
                                                                 deps_build: true)
                             args '--tmpfs /mnt/daos_0'
                         }

@@ -6,8 +6,8 @@
 #
 
 # Pull base image
-#ARG BASE_DISTRO=centos:8
-FROM centos:8
+ARG BASE_DISTRO=centos:8
+FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -21,8 +21,8 @@ ARG CB0
 # data for installing those keys.  Then the epel-release
 # package must be installed and the GPG key it provides must be
 # installed.
-ARG X_REPO_URL
-ARG X_REPO_DISTRO
+ARG REPO_URL
+ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
       rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
@@ -52,7 +52,7 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
     dnf clean all
 
 # Currently the appstream REPO can not be part of a repo group
-ARG X_REPO_APSTREAM
+ARG REPO_APSTREAM
 RUN if [ -n "$REPO_APPSTREAM" ]; then                           \
       rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_APPSTREAM}/";                  \
@@ -69,7 +69,7 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
-ARG X_REPO_DAOS
+ARG REPO_DAOS
 RUN if [ -n "$REPO_DAOS" ]; then                                \
       MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \
@@ -82,8 +82,8 @@ repo_gpgcheck=0\n\
 gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
     fi
 
-ARG X_JENKINS_URL
-ARG X_REPOS
+ARG JENKINS_URL
+ARG REPOS
 RUN for repo in $REPOS; do                                                \
         branch="master";                                                  \
         build_number="lastSuccessfulBuild";                               \
@@ -238,11 +238,6 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
  -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
 
 WORKDIR /home/daos
-
-USER root:root
-RUN dnf install sudo
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
-USER daos_server:daos_server
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
