@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
 const (
@@ -54,18 +54,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("Local fabric interface caching has been disabled\n")
 	}
 
-	netCtx, err := netdetect.Init(context.Background())
-	defer netdetect.CleanUp(netCtx)
-	if err != nil {
-		cmd.log.Errorf("Unable to initialize netdetect services")
-		return err
-	}
-
-	numaAware := netdetect.HasNUMA(netCtx)
-	if !numaAware {
-		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
-	}
-
 	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 
@@ -84,8 +72,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		ctlInvoker: cmd.ctlInvoker,
 		attachInfo: newAttachInfoCache(cmd.log, aicEnabled),
 		fabricInfo: fabricCache,
-		numaAware:  numaAware,
-		netCtx:     netCtx,
+		numaGetter: hwprov.DefaultProcessNUMAProvider(cmd.log),
 		monitor:    procmon,
 	})
 

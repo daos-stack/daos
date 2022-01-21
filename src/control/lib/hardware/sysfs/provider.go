@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -203,7 +203,7 @@ func (s *Provider) getPCIAddress(path string) (*hardware.PCIAddress, error) {
 	return nil, errors.Errorf("unable to parse PCI address from %q", path)
 }
 
-// GetFabricInterfaces harvests the CXI fabric interfaces from sysfs.
+// GetFabricInterfaces harvests fabric interfaces from sysfs.
 func (s *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInterfaceSet, error) {
 	if s == nil {
 		return nil, errors.New("sysfs provider is nil")

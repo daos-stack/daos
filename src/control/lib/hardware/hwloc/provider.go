@@ -336,3 +336,41 @@ func osDevTypeToHardwareDevType(osType int) hardware.DeviceType {
 
 	return hardware.DeviceTypeUnknown
 }
+
+// GetNUMANodeIDForPID fetches the NUMA node ID associated with a given process ID.
+func (p *Provider) GetNUMANodeIDForPID(ctx context.Context, pid int32) (uint, error) {
+	topo, cleanupTopo, err := p.initTopology()
+	if err != nil {
+		return 0, errors.Wrap(err, "initializing topology")
+	}
+	defer cleanupTopo()
+
+	// If there are no NUMA nodes detected, there's nothing to do here.
+	currentNode, err := topo.getNextObjByType(objTypeNUMANode, nil)
+	if err != nil {
+		return 0, hardware.ErrNoNUMANodes
+	}
+
+	cpuSet, cleanupCPUSet, err := topo.getProcessCPUSet(pid, 0)
+	if err != nil {
+		return 0, errors.Wrapf(err, "getting CPU set for PID %d", pid)
+	}
+	defer cleanupCPUSet()
+
+	nodeSet, cleanupNodeSet, err := cpuSet.toNodeSet()
+	if err != nil {
+		return 0, errors.Wrapf(err, "converting PID %d CPU set to NUMA node set", pid)
+	}
+	defer cleanupNodeSet()
+
+	for err == nil {
+		if nodeSet.intersects(currentNode.nodeSet()) ||
+			cpuSet.intersects(currentNode.cpuSet()) {
+			return currentNode.osIndex(), nil
+		}
+
+		currentNode, err = topo.getNextObjByType(objTypeNUMANode, nil)
+	}
+
+	return 0, errors.Errorf("no NUMA node could be associated with PID %d", pid)
+}
