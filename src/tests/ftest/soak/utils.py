@@ -177,7 +177,8 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
                 slurm_utils.srun(NodeSet.fromlist([host]), command, self.srun_params)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host))
+                    "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(
+                        host)) from error
             command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(shared_dir_tmp, dest_dir)
             try:
                 run_command(command, timeout=30)
@@ -191,7 +192,8 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params)
         except DaosTestError as error:
             raise SoakTestError(
-                "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host_list))
+                "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(
+                    host_list)) from error
         # copy the local logs and the logs in the shared dir to avocado dir
         for directory in [source_dir, shared_dir]:
             command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(directory, dest_dir)
@@ -233,7 +235,7 @@ def write_logfile(data, name, destination):
             log_file.write(str(data))
 
 
-def run_event_check(self, since, until, log=False):
+def run_event_check(self, since, until):
     """Run a check on specific events in journalctl.
 
     Args:
@@ -251,8 +253,8 @@ def run_event_check(self, since, until, log=False):
     # check events on all server nodes
     hosts = list(set(self.hostlist_servers))
     if events:
-        for type in ["kernel", "daos_server"]:
-            for output in get_journalctl(self, hosts, since, until, type):
+        for journalctl_type in ["kernel", "daos_server"]:
+            for output in get_journalctl(self, hosts, since, until, journalctl_type):
                 for event in events:
                     lines = output["data"].splitlines()
                     for line in lines:
@@ -266,14 +268,14 @@ def run_event_check(self, since, until, log=False):
     return events_found
 
 
-def get_journalctl(self, hosts, since, until, type, logging=False):
+def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
     """Run the journalctl on daos servers.
 
     Args:
         self (obj): soak obj
         since (str): start time
         until (str): end time
-        type (str): the -t param for journalctl
+        journalctl_type (str): the -t param for journalctl
         log (bool):  If true; write the events to a logfile
 
     Returns:
@@ -283,12 +285,11 @@ def get_journalctl(self, hosts, since, until, type, logging=False):
 
     """
     command = "sudo /usr/bin/journalctl --system -t {} --since=\"{}\" --until=\"{}\"".format(
-        type, since, until)
+        journalctl_type, since, until)
     err = "Error gathering system log events"
     results = get_host_data(hosts, command, "journalctl", err)
-    name = "journalctl_{}.log".format(type)
+    name = "journalctl_{}.log".format(journalctl_type)
     destination = self.outputsoak_dir
-    self.log
     if logging:
         for result in results:
             host = result["hosts"]

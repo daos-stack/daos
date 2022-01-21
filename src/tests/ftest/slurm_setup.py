@@ -12,7 +12,6 @@ import logging
 import re
 import socket
 import sys
-from time import sleep
 from ClusterShell.NodeSet import NodeSet
 from util.general_utils import pcmd, run_task
 from avocado.utils.distro import detect

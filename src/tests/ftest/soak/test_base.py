@@ -5,7 +5,6 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import logging
 import os
 import time
 from datetime import datetime, timedelta
@@ -66,6 +65,7 @@ class SoakTestBase(TestWithServers):
         self.check_errors = None
         self.initial_resv_file = None
         self.resv_cont = None
+        self.mpi_module = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -167,8 +167,8 @@ class SoakTestBase(TestWithServers):
         hosts = list(set(self.hostlist_servers))
         since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
         until = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.end_time))
-        for type in ["kernel", "daos_server"]:
-            get_journalctl(self, hosts, since, until, type, logging=True)
+        for journalctl_type in ["kernel", "daos_server"]:
+            get_journalctl(self, hosts, since, until, journalctl_type, logging=True)
         # Gather client daos logs with resource manager
         get_remote_dir(
             self, self.base_test_dir, self.outputsoak_dir, self.hostlist_clients,
