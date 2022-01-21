@@ -10,7 +10,7 @@ set -x
 
 . utils/sl/setup_local.sh
 
-sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_admin.sh
+./utils/setup_daos_admin.sh
 
 TMP_DIR=$(mktemp -d)
 
@@ -21,7 +21,7 @@ pushd "$TMP_DIR"
 
 set +e
 
-sudo ./node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
+./node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
 
 RC=$?
 set -e

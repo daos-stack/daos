@@ -888,8 +888,9 @@ pipeline {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
                                                                 deps_build: true)
-                            args '--tmpfs /mnt/daos_0'
+                            args '--tmpfs /mnt/daos_0 --user root:root'
                         }
                     }
                     steps {
