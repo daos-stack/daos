@@ -53,3 +53,13 @@ message NvmeRebindReq {
 message NvmeRebindResp {
 	ResponseState state = 1;
 }
+
+message NvmeAddDeviceReq {
+	string pci_addr = 1;		// an NVMe controller PCI address
+	uint32 engine_index = 2;
+	uint32 bdev_tier_index = 3;	// storage config bdev tier to add to
+}
+
+message NvmeAddDeviceResp {
+	ResponseState state = 1;
+}

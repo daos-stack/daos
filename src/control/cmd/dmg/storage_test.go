@@ -21,6 +21,8 @@ func TestStorageCommands(t *testing.T) {
 	systemQueryReq := &control.SystemQueryReq{FailOnUnavailable: true}
 	nvmeRebindReq := &control.NvmeRebindReq{PCIAddr: "0000:80:00.0"}
 	nvmeRebindReq.SetHostList([]string{"foo2.com"})
+	nvmeAddDeviceReq := &control.NvmeAddDeviceReq{PCIAddr: "0000:80:00.0", EngineIndex: 1}
+	nvmeAddDeviceReq.SetHostList([]string{"foo2.com"})
 
 	runCmdTests(t, []cmdTest{
 		{
@@ -121,6 +123,42 @@ func TestStorageCommands(t *testing.T) {
 			"Rebind NVMe",
 			"storage nvme-rebind -l foo2.com --pci-address 0000:80:00.0",
 			printRequest(t, nvmeRebindReq),
+			nil,
+		},
+		{
+			"Add NVMe device; no PCI address",
+			"storage nvme-add-device",
+			"",
+			errors.New("required flag"),
+		},
+		{
+			"Add NVMe device; 0 hosts in hostlist",
+			"storage nvme-add-device --pci-address 0000:80:00.0 --engine-index 0",
+			"",
+			errors.New("expects a single host"),
+		},
+		{
+			"Add NVMe device; 2 hosts in hostlist",
+			"storage nvme-add-device -l foo[1,2].com --pci-address 0000:80:00.0 --engine-index 0",
+			"",
+			errors.New("expects a single host"),
+		},
+		{
+			"Add NVMe device; no engine index",
+			"storage nvme-add-device -l foo2.com --pci-address 0000:80:00.0",
+			"",
+			errors.New("engine-index"),
+		},
+		{
+			"Add NVMe device; short opts",
+			"storage nvme-add-device -l foo2.com -a 0000:80:00.0 -e 1",
+			printRequest(t, nvmeAddDeviceReq),
+			nil,
+		},
+		{
+			"Add NVMe device; long opts",
+			"storage nvme-add-device --host-list foo2.com --pci-address 0000:80:00.0 --engine-index 1",
+			printRequest(t, nvmeAddDeviceReq),
 			nil,
 		},
 		{

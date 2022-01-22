@@ -19,13 +19,14 @@ import (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Scan       storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format     storageFormatCmd   `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query      storageQueryCmd    `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	NvmeRebind nvmeRebindCmd      `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
-	Set        setFaultyCmd       `command:"set" description:"Manually set the device state."`
-	Replace    storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
-	Identify   storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
+	Scan          storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format        storageFormatCmd   `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query         storageQueryCmd    `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	NvmeRebind    nvmeRebindCmd      `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
+	NvmeAddDevice nvmeAddDeviceCmd   `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
+	Set           setFaultyCmd       `command:"set" description:"Manually set the device state."`
+	Replace       storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
+	Identify      storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -182,6 +183,51 @@ func (cmd *nvmeRebindCmd) Execute(args []string) error {
 	req.SetHostList(cmd.hostlist)
 
 	resp, err := control.StorageNvmeRebind(ctx, cmd.ctlInvoker, req)
+	if err != nil {
+		return err
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, resp.Errors())
+	}
+
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.log.Error(outErr.String())
+	} else {
+		cmd.log.Info("Command completed successfully")
+	}
+
+	return resp.Errors()
+}
+
+// nvmeAddDeviceCmd is the struct representing the nvme-add-device storage subcommand.
+type nvmeAddDeviceCmd struct {
+	logCmd
+	ctlInvokerCmd
+	hostListCmd
+	jsonOutputCmd
+	PCIAddr     string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to add."`
+	EngineIndex uint32 `short:"e" long:"engine-index" required:"1" description:"Index of DAOS engine to add NVMe device to."`
+}
+
+// Execute is run when nvmeAddDeviceCmd activates.
+//
+// Add recently inserted NVMe SSD to a running engine by updating relevant NVMe config file.
+func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
+	ctx := context.Background()
+
+	if len(cmd.hostlist) != 1 {
+		return errors.New("command expects a single host in hostlist")
+	}
+
+	req := &control.NvmeAddDeviceReq{PCIAddr: cmd.PCIAddr, EngineIndex: cmd.EngineIndex}
+	req.SetHostList(cmd.hostlist)
+
+	resp, err := control.StorageNvmeAddDevice(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}

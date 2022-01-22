@@ -268,7 +268,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	return resp, nil
 }
 
-// StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
+// StorageNvmeRebind adds a newly added SSD to a DAOS engine's NVMe config to allow it to be used.
 func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
 	c.log.Debugf("received StorageNvmeRebind RPC %v", req)
 
@@ -303,6 +303,62 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 	}
 
 	c.log.Debug("responding to StorageNvmeRebind RPC")
+
+	return resp, nil
+}
+
+// StorageNvmeAddDevice rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
+func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {
+	c.log.Debugf("received StorageNvmeAddDevice RPC %v", req)
+
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	instances := c.harness.Instances()
+	engineIndex := req.GetEngineIndex()
+	if len(instances) <= int(engineIndex) {
+		return nil, errors.Errorf("engine with index %d not found", engineIndex)
+	}
+	defer func() {
+		err = errors.Wrapf(err, "engine %d", engineIndex)
+	}()
+
+	engine := instances[engineIndex]
+	ei, ok := engine.(*EngineInstance)
+	if !ok {
+		return nil, errors.New("not an EngineInstance")
+	}
+
+	bdevCfgs := ei.storage.GetBdevConfigs()
+	if len(bdevCfgs) == 0 {
+		return nil, errors.New("no bdev storage tiers in config")
+	}
+	tierIndex := req.GetBdevTierIndex()
+	if len(bdevCfgs) <= int(tierIndex) {
+		return nil, errors.Errorf("bdev tier with index %d not found", tierIndex)
+	}
+	tierCfg := bdevCfgs[tierIndex]
+	c.log.Debugf("bdev list to be updated: %+v", tierCfg.Bdev.DeviceList)
+	if err := tierCfg.Bdev.DeviceList.AddStrings(req.PciAddr); err != nil {
+		return nil, errors.Errorf("updating bdev list for tier %d", tierIndex)
+	}
+	c.log.Debugf("updated bdev list: %+v", tierCfg.Bdev.DeviceList)
+
+	resp = new(ctlpb.NvmeAddDeviceResp)
+	if err := ei.StorageWriteNvmeConfig(ctx); err != nil {
+		err = errors.Wrapf(err, "write nvme config for engine %d", engineIndex)
+		c.log.Error(err.Error())
+
+		resp.State = &ctlpb.ResponseState{
+			Error:  err.Error(),
+			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+		}
+
+		return resp, nil // report write conf call result in response
+	}
+
+	c.log.Debug("responding to StorageNvmeAddDevice RPC")
 
 	return resp, nil
 }
