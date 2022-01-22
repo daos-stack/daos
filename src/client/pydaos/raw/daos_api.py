@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1662,12 +1662,12 @@ class DaosContainer():
                                             self))
             thread.start()
 
-    def query(self, coh=None, daos_property=None, cb_func=None):
+    def query(self, coh=None, cont_prop=None, cb_func=None):
         """Query container information.
 
         Args:
             coh (ctypes.c_uint64, optional): Container handle. Defaults to None.
-            daos_property (DaosContProperties, optional): Empty data structure that
+            cont_prop (daos_cref.DaosProperty, optional): Empty data structure that
                 stores the property values. The values are set during create(). The
                 configuration of the data structure depends on the property values set.
                 See create() for more details. Defaults to None.
@@ -1685,9 +1685,9 @@ class DaosContainer():
         func = self.context.get_function('query-cont')
 
         if cb_func is None:
-            if daos_property:
+            if cont_prop:
                 ret = func(
-                    self.coh, ctypes.byref(self.info), ctypes.byref(daos_property), None)
+                    self.coh, ctypes.byref(self.info), ctypes.byref(cont_prop), None)
             else:
                 ret = func(self.coh, ctypes.byref(self.info), None, None)
             if ret != 0:

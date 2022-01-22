@@ -83,19 +83,19 @@ class QueryPropertiesTest(TestWithServers):
         # Element 2: Checksum server verify. Since we updated the srv_verify to True, we
         # expect the value to be 1.
         # Element 3: Checksum chunk size. In default we expect it to be 16384.
-        daos_property = daos_cref.DaosProperty(4)
+        cont_prop = daos_cref.DaosProperty(4)
 
-        daos_property.dpp_entries[0].dpe_type = ctypes.c_uint32(
+        cont_prop.dpp_entries[0].dpe_type = ctypes.c_uint32(
             DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
-        daos_property.dpp_entries[1].dpe_type = ctypes.c_uint32(
+        cont_prop.dpp_entries[1].dpe_type = ctypes.c_uint32(
             DaosContPropEnum.DAOS_PROP_CO_CSUM.value)
-        daos_property.dpp_entries[2].dpe_type = ctypes.c_uint32(
+        cont_prop.dpp_entries[2].dpe_type = ctypes.c_uint32(
             DaosContPropEnum.DAOS_PROP_CO_CSUM_SERVER_VERIFY.value)
-        daos_property.dpp_entries[3].dpe_type = ctypes.c_uint32(
+        cont_prop.dpp_entries[3].dpe_type = ctypes.c_uint32(
             DaosContPropEnum.DAOS_PROP_CO_CSUM_CHUNK_SIZE.value)
 
         try:
-            cont_info = self.container.container.query(daos_property=daos_property)
+            cont_info = self.container.container.query(cont_prop=cont_prop)
         except DaosApiError as error:
             self.log.info("Container query error! %s", error)
 
@@ -108,32 +108,32 @@ class QueryPropertiesTest(TestWithServers):
                        self.container.container.get_uuid_str(), uuid))
             errors.append(msg)
 
-        # Verify values set in daos_property.
+        # Verify values set in cont_prop.
         # Verify layout type.
-        layout_type = daos_property.dpp_entries[0].dpe_val
-        if layout_type == DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value:
-            self.log.info("Layout type is POSIX as expected.")
-        else:
-            self.log.info("Layout type is NOT POSIX!")
-            errors.append("Layout type is not POSIX! %s", layout_type)
+        actual_layout_type = cont_prop.dpp_entries[0].dpe_val
+        expected_layout_type = DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value
+        if actual_layout_type != expected_layout_type:
+            msg = "Layout type is not POSIX! Expected = {}; Actual = {}".format(
+                expected_layout_type, actual_layout_type)
+            errors.append(msg)
 
         # Verify checksum.
-        if daos_property.dpp_entries[1].dpe_val != 1:
+        if cont_prop.dpp_entries[1].dpe_val != 1:
             msg = "Unexpected checksum from query! Expected = 1; Actual = {}".format(
-                daos_property.dpp_entries[1].dpe_val)
+                cont_prop.dpp_entries[1].dpe_val)
             errors.append(msg)
 
         # Verify server verify.
-        if daos_property.dpp_entries[2].dpe_val != 1:
+        if cont_prop.dpp_entries[2].dpe_val != 1:
             msg = "Unexpected server verify from query! Expected = 1; Actual = {}".format(
-                daos_property.dpp_entries[2].dpe_val)
+                cont_prop.dpp_entries[2].dpe_val)
             errors.append(msg)
 
         # Verify checksum chunk size.
-        if daos_property.dpp_entries[3].dpe_val != 16384:
+        if cont_prop.dpp_entries[3].dpe_val != 16384:
             msg = ("Unexpected checksum chunk size from query! "
                    "Expected = 16384; Actual = {}".format(
-                       daos_property.dpp_entries[3].dpe_val))
+                       cont_prop.dpp_entries[3].dpe_val))
             errors.append(msg)
 
         if errors:
