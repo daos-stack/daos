@@ -47,11 +47,15 @@ class QueryPropertiesTest(TestWithServers):
         # Prepare DaosContProperties. Update some items from default. These are
         # properties that determine the values, not the actual values. The actual values
         # are set in DaosContainer.create() based on these configurations.
+        chksum_type_conf = self.params.get("configured", "/run/properties/chksum_type/*")
+        srv_verify_conf = self.params.get("configured", "/run/properties/srv_verify/*")
+        chunk_size_conf = self.params.get("configured", "/run/properties/chunk_size/*")
+
         cont_prop_type = bytes("POSIX", "utf-8") # Updated
         enable_chksum = True # Updated
-        srv_verify = True # Updated
-        chksum_type = ctypes.c_uint64(100) # Default
-        chunk_size = ctypes.c_uint64(0) # Default
+        srv_verify = srv_verify_conf # Updated
+        chksum_type = ctypes.c_uint64(chksum_type_conf) # Default
+        chunk_size = ctypes.c_uint64(chunk_size_conf) # Default
         con_in = [
             cont_prop_type,
             enable_chksum,
@@ -100,15 +104,18 @@ class QueryPropertiesTest(TestWithServers):
             self.log.info("Container query error! %s", error)
 
         # Sanity check that query isn't broken.
-        uuid = conversion.c_uuid_to_str(cont_info.ci_uuid)
-        self.log.info("UUID obtained from query = %s", uuid)
-        if uuid != self.container.container.get_uuid_str():
+        uuid_query = conversion.c_uuid_to_str(cont_info.ci_uuid)
+        uuid_create = self.container.container.get_uuid_str()
+        if uuid_query != uuid_create:
             msg = ("Container UUID obtained after create and after query don't match! "
-                   "Create: {}, Query: {}".format(
-                       self.container.container.get_uuid_str(), uuid))
+                   "Create: {}, Query: {}".format(uuid_create, uuid_query))
             errors.append(msg)
 
         # Verify values set in cont_prop.
+        chksum_type_exp = self.params.get("expected", "/run/properties/chksum_type/*")
+        srv_verify_exp = self.params.get("expected", "/run/properties/srv_verify/*")
+        chunk_size_exp = self.params.get("expected", "/run/properties/chunk_size/*")
+
         # Verify layout type.
         actual_layout_type = cont_prop.dpp_entries[0].dpe_val
         expected_layout_type = DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value
@@ -118,19 +125,19 @@ class QueryPropertiesTest(TestWithServers):
             errors.append(msg)
 
         # Verify checksum.
-        if cont_prop.dpp_entries[1].dpe_val != 1:
+        if cont_prop.dpp_entries[1].dpe_val != chksum_type_exp:
             msg = "Unexpected checksum from query! Expected = 1; Actual = {}".format(
                 cont_prop.dpp_entries[1].dpe_val)
             errors.append(msg)
 
         # Verify server verify.
-        if cont_prop.dpp_entries[2].dpe_val != 1:
+        if cont_prop.dpp_entries[2].dpe_val != srv_verify_exp:
             msg = "Unexpected server verify from query! Expected = 1; Actual = {}".format(
                 cont_prop.dpp_entries[2].dpe_val)
             errors.append(msg)
 
         # Verify checksum chunk size.
-        if cont_prop.dpp_entries[3].dpe_val != 16384:
+        if cont_prop.dpp_entries[3].dpe_val != chunk_size_exp:
             msg = ("Unexpected checksum chunk size from query! "
                    "Expected = 16384; Actual = {}".format(
                        cont_prop.dpp_entries[3].dpe_val))
