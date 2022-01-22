@@ -28,14 +28,16 @@ information.
 The DAOS documentation is available [online](https://daos-stack.github.io/).
 
 This includes:
-* [DAOS Architecture Overview](https://daos-stack.github.io/overview/terminology/)
-* [Administration Guide](https://daos-stack.github.io/admin/hardware/) to install, manage
+* [DAOS Architecture Overview](https://daos-stack.github.io/latest/overview/terminology/)
+* [Administration Guide](https://daos-stack.github.io/latest/admin/hardware/) to install, manage
   and monitor a DAOS system.
-* [User Guide](https://daos-stack.github.io/user/container/) documenting the
+* [User Guide](https://daos-stack.github.io/latest/user/container/) documenting the
   DAOS native API, as well as the integration with POSIX, MPI-IO, HDF5, and Spark.
-* [Release Notes](https://daos-stack.github.io/release/releaseNote_v1_0/)
-  for the 1.0 release.
-* [Developer documentation](https://daos-stack.github.io/dev/development/)
+* [Release Notes](https://daos-stack.github.io/v1.2/release/releaseNote_v1_0/)
+  for the 1.0 release;  
+  [Release Notes](https://daos-stack.github.io/latest/release/release_notes/)
+  for the latest stable release
+* [Developer documentation](https://daos-stack.github.io/latest/dev/development/)
   to learn more about DAOS internals and contribute to the development effort.
 
 More information can also be found on the [wiki](http://wiki.daos.io).
