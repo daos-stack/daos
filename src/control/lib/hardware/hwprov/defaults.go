@@ -32,6 +32,7 @@ func DefaultTopologyProvider(log logging.Logger) hardware.TopologyProvider {
 func DefaultFabricInterfaceProviders(log logging.Logger) []hardware.FabricInterfaceProvider {
 	return []hardware.FabricInterfaceProvider{
 		libfabric.NewProvider(log),
+		sysfs.NewProvider(log),
 	}
 }
 

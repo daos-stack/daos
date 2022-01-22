@@ -104,50 +104,51 @@ func writeTestFile(t *testing.T, path, contents string) {
 	}
 }
 
+func getPCIPath(root, pciAddr string) string {
+	return filepath.Join(root, "devices", "pci0000:00", "0000:00:01.0", pciAddr)
+}
+
+func setupPCIDev(t *testing.T, root, pciAddr, class, dev string) string {
+	t.Helper()
+
+	pciPath := getPCIPath(root, pciAddr)
+	path := filepath.Join(pciPath, class, dev)
+	if err := os.MkdirAll(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Symlink(pciPath, filepath.Join(path, "device")); err != nil {
+		t.Fatal(err)
+	}
+
+	return path
+}
+
+func setupClassLink(t *testing.T, root, class, devPath string) {
+	classPath := filepath.Join(root, "class", class)
+	if err := os.MkdirAll(classPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if devPath == "" {
+		return
+	}
+
+	if err := os.Symlink(devPath, filepath.Join(classPath, filepath.Base(devPath))); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Symlink(classPath, filepath.Join(devPath, "subsystem")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func setupNUMANode(t *testing.T, devPath, numaStr string) {
+	writeTestFile(t, filepath.Join(devPath, "device", "numa_node"), numaStr)
+}
+
 func TestProvider_GetTopology(t *testing.T) {
 	validPCIAddr := "0000:02:00.0"
-	getPCIPath := func(root, pciAddr string) string {
-		return filepath.Join(root, "devices", "pci0000:00", "0000:00:01.0", pciAddr)
-	}
-
-	setupPCIDev := func(t *testing.T, root, pciAddr, class, dev string) string {
-		t.Helper()
-
-		pciPath := getPCIPath(root, pciAddr)
-		path := filepath.Join(pciPath, class, dev)
-		if err := os.MkdirAll(path, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := os.Symlink(pciPath, filepath.Join(path, "device")); err != nil {
-			t.Fatal(err)
-		}
-
-		return path
-	}
-
-	setupClassLink := func(t *testing.T, root, class, devPath string) {
-		classPath := filepath.Join(root, "class", class)
-		if err := os.MkdirAll(classPath, 0755); err != nil {
-			t.Fatal(err)
-		}
-
-		if devPath == "" {
-			return
-		}
-
-		if err := os.Symlink(devPath, filepath.Join(classPath, filepath.Base(devPath))); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := os.Symlink(classPath, filepath.Join(devPath, "subsystem")); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	setupNUMANode := func(t *testing.T, devPath, numaStr string) {
-		writeTestFile(t, filepath.Join(devPath, "device", "numa_node"), numaStr)
-	}
 
 	for name, tc := range map[string]struct {
 		setup     func(*testing.T, string)
@@ -470,6 +471,75 @@ func TestProvider_GetTopology(t *testing.T) {
 			common.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Errorf("(-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
+	setupDefault := func(t *testing.T, root string) {
+		path0 := setupPCIDev(t, root, "0000:01:01.1", "cxi", "cxi0")
+		setupClassLink(t, root, "cxi", path0)
+
+		path1 := setupPCIDev(t, root, "0000:02:02.1", "cxi", "cxi1")
+		setupClassLink(t, root, "cxi", path1)
+	}
+
+	for name, tc := range map[string]struct {
+		p         *Provider
+		setup     func(*testing.T, string)
+		expErr    error
+		expResult *hardware.FabricInterfaceSet
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"no devices": {
+			p:         &Provider{},
+			setup:     func(*testing.T, string) {},
+			expResult: hardware.NewFabricInterfaceSet(),
+		},
+		"CXI devices": {
+			p: &Provider{},
+			expResult: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Name:      "cxi0",
+					Providers: common.NewStringSet("ofi+cxi"),
+				},
+				&hardware.FabricInterface{
+					Name:      "cxi1",
+					Providers: common.NewStringSet("ofi+cxi"),
+				},
+			),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			testDir, cleanupTestDir := common.CreateTestDir(t)
+			defer cleanupTestDir()
+
+			if tc.setup == nil {
+				tc.setup = setupDefault
+			}
+			tc.setup(t, testDir)
+
+			if tc.p != nil {
+				tc.p.log = log
+
+				// Mock out a fake sysfs in the testDir
+				tc.p.root = testDir
+			}
+
+			result, err := tc.p.GetFabricInterfaces(context.Background())
+
+			common.CmpErr(t, tc.expErr, err)
+
+			if diff := cmp.Diff(tc.expResult, result,
+				cmp.AllowUnexported(hardware.FabricInterfaceSet{}),
+			); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
 		})

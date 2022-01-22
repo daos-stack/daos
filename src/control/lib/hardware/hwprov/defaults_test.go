@@ -46,18 +46,20 @@ func TestHwprov_DefaultTopologyProvider(t *testing.T) {
 	}
 }
 
-func TestHwprov_DefaultFabricInterfaceProvider(t *testing.T) {
+func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
 	expResult := []hardware.FabricInterfaceProvider{
 		libfabric.NewProvider(log),
+		sysfs.NewProvider(log),
 	}
 
 	result := DefaultFabricInterfaceProviders(log)
 
 	if diff := cmp.Diff(expResult, result,
 		cmpopts.IgnoreUnexported(libfabric.Provider{}),
+		cmpopts.IgnoreUnexported(sysfs.Provider{}),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}

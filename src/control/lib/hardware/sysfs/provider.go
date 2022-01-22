@@ -17,6 +17,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -200,4 +201,43 @@ func (s *Provider) getPCIAddress(path string) (*hardware.PCIAddress, error) {
 	}
 
 	return nil, errors.Errorf("unable to parse PCI address from %q", path)
+}
+
+// GetFabricInterfaces harvests the CXI fabric interfaces from sysfs.
+func (s *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInterfaceSet, error) {
+	if s == nil {
+		return nil, errors.New("sysfs provider is nil")
+	}
+
+	cxiFIs, err := s.getCXIFabricInterfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	return hardware.NewFabricInterfaceSet(cxiFIs...), nil
+}
+
+func (s *Provider) getCXIFabricInterfaces() ([]*hardware.FabricInterface, error) {
+	cxiDevs, err := ioutil.ReadDir(s.sysPath("class", "cxi"))
+	if os.IsNotExist(err) {
+		s.log.Debugf("no cxi subsystem in sysfs")
+		return []*hardware.FabricInterface{}, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	if len(cxiDevs) == 0 {
+		s.log.Debugf("no cxi devices in sysfs")
+		return []*hardware.FabricInterface{}, nil
+	}
+
+	cxiFIs := make([]*hardware.FabricInterface, 0)
+	for _, dev := range cxiDevs {
+		cxiFIs = append(cxiFIs, &hardware.FabricInterface{
+			Name:      dev.Name(),
+			Providers: common.NewStringSet("ofi+cxi"),
+		})
+	}
+
+	return cxiFIs, nil
 }
