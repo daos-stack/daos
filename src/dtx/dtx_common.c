@@ -569,7 +569,7 @@ dtx_batched_commit(void *arg)
 			D_ASSERT(dbca->dbca_cont);
 			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
 			dbca->dbca_commit_req = sched_create_ult(&attr, dtx_batched_commit_one,
-								 dbca, 0);
+								 dbca, DSS_DEEP_STACK_SZ);
 			if (dbca->dbca_commit_req == NULL) {
 				D_WARN("Fail to start DTX ULT (1) for "DF_UUID"\n",
 				       DP_UUID(cont->sc_uuid));
@@ -595,7 +595,7 @@ dtx_batched_commit(void *arg)
 			D_ASSERT(dbca->dbca_cont);
 			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
 			dbca->dbca_cleanup_req = sched_create_ult(&attr, dtx_cleanup_stale,
-								  dbca, 0);
+								  dbca, DSS_DEEP_STACK_SZ);
 			if (dbca->dbca_cleanup_req == NULL) {
 				D_WARN("Fail to start DTX ULT (3) for "DF_UUID"\n",
 				       DP_UUID(cont->sc_uuid));
