@@ -340,24 +340,27 @@ type (
 		WriteConfig(BdevWriteConfigRequest) (*BdevWriteConfigResponse, error)
 		QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error)
 		UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error)
+		//CleanHugePages(BdevCleanHugePagesRequest) (*BdevCleanHugePagesRequest, error)
 	}
 
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
-		HugePageCount         int
-		DisableCleanHugePages bool
-		PCIAllowList          string
-		PCIBlockList          string
-		TargetUser            string
-		Reset_                bool
-		DisableVFIO           bool
-		EnableVMD             bool
+		HugePageCount      int
+		CleanHugePagesOnly bool
+		CleanHugePagesPID  uint64
+		PCIAllowList       string
+		PCIBlockList       string
+		TargetUser         string
+		Reset_             bool
+		DisableVFIO        bool
+		EnableVMD          bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		VMDPrepared bool
+		NrHugePagesRemoved uint
+		VMDPrepared        bool
 	}
 
 	// BdevScanRequest defines the parameters for a Scan operation.
@@ -470,6 +473,18 @@ type (
 	NVMeFirmwareUpdateResponse struct {
 		Results []NVMeDeviceFirmwareUpdateResult
 	}
+
+//	// BdevCleanHugePagesRequest defines the parameters for removing hugepages.
+//	BdevCleanHugePagesRequest struct {
+//		pbin.ForwardableRequest
+//		TargetUser string
+//		TargetPID  uint64
+//	}
+//
+//	BdevCleanHugePagesResponse struct {
+//		NrPagesRemoved int
+//		Error          error
+//	}
 )
 
 // getNumaNodeBusidRange sets range parameters in the input request either to user configured

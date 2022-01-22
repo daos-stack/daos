@@ -166,7 +166,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	if hasBdevs {
 		// Perform these checks to avoid even trying a prepare if the system isn't
 		// configured properly.
-		if srv.runningUser != "root" {
+		if srv.runningUser.Username != "root" {
 			if srv.cfg.DisableVFIO {
 				return FaultVfioDisabled
 			}
@@ -184,7 +184,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	}
 
 	prepReq := storage.BdevPrepareRequest{
-		TargetUser:   srv.runningUser,
+		TargetUser:   srv.runningUser.Username,
 		PCIAllowList: strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
@@ -268,6 +268,12 @@ func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.Get
 
 	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
 	if memSizeFreeMb < memSizeReqMb {
+		hpi, err := common.GetHugePageInfo()
+		if err != nil {
+			srv.log.Errorf("retrieve huge page info: %s", err.Error())
+		}
+		srv.log.Errorf("huge page info: %+v", *hpi)
+
 		return FaultInsufficientFreeHugePageMem(int(engineIdx), memSizeReqMb, memSizeFreeMb,
 			nrPagesRequired, hpi.Free)
 	}
@@ -296,9 +302,35 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
+func cleanEngineHugePagesFn(log logging.Logger, username string, svc *ControlService) onInstanceExitFn {
+	return func(ctx context.Context, engineIdx uint32, _ system.Rank, _ error, exPid uint64) error {
+		msg := fmt.Sprintf("cleaning engine %d (pid %d) hugepages after exit", engineIdx, exPid)
+
+		prepReq := storage.BdevPrepareRequest{
+			CleanHugePagesOnly: true,
+			CleanHugePagesPID:  exPid,
+			TargetUser:         username,
+		}
+
+		resp, err := svc.NvmePrepare(prepReq)
+		if err != nil {
+			err = errors.Wrap(err, msg)
+			log.Errorf(err.Error())
+			return err
+		}
+
+		log.Debugf("%s, %d removed", msg, resp.NrHugePagesRemoved)
+
+		return nil
+	}
+}
+
 func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
 	engine.OnInstanceExit(publishInstanceExitFn(srv.pubSub.Publish, srv.hostname))
+
+	// Register callback to clear hugepages used by engine process after it has exited.
+	engine.OnInstanceExit(cleanEngineHugePagesFn(srv.log, srv.runningUser.Username, srv.ctlSvc))
 
 	// Register callback to publish engine format requested events.
 	engine.OnAwaitFormat(publishFormatRequiredFn(srv.pubSub.Publish, srv.hostname))

@@ -213,7 +213,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	if err == nil && resp != nil {
+	if err == nil && resp != nil && !req.CleanHugePagesOnly {
 		p.vmdEnabled = resp.VMDPrepared
 	}
 	return resp, err
