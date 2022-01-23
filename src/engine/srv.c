@@ -1429,3 +1429,9 @@ dss_set_start_epoch(void)
 {
 	dss_start_epoch = crt_hlc_get();
 }
+
+bool
+dss_has_enough_helper(void)
+{
+	return dss_tgt_offload_xs_nr > 1 && dss_tgt_offload_xs_nr >= dss_tgt_nr / 4;
+}
