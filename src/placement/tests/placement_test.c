@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  *
@@ -15,13 +15,14 @@
 #include <daos/tests_lib.h>
 
 
-const char *s_opts = "he:f:v";
+const char *s_opts = "he:f:vp";
 static int idx;
 static struct option l_opts[] = {
 	{"exclude", required_argument, NULL, 'e'},
 	{"filter",  required_argument, NULL, 'f'},
 	{"help",    no_argument,       NULL, 'h'},
 	{"verbose", no_argument,       NULL, 'v'},
+	{"pda",     no_argument,       NULL, 'p'},
 };
 
 static bool
@@ -57,12 +58,11 @@ print_usage(char *name)
 	print_message("%s -v|--verbose\n", name);
 }
 
-int placement_tests_run(bool verbose);
-
 int main(int argc, char *argv[])
 {
 	int	opt;
 	char	filter[1024];
+	bool	pda_test = false;
 	bool	verbose = false;
 
 	assert_success(daos_debug_init(DAOS_LOG_DEFAULT));
@@ -100,11 +100,17 @@ int main(int argc, char *argv[])
 			D_PRINT("filter not enabled. %s not applied", filter);
 #endif
 			break;
+		case 'p':
+			pda_test = true;
+			break;
 		default:
 			break;
 		}
 	}
-	placement_tests_run(verbose);
+	if (pda_test)
+		pda_tests_run(verbose);
+	else
+		placement_tests_run(verbose);
 
 	daos_debug_fini();
 
