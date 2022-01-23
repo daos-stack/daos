@@ -548,6 +548,7 @@ free:
  * \param[in] func	function to be executed
  * \param[in] arg	argument to be passed to \a func
  * \param[in] main	only create ULT on main XS or not.
+ * \param[in] stack_size Stack size for new created ULT.
  *
  * \return		Success or negative error code
  *			0
@@ -555,20 +556,37 @@ free:
  *			-DER_INVAL
  */
 int
-dss_ult_create_all(void (*func)(void *), void *arg, bool main)
+dss_ult_create_all(void (*func)(void *), void *arg, bool main, size_t stack_size)
 {
 	struct dss_xstream      *dx;
 	int			 i, rc = 0;
+	int			 rc1;
+	ABT_thread_attr		 attr;
+
+	if (stack_size > 0) {
+		rc = ABT_thread_attr_create(&attr);
+		if (rc != ABT_SUCCESS)
+			return dss_abterr2der(rc);
+
+		rc = ABT_thread_attr_set_stacksize(attr, stack_size);
+		D_ASSERT(rc == ABT_SUCCESS);
+	} else {
+		attr = ABT_THREAD_ATTR_NULL;
+	}
 
 	for (i = 0; i < dss_xstream_cnt(); i++) {
 		dx = dss_get_xstream(i);
 		if (main && !dx->dx_main_xs)
 			continue;
 
-		rc = sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL,
-					 NULL, 0);
+		rc = sched_create_thread(dx, func, arg, attr, NULL, 0);
 		if (rc != 0)
 			break;
+	}
+
+	if (attr != ABT_THREAD_ATTR_NULL) {
+		rc1 = ABT_thread_attr_free(&attr);
+		D_ASSERT(rc1 == ABT_SUCCESS);
 	}
 
 	return rc;
