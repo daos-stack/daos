@@ -14,78 +14,7 @@
 #include "../../pool/rpc.h"
 #include "../../pool/srv_pool_map.h"
 
-#include <stdarg.h>
-#include <stddef.h>
-#include <setjmp.h>
-#include <cmocka.h>
-#include <daos/tests_lib.h>
-#define STR_HELPER(x) #x
-#define STR(x) STR_HELPER(x)
-
-static bool g_verbose;
-
-#define skip_msg(msg) do { print_message(__FILE__":" STR(__LINE__) \
-			" Skipping > "msg"\n"); skip(); } \
-			while (0)
-#define is_true assert_true
-#define is_false assert_false
-
-void verbose_msg(char *msg, ...)
-{
-	if (g_verbose) {
-		va_list vargs;
-
-		va_start(vargs, msg);
-		vprint_message(msg, vargs);
-		va_end(vargs);
-	}
-}
-
-static void
-gen_maps(int num_domains, int nodes_per_domain, int vos_per_target,
-	 struct pool_map **po_map, struct pl_map **pl_map)
-{
-	*po_map = NULL;
-	*pl_map = NULL;
-	gen_pool_and_placement_map(num_domains, nodes_per_domain,
-				   vos_per_target, PL_TYPE_JUMP_MAP,
-				   po_map, pl_map);
-	assert_non_null(*po_map);
-	assert_non_null(*pl_map);
-}
-
-static void
-gen_oid(daos_obj_id_t *oid, uint64_t lo, uint64_t hi, daos_oclass_id_t cid)
-{
-	int rc;
-
-	oid->lo = lo;
-	/* make sure top 32 bits are unset (DAOS only) */
-	oid->hi = hi & 0xFFFFFFFF;
-	rc = daos_obj_set_oid_by_class(oid, 0, cid, 0);
-	assert_rc_equal(rc, cid == OC_UNKNOWN ? -DER_INVAL : 0);
-}
-
-#define assert_placement_success(pl_map, cid) \
-	do {\
-		daos_obj_id_t __oid; \
-		struct pl_obj_layout *__layout = NULL; \
-		gen_oid(&__oid, 1, UINT64_MAX, cid); \
-		assert_success(plt_obj_place(__oid, &__layout, pl_map, \
-				false)); \
-		pl_obj_layout_free(__layout); \
-	} while (0)
-
-#define assert_invalid_param(pl_map, cid)		\
-	do {						\
-		daos_obj_id_t __oid;			\
-		struct pl_obj_layout *__layout = NULL;	\
-		int rc;					\
-		gen_oid(&__oid, 1, UINT64_MAX, cid);	\
-		rc = plt_obj_place(__oid, &__layout,	\
-				   pl_map, false);	\
-		assert_rc_equal(rc, -DER_INVAL);	\
-	} while (0)
+bool g_verbose;
 
 static void
 object_class_is_verified(void **state)
@@ -98,22 +27,22 @@ object_class_is_verified(void **state)
 	 * with a single target
 	 * ---------------------------------------------------------
 	 */
-	gen_maps(1, 1, 1, &po_map, &pl_map);
+	gen_maps(1, 1, 1, 1, &po_map, &pl_map);
 
-	assert_invalid_param(pl_map, OC_UNKNOWN);
-	assert_placement_success(pl_map, OC_S1);
-	assert_placement_success(pl_map, OC_SX);
+	assert_invalid_param(pl_map, OC_UNKNOWN, 0);
+	assert_placement_success(pl_map, OC_S1, 0);
+	assert_placement_success(pl_map, OC_SX, 0);
 
 	/* Replication should fail because there's only 1 target */
-	assert_invalid_param(pl_map, OC_RP_2G1);
-	assert_invalid_param(pl_map, OC_RP_3G1);
-	assert_invalid_param(pl_map, OC_RP_4G1);
-	assert_invalid_param(pl_map, OC_RP_6G1);
+	assert_invalid_param(pl_map, OC_RP_2G1, 0);
+	assert_invalid_param(pl_map, OC_RP_3G1, 0);
+	assert_invalid_param(pl_map, OC_RP_4G1, 0);
+	assert_invalid_param(pl_map, OC_RP_6G1, 0);
 
 	/* Multiple groups should fail because there's only 1 target */
-	assert_invalid_param(pl_map, OC_S2);
-	assert_invalid_param(pl_map, OC_S4);
-	assert_invalid_param(pl_map, OC_S32);
+	assert_invalid_param(pl_map, OC_S2, 0);
+	assert_invalid_param(pl_map, OC_S4, 0);
+	assert_invalid_param(pl_map, OC_S32, 0);
 	free_pool_and_placement_map(po_map, pl_map);
 
 
@@ -122,24 +51,24 @@ object_class_is_verified(void **state)
 	 * with 2 targets
 	 * ---------------------------------------------------------
 	 */
-	gen_maps(1, 1, 2, &po_map, &pl_map);
+	gen_maps(1, 1, 1, 2, &po_map, &pl_map);
 
-	assert_placement_success(pl_map, OC_S1);
-	assert_placement_success(pl_map, OC_S2);
-	assert_placement_success(pl_map, OC_SX);
+	assert_placement_success(pl_map, OC_S1, 0);
+	assert_placement_success(pl_map, OC_S2, 0);
+	assert_placement_success(pl_map, OC_SX, 0);
 
 	/*
 	 * Even though there are 2 targets, these will still fail because
 	 * placement requires a domain for each redundancy.
 	 */
-	assert_invalid_param(pl_map, OC_RP_2G1);
-	assert_invalid_param(pl_map, OC_RP_2G2);
-	assert_invalid_param(pl_map, OC_RP_3G1);
-	assert_invalid_param(pl_map, OC_RP_4G1);
-	assert_invalid_param(pl_map, OC_RP_6G1);
+	assert_invalid_param(pl_map, OC_RP_2G1, 0);
+	assert_invalid_param(pl_map, OC_RP_2G2, 0);
+	assert_invalid_param(pl_map, OC_RP_3G1, 0);
+	assert_invalid_param(pl_map, OC_RP_4G1, 0);
+	assert_invalid_param(pl_map, OC_RP_6G1, 0);
 	/* The following require more targets than available. */
-	assert_invalid_param(pl_map, OC_S4);
-	assert_invalid_param(pl_map, OC_S32);
+	assert_invalid_param(pl_map, OC_S4, 0);
+	assert_invalid_param(pl_map, OC_S32, 0);
 	free_pool_and_placement_map(po_map, pl_map);
 
 	/*
@@ -147,16 +76,16 @@ object_class_is_verified(void **state)
 	 * With 2 domains, 1 target each
 	 * ---------------------------------------------------------
 	 */
-	gen_maps(2, 1, 1, &po_map, &pl_map);
+	gen_maps(1, 2, 1, 1, &po_map, &pl_map);
 
-	assert_placement_success(pl_map, OC_S1);
-	assert_placement_success(pl_map, OC_RP_2G1);
-	assert_placement_success(pl_map, OC_RP_2GX);
-	assert_invalid_param(pl_map, OC_RP_2G2);
-	assert_invalid_param(pl_map, OC_RP_2G4);
+	assert_placement_success(pl_map, OC_S1, 0);
+	assert_placement_success(pl_map, OC_RP_2G1, 0);
+	assert_placement_success(pl_map, OC_RP_2GX, 0);
+	assert_invalid_param(pl_map, OC_RP_2G2, 0);
+	assert_invalid_param(pl_map, OC_RP_2G4, 0);
 
-	assert_invalid_param(pl_map, OC_RP_2G32);
-	assert_invalid_param(pl_map, OC_RP_3G1);
+	assert_invalid_param(pl_map, OC_RP_2G32, 0);
+	assert_invalid_param(pl_map, OC_RP_3G1, 0);
 
 	free_pool_and_placement_map(po_map, pl_map);
 
@@ -165,9 +94,9 @@ object_class_is_verified(void **state)
 	 * With 2 domains, 2 targets each = 4 targets
 	 * ---------------------------------------------------------
 	 */
-	gen_maps(2, 1, 2, &po_map, &pl_map);
-	assert_placement_success(pl_map, OC_RP_2G2);
-	assert_invalid_param(pl_map, OC_RP_2G4);
+	gen_maps(1, 2, 1, 2, &po_map, &pl_map);
+	assert_placement_success(pl_map, OC_RP_2G2, 0);
+	assert_invalid_param(pl_map, OC_RP_2G4, 0);
 
 	free_pool_and_placement_map(po_map, pl_map);
 
@@ -176,10 +105,10 @@ object_class_is_verified(void **state)
 	 * With 2 domains, 4 targets each = 8 targets
 	 * ---------------------------------------------------------
 	 */
-	gen_maps(2, 1, 4, &po_map, &pl_map);
-	assert_placement_success(pl_map, OC_RP_2G4);
+	gen_maps(1, 2, 1, 4, &po_map, &pl_map);
+	assert_placement_success(pl_map, OC_RP_2G4, 0);
 	/* even though it's 8 total, still need a domain for each replica */
-	assert_invalid_param(pl_map, OC_RP_4G2);
+	assert_invalid_param(pl_map, OC_RP_4G2, 0);
 
 	free_pool_and_placement_map(po_map, pl_map);
 	/*
@@ -187,9 +116,9 @@ object_class_is_verified(void **state)
 	 * With 2 domains, 2 nodes each, 2 targets each = 8 targets
 	 * ---------------------------------------------------------
 	 */
-	gen_maps(2, 2, 2, &po_map, &pl_map);
+	gen_maps(1, 2, 2, 2, &po_map, &pl_map);
 	/* even though it's 8 total, still need a domain for each replica */
-	assert_invalid_param(pl_map, OC_RP_4G2);
+	assert_invalid_param(pl_map, OC_RP_4G2, 0);
 
 	free_pool_and_placement_map(po_map, pl_map);
 
@@ -356,7 +285,7 @@ jtc_maps_gen(struct jm_test_ctx *ctx)
 	 */
 	__jtc_maps_free(ctx);
 
-	gen_pool_and_placement_map(ctx->domain_nr, ctx->node_nr,
+	gen_pool_and_placement_map(1, ctx->domain_nr, ctx->node_nr,
 				   ctx->target_nr, PL_TYPE_JUMP_MAP,
 				   &ctx->po_map, &ctx->pl_map);
 
@@ -485,7 +414,7 @@ jtc_create_layout(struct jm_test_ctx *ctx)
 	 * if already allocated
 	 */
 	__jtc_layout_free(ctx);
-	rc = plt_obj_place(ctx->oid, &ctx->layout, ctx->pl_map,
+	rc = plt_obj_place(ctx->oid, 0, &ctx->layout, ctx->pl_map,
 			   ctx->enable_print_layout);
 
 	if (rc == 0)
