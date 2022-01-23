@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -385,21 +385,13 @@ class TestPool(TestDaosApiBase):
         if self.pool:
             self.log.info("Get-prop for Pool: %s", self.identifier)
 
-            if self.control_method.value == self.USE_DMG and self.dmg:
-                # If specific property are not provided, get all the property
-                self.dmg.pool_get_prop(self.identifier, prop_name)
+            # If specific property are not provided, get all the property
+            self.dmg.pool_get_prop(self.identifier, prop_name)
 
-                if self.dmg.result.exit_status == 0:
-                    prop_value = json.loads(
-                        self.dmg.result.stdout)['response'][0]['value']
+            if self.dmg.result.exit_status == 0:
+                prop_value = json.loads(
+                    self.dmg.result.stdout)['response'][0]['value']
 
-            elif self.control_method.value == self.USE_DMG:
-                self.log.error("Error: Undefined dmg command")
-
-            else:
-                self.log.error(
-                    "Error: Undefined control_method: %s",
-                    self.control_method.value)
         return prop_value
 
     @fail_on(CommandFailure)

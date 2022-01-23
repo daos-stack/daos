@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,9 +37,9 @@ var (
 )
 
 func getTestEngineInstance(log logging.Logger) *EngineInstance {
-	cfg := engine.NewConfig().WithStorage(
+	cfg := engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
-			WithScmClass("ram").
+			WithStorageClass("ram").
 			WithScmMountPoint("/foo/bar"),
 	)
 	runner := engine.NewRunner(log, cfg)
@@ -318,6 +318,6 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 	return nil
 }
 
-func (mi *MockInstance) StorageWriteNvmeConfig() error {
+func (mi *MockInstance) StorageWriteNvmeConfig(context.Context) error {
 	return nil
 }

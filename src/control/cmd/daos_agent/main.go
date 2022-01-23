@@ -20,13 +20,12 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type cliOptions struct {
 	AllowProxy bool                    `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      string                  `short:"d" long:"debug" optional:"1" optional-value:"basic" choice:"basic" choice:"net" description:"Enable basic or enhanced network debug"`
+	Debug      bool                    `short:"d" long:"debug" description:"Enable debug output"`
 	JSON       bool                    `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs   bool                    `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath string                  `short:"o" long:"config-path" description:"Path to agent configuration file"`
@@ -150,14 +149,8 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			jsonCmd.enableJsonOutput(opts.JSON)
 		}
 
-		switch opts.Debug {
-		case "net":
+		if opts.Debug {
 			log.WithLogLevel(logging.LogLevelDebug)
-			log.Debug("net debug output enabled")
-			netdetect.SetLogger(log)
-		case "basic":
-			log.WithLogLevel(logging.LogLevelDebug)
-			log.Debug("basic debug output enabled")
 		}
 
 		if opts.JSONLogs {
