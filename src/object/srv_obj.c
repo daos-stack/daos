@@ -2325,7 +2325,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	if (orw->orw_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
-	rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
+	rc = dtx_begin(ioc.ioc_coh, ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
 		       orw->orw_map_ver, &orw->orw_oid,
 		       orw->orw_dti_cos.ca_arrays,
 		       orw->orw_dti_cos.ca_count, dtx_flags, mbs, &dth);
@@ -2356,7 +2356,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 out:
 	if (dth != NULL)
-		rc = dtx_end(dth, ioc.ioc_coc, rc);
+		rc = dtx_end(dth, rc);
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
@@ -2557,11 +2557,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (orw->orw_flags & ORF_FOR_MIGRATION)
 			dtx_flags = DTX_FOR_MIGRATION;
 
-		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0, orw->orw_map_ver,
-			       &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
+		rc = dtx_begin(ioc.ioc_coh, ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
+			       orw->orw_map_ver, &orw->orw_oid, NULL, 0, dtx_flags, NULL, &dth);
 		if (rc == 0) {
 			rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, dth, false);
-			rc = dtx_end(dth, ioc.ioc_coc, rc);
+			rc = dtx_end(dth, rc);
 		}
 
 		D_GOTO(out, rc);
@@ -2662,7 +2662,7 @@ again2:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
+	rc = dtx_leader_begin(ioc.ioc_coh, ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
 			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
@@ -2681,7 +2681,7 @@ again2:
 	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, NULL, &exec_arg);
 
 	/* Stop the distributed transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
+	rc = dtx_leader_end(dlh, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -2917,7 +2917,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_FOR_MIGRATION)
 		flags = DTX_FOR_MIGRATION;
 
-	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
+	rc = dtx_begin(ioc->ioc_coh, ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,
 		       NULL, &dth);
 	if (rc != 0)
@@ -2952,7 +2952,7 @@ re_pack:
 	}
 
 	/* dss_enum_pack may return 1. */
-	rc_tmp = dtx_end(dth, ioc->ioc_coc, rc > 0 ? 0 : rc);
+	rc_tmp = dtx_end(dth, rc > 0 ? 0 : rc);
 	if (rc_tmp != 0)
 		rc = rc_tmp;
 
@@ -3297,7 +3297,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 		dtx_flags |= DTX_SYNC;
 
 	/* Start the local transaction */
-	rc = dtx_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
+	rc = dtx_begin(ioc.ioc_coh, ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
 		       opi->opi_map_ver, &opi->opi_oid,
 		       opi->opi_dti_cos.ca_arrays,
 		       opi->opi_dti_cos.ca_count, dtx_flags, mbs, &dth);
@@ -3321,7 +3321,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 out:
 	/* Stop the local transaction */
 	if (dth != NULL)
-		rc = dtx_end(dth, ioc.ioc_coc, rc);
+		rc = dtx_end(dth, rc);
 	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
 	D_FREE(mbs);
 	obj_ioc_end(&ioc, rc);
@@ -3547,7 +3547,7 @@ again2:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
+	rc = dtx_leader_begin(ioc.ioc_coh, ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
 			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
@@ -3565,7 +3565,7 @@ again2:
 				 &opi->opi_api_flags, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coc, rc);
+	rc = dtx_leader_end(dlh, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -3660,7 +3660,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	epoch.oe_first = okqi->okqi_epoch_first;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(okqi->okqi_flags);
 
-	rc = dtx_begin(ioc.ioc_vos_coh, &okqi->okqi_dti, &epoch, 0,
+	rc = dtx_begin(ioc.ioc_coh, ioc.ioc_vos_coh, &okqi->okqi_dti, &epoch, 0,
 		       okqi->okqi_map_ver, &okqi->okqi_oid, NULL, 0, 0, NULL,
 		       &dth);
 	if (rc != 0)
@@ -3691,7 +3691,7 @@ re_query:
 			goto re_query;
 	}
 
-	rc = dtx_end(dth, ioc.ioc_coc, rc);
+	rc = dtx_end(dth, rc);
 
 failed:
 	obj_reply_set_status(rpc, rc);
@@ -4320,7 +4320,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	if (oci->oci_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
-	rc = dtx_begin(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &dcsh->dcsh_epoch,
+	rc = dtx_begin(ioc->ioc_coh, ioc->ioc_vos_coh, &dcsh->dcsh_xid, &dcsh->dcsh_epoch,
 		       dcde->dcde_write_cnt, oci->oci_map_ver,
 		       &dcsh->dcsh_leader_oid, NULL, 0, dtx_flags,
 		       dcsh->dcsh_mbs, &dth);
@@ -4336,7 +4336,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	if (rc == 0 && (dth->dth_modification_cnt == 0 || !dth->dth_active))
 		rc = vos_dtx_attach(dth, true);
 
-	rc = dtx_end(dth, ioc->ioc_coc, rc);
+	rc = dtx_end(dth, rc);
 
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
@@ -4563,7 +4563,7 @@ again:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
+	rc = dtx_leader_begin(dca->dca_ioc->ioc_coh, dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
 			      oci->oci_map_ver, &dcsh->dcsh_leader_oid,
 			      NULL, 0, tgts, tgt_cnt - 1, dtx_flags,
@@ -4580,7 +4580,7 @@ again:
 	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coc, rc);
+	rc = dtx_leader_end(dlh, rc);
 
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART &&

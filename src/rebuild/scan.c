@@ -695,7 +695,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	epoch.oe_value = rpt->rt_stable_epoch;
-	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
+	rc = dtx_begin(NULL, coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
 		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
 	D_ASSERT(rc == 0);
 	memset(&param, 0, sizeof(param));
@@ -714,7 +714,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
 			 rebuild_obj_scan_cb, NULL, arg, dth);
-	dtx_end(dth, NULL, rc);
+	dtx_end(dth, rc);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;

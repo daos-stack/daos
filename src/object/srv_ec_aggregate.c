@@ -2524,7 +2524,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
-	rc = dtx_begin(cont->sc_hdl, &dti, &epoch, 0, 0, &oid,
+	rc = dtx_begin(NULL, cont->sc_hdl, &dti, &epoch, 0, 0, &oid,
 		       NULL, 0, 0, NULL, &dth);
 	if (rc != 0) {
 		D_ERROR("Fail to start DTX for EC aggregation: "DF_RC"\n",
@@ -2551,7 +2551,7 @@ again:
 		}
 	}
 
-	dtx_end(dth, cont, rc);
+	dtx_end(dth, rc);
 
 	if (daos_handle_is_valid(ec_agg_param->ap_agg_entry.ae_obj_hdl)) {
 		dsc_obj_close(ec_agg_param->ap_agg_entry.ae_obj_hdl);

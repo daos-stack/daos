@@ -153,6 +153,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
 	int32_t			sch_ref;
+	uint32_t		sch_dtx_count;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
