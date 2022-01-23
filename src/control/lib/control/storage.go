@@ -259,7 +259,22 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 	}
 
 	for k, v := range ssr.HostStorage {
-		rpcClient.Debugf("host %q storage: %+v", k, v)
+		if v.HostStorage == nil {
+			continue
+		}
+		if v.HostStorage.SmdInfo == nil {
+			continue
+		}
+		if v.HostStorage.SmdInfo.Devices == nil {
+			continue
+		}
+		rpcClient.Debugf("host %q storage: %+v", k, v.HostStorage)
+		for _, smdDev := range v.HostStorage.SmdInfo.Devices {
+			if smdDev == nil {
+				continue
+			}
+			rpcClient.Debugf("smd: %+v", *smdDev)
+		}
 	}
 	rpcClient.Debugf("DAOS storage scan response: %+v", ssr)
 	return ssr, nil
