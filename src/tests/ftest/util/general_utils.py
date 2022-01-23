@@ -703,7 +703,11 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
             "if " + ps_cmd,
             "then rc=1",
             "sudo pkill --signal USR2 daos_engine",
-            # leave time for ABT info/stacks dump vs xstream/pool/ULT number
+            # leave time for ABT info/stacks dump vs xstream/pool/ULT number.
+            # at this time there is no way to know when Argobots ULTs stacks
+            # has completed, this may become possible after a PR will be
+            # available to address this problem that is already reported in
+            # Argobots issue #372.
 		"sleep 30",
             "fi",
             "exit $rc",
@@ -757,7 +761,8 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         if dump_ult_stacks is True and "daos_engine" in pattern:
             result = dump_engines_stacks(hosts, verbose, timeout, added_filter)
 
-        # in case dump of ULT stacks is still running it may be interrupted
+        # in case dump of ULT stacks is still running it may be interrupted by
+        # these following commands
         commands = [
             "rc=0",
             "if " + ps_cmd,
