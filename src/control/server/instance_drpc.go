@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
@@ -237,7 +238,8 @@ func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdD
 	// populate space usage for each smd device from health stats
 	smdDev.TotalBytes = pbStats.TotalBytes
 	smdDev.AvailBytes = pbStats.AvailBytes
-	msg = fmt.Sprintf("%s: smd space usage updated", msg)
+	msg = fmt.Sprintf("%s: smd space usage updated (%s/%s)", msg,
+		humanize.Bytes(smdDev.AvailBytes), humanize.Bytes(smdDev.TotalBytes))
 
 	if ctrlr == nil {
 		ei.log.Debug(msg)
@@ -263,6 +265,7 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 	if err != nil {
 		return errors.Wrapf(err, "instance %d listSmdDevices()", ei.Index())
 	}
+	ei.log.Debugf("updateInUseBdevs(): smdDevs %+v", smdDevs)
 
 	hasUpdatedHealth := make(map[string]bool)
 	for _, smd := range smdDevs.Devices {
@@ -276,12 +279,13 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 		if err != nil {
 			return errors.Wrapf(err, "collect smd info for ctrlr %s", ctrlr.PciAddr)
 		}
+		ei.log.Debugf("updating controller %q with smd: %+v", ctrlr.PciAddr, smdDev)
 
 		// multiple updates for the same key expected when more than one controller
 		// namespaces (and resident blobstores) exist, stats will be the same for each
 		// so only pass valid ctrlr reference when stats haven't yet been updated
 		var ctrlrRef *storage.NvmeController
-		if _, already := hasUpdatedHealth[ctrlr.PciAddr]; !already {
+		if !hasUpdatedHealth[ctrlr.PciAddr] {
 			ctrlrRef = ctrlr
 		}
 
@@ -294,6 +298,7 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 			hasUpdatedHealth[ctrlr.PciAddr] = true
 		}
 
+		ei.log.Debugf("updating controller %q with smd: %+v", ctrlr.PciAddr, smdDev)
 		ctrlr.UpdateSmd(smdDev)
 	}
 

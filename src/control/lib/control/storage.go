@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -152,7 +152,7 @@ type (
 // and adding it to the StorageScanResp.
 //
 // TODO: pass info field that is embedded in message to response receiver.
-func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
+func (ssr *StorageScanResp) addHostResponse(hr *HostResponse) error {
 	pbResp, ok := hr.Message.(*ctlpb.StorageScanResp)
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
@@ -175,7 +175,7 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		if nvmeState.GetInfo() != "" {
 			pbErrMsg += fmt.Sprintf(" (%s)", nvmeState.GetInfo())
 		}
-		if err := ssp.addHostError(hr.Addr, errors.New(pbErrMsg)); err != nil {
+		if err := ssr.addHostError(hr.Addr, errors.New(pbErrMsg)); err != nil {
 			return err
 		}
 	}
@@ -198,15 +198,15 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		if scmState.GetInfo() != "" {
 			pbErrMsg += fmt.Sprintf(" (%s)", scmState.GetInfo())
 		}
-		if err := ssp.addHostError(hr.Addr, errors.New(pbErrMsg)); err != nil {
+		if err := ssr.addHostError(hr.Addr, errors.New(pbErrMsg)); err != nil {
 			return err
 		}
 	}
 
-	if ssp.HostStorage == nil {
-		ssp.HostStorage = make(HostStorageMap)
+	if ssr.HostStorage == nil {
+		ssr.HostStorage = make(HostStorageMap)
 	}
-	if err := ssp.HostStorage.Add(hr.Addr, hs); err != nil {
+	if err := ssr.HostStorage.Add(hr.Addr, hs); err != nil {
 		return err
 	}
 
@@ -223,6 +223,8 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 // NumaMeta option requests DAOS server meta data stored on SSDs.
 // NumaBasic option strips SSD details down to only the most basic.
 func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanReq) (*StorageScanResp, error) {
+	rpcClient.Debugf("DAOS storage scan request: %+v", req)
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).StorageScan(ctx, &ctlpb.StorageScanReq{
 			Scm: &ctlpb.ScanScmReq{
@@ -256,6 +258,10 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 		}
 	}
 
+	for k, v := range ssr.HostStorage {
+		rpcClient.Debugf("host %q storage: %+v", k, v)
+	}
+	rpcClient.Debugf("DAOS storage scan response: %+v", ssr)
 	return ssr, nil
 }
 
