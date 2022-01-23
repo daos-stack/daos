@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -186,11 +187,11 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	svc.events.DisableEventIDs(events.RASEngineDied)
 	defer svc.events.EnableEventIDs(events.RASEngineDied)
 
-	for _, srv := range instances {
-		if !srv.IsStarted() {
+	for _, ei := range instances {
+		if !ei.IsStarted() {
 			continue
 		}
-		if err := srv.Stop(signal); err != nil {
+		if err := ei.Stop(signal); err != nil {
 			return nil, errors.Wrapf(err, "sending %s", signal)
 		}
 	}
@@ -295,30 +296,47 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 	svc.log.Debugf("CtlSvc.ResetFormatRanks dispatch, req:%+v\n", req)
 
-	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
+	engineInstances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
 
+	nvmeScanResp, err := svc.NvmeScan(storage.BdevScanRequest{})
+	if err != nil {
+		svc.log.Errorf("nvme scan failed: %s", err)
+		nvmeScanResp = &storage.BdevScanResponse{}
+	}
+	if nvmeScanResp == nil {
+		return nil, errors.New("nil nvme scan response received")
+	}
+
 	savedRanks := make(map[uint32]system.Rank) // instance idx to system rank
-	for _, srv := range instances {
-		rank, err := srv.GetRank()
+	for idx, ei := range engineInstances {
+		rank, err := ei.GetRank()
 		if err != nil {
 			return nil, err
 		}
-		savedRanks[srv.Index()] = rank
+		savedRanks[ei.Index()] = rank
 
-		if srv.IsStarted() {
+		if ei.IsStarted() {
 			return nil, FaultInstancesNotStopped("reset format", rank)
 		}
-		if err := srv.RemoveSuperblock(); err != nil {
+		if err := ei.RemoveSuperblock(); err != nil {
 			return nil, err
 		}
-		srv.requestStart(ctx)
+
+		engine, ok := ei.(*EngineInstance)
+		if !ok {
+			return nil, errors.New("not an EngineInstance")
+		}
+		engine.storage = storage.DefaultProvider(svc.log, idx, &engine.runner.GetConfig().Storage)
+		engine.storage.SetBdevCache(*nvmeScanResp)
+
+		ei.requestStart(ctx)
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances, func(e Engine) bool {
+	if _, err = pollInstanceState(ctx, engineInstances, func(e Engine) bool {
 		return e.isAwaitingFormat()
 	},
 		svc.harness.rankStartTimeout); err != nil {
@@ -327,8 +345,8 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 
 	// rank cannot be pulled from superblock so use saved value
-	results := make(system.MemberResults, 0, len(instances))
-	for _, srv := range instances {
+	results := make(system.MemberResults, 0, len(engineInstances))
+	for _, srv := range engineInstances {
 		var err error
 		state := srv.LocalState()
 		if state != system.MemberStateAwaitFormat {
