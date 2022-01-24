@@ -1358,13 +1358,12 @@ cond_test(void **state)
 	start_epoch = epoch + 1;
 }
 
-/** Making the oid generation deterministic, I get to 102 before I hit a false
- *  collision on the oid.   This may indicate the hashing needs to be improved
- *  but for now, it's good enough.  In general, the chance of a single
- *  collision is very high well before we get close to saturation due
+/** Making the oid generation deterministic, I get to 18201 before I hit a false
+ *  collision on the oid. For now, it's good enough. In general, the chance of
+ *  a single collision is very high well before we get close to saturation due
  *  to the birthday paradox.
  */
-#define NUM_OIDS 102
+#define NUM_OIDS 18201
 static void
 multiple_oid_cond_test(void **state)
 {
