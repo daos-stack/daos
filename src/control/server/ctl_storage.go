@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -217,8 +217,8 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 // controller claimed by another process. Only update info for controllers
 // assigned to I/O Engines.
 func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
-	var ctrlrs storage.NvmeControllers
 	instances := cs.harness.Instances()
+	ctrlrs := storage.NvmeControllers{}
 
 	for _, ei := range instances {
 		if !ei.HasBlockDevices() {
@@ -230,7 +230,7 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 			return nil, err
 		}
 
-		// If the is not running or we aren't interested in temporal
+		// If the engine is not running or we aren't interested in temporal
 		// statistics for the bdev devices then continue to next.
 		if !ei.IsReady() || !statsReq {
 			for _, tsr := range tsrs {
@@ -248,6 +248,8 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 			if err != nil {
 				return nil, errors.Wrap(err, "create controller map")
 			}
+			cs.log.Debugf("instance %d: nvme ctrlr map for tier %+v: %+v", ei.Index(),
+				tsr, ctrlrMap)
 
 			if err := ei.updateInUseBdevs(ctx, ctrlrMap); err != nil {
 				return nil, err
