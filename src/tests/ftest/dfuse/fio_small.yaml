@@ -65,6 +65,9 @@ fio:
     thread: 1
     group_reporting: 1
     #direct: 1
+    direct: !mux
+      on: 1
+      off: 0
     verify: 'crc64'
     iodepth: 16
     bs: !mux
