@@ -3931,11 +3931,13 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 static int
 obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 {
+	daos_iod_t	*iod;
 	d_sg_list_t	*sgls_dup, *sgls;
 	d_sg_list_t	*sg, *sg_dup;
-	d_iov_t		*iov;
+	d_iov_t		*iov, *iov_dup;
 	bool		 dup = false;
 	uint32_t	 i, j;
+	int		 rc = 0;
 
 	sgls = args->sgls;
 	if (obj_auxi->rw_args.sgls_dup != NULL || sgls == NULL)
@@ -3943,9 +3945,11 @@ obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 
 	for (i = 0; i < args->nr; i++) {
 		sg = &sgls[i];
+		iod = &args->iods[i];
 		for (j = 0; j < sg->sg_nr; j++) {
 			iov = &sg->sg_iovs[j];
-			if (iov->iov_len > iov->iov_buf_len || iov->iov_len == 0) {
+			if (iov->iov_len > iov->iov_buf_len ||
+			    (iov->iov_len == 0 && iod->iod_size != DAOS_REC_ANY)) {
 				D_ERROR("invalid args, iov_len "DF_U64", iov_buf_len "DF_U64"\n",
 					iov->iov_len, iov->iov_buf_len);
 				return -DER_INVAL;
@@ -3963,22 +3967,40 @@ obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 
 	for (i = 0; i < args->nr; i++) {
 		sg_dup = &sgls_dup[i];
-		*sg_dup = sgls[i];
+		sg = &sgls[i];
+		rc = d_sgl_init(sg_dup, sg->sg_nr);
+		if (rc)
+			goto failed;
+
 		for (j = 0; j < sg_dup->sg_nr; j++) {
-			iov = &sg_dup->sg_iovs[j];
-			iov->iov_buf_len = iov->iov_len;
+			iov_dup = &sg_dup->sg_iovs[j];
+			iov = &sg->sg_iovs[j];
+			*iov_dup = *iov;
+			iov_dup->iov_buf_len = iov_dup->iov_len;
 		}
 	}
 	obj_auxi->reasb_req.orr_usgls = sgls;
 	obj_auxi->rw_args.sgls_dup = sgls_dup;
 	args->sgls = sgls_dup;
 	return 0;
+
+failed:
+	if (sgls_dup != NULL) {
+		for (i = 0; i < args->nr; i++)
+			d_sgl_fini(&sgls_dup[i], false);
+		D_FREE(sgls_dup);
+	}
+	return rc;
 }
 
 static void
 obj_update_sgls_free(struct obj_auxi_args *obj_auxi)
 {
+	int	i;
+
 	if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE && obj_auxi->rw_args.sgls_dup != NULL) {
+		for (i = 0; i < obj_auxi->iod_nr; i++)
+			d_sgl_fini(&obj_auxi->rw_args.sgls_dup[i], false);
 		D_FREE(obj_auxi->rw_args.sgls_dup);
 		obj_auxi->rw_args.sgls_dup = NULL;
 		obj_auxi->rw_args.api_args->sgls = obj_auxi->reasb_req.orr_usgls;
