@@ -3989,8 +3989,14 @@ def test_alloc_fail_copy(server, conf, wf):
 
     pool = server.get_test_pool()
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
-    with open(join(src_dir.name, 'file'), 'w') as ofd:
-        ofd.write('hello')
+    sub_dir = join(src_dir.name, 'new_dir')
+    os.mkdir(sub_dir)
+    for f in range(5):
+        with open(join(sub_dir, 'file.{}'.format(f)), 'w') as ofd:
+            ofd.write('hello')
+
+    os.symlink('broken', join(sub_dir, 'broken'))
+    os.symlink('new_dir/file.0', 'link')
 
     def get_cmd():
         container = str(uuid.uuid4())
