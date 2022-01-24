@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -x
 
@@ -34,5 +34,13 @@ then
         $CP --quiet --no-tree --file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
     done
 fi
+
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=clangFormat.style
+export GIT_CONFIG_VALUE_0=file
+git clang-format origin/"$CHANGE_TARGET"...
+git log
+
+git diff
 
 exit $RC

@@ -90,7 +90,7 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
 		*prov = crt_prov_str_to_na_type(provider_str);
 
 	if (addr)
-		strncpy(addr, addr_str+2, CRT_ADDR_STR_MAX_LEN - 1);
+		strncpy(addr, addr_str + 2, CRT_ADDR_STR_MAX_LEN - 1);
 
 	return 0;
 }
@@ -147,10 +147,10 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 		}
 		D_INIT_LIST_HEAD(&hdl->chh_link);
 
-		hg_ret = HG_Create(hg_ctx->chc_hgctx, NULL,
+	hg_ret = HG_Create(hg_ctx->chc_hgctx, NULL,
 				   CRT_HG_RPCID, &hdl->chh_hdl);
 		if (hg_ret != HG_SUCCESS) {
-			D_FREE(hdl);
+		D_FREE(hdl);
 			D_ERROR("HG_Create() failed, hg_ret: %d.\n", hg_ret);
 			rc = -DER_HG;
 			break;
@@ -210,7 +210,9 @@ crt_hg_pool_init(struct crt_hg_context *hg_ctx)
 	int			 rc = 0;
 
 	rc = D_SPIN_INIT(&hg_pool->chp_lock, PTHREAD_PROCESS_PRIVATE);
+
 	if (rc != 0)
+
 		D_GOTO(exit, rc);
 
 	hg_pool->chp_num = 0;
@@ -219,10 +221,10 @@ crt_hg_pool_init(struct crt_hg_context *hg_ctx)
 	D_INIT_LIST_HEAD(&hg_pool->chp_list);
 
 	rc = crt_hg_pool_enable(hg_ctx, CRT_HG_POOL_MAX_NUM,
-				CRT_HG_POOL_PREPOST_NUM);
-	if (rc != 0)
-		D_ERROR("crt_hg_pool_enable() hg_ctx %p, failed, " DF_RC "\n",
-			hg_ctx, DP_RC(rc));
+			CRT_HG_POOL_PREPOST_NUM);
+if (rc != 0)
+	D_ERROR("crt_hg_pool_enable() hg_ctx %p, failed, " DF_RC "\n",
+		hg_ctx, DP_RC(rc));
 
 exit:
 	return rc;
@@ -503,7 +505,7 @@ d_list_t
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return &(prov_data->cpg_ctx_list);
+	return &prov_data->cpg_ctx_list;
 }
 
 static int
