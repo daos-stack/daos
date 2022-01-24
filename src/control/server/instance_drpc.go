@@ -259,6 +259,11 @@ func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdD
 // Query each SmdDevice on each I/O Engine instance for health stats and update existing controller
 // data in ctrlrMap using PCI address key.
 func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
+	// Clear smd info for controllers in ctrlrMap, populate smd info from scratch.
+	for _, ctrlr := range ctrlrMap {
+		ctrlr.SmdDevices = []*storage.SmdDevice{}
+	}
+
 	smdDevs, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
 		return errors.Wrapf(err, "instance %d listSmdDevices()", ei.Index())
