@@ -523,7 +523,7 @@ class DaosServerInformation():
                 else:
                     # VMD controlled devices include the controller address at the beginning of
                     # their address, e.g. "0000:85:05.5" -> "850505:01:00.0"
-                    address_split = [int(x) for x in re.split(r":|\.", device)]
+                    address_split = [int(x, 16) for x in re.split(r":|\.", device)]
                     vmd_device = "{1:02x}{2:02x}{3:02x}:".format(*address_split)
                     for controller in device_capacity["nvme"]:
                         if controller.startswith(vmd_device):
