@@ -1886,7 +1886,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_epr.epr_hi = args->la_auxi.epoch.oe_value;
 		oei->oei_flags |= ORF_ENUM_WITHOUT_EPR;
 	}
-	if (!obj_args->incr_order)
+	if ((!obj_args->incr_order) && ((opc == DAOS_OBJ_RECX_RPC_ENUMERATE) ||
+					 opc == DAOS_OBJ_RPC_ENUMERATE))
 		oei->oei_flags |= ORF_DESCENDING_ORDER;
 
 	oei->oei_nr		= args->la_nr;
