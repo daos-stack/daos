@@ -1262,13 +1262,6 @@ out:
 		if (result < 0 && !aborted)
 			vos_dtx_cleanup(dth);
 
-		vos_dtx_rsrvd_fini(dth);
-		vos_dtx_detach(dth);
-		if (dth->dth_hdl != NULL) {
-			D_ASSERT(dth->dth_hdl->sch_dtx_count > 0);
-			dth->dth_hdl->sch_dtx_count--;
-		}
-
 		D_DEBUG(DB_IO,
 			"Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, "
 			"%s participator(s), cos %d/%d: rc "DF_RC"\n",
@@ -1290,6 +1283,13 @@ out:
 		for (i = 0; i < dth->dth_dti_cos_count; i++)
 			dtx_del_cos(cont, &dth->dth_dti_cos[i],
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
+	}
+
+	vos_dtx_rsrvd_fini(dth);
+	vos_dtx_detach(dth);
+	if (dth->dth_hdl != NULL) {
+		D_ASSERT(dth->dth_hdl->sch_dtx_count > 0);
+		dth->dth_hdl->sch_dtx_count--;
 	}
 
 	D_FREE(dth->dth_oid_array);
