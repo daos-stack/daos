@@ -13,11 +13,11 @@ container:
 
 properties:
   chksum_type:
-    configured: 100
+    configured: 100 # Default
     expected: 1
   srv_verify:
-    configured: True
+    configured: True # Updated
     expected: 1
   chunk_size:
-    configured: 0
+    configured: 0 # Default
     expected: 16384

@@ -53,9 +53,9 @@ class QueryPropertiesTest(TestWithServers):
 
         cont_prop_type = bytes("POSIX", "utf-8") # Updated
         enable_chksum = True # Updated
-        srv_verify = srv_verify_conf # Updated
-        chksum_type = ctypes.c_uint64(chksum_type_conf) # Default
-        chunk_size = ctypes.c_uint64(chunk_size_conf) # Default
+        srv_verify = srv_verify_conf
+        chksum_type = ctypes.c_uint64(chksum_type_conf)
+        chunk_size = ctypes.c_uint64(chunk_size_conf)
         con_in = [
             cont_prop_type,
             enable_chksum,
@@ -126,21 +126,22 @@ class QueryPropertiesTest(TestWithServers):
 
         # Verify checksum.
         if cont_prop.dpp_entries[1].dpe_val != chksum_type_exp:
-            msg = "Unexpected checksum from query! Expected = 1; Actual = {}".format(
-                cont_prop.dpp_entries[1].dpe_val)
+            msg = "Unexpected checksum from query! Expected = {}; Actual = {}".format(
+                chksum_type_exp, cont_prop.dpp_entries[1].dpe_val)
             errors.append(msg)
 
         # Verify server verify.
         if cont_prop.dpp_entries[2].dpe_val != srv_verify_exp:
-            msg = "Unexpected server verify from query! Expected = 1; Actual = {}".format(
-                cont_prop.dpp_entries[2].dpe_val)
+            msg = ("Unexpected server verify from query! "
+                   "Expected = {}; Actual = {}".format(
+                       srv_verify_exp, cont_prop.dpp_entries[2].dpe_val))
             errors.append(msg)
 
         # Verify checksum chunk size.
         if cont_prop.dpp_entries[3].dpe_val != chunk_size_exp:
             msg = ("Unexpected checksum chunk size from query! "
-                   "Expected = 16384; Actual = {}".format(
-                       cont_prop.dpp_entries[3].dpe_val))
+                   "Expected = {}; Actual = {}".format(
+                       chunk_size_exp, cont_prop.dpp_entries[3].dpe_val))
             errors.append(msg)
 
         if errors:
