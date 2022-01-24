@@ -270,9 +270,10 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 			if ok && status == drpc.DaosNonexistant && !smdDev.NvmeState.IsNormal() {
 				ei.log.Debugf("%s: stats not found (device state: %q), skip update",
 					msg, smdDev.NvmeState.String())
-				continue
+			} else {
+				ei.log.Errorf("%s: fetch stats: %s", msg, err.Error())
 			}
-			ei.log.Errorf("%s: fetch stats: %s", msg, err.Error())
+			ctrlr.UpdateSmd(smdDev)
 			continue
 		}
 
