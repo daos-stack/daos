@@ -39,10 +39,7 @@ export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0=clangFormat.style
 export GIT_CONFIG_VALUE_0=file
 
-TARGET_SHA=`git rev-list --boundary HEAD...origin/"$CHANGE_TARGET" | grep "^-" | cut -c2-`
+TARGET_SHA=$(git rev-list --boundary HEAD...origin/"$CHANGE_TARGET" | grep "^-" | cut -c2-)
 git clang-format "$TARGET_SHA"
-git log
-
-git diff
 
 exit $RC
