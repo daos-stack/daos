@@ -1078,8 +1078,7 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 			D_FREE(sym->value);
 		} else if (rc != 0) {
 			D_FREE(sym->value);
-			D_ERROR("Inserting entry %s failed (rc = %d)\n",
-				sym->name, rc);
+			D_ERROR("Inserting entry '%s' failed: %d (%s)\n", sym->name, rc, strerror(rc));
 		}
 		return rc;
 	}
