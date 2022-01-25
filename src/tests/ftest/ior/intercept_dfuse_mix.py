@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -45,7 +45,8 @@ class IorInterceptDfuseMix(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,ior_intercept_mix
+        :avocado: tags=daosio,dfuse,il,ior,ior_intercept
+        :avocado: tags=ior_intercept_mix
         """
         self.add_pool()
         self.add_container(self.pool)
