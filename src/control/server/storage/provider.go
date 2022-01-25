@@ -312,7 +312,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 type topologyGetter func(ctx context.Context) (*hardware.Topology, error)
 
 // BdevWriteConfigRequestFromConfig returns a config write request from a storage config.
-func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, getTopo topologyGetter) (BdevWriteConfigRequest, error) {
+func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, vmdEnabled bool, getTopo topologyGetter) (BdevWriteConfigRequest, error) {
 	req := BdevWriteConfigRequest{
 		OwnerUID: os.Geteuid(),
 		OwnerGID: os.Getegid(),
@@ -343,7 +343,16 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		}
 
 		// Populate hotplug bus-ID range limits when processing the first bdev tier.
-		// Applying the range limits hotplug activity of engine to a ssd device set.
+
+		if vmdEnabled {
+			req.HotplugBusidBegin = 0x00
+			req.HotplugBusidEnd = 0xFF
+			log.Debug("hotplug bus-id filter allows all as vmd is enabled")
+			continue
+		}
+
+		// Applying the bus-id range limits hotplug activity of engine to a set of ssd
+		// devices.
 
 		var begin, end uint8
 		if tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero() {
@@ -367,26 +376,32 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		req.HotplugBusidEnd = end
 	}
 
+	req.VMDEnabled = vmdEnabled
+
 	return req, nil
 }
 
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
 func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) error {
-	req, err := BdevWriteConfigRequestFromConfig(ctx, log, p.engineStorage,
-		hwloc.NewProvider(log).GetTopology)
+	p.RLock()
+	vmdEnabled := p.vmdEnabled
+	engineIndex := p.engineIndex
+	engineStorage := p.engineStorage
+	p.RUnlock()
+
+	req, err := BdevWriteConfigRequestFromConfig(ctx, log, engineStorage,
+		vmdEnabled, hwloc.NewProvider(log).GetTopology)
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
 
-	log.Infof("Writing NVMe config file for engine instance %d to %q", p.engineIndex,
+	log.Infof("Writing NVMe config file for engine instance %d to %q", engineIndex,
 		req.ConfigOutputPath)
 
 	p.RLock()
 	defer p.RUnlock()
-
 	req.BdevCache = &p.bdevCache
-	req.VMDEnabled = p.vmdEnabled
 
 	_, err = p.bdev.WriteConfig(req)
 

@@ -20,7 +20,7 @@ import (
 
 const (
 	spdkSetupPath      = "../share/daos/control/setup_spdk.sh"
-	defaultNrHugepages = 4096
+	defaultNrHugepages = 1024 // default number applied by SPDK
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
 	pciAllowListEnv    = "_PCI_ALLOWED"
@@ -99,7 +99,9 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 	nrHugepages := req.HugePageCount
-	if nrHugepages < 0 {
+	// Always supply non-zero number of hugepages in request otherwise devices cannot be
+	// accessed.
+	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages
 	}
 
