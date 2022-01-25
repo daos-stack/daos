@@ -160,7 +160,6 @@ query_normal_recx(struct open_query *query, daos_recx_t *recx)
 	int			rc;
 	int			close_rc;
 	uint32_t		inob;
-	bool			exist = false;
 
 
 	vos_evt_desc_cbs_init(&cbs, query->qt_pool, query->qt_coh);
@@ -205,18 +204,12 @@ query_normal_recx(struct open_query *query, daos_recx_t *recx)
 	D_DEBUG(DB_TRACE, "query recx "DF_U64"/"DF_U64" : "DF_RC"\n", recx->rx_idx,
 		recx->rx_nr, DP_RC(rc));
 fini:
-	if (rc == 0)
-		exist = true;
-	if (rc == -DER_NONEXIST)
-		rc = 0;
 	close_rc = evt_iter_finish(ih);
-	if (rc == 0)
+	if (close_rc != 0)
 		rc = close_rc;
 out:
 	close_rc = evt_close(toh);
-	if (rc == 0 && !exist)
-		rc = -DER_NONEXIST;
-	if (rc == 0)
+	if (close_rc != 0)
 		rc = close_rc;
 
 	return rc;
@@ -347,7 +340,6 @@ query_ec_recx(struct open_query *query, daos_recx_t *recx)
 	int			rc = 0, nrc, prc;
 	int			close_rc;
 	uint32_t		inob;
-	bool			exist = false;
 	bool			nrefresh = true;
 	bool			prefresh = true;
 
@@ -465,22 +457,16 @@ next:
 
 	D_DEBUG(DB_TRACE, "query recx "DF_U64"/"DF_U64" : "DF_RC"\n", recx->rx_idx,
 		recx->rx_nr, DP_RC(rc));
-	if (rc == 0)
-		exist = true;
-	if (rc == -DER_NONEXIST)
-		rc = 0;
 	close_rc = evt_iter_finish(pih);
-	if (rc == 0)
+	if (close_rc != 0)
 		rc = close_rc;
 close_nih:
 	close_rc = evt_iter_finish(nih);
-	if (rc == 0)
+	if (close_rc != 0)
 		rc = close_rc;
 out:
 	close_rc = evt_close(toh);
-	if (rc == 0 && !exist)
-		rc = -DER_NONEXIST;
-	if (rc == 0)
+	if (close_rc != 0)
 		rc = close_rc;
 
 	return rc;
