@@ -397,10 +397,8 @@ query_ec_recx(struct open_query *query, daos_recx_t *recx)
 				break;
 			}
 		} else if (nrc != 0) {
-			if (prc == -DER_NONEXIST) {
-				rc = nrc;
-				break;
-			}
+			rc = nrc;
+			break;
 		} else if (prc != 0 && prc != -DER_NONEXIST) {
 			rc = prc;
 			break;
