@@ -137,7 +137,7 @@ func newServer(log *logging.LeveledLogger, cfg *config.Server, faultDomain *syst
 		log:         log,
 		cfg:         cfg,
 		hostname:    hostname,
-		runningUser: cu, //.Username,
+		runningUser: cu,
 		faultDomain: faultDomain,
 		harness:     harness,
 	}, nil

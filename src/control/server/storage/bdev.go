@@ -340,7 +340,6 @@ type (
 		WriteConfig(BdevWriteConfigRequest) (*BdevWriteConfigResponse, error)
 		QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error)
 		UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error)
-		//CleanHugePages(BdevCleanHugePagesRequest) (*BdevCleanHugePagesRequest, error)
 	}
 
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
@@ -473,18 +472,6 @@ type (
 	NVMeFirmwareUpdateResponse struct {
 		Results []NVMeDeviceFirmwareUpdateResult
 	}
-
-//	// BdevCleanHugePagesRequest defines the parameters for removing hugepages.
-//	BdevCleanHugePagesRequest struct {
-//		pbin.ForwardableRequest
-//		TargetUser string
-//		TargetPID  uint64
-//	}
-//
-//	BdevCleanHugePagesResponse struct {
-//		NrPagesRemoved int
-//		Error          error
-//	}
 )
 
 // getNumaNodeBusidRange sets range parameters in the input request either to user configured

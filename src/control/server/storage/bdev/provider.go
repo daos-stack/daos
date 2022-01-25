@@ -24,7 +24,6 @@ type (
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
 		UpdateFirmware(pciAddr string, path string, slot int32) error
 		WriteConfig(storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error)
-		//CleanHugePages(storage.BdevCleanHugePagesRequest) (*storage.BdevCleanHugePagesResponse, error)
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -83,9 +82,3 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 func (p *Provider) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {
 	return p.backend.WriteConfig(req)
 }
-
-// CleanHugePages calls into the bdev backend to clean any hugepages owned by the specified user
-// and created by the specified PID.
-//func (p *Provider) CleanHugePages(req storage.BdevCleanHugePagesRequest) (*storage.BdevCleanHugePagesResponse, error) {
-//	return p.backend.CleanHugePages(req)
-//}
