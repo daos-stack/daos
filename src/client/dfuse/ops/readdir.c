@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -107,6 +107,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 	ie->ie_obj = obj;
 	ie->ie_stat = entry->attr;
+
+	D_INIT_LIST_HEAD(&ie->ie_odir_list);
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 

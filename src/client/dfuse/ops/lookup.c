@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,6 +36,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 
 	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
+
+	D_INIT_LIST_HEAD(&ie->ie_odir_list);
 
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;

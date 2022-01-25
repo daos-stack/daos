@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,6 +48,7 @@ struct dfuse_projection_info {
 	sem_t				dpi_sem;
 	pthread_t			dpi_thread;
 	bool				dpi_shutdown;
+	pthread_mutex_t			dpi_op_lock;
 };
 
 /* Launch fuse, and do not return until complete */
@@ -89,6 +90,10 @@ struct dfuse_obj_hdl {
 	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */
 	daos_anchor_t			doh_anchor;
+
+	/* List of blocked opendirs */
+	d_list_t			doh_dir_list;
+	fuse_req_t			doh_od_req;
 
 	/** Array of entries returned by dfs but not reported to kernel */
 	struct dfuse_readdir_entry	*doh_dre;
@@ -535,6 +540,9 @@ struct dfuse_inode_entry {
 
 	/** File has been unlinked from daos */
 	bool			ie_unlinked;
+
+	bool ie_odir;
+	d_list_t		ie_odir_list;
 };
 
 /* Generate the inode to use for this dfs object.  This is generating a single
