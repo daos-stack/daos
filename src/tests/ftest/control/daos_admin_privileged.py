@@ -45,8 +45,7 @@ class DaosAdminPrivTest(TestWithServers):
         actual = file_stats.st_mode & ~stat.S_IRWXO # mask out Other
                                                     # bits for non-RPM
         if (actual ^ desired) > 0:
-            self.fail("Incorrect daos_admin permissions: {}".format(
-                oct(actual)))
+            self.fail("Incorrect daos_admin permissions: {}".format(oct(actual)))
 
         # Setup server as non-root
         self.log.info("(0)Preparing to run daos_server as non-root user")
@@ -64,15 +63,13 @@ class DaosAdminPrivTest(TestWithServers):
         try:
             self.server_managers[0].prepare_storage(user, True, False)
         except ServerFailed as error:
-            self.fail(
-                "(1)Failed preparing SCM as user {}: {}".format(user, error))
+            self.fail("(1)Failed preparing SCM as user {}: {}".format(user, error))
 
         self.log.info("(2)Performing NVMe storage prepare")
         try:
             self.server_managers[0].prepare_storage(user, False, True)
         except ServerFailed as err:
-            self.fail(
-                "##(2)Failed preparing NVMe as user {}: {}".format(user, err))
+            self.fail("##(2)Failed preparing NVMe as user {}: {}".format(user, err))
 
         # Start server
         self.log.info("(3)Starting server as non-root")

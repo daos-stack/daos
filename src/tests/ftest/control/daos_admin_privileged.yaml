@@ -14,7 +14,7 @@ server_config:
   port: 10001
   servers:
     bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
   transport_config:
