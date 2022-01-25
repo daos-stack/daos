@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,7 +19,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -154,7 +155,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		engineCount     int
-		netDevClass     uint32
+		netDevClass     hardware.NetDevClass
 		uErr            error
 		hostResponses   []*HostResponse
 		expHostErrs     []*MockHostError
@@ -220,7 +221,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 		},
 		"single engine set and single interface select ethernet": {
 			engineCount:     1,
-			netDevClass:     netdetect.Ether,
+			netDevClass:     hardware.Ether,
 			hostResponses:   dualHostRespSame(fabIfs3),
 			expIfs:          []*HostFabricInterface{eth0},
 			expCoresPerNuma: 24,
@@ -237,9 +238,9 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			expCoresPerNuma: 24,
 		},
 		"engine count unset and dual numa with dual ib interfaces but ethernet selected": {
-			netDevClass:   netdetect.Ether,
+			netDevClass:   hardware.Ether,
 			hostResponses: dualHostRespSame(fabIfs4),
-			expErr: errors.Errorf(errInsufNrIfaces, netdetect.DevClassName(netdetect.Ether), 2, 0,
+			expErr: errors.Errorf(errInsufNrIfaces, hardware.Ether, 2, 0,
 				make(numaNetIfaceMap)),
 		},
 		"engine count unset and dual numa with dual eth interfaces": {
@@ -248,9 +249,9 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			expCoresPerNuma: 24,
 		},
 		"engine count unset and dual numa with dual eth interfaces but infiniband selected": {
-			netDevClass:   netdetect.Infiniband,
+			netDevClass:   hardware.Infiniband,
 			hostResponses: dualHostRespSame(fabIfs5),
-			expErr: errors.Errorf(errInsufNrIfaces, netdetect.DevClassName(netdetect.Infiniband), 2, 0,
+			expErr: errors.Errorf(errInsufNrIfaces, hardware.Infiniband, 2, 0,
 				make(numaNetIfaceMap)),
 		},
 		"multiple engines set with dual ib interfaces": {
@@ -288,7 +289,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			})
 
 			if tc.netDevClass == 0 {
-				tc.netDevClass = NetDevAny
+				tc.netDevClass = hardware.NetDevAny
 			}
 			req := ConfigGenerateReq{
 				NrEngines: tc.engineCount,
@@ -727,7 +728,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 					).
@@ -749,7 +750,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 					).
@@ -779,7 +780,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 					).
@@ -810,7 +811,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 					).
@@ -831,11 +832,11 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
+							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(common.MockPCIAddr(1)),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
@@ -861,11 +862,11 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
+							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2)...),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
@@ -878,19 +879,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricInterfacePort(
 						int(defaultFiPort+defaultFiPortInterval)).
 					WithFabricProvider("ofi+psm2").
-					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem1").
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
+							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
 					).
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
-					WithStorageNumaNodeIndex(1).
 					WithTargetCount(15).
 					WithHelperStreamCount(6)),
 		},
@@ -909,11 +908,11 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
+							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(common.MockPCIAddr(1)),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
@@ -940,11 +939,11 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
+							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2)...),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
@@ -957,19 +956,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricInterfacePort(
 						int(defaultFiPort+defaultFiPortInterval)).
 					WithFabricProvider("ofi+psm2").
-					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass(storage.ClassDcpm.String()).
+							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem1").
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
-							WithBdevClass(storage.ClassNvme.String()).
+							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
 					).
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
-					WithStorageNumaNodeIndex(1).
 					WithTargetCount(6).
 					WithHelperStreamCount(0)),
 		},
@@ -996,9 +993,9 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			}
 
 			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(security.CertificateConfig{}),
-				cmpopts.IgnoreFields(engine.Config{}, "GetNetDevCls", "ValidateProvider",
-					"GetIfaceNumaNode"),
+				cmpopts.IgnoreUnexported(security.CertificateConfig{},
+					config.Server{}),
+				cmpopts.IgnoreUnexported(sysfs.Provider{}),
 			}
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 
