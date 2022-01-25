@@ -58,6 +58,7 @@
 /** Number of A-keys for attributes in any object entry */
 #define INODE_AKEYS	10
 #define INODE_AKEY_NAME	"DFS_INODE"
+#define SLINK_AKEY_NAME	"DFS_SLINK"
 #define MODE_IDX	0
 #define OID_IDX		(sizeof(mode_t))
 #define ATIME_IDX	(OID_IDX + sizeof(daos_obj_id_t))
@@ -67,7 +68,8 @@
 #define OCLASS_IDX	(CSIZE_IDX + sizeof(daos_size_t))
 #define UID_IDX		(OCLASS_IDX + sizeof(daos_oclass_id_t))
 #define GID_IDX		(UID_IDX + sizeof(uid_t))
-#define SYML_IDX	(GID_IDX + sizeof(gid_t))
+#define SIZE_IDX	(GID_IDX + sizeof(gid_t))
+#define END_IDX		(SIZE_IDX + sizeof(daos_size_t))
 
 /** Parameters for dkey enumeration */
 #define ENUM_DESC_NR	10
@@ -154,7 +156,7 @@ struct dfs_entry {
 	/** mode (permissions + entry type) */
 	mode_t			mode;
 	/* Length of value string, not including NULL byte */
-	uint16_t		value_len;
+	daos_size_t		value_len;
 	/** Object ID if not a symbolic link */
 	daos_obj_id_t		oid;
 	/* Time of last access */
@@ -409,12 +411,12 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	d_iov_set(&iod->iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod->iod_nr	= 1;
 	recx.rx_idx	= 0;
-	recx.rx_nr	= SYML_IDX;
+	recx.rx_nr	= END_IDX;
 	iod->iod_recxs	= &recx;
 	iod->iod_type	= DAOS_IOD_ARRAY;
 	iod->iod_size	= 1;
-	i = 0;
 
+	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
 	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(time_t));
@@ -424,11 +426,12 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	d_iov_set(&sg_iovs[i++], &entry->oclass, sizeof(daos_oclass_id_t));
 	d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
 	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
+	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
 
-	/** if we are reading from a layout ver 2 or older container, don't read the uid/gid */
+	/* if we are reading from a layout ver 2 or older, don't read the uid, gid, and val len */
 	if (ver <= 2) {
 		recx.rx_nr = UID_IDX;
-		i = i - 2;
+		i = i - 3;
 	}
 
 	sgl->sg_nr	= i;
@@ -446,26 +449,43 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 		xsizes[i] = iods[i].iod_size;
 
 	if (fetch_sym && S_ISLNK(entry->mode)) {
-		char *value;
+		char		*value;
+		daos_size_t	val_len;
 
-		D_ALLOC(value, DFS_MAX_PATH);
+		if (ver > 2) {
+			/** symlink is empty */
+			if (entry->value_len == 0)
+				D_GOTO(out, rc = EIO);
+			val_len = entry->value_len;
+		} else {
+			val_len = DFS_MAX_PATH;
+		}
+
+		D_ALLOC(value, val_len);
 		if (value == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
 		/*
 		 * If we are reading from a layout ver 2 or older container, symlink value starts at
-		 * the current uid_idx.
+		 * the current uid_idx; otherwise symlink is in a separate akey.
 		 */
-		if (ver <= 2)
+		if (ver <= 2) {
 			recx.rx_idx = UID_IDX;
-		else
-			recx.rx_idx = SYML_IDX;
-		recx.rx_nr = DFS_MAX_PATH;
+			recx.rx_nr = val_len;
 
-		d_iov_set(&sg_iovs[0], value, DFS_MAX_PATH);
+		} else {
+			d_iov_set(&iod->iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
+			iod->iod_nr	= 1;
+			iod->iod_recxs	= NULL;
+			iod->iod_type	= DAOS_IOD_SINGLE;
+			iod->iod_size	= DAOS_REC_ANY;
+		}
+
+		d_iov_set(&sg_iovs[0], value, val_len);
 		sgl->sg_nr	= 1;
 		sgl->sg_nr_out	= 0;
 		sgl->sg_iovs	= sg_iovs;
+
 
 		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, iod, sgl, NULL, NULL);
 		if (rc) {
@@ -474,12 +494,21 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
-		entry->value_len = sg_iovs[0].iov_len;
+		if (ver > 2) {
+			/** make sure that the akey value size matches what is in the inode */
+			if (iod->iod_size != val_len) {
+				D_ERROR("Symlink value length inconsistent with inode data\n");
+				D_GOTO(out, rc = EIO);
+			}
+		} else {
+			/*
+			 * update the length in the entry struct since it's not known at this point
+			 * in the older layout version.
+			 */
+			entry->value_len = sg_iovs[0].iov_len;
+		}
 
 		if (entry->value_len != 0) {
-			/* Return value here, and allow the caller to truncate the buffer if they
-			 * want to
-			 */
 			entry->value = value;
 		} else {
 			D_ERROR("Failed to load value for symlink\n");
@@ -492,7 +521,6 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 		*exists = false;
 	else
 		*exists = true;
-
 out:
 	if (xnr) {
 		if (pxnames) {
@@ -544,24 +572,26 @@ static int
 insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	     uint64_t flags, struct dfs_entry *entry)
 {
-	d_sg_list_t	sgl;
+	d_sg_list_t	sgls[2];
 	d_iov_t		sg_iovs[INODE_AKEYS];
-	daos_iod_t	iod;
+	d_iov_t		sym_iov;
+	daos_iod_t	iods[2];
 	daos_recx_t	recx;
 	daos_key_t	dkey;
 	unsigned int	i;
+	unsigned int	nr_iods;
 	int		rc;
 
 	d_iov_set(&dkey, (void *)name, len);
-	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
-	iod.iod_nr	= 1;
-	recx.rx_idx	= 0;
-	recx.rx_nr	= SYML_IDX;
-	iod.iod_recxs	= &recx;
-	iod.iod_type	= DAOS_IOD_ARRAY;
-	iod.iod_size	= 1;
-	i = 0;
+	d_iov_set(&iods[0].iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iods[0].iod_nr		= 1;
+	recx.rx_idx		= 0;
+	recx.rx_nr		= END_IDX;
+	iods[0].iod_recxs	= &recx;
+	iods[0].iod_type	= DAOS_IOD_ARRAY;
+	iods[0].iod_size	= 1;
 
+	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
 	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(time_t));
@@ -570,32 +600,56 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->oclass, sizeof(daos_oclass_id_t));
 
-	/** if we are writing to a layout ver 2 or older container, don't add the uid/gid */
+	nr_iods = 1;
+	/*
+	 * if we are writing to a layout ver 2 or older container, don't add the uid/gid, and put
+	 * symlink value in the same akey.
+	 */
 	if (ver <= 2) {
+		/*
+		 * length of the array in that version is at the first new entry added in the new
+		 * format, which is the uid.
+		 */
 		recx.rx_nr = UID_IDX;
+
+		/** Add symlink value to the array */
+		if (S_ISLNK(entry->mode)) {
+			d_iov_set(&sg_iovs[i++], entry->value, entry->value_len);
+			recx.rx_nr += entry->value_len;
+		}
 	} else {
 		d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
 		d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
+		/** Add file size / symlink length. for now, file size cached in the entry is 0. */
+		d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
+
+		/** add the symlink as a separate akey */
+		if (S_ISLNK(entry->mode)) {
+			nr_iods = 2;
+			d_iov_set(&iods[1].iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
+			iods[1].iod_nr		= 1;
+			iods[1].iod_recxs	= NULL;
+			iods[1].iod_type	= DAOS_IOD_SINGLE;
+			iods[1].iod_size	= entry->value_len;
+
+			d_iov_set(&sym_iov, entry->value, entry->value_len);
+			sgls[1].sg_nr = 1;
+			sgls[1].sg_nr_out = 0;
+			sgls[1].sg_iovs = &sym_iov;
+		}
 	}
 
-	/** Add symlink value if Symlink */
-	if (S_ISLNK(entry->mode)) {
-		d_iov_set(&sg_iovs[i++], entry->value, entry->value_len);
-		recx.rx_nr += entry->value_len;
-	}
+	sgls[0].sg_nr		= i;
+	sgls[0].sg_nr_out	= 0;
+	sgls[0].sg_iovs		= sg_iovs;
 
-	sgl.sg_nr	= i;
-	sgl.sg_nr_out	= 0;
-	sgl.sg_iovs	= sg_iovs;
-
-	rc = daos_obj_update(oh, th, flags, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, th, flags, &dkey, nr_iods, iods, sgls, NULL);
 	if (rc) {
 		/** don't log error if conditional failed */
 		if (rc != -DER_EXIST && rc != -DER_NO_PERM)
 			D_ERROR("Failed to insert entry '%s', "DF_RC"\n", name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
-
 	return 0;
 }
 
@@ -650,9 +704,17 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 
 	memset(stbuf, 0, sizeof(struct stat));
 
-	/* Check if parent has the entry */
-	rc = fetch_entry(dfs->layout_v, oh, th, name, len, true, &exists, &entry,
-			 0, NULL, NULL, NULL);
+	/*
+	 * Check if parent has the entry. In older layout version, we need to fetch the symlink to
+	 * determine the size, but in current version, the size is stored in the inode akey, so no
+	 * need to fetch the symlink.
+	 */
+	if (dfs->layout_v > 2)
+		rc = fetch_entry(dfs->layout_v, oh, th, name, len, false, &exists, &entry, 0,
+				 NULL, NULL, NULL);
+	else
+		rc = fetch_entry(dfs->layout_v, oh, th, name, len, true, &exists, &entry, 0,
+				 NULL, NULL, NULL);
 	if (rc)
 		return rc;
 
@@ -3708,8 +3770,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name is NULL)\n",
-				parent->name);
+			D_ERROR("Invalid path %s and entry name is NULL)\n", parent->name);
 			return EINVAL;
 		}
 		name = parent->name;
@@ -3741,8 +3802,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name),
-			obj, stbuf);
+	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, stbuf);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3879,12 +3939,13 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	if (!exists)
 		D_GOTO(out, rc = ENOENT);
 
+	printf("CHMOD Entry %s val size = %zu\n", name, entry.value_len);
+	printf("CHMOD Entry val = %s\n", entry.value);
 	/** resolve symlink */
 	if (S_ISLNK(entry.mode)) {
 		D_ASSERT(entry.value);
 
-		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym,
-				     NULL, NULL, 0);
+		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
 		if (rc) {
 			D_ERROR("Failed to lookup symlink %s\n", entry.value);
 			D_FREE(entry.value);

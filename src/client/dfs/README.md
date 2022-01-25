@@ -82,7 +82,11 @@ Directory Object
         mtime: modify time
         ctime: change time
         chunk_size: chunk_size of file (0 if default or not a file)
+        object class: default object class of objects under this dir
         syml: symlink value (does not exist if not a symlink)
+        uid: user idnetifier
+        gid: group idnetifier
+        size: symlink size (0 for files/dirs)
     A-key "x:xattr1"	// extended attribute name (if any)
     A-key "x:xattr2"	// extended attribute name (if any)
 ~~~~~~
@@ -165,9 +169,18 @@ space allocation cannot be supported by a naïve set_size operation.
 
 ## Symbolic Links
 
-As mentioned in the directory section, symbolic links will not have an object
-for the symlink itself, but will have a value in the entry itself of the parent
-directory containing the actual value of the symlink.
+As mentioned in the directory section, symbolic links will not have an object for the symlink
+itself, but will have a value in the entry itself of the parent directory containing the actual
+value of the symlink. In addition to inode akey, symlinks have an akey that contains a single value
+of the symlink value itself:
+
+Symlink Object
+  D-key "entry1_name"
+    A-key "DFS_INODE"
+      ..
+    A-key "DFS_SLINK" - only exists if entry is a symlink
+      Single Value:
+        Symlink value
 
 ## Access Permissions
 

@@ -359,7 +359,6 @@ dfs_test_syml(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, strlen(val) + 1);
 	assert_string_equal(val, tmp_buf);
-
 	rc = dfs_release(sym);
 	assert_int_equal(rc, 0);
 
