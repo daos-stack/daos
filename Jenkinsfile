@@ -63,7 +63,19 @@ pipeline {
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: "full_regression",
-               description: 'Test-tag to use for this run (i.e pr, daily_regression, full_regression, etc.')
+               description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'CI_FUNCTIONAL_VM9_LABEL',
+               defaultValue: 'ci_vm9',
+               description: 'Label to use for 9 VM functional tests')
+        string(name: 'CI_NVME_3_LABEL',
+               defaultValue: 'ci_nvme3',
+               description: 'Label to use for 3 node NVMe tests')
+        string(name: 'CI_NVME_5_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node NVMe tests')
+        string(name: 'CI_NVME_9_LABEL',
+               defaultValue: 'ci_nvme9',
+               description: 'Label to use for 9 node NVMe tests')
     }
 
     stages {
@@ -93,7 +105,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -116,7 +128,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -139,7 +151,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -163,7 +175,7 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme3'
+                        label params.CI_NVME_3_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -187,7 +199,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label 'ci_nvme5'
+                        label params.CI_NVME_5_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -211,7 +223,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label 'ci_nvme9'
+                        label params.CI_NVME_9_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
