@@ -1729,7 +1729,6 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		DH_PERROR_DER(ap, rc, "unknown type for %s", dst_path);
 		D_GOTO(out_copy_symlink, rc);
 	}
-	
 out_copy_symlink:
 	src_file_dfs->offset = 0;
 	dst_file_dfs->offset = 0;
