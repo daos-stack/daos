@@ -47,7 +47,7 @@ class DaosAdminPrivTest(TestWithServers):
                 oct(actual)))
 
         # Setup server as non-root
-        self.log.info("Preparing to run daos_server as non-root user")
+        self.log.info("(0)Preparing to run daos_server as non-root user")
         self.add_server_manager()
         self.configure_manager(
             "server", self.server_managers[0], self.hostlist_servers,
@@ -57,36 +57,35 @@ class DaosAdminPrivTest(TestWithServers):
         # Get user
         user = getpass.getuser()
 
+        # Uncomment the below line after DAOS-9352 is resolved
         # Prep server for format, run command under non-root user
-        self.log.info("Performing SCM storage prepare")
-        try:
-            self.server_managers[0].prepare_storage(user, True, False)
-        except ServerFailed as error:
-            self.fail("Failed preparing SCM as user {}: {}".format(user, error))
-
-        # Uncomment the below line after DAOS-4287 is resolved
-        # # Prep server for format, run command under non-root user
-        # self.log.info("Performing NVMe storage prepare")
+        # self.log.info("Performing SCM storage prepare")
         # try:
-        #     self.server_managers[0].prepare_storage(user, False, True)
-        # except ServerFailed as err:
-        #     self.fail(
-        #         "Failed preparing NVMe as user {}: {}".format(user, err))
+        #     self.server_managers[0].prepare_storage(user, True, False)
+        # except ServerFailed as error:
+        #     self.fail("Failed preparing SCM as user {}: {}".format(user, error))
+
+        self.log.info("(1)Performing NVMe storage prepare")
+        try:
+            self.server_managers[0].prepare_storage(user, False, True)
+        except ServerFailed as err:
+            self.fail(
+                "##(1)Failed preparing NVMe as user {}: {}".format(user, err))
 
         # Start server
-        self.log.info("Starting server as non-root")
+        self.log.info("(2)Starting server as non-root")
         try:
             self.server_managers[0].detect_format_ready()
         except ServerFailed as error:
             self.fail(
-                "Failed starting server before format as non-root user: "
+                "##(2)Failed starting server before format as non-root user: "
                 "{}".format(error))
 
         # Run format command under non-root user
-        self.log.info("Performing SCM format")
+        self.log.info("(3)Performing SCM format")
         result = self.server_managers[0].dmg.storage_format()
         if result is None:
-            self.fail("Failed to format storage")
+            self.fail("##(3)Failed to format storage")
 
         # Verify format success when all the daos_engine start. Use dmg to detect server start.
         try:
