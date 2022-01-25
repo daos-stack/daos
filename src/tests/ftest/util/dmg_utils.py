@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1134,6 +1134,18 @@ class DmgCommand(DmgCommandBase):
         """
         return self._parse_pool_list("svc_reps", **kwargs)
 
+    def version(self):
+        """Call dmg version.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_result(["version"])
 
 def check_system_query_status(data):
     """Check if any server crashed.

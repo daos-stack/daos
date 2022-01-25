@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -918,11 +918,8 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		D_ASSERTF(id_in->id_epoch != 0, "epoch "DF_U64" opc %d\n",
 			  id_in->id_epoch, opc);
 		rc = ilog_ptr_set(lctx, root, &tmp);
-		if (rc != 0)
-			goto done;
-		rc = ilog_log_add(lctx, &root->lr_id);
-		if (rc != 0)
-			goto done;
+		if (rc == 0)
+			rc = ilog_log_add(lctx, &root->lr_id);
 	} else if (root->lr_tree.it_embedded) {
 		bool	is_equal;
 
