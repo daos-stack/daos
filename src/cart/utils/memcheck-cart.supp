@@ -308,36 +308,3 @@
    fun:fi_tsend
    ...
 }
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:calloc
-   obj:/usr/lib64/libibverbs.so.1.7.26.0
-   fun:nl_recvmsgs_report
-   fun:nl_recvmsgs
-   obj:/usr/lib64/libibverbs.so.1.7.26.0
-   obj:/usr/lib64/libibverbs.so.1.7.26.0
-   obj:/usr/lib64/libibverbs.so.1.7.26.0
-   fun:ibv_get_device_list
-   fun:vrb_have_device
-   fun:vrb_init_info
-   fun:fi_verbs_ini
-   fun:fi_ini
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:calloc
-   ...
-   fun:racecall
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   ...
-   fun:racecall
-}

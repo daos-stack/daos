@@ -1156,7 +1156,6 @@ class DFuse():
         if self.container:
             cmd.extend(['--container', self.container])
         print('Running {}'.format(' '.join(cmd)))
-        # pylint: disable=consider-using-with
         self._sp = subprocess.Popen(cmd, env=self._env)
         print('Started dfuse at {}'.format(self.dir))
         print('Log file is {}'.format(self.log_file))

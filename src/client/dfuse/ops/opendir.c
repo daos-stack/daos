@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,6 +60,6 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 		D_FREE(oh);
 	} else {
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-		dfuse_dfs_release(fs_handle, oh, oh->doh_obj);
+		dfuse_dfs_release(fs_handle, oh->doh_obj, (void **)&oh);
 	}
 };

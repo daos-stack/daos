@@ -394,28 +394,32 @@ d_hash_table_ops_t cont_hops = {
 /** Release a dfs object, and free associated memory region.
  *
  * If the call to dfs_release fails then realloc the ptr to a new descriptor type, and keep the
- * dfs object for later retry.
+ * dfs object for later retry.  Always frees ptr.
  */
 void
-dfuse_dfs_release(struct dfuse_projection_info *fs_handle, void *ptr, dfs_obj_t *obj)
+dfuse_dfs_release(struct dfuse_projection_info *fs_handle, dfs_obj_t *obj, void **ptr)
 {
 	struct dfuse_dfs_list	*ddl;
+	void			*_ptr = *ptr;
 	int			rc;
+
+	*ptr = NULL;
 
 	rc = dfs_release(obj);
 	if (rc == 0) {
-		D_FREE(ptr);
+		D_FREE(_ptr);
+
 		return;
 	}
-	DFUSE_TRA_ERROR(ptr, "dfs_release() failed: %d (%s)", rc, strerror(rc));
+	DFUSE_TRA_ERROR(_ptr, "dfs_release() failed: %d (%s)", rc, strerror(rc));
 
-	D_REALLOC(ddl, ptr, 0, sizeof(*ddl));
+	D_REALLOC(ddl, _ptr, 0, sizeof(*ddl));
 
 	/* If the realloc failed (and it shouldn't because the new structure is smaller) then just
 	 * use the larger memory region anyway
 	 */
 	if (ddl == NULL)
-		ddl = ptr;
+		ddl = _ptr;
 
 	ddl->ddl_obj = obj;
 
@@ -1145,8 +1149,7 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	/* Drop the dfs object.  This will try to close it, but if it fails it'll save it to a free
 	 * list for retry later
 	 */
-	dfuse_dfs_release(fs_handle, ie, ie->ie_obj);
-	ie = NULL;
+	dfuse_dfs_release(fs_handle, ie->ie_obj, (void **)&ie);
 
 	if (dfc) {
 		struct dfuse_pool *dfp = dfc->dfs_dfp;

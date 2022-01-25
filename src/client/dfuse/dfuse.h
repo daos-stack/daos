@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -264,7 +264,7 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 
 /* Release a dfs object */
 void
-dfuse_dfs_release(struct dfuse_projection_info *fs_handle, void *ptr, dfs_obj_t *obj);
+dfuse_dfs_release(struct dfuse_projection_info *fs_handle, dfs_obj_t *obj, void **ptr);
 
 /* Retry one previously flushed dfs objects */
 void
