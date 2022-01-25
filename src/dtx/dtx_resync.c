@@ -591,7 +591,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		uint64_t	hint = 0;
 
 		dss_set_start_epoch();
-		vos_dtx_cache_reset(cont->sc_hdl);
+		vos_dtx_cache_reset(cont->sc_hdl, true);
 
 		while (1) {
 			rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);

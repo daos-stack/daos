@@ -1409,6 +1409,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
 	hdl->sch_flags = flags;
 	hdl->sch_sec_capas = sec_capas;
+	hdl->sch_closed = 0;
 
 	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
 	if (rc != 0)
@@ -1620,6 +1621,7 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 	/* Remove the handle from hash first, following steps may yield */
 	ds_cont_local_close(cont_hdl_uuid);
 
+	hdl->sch_closed = 1;
 	cont_child = hdl->sch_cont;
 	if (cont_child != NULL) {
 		D_DEBUG(DF_DSMS, DF_CONT": closing (%d): hdl="DF_UUID"\n",
