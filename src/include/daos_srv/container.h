@@ -122,6 +122,7 @@ struct ds_cont_child {
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
 	uint32_t		 sc_rw_disabled:1;
+	daos_epoch_t		 sc_migrate_epoch;
 };
 
 typedef uint64_t (*agg_param_get_eph_t)(struct ds_cont_child *cont);

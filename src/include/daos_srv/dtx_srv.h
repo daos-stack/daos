@@ -242,6 +242,8 @@ int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t ep
 
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
+int dtx_discard(struct ds_cont_child *cont, daos_epoch_t max_epoch);
+
 /**
  * Check whether the given DTX is resent one or not.
  *

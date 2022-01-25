@@ -2640,6 +2640,33 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		return rc;
 	}
 
+	if (tls->mpt_opc == RB_OP_REINT && unlikely(cont->sc_migrate_epoch < tls->mpt_max_eph)) {
+		struct ds_pool		*pool = cont->sc_pool->spc_pool;
+		struct pool_target	*target;
+		d_rank_t		 myrank;
+
+		crt_group_rank(NULL, &myrank);
+
+		ABT_rwlock_rdlock(pool->sp_lock);
+		rc = pool_map_find_target_by_rank_idx(pool->sp_map, myrank, tgt_idx, &target);
+		D_ASSERT(rc == 1);
+		ABT_rwlock_unlock(pool->sp_lock);
+
+		/* For healthy target, do not need to discard stale DTX entries. */
+		if (target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+			rc = dtx_discard(cont, tls->mpt_max_eph);
+			if (rc != 0) {
+				D_ERROR("Migration failed to discard stale DTX entries prior to "
+					"reintegration, pool/cont "DF_UUID"/"DF_UUID" rc = %d\n",
+					DP_UUID(tls->mpt_pool_uuid), DP_UUID(cont->sc_uuid), rc);
+				ds_cont_child_put(cont);
+				return rc;
+			}
+		}
+
+		cont->sc_migrate_epoch = tls->mpt_max_eph;
+	}
+
 	/* Wait until container aggregation are stopped */
 	while ((cont->sc_ec_agg_active || cont->sc_vos_agg_active) &&
 	       !tls->mpt_fini && !cont->sc_stopping) {

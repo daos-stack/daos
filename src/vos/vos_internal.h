@@ -821,6 +821,7 @@ struct vos_iterator {
 				 it_for_discard:1,
 				 it_for_migration:1,
 				 it_cleanup_stale_dtx:1,
+				 it_list_act_dtx:1,
 				 it_show_uncommitted:1,
 				 it_ignore_uncommitted:1;
 };

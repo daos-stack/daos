@@ -1853,3 +1853,72 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 
 	return rc;
 }
+
+struct dtx_discard_cb_args {
+	d_list_t	ddca_list;
+	daos_epoch_t	ddca_epoch;
+};
+
+struct dtx_discard_item {
+	d_list_t	ddi_link;
+	struct dtx_id	ddi_xid;
+	daos_epoch_t	ddi_epoch;
+};
+
+static int
+dtx_discard_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
+{
+	struct dtx_discard_cb_args	*ddca = args;
+	struct dtx_discard_item		*ddi;
+
+	if (ent->ie_epoch > ddca->ddca_epoch)
+		return 0;
+
+	D_ALLOC_PTR(ddi);
+	if (ddi == NULL)
+		return -DER_NOMEM;
+
+	ddi->ddi_xid = ent->ie_dtx_xid;
+	ddi->ddi_epoch = ent->ie_epoch;
+	d_list_add_tail(&ddi->ddi_link, &ddca->ddca_list);
+
+	return 0;
+}
+
+int
+dtx_discard(struct ds_cont_child *cont, daos_epoch_t max_epoch)
+{
+	struct dtx_discard_item		*ddi;
+	struct dtx_discard_cb_args	 ddca;
+	int				 count = 0;
+	int				 rc;
+
+	D_INIT_LIST_HEAD(&ddca.ddca_list);
+	ddca.ddca_epoch = max_epoch;
+
+	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid, dtx_discard_iter_cb,
+			  &ddca, VOS_ITER_DTX, VOS_IT_LIST_ACT_DTX);
+	if (rc < 0) {
+		D_ERROR("Failed to list active DTX entries for "DF_UUID": "DF_RC"\n",
+			DP_UUID(cont->sc_uuid), DP_RC(rc));
+		goto out;
+	}
+
+	while ((ddi = d_list_pop_entry(&ddca.ddca_list, struct dtx_discard_item,
+				       ddi_link)) != NULL) {
+		rc = vos_dtx_abort(cont->sc_hdl, &ddi->ddi_xid, ddi->ddi_epoch);
+		D_FREE(ddi);
+		if (rc != 0)
+			break;
+
+		if (unlikely(count++ >= DTX_YIELD_CYCLE))
+			ABT_thread_yield();
+	}
+
+out:
+	while ((ddi = d_list_pop_entry(&ddca.ddca_list, struct dtx_discard_item,
+				       ddi_link)) != NULL)
+		D_FREE(ddi);
+
+	return rc > 0 ? 0 : rc;
+}

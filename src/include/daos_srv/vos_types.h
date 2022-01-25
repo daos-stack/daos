@@ -330,8 +330,10 @@ enum {
 	VOS_IT_FOR_DISCARD	= (1 << 8),
 	/** Entry is not committed */
 	VOS_IT_UNCOMMITTED	= (1 << 9),
+	/* Iterate all active DTX entries. */
+	VOS_IT_LIST_ACT_DTX	= (1 << 10),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 10) - 1,
+	VOS_IT_MASK		= (1 << 11) - 1,
 };
 
 /**

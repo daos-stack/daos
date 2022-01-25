@@ -76,6 +76,8 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	if (param->ip_flags & VOS_IT_CLEANUP_DTX)
 		oiter->oit_iter.it_cleanup_stale_dtx = 1;
+	if (param->ip_flags & VOS_IT_LIST_ACT_DTX)
+		oiter->oit_iter.it_list_act_dtx = 1;
 
 	oiter->oit_iter.it_type = type;
 	oiter->oit_cont = cont;
@@ -136,8 +138,8 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 		dae = rec_iov.iov_buf;
 	}
 
-	while (dae->dae_committable || dae->dae_committed ||
-	       dae->dae_aborted || dae->dae_dbd == NULL) {
+	while (dae->dae_committable || dae->dae_committed || dae->dae_aborted ||
+	       (dae->dae_dbd == NULL && !oiter->oit_iter.it_list_act_dtx)) {
 		if (oiter->oit_linear) {
 			if (dae->dae_link.next ==
 			    &oiter->oit_cont->vc_dtx_act_list) {
@@ -208,8 +210,10 @@ dtx_iter_next(struct vos_iterator *iter)
 				 sizeof(struct vos_dtx_act_ent));
 			dae = rec_iov.iov_buf;
 		}
-	} while (dae->dae_committable || dae->dae_committed ||
-		 dae->dae_aborted || dae->dae_dbd == NULL);
+
+		if (dae->dae_committable || dae->dae_committed || dae->dae_aborted)
+			continue;
+	} while (dae->dae_dbd == NULL && !oiter->oit_iter.it_list_act_dtx);
 
 out:
 	return rc;
@@ -248,7 +252,9 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	D_ASSERT(!dae->dae_committable);
 	D_ASSERT(!dae->dae_committed);
 	D_ASSERT(!dae->dae_aborted);
-	D_ASSERT(dae->dae_dbd != NULL);
+
+	if (oiter->oit_iter.it_list_act_dtx)
+		D_ASSERT(dae->dae_dbd != NULL);
 
 	it_entry->ie_epoch = DAE_EPOCH(dae);
 	it_entry->ie_dtx_xid = DAE_XID(dae);
