@@ -29,34 +29,33 @@ ior:
     client_processes:
       np: 16
     test_file: testFile
-    repetitions: 1
-# Remove the below line once DAOS-3143 is resolved
-    dfs_destroy: False
+    repetitions: 3
     iorflags:
         ssf:
-          flags: "-k -v -D 300 -w -r"
+          flags: "-k -v -D 600 -w -r"
           api: POSIX
           dfs_oclass: "SX"
           transfersize_blocksize: !mux
             512B:
               transfer_size: '512B'
-              block_size: '128M'
+              block_size: '32M'
               write_x: 1
               read_x: 1
             1K:
               transfer_size: '1K'
-              block_size: '512M'
+              block_size: '128M'
               write_x: 2
               read_x: 1
             4K:
               transfer_size: '4K'
-              block_size: '512M'
+              block_size: '128M'
               write_x: 1
               read_x: 1
             1M:
               transfer_size: '1M'
-              block_size: '8G'
+              block_size: '2G'
               write_x: 2
               read_x: 1
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
+    disable_caching: True

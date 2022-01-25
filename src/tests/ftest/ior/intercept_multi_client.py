@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -41,11 +41,11 @@ class IorInterceptMultiClient(IorTestBase):
         :avocado: tags=daosio,iorinterceptmulticlient
         """
         suffix = self.ior_cmd.transfer_size.value
-        out = self.run_ior_with_pool(test_file_suffix=suffix)
+        out = self.run_ior_with_pool(test_file_suffix=suffix, fail_on_warning=True)
         without_intercept = IorCommand.get_ior_metrics(out)
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         suffix = suffix + "intercept"
-        out = self.run_ior_with_pool(intercept, test_file_suffix=suffix)
+        out = self.run_ior_with_pool(intercept, test_file_suffix=suffix, fail_on_warning=True)
         with_intercept = IorCommand.get_ior_metrics(out)
         max_mib = int(IorMetrics.Max_MiB)
         min_mib = int(IorMetrics.Min_MiB)
@@ -56,8 +56,9 @@ class IorInterceptMultiClient(IorTestBase):
         # Verifying write performance
         self.assertTrue(float(with_intercept[0][max_mib]) >
                         write_x * float(without_intercept[0][max_mib]))
-        self.assertTrue(float(with_intercept[0][min_mib]) >
-                        write_x * float(without_intercept[0][min_mib]))
+        # DAOS-5857, DAOS-9237 Do not check min performance.
+        #self.assertTrue(float(with_intercept[0][min_mib]) >
+        #                write_x * float(without_intercept[0][min_mib]))
         self.assertTrue(float(with_intercept[0][mean_mib]) >
                         write_x * float(without_intercept[0][mean_mib]))
 
@@ -69,7 +70,7 @@ class IorInterceptMultiClient(IorTestBase):
         read_x = 0.6
         self.assertTrue(float(with_intercept[1][max_mib]) >
                         read_x * float(without_intercept[1][max_mib]))
-        self.assertTrue(float(with_intercept[1][min_mib]) >
-                        read_x * float(without_intercept[1][min_mib]))
+        #self.assertTrue(float(with_intercept[1][min_mib]) >
+        #                read_x * float(without_intercept[1][min_mib]))
         self.assertTrue(float(with_intercept[1][mean_mib]) >
                         read_x * float(without_intercept[1][mean_mib]))
