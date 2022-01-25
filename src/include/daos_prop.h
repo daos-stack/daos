@@ -114,6 +114,19 @@ daos_rf_is_valid(unsigned long long rf)
 #define DAOS_PROP_PO_EC_PDA_DEFAULT	1
 
 /**
+ * the placement algorithm should place two-way and three-way
+ * replication object within a PD; for those object classes with
+ * more than 3 replicas, DAOS will place three replicas within a PD
+ * and switch to another PD.
+ */
+#define DAOS_PROP_PO_RP_PDA_DEFAULT	3
+/**
+ * the placement algorithm always tries to scatter shards of EC
+ * object to different PDs.
+ */
+#define DAOS_PROP_PO_EC_PDA_DEFAULT	1
+
+/**
  * Number of pool property types
  */
 #define DAOS_PROP_PO_NUM	(DAOS_PROP_PO_MAX - DAOS_PROP_PO_MIN - 1)

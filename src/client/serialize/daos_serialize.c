@@ -286,10 +286,10 @@ prop_to_str(uint32_t type)
 		return "DAOS_PROP_CO_ALLOCED_OID";
 	case DAOS_PROP_CO_EC_CELL_SZ:
 		return "DAOS_PROP_CO_EC_CELL_SZ";
-	case DAOS_PROP_CO_RP_PDA:
-		return "DAOS_PROP_CO_RP_PDA";
 	case DAOS_PROP_CO_EC_PDA:
 		return "DAOS_PROP_CO_EC_PDA";
+	case DAOS_PROP_CO_RP_PDA:
+		return "DAOS_PROP_CO_RP_PDA";
 	case DAOS_PROP_CO_ROOTS:
 		return "DAOS_PROP_CO_ROOTS";
 	default:

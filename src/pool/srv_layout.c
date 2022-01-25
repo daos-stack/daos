@@ -66,7 +66,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_PO_REDUN_FAC,
 		.dpe_val	= DAOS_RPOP_PO_REDUN_FAC_DEFAULT,
-
+	}, {
 		.dpe_type	= DAOS_PROP_PO_EC_PDA,
 		.dpe_val	= DAOS_PROP_PO_EC_PDA_DEFAULT,
 
