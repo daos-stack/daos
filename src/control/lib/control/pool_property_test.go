@@ -173,6 +173,28 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "wat",
 			expErr: errors.New("invalid"),
 		},
+		"ec_pda-valid": {
+			name:    "ec_pda",
+			value:   "1",
+			expStr:  "ec_pda:1",
+			expJson: []byte(`{"name":"ec_pda","description":"Performance domain affinity level of EC","value":1}`),
+		},
+		"ec_pda-invalid": {
+			name:   "ec_pda",
+			value:  "-1",
+			expErr: errors.New("invalid"),
+		},
+		"rp_pda-valid": {
+			name:    "rp_pda",
+			value:   "2",
+			expStr:  "rp_pda:2",
+			expJson: []byte(`{"name":"rp_pda","description":"Performance domain affinity level of RP","value":2}`),
+		},
+		"rp_pda-invalid": {
+			name:   "rp_pda",
+			value:  "-1",
+			expErr: errors.New("invalid"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			prop, err := control.PoolProperties().GetProperty(tc.name)

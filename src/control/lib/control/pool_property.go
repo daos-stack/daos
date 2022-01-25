@@ -101,9 +101,10 @@ func PoolProperties() PoolPropertyMap {
 				Description: "EC cell size",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					b, err := humanize.ParseBytes(s)
-					if err != nil {
+					if err != nil || !drpc.EcCellSizeIsValid(b) {
 						return nil, errors.Errorf("invalid EC Cell size %q", s)
 					}
+
 					return &PoolPropertyValue{b}, nil
 				},
 				valueStringer: func(v *PoolPropertyValue) string {
@@ -130,6 +131,42 @@ func PoolProperties() PoolPropertyMap {
 						return nil, rbErr
 					}
 					return &PoolPropertyValue{rfVal}, nil
+				},
+			},
+		},
+		"ec_pda": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyECPda,
+				Description: "Performance domain affinity level of EC",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					ecpdaErr := errors.Errorf("invalid ec_pda value %q", s)
+					pdalvl, err := strconv.ParseUint(s, 10, 32)
+					if err != nil || !drpc.EcPdaIsValid(pdalvl) {
+						return nil, ecpdaErr
+					}
+					return &PoolPropertyValue{pdalvl}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"rp_pda": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyRPPda,
+				Description: "Performance domain affinity level of RP",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rppdaErr := errors.Errorf("invalid rp_pda value %q", s)
+					pdalvl, err := strconv.ParseUint(s, 10, 32)
+					if err != nil || !drpc.RpPdaIsValid(pdalvl) {
+						return nil, rppdaErr
+					}
+					return &PoolPropertyValue{pdalvl}, nil
 				},
 				valueStringer: func(v *PoolPropertyValue) string {
 					n, err := v.GetNumber()

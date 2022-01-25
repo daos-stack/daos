@@ -75,6 +75,16 @@ enum daos_pool_props {
 	 * Pool redundancy factor.
 	 */
 	DAOS_PROP_PO_REDUN_FAC,
+	/**
+	 * The pool performance domain affinity level
+	 * of EC object.
+	 */
+	DAOS_PROP_PO_EC_PDA,
+	/**
+	 * The pool performance domain affinity level
+	 * of replicated object.
+	 */
+	DAOS_PROP_PO_RP_PDA,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -89,6 +99,19 @@ daos_rf_is_valid(unsigned long long rf)
 {
 	return rf <= DAOS_PROP_PO_REDUN_FAC_MAX;
 }
+
+/**
+ * the placement algorithm should place two-way and three-way
+ * replication object within a PD; for those object classes with
+ * more than 3 replicas, DAOS will place three replicas within a PD
+ * and switch to another PD.
+ */
+#define DAOS_PROP_PO_RP_PDA_DEFAULT	3
+/**
+ * the placement algorithm always tries to scatter shards of EC
+ * object to different PDs.
+ */
+#define DAOS_PROP_PO_EC_PDA_DEFAULT	1
 
 /**
  * Number of pool property types
@@ -215,6 +238,10 @@ enum daos_cont_props {
 	DAOS_PROP_CO_ALLOCED_OID,
 	/** EC cell size, it can overwrite DAOS_PROP_CO_EC_CELL_SZ of pool */
 	DAOS_PROP_CO_EC_CELL_SZ,
+	/** Performance domain affinity level of EC object */
+	DAOS_PROP_CO_EC_PDA,
+	/**  performance domain affinity level of RP object */
+	DAOS_PROP_CO_RP_PDA,
 	DAOS_PROP_CO_MAX,
 };
 

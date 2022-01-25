@@ -29,6 +29,8 @@ RDB_STRING_KEY(ds_pool_prop_, nhandles);
 RDB_STRING_KEY(ds_pool_prop_, handles);
 RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
 RDB_STRING_KEY(ds_pool_prop_, redun_fac);
+RDB_STRING_KEY(ds_pool_prop_, ec_pda);
+RDB_STRING_KEY(ds_pool_prop_, rp_pda);
 RDB_STRING_KEY(ds_pool_attr_, user);
 
 /** default properties, should cover all optional pool properties */
@@ -65,6 +67,12 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_type	= DAOS_PROP_PO_REDUN_FAC,
 		.dpe_val	= DAOS_RPOP_PO_REDUN_FAC_DEFAULT,
 
+		.dpe_type	= DAOS_PROP_PO_EC_PDA,
+		.dpe_val	= DAOS_PROP_PO_EC_PDA_DEFAULT,
+
+	}, {
+		.dpe_type	= DAOS_PROP_PO_RP_PDA,
+		.dpe_val	= DAOS_PROP_PO_RP_PDA_DEFAULT,
 	}
 };
 

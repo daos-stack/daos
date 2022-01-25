@@ -692,11 +692,19 @@ func TestPoolGetProp(t *testing.T) {
 						},
 						{
 							Number: propWithVal("ec_cell_sz", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1024},
+							Value:  &mgmtpb.PoolProperty_Numval{4096},
 						},
 						{
 							Number: propWithVal("rf", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
+							Number: propWithVal("ec_pda", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
+							Number: propWithVal("rp_pda", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{2},
 						},
 					},
 				}),
@@ -705,10 +713,12 @@ func TestPoolGetProp(t *testing.T) {
 				ID: common.MockUUID(),
 			},
 			expResp: []*PoolProperty{
-				propWithVal("ec_cell_sz", "1024"),
+				propWithVal("ec_cell_sz", "4096"),
+				propWithVal("ec_pda", "1"),
 				propWithVal("label", "foo"),
 				propWithVal("reclaim", "disabled"),
 				propWithVal("rf", "1"),
+				propWithVal("rp_pda", "2"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
 			},

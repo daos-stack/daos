@@ -6,10 +6,13 @@
 package drpc
 
 import "unsafe"
+import "math"
 
 /*
 #include <daos_prop.h>
 #include <daos_pool.h>
+#include <daos/object.h>
+#include <daos/cont_props.h>
 */
 import "C"
 
@@ -38,6 +41,10 @@ const (
 	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
 	// PoolPropertyRedunFac
 	PoolPropertyRedunFac = C.DAOS_PROP_PO_REDUN_FAC
+	//PoolPropertyECPda is performance domain affinity level of EC object.
+	PoolPropertyECPda = C.DAOS_PROP_PO_EC_PDA
+	//PoolPropertyRPPda is performance domain affinity level of replicated object.
+	PoolPropertyRPPda = C.DAOS_PROP_PO_RP_PDA
 )
 
 const (
@@ -74,4 +81,25 @@ func LabelIsValid(label string) bool {
 	defer C.free(unsafe.Pointer(cLabel))
 
 	return bool(C.daos_label_is_valid(cLabel))
+}
+
+func EcCellSizeIsValid(sz uint64) bool {
+	if sz > math.MaxUint32 {
+		return false
+	}
+	return bool(C.daos_ec_cs_valid(C.uint32_t(sz)))
+}
+
+func EcPdaIsValid(pda uint64) bool {
+	if pda > math.MaxUint32 {
+		return false
+	}
+	return bool(C.daos_ec_pda_valid(C.uint32_t(pda)))
+}
+
+func RpPdaIsValid(pda uint64) bool {
+	if pda > math.MaxUint32 {
+		return false
+	}
+	return bool(C.daos_rp_pda_valid(C.uint32_t(pda)))
 }
