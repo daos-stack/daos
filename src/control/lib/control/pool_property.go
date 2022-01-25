@@ -131,6 +131,42 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return &PoolPropertyValue{rfVal}, nil
 				},
+			},
+		},
+		"ec_pda": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyECPda,
+				Description: "Performance domain affinity level of EC",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					ecpdaErr := errors.Errorf("invalid ec_pda value %s", s)
+					pdaPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
+					if err != nil {
+						return nil, ecpdaErr
+					}
+					return &PoolPropertyValue{pdaPct}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"rp_pda": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyRPPda,
+				Description: "Performance domain affinity level of RP",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rppdaErr := errors.Errorf("invalid rp_pda value %s", s)
+					pdaPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
+					if err != nil {
+						return nil, rppdaErr
+					}
+					return &PoolPropertyValue{pdaPct}, nil
+				},
 				valueStringer: func(v *PoolPropertyValue) string {
 					n, err := v.GetNumber()
 					if err != nil {

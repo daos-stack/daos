@@ -305,6 +305,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_EC_CELL_SZ:
+		case DAOS_PROP_PO_EC_PDA:
+		case DAOS_PROP_PO_RP_PDA:
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			val = prop->dpp_entries[i].dpe_val;
@@ -453,6 +455,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ROOTS:
 		case DAOS_PROP_CO_EC_CELL_SZ:
+		case DAOS_PROP_CO_EC_PDA:
+		case DAOS_PROP_CO_RP_PDA:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
@@ -965,6 +969,12 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 		}
 	} else if (strcmp(name, DAOS_PROP_ENTRY_EC_CELL_SZ) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_EC_PDA) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_EC_PDA;
+		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_RP_PDA) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_RP_PDA;
 		entry->dpe_val = strtoull(val, NULL, 0);
 	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||
