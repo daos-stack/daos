@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,7 +27,7 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -87,7 +87,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
 				Provider:        "ofi+verbs",
 				CrtCtxShareAddr: 1,
-				CrtTimeout:      10, NetDevClass: netdetect.Infiniband,
+				CrtTimeout:      10,
+				NetDevClass:     uint32(hardware.Infiniband),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -98,7 +99,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 					Provider:        "ofi+verbs",
 					CrtCtxShareAddr: 1,
 					CrtTimeout:      10,
-					NetDevClass:     netdetect.Infiniband,
+					NetDevClass:     uint32(hardware.Infiniband),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
@@ -118,7 +119,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				Provider:        "ofi+tcp",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
-				NetDevClass:     netdetect.Ether,
+				NetDevClass:     uint32(hardware.Ether),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -129,7 +130,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 					Provider:        "ofi+tcp",
 					CrtCtxShareAddr: 0,
 					CrtTimeout:      5,
-					NetDevClass:     netdetect.Ether,
+					NetDevClass:     uint32(hardware.Ether),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
@@ -149,7 +150,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				Provider:        "ofi+tcp",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
-				NetDevClass:     netdetect.Ether,
+				NetDevClass:     uint32(hardware.Ether),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -160,7 +161,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 					Provider:        "ofi+tcp",
 					CrtCtxShareAddr: 0,
 					CrtTimeout:      5,
-					NetDevClass:     netdetect.Ether,
+					NetDevClass:     uint32(hardware.Ether),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
