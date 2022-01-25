@@ -132,6 +132,14 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return &PoolPropertyValue{rfVal}, nil
 				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
 			},
 		},
 		"ec_pda": {
