@@ -83,7 +83,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	}
 
 	if (readahead) {
+#if 0
 		if (!fs_handle->dpi_info->di_wb_cache)
+#endif
 			buff_len += READAHEAD_SIZE;
 	} else {
 		if (!skip_read) {
