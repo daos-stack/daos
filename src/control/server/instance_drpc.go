@@ -235,7 +235,7 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 		err = errors.Wrapf(err, "instance %d", ei.Index())
 	}()
 
-	// Clear smd info for controllers in ctrlrMap, populate smd info from scratch.
+	// Clear SMD info for controllers in ctrlrMap, populate smd info from scratch.
 	for _, ctrlr := range ctrlrMap {
 		ctrlr.SmdDevices = []*storage.SmdDevice{}
 	}
@@ -259,13 +259,13 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 
 		smdDev, err := ei.getSmdDetails(smd)
 		if err != nil {
-			ei.log.Errorf("%s: collect smd info: %s", msg, err.Error())
-			continue
+			return errors.Wrapf(err, "%s: collect smd info", msg)
 		}
 
 		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
 		if err != nil {
-			// continue if error indicates non-existent health and smd has abnormal state
+			// Only log error if error indicates non-existent health and the SMD entity
+			// has abnormal state.
 			status, ok := errors.Cause(err).(drpc.DaosStatus)
 			if ok && status == drpc.DaosNonexistant && !smdDev.NvmeState.IsNormal() {
 				ei.log.Debugf("%s: stats not found (device state: %q), skip update",
@@ -277,18 +277,17 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 			continue
 		}
 
-		// populate space usage for each smd device from health stats
+		// Populate space usage for each SMD device from health stats.
 		smdDev.TotalBytes = pbStats.TotalBytes
 		smdDev.AvailBytes = pbStats.AvailBytes
 		msg = fmt.Sprintf("%s: smd usage = %s/%s", msg, humanize.Bytes(smdDev.AvailBytes),
 			humanize.Bytes(smdDev.TotalBytes))
 		ctrlr.UpdateSmd(smdDev)
 
-		// multiple updates for the same key expected when more than one controller
-		// namespaces (and resident blobstores) exist, stats will be the same for each
-		// so only pass valid ctrlr reference when stats haven't yet been updated
+		// Multiple SMD entries for the same address key may exist when there are multiple
+		// NVMe namespaces (and resident blobstores) exist on a single controller. In this
+		// case only update once as health stats will be the same for each.
 		if hasUpdatedHealth[ctrlr.PciAddr] {
-			ei.log.Debugf("%s: health stats already added so skip update", msg)
 			continue
 		}
 

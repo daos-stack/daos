@@ -248,8 +248,6 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 			if err != nil {
 				return nil, errors.Wrap(err, "create controller map")
 			}
-			cs.log.Debugf("instance %d: nvme ctrlr map for tier %d: %+v", ei.Index(),
-				tsr.Tier, ctrlrMap)
 
 			if err := ei.updateInUseBdevs(ctx, ctrlrMap); err != nil {
 				return nil, err

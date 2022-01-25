@@ -612,8 +612,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
 		},
-		// make sure information is not duplicated in cache
-		"verify cache integrity over multiple storage scan calls": {
+		// make sure stale information is cleared and not used from cache
+		"verify cache invalidation over multiple storage scan calls": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
@@ -635,14 +635,18 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			scanTwice: true,
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
-					{Message: newSmdDevResp(1)},
-					{Message: newBioHealthResp(1)},
+					{Message: newSmdDevResp(1, 1, 2, 3)},
+					{Message: newBioHealthResp(1, 1)},
+					{Message: newBioHealthResp(1, 2)},
+					{Message: newBioHealthResp(1, 3)},
 					{Message: newSmdDevResp(1)},
 					{Message: newBioHealthResp(1)},
 				},
 				1: {
-					{Message: newSmdDevResp(2)},
-					{Message: newBioHealthResp(2)},
+					{Message: newSmdDevResp(2, 1, 2, 3)},
+					{Message: newBioHealthResp(1, 1)},
+					{Message: newBioHealthResp(1, 2)},
+					{Message: newBioHealthResp(1, 3)},
 					{Message: newSmdDevResp(2)},
 					{Message: newBioHealthResp(2)},
 				},
@@ -1059,8 +1063,11 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				// mock drpc responses
 				dcc := new(mockDrpcClientConfig)
 				if tc.junkResp {
-					dcc.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+					dcc.setSendMsgResponse(drpc.Status_SUCCESS,
+						makeBadBytes(42), nil)
 				} else if len(tc.drpcResps) > idx {
+					t.Logf("setting %d drpc responses for engine %d",
+						len(tc.drpcResps[idx]), idx)
 					dcc.setSendMsgResponseList(t, tc.drpcResps[idx]...)
 				} else {
 					t.Fatal("drpc response mocks unpopulated")
