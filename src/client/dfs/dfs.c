@@ -457,11 +457,11 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 			if (entry->value_len == 0)
 				D_GOTO(out, rc = EIO);
 			val_len = entry->value_len;
+			D_ALLOC(value, val_len + 1);
 		} else {
 			val_len = DFS_MAX_PATH;
+			D_ALLOC(value, DFS_MAX_PATH);
 		}
-
-		D_ALLOC(value, val_len);
 		if (value == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
@@ -472,7 +472,6 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 		if (ver <= 2) {
 			recx.rx_idx = UID_IDX;
 			recx.rx_nr = val_len;
-
 		} else {
 			d_iov_set(&iod->iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
 			iod->iod_nr	= 1;
@@ -500,6 +499,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 				D_ERROR("Symlink value length inconsistent with inode data\n");
 				D_GOTO(out, rc = EIO);
 			}
+			value[val_len] = 0;
 		} else {
 			/*
 			 * update the length in the entry struct since it's not known at this point

@@ -83,7 +83,6 @@ Directory Object
         ctime: change time
         chunk_size: chunk_size of file (0 if default or not a file)
         object class: default object class of objects under this dir
-        syml: symlink value (does not exist if not a symlink)
         uid: user idnetifier
         gid: group idnetifier
         size: symlink size (0 for files/dirs)
