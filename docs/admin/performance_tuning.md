@@ -235,7 +235,7 @@ The `-R` option is used to define the operation to be performanced:
 - `P` for `punch` (i.e. truncate) operation
 - `p` to display the performance result for the previous operation.
 
-For instance, -R "U;p F;P" means update the keys, print the update rate/bandwidth,
+For instance, -R "U;p F;p" means update the keys, print the update rate/bandwidth,
 fetch the keys and then print the fetch rate/bandwidth. The number of
 object/dkey/akey/value can be passed via respectively the -o, -d, -a and -n
 options. The value size is specified via the -s parameter (e.g. -s 4K for 4K
