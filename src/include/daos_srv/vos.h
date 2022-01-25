@@ -1050,9 +1050,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx		max or min offset in dkey/akey, and the size of the
  *				extent at the offset. If there are no visible array
  *				records, the size in the recx returned will be 0.
- * \param[in, out]
- *		max_write	[in]: Optional pointer to save max write epoch for object
- *				[out]: Max write epoch for object
+ * \param[out] 	max_write	Optional: Returns max write epoch for object
  * \param[in]	cell_size cell size for EC object, used to calculated the replicated
  *                      space address on parity shard.
  * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
