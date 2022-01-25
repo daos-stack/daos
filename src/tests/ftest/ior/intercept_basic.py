@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +8,7 @@
 import os
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
+from general_utils import percent_change
 
 
 class IorIntercept(IorTestBase):
@@ -44,38 +45,39 @@ class IorIntercept(IorTestBase):
         :avocado: tags=daosio,dfuse,il
         :avocado: tags=iorinterceptbasic
         """
-        apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
-        for api in apis:
-            self.ior_cmd.api.update(api)
-            out = self.run_ior_with_pool(fail_on_warning=True)
-            without_intercept = IorCommand.get_ior_metrics(out)
-            if api == "POSIX":
-                intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-                out = self.run_ior_with_pool(intercept, fail_on_warning=True)
-                with_intercept = IorCommand.get_ior_metrics(out)
-                max_mib = int(IorMetrics.Max_MiB)
-                min_mib = int(IorMetrics.Min_MiB)
-                mean_mib = int(IorMetrics.Mean_MiB)
-                write_x = self.params.get("write_x",
-                                          "/run/ior/iorflags/ssf/*", 1)
-                read_x = self.params.get("read_x",
-                                         "/run/ior/iorflags/ssf/*", 1)
+        # Run IOR without interception
+        suffix = self.ior_cmd.transfer_size.value
+        out = self.run_ior_with_pool(test_file_suffix=suffix)
+        without_intercept = IorCommand.get_ior_metrics(out)
 
-                # Verifying write performance
-                self.assertTrue(float(with_intercept[0][max_mib]) >
-                                write_x * float(without_intercept[0][max_mib]))
-                self.assertTrue(float(with_intercept[0][min_mib]) >
-                                write_x * float(without_intercept[0][min_mib]))
-                self.assertTrue(float(with_intercept[0][mean_mib]) >
-                                write_x * float(without_intercept[0][mean_mib]))
+        # Run IOR with interception
+        intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+        suffix = suffix + "intercept"
+        out = self.run_ior_with_pool(intercept, test_file_suffix=suffix)
+        with_intercept = IorCommand.get_ior_metrics(out)
 
-                # Verifying read performance
-                self.assertTrue(float(with_intercept[1][max_mib]) >
-                                read_x * float(without_intercept[1][max_mib]))
-                # DAOS-5857 There's a lot of volatility in this result, so disable it to reduce
-                # testing noise.  This test runs IOR with multiple iterations so it should only
-                # affect min results, mean and max results should be more resilient.
-                #self.assertTrue(float(with_intercept[1][min_mib]) >
-                #                read_x * float(without_intercept[1][min_mib]))
-                self.assertTrue(float(with_intercept[1][mean_mib]) >
-                                read_x * float(without_intercept[1][mean_mib]))
+        # Index of each metric
+        max_mib = int(IorMetrics.Max_MiB)
+        mean_mib = int(IorMetrics.Mean_MiB)
+
+        # Write and read performance thresholds
+        write_x = self.params.get("write_x", self.ior_cmd.namespace, 1)
+        read_x = self.params.get("read_x", self.ior_cmd.namespace, 1)
+
+        # Verify write performance
+        # DAOS-5857 & DAOS-9237: Since there is a lot of volatility in the performance results,
+        # only check max and mean.
+        max_change = percent_change(without_intercept[0][max_mib], with_intercept[0][max_mib])
+        self.log.info('assert max_change > write_x: %f > %f', max_change, write_x)
+        self.assertGreater(max_change, write_x, "Expected higher max write performance")
+        mean_change = percent_change(without_intercept[0][mean_mib], with_intercept[0][mean_mib])
+        self.log.info('assert mean_change > write_x: %f > %f', mean_change, write_x)
+        self.assertGreater(mean_change, write_x, "Expected higher mean write performance")
+
+        # Verify read performance
+        max_change = percent_change(without_intercept[1][max_mib], with_intercept[1][max_mib])
+        self.log.info('assert max_change > read_x: %f > %f', max_change, read_x)
+        self.assertGreater(max_change, read_x, "Expected higher max read performance")
+        mean_change = percent_change(without_intercept[1][mean_mib], with_intercept[1][mean_mib])
+        self.log.info('assert mean_change > read_x: %f > %f', mean_change, read_x)
+        self.assertGreater(mean_change, read_x, "Expected higher mean read performance")
