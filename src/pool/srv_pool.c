@@ -1519,7 +1519,7 @@ ds_pool_start_all(void)
 
 	/* Create a ULT to call ds_rsvc_start() in xstream 0. */
 	rc = dss_ult_create(pool_start_all, NULL /* arg */, DSS_XS_SYS,
-			    0 /* tgt_idx */, 0 /* stack_size */, &thread);
+			    0 /* tgt_idx */, DSS_DEEP_STACK_SZ /* stack_size */, &thread);
 	if (rc != 0) {
 		D_ERROR("failed to create pool start ULT: "DF_RC"\n",
 			DP_RC(rc));
