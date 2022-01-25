@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -132,6 +132,7 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 			sysfs.Provider{},
 		),
 		common.CmpOptIgnoreFieldAnyType("log"),
+		cmpopts.IgnoreFields(hardware.FabricScanner{}, "mutex"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}

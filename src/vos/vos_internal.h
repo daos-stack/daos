@@ -20,6 +20,7 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
+#include <daos_srv/policy.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
 #include "vos_ilog.h"
@@ -204,6 +205,8 @@ struct vos_pool {
 	struct vos_pool_metrics	*vp_metrics;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
+	/** Tiering policy */
+	struct policy_desc_t	vp_policy_desc;
 };
 
 /**
@@ -252,7 +255,7 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_reindex_cmt_dtx:1;
+				vc_cmt_dtx_indexed:1;
 	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
 };
@@ -421,6 +424,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  * \param epoch		[IN]	Epoch of update
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
+ * \param retry		[IN]	Whether need to retry if hit non-committed DTX entry.
  *
  * \return	positive value	If available to outside.
  *		zero		If unavailable to outside.
@@ -434,7 +438,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  */
 int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
-			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type, bool retry);
 
 /**
  * Get local entry DTX state. Only used by VOS aggregation.
@@ -1020,19 +1024,6 @@ key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 daos_size_t
 vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum);
 
-/*
- * A simple media selection policy embedded in VOS, which select media by
- * akey type and record size.
- */
-static inline uint16_t
-vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
-{
-	if (pool->vp_vea_info == NULL)
-		return DAOS_MEDIA_SCM;
-
-	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
-}
-
 int
 vos_dedup_init(struct vos_pool *pool);
 void
@@ -1305,6 +1296,12 @@ vos_offload_exec(int (*func)(void *), void *arg)
 		return dss_offload_exec(func, arg);
 	else
 		return func(arg);
+}
+
+static inline bool
+umoff_is_null(umem_off_t umoff)
+{
+	return umoff == UMOFF_NULL;
 }
 
 /* vos_csum_recalc.c */

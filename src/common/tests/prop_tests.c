@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +58,7 @@ expect_merge_result(daos_prop_t *old, daos_prop_t *new, daos_prop_t *exp_result)
 		case DAOS_PROP_CO_OWNER:
 		case DAOS_PROP_PO_OWNER_GROUP:
 		case DAOS_PROP_CO_OWNER_GROUP:
+		case DAOS_PROP_PO_POLICY:
 			assert_string_equal(entry->dpe_str, exp_entry->dpe_str);
 			break;
 		case DAOS_PROP_PO_ACL:

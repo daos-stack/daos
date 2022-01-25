@@ -20,6 +20,7 @@ import (
 
 const (
 	spdkSetupPath      = "../share/daos/control/setup_spdk.sh"
+	defaultNrHugepages = 1024 // default number applied by SPDK
 	nrHugepagesEnv     = "_NRHUGE"
 	hugeNodeEnv        = "_HUGENODE"
 	targetUserEnv      = "_TARGET_USER"
@@ -98,13 +99,16 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
-	if req.HugePageCount < 0 {
-		return errors.New("number of hugepages not specified in request")
+	nrHugepages := req.HugePageCount
+	// Always supply non-zero number of hugepages in request otherwise devices cannot be
+	// accessed.
+	if nrHugepages <= 0 {
+		nrHugepages = defaultNrHugepages
 	}
 
 	env := []string{
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-		fmt.Sprintf("%s=%d", nrHugepagesEnv, req.HugePageCount),
+		fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
 		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
 	}
 	if req.HugeNodes != "" {
