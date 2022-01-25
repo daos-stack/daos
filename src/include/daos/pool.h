@@ -35,9 +35,10 @@
 #define DAOS_PO_QUERY_PROP_OWNER_GROUP	(1ULL << (PROP_BIT_START + 6))
 #define DAOS_PO_QUERY_PROP_SVC_LIST	(1ULL << (PROP_BIT_START + 7))
 #define DAOS_PO_QUERY_PROP_EC_CELL_SZ	(1ULL << (PROP_BIT_START + 8))
-#define DAOS_PO_QUERY_PROP_EC_PDA	(1ULL << (PROP_BIT_START + 9))
-#define DAOS_PO_QUERY_PROP_RP_PDA	(1ULL << (PROP_BIT_START + 10))
-#define DAOS_PO_QUERY_PROP_BIT_END	26
+#define DAOS_PO_QUERY_PROP_REDUN_FAC	(1ULL << (PROP_BIT_START + 9))
+#define DAOS_PO_QUERY_PROP_EC_PDA	(1ULL << (PROP_BIT_START + 10))
+#define DAOS_PO_QUERY_PROP_RP_PDA	(1ULL << (PROP_BIT_START + 11))
+#define DAOS_PO_QUERY_PROP_BIT_END	27
 
 #define DAOS_PO_QUERY_PROP_ALL						\
 	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB |	\
@@ -45,7 +46,7 @@
 	 DAOS_PO_QUERY_PROP_ACL | DAOS_PO_QUERY_PROP_OWNER |		\
 	 DAOS_PO_QUERY_PROP_OWNER_GROUP | DAOS_PO_QUERY_PROP_SVC_LIST |	\
 	 DAOS_PO_QUERY_PROP_EC_CELL_SZ | DAOS_PO_QUERY_PROP_EC_PDA | \
-	 DAOS_PO_QUERY_PROP_RP_PDA)
+	 DAOS_PO_QUERY_PROP_RP_PDA | DAOS_PO_QUERY_PROP_REDUN_FAC)
 
 
 int dc_pool_init(void);
@@ -109,6 +110,7 @@ int dc_pool_reint(tse_task_t *task);
 int dc_pool_drain(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
 int dc_pool_list_cont(tse_task_t *task);
+int dc_pool_get_redunc(daos_handle_t poh);
 
 int dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
 int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,

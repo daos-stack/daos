@@ -1359,8 +1359,8 @@ dc_pool_query(tse_task_t *task)
 	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool query rpc: %d\n",
-			DP_UUID(pool->dp_pool), rc);
+		D_ERROR(DF_UUID": failed to create pool query rpc: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
 		D_GOTO(out_pool, rc);
 	}
 
@@ -2782,4 +2782,27 @@ out_pool:
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
+}
+
+int dc_pool_get_redunc(daos_handle_t poh)
+{
+	struct daos_prop_entry	*entry;
+	daos_prop_t		*prop_query = daos_prop_alloc(1);
+	int			rf;
+
+	if (prop_query == NULL)
+		return -DER_NOMEM;
+
+	prop_query->dpp_entries[0].dpe_type = DAOS_PROP_PO_REDUN_FAC;
+	rf = daos_pool_query(poh, NULL, NULL, prop_query, NULL);
+	if (rf) {
+		daos_prop_free(prop_query);
+		return rf;
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_REDUN_FAC);
+	D_ASSERT(entry != NULL);
+	rf = entry->dpe_val;
+	daos_prop_free(prop_query);
+
+	return rf;
 }

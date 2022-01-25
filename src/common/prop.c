@@ -296,6 +296,13 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_REDUN_FAC:
+			val = prop->dpp_entries[i].dpe_val;
+			if (!daos_rf_is_valid(val)) {
+				D_ERROR("invalid rf "DF_U64"\n", val);
+				return false;
+			}
+			break;
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_EC_CELL_SZ:
 		case DAOS_PROP_PO_EC_PDA:

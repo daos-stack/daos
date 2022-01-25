@@ -695,6 +695,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Numval{4096},
 						},
 						{
+							Number: propWithVal("rf", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
 							Number: propWithVal("ec_pda", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{1},
 						},
@@ -713,6 +717,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("ec_pda", "1"),
 				propWithVal("label", "foo"),
 				propWithVal("reclaim", "disabled"),
+				propWithVal("rf", "1"),
 				propWithVal("rp_pda", "2"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),

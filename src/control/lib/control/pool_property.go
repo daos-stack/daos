@@ -117,6 +117,23 @@ func PoolProperties() PoolPropertyMap {
 				jsonNumeric: true,
 			},
 		},
+		"rf": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyRedunFac,
+				Description: "Pool redundancy factor",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rbErr := errors.Errorf("invalid redun fac value %s (valid values: 0-4)", s)
+					rfVal, err := strconv.ParseUint(s, 10, 64)
+					if err != nil {
+						return nil, rbErr
+					}
+					if rfVal > 4 {
+						return nil, rbErr
+					}
+					return &PoolPropertyValue{rfVal}, nil
+				},
+			},
+		},
 		"ec_pda": {
 			Property: PoolProperty{
 				Number:      drpc.PoolPropertyECPda,

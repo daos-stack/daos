@@ -155,6 +155,7 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 	int				rc = 0;
 	uid_t				uid = geteuid();
 	gid_t				gid = getegid();
+	struct daos_prop_entry          *entry;
 
 	entries = (prop_in == NULL) ? 0 : prop_in->dpp_nr;
 
@@ -195,7 +196,14 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 		/** allocate objid according to the redundancy factor */
 		roots->cr_oids[0].lo = 0;
 		roots->cr_oids[0].hi = 0;
-		rf = daos_cont_prop2redunfac(prop_in);
+		entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_REDUN_FAC);
+		if (!entry) {
+			rf = dc_pool_get_redunc(poh);
+			if (rf < 0)
+				D_GOTO(err_out, rc);
+		} else {
+			rf = entry->dpe_val;
+		}
 		rc = daos_obj_generate_oid_by_rf(poh, rf, &roots->cr_oids[0], 0,
 						 0, 0, 0);
 		if (rc) {

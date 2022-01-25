@@ -139,6 +139,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_EC_CELL_SZ:
 			iv_prop->pip_ec_cell_sz = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_REDUN_FAC:
+			iv_prop->pip_redun_fac = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_PO_ACL:
 			acl = prop_entry->dpe_val_ptr;
 			if (acl != NULL) {
@@ -237,6 +240,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_EC_CELL_SZ:
 			prop_entry->dpe_val = iv_prop->pip_ec_cell_sz;
+			break;
+		case DAOS_PROP_PO_REDUN_FAC:
+			prop_entry->dpe_val = iv_prop->pip_redun_fac;
 			break;
 		case DAOS_PROP_PO_ACL:
 			iv_prop->pip_acl =
