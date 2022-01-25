@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 var (
@@ -153,11 +153,11 @@ func FaultConfigHelperStreamCountMismatch(curIdx, curCount, seenIdx, seenCount i
 	)
 }
 
-func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
+func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass hardware.NetDevClass, iface string) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigInvalidNetDevClass,
 		fmt.Sprintf("I/O Engine %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
-			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
+			curIdx, iface, thisDevClass, primaryDevClass),
 		"ensure that each I/O Engine specifies a fabric_iface with a matching device class and restart",
 	)
 }
