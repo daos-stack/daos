@@ -138,7 +138,6 @@ struct crt_rpc_priv {
 	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
 
 	crt_rpc_state_t		crp_state; /* RPC state */
-
 	hg_handle_t		crp_hg_hdl; /* HG request handle */
 	hg_addr_t		crp_hg_addr; /* target na address */
 	struct crt_hg_hdl	*crp_hdl_reuse; /* reused hg_hdl */
@@ -165,7 +164,7 @@ struct crt_rpc_priv {
 				/* flag of forwarded rpc for corpc */
 				crp_forward:1,
 				/* flag of in timeout binheap */
-			crp_in_binheap:1,
+				crp_in_binheap:1,
 				/* set if a call to crt_req_reply pending */
 				crp_reply_pending:1,
 				/* set to 1 if target ep is set */
@@ -192,7 +191,7 @@ struct crt_rpc_priv {
 #define CRT_PROTO_FI_VERSION 3
 #define CRT_PROTO_ST_VERSION 1
 #define CRT_PROTO_CTL_VERSION 1
-#define CRT_PROTO_IV_VERSION  1
+#define CRT_PROTO_IV_VERSION 1
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
