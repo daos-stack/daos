@@ -3996,7 +3996,7 @@ def test_alloc_fail_copy(server, conf, wf):
             ofd.write('hello')
 
     os.symlink('broken', join(sub_dir, 'broken'))
-    os.symlink('new_dir/file.0', 'link')
+    os.symlink('new_dir/file.0', join(sub_dir, 'link'))
 
     def get_cmd():
         container = str(uuid.uuid4())

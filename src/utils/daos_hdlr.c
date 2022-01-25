@@ -1671,7 +1671,10 @@ fs_copy_symlink(struct cmd_args_s *ap,
 {
 	int		rc = 0;
 	daos_size_t	len = 0;
-	char		symlink_value[DFS_MAX_PATH];
+	char		*symlink_value = NULL;
+
+	D_ALLOC(symlink_value, DFS_MAX_PATH);
+	assert(symlink_value != NULL);
 
 	len = PATH_MAX - 1;
 	if (src_file_dfs->type == POSIX) {
@@ -1730,6 +1733,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		D_GOTO(out_copy_symlink, rc);
 	}
 out_copy_symlink:
+	D_FREE(symlink_value);
 	src_file_dfs->offset = 0;
 	dst_file_dfs->offset = 0;
 	return rc;
@@ -1764,8 +1768,10 @@ fs_copy_dir(struct cmd_args_s *ap,
 
 	/* create the destination directory if it does not exist */
 	rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-	if ((rc == EEXIST) && (strncmp(dst_path, "/", 2) != 0)) {
-		D_DEBUG(DB_TRACE, "Directory %s exists.\n", dst_path);
+	if (rc == EEXIST) {
+		if (strncmp(dst_path, "/", 2) != 0) {
+			DH_PERROR_SYS(ap, rc, "Directory '%s' exists", dst_path);
+		}
 	} else if (rc != 0) {
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
