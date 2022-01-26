@@ -449,6 +449,7 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 	}
 	defer restoreAfterInit()
 
+	sb.log.Debugf("calling spdk bindings format")
 	results, err := sb.binding.Format(sb.log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "spdk format %s", needDevs)
