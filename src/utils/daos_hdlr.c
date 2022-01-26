@@ -568,6 +568,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 
 		attr.da_id = 0;
 		attr.da_oclass_id = ap->oclass;
+		attr.da_dir_oclass_id = ap->dir_oclass;
 		attr.da_chunk_size = ap->chunk_size;
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
@@ -612,7 +613,9 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	uuid_copy(dattr.da_cuuid, ap->c_uuid);
 	dattr.da_type = ap->type;
 	dattr.da_oclass_id = ap->oclass;
+	dattr.da_dir_oclass_id = ap->dir_oclass;
 	dattr.da_chunk_size = ap->chunk_size;
+	//dattr.da_hints = ap->hints;
 	dattr.da_props = ap->props;
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);

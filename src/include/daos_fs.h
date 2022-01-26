@@ -57,13 +57,20 @@ typedef struct dfs dfs_t;
 /** read/write access */
 #define DFS_RDWR	O_RDWR
 
-/** struct holding attributes for a DFS container */
+enum {
+	DFS_HINT_LARGE_FILES	= (1 << 0),
+	DFS_HINT_SMALL_FILES	= (1 << 1),
+	DFS_HINT_LARGE_DIRS	= (1 << 2),
+	DFS_HINT_SMALL_DIRS	= (1 << 3),
+};
+
+/** struct holding attributes for a DFS container - all optional */
 typedef struct {
-	/** Optional user ID for DFS container. */
+	/** User ID for DFS container. */
 	uint64_t		da_id;
 	/** Default Chunk size for all files in container */
 	daos_size_t		da_chunk_size;
-	/** Default Object Class for all objects in the container */
+	/** Default Object Class for all files in the container */
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
@@ -73,6 +80,10 @@ typedef struct {
 	 * mode will be used. In the future, Balanced mode will be the default.
 	 */
 	uint32_t		da_mode;
+	/** Default Object Class for all directories in the container */
+	daos_oclass_id_t	da_dir_oclass_id;
+	/** hints for POSIX container creation DFS_DIRS/FILES_LARGE/SMALL */
+	uint64_t		da_hints;
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
