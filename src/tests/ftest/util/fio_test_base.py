@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -65,9 +65,11 @@ class FioBase(DfuseTestBase):
                                             attr='dfuse-direct-io-disable',
                                             val='on')
 
-                self.start_dfuse(self.hostlist_clients, self.pool, self.container)
-                self.fio_cmd.update("global", "directory", self.dfuse.mount_dir.value,
-                                    "fio --name=global --directory")
+                self.start_dfuse(
+                    self.hostlist_clients, self.pool, self.container)
+                self.fio_cmd.update(
+                    "global", "directory", self.dfuse.mount_dir.value,
+                    "fio --name=global --directory")
 
         # Run Fio
         self.fio_cmd.hosts = self.hostlist_clients
