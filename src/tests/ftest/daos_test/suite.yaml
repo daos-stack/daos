@@ -30,7 +30,7 @@ timeouts:
     test_daos_drain_simple: 500
     test_daos_oid_allocator: 320
     test_daos_checksum: 500
-    test_daos_rebuild_ec: 1800
+    test_daos_rebuild_ec: 3600
     test_daos_aggregate_ec: 200
     test_daos_degraded_ec: 1900
     test_daos_dedup: 220
