@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,6 +33,8 @@ class DaosCommandBase(CommandWithSubCommand):
             self.sub_command_class = self.ObjectSubCommand()
         elif self.sub_command.value == "filesystem":
             self.sub_command_class = self.FilesystemSubCommand()
+        elif self.sub_command.value == "version":
+            self.sub_command_class = self.VersionSubCommand()
         else:
             self.sub_command_class = None
 
@@ -550,3 +552,10 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.dst = FormattedParameter("--dst={}")
                 # filename to write and read container properties
                 self.preserve_props = FormattedParameter("--preserve-props={}")
+
+    class VersionSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos version sub command."""
+
+        def __init__(self):
+            """Create a dmg version subcommand object."""
+            super().__init__("/run/daos/version/*", "version")

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -108,7 +108,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
-        self.nr_hugepages = BasicParameter(None, 4096)
+        self.nr_hugepages = BasicParameter(None, 0)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
@@ -155,6 +155,10 @@ class DaosServerYamlParameters(YamlParameters):
 
         for engine_params in self.engine_params:
             engine_params.get_params(test)
+
+        if self.using_nvme and self.nr_hugepages.value == 0:
+            self.log.debug("Setting hugepages when bdev class is 'nvme'")
+            self.nr_hugepages.update(4096, "nr_hugepages")
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -326,11 +330,9 @@ class DaosServerYamlParameters(YamlParameters):
             "common": [
                 "D_LOG_FILE_APPEND_PID=1",
                 "COVFILE=/tmp/test.cov"],
-            "ofi+sockets": [
-                "FI_SOCKETS_MAX_CONN_RETRY=5",
-                "FI_SOCKETS_CONN_TIMEOUT=2000",
+            "ofi+tcp": [
                 "CRT_SWIM_RPC_TIMEOUT=10"],
-            "ofi_rxm": [
+            "ofi+verbs": [
                 "FI_OFI_RXM_USE_SRX=1"],
         }
 
@@ -348,7 +350,7 @@ class DaosServerYamlParameters(YamlParameters):
             if provider is not None:
                 self._provider = provider
             else:
-                self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
+                self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
 
             # Use environment variables to get default parameters
             default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,9 @@
 package proto
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -121,11 +124,23 @@ type NvmeControllerResults []*ctlpb.NvmeControllerResult
 // HasErrors indicates whether any controller result has non-successful status.
 func (ncr NvmeControllerResults) HasErrors() bool {
 	for _, res := range ncr {
-		if res.State.Status != ctlpb.ResponseStatus_CTL_SUCCESS {
+		if res.GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
 			return true
 		}
 	}
 	return false
+}
+
+// Errors reports summary string of errored results.
+func (ncr NvmeControllerResults) Errors() string {
+	var errs []string
+	for _, res := range ncr {
+		if res.GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+			errs = append(errs, fmt.Sprintf("%s: %s", res.GetPciAddr(),
+				res.GetState().GetError()))
+		}
+	}
+	return strings.Join(errs, ", ")
 }
 
 // ScmModule is an alias for protobuf ScmModule message representing an SCM

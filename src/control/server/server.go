@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,7 +25,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -34,8 +35,9 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.FaultDomain, error) {
-	err := cfg.Validate(log)
+func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
+	processFabricProvider(cfg)
+	err := cfg.Validate(ctx, log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
@@ -48,8 +50,16 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
+		if err := ec.ValidateFabric(ctx, log, fis); err != nil {
+			return nil, err
+		}
+
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
 			return nil, err
+		}
+
+		if err := updateFabricEnvars(ctx, log, ec, fis); err != nil {
+			return nil, errors.Wrap(err, "update engine fabric envars")
 		}
 	}
 
@@ -68,6 +78,21 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server) (*system.Faul
 	return faultDomain, nil
 }
 
+func processFabricProvider(cfg *config.Server) {
+	if shouldAppendRXM(cfg.Fabric.Provider) {
+		cfg.WithFabricProvider(cfg.Fabric.Provider + ";ofi_rxm")
+	}
+}
+
+func shouldAppendRXM(provider string) bool {
+	for _, rxmProv := range []string{"ofi+verbs", "ofi+tcp"} {
+		if rxmProv == provider {
+			return true
+		}
+	}
+	return false
+}
+
 // server struct contains state and components of DAOS Server.
 type server struct {
 	log         *logging.LeveledLogger
@@ -76,7 +101,7 @@ type server struct {
 	runningUser string
 	faultDomain *system.FaultDomain
 	ctlAddr     *net.TCPAddr
-	netDevClass uint32
+	netDevClass hardware.NetDevClass
 	listener    net.Listener
 
 	harness      *EngineHarness
@@ -158,7 +183,8 @@ func (srv *server) createServices(ctx context.Context) error {
 	srv.evtForwarder = control.NewEventForwarder(rpcClient, srv.cfg.AccessPoints)
 	srv.evtLogger = control.NewEventLogger(srv.log)
 
-	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub)
+	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
+		hwprov.DefaultFabricScanner(srv.log))
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, sysdb, rpcClient, srv.pubSub)
 
 	return nil
@@ -199,13 +225,6 @@ func (srv *server) initNetwork(ctx context.Context) error {
 	}
 	srv.ctlAddr = ctlAddr
 	srv.listener = listener
-
-	ndc, err := netInit(ctx, srv.log, srv.cfg)
-	if err != nil {
-		return err
-	}
-	srv.netDevClass = ndc
-	srv.log.Infof("Network device class set to %q", netdetect.DevClassName(ndc))
 
 	return nil
 }
@@ -313,7 +332,7 @@ func (srv *server) setupGrpc() error {
 		Provider:        srv.cfg.Fabric.Provider,
 		CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
 		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
-		NetDevClass:     srv.netDevClass,
+		NetDevClass:     uint32(srv.netDevClass),
 		SrvSrxSet:       srxSetting,
 	}
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
@@ -412,21 +431,31 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *config.Server) error {
-	faultDomain, err := processConfig(log, cfg)
-	if err != nil {
-		return err
-	}
-
 	// Create the root context here. All contexts should inherit from this one so
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
+
+	scanner := hwprov.DefaultFabricScanner(log)
+	fiSet, err := scanner.Scan(ctx)
+	if err != nil {
+		return errors.Wrap(err, "scan fabric")
+	}
+
+	faultDomain, err := processConfig(ctx, log, cfg, fiSet)
+	if err != nil {
+		return err
+	}
 
 	srv, err := newServer(ctx, log, cfg, faultDomain)
 	if err != nil {
 		return err
 	}
 	defer srv.shutdown()
+
+	if srv.netDevClass, err = getFabricNetDevClass(cfg, fiSet); err != nil {
+		return err
+	}
 
 	if err := srv.createServices(ctx); err != nil {
 		return err

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,6 +8,7 @@ package io.daos;
 
 import io.daos.dfs.StatAttributes;
 
+import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.UUID;
@@ -123,5 +124,37 @@ public final class DaosUtils {
 
   public static boolean isBlankStr(String value) {
     return value == null || value.trim().length() == 0;
+  }
+
+  /**
+   * convert key to bytes with charset {@link Constants#KEY_CHARSET}.
+   * length of byte array should not exceed {@link Short#MAX_VALUE}.
+   *
+   * @param key
+   * @return byte array
+   */
+  public static byte[] keyToBytes(String key) {
+    return keyToBytes(key, Short.MAX_VALUE);
+  }
+
+  /**
+   * convert key to bytes with charset {@link Constants#KEY_CHARSET}.
+   *
+   * @param key
+   * @param lenLimit
+   * @return
+   */
+  public static byte[] keyToBytes(String key, int lenLimit) {
+    byte[] bytes;
+    try {
+      bytes = key.getBytes(Constants.KEY_CHARSET);
+    } catch (IOException e) {
+      throw new IllegalArgumentException("failed to get bytes in " + Constants.KEY_CHARSET + " of key " + key);
+    }
+    if (bytes.length > lenLimit) {
+      throw new IllegalArgumentException("key length in " + Constants.KEY_CHARSET + " should not exceed "
+          + lenLimit);
+    }
+    return bytes;
   }
 }

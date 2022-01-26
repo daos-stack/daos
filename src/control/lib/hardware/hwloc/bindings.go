@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -127,7 +127,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 type api struct {
@@ -244,7 +244,19 @@ type object struct {
 func (o *object) name() string {
 	objName := C.GoString(o.cObj.name)
 	if objName == "" {
-		objName = fmt.Sprintf("%s %d", o.objTypeString(), o.osIndex())
+		var id string
+		switch o.objType() {
+		case objTypeBridge:
+			lo, hi, err := o.busRange()
+			if err != nil {
+				id = "(unknown range)"
+				break
+			}
+			id = fmt.Sprintf("%04x:[%02x-%02x]", lo.Domain, lo.Bus, hi.Bus)
+		default:
+			id = fmt.Sprintf("%d", o.osIndex())
+		}
+		objName = fmt.Sprintf("%s %s", o.objTypeString(), id)
 	}
 	return objName
 }
@@ -325,23 +337,25 @@ func (o *object) objTypeString() string {
 		return "core"
 	case objTypePCIDevice:
 		return "PCI device"
+	case objTypeBridge:
+		return "bridge"
 	case objTypeOSDevice:
 		return "OS device"
 	}
-	return "unknown object type"
+	return fmt.Sprintf("unknown object type %d (0x%x)", o.objType(), o.objType())
 }
 
-func (o *object) busRange() (*common.PCIAddress, *common.PCIAddress, error) {
+func (o *object) busRange() (*hardware.PCIAddress, *hardware.PCIAddress, error) {
 	if o.objType() != objTypeBridge {
 		return nil, nil, errors.Errorf("device %q is not a Bridge", o.name())
 	}
 	downstream := C.node_get_bridge_downstream(o.cObj)
 
-	lo, err := common.NewPCIAddress(fmt.Sprintf("%04x:%02x:0.0", downstream.domain, downstream.secondary_bus))
+	lo, err := hardware.NewPCIAddress(fmt.Sprintf("%04x:%02x:0.0", downstream.domain, downstream.secondary_bus))
 	if err != nil {
 		return nil, nil, err
 	}
-	hi, err := common.NewPCIAddress(fmt.Sprintf("%04x:%02x:0.0", downstream.domain, downstream.subordinate_bus))
+	hi, err := hardware.NewPCIAddress(fmt.Sprintf("%04x:%02x:0.0", downstream.domain, downstream.subordinate_bus))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -371,7 +385,7 @@ func (o *object) osDevType() (int, error) {
 	return int(devType), nil
 }
 
-func (o *object) pciAddr() (*common.PCIAddress, error) {
+func (o *object) pciAddr() (*hardware.PCIAddress, error) {
 	switch o.objType() {
 	case objTypePCIDevice, objTypeBridge:
 	default:
@@ -381,7 +395,7 @@ func (o *object) pciAddr() (*common.PCIAddress, error) {
 	if pciDevAttr == nil {
 		return nil, errors.Errorf("device %q attrs are nil", o.name())
 	}
-	return common.NewPCIAddress(fmt.Sprintf("%04x:%02x:%02x.%01x", pciDevAttr.domain, pciDevAttr.bus,
+	return hardware.NewPCIAddress(fmt.Sprintf("%04x:%02x:%02x.%01x", pciDevAttr.domain, pciDevAttr.bus,
 		pciDevAttr.dev, pciDevAttr._func))
 }
 

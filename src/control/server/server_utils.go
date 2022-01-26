@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,7 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -106,16 +106,17 @@ func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.
-func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Config) error {
+func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Config, fis *hardware.FabricInterfaceSet) error {
 	// In the case of some providers, mercury uses the interface name
 	// such as ib0, while OFI uses the device name such as hfi1_0 CaRT and
 	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
 	if !cfg.HasEnvVar("OFI_DOMAIN") {
-		domain, err := netdetect.GetDeviceDomain(ctx, cfg.Fabric.Provider, cfg.Fabric.Interface)
+		fi, err := fis.GetInterfaceOnOSDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
 		if err != nil {
 			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
 		}
+		domain := fi.Name
 		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
 		envVar := "OFI_DOMAIN=" + domain
 		cfg.WithEnvVars(envVar)
@@ -124,41 +125,24 @@ func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Con
 	return nil
 }
 
-// netInit performs all network detection tasks in one place starting with
-// netdetect library init and cleaning up on exit. Warn if configured number
-// of engines is less than NUMA node count and update-in-place engine configs.
-func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (uint32, error) {
-	engineCount := len(cfg.Engines)
-	if engineCount == 0 {
-		log.Debug("no engines configured, skipping network init")
-		return 0, nil
-	}
+func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
+	var netDevClass hardware.NetDevClass
+	for index, engine := range cfg.Engines {
+		fi, err := fis.GetInterface(engine.Fabric.Interface)
+		if err != nil {
+			return 0, err
+		}
 
-	ctx, err := netdetect.Init(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer netdetect.CleanUp(ctx)
-
-	// On a NUMA-aware system, emit a message when the configuration may be
-	// sub-optimal.
-	numaCount := netdetect.NumNumaNodes(ctx)
-	if numaCount > 0 && engineCount > numaCount {
-		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected",
-			numaCount, engineCount)
-	}
-
-	netDevClass, err := cfg.CheckFabric(ctx)
-	if err != nil {
-		return 0, errors.Wrap(err, "validate fabric config")
-	}
-
-	for _, engine := range cfg.Engines {
-		if err := updateFabricEnvars(ctx, log, engine); err != nil {
-			return 0, errors.Wrap(err, "update engine fabric envars")
+		ndc := fi.DeviceClass
+		if index == 0 {
+			netDevClass = ndc
+			continue
+		}
+		if ndc != netDevClass {
+			return 0, config.FaultConfigInvalidNetDevClass(index, netDevClass,
+				ndc, engine.Fabric.Interface)
 		}
 	}
-
 	return netDevClass, nil
 }
 
@@ -176,11 +160,20 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 	}
 
 	hasBdevs := cfgHasBdevs(srv.cfg)
+	// Use default value
+	if srv.cfg.NrHugepages < 0 {
+		srv.cfg.NrHugepages = 4096
+	}
+	// The config value is intended to be per-engine, so we need to adjust
+	// based on the number of engines.
+	if srv.cfg.NrHugepages > 0 {
+		if len(srv.cfg.Engines) == 0 {
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		} else {
+			prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
+		}
+	}
 	if hasBdevs {
-		// The config value is intended to be per-engine, so we need to adjust
-		// based on the number of engines.
-		prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
-
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
 		if srv.runningUser != "root" {
@@ -213,24 +206,22 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		return errors.Wrap(err, "unable to read system hugepage info")
 	}
 
-	if hasBdevs {
-		// Double-check that we got the requested number of huge pages after prepare.
-		if hugePages.Free < prepReq.HugePageCount {
-			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
-		}
+	// Double-check that we got the requested number of huge pages after prepare.
+	if srv.cfg.NrHugepages > 0 && hugePages.Free < prepReq.HugePageCount {
+		return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
 	}
 
 	for _, engineCfg := range srv.cfg.Engines {
 		// Calculate mem_size per I/O engine (in MB)
 		PageSizeMb := hugePages.PageSizeKb >> 10
-		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
+		engineCfg.MemSize = srv.cfg.NrHugepages
 		engineCfg.MemSize *= PageSizeMb
 		// Pass hugepage size, do not assume 2MB is used
 		engineCfg.HugePageSz = PageSizeMb
 		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
 		// Warn if hugepages are not enough to sustain average
-		// I/O workload (~1GB), ignore warning if only using SCM backend
-		if !hasBdevs {
+		// I/O workload (~1GB), ignore warning if using SCM backend with 0 hugepages
+		if !hasBdevs && engineCfg.MemSize == 0 {
 			continue
 		}
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {

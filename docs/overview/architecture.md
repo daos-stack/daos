@@ -152,8 +152,8 @@ that are served by this engine.
 
 Applications, users, and administrators can interact with a DAOS system
 through two different client APIs. The management API offers the ability
-to administrate a DAOS system. It is intended to be integrated with
-different vendor-specific storage management or open-source
+to administer a DAOS system and is intended for integration with
+vendor-specific storage management and open-source
 orchestration frameworks. The `dmg` CLI tool is built over the DAOS management
 API. On the other hand, the DAOS library (`libdaos`) implements the
 DAOS storage model. It is primarily targeted at application and I/O

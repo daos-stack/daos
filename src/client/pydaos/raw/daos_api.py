@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -407,9 +407,6 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_R1S_SPEC_RANK = 19
     DAOS_OC_R2S_SPEC_RANK = 20
     DAOS_OC_R3S_SPEC_RANK = 21
-    DAOS_OC_EC_K2P1_L32K = 22
-    DAOS_OC_EC_K2P2_L32K = 23
-    DAOS_OC_EC_K4P2_L32K = 24
 
 
 # pylint: disable=no-member

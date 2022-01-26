@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,8 +100,16 @@ enum {
  */
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
+/*
+ * Default size (in blocks) threshold for merging NVMe records, we choose
+ * 256 blocks as default value since the default DFS chunk size is 1MB.
+ */
+#define VOS_MW_NVME_THRESH	256		/* 256 * VOS_BLK_SZ = 1MB */
+
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
 #define VOS_AGG_CREDITS_MAX	32
+
+extern unsigned int vos_agg_nvme_thresh;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -218,6 +226,8 @@ struct vos_container {
 	daos_epoch_range_t	vc_epr_aggregation;
 	/* Current ongoing discard EPR */
 	daos_epoch_range_t	vc_epr_discard;
+	/* Last timestamp when VOS aggregation reporting ENOSPACE */
+	uint64_t		vc_agg_nospc_ts;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
@@ -258,13 +268,14 @@ struct vos_dtx_act_ent {
 	daos_epoch_t			 dae_start_time;
 	/* Link into container::vc_dtx_act_list. */
 	d_list_t			 dae_link;
+	/* Back pointer to the DTX handle. */
+	struct dtx_handle		*dae_dth;
 
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
-					 dae_prepared:1,
-					 dae_resent:1;
+					 dae_prepared:1;
 };
 
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
@@ -290,8 +301,7 @@ struct vos_dtx_cmt_ent {
 
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
-					 dce_invalid:1,
-					 dce_resent:1;
+					 dce_invalid:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
@@ -472,11 +482,10 @@ int
 vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
 
 int
-vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count, daos_epoch_t epoch,
-			bool resent, bool *rm_cos,
-			struct vos_dtx_act_ent **daes,
-			struct vos_dtx_cmt_ent **dces);
+vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
+			int count, daos_epoch_t epoch, bool rm_cos[],
+			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
+
 void
 vos_dtx_post_handle(struct vos_container *cont,
 		    struct vos_dtx_act_ent **daes,
@@ -1247,5 +1256,53 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 
 int
 vos_pool_settings_init(void);
+
+/** Raise a RAS event on incompatible durable format
+ *
+ * \param[in] type		Type of object with layout format
+ *				incompatibility (e.g. VOS pool)
+ * \param[in] version		Version of the object
+ * \param[in] min_version	Minimum supported version
+ * \param[in] max_version	Maximum supported version
+ * \param[in] pool		(Optional) associated pool uuid
+ */
+void
+vos_report_layout_incompat(const char *type, int version, int min_version,
+			   int max_version, uuid_t *uuid);
+
+#define VOS_NOTIFY_RAS_EVENTF(...)			\
+	do {						\
+		if (ds_notify_ras_eventf == NULL)	\
+			break;				\
+		ds_notify_ras_eventf(__VA_ARGS__);	\
+	} while (0)					\
+
+static inline int
+vos_offload_exec(int (*func)(void *), void *arg)
+{
+	if (dss_offload_exec != NULL)
+		return dss_offload_exec(func, arg);
+	else
+		return func(arg);
+}
+
+/* vos_csum_recalc.c */
+
+struct csum_recalc {
+	struct evt_extent	 cr_log_ext;
+	struct evt_extent	*cr_phy_ext;
+	struct dcs_csum_info	*cr_phy_csum;
+	daos_off_t		 cr_phy_off;
+};
+
+struct csum_recalc_args {
+	struct bio_sglist	*cra_bsgl;	/* read sgl */
+	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
+	struct csum_recalc	*cra_recalcs;   /* recalc info */
+	unsigned int		 cra_seg_cnt;   /* # of read segments */
+	int			 cra_rc;	/* return code */
+};
+
+int vos_csum_recalc_fn(void *recalc_args);
 
 #endif /* __VOS_INTERNAL_H__ */

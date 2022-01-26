@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1041,34 +1041,27 @@ func TestParseFsType(t *testing.T) {
 			expFsType: fsTypeExt4,
 		},
 		"empty input": {
-			expError: errors.New("unable to determine fs type from \"\""),
+			expFsType: fsTypeUnknown,
 		},
 		"mangled short": {
-			input:    "/dev/pmem0",
-			expError: errors.New("unable to determine fs type from \"/dev/pmem0\""),
+			input:     "/dev/pmem0",
+			expFsType: fsTypeUnknown,
 		},
 		"mangled medium": {
-			input:    "/dev/pmem0: Linux",
-			expError: errors.New("unable to determine fs type from \"/dev/pmem0: Linux\""),
+			input:     "/dev/pmem0: Linux",
+			expFsType: fsTypeUnknown,
 		},
 		"mangled long": {
-			input:    "/dev/pmem0: Linux quack bark",
-			expError: errors.New("unable to determine fs type from \"/dev/pmem0: Linux quack bark\""),
+			input:     "/dev/pmem0: Linux quack bark",
+			expFsType: fsTypeUnknown,
+		},
+		"formatted; ext2": {
+			input:     "/dev/pmem0: Linux rev 1.0 ext2 filesystem data, UUID=0ce47201-6f25-4569-9e82-34c9d91173bb (large files)\n",
+			expFsType: "ext2",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			fsType, err := parseFsType(tc.input)
-
-			if err != tc.expError {
-				if err != nil && tc.expError != nil {
-					if err.Error() == tc.expError.Error() {
-						return
-					}
-				}
-				t.Fatal(err)
-			}
-
-			if diff := cmp.Diff(tc.expFsType, fsType); diff != "" {
+			if diff := cmp.Diff(tc.expFsType, parseFsType(tc.input)); diff != "" {
 				t.Fatalf("unexpected fsType (-want, +got):\n%s\n", diff)
 			}
 		})
