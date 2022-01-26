@@ -478,12 +478,16 @@ func (d PCIDevices) MarshalJSON() ([]byte, error) {
 }
 
 // Add adds a device to the PCIDevices.
-func (d PCIDevices) Add(dev *PCIDevice) {
-	if d == nil || dev == nil {
-		return
+func (d PCIDevices) Add(dev *PCIDevice) error {
+	if d == nil {
+		return errors.New("nil PCIDevices map")
+	}
+	if dev == nil {
+		return errors.New("nil PCIDevice")
 	}
 	addr := dev.PCIAddr
 	d[addr] = append(d[addr], dev)
+	return nil
 }
 
 // Keys fetches the sorted keys for the map.
