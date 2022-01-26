@@ -1660,14 +1660,13 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		const char *dst_path)
 {
 	int		rc = 0;
-	daos_size_t	len = 0;
-	char		*symlink_value = NULL;
+	daos_size_t	len = DFS_MAX_PATH;
+	char		*symlink_value;
 
-	D_ALLOC(symlink_value, DFS_MAX_PATH);
+	D_ALLOC(symlink_value, len + 1);
 	if (symlink_value == NULL)
 		D_GOTO(out_copy_symlink, rc = -DER_NOMEM);
 
-	len = PATH_MAX - 1;
 	if (src_file_dfs->type == POSIX) {
 		len = readlink(src_path, symlink_value, (size_t)len);
 		if (len < 0) {
