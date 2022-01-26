@@ -107,7 +107,7 @@ enum daos_otype_t {
 static inline bool
 daos_otype_t_is_valid(enum daos_otype_t type)
 {
-	return type >= 0 && type <= DAOS_OT_MAX;
+	return type <= DAOS_OT_MAX;
 }
 
 static inline enum daos_otype_t
