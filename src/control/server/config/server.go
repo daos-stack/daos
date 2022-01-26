@@ -234,7 +234,7 @@ func (cfg *Server) WithHyperthreads(enable bool) *Server {
 	return cfg
 }
 
-// WithNrHugePages sets the number of huge pages to be used.
+// WithNrHugePages sets the number of huge pages to be used (total for all engines).
 func (cfg *Server) WithNrHugePages(nr int) *Server {
 	cfg.NrHugepages = nr
 	return cfg

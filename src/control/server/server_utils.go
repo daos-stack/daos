@@ -224,9 +224,14 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		// TargetsCount is equal for each engine).
 		numaNodes := getEngineNUMANodes(srv.log, srv.cfg.Engines)
 
-		// Request a few more hugepages than actually required as not all may be available.
-		prepReq.HugePageCount = (srv.cfg.NrHugepages + common.ExtraHugePages)
-		prepReq.HugePageCount /= len(numaNodes)
+		if len(numaNodes) == 0 {
+			return errors.New("invalid number of numa nodes detected (0)")
+		}
+
+		// Request a few more hugepages than actually required for each NUMA node
+		// allocation as some overhead may result in one or two being unavailable.
+		prepReq.HugePageCount = srv.cfg.NrHugepages / len(numaNodes)
+		prepReq.HugePageCount += common.ExtraHugePages
 		prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
@@ -296,10 +301,6 @@ func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.Get
 
 	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
 	if memSizeFreeMb < memSizeReqMb {
-		hpi, err := common.GetHugePageInfo()
-		if err != nil {
-			srv.log.Errorf("retrieve huge page info: %s", err.Error())
-		}
 		srv.log.Errorf("huge page info: %+v", *hpi)
 
 		return FaultInsufficientFreeHugePageMem(int(engineIdx), memSizeReqMb, memSizeFreeMb,

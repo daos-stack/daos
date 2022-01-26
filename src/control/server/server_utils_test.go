@@ -329,7 +329,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 16386, // 2 extra huge pages requested
+					HugePageCount: 16386,
 					HugeNodes:     "1",
 					TargetUser:    username,
 				},
@@ -351,7 +351,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 8193, // 1 extra huge page requested per-engine
+					HugePageCount: 8194, // 2 extra huge pages requested per-engine
 					HugeNodes:     "0,1",
 					TargetUser:    username,
 				},
@@ -373,7 +373,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 8193, // 1 extra huge page requested per-engine
+					HugePageCount: 8194,
 					HugeNodes:     "0,1",
 					TargetUser:    username,
 				},
@@ -501,7 +501,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 8193, // 1 extra huge page requested per-engine
+					HugePageCount: 8194,
 					HugeNodes:     "0,1",
 					TargetUser:    username,
 					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
@@ -536,7 +536,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
-					HugePageCount: 8193, // 1 extra huge page requested per-engine
+					HugePageCount: 8194,
 					HugeNodes:     "0,1",
 					TargetUser:    username,
 					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
@@ -604,6 +604,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 
 			mockGetHugePageInfo := func() (*common.HugePageInfo, error) {
+				t.Logf("returning %d free hugepages from mock", tc.hugePagesFree)
 				return &common.HugePageInfo{
 					PageSizeKb: 2048,
 					Free:       tc.hugePagesFree,
