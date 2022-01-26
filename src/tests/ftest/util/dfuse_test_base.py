@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2020-2021 Intel Corporation.
+(C) Copyright 2020-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -44,7 +44,7 @@ class DfuseTestBase(TestWithServers):
             error_list.append("Error stopping dfuse: {}".format(error))
         return error_list
 
-    def start_dfuse(self, hosts, pool=None, container=None, mount_dir=None):
+    def start_dfuse(self, hosts, pool=None, container=None, mount_dir=None, bind_cores=None):
         """Create a DfuseCommand object and use it to start Dfuse.
 
         Args:
@@ -67,7 +67,7 @@ class DfuseTestBase(TestWithServers):
 
         try:
             # Start dfuse
-            self.dfuse.run()
+            self.dfuse.run(bind_cores=bind_cores)
         except CommandFailure as error:
             self.log.error(
                 "Dfuse command %s failed on hosts %s", str(self.dfuse),

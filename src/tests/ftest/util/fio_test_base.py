@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -21,6 +21,7 @@ class FioBase(DfuseTestBase):
         self.fio_cmd = None
         self.processes = None
         self.manager = None
+        self.dfuse_bind_cores = None
 
     def setUp(self):
         """Set up each test case."""
@@ -65,8 +66,8 @@ class FioBase(DfuseTestBase):
                                             attr='dfuse-direct-io-disable',
                                             val='on')
 
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container)
+                self.start_dfuse(self.hostlist_clients, self.pool, self.container,
+                                 bind_cores=self.dfuse_bind_cores)
                 self.fio_cmd.update(
                     "global", "directory", self.dfuse.mount_dir.value,
                     "fio --name=global --directory")

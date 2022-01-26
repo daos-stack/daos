@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -251,7 +251,7 @@ class Dfuse(DfuseCommand):
                 "No %s dfuse mount point directory found on %s",
                 self.mount_dir.value, self.hosts)
 
-    def run(self, check=True):
+    def run(self, check=True, bind_cores=None):
         # pylint: disable=arguments-differ
         """Run the dfuse command.
 
@@ -273,7 +273,11 @@ class Dfuse(DfuseCommand):
         self.create_mount_point()
 
         # run dfuse command
-        cmd = "".join([self.env.get_export_str(), self.__str__()])
+        cmd = self.env.get_export_str()
+        if bind_cores:
+            cmd += 'numactl --physcpubind 0-{} '.format(bind_cores - 1)
+        cmd += str(self)
+        self.log.info("Command is '{}'".format(cmd))
         ret_code = pcmd(self.hosts, cmd, timeout=30)
 
         if 0 in ret_code:
