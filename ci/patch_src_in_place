@@ -35,6 +35,9 @@ then
     done
 fi
 
+# Correct any formatting of go code.
+find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w -e -s {} +
+
 export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0=clangFormat.style
 export GIT_CONFIG_VALUE_0=file
