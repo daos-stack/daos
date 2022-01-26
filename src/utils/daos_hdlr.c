@@ -1902,7 +1902,7 @@ fs_copy(struct cmd_args_s *ap,
 			copy_into_dst = true;
 		} else if S_ISDIR(src_stat.st_mode) {
 			rc = -DER_INVAL;
-			DH_PERROR_DER(ap, rc, "Destination is not a directory");
+			DH_PERROR_DER(ap, rc, "Destination exists and is not a directory");
 			D_GOTO(out, rc);
 		}
 	}
