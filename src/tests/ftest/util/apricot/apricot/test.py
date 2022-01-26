@@ -1593,7 +1593,8 @@ class TestWithServers(TestWithoutServers):
         """
         pool = TestPool(
             context=self.context, dmg_command=self.get_dmg_command(index),
-            label_generator=self.label_generator)
+            label_generator=self.label_generator,
+            crt_timeout=self.server_managers[index].get_config_value("crt_timeout"))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
