@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -404,6 +404,11 @@ vos_cont_close(daos_handle_t coh);
 int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
+enum {
+	VOS_AGG_FL_FORCE_SCAN	= (1UL << 0),	/* Scan all obj/dkey/akeys */
+	VOS_AGG_FL_FORCE_MERGE	= (1UL << 1),	/* Merge all coalesce-able EV records */
+};
+
 /**
  * Aggregates all epochs within the epoch range \a epr.
  * Data in all these epochs will be aggregated to the last epoch
@@ -414,13 +419,13 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  * \param epr	  [IN]		The epoch range of aggregation
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
- * \param full_scan  [IN]	Full scan for snapshot deletion
+ * \param flags      [IN]	Aggregation flags
  *
  * \return			Zero on success, negative value if error
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      bool (*yield_func)(void *arg), void *yield_arg, bool full_scan);
+	      bool (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -478,6 +478,16 @@ vos_mod_init(void)
 	rc = vos_ilog_init();
 	if (rc)
 		D_ERROR("Failed to initialize incarnation log capability\n");
+
+	d_getenv_int("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
+	if (vos_agg_nvme_thresh == 0 || vos_agg_nvme_thresh > 256)
+		vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
+	/* Round down to 2^n blocks */
+	if (vos_agg_nvme_thresh > 1)
+		vos_agg_nvme_thresh = (vos_agg_nvme_thresh / 2) * 2;
+
+	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu).\n",
+	       vos_agg_nvme_thresh, VOS_BLK_SZ);
 
 	return rc;
 }
