@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -79,12 +79,13 @@ func LabelIsValid(label string) bool {
 	return bool(C.daos_label_is_valid(cLabel))
 }
 
+// PoolPolicy defines a type to be used to represent DAOS pool policies.
 type PoolPolicy uint32
 
 const (
-	// PoolPolicyDefault sets the pool's policy to io_size
+	// PoolPolicyIoSize sets the pool's policy to io_size
 	PoolPolicyIoSize PoolPolicy = C.DAOS_MEDIA_POLICY_IO_SIZE
-	// PoolPolicyDefault sets the pool's policy to write_intensivity
+	// PoolPolicyWriteIntensivity sets the pool's policy to write_intensivity
 	PoolPolicyWriteIntensivity PoolPolicy = C.DAOS_MEDIA_POLICY_WRITE_INTENSIVITY
 )
 
