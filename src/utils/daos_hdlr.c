@@ -24,7 +24,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <dlfcn.h>
-#include <linux/limits.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -42,10 +41,6 @@
 #include "daos_hdlr.h"
 
 #define OID_ARR_SIZE 8
-
-#if D_HAS_WARNING(4, "-Wframe-larger-than=")
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#endif
 
 struct file_dfs {
 	enum {POSIX, DAOS} type;
