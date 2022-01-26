@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
@@ -53,6 +54,12 @@ func (cmd *startCmd) Execute(_ []string) error {
 	if !ficEnabled {
 		cmd.log.Debugf("Local fabric interface caching has been disabled\n")
 	}
+
+	unloadFabricLibs, err := hwprov.LoadRuntimeFabricLibs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer unloadFabricLibs()
 
 	netCtx, err := netdetect.Init(context.Background())
 	defer netdetect.CleanUp(netCtx)

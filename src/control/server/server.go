@@ -436,6 +436,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
 
+	unloadFabricLibs, err := hwprov.LoadRuntimeFabricLibs(log)
+	if err != nil {
+		return err
+	}
+	defer unloadFabricLibs()
+
 	scanner := hwprov.DefaultFabricScanner(log)
 	fiSet, err := scanner.Scan(ctx)
 	if err != nil {

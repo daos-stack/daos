@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,8 @@
 package hwprov
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/libfabric"
@@ -58,4 +60,14 @@ func DefaultFabricScanner(log logging.Logger) *hardware.FabricScanner {
 	}
 
 	return fs
+}
+
+// LoadRuntimeFabricLibs loads up any dynamic libraries that need to be loaded at runtime.
+func LoadRuntimeFabricLibs(log logging.Logger) (func(), error) {
+	cleanupLibFabric, err := libfabric.Load()
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to load any fabric libraries")
+	}
+
+	return cleanupLibFabric, nil
 }
