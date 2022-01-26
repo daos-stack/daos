@@ -151,7 +151,7 @@ func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) er
 
 	var out strings.Builder
 	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
-	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &out, verbose); err != nil {
+	if err := pretty.PrintStorageFormatMap(cmd.log, resp.HostStorage, &out, verbose); err != nil {
 		return err
 	}
 	cmd.log.Info(out.String())

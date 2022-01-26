@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -159,7 +160,49 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 	return w.Err
 }
 
-func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
+// Strip NVMe controller format results of skip entries and process duplicates.
+func parseNvmeFormatResults(log logging.Logger, inResults storage.NvmeControllers) storage.NvmeControllers {
+	resMap := make(map[string]storage.NvmeControllers)
+	for _, result := range inResults {
+		resMap[result.PciAddr] = append(resMap[result.PciAddr], result)
+	}
+
+	outResults := make(storage.NvmeControllers, 0)
+	for devAddr, devResults := range resMap {
+		if devAddr == storage.NilBdevAddress {
+			// ignore skip results
+			continue
+		}
+
+		switch len(devResults) {
+		case 0:
+			log.Debugf("expected 1 format result for nvme ctrlr %s, got 0", devAddr)
+		case 1:
+			outResults = append(outResults, devResults[0])
+		default:
+			log.Debugf("expected 1 format result for nvme ctrlr %s, got %d", devAddr,
+				len(devResults))
+
+			// only include success result if there are no failures
+			var successfulResult *storage.NvmeController
+			failed := false
+			for _, result := range devResults {
+				if !strings.Contains(result.Info, "SUCCESS") {
+					failed = true
+				} else {
+					successfulResult = result
+				}
+			}
+			if !failed {
+				outResults = append(outResults, successfulResult)
+			}
+		}
+	}
+
+	return outResults
+}
+
+func printNvmeFormatResults(log logging.Logger, devices storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
 	if len(devices) == 0 {
 		fmt.Fprintln(out, "\tNo NVMe devices found")
 		return nil
@@ -174,7 +217,7 @@ func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts
 
 	sort.Slice(devices, func(i, j int) bool { return devices[i].PciAddr < devices[j].PciAddr })
 
-	for _, device := range devices {
+	for _, device := range parseNvmeFormatResults(log, devices) {
 		row := txtfmt.TableRow{pciTitle: device.PciAddr}
 		row[resultTitle] = device.Info
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -121,7 +122,7 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 	return nil
 }
 
-func printStorageFormatMapVerbose(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+func printStorageFormatMapVerbose(log logging.Logger, hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	for _, key := range hsm.Keys() {
 		hss := hsm[key]
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
@@ -131,7 +132,7 @@ func printStorageFormatMapVerbose(hsm control.HostStorageMap, out io.Writer, opt
 			return err
 		}
 		fmt.Fprintln(out)
-		if err := printNvmeFormatResults(hss.HostStorage.NvmeDevices, out, opts...); err != nil {
+		if err := printNvmeFormatResults(log, hss.HostStorage.NvmeDevices, out, opts...); err != nil {
 			return err
 		}
 		fmt.Fprintln(out)
@@ -142,14 +143,18 @@ func printStorageFormatMapVerbose(hsm control.HostStorageMap, out io.Writer, opt
 
 // PrintStorageFormatMap generates a human-readable representation of the supplied
 // HostStorageMap which is populated in response to a StorageFormat operation.
-func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+//
+// NVMe device format results that contain a skip reason should be ignored.
+// NVMe device format results are per-NVMe-namespace and PCIe address should only be marked as
+// formatted if all controller namespaces for that address have been successfully formatted.
+func PrintStorageFormatMap(log logging.Logger, hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	if len(hsm) == 0 {
 		return nil
 	}
 	fc := getPrintConfig(opts...)
 
 	if fc.Verbose {
-		return printStorageFormatMapVerbose(hsm, out, opts...)
+		return printStorageFormatMapVerbose(log, hsm, out, opts...)
 	}
 
 	hostsTitle := "Hosts"
@@ -166,7 +171,8 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		row := txtfmt.TableRow{hostsTitle: hosts}
 		row[scmTitle] = fmt.Sprintf("%d", len(hss.HostStorage.ScmMountPoints))
-		row[nvmeTitle] = fmt.Sprintf("%d", len(hss.HostStorage.NvmeDevices))
+		row[nvmeTitle] = fmt.Sprintf("%d",
+			len(parseNvmeFormatResults(log, hss.HostStorage.NvmeDevices)))
 		table = append(table, row)
 	}
 

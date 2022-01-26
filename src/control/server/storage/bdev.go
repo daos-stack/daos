@@ -31,7 +31,10 @@ import (
 )
 
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
-const BdevPciAddrSep = " "
+const (
+	BdevPciAddrSep = " "
+	NilBdevAddress = ""
+)
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
 type NvmeDevState uint32

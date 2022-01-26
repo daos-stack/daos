@@ -507,11 +507,13 @@ func MockFailureMap(idxList ...int) map[int]struct{} {
 
 // MockFormatConf configures the contents of a StorageFormatResp.
 type MockFormatConf struct {
-	Hosts        int
-	ScmPerHost   int
-	NvmePerHost  int
-	ScmFailures  map[int]struct{}
-	NvmeFailures map[int]struct{}
+	Hosts              int
+	ScmPerHost         int
+	NvmePerHost        int
+	ResultsPerNvme     int
+	ScmFailures        map[int]struct{}
+	NvmeFailures       map[int]struct{}
+	NvmeResultFailures map[int]struct{}
 }
 
 // MockFormatResp returns a populated StorageFormatResp based on input config.
@@ -525,7 +527,8 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 
 		for j := 0; j < mfc.ScmPerHost; j++ {
 			if _, failed := mfc.ScmFailures[j]; failed {
-				if err := hem.Add(hostName, errors.Errorf("/mnt/%d format failed", j+1)); err != nil {
+				err := hem.Add(hostName, errors.Errorf("/mnt/%d format failed", j+1))
+				if err != nil {
 					t.Fatal(err)
 				}
 				continue
@@ -538,7 +541,8 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 
 		for j := 0; j < mfc.NvmePerHost; j++ {
 			if _, failed := mfc.NvmeFailures[j]; failed {
-				if err := hem.Add(hostName, errors.Errorf("NVMe device %d format failed", j+1)); err != nil {
+				err := hem.Add(hostName, errors.Errorf("NVMe device %d format failed", j+1))
+				if err != nil {
 					t.Fatal(err)
 				}
 				continue
@@ -549,10 +553,20 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 			if _, failed := mfc.ScmFailures[j]; failed {
 				continue
 			}
-			hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
-				Info:    ctlpb.ResponseStatus_CTL_SUCCESS.String(),
-				PciAddr: fmt.Sprintf("%d", j+1),
-			})
+			for k := 0; k < mfc.ResultsPerNvme; k++ {
+				if _, failed := mfc.NvmeResultFailures[k]; failed {
+					err := hem.Add(hostName,
+						errors.Errorf("NVMe device %d ns %d format failed", j+1, k))
+					if err != nil {
+						t.Fatal(err)
+					}
+					continue
+				}
+				hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
+					Info:    ctlpb.ResponseStatus_CTL_SUCCESS.String(),
+					PciAddr: fmt.Sprintf("%d", j+1),
+				})
+			}
 		}
 		if err := hsm.Add(hostName, hs); err != nil {
 			t.Fatal(err)

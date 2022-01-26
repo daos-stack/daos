@@ -1011,10 +1011,11 @@ Errors:
 		},
 		"2 SCM, 2 NVMe; first SCM fails": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:       1,
-				ScmPerHost:  2,
-				ScmFailures: control.MockFailureMap(0),
-				NvmePerHost: 2,
+				Hosts:          1,
+				ScmPerHost:     2,
+				ScmFailures:    control.MockFailureMap(0),
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
 			}),
 			expPrintStr: `
 Errors:
@@ -1030,10 +1031,11 @@ Format Summary:
 		},
 		"2 SCM, 2 NVMe; second NVMe fails": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:        1,
-				ScmPerHost:   2,
-				NvmePerHost:  2,
-				NvmeFailures: control.MockFailureMap(1),
+				Hosts:          1,
+				ScmPerHost:     2,
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
+				NvmeFailures:   control.MockFailureMap(1),
 			}),
 			expPrintStr: `
 Errors:
@@ -1049,9 +1051,25 @@ Format Summary:
 		},
 		"2 SCM, 2 NVMe": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:       1,
-				ScmPerHost:  2,
-				NvmePerHost: 2,
+				Hosts:          1,
+				ScmPerHost:     2,
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
+			}),
+			expPrintStr: `
+
+Format Summary:
+  Hosts SCM Devices NVMe Devices 
+  ----- ----------- ------------ 
+  host1 2           2            
+`,
+		},
+		"2 SCM, 4 NVMe; 2 namespaces per controller": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:          1,
+				ScmPerHost:     2,
+				NvmePerHost:    2,
+				ResultsPerNvme: 2,
 			}),
 			expPrintStr: `
 
@@ -1063,10 +1081,11 @@ Format Summary:
 		},
 		"2 Hosts, 2 SCM, 2 NVMe; first SCM fails": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:       2,
-				ScmPerHost:  2,
-				ScmFailures: control.MockFailureMap(0),
-				NvmePerHost: 2,
+				Hosts:          2,
+				ScmPerHost:     2,
+				ScmFailures:    control.MockFailureMap(0),
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
 			}),
 			expPrintStr: `
 Errors:
@@ -1082,9 +1101,10 @@ Format Summary:
 		},
 		"2 Hosts, 2 SCM, 2 NVMe": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:       2,
-				ScmPerHost:  2,
-				NvmePerHost: 2,
+				Hosts:          2,
+				ScmPerHost:     2,
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
 			}),
 			expPrintStr: `
 
@@ -1096,11 +1116,14 @@ Format Summary:
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
 			var bld strings.Builder
 			if err := PrintResponseErrors(tc.resp, &bld); err != nil {
 				t.Fatal(err)
 			}
-			if err := PrintStorageFormatMap(tc.resp.HostStorage, &bld); err != nil {
+			if err := PrintStorageFormatMap(log, tc.resp.HostStorage, &bld); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1134,10 +1157,11 @@ Errors:
 		},
 		"2 SCM, 2 NVMe; first SCM fails": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:       1,
-				ScmPerHost:  2,
-				ScmFailures: control.MockFailureMap(0),
-				NvmePerHost: 2,
+				Hosts:          1,
+				ScmPerHost:     2,
+				ScmFailures:    control.MockFailureMap(0),
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
 			}),
 			expPrintStr: `
 Errors:
@@ -1160,10 +1184,11 @@ NVMe PCI Format Result
 		},
 		"2 SCM, 2 NVMe; second NVMe fails": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:        1,
-				ScmPerHost:   2,
-				NvmePerHost:  2,
-				NvmeFailures: control.MockFailureMap(1),
+				Hosts:          1,
+				ScmPerHost:     2,
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
+				NvmeFailures:   control.MockFailureMap(1),
 			}),
 			expPrintStr: `
 Errors:
@@ -1187,9 +1212,10 @@ NVMe PCI Format Result
 		},
 		"2 SCM, 2 NVMe": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:       1,
-				ScmPerHost:  2,
-				NvmePerHost: 2,
+				Hosts:          1,
+				ScmPerHost:     2,
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
 			}),
 			expPrintStr: `
 
@@ -1208,12 +1234,64 @@ NVMe PCI Format Result
 
 `,
 		},
+		"2 SCM, 2 NVMe; 2 results-per-controller": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:          1,
+				ScmPerHost:     2,
+				NvmePerHost:    2,
+				ResultsPerNvme: 2,
+			}),
+			expPrintStr: `
+
+-----
+host1
+-----
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/1    CTL_SUCCESS   
+/mnt/2    CTL_SUCCESS   
+
+NVMe PCI Format Result 
+-------- ------------- 
+1        CTL_SUCCESS   
+1        CTL_SUCCESS   
+2        CTL_SUCCESS   
+2        CTL_SUCCESS   
+
+`,
+		},
+		"2 SCM, 2 NVMe; 2 results-per-controller; first result fails": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:              1,
+				ScmPerHost:         2,
+				NvmePerHost:        2,
+				ResultsPerNvme:     2,
+				NvmeResultFailures: control.MockFailureMap(0),
+			}),
+			expPrintStr: `
+		
+		-----
+		host1
+		-----
+		SCM Mount Format Result
+		--------- -------------
+		/mnt/1    CTL_SUCCESS
+		/mnt/2    CTL_SUCCESS
+		
+		NVMe PCI Format Result
+		-------- -------------
+		1        CTL_SUCCESS
+		2        CTL_SUCCESS
+		
+		`,
+		},
 		"2 Hosts, 2 SCM, 2 NVMe; first SCM fails": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:       2,
-				ScmPerHost:  2,
-				ScmFailures: control.MockFailureMap(0),
-				NvmePerHost: 2,
+				Hosts:          2,
+				ScmPerHost:     2,
+				ScmFailures:    control.MockFailureMap(0),
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
 			}),
 			expPrintStr: `
 Errors:
@@ -1236,9 +1314,10 @@ NVMe PCI Format Result
 		},
 		"2 Hosts, 2 SCM, 2 NVMe": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
-				Hosts:       2,
-				ScmPerHost:  2,
-				NvmePerHost: 2,
+				Hosts:          2,
+				ScmPerHost:     2,
+				NvmePerHost:    2,
+				ResultsPerNvme: 1,
 			}),
 			expPrintStr: `
 
@@ -1259,11 +1338,14 @@ NVMe PCI Format Result
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
 			var bld strings.Builder
 			if err := PrintResponseErrors(tc.resp, &bld); err != nil {
 				t.Fatal(err)
 			}
-			if err := PrintStorageFormatMap(tc.resp.HostStorage, &bld, PrintWithVerboseOutput(true)); err != nil {
+			if err := PrintStorageFormatMap(log, tc.resp.HostStorage, &bld, PrintWithVerboseOutput(true)); err != nil {
 				t.Fatal(err)
 			}
 

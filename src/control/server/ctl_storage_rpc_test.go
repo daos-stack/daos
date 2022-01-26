@@ -1264,6 +1264,90 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				},
 			},
 		},
+		"nvme and dcpm; multiple nvme namespaces": {
+			sMounts: []string{"/mnt/daos"},
+			sClass:  storage.ClassDcpm,
+			sDevs:   []string{"dev/pmem0"},
+			bClass:  storage.ClassNvme,
+			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"nvme and dcpm; multiple nvme namespaces; single nvme namespace failure": {
+			sMounts: []string{"/mnt/daos"},
+			sClass:  storage.ClassDcpm,
+			sDevs:   []string{"dev/pmem0"},
+			bClass:  storage.ClassNvme,
+			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+							Error:  "nvme rebind: failure",
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
 		"io instance already running": { // await should exit immediately
 			instancesStarted: true,
 			scmMounted:       true,
@@ -1283,7 +1367,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1319,7 +1403,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1388,7 +1472,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
