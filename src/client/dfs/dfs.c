@@ -29,7 +29,7 @@
 /** D-key name of SB metadata */
 #define SB_DKEY		"DFS_SB_METADATA"
 
-#define SB_AKEYS	6
+#define SB_AKEYS	8
 /** A-key name of SB magic */
 #define MAGIC_NAME	"DFS_MAGIC"
 /** A-key name of SB version */
@@ -38,9 +38,13 @@
 #define LAYOUT_NAME	"DFS_LAYOUT_VERSION"
 /** A-key name of Default chunk size */
 #define CS_NAME		"DFS_CHUNK_SIZE"
-/** A-key name of Default Object Class */
+/** A-key name of Default Object Class for files */
 #define OC_NAME		"DFS_OBJ_CLASS"
-/** Consistency mode of the DFS container. */
+/** A-key name of Default Object Class for directories */
+#define DIR_OC_NAME	"DFS_DIR_OBJ_CLASS"
+/** A-key name of the object class hints */
+#define HINT_OC_NAME	"DFS_OC_HINTS"
+/** Consistency mode of the DFS container */
 #define MODE_NAME	"DFS_MODE"
 
 /** Magic Value */
@@ -166,6 +170,10 @@ struct dfs {
 	dfs_obj_t		root;
 	/** DFS container attributes (Default chunk size, oclass, etc.) */
 	dfs_attr_t		attr;
+	/** Object class hint for files */
+	daos_oclass_hints_t	file_oclass_hint;
+	/** Object class hint for dirs */
+	daos_oclass_hints_t	dir_oclass_hint;
 	/** Optional prefix to account for when resolving an absolute path */
 	char			*prefix;
 	daos_size_t		prefix_len;
@@ -363,7 +371,8 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 		type = DAOS_OT_ARRAY_BYTE;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	rc = daos_obj_generate_oid(dfs->coh, oid, type, oclass, 0, 0);
+	rc = daos_obj_generate_oid(dfs->coh, oid, type, oclass,
+				   file ? dfs->file_oclass_hint : dfs->dir_oclass_hint, 0);
 	if (rc) {
 		D_ERROR("daos_obj_generate_oid() failed "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
@@ -1165,7 +1174,7 @@ create_dir(dfs_t *dfs, dfs_obj_t *parent, daos_oclass_id_t cid, dfs_obj_t *dir)
 	/** set oclass for dir. order: API, parent dir, cont default */
 	if (cid == 0) {
 		if (parent->d.oclass == 0)
-			cid = dfs->attr.da_oclass_id;
+			cid = dfs->attr.da_dir_oclass_id;
 		else
 			cid = parent->d.oclass;
 	}
@@ -1402,13 +1411,13 @@ set_inode_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 	d_iov_set(dkey, SB_DKEY, sizeof(SB_DKEY) - 1);
 
 	set_daos_iod(for_update, &iods[i++], MAGIC_NAME, sizeof(dfs_magic_t));
-	set_daos_iod(for_update, &iods[i++],
-		     SB_VERSION_NAME, sizeof(dfs_sb_ver_t));
-	set_daos_iod(for_update, &iods[i++],
-		     LAYOUT_NAME, sizeof(dfs_layout_ver_t));
+	set_daos_iod(for_update, &iods[i++], SB_VERSION_NAME, sizeof(dfs_sb_ver_t));
+	set_daos_iod(for_update, &iods[i++], LAYOUT_NAME, sizeof(dfs_layout_ver_t));
 	set_daos_iod(for_update, &iods[i++], CS_NAME, sizeof(daos_size_t));
 	set_daos_iod(for_update, &iods[i++], OC_NAME, sizeof(daos_oclass_id_t));
 	set_daos_iod(for_update, &iods[i++], MODE_NAME, sizeof(uint32_t));
+	set_daos_iod(for_update, &iods[i++], DIR_OC_NAME, sizeof(daos_oclass_id_t));
+	set_daos_iod(for_update, &iods[i++], HINT_OC_NAME, sizeof(uint64_t));
 }
 
 static int
@@ -1424,12 +1433,13 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 	dfs_layout_ver_t	layout_ver;
 	daos_size_t		chunk_size = 0;
 	daos_oclass_id_t	oclass = OC_UNKNOWN;
+	daos_oclass_id_t	dir_oclass = OC_UNKNOWN;
 	uint32_t		mode;
+	uint64_t		hints;
 	int			i, rc;
 
 	/** Open SB object */
-	rc = daos_obj_open(coh, super_oid, create ? DAOS_OO_RW : DAOS_OO_RO,
-			   oh, NULL);
+	rc = daos_obj_open(coh, super_oid, create ? DAOS_OO_RW : DAOS_OO_RO, oh, NULL);
 	if (rc) {
 		D_ERROR("daos_obj_open() Failed, "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);
@@ -1441,6 +1451,8 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 	d_iov_set(&sg_iovs[3], &chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[4], &oclass, sizeof(daos_oclass_id_t));
 	d_iov_set(&sg_iovs[5], &mode, sizeof(uint32_t));
+	d_iov_set(&sg_iovs[6], &dir_oclass, sizeof(daos_oclass_id_t));
+	d_iov_set(&sg_iovs[7], &hints, sizeof(uint64_t));
 
 	for (i = 0; i < SB_AKEYS; i++) {
 		sgls[i].sg_nr		= 1;
@@ -1462,11 +1474,12 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 			chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 
 		oclass = attr->da_oclass_id;
-
+		dir_oclass = attr->da_dir_oclass_id;
 		mode = attr->da_mode;
+		hints = attr->da_hints;
 
-		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
-				     &dkey, SB_AKEYS, iods, sgls, NULL);
+		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT, &dkey, SB_AKEYS,
+				     iods, sgls, NULL);
 		if (rc) {
 			D_ERROR("Failed to create DFS superblock "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err, rc = daos_der2errno(rc));
@@ -1476,8 +1489,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 	}
 
 	/* otherwise fetch the values and verify SB */
-	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS, iods, sgls,
-			    NULL, NULL);
+	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, 0, &dkey, SB_AKEYS, iods, sgls, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch SB info, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err, rc = daos_der2errno(rc));
@@ -1510,11 +1522,10 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 	D_DEBUG(DB_ALL, "DFS Library Layout version: %d\n", DFS_LAYOUT_VERSION);
 
 	*ver = layout_ver;
-	attr->da_chunk_size = (chunk_size) ? chunk_size :
-		DFS_DEFAULT_CHUNK_SIZE;
+	attr->da_chunk_size = (chunk_size) ? chunk_size : DFS_DEFAULT_CHUNK_SIZE;
 	attr->da_oclass_id = oclass;
-
-	/** DFS_RELAXED by default */
+	attr->da_dir_oclass_id = dir_oclass;
+	attr->da_hints = hints;
 	attr->da_mode = mode;
 
 	return 0;
@@ -1553,6 +1564,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	daos_handle_t		coh, super_oh;
 	struct dfs_entry	entry = {0};
 	daos_prop_t		*prop = NULL;
+	daos_oclass_hints_t	dir_oclass_hint = 0;
 	uint64_t		rf_factor;
 	daos_cont_info_t	co_info;
 	dfs_t			*dfs;
@@ -1586,9 +1598,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 		}
 	}
 
-	/** set the oclass id from passed in attr, otherwise use default (0) */
 	if (attr) {
 		dattr.da_oclass_id = attr->da_oclass_id;
+		dattr.da_dir_oclass_id = attr->da_dir_oclass_id;
 
 		/** check non default mode */
 		if ((attr->da_mode & MODE_MASK) == DFS_RELAXED ||
@@ -1602,10 +1614,22 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 			dattr.da_chunk_size = attr->da_chunk_size;
 		else
 			dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+
+		dattr.da_hints = attr->da_hints;
 	} else {
 		dattr.da_oclass_id = 0;
+		dattr.da_dir_oclass_id = 0;
+		dattr.da_hints = 0;
 		dattr.da_mode = DFS_RELAXED;
 		dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+	}
+
+	/** check hint for SB and Root Dir */
+	if (dattr.da_hints != 0) {
+		if (dattr.da_hints & DFS_HINT_SMALL_DIRS)
+			dir_oclass_hint = DAOS_OCH_SHD_TINY;
+		else if (dattr.da_hints & DFS_HINT_LARGE_DIRS)
+			dir_oclass_hint = DAOS_OCH_SHD_MAX;
 	}
 
 	/** check if RF factor is set on property */
@@ -1623,8 +1647,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	/* select oclass and generate SB OID */
 	roots.cr_oids[0].lo = RESERVED_LO;
 	roots.cr_oids[0].hi = SB_HI;
-	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[0],
-					 0, dattr.da_oclass_id, 0, 0, pa_domain);
+	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[0], 0,
+					 dattr.da_dir_oclass_id, dir_oclass_hint, 0, pa_domain);
 	if (rc) {
 		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
@@ -1633,8 +1657,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	/* select oclass and generate ROOT OID */
 	roots.cr_oids[1].lo = RESERVED_LO;
 	roots.cr_oids[1].hi = ROOT_HI;
-	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[1],
-					 0, dattr.da_oclass_id, 0, 0, pa_domain);
+	rc = daos_obj_generate_oid_by_rf(poh, rf_factor, &roots.cr_oids[1], 0,
+					 dattr.da_dir_oclass_id, dir_oclass_hint, 0, pa_domain);
 	if (rc) {
 		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
@@ -1677,7 +1701,6 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	entry.atime = entry.mtime = entry.ctime = now.tv_sec;
 	entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
 	entry.chunk_size = dattr.da_chunk_size;
-	entry.oclass = dattr.da_oclass_id;
 	entry.uid = geteuid();
 	entry.gid = getegid();
 
@@ -2037,6 +2060,19 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 		}
 	}
 
+	/** set oid hints for files and dirs */
+	if (dfs->attr.da_hints != 0) {
+		if (dfs->attr.da_hints & DFS_HINT_SMALL_FILES)
+			dfs->file_oclass_hint = DAOS_OCH_SHD_TINY;
+		else if (dfs->attr.da_hints & DFS_HINT_LARGE_FILES)
+			dfs->file_oclass_hint = DAOS_OCH_SHD_MAX;
+
+		if (dfs->attr.da_hints & DFS_HINT_SMALL_DIRS)
+			dfs->dir_oclass_hint = DAOS_OCH_SHD_TINY;
+		else if (dfs->attr.da_hints & DFS_HINT_LARGE_DIRS)
+			dfs->dir_oclass_hint = DAOS_OCH_SHD_MAX;
+	}
+
 	/*
 	 * If container was created with balanced mode, only balanced mode
 	 * mounting should be allowed.
@@ -2264,6 +2300,7 @@ struct dfs_glob {
 	uint64_t		id;
 	daos_size_t		chunk_size;
 	daos_oclass_id_t	oclass;
+	daos_oclass_id_t	dir_oclass;
 	uuid_t			cont_uuid;
 	uuid_t			coh_uuid;
 	daos_obj_id_t		super_oid;
@@ -2352,6 +2389,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params->id		= dfs->attr.da_id;
 	dfs_params->chunk_size	= dfs->attr.da_chunk_size;
 	dfs_params->oclass	= dfs->attr.da_oclass_id;
+	dfs_params->dir_oclass	= dfs->attr.da_dir_oclass_id;
 	uuid_copy(dfs_params->coh_uuid, coh_uuid);
 	uuid_copy(dfs_params->cont_uuid, cont_uuid);
 
@@ -2418,6 +2456,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	dfs->attr.da_id = dfs_params->id;
 	dfs->attr.da_chunk_size = dfs_params->chunk_size;
 	dfs->attr.da_oclass_id = dfs_params->oclass;
+	dfs->attr.da_dir_oclass_id = dfs_params->dir_oclass;
 
 	dfs->super_oid = dfs_params->super_oid;
 	dfs->root.oid = dfs_params->root_oid;
@@ -2742,8 +2781,7 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 		else if (dfs->attr.da_oclass_id)
 			info->doi_oclass_id = dfs->attr.da_oclass_id;
 		else
-			info->doi_oclass_id = daos_obj_get_oclass
-				(dfs->coh, 0, 0, 0);
+			info->doi_oclass_id = daos_obj_get_oclass(dfs->coh, 0, 0, 0);
 
 		if (obj->d.chunk_size)
 			info->doi_chunk_size = obj->d.chunk_size;
@@ -2751,14 +2789,12 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 			info->doi_chunk_size = dfs->attr.da_chunk_size;
 		else
 			info->doi_chunk_size =  DFS_DEFAULT_CHUNK_SIZE;
-
 		break;
 	case S_IFREG:
 	{
 		daos_size_t cell_size;
 
-		rc = daos_array_get_attr(obj->oh, &info->doi_chunk_size,
-					 &cell_size);
+		rc = daos_array_get_attr(obj->oh, &info->doi_chunk_size, &cell_size);
 		if (rc)
 			return daos_der2errno(rc);
 

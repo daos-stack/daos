@@ -48,7 +48,7 @@ enum {
 struct duns_attr_t {
 	/** IN/OUT: Container layout (POSIX, HDF5, Python, etc.) */
 	daos_cont_layout_t	da_type;
-	/** IN: (Optional) For a POSIX container, set a default object class for all objects. */
+	/** IN: (Optional) For a POSIX container, set a default object class for all files. */
 	daos_oclass_id_t	da_oclass_id;
 	/** IN: (Optional) For a POSIX container, set a default chunk size for all files. */
 	daos_size_t		da_chunk_size;
@@ -58,7 +58,7 @@ struct duns_attr_t {
 	 *
 	 * DUNS_NO_PREFIX
 	 * DUNS_NO_REVERSE_LOOKUP
-	 * DUNS_NO_CHECK_PATH:
+	 * DUNS_NO_CHECK_PATH
 	 */
 	uint32_t		da_flags;
 	/** OUT: Pool UUID or label string.
@@ -114,6 +114,10 @@ struct duns_attr_t {
 	 * da_cont with duns_resolve_path().
 	 */
 	uuid_t			da_cuuid;
+	/** IN: (Optional) For a POSIX container, set a default object class for all directories. */
+	daos_oclass_id_t	da_dir_oclass_id;
+	/** IN: (Optional) For a POSIX container, set hints for file and dir object classes. */
+	daos_size_t		da_hints;
 };
 
 /** extended attribute name that will store the UNS info */
