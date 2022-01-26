@@ -690,7 +690,11 @@ kv_insert128(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
+	/**
+	 * Use daos_ofeat_t DAOS_OF_KV_FLAT rather than DAOS_OT_KV_FLASH
+	 * to test if function compatible with old flags.
+	 */
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
