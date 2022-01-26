@@ -173,6 +173,32 @@ out:
 }
 
 int
+crt_context_provider_create(crt_context_t *crt_ctx, int provider);
+
+int
+crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider)
+{
+	int	provider_idx = -1;
+	int	i;
+
+	for (i = 0; crt_na_dict[i].nad_str != NULL; i++) {
+		if (!strncmp(provider, crt_na_dict[i].nad_str, strlen(crt_na_dict[i].nad_str) + 1) ||
+		    (crt_na_dict[i].nad_alt_str &&
+		     !strncmp(provider, crt_na_dict[i].nad_alt_str, strlen(crt_na_dict[i].nad_alt_str) + 1))) {
+			provider_idx = crt_na_dict[i].nad_type;
+			break;
+		}
+	}
+
+	if (provider_idx == -1) {
+		D_ERROR("Requested provider '%s' not found\n", provider);
+		return -DER_INVAL;
+	}
+
+	return crt_context_provider_create(crt_ctx, provider_idx);
+}
+
+int
 crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 {
 	struct crt_context	*ctx = NULL;

@@ -83,6 +83,11 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 int
 crt_context_create(crt_context_t *crt_ctx);
 
+
+int
+crt_context_create_secondary(crt_context_t *ctx_ctx);
+
+
 /**
  * Set the timeout value for all RPC requests created on the specified context.
  * Setting the timeout after crt_req_create() call will not affect already

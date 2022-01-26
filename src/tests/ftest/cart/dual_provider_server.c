@@ -18,88 +18,20 @@
 #include <cart/api.h>
 #include <cart/types.h>
 #include <signal.h>
+#include "crt_utils.h"
 
-#define MY_BASE 0x010000000
-#define MY_VER  0
+#include "dual_provider_common.h"
 
-#define NUM_PRIMARY_CTX 8
-#define NUM_SECONDARY_CTX 8
-
-#define RPC_DECLARE(name)					\
-	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)	\
-	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)
-
-enum {
-	RPC_PING = CRT_PROTO_OPC(MY_BASE, MY_VER, 0),
-	RPC_SHUTDOWN
-} rpc_id_t;
-
-#define CRT_ISEQ_RPC_PING	/* input fields */		 \
-	((crt_bulk_t)		(bulk_hdl1)		CRT_VAR) \
-	((crt_bulk_t)		(bulk_hdl2)		CRT_VAR) \
-	((uint64_t)		(size1)			CRT_VAR) \
-	((uint64_t)		(size2)			CRT_VAR)
-
-#define CRT_OSEQ_RPC_PING	/* output fields */		 \
-	((crt_bulk_t)		(ret_bulk)		CRT_VAR) \
-	((int64_t)		(rc)			CRT_VAR)
-
-#define CRT_ISEQ_RPC_SHUTDOWN	/* input fields */		 \
-	((uint64_t)		(field)			CRT_VAR)
-
-#define CRT_OSEQ_RPC_SHUTDOWN	/* output fields */		 \
-	((uint64_t)		(field)			CRT_VAR)
-
-static int handler_ping(crt_rpc_t *rpc);
-static int handler_shutdown(crt_rpc_t *rpc);
-
-RPC_DECLARE(RPC_PING);
-RPC_DECLARE(RPC_SHUTDOWN);
-
-struct crt_proto_rpc_format my_proto_rpc_fmt[] = {
-	{
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_RPC_PING,
-		.prf_hdlr	= (void *)handler_ping,
-		.prf_co_ops	= NULL,
-	}, {
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_RPC_SHUTDOWN,
-		.prf_hdlr	= (void *)handler_shutdown,
-		.prf_co_ops	= NULL,
-	}
-};
-
-struct crt_proto_format my_proto_fmt = {
-	.cpf_name = "my-proto",
-	.cpf_ver = MY_VER,
-	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt),
-	.cpf_prf = &my_proto_rpc_fmt[0],
-	.cpf_base = MY_BASE,
-};
-
-
-static int
-handler_ping(crt_rpc_t *rpc)
+static void
+exit_on_line(int line)
 {
-	struct RPC_PING_in	*input;
-	struct RPC_PING_out	*output;
-	int			rc = 0;
-
-	input = crt_req_get(rpc);
-	output = crt_reply_get(rpc);
-
-	crt_reply_send(rpc);
-	return 0;
+	printf("Failed on line %d\n", line);
+	exit(0);
 }
 
-static int
-handler_shutdown(crt_rpc_t *rpc)
-{
-	crt_reply_send(rpc);
-	exit(0); // TODO: Fix
-	return 0;
-}
+#define error_exit() exit_on_line(__LINE__)
+
+
 
 static void
 print_usage(const char *msg)
@@ -116,20 +48,38 @@ print_usage(const char *msg)
 	printf("-d 'domain0,domain1': Specify two domains to use; ");
 	printf("e.g. 'eth0,eth1'\n");
 	printf("-p 'provider0,provider1\n' : Specify providers to use; ");
-	printf("e.g. 'ofi+tcp,ofi+verbs'\n")
+	printf("e.g. 'ofi+tcp,ofi+verbs'\n");
 	printf("NOTE: first provider will be considered a primary one\n");
 	printf("-f [filename]       : If set will transfer contents ");
 	printf("of the specified file via bulk/rdma as part of 'PING' rpc\n");
 }
 
+void *
+progress_fn(void *data)
+{
+	crt_context_t	*p_ctx = (crt_context_t *)data;
+	int		rc;
+
+	while (do_shutdown == 0)
+		crt_progress(*p_ctx, 1000);
+
+	sleep(1);
+	rc = crt_context_destroy(*p_ctx, 1);
+	if (rc != 0)
+		D_ERROR("ctx destroy failed\n");
+	pthread_exit(NULL);
+}
+
 int main(int argc, char **argv)
 {
 	crt_context_t	primary_ctx[NUM_PRIMARY_CTX];
-	pthread_t	progress_thread[NUM_PRIMARY_CTX];
+	pthread_t	primary_progress_thread[NUM_PRIMARY_CTX];
 
-	crt_context_t	secondary_ctx[NUM_SECONDARY_CTX];
-	pthread_t	secondary_thread[NUM_SECONDARY_CTX];
+//	crt_context_t	secondary_ctx[NUM_SECONDARY_CTX];
+//	pthread_t	secondary_thread[NUM_SECONDARY_CTX];
 
+	int		rc;
+	int		i;
 	char		c;
 	char		*arg_interface = NULL;
 	char		*arg_domain = NULL;
@@ -145,6 +95,33 @@ int main(int argc, char **argv)
 	char		*iface0, *iface1;
 	char		*domain0, *domain1;
 	char		*provider0, *provider1;
+	char		*env_self_rank;
+	char		*env_group_cfg;
+	char		*my_uri;
+	uint32_t	grp_size;
+	crt_group_t	*grp;
+	char		*save_ptr;
+	d_rank_t	my_rank;
+
+
+	/* Get self rank and a group config file from envs set by crt_launch */
+	env_self_rank = getenv("CRT_L_RANK");
+	env_group_cfg = getenv("CRT_L_GRP_CFG");
+
+	if (env_self_rank == NULL || env_group_cfg == NULL) {
+		printf("Error: This application is intended to be launched via crt_launch\n");
+		return 0;
+	}
+
+	my_rank = atoi(env_self_rank);
+	crtu_test_init(my_rank, 20, true, true);
+
+	iface0 = default_iface0;
+	iface1 = default_iface1;
+	domain0 = default_domain0;
+	domain1 = default_domain1;
+	provider0 = default_provider0;
+	provider1 = default_provider1;
 
 	while ((c = getopt(argc, argv, "i:p:d:f:")) != -1) {
 		switch (c) {
@@ -209,11 +186,116 @@ int main(int argc, char **argv)
 	}
 
 	printf("----------------------------------------\n");
+	printf("My_rank: %d\n", my_rank);
 	printf("Provider0: '%s' Interface0: '%s' Domain0: '%s'\n", provider0, iface0, domain0);
 	printf("Provider1: '%s' Interface1: '%s' Domain1: '%s'\n", provider1, iface1, domain1);
 	printf("File to transfer: '%s'\n",
 	       arg_mmap_file ? arg_mmap_file : "none");
 	printf("----------------------------------------\n\n");
+
+	rc = d_log_init();
+	if (rc != 0) {
+		D_ERROR("d_log_init() failed; rc=%d\n", rc);
+		error_exit();
+	}
+
+	rc = crt_init(SERVER_GROUP_NAME,
+			CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	if (rc != 0) {
+		D_ERROR("crt_init() failed; rc=%d\n", rc);
+		error_exit();
+	}
+
+	for (i = 0; i < NUM_PRIMARY_CTX; i++) {
+		rc = crt_context_create(&primary_ctx[i]);
+		if (rc != 0) {
+			D_ERROR("Context %d creation failed; rc=%d\n", i, rc);
+			error_exit();
+		}
+
+		rc = pthread_create(&primary_progress_thread[i], 0, progress_fn, &primary_ctx[i]);
+		if (rc != 0) {
+			error_exit();
+		}
+	}
+
+	rc = crt_proto_register(&my_proto_fmt);
+	if (rc != 0) {
+		D_ERROR("crt_proto_register() failed; rc=%d\n", rc);
+		error_exit();
+	}
+
+	grp = crt_group_lookup(NULL);
+	if (!grp)
+		error_exit();
+
+	rc = crt_rank_self_set(my_rank);
+	if (rc != 0)
+		error_exit();
+
+	{
+		FILE	*f;
+		int	parsed_rank;
+		char	parsed_addr[256];
+
+		f = fopen(env_group_cfg, "r");
+		if (!f) {
+			D_ERROR("Failed to open %s\n", env_group_cfg);
+			error_exit();
+		}
+
+		while (1) {
+			rc = fscanf(f, "%8d %254s", &parsed_rank, parsed_addr);
+			if (rc == EOF) {
+				rc = 0;
+				break;
+			}
+
+			if (parsed_rank == my_rank)
+				continue;
+
+
+			DBG_PRINT("Rank=%d uri='%s'\n", parsed_rank, parsed_addr);
+			rc = crt_group_primary_rank_add(primary_ctx[0], grp,
+						parsed_rank, parsed_addr);
+
+			if (rc != 0) {
+				D_ERROR("Failed to add %d %s; rc=%d\n",
+					parsed_rank, parsed_addr, rc);
+				break;
+			}
+		}
+	}
+
+	rc = crt_rank_uri_get(grp, my_rank, 0, &my_uri);
+	if (rc)
+		error_exit();
+
+
+	rc = crt_group_size(NULL, &grp_size);
+	if (rc)
+		error_exit();
+
+	DBG_PRINT("self_rank=%d uri=%s file=%s group_size=%d\n", my_rank, my_uri, env_group_cfg, grp_size);
+
+	D_FREE(my_uri);
+
+
+	if (my_rank == 0) {
+		DBG_PRINT("Saving group config info\n");
+		rc = crt_group_config_save(NULL, true);
+		if (rc)
+			error_exit();
+	}
+
+	for (i = 0; i < NUM_PRIMARY_CTX; i++)
+		pthread_join(primary_progress_thread[i], NULL);
+
+	rc = crt_finalize();
+	if (rc != 0)
+		error_exit();
+
+	d_log_fini();
 
 	return 0;
 }
