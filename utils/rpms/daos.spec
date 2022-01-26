@@ -531,7 +531,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-<<<<<<< HEAD
 * Tue Jan 18 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-19
 - Remove direct MPI dependency from most of tests
 
