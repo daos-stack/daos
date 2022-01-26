@@ -2,6 +2,12 @@
 #include <mpi.h>
 #include <daos/dpar.h>
 
+uint32_t
+par_getversion(void)
+{
+	return DPAR_VERSION;
+}
+
 int
 par_init(int *argc, char ***argv)
 {

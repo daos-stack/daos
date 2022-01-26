@@ -8,25 +8,28 @@
 #include <daos/dpar.h>
 
 struct par_stubs {
-	int	(*ps_init)(int *argc, char ***argv);
-	int	(*ps_fini)(void);
-	int	(*ps_barrier)(void);
-	int	(*ps_rank)(int *rank);
-	int	(*ps_size)(int *size);
-	int	(*ps_reduce)(const void *sendbuf, void *recvbuf, int count, enum par_type type,
-			      enum par_op op, int root);
-	int	(*ps_gather)(const void *sendbuf, void *recvbuf, int count, enum par_type type,
-			     int root);
-	int	(*ps_allreduce)(const void *sendbuf, void *recvbuf, int count, enum par_type type,
-				enum par_op op);
-	int	(*ps_allgather)(const void *sendbuf, void *recvbuf, int count, enum par_type type);
-	int	(*ps_bcast)(void *buffer, int count, enum par_type type, int root);
+	uint32_t	(*ps_getversion)(void);
+	int		(*ps_init)(int *argc, char ***argv);
+	int		(*ps_fini)(void);
+	int		(*ps_barrier)(void);
+	int		(*ps_rank)(int *rank);
+	int		(*ps_size)(int *size);
+	int		(*ps_reduce)(const void *sendbuf, void *recvbuf, int count,
+				     enum par_type type, enum par_op op, int root);
+	int		(*ps_gather)(const void *sendbuf, void *recvbuf, int count,
+				     enum par_type type, int root);
+	int		(*ps_allreduce)(const void *sendbuf, void *recvbuf, int count,
+					enum par_type type, enum par_op op);
+	int		(*ps_allgather)(const void *sendbuf, void *recvbuf, int count,
+					enum par_type type);
+	int		(*ps_bcast)(void *buffer, int count, enum par_type type, int root);
 };
 
 static struct par_stubs	 stubs;
 static void		*stubs_handle;
 
 #define FOREACH_PAR_SYMBOL(ACTION, arg)	\
+	ACTION(getversion, arg)	\
 	ACTION(init, arg)		\
 	ACTION(fini, arg)		\
 	ACTION(barrier, arg)		\
@@ -53,7 +56,8 @@ static pthread_once_t init_control = PTHREAD_ONCE_INIT;
 static void
 init_routine(void)
 {
-	bool	 fail = false;
+	bool		fail = false;
+	uint32_t	version;
 
 	stubs_handle = dlopen("libdpar_mpi.so", RTLD_NOW);
 
@@ -64,8 +68,26 @@ init_routine(void)
 
 	FOREACH_PAR_SYMBOL(LOAD_SYM, fail);
 
-	if (fail)
+	if (!fail) {
+		version = stubs.ps_getversion();
+		if (par_version_compatible(version)) {
+			printf("Using compatible version\n");
+			return;
+		}
+
+		printf("libdpar_mpi.so version %d.%d is not compatible with stub version %d.%d\n",
+		       version >> DPAR_VERSION_SHIFT, version & DPAR_VERSION_MASK,
+		       DPAR_MAJOR, DPAR_MINOR);
+		printf("Continuing with serial library\n");
+		fail = true;
+	}
+
+	if (fail) {
+		/* Ideally, we would do some check here to ensure we are not running under MPI
+		 * but I don't know of a reliable way, MPI vendor independent way to do that.
+		 */
 		memset(&stubs, 0, sizeof(stubs));
+	}
 }
 
 static void
@@ -90,6 +112,12 @@ static void
 unload_stubs(void)
 {
 	memset(&stubs, 0, sizeof(stubs));
+}
+
+uint32_t
+par_getversion(void)
+{
+	return DPAR_VERSION;
 }
 
 int
