@@ -1669,7 +1669,8 @@ fs_copy_symlink(struct cmd_args_s *ap,
 	char		*symlink_value = NULL;
 
 	D_ALLOC(symlink_value, DFS_MAX_PATH);
-	assert(symlink_value != NULL);
+	if (symlink_value == NULL)
+		D_GOTO(out_copy_symlink, rc = -DER_NOMEM);
 
 	len = PATH_MAX - 1;
 	if (src_file_dfs->type == POSIX) {
@@ -1728,7 +1729,8 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		D_GOTO(out_copy_symlink, rc);
 	}
 out_copy_symlink:
-	D_FREE(symlink_value);
+	if (symlink_value)
+		D_FREE(symlink_value);
 	src_file_dfs->offset = 0;
 	dst_file_dfs->offset = 0;
 	return rc;
