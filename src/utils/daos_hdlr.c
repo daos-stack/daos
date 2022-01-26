@@ -68,12 +68,7 @@ struct dm_args {
 
 };
 
-struct fs_copy_args {
-	struct cmd_args_s	*ap;
-	struct file_dfs		*src_file_dfs;
-	struct file_dfs		*dst_file_dfs;
-	char			*src_path;
-	char			*dst_path;
+struct fs_copy_num_args {
 	uint64_t		num_dirs;
 	uint64_t		num_files;
 	uint64_t		num_links;
@@ -1743,9 +1738,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 	    struct stat *src_stat,
 	    const char *src_path,
 	    const char *dst_path,
-	    uint64_t *num_dirs,
-	    uint64_t *num_files,
-	    uint64_t *num_links)
+	    struct fs_copy_num_args *num)
 {
 	DIR			*src_dir = NULL;
 	struct dirent		*entry = NULL;
@@ -1825,7 +1818,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 					  next_dst_path);
 			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
-			(*num_files)++;
+			num->num_files++;
 			break;
 		case S_IFLNK:
 			rc = fs_copy_symlink(ap, src_file_dfs, dst_file_dfs,
@@ -1833,15 +1826,14 @@ fs_copy_dir(struct cmd_args_s *ap,
 					     next_dst_path);
 			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
-			(*num_links)++;
+			num->num_links++;
 			break;
 		case S_IFDIR:
-			rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs,
-					 &next_src_stat, next_src_path,
-					 next_dst_path, num_dirs, num_files, num_links);
+			rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &next_src_stat,
+					 next_src_path, next_dst_path, num);
 			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
-			(*num_dirs)++;
+			num->num_dirs++;
 			break;
 		default:
 			rc = -DER_INVAL;
@@ -1879,7 +1871,12 @@ out:
 }
 
 static int
-fs_copy(struct fs_copy_args *copy_args)
+fs_copy(struct cmd_args_s *ap,
+	struct file_dfs *src_file_dfs,
+	struct file_dfs *dst_file_dfs,
+	const char *src_path,
+	const char *dst_path,
+	struct fs_copy_num_args *num)
 {
 	int		rc = 0;
 	struct stat	src_stat;
@@ -1890,63 +1887,60 @@ fs_copy(struct fs_copy_args *copy_args)
 	char		*tmp_name = NULL;
 
 	/* Make sure the source exists. */
-	rc = file_lstat(copy_args->ap, copy_args->src_file_dfs, copy_args->src_path, &src_stat);
+	rc = file_lstat(ap, src_file_dfs, src_path, &src_stat);
 	if (rc != 0) {
 		rc = daos_errno2der(rc);
-		DH_PERROR_DER(copy_args->ap, rc, "Failed to stat '%s'", copy_args->src_path);
+		DH_PERROR_DER(ap, rc, "Failed to stat '%s'", src_path);
 		D_GOTO(out, rc);
 	}
 
 	/* If the destination exists and is a directory,
 	 * copy INTO the directory instead of TO it.
 	 */
-	rc = file_lstat(copy_args->ap, copy_args->dst_file_dfs, copy_args->dst_path, &dst_stat);
+	rc = file_lstat(ap, dst_file_dfs, dst_path, &dst_stat);
 	if (rc == 0) {
 		if (S_ISDIR(dst_stat.st_mode)) {
 			copy_into_dst = true;
 		} else if S_ISDIR(src_stat.st_mode) {
 			rc = -DER_INVAL;
-			DH_PERROR_DER(copy_args->ap, rc, "Destination is not a directory");
+			DH_PERROR_DER(ap, rc, "Destination is not a directory");
 			D_GOTO(out, rc);
 		}
 	}
 
 	if (copy_into_dst) {
 		/* Get the dirname and basename */
-		rc = parse_filename_dfs(copy_args->src_path, &tmp_name, &tmp_dir);
+		rc = parse_filename_dfs(src_path, &tmp_name, &tmp_dir);
 		if (rc != 0) {
-			DH_PERROR_DER(copy_args->ap, rc, "Failed to parse path '%s'",
-				      copy_args->src_path);
+			DH_PERROR_DER(ap, rc, "Failed to parse path '%s'", src_path);
 			D_GOTO(out, rc);
 		}
 
 		/* Build the destination path */
 		if (tmp_name != NULL) {
-			D_ASPRINTF(tmp_path, "%s/%s", copy_args->dst_path, tmp_name);
+			D_ASPRINTF(tmp_path, "%s/%s", dst_path, tmp_name);
 			if (tmp_path == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			copy_args->dst_path = tmp_path;
+			dst_path = tmp_path;
 		}
 	}
 
 	switch (src_stat.st_mode & S_IFMT) {
 	case S_IFREG:
-		rc = fs_copy_file(copy_args->ap, copy_args->src_file_dfs, copy_args->dst_file_dfs,
-				  &src_stat, copy_args->src_path, copy_args->dst_path);
+		rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path,
+				  dst_path);
 		if (rc == 0)
-			(copy_args->num_files)++;
+			num->num_files++;
 		break;
 	case S_IFDIR:
-		rc = fs_copy_dir(copy_args->ap, copy_args->src_file_dfs, copy_args->dst_file_dfs,
-				 &src_stat, copy_args->src_path, copy_args->dst_path,
-				 &(copy_args->num_dirs), &(copy_args->num_files),
-				 &(copy_args->num_links));
+		rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path,
+				 dst_path, num);
 		if (rc == 0)
-			(copy_args->num_dirs)++;
+			num->num_dirs++;
 		break;
 	default:
 		rc = -DER_INVAL;
-		DH_PERROR_DER(copy_args->ap, rc, "Only files and directories are supported");
+		DH_PERROR_DER(ap, rc, "Only files and directories are supported");
 		D_GOTO(out, rc);
 	}
 
@@ -2828,7 +2822,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	struct file_dfs		dst_file_dfs = {0};
 	struct dm_args		ca = {0};
 	bool			is_posix_copy = true;
-	struct fs_copy_args	copy_args;
+	struct fs_copy_num_args	num = {0};
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_file_dfs);
@@ -2877,16 +2871,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	copy_args.ap = ap;
-	copy_args.src_file_dfs = &src_file_dfs;
-	copy_args.dst_file_dfs = &dst_file_dfs;
-	copy_args.src_path = src_str;
-	copy_args.dst_path = dst_str;
-	copy_args.num_dirs = 0;
-	copy_args.num_files = 0;
-	copy_args.num_links = 0;
-
-	rc = fs_copy(&copy_args);
+	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, &num);
 	if (rc != 0)
 		D_GOTO(out_disconnect, rc);
 
@@ -2895,9 +2880,9 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	} else if (dst_file_dfs.type == POSIX) {
 		fprintf(ap->outstream, "Successfully copied to POSIX: %s\n", dst_str);
 	}
-	fprintf(ap->outstream, "    Directories: %lu\n", copy_args.num_dirs);
-	fprintf(ap->outstream, "    Files:       %lu\n", copy_args.num_files);
-	fprintf(ap->outstream, "    Links:       %lu\n", copy_args.num_links);
+	fprintf(ap->outstream, "    Directories: %lu\n", num.num_dirs);
+	fprintf(ap->outstream, "    Files:       %lu\n", num.num_files);
+	fprintf(ap->outstream, "    Links:       %lu\n", num.num_links);
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */
 	rc2 = dm_disconnect(ap, is_posix_copy, &ca, &src_file_dfs, &dst_file_dfs);
