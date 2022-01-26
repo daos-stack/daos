@@ -4,7 +4,7 @@ hosts:
     - server-B
   test_clients:
     - client-A
-timeout: 150
+timeout: 400
 setup:
   start_servers_once: False
 server_config:

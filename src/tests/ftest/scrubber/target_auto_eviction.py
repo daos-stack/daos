@@ -4,10 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 from scrubber_test_base import TestWithScrubber
 
 
-class TestWithScrubberSsdEviction(TestWithScrubber):
+class TestWithScrubberTargetEviction(TestWithScrubber):
     # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Inject Checksum Fault with scrubber enabled
@@ -23,7 +24,7 @@ class TestWithScrubberSsdEviction(TestWithScrubber):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=scrubber
-        :avocado: tags=test_scrubber_ssd_auto_eviction
+        :avocado: tags=test_scrubber_target_auto_eviction
 
         """
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
@@ -40,11 +41,14 @@ class TestWithScrubberSsdEviction(TestWithScrubber):
         self.ior_cmd.dfs_oclass.update(obj_class[0])
         self.ior_cmd.dfs_dir_oclass.update(obj_class[0])
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
+        self.dmg_cmd.pool_query(self.pool.uuid)
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
         for test in transfer_block_size:
             self.ior_cmd.transfer_size.update(test[0])
             self.ior_cmd.block_size.update(test[1])
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        time.sleep(60)
+        self.dmg_cmd.pool_query(self.pool.uuid)
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
         if status is False:
