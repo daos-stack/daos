@@ -16,19 +16,29 @@ import (
 
 // DefaultTopologyProvider gets the default hardware topology provider.
 func DefaultTopologyProvider(log logging.Logger) hardware.TopologyProvider {
-	return hwloc.NewProvider(log)
+	return hardware.NewTopologyFactory(
+		&hardware.WeightedTopologyProvider{
+			Provider: hwloc.NewProvider(log),
+			Weight:   100,
+		},
+		&hardware.WeightedTopologyProvider{
+			Provider: sysfs.NewProvider(log),
+			Weight:   90,
+		},
+	)
 }
 
 // DefaultFabricInterfaceProviders returns the default fabric interface providers.
 func DefaultFabricInterfaceProviders(log logging.Logger) []hardware.FabricInterfaceProvider {
 	return []hardware.FabricInterfaceProvider{
 		libfabric.NewProvider(log),
+		sysfs.NewProvider(log),
 	}
 }
 
 // DefaultNetDevClassProvider gets the default provider for the network device class.
-func DefaultNetDevClassProvider() hardware.NetDevClassProvider {
-	return sysfs.NewProvider()
+func DefaultNetDevClassProvider(log logging.Logger) hardware.NetDevClassProvider {
+	return sysfs.NewProvider(log)
 }
 
 // DefaultFabricScannerConfig gets a default FabricScanner configuration.
@@ -36,7 +46,7 @@ func DefaultFabricScannerConfig(log logging.Logger) *hardware.FabricScannerConfi
 	return &hardware.FabricScannerConfig{
 		TopologyProvider:         DefaultTopologyProvider(log),
 		FabricInterfaceProviders: DefaultFabricInterfaceProviders(log),
-		NetDevClassProvider:      DefaultNetDevClassProvider(),
+		NetDevClassProvider:      DefaultNetDevClassProvider(log),
 	}
 }
 
