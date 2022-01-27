@@ -2,8 +2,7 @@
 
 ## RAS Events
 
-Reliability, Availability, and Serviceability (RAS) related events are
-communicated and logged within DAOS and syslog.
+Reliability, Availability, and Serviceability (RAS) related events are communicated and logged within DAOS and syslog.
 
 ### Event Structure
 
@@ -15,7 +14,7 @@ descriptions of mandatory and optional fields.
 |:----|:----|:----|
 | ID                | Mandatory            | Unique event identifier referenced in the manual.        |
 | Type              | Mandatory            | Event type of STATE\_CHANGE causes an update to the Management Service (MS) database in addition to the event being written to SYSLOG. INFO\_ONLY type events are only written to SYSLOG.                                       |
-| Timestamp         | Mandatory            | Resolution at the microseconds and include the timezone offset to avoid locality issues.                |
+| Timestamp         | Mandatory            | Resolution at the microseconds and include the time zone offset to avoid locality issues.                |
 | Severity          | Mandatory            | Indicates event severity, Error/Warning/Notice.          |
 | Msg               | Mandatory            | Human readable message.                                  |
 | HID               | Optional             | Identify hardware components involved in the event. E.g., PCI address for SSD, network interface              |
@@ -52,9 +51,9 @@ severity, message, description, and cause.
 | pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. The event data field includes the pool map version and pool operation identifier.  | N/A|
 | pool\_rebuild\_failed| INFO\_ONLY| ERROR| Pool rebuild failed: <rc\>.| Indicates a pool rebuild has failed. The event data field includes the pool map version and pool operation identifier. <rc\> provides a string representation of DER code.| N/A                          |
 | pool\_replicas\_updated| STATE\_CHANGE| NOTICE| List of pool service replica ranks has been updated.| Indicates a pool service replica list has changed. The event contains the new service replica list in a custom payload. | When a pool service replica rank becomes unavailable, a new rank is selected to replace it (if available). |
-| pool\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with pool data in local storage that has an incompatible layout version. |
-| container\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with container data in local storage that has an incompatible layout version.|
-| rdb\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>]] OR incompatible DB UUID: <uuid\> | Indicates the given RDB's layout version does not match any of the versions supported by the currently running DAOS software, or the given RDB's UUID does not match the expected UUID (usually because the RDB belongs to a pool created by a pre-2.0 DAOS version).| DAOS engine is started with RDB data in local storage that has an incompatible layout version.|
+| pool\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine starts with pool data in local storage with s an incompatible layout version. |
+| container\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine starts with container data in local storage with s an incompatible layout version.|
+| rdb\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>]] OR incompatible DB UUID: <uuid\> | Indicates the given RDB's layout version does not match any of the versions supported by the currently running DAOS software, or the given RDB's UUID does not match the expected UUID (usually because the RDB belongs to a pool created by a pre-2.0 DAOS version).| DAOS engine starts with RDB data in local storage with s an incompatible layout version.|
 | swim\_rank\_alive| STATE\_CHANGE| NOTICE| TBD| The SWIM protocol has detected the specified rank is responsive.| A remote DAOS engine has become responsive.|
 | swim\_rank\_dead| STATE\_CHANGE| NOTICE| SWIM rank marked as dead.| The SWIM protocol has detected the specified rank is unresponsive.| A remote DAOS engine has become unresponsive.|
 | system\_start\_failed| INFO\_ONLY| ERROR| System startup failed, <errors\>| Indicates that a user-initiated controlled startup failed. <errors\> shows which ranks failed.| Ranks failed to start.|
@@ -65,11 +64,10 @@ severity, message, description, and cause.
 
 Engine logging is initially configured by setting the `log_file` and `log_mask`
 parameters in the server config file. Logging is described in detail in the
-[`Debugging System`](https://daos-stack.github.io/admin/troubleshooting/#debugging-system)
-section.
+[`Debugging System`](https://daos-stack.github.io/admin/troubleshooting/#debugging-system) section.
 
-Engine log levels can be changed dynamically (at runtime) by setting log masks
-for a set of facilities to a given level.
+Engine log levels can be changed dynamically (at runtime) by setting log
+Masks for a set of facilities to a given level.
 The changed settings will be applied to all running DAOS I/O Engines present in the configured
 dmg hostlist using the command `dmg server set-logmasks [<masks>]`.
 The command accepts 0-1 positional arguments.
@@ -163,8 +161,7 @@ scrape_configs:
 ```
 
 ##### Setting up a new local Prometheus installation
-If there is not already a Prometheus server set up, DMG offers quick setup
-options for DAOS.
+If there is no Prometheus server set up, DMG offers a quick setup option for DAOS.
 
 To install and configure Prometheus on the local machine:
 
@@ -193,7 +190,7 @@ metrics from the local host only.
 `daos_metrics` displays the metrics in a human-readable tree format or CSV
 format (`--csv`).
 
-Each DAOS engine maintains its own metrics.
+Each DAOS engine maintains its metrics.
 The `--srv_idx` parameter can be used to specify which engine to query, if there
 are multiple engines configured per server.
 The default is to query the first engine on the server (index 0).
@@ -251,7 +248,7 @@ Usage:
 ```
 
 The command output shows online DAOS storage utilization, only including storage
-statistics for devices that have been formatted by DAOS control-plane and assigned
+statistics for devices that have been formatted by the DAOS control plane and assigned
 to a currently running rank of the DAOS system. This represents the storage that
 can host DAOS pools.
 ```bash
@@ -262,7 +259,7 @@ wolf-71 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 ```
 
-Note that the table values are per-host (storage server) and SCM/NVMe capacity
+Note: table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
 [`dmg pool create`](https://daos-stack.github.io/admin/pool_operations/#pool-creationdestroy)
 are per rank.
@@ -273,7 +270,7 @@ then the values supplied to `dmg pool create` should be
 a maximum of the SCM/NVMe free space divided by the number of ranks per host.
 
 For example, if 2.0 TB SCM and 10.0 TB NVMe free space is reported by
-`dmg storage query usage` and the server configuration file used to start the
+`dmg storage query usage` and the server configuration file used to start the 
 system specifies 2 I/O processes (2 "server" sections), the maximum pool size
 that can be specified is approximately `dmg pool create -s 1T -n 5T` (may need to
 specify slightly below the maximum to take account of negligible metadata
@@ -332,13 +329,13 @@ states are the following:
   - NORMAL: a fully functional device in-use by DAOS
   - EVICTED: the device is no longer in-use by DAOS
   - UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
-  - NEW: the device is plugged and available and not currently in-use by DAOS
+  - NEW: the device is plugged and available and not currently in use by DAOS
 
 To list only devices in the EVICTED state, use the (--show-evicted|-e) option to the
 list-devices command.
 
 The transport address is also listed for the device. This is either the PCIe address
-for normal NVMe SSDs, or the BDF format address of the backing NVMe SSDs behind a
+for NVMe SSDs, or the BDF format address of the backing NVMe SSDs behind a
 VMD (Volume Management Device) address. In the example below, the last two listed devices
 are both VMD devices with transport addresses in the BDF format behind the VMD address
 0000:5d:05.5.
@@ -420,7 +417,7 @@ Usage:
 ```
 
 The NVMe storage query device-health and target-health commands query the device
-health data, including NVMe SSD health stats and in-memory I/O error and checksum
+health data, including NVMe SSD health stats, in-memory I/O error and checksum
 error counters. The server rank and device state are also listed. The device health
 data can either be queried by device UUID (device-health command) or by VOS target ID
 along with the server rank (target-health command). The same device health information
@@ -515,10 +512,10 @@ will remain evicted until device replacement occurs).
     Full NVMe hot-plug capability will be available and supported in DAOS 2.2 release.
     Use is currently intended for testing only and is not supported for production.
 
-- To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
+- To use a newly added (hot-inserted) SSD, the SSD needs to be unbound from the kernel driver
 and bound instead to a user-space driver so that the device can be used with DAOS.
 
-To rebind a SSD on a single host, run the following command (replace SSD PCI address and
+To rebind an SSD on a single host, run the following command (replace SSD PCI address and
 hostname with appropriate values):
 ```bash
 $ dmg storage nvme-rebind -a 0000:84:00.0 -l wolf-167
@@ -539,7 +536,7 @@ Usage:
 
 [nvme command options]
           --old-uuid= Device UUID of hot-removed SSD
-          --new-uuid= Device UUID of new device
+          --new-uuid= Device UUID of a new device
           --no-reint  Bypass reintegration of device and just bring back online.
 ```
 
@@ -553,12 +550,12 @@ boro-11
   Devices
     UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b Targets:[] Rank:1 State:NORMAL
 ```
-The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
+The old, now replaced device will remain in an "EVICTED" state until it is disconnected from the server.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
 
 - Reuse a FAULTY Device:
 
-In order to reuse a device that was previously set as FAULTY and evicted from the DAOS
+To reuse a device that was previously set as FAULTY and evicted from the DAOS 
 system, an admin can run the following command (setting the old device UUID to be the
 new device UUID):
 ```bash
@@ -571,13 +568,13 @@ boro-11
 ```
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
-be for testing or for accidental device eviction.
+be for testing or accidental device eviction.
 
 #### Identification
 
-The SSD identification feature is simply a way to quickly and visually locate a
+The SSD identification feature is simply a way to quickly and visually locate a 
 device. It requires the use of Intel VMD (Volume Management Device), which needs
-to be physically available on the hardware as well as enabled in the system BIOS.
+to be physically available on the hardware and enabled in the system BIOS.
 The feature supports two LED device events: locating a healthy device and locating
 an evicted device.
 
@@ -624,12 +621,12 @@ that join the DAOS system. Once an engine has joined the DAOS system, it is
 identified by a unique system "rank". Multiple ranks can reside on the same
 host machine, accessible via the same network address.
 
-A DAOS system can be shutdown and restarted to perform maintenance and/or
-reboot hosts. Pool data and state will be maintained providing no changes are
+A DAOS system can be shut down and restarted to perform maintenance and/or
+reboot hosts. Pool data and state will be maintained, providing that no changes are
 made to the rank's metadata stored on persistent memory.
 
-Storage reformat can also be performed after system shutdown. Pools will be
-removed and storage wiped.
+Storage reformats can also be performed after a system shutdown. Pools
+will be removed and storage wiped.
 
 System commands will be handled by a DAOS Server acting as an access point and
 listening on the address specified in the DMG config file "hostlist" parameter.
@@ -652,7 +649,7 @@ Usage:
 
 Available commands:
   cleanup       Clean up all resources associated with the specified machine
-  erase         Erase system metadata prior to reformat
+  erase         Erase system metadata prior to reformatting
   leader-query  Query for current Management Service leader
   list-pools    List all pools in the DAOS system
   query         Query DAOS system status
@@ -682,20 +679,20 @@ Usage:
 The `--ranks` takes a pattern describing rank ranges, e.g., 0,5-10,20-100.
 The `--rank-hosts` takes a pattern describing host ranges e.g. storagehost[0,5-10],10.8.1.[20-100].
 
-The output table will provide system rank mappings to host address and instance
+The output table will provide system rank mappings to the host address and instance
 UUID, in addition to the rank state.
 
 DAOS engines run a gossip-based protocol called SWIM that provides efficient
 and scalable fault detection. When an engine is reported as unresponsive, a
-RAS event is raised and the associated engine is marked as excluded in the
+RAS event is raised, and the associated engine is marked as excluded in the
 output of `dmg system query`. The engine can be stopped (see next section)
-and then restarted to rejoin the system. An failed engine might also be excluded
+and then restarted to rejoin the system. A failed engine might also be excluded
 from the pools it hosted, please check the pool operation section on how to
 reintegrate an excluded engine.
 
 ### Shutdown
 
-When up and running, the entire system can be shutdown.
+When up and running, the entire system can be shut down.
 
 - Stop a System:
 ```bash
@@ -714,23 +711,23 @@ Usage:
 The `--ranks` takes a pattern describing rank ranges, e.g., 0,5-10,20-100.
 The `--rank-hosts` takes a pattern describing host ranges e.g. storagehost[0,5-10],10.8.1.[20-100].
 
-The output table will indicate action and result.
+The output table will indicate the action and result.
 
 While the engines are stopped, the DAOS servers will continue to
 operate and listen on the management network.
 
 !!! warning
     All engines monitor each other and pro-actively exclude unresponsive
-    members. It is critical to properly stop a DAOS system as with dmg in
-    the case of a planned maintenance on all or a majority of the DAOS
+    members. It is critical to stop a DAOS system with dmg in properly in
+    the case of planned maintenance on all or a majority of the DAOS
     storage nodes. An abrupt reboot of the storage nodes might result
-    in massive exclusion that will take time to recover.
+    In massive exclusion, that will take time to recover.
 
-The force option can be passed to for cases when a clean shutdown is not working.
-Monitoring is not disabled in this case and spurious exclusion might happen,
+The force option can be passed for cases when a clean shutdown is not working.
+Monitoring is not disabled in this case, and spurious exclusion might happen,
 but the engines are guaranteed to be killed.
 
-dmg also allows to stop a subsection of engines identified by ranks or hostnames.
+dmg also allows stopping a subsection of engines identified by ranks or hostnames.
 This is useful to stop (and restart) misbehaving engines.
 
 ### Start
@@ -753,7 +750,7 @@ Usage:
 The `--ranks` takes a pattern describing rank ranges, e.g., 0,5-10,20-100.
 The `--rank-hosts` takes a pattern describing host ranges e.g. storagehost[0,5-10],10.8.1.[20-100].
 
-The output table will indicate action and result.
+The output table will indicate the action and result.
 
 DAOS I/O Engines will be started.
 
@@ -802,7 +799,7 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
 
 To erase the DAOS storage configuration, the `dmg system erase`
 command can be used. Before doing this, the affected engines need to be
-stopped by running `dmg system stop` (if necessary with the `--force` flag).
+stopped by running `dmg system stop` (if necessary, use the `--force` flag).
 The erase operation will destroy any pools that may still exist, and will
 unconfigure the storage. It will not stop the daos\_server process, so
 the `dmg` command can still be used. For example, the system can be
@@ -823,12 +820,12 @@ formatted again by running `dmg storage format`.
 To add a new server to an existing DAOS system, one should install:
 
 - the relevant certificates
-- the server yaml file pointing to the access points of the running
+- the server yml file pointing to the access points of the running
   DAOS system
 
 The daos\_control.yml file should also be updated to include the new DAOS server.
 
-Then starts the daos\_server via systemd and format the new server via
+Then start the daos\_server via the systemd command and format the new server via
 dmg as follows:
 
 ```
@@ -857,12 +854,11 @@ nodes to be upgraded to a 2.x version.
 !!! warning
     Attempts to start DAOS v2.0 over a system formatted with a previous DAOS
     version will trigger a RAS event and cause all the engines to abort.
-    Similarly, a 2.0 DAOS client or engine will refuse to communicate with a
-    peer that runs an incompatible version.
+    Similarly, a 2.0 DAOS client or the engine will refuse to communicate with a peer that runs an incompatible version.
 
 DAOS v2.0 will maintain interoperability for both the wire protocol and
-persistent layout with any future v2.x versions. That being said, it is
-required that all engines in the same system run the same DAOS version.
+persistent layout with any future v2.x versions. It is required that 
+all engines in the same system run the same DAOS version.
 
 !!! warning
     Rolling upgrade is not supported at this time.
