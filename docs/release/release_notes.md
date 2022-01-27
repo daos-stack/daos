@@ -3,9 +3,8 @@
 We are pleased to announce the release of DAOS version 2.0.
 
 !!! note
-    The DAOS version 2.0 java/hadoop DAOS connector has been updated to use
-    Log4j version 2.16 and may not include the latest functional and security
-    updates. DAOS 2.0.1 is targeted to be released in January 2022 and will
+    DAOS version 2.0.1 does not include the latest functional and security
+    updates. DAOS 2.0.2 is targeted to be released in March 2022 and will
     include additional functional and/or security updates. Customers should
     update to the latest version as it becomes available.
 
