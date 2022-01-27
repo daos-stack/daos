@@ -252,11 +252,12 @@ class VOS_SIZE(BASE_CLASS):
     def __del__(self):
         self._lib.d_free_string(ctypes.byref(self._data))
 
-    def get_vos_size_str(self, alloc_overhead):
+    def get_vos_size_str(self, alloc_overhead, vospath):
         print('  Reading VOS structures from current installation')
         ret = self._lib.get_vos_structure_sizes_yaml(
             ctypes.c_int(alloc_overhead),
-            ctypes.byref(self._data))
+            ctypes.byref(self._data),
+            bytes(vospath, encoding='utf-8'))
 
         if ret != 0:
             raise Exception(

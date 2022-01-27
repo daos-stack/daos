@@ -51,8 +51,6 @@
 #define STORAGE_PATH_LEN 96
 #endif
 
-extern char vos_path[STORAGE_PATH_LEN];
-
 static void
 print_dynamic(struct d_string_buffer_t *buf, const char *name,
 	      const struct daos_tree_overhead *ovhd)
@@ -140,7 +138,7 @@ get_daos_csummers(struct d_string_buffer_t *buf)
 }
 
 int
-get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
+get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf, const char *vos_path)
 {
 	FOREACH_TYPE(DECLARE_TYPE)
 	int rc;
@@ -152,7 +150,6 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 	if (rc) {
 		goto exit_0;
 	}
-
 	rc = vos_self_init(vos_path);
 	if (rc) {
 		goto exit_1;
