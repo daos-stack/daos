@@ -335,7 +335,7 @@ The ACL file format is detailed in [here](https://daos-stack.github.io/overview/
 To view a pool's ACL:
 
 ```bash
-$ dmg pool get-acl --acl-file <path> <pool_label>
+$ dmg pool get-acl --outfile=<path> <pool_label>
 ```
 
 The output is in the same string format used in the ACL file during creation,
