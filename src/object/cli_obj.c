@@ -5865,6 +5865,8 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 {
 	daos_ofeat_t	feat = (daos_ofeat_t)in;
 
+	D_WARN("daos_ofeat_t(DAOS_OF_XXX) will be deprecated soon, "
+		"please use enum daos_otype_t(DAOS_OT_XXX) instead!\n");
 	return daos_obj_generate_oid2(coh, oid, daos_obj_feat2type(feat), cid, hints, args);
 }
 
@@ -5895,6 +5897,9 @@ daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
 	int			rc;
+
+	if (!daos_otype_t_is_valid(type))
+		return -DER_INVAL;
 
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);
@@ -5942,6 +5947,9 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
 	int			rc;
+
+	if (!daos_otype_t_is_valid(type))
+		return -DER_INVAL;
 
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
