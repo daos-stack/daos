@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -634,6 +634,7 @@ type FabricScanner struct {
 	log      logging.Logger
 	config   *FabricScannerConfig
 	builders []FabricInterfaceSetBuilder
+	topo     *Topology
 }
 
 // NewFabricScanner creates a new FabricScanner with the given configuration.
@@ -653,9 +654,13 @@ func (s *FabricScanner) init(ctx context.Context) error {
 		return errors.Wrap(err, "invalid FabricScannerConfig")
 	}
 
-	topo, err := s.config.TopologyProvider.GetTopology(ctx)
-	if err != nil {
-		return err
+	topo := s.topo
+	if topo == nil {
+		var err error
+		topo, err = s.config.TopologyProvider.GetTopology(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	s.builders = defaultFabricInterfaceSetBuilders(s.log,
@@ -664,8 +669,6 @@ func (s *FabricScanner) init(ctx context.Context) error {
 			FabricInterfaceProviders: s.config.FabricInterfaceProviders,
 			NetDevClassProvider:      s.config.NetDevClassProvider,
 		})
-
-	s.log.Debugf("initialized FabricScanner")
 	return nil
 }
 
@@ -696,4 +699,18 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 
 func (s *FabricScanner) isInitialized() bool {
 	return len(s.builders) > 0
+}
+
+// CacheTopology caches a specific HW topology for use with the fabric scan.
+func (s *FabricScanner) CacheTopology(t *Topology) error {
+	if s == nil {
+		return errors.New("FabricScanner is nil")
+	}
+
+	if t == nil {
+		return errors.New("Topology is nil")
+	}
+
+	s.topo = t
+	return nil
 }
