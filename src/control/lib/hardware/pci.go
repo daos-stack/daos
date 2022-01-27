@@ -204,6 +204,11 @@ type PCIAddressSet struct {
 	addrMap map[string]*PCIAddress
 }
 
+// Equals compares two PCIAddressSets for equality.
+func (pas *PCIAddressSet) Equals(other *PCIAddressSet) bool {
+	return pas.Difference(other).Len() == 0
+}
+
 // Contains returns true if provided address is already in set.
 func (pas *PCIAddressSet) Contains(a *PCIAddress) bool {
 	if pas == nil {

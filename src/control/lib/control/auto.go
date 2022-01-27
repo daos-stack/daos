@@ -608,7 +608,7 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 					WithScmDeviceList(sd.numaPMems[nn][0]),
 			)
 		}
-		if len(sd.numaSSDs) > 0 {
+		if len(sd.numaSSDs) > 0 && len(sd.numaSSDs[nn]) > 0 {
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass(storage.ClassNvme.String()).

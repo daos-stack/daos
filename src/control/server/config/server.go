@@ -479,7 +479,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 			// backward compatible behavior.
 			bc := ls.BdevClass
 			switch {
-			case bc == storage.ClassNvme && len(ls.BdevConfig.DeviceList) == 0:
+			case bc == storage.ClassNvme && ls.BdevConfig.DeviceList.Len() == 0:
 				log.Debugf("legacy storage config conversion skipped for class "+
 					"%s with empty bdev_list", storage.ClassNvme)
 			case bc == storage.ClassNone:
@@ -490,7 +490,8 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 					storage.NewTierConfig().
 						WithStorageClass(ls.BdevClass.String()).
 						WithBdevDeviceCount(ls.DeviceCount).
-						WithBdevDeviceList(ls.BdevConfig.DeviceList...).
+						WithBdevDeviceList(
+							ls.BdevConfig.DeviceList.Devices()...).
 						WithBdevFileSize(ls.FileSize).
 						WithBdevBusidRange(
 							ls.BdevConfig.BusidRange.String()),
@@ -603,14 +604,14 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 
 		var bdevCount int
 		for _, bdevConf := range engine.Storage.Tiers.BdevConfigs() {
-			for _, dev := range bdevConf.Bdev.DeviceList {
+			for _, dev := range bdevConf.Bdev.DeviceList.Devices() {
 				if seenIn, exists := seenBdevSet[dev]; exists {
 					log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
 					return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 				}
 				seenBdevSet[dev] = idx
 			}
-			bdevCount += len(bdevConf.Bdev.DeviceList)
+			bdevCount += bdevConf.Bdev.DeviceList.Len()
 		}
 		if seenBdevCount != -1 && bdevCount != seenBdevCount {
 			return FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)

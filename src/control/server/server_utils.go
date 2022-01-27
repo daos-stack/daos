@@ -43,30 +43,30 @@ const (
 	scanMinHugePageCount = 128
 )
 
-func engineCfgGetBdevs(engineCfg *engine.Config) []string {
+func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
 	bdevs := []string{}
 	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
 		if bc.Class != storage.ClassNvme {
 			// don't scan if any tier is using emulated NVMe
-			return []string{}
+			return new(storage.BdevDeviceList)
 		}
-		bdevs = append(bdevs, bc.Bdev.DeviceList...)
+		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
 	}
 
-	return bdevs
+	return storage.MustNewBdevDeviceList(bdevs...)
 }
 
-func cfgGetBdevs(cfg *config.Server) []string {
+func cfgGetBdevs(cfg *config.Server) *storage.BdevDeviceList {
 	bdevs := []string{}
 	for _, engineCfg := range cfg.Engines {
-		bdevs = append(bdevs, engineCfgGetBdevs(engineCfg)...)
+		bdevs = append(bdevs, engineCfgGetBdevs(engineCfg).Devices()...)
 	}
 
-	return bdevs
+	return storage.MustNewBdevDeviceList(bdevs...)
 }
 
 func cfgHasBdevs(cfg *config.Server) bool {
-	return len(cfgGetBdevs(cfg)) != 0
+	return cfgGetBdevs(cfg).Len() != 0
 }
 
 func cfgGetReplicas(cfg *config.Server, resolver resolveTCPFn) ([]*net.TCPAddr, error) {
@@ -280,7 +280,7 @@ func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.Get
 	ei.RLock()
 	engineCfg := ei.runner.GetConfig()
 	engineIdx := engineCfg.Index
-	if len(engineCfgGetBdevs(engineCfg)) == 0 {
+	if engineCfgGetBdevs(engineCfg).Len() == 0 {
 		srv.log.Debugf("skipping mem check on engine %d, no bdevs", engineIdx)
 		ei.RUnlock()
 		return nil

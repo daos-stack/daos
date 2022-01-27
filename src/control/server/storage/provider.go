@@ -223,7 +223,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 // block devices.
 func (p *Provider) HasBlockDevices() bool {
 	for _, cfg := range p.engineStorage.Tiers.BdevConfigs() {
-		if len(cfg.Bdev.DeviceList) > 0 {
+		if cfg.Bdev.DeviceList.Len() > 0 {
 			return true
 		}
 	}
@@ -427,7 +427,7 @@ func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierSc
 		if cfg.Class != ClassNvme {
 			continue
 		}
-		if len(cfg.Bdev.DeviceList) == 0 {
+		if cfg.Bdev.DeviceList.Len() == 0 {
 			continue
 		}
 

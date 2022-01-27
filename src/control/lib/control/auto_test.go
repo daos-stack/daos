@@ -1021,6 +1021,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					config.Server{},
 					sysfs.Provider{},
 				),
+				cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+					if x == nil && y == nil {
+						return true
+					}
+					return x.Equals(y)
+				}),
 			}
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 
