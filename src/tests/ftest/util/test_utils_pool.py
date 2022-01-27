@@ -108,8 +108,8 @@ class TestPool(TestDaosApiBase):
             index = self.server_index.value
             try:
                 params = test.server_managers[index].autosize_pool_params(
-                    size=self.size.value,
-                    tier_ratio=self.tier_ratio.value,
+                    size=None,
+                    tier_ratio=None,
                     scm_size=self.scm_size.value,
                     nvme_size=self.nvme_size.value,
                     min_targets=self.min_targets.value,
