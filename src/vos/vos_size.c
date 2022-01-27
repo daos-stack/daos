@@ -138,7 +138,8 @@ get_daos_csummers(struct d_string_buffer_t *buf)
 }
 
 int
-get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf, const char *vos_path)
+get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf,
+			     const char *vos_path)
 {
 	FOREACH_TYPE(DECLARE_TYPE)
 	int rc;
