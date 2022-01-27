@@ -18,8 +18,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY ./utils/scripts/install-ubuntu20.sh /tmp/install.sh
 RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
-RUN apt-get update && apt-get install apt-utils && apt-get upgrade && chmod +x /tmp/install.sh && \
-  /tmp/install.sh && apt-get clean all
+RUN apt-get update && apt-get install apt-utils software-properties-common && \
+    apt-get upgrade && chmod +x /tmp/install.sh && /tmp/install.sh && \
+    apt-get clean all
 
 RUN locale-gen en_US.UTF-8
 

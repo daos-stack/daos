@@ -24,8 +24,8 @@ zypper --non-interactive install \
     gcc \
     gcc-c++ \
     git \
-    go1.14 \
-    go1.14-race \
+    go1.15 \
+    go1.15-race \
     graphviz \
     gzip \
     hwloc-devel \

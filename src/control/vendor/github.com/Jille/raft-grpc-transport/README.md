@@ -16,3 +16,5 @@ tm.Register(s)
 r, err := raft.NewRaft(..., tm.Transport())
 // ...
 ```
+
+Want more example code? Check out main.go at https://github.com/Jille/raft-grpc-example

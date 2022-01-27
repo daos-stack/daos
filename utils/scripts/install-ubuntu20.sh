@@ -10,6 +10,9 @@
 # interactively then these this commands can be used to set apt-get into automatic mode.
 # echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 
+add-apt-repository ppa:longsleep/golang-backports
+apt-get update
+
 apt-get install \
     autoconf \
     build-essential \

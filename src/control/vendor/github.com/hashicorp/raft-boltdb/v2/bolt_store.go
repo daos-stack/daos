@@ -2,7 +2,12 @@ package raftboltdb
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"time"
 
+	metrics "github.com/armon/go-metrics"
+	v1 "github.com/boltdb/bolt"
 	"github.com/hashicorp/raft"
 	"go.etcd.io/bbolt"
 )
@@ -105,6 +110,10 @@ func (b *BoltStore) initialize() error {
 	return tx.Commit()
 }
 
+func (b *BoltStore) Stats() bbolt.Stats {
+	return b.conn.Stats()
+}
+
 // Close is used to gracefully close the DB connection.
 func (b *BoltStore) Close() error {
 	return b.conn.Close()
@@ -144,6 +153,8 @@ func (b *BoltStore) LastIndex() (uint64, error) {
 
 // GetLog is used to retrieve a log from Bbolt at a given index.
 func (b *BoltStore) GetLog(idx uint64, log *raft.Log) error {
+	defer metrics.MeasureSince([]string{"raft", "boltdb", "getLog"}, time.Now())
+
 	tx, err := b.conn.Begin(false)
 	if err != nil {
 		return err
@@ -166,23 +177,32 @@ func (b *BoltStore) StoreLog(log *raft.Log) error {
 
 // StoreLogs is used to store a set of raft logs
 func (b *BoltStore) StoreLogs(logs []*raft.Log) error {
+	defer metrics.MeasureSince([]string{"raft", "boltdb", "storeLogs"}, time.Now())
 	tx, err := b.conn.Begin(true)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
+	batchSize := 0
 	for _, log := range logs {
 		key := uint64ToBytes(log.Index)
 		val, err := encodeMsgPack(log)
 		if err != nil {
 			return err
 		}
+
+		logLen := val.Len()
 		bucket := tx.Bucket(dbLogs)
 		if err := bucket.Put(key, val.Bytes()); err != nil {
 			return err
 		}
+		batchSize += logLen
+		metrics.AddSample([]string{"raft", "boltdb", "logSize"}, float32(logLen))
 	}
+
+	metrics.AddSample([]string{"raft", "boltdb", "logsPerBatch"}, float32(len(logs)))
+	metrics.AddSample([]string{"raft", "boltdb", "logBatchSize"}, float32(batchSize))
 
 	return tx.Commit()
 }
@@ -265,4 +285,68 @@ func (b *BoltStore) GetUint64(key []byte) (uint64, error) {
 // database file to sync against the disk.
 func (b *BoltStore) Sync() error {
 	return b.conn.Sync()
+}
+
+// MigrateToV2 reads in the source file path of a BoltDB file
+// and outputs all the data migrated to a Bbolt destination file
+func MigrateToV2(source, destination string) (*BoltStore, error) {
+	_, err := os.Stat(destination)
+	if err == nil {
+		return nil, fmt.Errorf("file exists in destination %v", destination)
+	}
+
+	srcDb, err := v1.Open(source, dbFileMode, &v1.Options{
+		ReadOnly: true,
+		Timeout:  1 * time.Minute,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed opening source database: %v", err)
+	}
+
+	//Start a connection to the source
+	srctx, err := srcDb.Begin(false)
+	if err != nil {
+		return nil, fmt.Errorf("failed connecting to source database: %v", err)
+	}
+	defer srctx.Rollback()
+
+	//Create the destination
+	destDb, err := New(Options{Path: destination})
+	if err != nil {
+		return nil, fmt.Errorf("failed creating destination database: %v", err)
+	}
+	//Start a connection to the new
+	desttx, err := destDb.conn.Begin(true)
+	if err != nil {
+		destDb.Close()
+		os.Remove(destination)
+		return nil, fmt.Errorf("failed connecting to destination database: %v", err)
+	}
+
+	defer desttx.Rollback()
+
+	//Loop over both old buckets and set them in the new
+	buckets := [][]byte{dbConf, dbLogs}
+	for _, b := range buckets {
+		srcB := srctx.Bucket(b)
+		destB := desttx.Bucket(b)
+		err = srcB.ForEach(func(k, v []byte) error {
+			return destB.Put(k, v)
+		})
+		if err != nil {
+			destDb.Close()
+			os.Remove(destination)
+			return nil, fmt.Errorf("failed to copy %v bucket: %v", string(b), err)
+		}
+	}
+
+	//If the commit fails, clean up
+	if err := desttx.Commit(); err != nil {
+		destDb.Close()
+		os.Remove(destination)
+		return nil, fmt.Errorf("failed commiting data to destination: %v", err)
+	}
+
+	return destDb, nil
+
 }
