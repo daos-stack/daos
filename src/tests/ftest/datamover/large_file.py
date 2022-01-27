@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -44,10 +44,8 @@ class DmvrPosixLargeFile(DataMoverTestBase):
         pool = self.create_pool()
         cont1 = self.create_cont(pool)
 
-        # update and run ior on cont1
-        self.run_ior_with_params(
-            "DAOS", self.ior_cmd.test_file.value,
-            pool, self.container[0])
+        # create initial data in cont1
+        self.run_ior_with_params("DAOS", self.ior_cmd.test_file.value, pool, cont1)
 
         # create cont2
         cont2 = self.create_cont(pool)
