@@ -15,6 +15,10 @@ server_config:
   name: daos_server
   servers:
     targets: 2
+    log_mask: DEBUG,MEM=ERR
+    env_vars:
+      - DD_MASK=all
+      - DD_SUBSYS=all
 pool:
   mode: 511
   name: daos_server
