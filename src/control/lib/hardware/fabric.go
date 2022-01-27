@@ -12,6 +12,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -632,6 +633,7 @@ func (c *FabricScannerConfig) Validate() error {
 // FabricScanner is a type that scans the system for fabric interfaces.
 type FabricScanner struct {
 	log      logging.Logger
+	mutex    sync.Mutex
 	config   *FabricScannerConfig
 	builders []FabricInterfaceSetBuilder
 	topo     *Topology
@@ -678,6 +680,9 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 		return nil, errors.New("FabricScanner is nil")
 	}
 
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	if !s.isInitialized() {
 		if err := s.init(ctx); err != nil {
 			return nil, err
@@ -710,6 +715,9 @@ func (s *FabricScanner) CacheTopology(t *Topology) error {
 	if t == nil {
 		return errors.New("Topology is nil")
 	}
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	s.topo = t
 	return nil

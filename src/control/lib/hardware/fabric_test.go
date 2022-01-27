@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -883,6 +884,7 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 					MockNetDevClassProvider{},
 				),
 				common.CmpOptIgnoreFieldAnyType("log"),
+				cmpopts.IgnoreFields(FabricScanner{}, "mutex"),
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
