@@ -368,6 +368,10 @@ struct daos_prop_entry {
 /** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
 #define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
 
+/** default values for unset labels */
+#define DAOS_PROP_CO_LABEL_DEFAULT "container_label_not_set"
+#define DAOS_PROP_PO_LABEL_DEFAULT "pool_label_not_set"
+
 /**
  * Check if DAOS (pool or container property) label string is valid.
  * DAOS labels must consist only of alphanumeric characters, colon ':',
