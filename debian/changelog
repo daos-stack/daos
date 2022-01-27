@@ -1,3 +1,9 @@
+daos (2.0.1-2) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Fix issue in backward compatibility code.
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Thu, 27 Jan 2022 10:00:00 -0100
+
 daos (2.0.1-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Version bump to 2.0.1
