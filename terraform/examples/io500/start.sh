@@ -46,7 +46,7 @@ gcloud compute instance-groups managed wait-until ${TF_VAR_server_template_name}
 
 printf "\nAdd external IP to first client\n\n"
 gcloud compute instances add-access-config ${DAOS_FIRST_CLIENT} --zone ${TF_VAR_zone} && sleep 10
-FIRST_CLIENT_IP=$(gcloud compute instances describe ${DAOS_FIRST_CLIENT} | grep natIP | awk '{print $2}')
+FIRST_CLIENT_IP=$(gcloud compute instances describe ${DAOS_FIRST_CLIENT}  --zone ${TF_VAR_zone} | grep natIP | awk '{print $2}')
 
 log "Configure SSH access"
 printf "\nCreate SSH key\n\n"
@@ -57,9 +57,9 @@ printf "\nConfiguring SSH for user '${SSH_USER}' on all nodes\n\n"
 for node in $ALL_NODES
 do
     # Disable OSLogin to be able to connect with SSH keys uploaded in next command
-    gcloud compute instances add-metadata ${node} --metadata enable-oslogin=FALSE && \
+    gcloud compute instances add-metadata ${node}  --zone ${TF_VAR_zone} --metadata enable-oslogin=FALSE && \
     # Upload SSH key to instance, so that you could login to instance over SSH
-    gcloud compute instances add-metadata ${node} --metadata-from-file ssh-keys=keys.txt &
+    gcloud compute instances add-metadata ${node}  --zone ${TF_VAR_zone} --metadata-from-file ssh-keys=keys.txt &
 done
 
 # Wait for SSH configuring tasks to finish
