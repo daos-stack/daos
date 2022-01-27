@@ -2,7 +2,8 @@
 
 ## RAS Events
 
-Reliability, Availability, and Serviceability (RAS) related events are communicated and logged within DAOS and syslog.
+Reliability, Availability, and Serviceability (RAS) related events are 
+communicated and logged within DAOS and syslog.
 
 ### Event Structure
 
