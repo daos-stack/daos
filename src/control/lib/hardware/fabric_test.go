@@ -882,7 +882,7 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 					MockFabricInterfaceProvider{},
 					MockNetDevClassProvider{},
 				),
-				common.CmpOptIgnoreField("log"),
+				common.CmpOptIgnoreFieldAnyType("log"),
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -1095,7 +1095,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 		cmp.AllowUnexported(OSDeviceBuilder{}),
 		cmp.AllowUnexported(MockFabricInterfaceProvider{}),
 		cmp.AllowUnexported(MockNetDevClassProvider{}),
-		common.CmpOptIgnoreField("log"),
+		common.CmpOptIgnoreFieldAnyType("log"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
