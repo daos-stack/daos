@@ -194,7 +194,7 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 
 	// Prepare non-VMD devices.
 	req.EnableVMD = false
-	return resp, errors.Wrap(sb.script.Prepare(&req), "re-binding ssds to attasch with spdk")
+	return resp, errors.Wrap(sb.script.Prepare(&req), "re-binding ssds to attach with spdk")
 }
 
 // reset receives function pointers for external interfaces.
