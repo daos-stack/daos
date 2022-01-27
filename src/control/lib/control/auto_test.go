@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -993,9 +993,11 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			}
 
 			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(security.CertificateConfig{},
-					config.Server{}),
-				cmpopts.IgnoreUnexported(sysfs.Provider{}),
+				cmpopts.IgnoreUnexported(
+					security.CertificateConfig{},
+					config.Server{},
+					sysfs.Provider{},
+				),
 			}
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 

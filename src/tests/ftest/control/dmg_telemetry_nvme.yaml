@@ -3,7 +3,7 @@ hosts:
     - server-A
     - server-B
 timeouts:
-  test_telemetry_list_nvme: 90
+  test_telemetry_list_nvme: 120
 server_config:
   servers:
     bdev_class: nvme

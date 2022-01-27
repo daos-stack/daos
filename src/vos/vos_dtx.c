@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2507,6 +2507,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			memcpy(&dae->dae_base, dae_df, sizeof(dae->dae_base));
 			dae->dae_df_off = umem_ptr2off(umm, dae_df);
 			dae->dae_dbd = dbd;
+			dae->dae_prepared = 1;
 			D_INIT_LIST_HEAD(&dae->dae_link);
 
 			if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT) {
