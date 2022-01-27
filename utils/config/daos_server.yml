@@ -6,7 +6,7 @@
 #
 #
 ## Name associated with the DAOS system.
-## Immutable after reformat.
+## Immutable after running "dmg storage format".
 #
 ## NOTE: Changing the DAOS system name is not supported yet.
 ##       It must not be changed from the default "daos_server".
@@ -16,7 +16,7 @@
 #
 #
 ## Access points
-## Immutable after reformat.
+## Immutable after running "dmg storage format".
 #
 ## To operate, DAOS will need a quorum of access point nodes to be available.
 ## Must have the same value for all agents and servers in a system.
@@ -54,14 +54,14 @@
 #
 #
 ## Fault domain path
-## Immutable after reformat.
+## Immutable after running "dmg storage format".
 #
 ## default: /hostname for a local configuration w/o fault domain
 #fault_path: /vcdu0/rack1/hostname
 #
 #
 ## Fault domain callback
-## Immutable after reformat.
+## Immutable after running "dmg storage format".
 #
 ## Path to executable which will return fault domain string.
 #
@@ -72,10 +72,10 @@
 #
 ## Force a specific libfabric provider to be used by all the engines.
 ## The default provider depends on the interfaces that will be auto-detected:
-##  ofi+verbs;ofi_rxm for Infiniband/RoCE and
-##  ofi+sockets for non-RDMA-capable Ethernet.
+##  ofi+verbs for Infiniband/RoCE and
+##  ofi+tcp for non-RDMA-capable Ethernet.
 #
-#provider: ofi+verbs;ofi_rxm
+#provider: ofi+verbs
 #
 #
 ## CART: Whether to enable share address in the network stack
@@ -91,8 +91,14 @@
 #crt_timeout: 30
 #
 #
+## CART: Disable SRX
+## parameters shared with client.
+#
+#disable_srx: false
+#
+#
 ## NVMe SSD inclusion list
-## Immutable after reformat.
+## Immutable after running "dmg storage format".
 #
 ## Only use NVMe controllers with specific PCI addresses.
 ## Colons replaced by dots in PCI identifiers.
@@ -102,7 +108,7 @@
 #
 #
 ## NVMe SSD exclusion list
-## Immutable after reformat.
+## Immutable after running "dmg storage format".
 #
 ## Only use NVMe controllers with specific PCI addresses.
 ## Excludes drives listed in bdev_include and forces auto-detection to
@@ -158,16 +164,25 @@
 ## with other system components. This setting is the base location to place
 ## the sockets in.
 #
+## NOTE: Do not change this when running under systemd control. If it needs to
+##       be changed, then make sure that it matches the RuntimeDirectory setting
+##       in /usr/lib/systemd/system/daos_server.service
+#
 ## default: /var/run/daos_server
+#
 #socket_dir: ./.daos/daos_server
 #
 #
-## Number of hugepages to allocate for use by NVMe SSDs
+## Number of hugepages to allocate for DMA buffer memory
 #
-## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. This indicates the number to be used for each spawned
-## I/O Engines, so the total will be this number * number of I/O Engines.
-## Default system hugepage size will be used.
+## Specifies the number (not size) of hugepages to allocate for use by DMA
+## buffer memory, this is mandatory with NVME SSD configured and optional
+## without SSDs configured. This indicates the number to be used for each
+## spawned I/O Engines, so the total will be this number * number of I/O Engines.
+## Default system hugepage size will be used. For the best performance,
+## It requires at least 1GiB memory size per target, so for one engine with
+## 8 targets, 4096 is minimum. When NVMe isn't configured, daos will just
+## allocate normal memory as DMA buffer if nr_hugepages is 0.
 #
 ## default: 4096
 #nr_hugepages: 4096
@@ -208,7 +223,7 @@
 #engines:
 #-
 #  # Rank to be assigned as identifier for this engine.
-#  # Immutable after reformat.
+#  # Immutable after running "dmg storage format".
 #  #
 #  # Optional parameter; must be unique across all engines in the DAOS system.
 #  #
@@ -217,7 +232,7 @@
 #  rank: 0
 #
 #  # Number of I/O service threads (and network endpoints) per engine.
-#  # Immutable after reformat.
+#  # Immutable after running "dmg storage format".
 #  #
 #  # Each storage target manages a fraction of the (interleaved) SCM storage space,
 #  # and a fraction of one of the NVMe SSDs that are managed by this engine.
@@ -232,7 +247,7 @@
 #  targets: 16
 #
 #  # Number of additional offload service threads per engine.
-#  # Immutable after reformat.
+#  # Immutable after running "dmg storage format".
 #  #
 #  # Helper threads to accelerate checksum and server-side RPC dispatch.
 #  #
@@ -252,7 +267,7 @@
 #  pinned_numa_node: 0
 #
 #  # Offset of the first core to be used for I/O service threads (targets).
-#  # Immutable after reformat.
+#  # Immutable after running "dmg storage format".
 #  #
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
@@ -309,7 +324,7 @@
 #    # Options are:
 #    # - "dcpm" for real SCM (preferred option), scm_size ignored
 #    # - "ram" to emulate SCM with memory, scm_list ignored
-#    # Immutable after reformat.
+#    # Immutable after running "dmg storage format".
 #
 #    class: ram
 #
@@ -324,23 +339,31 @@
 #    # - "nvme" for NVMe SSDs (preferred option), bdev_size ignored
 #    # - "file" to emulate a NVMe SSD with a regular file
 #    # - "kdev" to use a kernel block device, bdev_size ignored
-#    # Immutable after reformat.
+#    # Immutable after running "dmg storage format".
 #
 #    class: nvme
 #
 #    # Backend block device configuration to be used by this engine instance.
 #    # When class is set to nvme, bdev_list is the list of unique NVMe IDs
 #    # that should be different across different engine instance.
-#    # Immutable after reformat.
-#    bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
+#    # Immutable after running "dmg storage format".
+#    bdev_list: ["0000:81:00.0", "0000:82:00.0"]  # generate regular nvme.conf
+#
 #    # If VMD-enabled NVMe SSDs are used, the bdev_list should consist of the VMD
 #    # PCIe addresses, and not the BDF format transport IDs of the backing NVMe SSDs
 #    # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
 #    #bdev_list: ["0000:5d:05.5"]
+#
+#    # Optional override, will be automatically generated based on NUMA affinity.
+#    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
+#    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
+#    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    bdev_busid_range: 0x80-0x8f
+#    #bdev_busid_range: 128-143
 
 #-
 #  # Rank to be assigned as identifier for this engine.
-#  # Immutable after reformat.
+#  # Immutable after running "dmg storage format".
 #  #
 #  # Optional parameter; must be unique across all engines in the DAOS system.
 #  #
@@ -349,7 +372,7 @@
 #  rank: 1
 #
 #  # Number of I/O service threads (and network endpoints) per engine.
-#  # Immutable after reformat.
+#  # Immutable after running "dmg storage format".
 #  #
 #  # Each storage target manages a fraction of the (interleaved) SCM storage space,
 #  # and a fraction of one of the NVMe SSDs that are managed by this engine.
@@ -364,7 +387,7 @@
 #  targets: 16
 #
 #  # Number of additional offload service threads per engine.
-#  # Immutable after reformat.
+#  # Immutable after running "dmg storage format".
 #  #
 #  # Helper threads to accelerate checksum and server-side RPC dispatch.
 #  #
@@ -384,7 +407,7 @@
 #  pinned_numa_node: 1
 #
 #  # Offset of the first core to be used for I/O service threads (targets).
-#  # Immutable after reformat.
+#  # Immutable after running "dmg storage format".
 #  #
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
@@ -440,7 +463,7 @@
 #    # Options are:
 #    # - "dcpm" for real SCM (preferred option), scm_size is ignored
 #    # - "ram" to emulate SCM with memory, scm_list is ignored
-#    # Immutable after reformat.
+#    # Immutable after running "dmg storage format".
 #
 #    class: dcpm
 #
@@ -455,7 +478,7 @@
 #    # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
 #    # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
 #    # - "kdev" to use a kernel block device, bdev_{size,number} ignored
-#    # Immutable after reformat.
+#    # Immutable after running "dmg storage format".
 #
 #    # When class is set to file, Linux AIO will be used to emulate NVMe.
 #    # The size of file that will be created is specified by bdev_size in GB units.
@@ -472,5 +495,15 @@
 #    # If Volume Management Devices (VMD) are to be used, then the disable_vmd
 #    # flag needs to be set to false (default). The class will remain the
 #    # default "nvme" type, and bdev_list will include the VMD addresses.
-#    class: nvme
-#    bdev_list: ["0000:82:00.0","0000:5d:05.5"]
+#    #class: nvme
+#    #bdev_list: ["0000:5d:05.5"]
+#
+#    #class: nvme
+#    #bdev_list: ["0000:da:00.0", "0000:db:00.0"]  # generate regular nvme.conf
+#
+#    # Optional override, will be automatically generated based on NUMA affinity.
+#    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
+#    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
+#    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    #bdev_busid_range: 0xd0-0xdf
+#    #bdev_busid_range: 208-223

@@ -33,7 +33,20 @@ extern "C" {
 extern unsigned int	d_fault_inject;
 extern unsigned int	d_fault_config_file;
 
+/* Location used for inecting memory allocation failures into D_ALLOC
+ * uses fault_id 0
+ */
 extern struct d_fault_attr_t *d_fault_attr_mem;
+
+/* DFuse uses fault id 100 to force shutdown rather than mount after initialization
+ * is complete.
+ *
+ * daos_init uses fault id 101 to disable memory faults for the duration of daos_init
+ * so that fault injection testing can avoid replicating coverage across multiple tests.
+ *
+ * Other fault ids used by daos_engine are defined in src/include/daos/common.h
+ */
+
 struct d_fault_attr_t {
 	/**
 	 * config id, used to select configuration from the fault_inject config

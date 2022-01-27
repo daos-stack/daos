@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -120,11 +120,11 @@ test_cond_helper(test_arg_t *arg, int rf)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** test atomic rename with DFS DTX mode */
-	bool use_dtx;
+	bool use_dtx = false;
 
 	d_getenv_bool("DFS_USE_DTX", &use_dtx);
 	if (!use_dtx)
-		return;
+		goto out;
 	if (arg->myrank == 0) {
 		print_message("All ranks rename the same file\n");
 		rc = dfs_open(dfs, NULL, filename,
@@ -170,6 +170,7 @@ test_cond_helper(test_arg_t *arg, int rf)
 		dfs_release(file);
 	}
 
+out:
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
@@ -369,23 +370,23 @@ dfs_test_ec_short_read(void **state)
 		return;
 
 	/* less than 1 EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 2000);
 
 	/* partial EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 2);
 
 	/* full EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 4);
 
 	/* one full EC stripe + partial EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 6);
 
 	/* 2 full stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 6);
 }
 
@@ -666,8 +667,7 @@ dfs_test_cont_atomic(void **state)
 	if (arg->myrank == 0)
 		print_message("one rank Created POSIX Container dfs_par_test_cont\n");
 
-	rc = daos_cont_open(arg->pool.poh, "dfs_par_test_cont", DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+	rc = daos_cont_open(arg->pool.poh, "dfs_par_test_cont", DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
@@ -880,7 +880,14 @@ dfs_setup(void **state)
 	if (arg->myrank == 0) {
 		dfs_attr_t attr = {};
 
+		attr.da_props = daos_prop_alloc(1);
+		assert_non_null(attr.da_props);
+		attr.da_props->dpp_entries[0].dpe_type =
+					DAOS_PROP_CO_EC_CELL_SZ;
+		attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+
 		rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+		daos_prop_free(attr.da_props);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2168,6 +2168,50 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 	agg_entry->ae_cur_stripe.as_offset	= 0U;
 }
 
+static int
+agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
+		  daos_unit_oid_t *oid, uint32_t version)
+{
+	struct daos_obj_md	 md = { 0 };
+	struct pl_map		*map;
+	struct pl_obj_layout	*layout = NULL;
+	struct pl_obj_shard	*shard;
+	uint32_t		 idx;
+	int			 rc;
+
+	/* Only last parity shard can be EC-AGG leader. */
+	if ((oid->id_shard % daos_oclass_grp_size(oca)) != (daos_oclass_grp_size(oca) - 1))
+		return 0;
+
+	map = pl_map_find(pool->sp_uuid, oid->id_pub);
+	if (map == NULL) {
+		D_ERROR("Failed to find pool map to check leader for "DF_UOID"\n", DP_UOID(*oid));
+		return -DER_INVAL;
+	}
+
+	md.omd_id = oid->id_pub;
+	md.omd_ver = version;
+	rc = pl_obj_place(map, &md, NULL, &layout);
+	if (rc != 0)
+		goto out;
+
+	idx = (oid->id_shard / daos_oclass_grp_size(oca)) * layout->ol_grp_size +
+	      daos_oclass_grp_size(oca) - 1;
+	shard = pl_obj_get_shard(layout, idx);
+	if (shard->po_target != -1 && shard->po_shard != -1 && !shard->po_rebuilding) {
+		rc = (oid->id_shard == shard->po_shard) ? 1 : 0;
+	} else {
+		/* If last parity unavailable, then skip the object via returning -DER_STALE. */
+		rc = -DER_STALE;
+	}
+
+out:
+	if (layout != NULL)
+		pl_obj_layout_free(layout);
+	pl_map_decref(map);
+	return rc;
+}
+
 /* Iterator pre-callback for objects. Determines if object is subject
  * to aggregation. Skips objects that are not EC, or are not led by
  * this target.
@@ -2190,7 +2234,7 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = dsc_obj_id2oc_attr(entry->ie_oid.id_pub, &info->api_props, &oca);
 	if (rc) {
-		D_ERROR("SKip object("DF_OID") with unknown class(%d)\n",
+		D_ERROR("SKip object("DF_OID") with unknown class(%u)\n",
 			DP_OID(entry->ie_oid.id_pub),
 			daos_obj_id2class(entry->ie_oid.id_pub));
 		*acts |= VOS_ITER_CB_SKIP;
@@ -2204,9 +2248,11 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 		goto out;
 	}
 
-	rc = ds_pool_check_dtx_leader(info->api_pool, &entry->ie_oid,
-				      info->api_pool->sp_map_version, true);
-	if (rc == 1 && entry->ie_oid.id_shard >= oca.u.ec.e_k) {
+	rc = agg_obj_is_leader(info->api_pool, &oca, &entry->ie_oid,
+			       info->api_pool->sp_map_version);
+	if (rc == 1) {
+		D_ASSERT((entry->ie_oid.id_shard % obj_ec_tgt_nr(&oca)) ==
+			 obj_ec_tgt_nr(&oca) - 1);
 		D_DEBUG(DB_EPC, "oid:"DF_UOID" ec agg starting\n",
 			DP_UOID(entry->ie_oid));
 
@@ -2281,61 +2327,89 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
-struct agg_iv_ult_arg {
+struct ec_agg_ult_arg {
 	struct ec_agg_param	*param;
-	ABT_eventual		eventual;
+	daos_epoch_t		*ec_query_p;
+	uint32_t		tgt_idx;
 };
 
 /* Captures the IV values need for pool and container open. Runs in
  * system xstream.
  */
-static void
-agg_iv_ult(void *arg)
+static	int
+ec_agg_init_ult(void *arg)
 {
-	struct agg_iv_ult_arg	*ult_arg = arg;
+	struct ec_agg_ult_arg	*ult_arg = arg;
 	struct ec_agg_param	*agg_param = ult_arg->param;
+	struct ds_pool		*pool = agg_param->ap_pool_info.api_pool;
 	struct daos_prop_entry	*entry = NULL;
-	daos_prop_t		*prop;
-	int			 rc = 0;
+	daos_prop_t		*prop = NULL;
+	int			 rc;
 
-	rc = ds_pool_iv_srv_hdl_fetch(agg_param->ap_pool_info.api_pool,
-				      &agg_param->ap_pool_info.api_poh_uuid,
+	rc = ds_cont_ec_eph_insert(agg_param->ap_pool_info.api_pool,
+				   agg_param->ap_pool_info.api_cont_uuid,
+				   ult_arg->tgt_idx, &ult_arg->ec_query_p);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ds_pool_iv_srv_hdl_fetch(pool, &agg_param->ap_pool_info.api_poh_uuid,
 				      &agg_param->ap_pool_info.api_coh_uuid);
 	if (rc)
-		goto out;
+		D_GOTO(out, rc);
 
 	prop = daos_prop_alloc(0);
-	if (prop == NULL) {
-		D_ERROR("Property allocation failed\n");
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (prop == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_pool_iv_prop_fetch(agg_param->ap_pool_info.api_pool, prop);
+	rc = ds_pool_iv_prop_fetch(pool, prop);
 	if (rc) {
 		D_ERROR("ds_pool_iv_prop_fetch failed: "DF_RC"\n", DP_RC(rc));
-		goto out;
+		D_GOTO(out, rc);
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
 	rc = d_rank_list_dup(&agg_param->ap_pool_info.api_svc_list,
 			     (d_rank_list_t *)entry->dpe_val_ptr);
-	if (rc) {
-		D_ERROR("Failed to duplicate service list\n");
-		goto out;
-	}
-	daos_prop_free(prop);
+	if (rc)
+		D_GOTO(out, rc);
+
 out:
-	D_DEBUG(DB_IO, DF_UUID" get iv for agg: %d\n",
+	if (prop)
+		daos_prop_free(prop);
+
+	D_DEBUG(DB_EPC, DF_UUID" get iv for agg: %d\n",
 		DP_UUID(agg_param->ap_pool_info.api_cont_uuid), rc);
-	ABT_eventual_set(ult_arg->eventual, (void *)&rc, sizeof(rc));
+
+	return rc;
+}
+
+static	int
+ec_agg_fini_ult(void *arg)
+{
+	struct ec_agg_ult_arg	*ult_arg = arg;
+	struct ec_agg_param	*agg_param = ult_arg->param;
+	int			 rc;
+
+	rc = ds_cont_ec_eph_delete(agg_param->ap_pool_info.api_pool,
+				   agg_param->ap_pool_info.api_cont_uuid,
+				   ult_arg->tgt_idx);
+	D_ASSERT(rc == 0);
+	return 0;
 }
 
 static void
-ec_agg_param_fini(struct ec_agg_param *agg_param)
+ec_agg_param_fini(struct ds_cont_child *cont, struct ec_agg_param *agg_param)
 {
 	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
+	struct ec_agg_ult_arg	arg;
+
+	arg.param = agg_param;
+	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
+	if (cont->sc_ec_query_agg_eph) {
+		dss_ult_execute(ec_agg_fini_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+		cont->sc_ec_query_agg_eph = NULL;
+	}
 
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_cont_hdl))
 		dsc_cont_close(agg_param->ap_pool_info.api_pool_hdl,
@@ -2358,9 +2432,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 {
 	struct ec_agg_param	*agg_param = param->ap_data;
 	struct ec_agg_pool_info *info = &agg_param->ap_pool_info;
-	struct agg_iv_ult_arg	arg;
-	ABT_eventual		eventual;
-	int			*status;
+	struct ec_agg_ult_arg	arg;
 	int			rc;
 
 	D_ASSERT(agg_param->ap_initialized == 0);
@@ -2374,22 +2446,12 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
 
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
 	arg.param = agg_param;
-	arg.eventual = eventual;
-	rc = dss_ult_periodic(agg_iv_ult, &arg, DSS_XS_SYS, 0, 0, NULL);
-	if (rc)
-		D_GOTO(free_eventual, rc = dss_abterr2der(rc));
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(free_eventual, rc = dss_abterr2der(rc));
-
-	if (*status != 0)
-		D_GOTO(free_eventual, rc = *status);
+	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
+	rc = dss_ult_execute(ec_agg_init_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	cont->sc_ec_query_agg_eph = arg.ec_query_p;
 
 	rc = dsc_pool_open(info->api_pool_uuid,
 			   info->api_poh_uuid, DAOS_PC_RW,
@@ -2397,7 +2459,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 			   info->api_svc_list, &info->api_pool_hdl);
 	if (rc) {
 		D_ERROR("dsc_pool_open failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(free_eventual, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = dsc_cont_open(info->api_pool_hdl, info->api_cont_uuid,
@@ -2410,12 +2472,10 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 
 	rc = dsc_cont_get_props(info->api_cont_hdl, &info->api_props);
 	D_ASSERT(rc == 0);
-free_eventual:
-	ABT_eventual_free(&eventual);
 out:
 	if (rc) {
 		D_DEBUG(DB_EPC, "aggregate param init failed: %d\n", rc);
-		ec_agg_param_fini(agg_param);
+		ec_agg_param_fini(cont, agg_param);
 	} else {
 		agg_param->ap_initialized = 1;
 	}
@@ -2429,12 +2489,12 @@ out:
  */
 static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		     bool full_scan, struct agg_param *agg_param, uint64_t *msec)
+		     uint32_t flags, struct agg_param *agg_param, uint64_t *msec)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
+	struct dtx_handle	 *dth = NULL;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
-	struct dtx_handle	 dth = { 0 };
 	struct dtx_id		 dti = { 0 };
 	struct dtx_epoch	 epoch = { 0 };
 	daos_unit_oid_t		 oid = { 0 };
@@ -2472,15 +2532,14 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		return rc;
 	}
 
-	ec_agg_param->ap_dth = &dth;
+	ec_agg_param->ap_dth = dth;
 	ec_agg_param->ap_obj_skipped = 0;
 
 again:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb,
-			 ec_agg_param, &dth);
-	if (obj_dtx_need_refresh(&dth, rc)) {
-		rc = dtx_refresh(&dth, cont);
+			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, dth);
+	if (obj_dtx_need_refresh(dth, rc)) {
+		rc = dtx_refresh(dth, cont);
 		if (rc == -DER_AGAIN) {
 			anchors.ia_reprobe_co = 0;
 			anchors.ia_reprobe_obj = 0;
@@ -2492,7 +2551,7 @@ again:
 		}
 	}
 
-	dtx_end(&dth, cont, rc);
+	dtx_end(dth, cont, rc);
 
 	if (daos_handle_is_valid(ec_agg_param->ap_agg_entry.ae_obj_hdl)) {
 		dsc_obj_close(ec_agg_param->ap_agg_entry.ae_obj_hdl);
@@ -2508,8 +2567,11 @@ again:
 			*msec = 5 * 1000;
 	}
 
-	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0)
+	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
+		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph)
+			*cont->sc_ec_query_agg_eph = cont->sc_ec_agg_eph;
+	}
 
 	return rc;
 }
@@ -2547,5 +2609,5 @@ ds_obj_ec_aggregate(void *arg)
 
 	cont_aggregate_interval(cont, cont_ec_aggregate_cb, &param);
 
-	ec_agg_param_fini(&agg_param);
+	ec_agg_param_fini(cont, &agg_param);
 }

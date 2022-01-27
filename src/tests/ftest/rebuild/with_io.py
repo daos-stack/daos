@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers, skipForTicket
-
+from apricot import TestWithServers
+from daos_utils import DaosCommand
 
 class RbldWithIO(TestWithServers):
     """Test class for pool rebuild during I/O.
@@ -17,7 +17,10 @@ class RbldWithIO(TestWithServers):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5611")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.daos_cmd = None
+
     def test_rebuild_with_io(self):
         """JIRA ID: Rebuild-003.
 
@@ -41,14 +44,19 @@ class RbldWithIO(TestWithServers):
 
         # Create a pool and verify the pool info before rebuild (also connects)
         self.pool.create()
-        status = self.pool.check_pool_info(
-            pi_nnodes=server_count,
-            pi_ntargets=(server_count * targets),  # DAOS-2799
-            pi_ndisabled=0,
-        )
-        status &= self.pool.check_rebuild_status(
-            rs_done=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
-        self.assertTrue(status, "Error confirming pool info before rebuild")
+        checks = {
+            "pi_nnodes": server_count,
+            "pi_ntargets": server_count * targets,
+            "pi_ndisabled": 0,
+        }
+        self.assertTrue(
+            self.pool.check_pool_info(**checks),
+            "Invalid pool information detected before rebuild")
+
+        self.assertTrue(
+            self.pool.check_rebuild_status(rs_errno=0, rs_done=1,
+                                           rs_obj_nr=0, rs_rec_nr=0),
+            "Invalid pool rebuild info detected before rebuild")
 
         # Create and open the container
         self.container.create()
@@ -66,6 +74,13 @@ class RbldWithIO(TestWithServers):
 
         # Wait for recovery to start
         self.pool.wait_for_rebuild(True)
+
+        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd.container_set_prop(
+                      pool=self.pool.uuid,
+                      cont=self.container.uuid,
+                      prop="status",
+                      value="healthy")
 
         # Write data to the container for another 30 seconds
         self.log.info(

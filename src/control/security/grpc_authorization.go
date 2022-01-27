@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,7 @@ func (c Component) String() string {
 var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/StorageScan":              {ComponentAdmin},
 	"/ctl.CtlSvc/StorageFormat":            {ComponentAdmin},
+	"/ctl.CtlSvc/StorageNvmeRebind":        {ComponentAdmin},
 	"/ctl.CtlSvc/NetworkScan":              {ComponentAdmin},
 	"/ctl.CtlSvc/FirmwareQuery":            {ComponentAdmin},
 	"/ctl.CtlSvc/FirmwareUpdate":           {ComponentAdmin},
@@ -59,6 +60,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/ListPools":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/ListContainers":         {ComponentAdmin},
 	"/mgmt.MgmtSvc/ContSetOwner":           {ComponentAdmin},
+	"/mgmt.MgmtSvc/SystemCleanup":          {ComponentAdmin},
 	"/RaftTransport/AppendEntries":         {ComponentServer},
 	"/RaftTransport/AppendEntriesPipeline": {ComponentServer},
 	"/RaftTransport/RequestVote":           {ComponentServer},

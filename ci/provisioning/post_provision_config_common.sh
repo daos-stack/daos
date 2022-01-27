@@ -55,7 +55,7 @@ retry_cmd() {
         fi
         # Command failed, retry
         rc=${PIPESTATUS[0]}
-        (( attempt++ ))
+        (( attempt++ )) || true
         if [ "$attempt" -gt 0 ]; then
             sleep "${RETRY_DELAY_SECONDS:-$DAOS_STACK_RETRY_DELAY_SECONDS}"
         fi
@@ -84,7 +84,7 @@ timeout_cmd() {
         rc=${PIPESTATUS[0]}
         if [ "$rc" = "124" ]; then
             # Command timed out, try again
-            (( attempt++ ))
+            (( attempt++ )) || true
             continue
         fi
         # Command failed for something other than timeout

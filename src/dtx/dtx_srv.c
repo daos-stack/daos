@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,7 +80,7 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 	if (metrics == NULL)
 		return NULL;
 
-	rc = d_tm_add_metric(&metrics->dpm_batched_degree, D_TM_COUNTER,
+	rc = d_tm_add_metric(&metrics->dpm_batched_degree, D_TM_GAUGE,
 			     "degree of DTX entries per batched commit RPC",
 			     "entries", "%s/entries/dtx_batched_degree/tgt_%u",
 			     path, tgt_id);
@@ -119,7 +119,7 @@ dtx_metrics_free(void *data)
 static int
 dtx_metrics_count(void)
 {
-	return (sizeof(struct dtx_pool_metrics) / sizeof(struct d_tm_node_t *)) * dss_tgt_nr;
+	return (sizeof(struct dtx_pool_metrics) / sizeof(struct d_tm_node_t *));
 }
 
 struct dss_module_metrics dtx_metrics = {
@@ -186,8 +186,7 @@ dtx_handler(crt_rpc_t *rpc)
 		rc1 = d_tm_get_counter(NULL, &opc_cnt, dpm->dpm_total[opc]);
 		D_ASSERT(rc1 == DER_SUCCESS);
 
-		d_tm_set_counter(dpm->dpm_batched_degree,
-				 ent_cnt / (opc_cnt + 1));
+		d_tm_set_gauge(dpm->dpm_batched_degree, ent_cnt / (opc_cnt + 1));
 
 		break;
 	}
@@ -214,9 +213,15 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL);
 		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
 			rc = -DER_INPROGRESS;
+		else if (rc == DTX_ST_INITED)
+			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
+			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
+			 * request is from old server.
+			 */
+			rc = -DER_NONEXIST;
 
 		break;
 	case DTX_REFRESH:
@@ -245,26 +250,35 @@ dtx_handler(crt_rpc_t *rpc)
 		for (i = 0, rc1 = 0; i < count; i++) {
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
-					     &mbs[i], &dcks[i], false);
+			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i]);
 			/* The DTX status may be changes by DTX resync soon. */
-			if ((*ptr == DTX_ST_PREPARED &&
-			     cont->sc_dtx_resyncing) ||
+			if ((*ptr == DTX_ST_PREPARED && cont->sc_dtx_resyncing) ||
 			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
 				*ptr = -DER_INPROGRESS;
 
 			if (*ptr == -DER_NONEXIST) {
 				struct dtx_stat		stat = { 0 };
 
-				/* dtx_id::dti_hlc is client side time stamp. Usually, it is
-				 * older than the time of the DTX being handled on the leader.
-				 * If it is older than the time of next to be aggregated DTX
-				 * entry, then it may has been removed by DTX aggregation.
-				 * Under such case, return -DER_TX_UNCERTAIN to non-leader.
+				/* dtx_id::dti_hlc is client side time stamp. If it is
+				 * older than the time of the most new DTX entry that
+				 * has been aggregated, then it may has been removed by
+				 * DTX aggregation. Under such case, return -DER_TX_UNCERTAIN.
 				 */
 				vos_dtx_stat(cont->sc_hdl, &stat, DSF_SKIP_BAD);
-				if (dtis->dti_hlc < stat.dtx_first_cmt_blob_time_up)
+				if (dtis->dti_hlc <= stat.dtx_newest_aggregated) {
+					D_WARN("Not sure about whether the old DTX "
+					       DF_DTI" is committed or not: %lu/%lu\n",
+					       DP_DTI(dtis), dtis->dti_hlc,
+					       stat.dtx_newest_aggregated);
 					*ptr = -DER_TX_UNCERTAIN;
+				}
+			} else if (*ptr == DTX_ST_INITED) {
+				/* Leader is in progress, it is not important whether ready or not.
+				 * Return DTX_ST_PREPARED to the remote non-leader to handle it as
+				 * non-committable case. If we directly return DTX_ST_INITED, then
+				 * it will cause interoperability trouble if remote server is old.
+				 */
+				*ptr = DTX_ST_PREPARED;
 			}
 
 			if (mbs[i] != NULL)
@@ -317,7 +331,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, dcks, j, false);
+		rc = dtx_commit(cont, pdte, dcks, j);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
@@ -377,7 +391,7 @@ dtx_init(void)
 		dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
 	}
 
-	dtx_agg_thd_age_lo = dtx_agg_thd_age_up * 6 / 7;
+	dtx_agg_thd_age_lo = dtx_agg_thd_age_up - 30;
 
 	D_INFO("Set DTX aggregation time threshold as %d (seconds)\n",
 	       dtx_agg_thd_age_up);

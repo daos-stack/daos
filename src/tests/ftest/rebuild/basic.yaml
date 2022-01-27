@@ -8,7 +8,7 @@ hosts:
     - server-D
     - server-E
     - server-F
-timeout: 600
+timeout: 900
 server_config:
   name: daos_server
   servers:
@@ -16,7 +16,7 @@ server_config:
 pool:
   mode: 511
   name: daos_server
-  scm_size: 1073741824
+  scm_size: 1G
   control_method: dmg
   pool_query_timeout: 30
 container:

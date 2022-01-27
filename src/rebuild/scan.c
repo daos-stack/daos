@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -303,7 +303,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 		 * reclaim is not being scheduled in the previous failure reintegration,
 		 * so let's ignore duplicate shards(DER_EXIST) in this case.
 		 */
-		if (rpt->rt_rebuild_op == RB_OP_REINT) {
+		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND) {
 			D_DEBUG(DB_REBUILD, DF_UUID" found duplicate "DF_UOID" %d\n",
 				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
 			rc = 0;
@@ -513,6 +513,12 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	oc_attr = daos_oclass_attr_find(oid.id_pub, NULL);
+	if (oc_attr == NULL) {
+		D_INFO(DF_UUID" skip invalid "DF_UOID"\n", DP_UUID(rpt->rt_pool_uuid),
+		       DP_UOID(oid));
+		D_GOTO(out, rc = 0);
+	}
+
 	grp_size = daos_oclass_grp_size(oc_attr);
 
 	dc_obj_fetch_md(oid.id_pub, &md);
@@ -658,10 +664,10 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct rebuild_scan_arg		*arg = data;
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
+	struct dtx_handle		*dth = NULL;
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
-	struct dtx_handle		dth = { 0 };
 	struct dtx_id			dti = { 0 };
 	struct dtx_epoch		epoch = { 0 };
 	daos_unit_oid_t			oid = { 0 };
@@ -707,8 +713,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		param.ip_flags |= VOS_IT_PUNCHED;
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor,
-			 rebuild_obj_scan_cb, NULL, arg, &dth);
-	dtx_end(&dth, NULL, rc);
+			 rebuild_obj_scan_cb, NULL, arg, dth);
+	dtx_end(dth, NULL, rc);
 	vos_cont_close(coh);
 
 	*acts |= VOS_ITER_CB_YIELD;
@@ -784,12 +790,12 @@ rebuild_scanner(void *data)
 out:
 	tls->rebuild_pool_scan_done = 1;
 	if (ult_send != ABT_THREAD_NULL)
-		ABT_thread_join(ult_send);
+		ABT_thread_free(&ult_send);
 
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 
-	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: "DF_RC"\n",
+	D_DEBUG(DB_REBUILD, DF_UUID" iterate pool done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	return rc;
 }
@@ -813,7 +819,7 @@ rebuild_scan_leader(void *data)
 	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
 		ABT_thread_yield();
 
-	rc = dss_thread_collective(rebuild_scanner, rpt, 0);
+	rc = dss_thread_collective(rebuild_scanner, rpt, DSS_ULT_DEEP_STACK);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -857,6 +863,21 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d\n",
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_rebuild_ver);
+
+	/* If PS leader has been changed, and rebuild version is also increased
+	 * due to adding new failure targets for rebuild, let's abort previous
+	 * rebuild.
+	 */
+	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
+		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
+		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) {
+			D_INFO(DF_UUID" rebuild %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
+			       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
+			       rpt->rt_leader_term, rsi->rsi_rebuild_ver,
+			       rsi->rsi_leader_term);
+			rpt->rt_abort = 1;
+		}
+	}
 
 	/* check if the rebuild is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);

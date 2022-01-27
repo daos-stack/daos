@@ -1,14 +1,11 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
-
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 class RbldWithIOR(IorTestBase):
@@ -20,7 +17,6 @@ class RbldWithIOR(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-2773")
     def test_rebuild_with_ior(self):
         """Jira ID: DAOS-951.
 
@@ -31,17 +27,18 @@ class RbldWithIOR(IorTestBase):
           -- single pool, single client performing continuous read/write/verify
              sequence while failure/rebuild is triggered in another process
 
-        :avocado: tags=all,daily_regression,small,pool,rebuild,rebuildwithior
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=pool,rebuild
+        :avocado: tags=rebuildwithior
+
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
-        rank = self.params.get("rank_to_kill", "/run/testparams/*")
-
-        # ior parameters
-        iorflags_write = self.params.get("F", '/run/ior/iorflags/write/')
-        iorflags_read = self.params.get("F", '/run/ior/iorflags/read/')
-        file1 = "daos:testFile1"
-        file2 = "daos:testFile2"
+        ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
+        iorflags_write = self.params.get("write_flg", '/run/ior/iorflags/')
+        iorflags_read = self.params.get("read_flg", '/run/ior/iorflags/')
+        rank_to_kill = self.params.get("rank_to_kill", "/run/ior/*")
 
         # create pool
         self.create_pool()
@@ -61,35 +58,30 @@ class RbldWithIOR(IorTestBase):
                                            rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
-        # perform first set of io using IOR
+        # perform IOR write before rebuild
         self.ior_cmd.flags.update(iorflags_write)
-        self.run_ior_with_pool(test_file=file1)
+        self.run_ior_with_pool(timeout=ior_timeout)
 
-        # Kill the server
-        self.server_managers[0].stop_ranks([rank], self.d_log)
+        # kill the server
+        self.server_managers[0].stop_ranks([rank_to_kill], self.d_log)
 
-        # Wait for rebuild to start
+        # wait for rebuild to start
         self.pool.wait_for_rebuild(True)
 
-        # Wait for rebuild to complete
+        # wait for rebuild to complete
         self.pool.wait_for_rebuild(False)
 
-        # Verify the pool information after rebuild
+        # verify the pool information after rebuild
+        self.log.info("Verifying pool info after rebuild")
         checks["pi_ndisabled"] = targets
         self.assertTrue(
             self.pool.check_pool_info(**checks),
-            "Invalid pool information detected after rebuild")
+            "#Invalid pool information detected after rebuild")
+        self.log.info("Verifying rebuild info after rebuild")
         self.assertTrue(
             self.pool.check_rebuild_status(rs_errno=0, rs_done=1),
-            "Invalid pool rebuild error number detected after rebuild")
+            "#Invalid pool rebuild error number detected after rebuild")
 
-        # perform second set of io using IOR
-        self.ior_cmd.flags.update(iorflags_write)
-        self.run_ior_with_pool(test_file=file2)
-
-        # check data intergrity using ior for both ior runs
+        # perform IOR read after rebuild
         self.ior_cmd.flags.update(iorflags_read)
-        self.run_ior_with_pool(test_file=file1)
-
-        self.ior_cmd.flags.update(iorflags_read)
-        self.run_ior_with_pool(test_file=file2)
+        self.run_ior_with_pool(create_cont=False, timeout=ior_timeout)

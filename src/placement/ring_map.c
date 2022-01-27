@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -811,10 +811,11 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	struct daos_oclass_attr	*oc_attr;
 	daos_obj_id_t		oid;
 	unsigned int		grp_dist;
+	uint32_t		nr_grps;
 	int rc;
 
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid, NULL);
+	oc_attr = daos_oclass_attr_find(oid, &nr_grps);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
@@ -851,7 +852,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		if (grp_max == 0)
 			grp_max = 1;
 
-		rop->rop_grp_nr	= daos_oclass_grp_nr(oc_attr, md);
+		rop->rop_grp_nr	= nr_grps;
 		if (rop->rop_grp_nr > grp_max)
 			rop->rop_grp_nr = grp_max;
 		rop->rop_shard_id = 0;
@@ -1022,7 +1023,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
 
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
-				       remap_list, for_reint, f_shard, l_shard,
+				       remap_list, for_reint, -1, f_shard, l_shard,
 				       NULL);
 	}
 

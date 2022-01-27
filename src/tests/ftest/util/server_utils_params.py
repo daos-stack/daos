@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -108,7 +108,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
-        self.nr_hugepages = BasicParameter(None, 4096)
+        self.nr_hugepages = BasicParameter(None, 0)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
@@ -134,7 +134,6 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.fault_path = BasicParameter(None)
 
-
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -149,13 +148,17 @@ class DaosServerYamlParameters(YamlParameters):
         # Create the requested number of single server parameters
         if isinstance(self.engines_per_host.value, int):
             self.engine_params = [
-                self.PerEngineYamlParameters(index)
+                self.PerEngineYamlParameters(index, self.provider.value)
                 for index in range(self.engines_per_host.value)]
         else:
-            self.engine_params = [self.PerEngineYamlParameters()]
+            self.engine_params = [self.PerEngineYamlParameters(None, self.provider.value)]
 
         for engine_params in self.engine_params:
             engine_params.get_params(test)
+
+        if self.using_nvme and self.nr_hugepages.value == 0:
+            self.log.debug("Setting hugepages when bdev class is 'nvme'")
+            self.nr_hugepages.update(4096, "nr_hugepages")
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -322,7 +325,18 @@ class DaosServerYamlParameters(YamlParameters):
     class PerEngineYamlParameters(YamlParameters):
         """Defines the configuration yaml parameters for a single server."""
 
-        def __init__(self, index=None):
+        # Engine environment variables that are required by provider type.
+        REQUIRED_ENV_VARS = {
+            "common": [
+                "D_LOG_FILE_APPEND_PID=1",
+                "COVFILE=/tmp/test.cov"],
+            "ofi+tcp": [
+                "CRT_SWIM_RPC_TIMEOUT=10"],
+            "ofi+verbs": [
+                "FI_OFI_RXM_USE_SRX=1"],
+        }
+
+        def __init__(self, index=None, provider=None):
             """Create a SingleServerConfig object.
 
             Args:
@@ -333,12 +347,15 @@ class DaosServerYamlParameters(YamlParameters):
             if isinstance(index, int):
                 namespace = "/run/server_config/servers/{}/*".format(index)
             super().__init__(namespace)
+            if provider is not None:
+                self._provider = provider
+            else:
+                self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
 
             # Use environment variables to get default parameters
-            default_interface = os.environ.get("OFI_INTERFACE", "eth0")
+            default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
             default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
-            default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
             # All log files should be placed in the same directory on each host
             # to enable easy log file archiving by launch.py
@@ -358,28 +375,24 @@ class DaosServerYamlParameters(YamlParameters):
             #           - CRT_CTX_NUM=8
             self.targets = BasicParameter(None, 8)
             self.first_core = BasicParameter(None, 0)
-            self.nr_xs_helpers = BasicParameter(None, 16)
+            self.nr_xs_helpers = BasicParameter(None, 4)
             self.fabric_iface = BasicParameter(None, default_interface)
             self.fabric_iface_port = BasicParameter(None, default_port)
             self.pinned_numa_node = BasicParameter(None)
             self.log_mask = BasicParameter(None, "INFO")
             self.log_file = LogParameter(log_dir, None, "daos_server.log")
 
-            # Set extra environment variables for sockets provider
+            # Set default environment variables
             default_env_vars = [
                 "ABT_ENV_MAX_NUM_XSTREAMS=100",
                 "ABT_MAX_NUM_XSTREAMS=100",
                 "DAOS_MD_CAP=1024",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
-                "D_LOG_FILE_APPEND_PID=1",
-                "COVFILE=/tmp/test.cov"
             ]
-            if default_provider == "ofi+sockets":
-                default_env_vars.extend([
-                    "FI_SOCKETS_MAX_CONN_RETRY=5",
-                    "FI_SOCKETS_CONN_TIMEOUT=2000",
-                    "CRT_SWIM_RPC_TIMEOUT=10"
-                ])
+            default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
+            for name in self._provider.split(";"):
+                if name in self.REQUIRED_ENV_VARS:
+                    default_env_vars.extend(self.REQUIRED_ENV_VARS[name])
             self.env_vars = BasicParameter(None, default_env_vars)
 
             # global CRT_CTX_SHARE_ADDR shared with client
@@ -453,11 +466,32 @@ class DaosServerYamlParameters(YamlParameters):
                 self.log.debug("Ignoring the scm_size when scm_class is 'dcpm'")
                 self.scm_size.update(None, "scm_size")
 
-            # Include fault injection settings if configured
-            if test.fault_injection.fault_file:
-                fault_setting = "D_FI_CONFIG={}".format(test.fault_injection.fault_file)
-                if fault_setting not in self.env_vars.value:
-                    self.env_vars.update(fault_setting, "env_vars", True)
+            # Define any required env vars
+            required_env_vars = {}
+            for env in self.REQUIRED_ENV_VARS["common"]:
+                required_env_vars[env.split("=", maxsplit=1)[0]] = env.split("=", maxsplit=1)[1]
+            for name in self._provider.split(";"):
+                if name in self.REQUIRED_ENV_VARS:
+                    required_env_vars.update({
+                        env.split("=", maxsplit=1)[0]: env.split("=", maxsplit=1)[1]
+                        for env in self.REQUIRED_ENV_VARS[name]})
+
+            # Enable fault injection if configured
+            if test.fault_injection.fault_file is not None:
+                self.log.debug("Enabling fault injection")
+                required_env_vars["D_FI_CONFIG"] = test.fault_injection.fault_file
+
+            # Update the env vars with any missing or different required setting
+            update = False
+            env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
+            for key in sorted(required_env_vars):
+                if key not in env_var_dict or env_var_dict[key] != required_env_vars[key]:
+                    env_var_dict[key] = required_env_vars[key]
+                    update = True
+            if update:
+                self.log.debug("Assigning required env_vars")
+                new_env_vars = ["=".join([key, str(value)]) for key, value in env_var_dict.items()]
+                self.env_vars.update(new_env_vars, "env_var")
 
         @property
         def using_nvme(self):

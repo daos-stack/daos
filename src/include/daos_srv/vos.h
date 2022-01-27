@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,13 +38,21 @@ void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth);
 
 /**
- * Generate DTX entry for the given DTX.
+ * Generate DTX entry for the given DTX, and attach it to the DTX handle.
  *
  * \param dth		[IN]	The dtx handle
  * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
  */
 int
-vos_dtx_pin(struct dtx_handle *dth, bool persistent);
+vos_dtx_attach(struct dtx_handle *dth, bool persistent);
+
+/**
+ * Detach the DTX entry from the DTX handle.
+ *
+ * \param dth		[IN]	The dtx handle
+ */
+void
+vos_dtx_detach(struct dtx_handle *dth);
 
 /**
  * Check whether DTX entry attached to the DTX handle is still valid or not.
@@ -68,7 +76,6 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
  * \param mbs		[OUT]	Pointer to the DTX participants information.
  * \param dck		[OUT]	Pointer to the key for CoS cache.
- * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -82,12 +89,12 @@ vos_dtx_validation(struct dtx_handle *dth);
  *			-DER_AGAIN means DTX re-index is in processing, not sure
  *				   about the existence of the DTX entry, need to
  *				   retry sometime later.
+ *			DTX_ST_INITED	means that the DTX is just initialized but not prepared.
  *			Other negative value if error.
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs,
-	      struct dtx_cos_key *dck, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck);
 
 /**
  * Commit the specified DTXs.
@@ -101,8 +108,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  * \return		Others are for the count of committed DTXs.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
-	       bool *rm_cos);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]);
 
 /**
  * Abort the specified DTXs.
@@ -283,6 +289,13 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
 
 /**
+ * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
+ */
+int
+vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
+		      daos_handle_t *poh);
+
+/**
  * Close a VOSP, all opened containers sharing this pool handle
  * will be revoked.
  *
@@ -391,6 +404,11 @@ vos_cont_close(daos_handle_t coh);
 int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
+enum {
+	VOS_AGG_FL_FORCE_SCAN	= (1UL << 0),	/* Scan all obj/dkey/akeys */
+	VOS_AGG_FL_FORCE_MERGE	= (1UL << 1),	/* Merge all coalesce-able EV records */
+};
+
 /**
  * Aggregates all epochs within the epoch range \a epr.
  * Data in all these epochs will be aggregated to the last epoch
@@ -399,17 +417,15 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
- * \param csum_func  [IN]	Pointer to csum recalculation function
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
- * \param full_scan  [IN]	Full scan for snapshot deletion
+ * \param flags      [IN]	Aggregation flags
  *
  * \return			Zero on success, negative value if error
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
-	      void *yield_arg, bool full_scan);
+	      bool (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -1085,14 +1101,6 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/**
-	 * Pause flushing the free extents in aging buffer. This is usually
-	 * called before container destroy where huge amount of extents could
-	 * be freed in a short period of time.
-	 */
-	VOS_PO_CTL_VEA_PLUG,
-	/** Pairing with PLUG, usually called after container destroy done. */
-	VOS_PO_CTL_VEA_UNPLUG,
 };
 
 /**
@@ -1135,27 +1143,6 @@ vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
 		      unsigned int bulk_perm);
 int
 vos_dedup_verify(daos_handle_t ioh);
-
-/** Raise a RAS event on incompatible durable format
- *
- * \param[in] type		Type of object with layout format
- *				incompatibility (e.g. VOS pool)
- * \param[in] version		Version of the object
- * \param[in] min_version	Minimum supported version
- * \param[in] max_version	Maximum supported version
- * \param[in] pool		(Optional) associated pool uuid
- */
-void
-vos_report_layout_incompat(const char *type, int version, int min_version,
-			   int max_version, uuid_t *uuid);
-
-#define VOS_NOTIFY_RAS_EVENTF(...)			\
-	do {						\
-		if (ds_notify_ras_eventf == NULL)	\
-			break;				\
-		ds_notify_ras_eventf(__VA_ARGS__);	\
-	} while (0)					\
-
 
 struct sys_db *vos_db_get(void);
 /**

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -227,12 +227,12 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			engineCfg := engine.NewConfig().WithTargetCount(testTargetCount)
+			engineCfg := engine.MockConfig().WithTargetCount(testTargetCount)
 			if !tc.disableNVMe {
 				engineCfg = engineCfg.
 					WithStorage(
 						storage.NewTierConfig().
-							WithBdevClass("nvme").
+							WithStorageClass("nvme").
 							WithBdevDeviceList("foo", "bar"),
 					)
 			}
@@ -419,11 +419,11 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			defer cancel()
 
 			if tc.mgmtSvc == nil {
-				engineCfg := engine.NewConfig().
+				engineCfg := engine.MockConfig().
 					WithTargetCount(tc.targetCount).
 					WithStorage(
 						storage.NewTierConfig().
-							WithBdevClass("nvme").
+							WithStorageClass("nvme").
 							WithBdevDeviceList("foo", "bar"),
 					)
 				r := engine.NewTestRunner(nil, engineCfg)
@@ -492,14 +492,14 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	defer cancel()
 
 	mgmtSvc := newTestMgmtSvc(t, log)
-	ec := engine.NewConfig().
+	ec := engine.MockConfig().
 		WithTargetCount(1).
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmMountPoint("/foo/bar"),
 			storage.NewTierConfig().
-				WithBdevClass("nvme").
+				WithStorageClass("nvme").
 				WithBdevDeviceList("foo", "bar"),
 		)
 	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil)

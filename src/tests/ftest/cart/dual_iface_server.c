@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -328,13 +328,15 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	/* Read each others URIs from the file */
 	memset(other_server_uri, 0x0, sizeof(other_server_uri));
-	other_server_uri[MAX_URI] = '\0';
+
 	lseek(fd_read, 0, SEEK_SET);
 	rc = read(fd_read, other_server_uri, MAX_URI);
 	if (rc < 0) {
 		D_ERROR("Failed to read uri from a file\n");
 		error_exit();
 	}
+	/* Terminate the string read by read since it won't do it on its own */
+	other_server_uri[rc] = '\0';
 
 	DBG_PRINT("Other servers uri is '%s'\n", other_server_uri);
 
@@ -483,7 +485,7 @@ print_usage(const char *msg)
 	printf("-d 'domain0,domain1': Specify two domains to use; ");
 	printf("e.g. 'eth0,eth1'\n");
 	printf("-p 'provider'       : Specify provider to use; ");
-	printf("e.g. 'ofi+sockets'\n");
+	printf("e.g. 'ofi+tcp'\n");
 	printf("-f [filename]       : If set will transfer contents ");
 	printf("of the specified file via bulk/rdma as part of 'PING' rpc\n");
 }

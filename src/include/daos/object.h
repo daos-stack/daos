@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,24 +16,6 @@
  * range.
  */
 #define DAOS_EC_PARITY_BIT	(1ULL << 63)
-
-static inline daos_ofeat_t
-daos_obj_id2feat(daos_obj_id_t oid)
-{
-	daos_ofeat_t ofeat;
-
-	ofeat = (oid.hi & OID_FMT_FEAT_MASK) >> OID_FMT_FEAT_SHIFT;
-	return ofeat;
-}
-
-static inline uint8_t
-daos_obj_id2ver(daos_obj_id_t oid)
-{
-	uint8_t version;
-
-	version = (oid.hi & OID_FMT_VER_MASK) >> OID_FMT_VER_SHIFT;
-	return version;
-}
 
 /**
  * XXX old class IDs
@@ -66,33 +48,6 @@ enum {
 				 * These 3 XX_SPEC are mostly for testing
 				 * purpose.
 				 */
-	DAOS_OC_EC_K2P1_L32K,	/* Erasure code, 2 data cells, 1 parity cell,
-				 * cell size 32K.
-				 */
-	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
-				 * cell size 32K.
-				 */
-	DAOS_OC_EC_K4P1_L32K,	/* Erasure code, 4 data cells, 1 parity cells,
-				 * cell size 32K.
-				 */
-
-	DAOS_OC_EC_K4P2_L32K,	/* Erasure code, 4 data cells, 2 parity cells,
-				 * cell size 32K.
-				 */
-
-	DAOS_OC_EC_K2P1_SPEC_RANK_L32K,
-	DAOS_OC_EC_K4P1_SPEC_RANK_L32K,
-	/**
-	 * Object class reserved by Object Index Table (OIT)
-	 * It is the 1st version and could be changed in the future
-	 *
-	 * NB: it should be smaller than OC_BACK_COMPAT (50)
-	 */
-	DAOS_OC_OIT_RF0	= 45,
-	DAOS_OC_OIT_RF1	= 46,
-	DAOS_OC_OIT_RF2	= 47,
-	DAOS_OC_OIT_RF3	= 48,
-	DAOS_OC_OIT_RF4	= 49,
 };
 
 /* Temporarily keep it to minimize change, remove it in the future */
@@ -101,10 +56,7 @@ enum {
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
 {
-	int	oc;
-
-	if (daos_obj_id2feat(oid) & DAOS_OF_ECHO)
-		return true;
+	daos_oclass_id_t oc;
 
 	oc = daos_obj_id2class(oid);
 	return oc == DAOS_OC_ECHO_TINY_RW || oc == DAOS_OC_ECHO_R2S_RW ||
@@ -114,19 +66,17 @@ daos_obj_is_echo(daos_obj_id_t oid)
 static inline bool
 daos_obj_is_srank(daos_obj_id_t oid)
 {
-	int	oc = daos_obj_id2class(oid);
+	daos_oclass_id_t oc = daos_obj_id2class(oid);
 
 	return oc == DAOS_OC_R3S_SPEC_RANK || oc == DAOS_OC_R1S_SPEC_RANK ||
-	       oc == DAOS_OC_R2S_SPEC_RANK ||
-	       oc == DAOS_OC_EC_K2P1_SPEC_RANK_L32K ||
-	       oc == DAOS_OC_EC_K4P1_SPEC_RANK_L32K;
+	       oc == DAOS_OC_R2S_SPEC_RANK;
 }
 
 enum {
 	/* smallest cell size */
 	DAOS_EC_CELL_MIN	= (4 << 10),
 	/* default cell size */
-	DAOS_EC_CELL_DEF	= (128 << 10),
+	DAOS_EC_CELL_DEF	= (64 << 10),
 	/* largest cell size */
 	DAOS_EC_CELL_MAX	= (1024 << 10),
 };
@@ -150,9 +100,9 @@ enum daos_io_mode {
 	DIM_CLIENT_DISPATCH	= 2,
 };
 
-#define DAOS_OBJ_GRP_MAX	(~0)
-#define DAOS_OBJ_REPL_MAX	(~0)
-#define DAOS_OBJ_RESIL_MAX	(~0)
+#define DAOS_OBJ_GRP_MAX	MAX_NUM_GROUPS
+#define DAOS_OBJ_REPL_MAX	MAX_NUM_GROUPS
+#define DAOS_OBJ_RESIL_MAX	MAX_NUM_GROUPS
 
 /**
  * 192-bit object ID, it can identify a unique bottom level object.
@@ -161,7 +111,7 @@ enum daos_io_mode {
 typedef struct {
 	/** Public section, high level object ID */
 	daos_obj_id_t		id_pub;
-	/** Private section, object shard index */
+	/** Private section, object shard identifier */
 	uint32_t		id_shard;
 	/** Padding */
 	uint32_t		id_pad_32;
@@ -257,12 +207,15 @@ struct pl_obj_layout;
 int obj_class_init(void);
 void obj_class_fini(void);
 struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid,
-					       bool *is_priv);
+					       uint32_t *nr_grps);
+int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca);
+int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
+			      daos_oclass_id_t cid, uint32_t args);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
-			daos_oclass_id_t *oc_id_p);
+			enum daos_obj_redun *ord, uint32_t *nr);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
 daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
 				   daos_oclass_hints_t hints, uint32_t args);
@@ -326,37 +279,69 @@ daos_oclass_is_ec(struct daos_oclass_attr *oca)
 }
 
 static inline void
-daos_obj_set_oid(daos_obj_id_t *oid, daos_ofeat_t ofeats,
-		 daos_oclass_id_t cid, uint32_t args)
+daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
+		 enum daos_obj_redun ord, uint32_t nr_grps,
+		 uint32_t args)
 {
 	uint64_t hdr;
 
-	/* TODO: add check at here, it should return error if user specified
-	 * bits reserved by DAOS
-	 */
+	/** XXX: encode nr_grps as-is for now */
+
 	oid->hi &= (1ULL << OID_FMT_INTR_BITS) - 1;
 	/**
 	 * | Upper bits contain
-	 * | OID_FMT_VER_BITS (version)		 |
-	 * | OID_FMT_FEAT_BITS (object features) |
+	 * | OID_FMT_TYPE_BITS (object features) |
 	 * | OID_FMT_CLASS_BITS (object class)	 |
-	 * | 96-bit for upper layer ...		 |
+	 * | OID_FMT_MD_BITS (object metadata)	 |
+	 * | 96-bit for API user ...		 |
 	 */
-	hdr  = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
-	hdr |= ((uint64_t)ofeats << OID_FMT_FEAT_SHIFT);
-	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
+	hdr  = ((uint64_t)type << OID_FMT_TYPE_SHIFT);
+	hdr |= ((uint64_t)ord << OID_FMT_CLASS_SHIFT);
+	if (nr_grps > MAX_NUM_GROUPS)
+		nr_grps = MAX_NUM_GROUPS;
+	hdr |= ((uint64_t)nr_grps << OID_FMT_META_SHIFT);
 	oid->hi |= hdr;
 }
+
 
 /* check if an object ID is OIT (Object ID Table) */
 static inline bool
 daos_oid_is_oit(daos_obj_id_t oid)
 {
-	daos_oclass_id_t	oc = daos_obj_id2class(oid);
+	return daos_obj_id2type(oid) == DAOS_OT_OIT;
+}
 
-	return (oc == DAOS_OC_OIT_RF0) || (oc == DAOS_OC_OIT_RF1) ||
-	       (oc == DAOS_OC_OIT_RF2) || (oc == DAOS_OC_OIT_RF3) ||
-	       (oc == DAOS_OC_OIT_RF4);
+/**
+ * For backward compatibility purpose
+ */
+static inline enum daos_otype_t
+daos_obj_feat2type(daos_ofeat_t feat)
+{
+	if (feat == (DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64))
+		return DAOS_OT_MULTI_UINT64;
+	else if (feat == DAOS_OF_AKEY_UINT64)
+		return DAOS_OT_AKEY_UINT64;
+	else if (feat == DAOS_OF_DKEY_UINT64)
+		return DAOS_OT_DKEY_UINT64;
+	else if (feat == DAOS_OF_DKEY_LEXICAL)
+		return DAOS_OT_DKEY_LEXICAL;
+	else if (feat == DAOS_OF_AKEY_LEXICAL)
+		return DAOS_OT_AKEY_LEXICAL;
+	else if (feat == (DAOS_OF_DKEY_LEXICAL | DAOS_OF_AKEY_LEXICAL))
+		return DAOS_OT_MULTI_LEXICAL;
+	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY))
+		return DAOS_OT_ARRAY;
+	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY_BYTE))
+		return DAOS_OT_ARRAY_BYTE;
+	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT))
+		return DAOS_OT_ARRAY_ATTR;
+	else if (feat == DAOS_OF_KV_FLAT)
+		return DAOS_OT_KV_HASHED;
+	else if (feat == (DAOS_OF_KV_FLAT | DAOS_OF_DKEY_LEXICAL))
+		return DAOS_OT_KV_LEXICAL;
+
+	/** default */
+	return DAOS_OT_MULTI_HASHED;
 }
 
 /*
@@ -367,32 +352,34 @@ daos_oid_is_oit(daos_obj_id_t oid)
 static inline daos_obj_id_t
 daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
 {
-	daos_oclass_id_t	oc;
+	enum daos_obj_redun	ord;
 	daos_obj_id_t		oid = {0};
 
 	switch (cont_rf) {
 	case DAOS_PROP_CO_REDUN_RF0:
-		oc = DAOS_OC_OIT_RF0;
+		ord = OR_RP_1;
 		break;
 	case DAOS_PROP_CO_REDUN_RF1:
-		oc = DAOS_OC_OIT_RF1;
+		ord = OR_RP_2;
 		break;
 	case DAOS_PROP_CO_REDUN_RF2:
-		oc = DAOS_OC_OIT_RF2;
+		ord = OR_RP_3;
 		break;
 	case DAOS_PROP_CO_REDUN_RF3:
-		oc = DAOS_OC_OIT_RF3;
+		ord = OR_RP_4;
 		break;
 	case DAOS_PROP_CO_REDUN_RF4:
-		oc = DAOS_OC_OIT_RF4;
+		ord = OR_RP_5;
 		break;
 	default:
 		D_ASSERTF(0, "bad cont_rf %d\n", cont_rf);
 		break;
 	};
 
-	daos_obj_set_oid(&oid, 0, oc, 0);
+	/** use 1 group for simplicity, it should be more scalable */
+	daos_obj_set_oid(&oid, DAOS_OT_OIT, ord, 1, 0);
 	oid.lo = epoch;
+
 	return oid;
 }
 
@@ -430,7 +417,7 @@ void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 
 int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
-				daos_obj_id_t *oid, daos_ofeat_t ofeats,
+				daos_obj_id_t *oid, enum daos_otype_t type,
 				daos_oclass_id_t cid, daos_oclass_hints_t hints,
 				uint32_t args);
 
@@ -644,6 +631,40 @@ daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 
 	return dup_lists;
+}
+
+/* merge adjacent recxs for same epoch */
+static inline void
+daos_recx_ep_list_merge(struct daos_recx_ep_list *lists, unsigned int nr)
+{
+	struct daos_recx_ep_list	*list;
+	struct daos_recx_ep		*recx_ep, *next;
+	unsigned int			 i, j, k;
+
+	for (i = 0; i < nr; i++) {
+		list = &lists[i];
+		if (list->re_nr < 2)
+			continue;
+		for (j = 0; j < list->re_nr - 1; j++) {
+			recx_ep = &list->re_items[j];
+			next = &list->re_items[j + 1];
+			if (recx_ep->re_ep != next->re_ep ||
+			    recx_ep->re_rec_size != next->re_rec_size ||
+			    recx_ep->re_type != next->re_type ||
+			    !DAOS_RECX_ADJACENT(recx_ep->re_recx, next->re_recx))
+				continue;
+
+			recx_ep->re_recx.rx_nr += next->re_recx.rx_nr;
+			if (recx_ep->re_recx.rx_idx > next->re_recx.rx_idx)
+				recx_ep->re_recx.rx_idx = next->re_recx.rx_idx;
+
+			for (k = j + 1; k < list->re_nr - 1; k++)
+				list->re_items[k] = list->re_items[k + 1];
+
+			list->re_nr--;
+			j--;
+		}
+	}
 }
 
 static inline void

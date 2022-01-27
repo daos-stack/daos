@@ -66,7 +66,7 @@ int			obj_cnt_per_class = 2;
  */
 int			cond_pct = 20;
 
-static uint16_t
+static daos_oclass_id_t
 oclass_get(unsigned int random)
 {
 	uint16_t idx = random % OBJ_CNT;

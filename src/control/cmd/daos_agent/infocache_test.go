@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,11 +11,12 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/atm"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -41,83 +42,85 @@ func TestAgent_newAttachInfoCache(t *testing.T) {
 			}
 
 			common.AssertEqual(t, log, cache.log, "")
-			common.AssertEqual(t, tc.enabled, cache.IsEnabled(), "IsEnabled()")
-			common.AssertFalse(t, cache.IsCached(), "default state is uncached")
+			common.AssertEqual(t, tc.enabled, cache.isEnabled(), "isEnabled()")
+			common.AssertFalse(t, cache.isCached(), "default state is uncached")
 		})
 	}
 }
 
-func TestAgent_attachInfoCache_Cache(t *testing.T) {
+func TestAgent_attachInfoCache_Get(t *testing.T) {
+	srvResp := &mgmtpb.GetAttachInfoResp{
+		Status: -1000,
+		RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
+			{Rank: 1, Uri: "firsturi"},
+			{Rank: 2, Uri: "nexturi"},
+		},
+	}
+
 	for name, tc := range map[string]struct {
 		aic       *attachInfoCache
-		input     *mgmtpb.GetAttachInfoResp
+		cache     *mgmtpb.GetAttachInfoResp
 		expCached bool
+		expRemote bool
+		remoteErr bool
+		expErr    error
 	}{
-		"nil cache": {},
 		"not enabled": {
-			aic: &attachInfoCache{},
+			aic:       &attachInfoCache{},
+			expRemote: true,
 		},
-		"nil input": {
-			aic: &attachInfoCache{enabled: atm.NewBool(true)},
-		},
-		"success": {
-			aic: &attachInfoCache{enabled: atm.NewBool(true)},
-			input: &mgmtpb.GetAttachInfoResp{
-				Status: -1000,
-				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
-					{Rank: 1, Uri: "firsturi"},
-					{Rank: 2, Uri: "nexturi"},
-				},
-			},
+		"not cached": {
+			aic:       &attachInfoCache{enabled: atm.NewBool(true)},
+			expRemote: true,
 			expCached: true,
+		},
+		"cached": {
+			aic:       &attachInfoCache{enabled: atm.NewBool(true)},
+			cache:     srvResp,
+			expCached: true,
+		},
+		"remote fails": {
+			aic:       &attachInfoCache{enabled: atm.NewBool(true)},
+			expRemote: true,
+			remoteErr: true,
+			expErr:    errors.New("no soup for you"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tc.aic.Cache(context.TODO(), tc.input)
-
-			common.AssertEqual(t, tc.expCached, tc.aic.IsCached(), "IsCached()")
+			if tc.cache != nil {
+				tc.aic.attachInfo = tc.cache
+				tc.aic.initialized.SetTrue()
+			}
 
 			if tc.aic == nil {
 				return
 			}
 
-			cachedResp, err := tc.aic.GetAttachInfoResp()
-			if tc.expCached {
-				if diff := cmp.Diff(tc.input, cachedResp, common.DefaultCmpOpts()...); diff != "" {
-					t.Fatalf("-want, +got:\n%s", diff)
+			numaNode := 42
+			sysName := "snekSezSyss"
+			remoteInvoked := atm.NewBool(false)
+			getFn := func(_ context.Context, node int, name string) (*mgmtpb.GetAttachInfoResp, error) {
+				common.AssertEqual(t, numaNode, node, "node was not supplied")
+				common.AssertEqual(t, sysName, name, "name was not supplied")
+
+				remoteInvoked.SetTrue()
+				if tc.remoteErr {
+					return nil, tc.expErr
 				}
-				if err != nil {
-					t.Fatalf("expected no error, got: %s", err.Error())
-				}
-			} else {
-				common.CmpErr(t, NotCachedErr, err)
-				if cachedResp != nil {
-					t.Fatalf("expected nothing cached, got: %+v", cachedResp)
-				}
+				return srvResp, nil
 			}
 
-		})
-	}
-}
+			cachedResp, gotErr := tc.aic.Get(context.Background(), numaNode, sysName, getFn)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+			if diff := cmp.Diff(srvResp, cachedResp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
 
-func TestAgent_attachInfoCache_IsEnabled(t *testing.T) {
-	for name, tc := range map[string]struct {
-		aic        *attachInfoCache
-		expEnabled bool
-	}{
-		"nil": {},
-		"not enabled": {
-			aic: &attachInfoCache{},
-		},
-		"enabled": {
-			aic:        &attachInfoCache{enabled: atm.NewBool(true)},
-			expEnabled: true,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			enabled := tc.aic.IsEnabled()
-
-			common.AssertEqual(t, tc.expEnabled, enabled, "IsEnabled()")
+			common.AssertEqual(t, tc.expCached, tc.aic.isCached(), "cache state")
+			common.AssertEqual(t, tc.expRemote, remoteInvoked.Load(), "remote invoked")
 		})
 	}
 }
@@ -188,7 +191,7 @@ func TestAgent_localFabricCache_IsEnabled(t *testing.T) {
 func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		lfc       *localFabricCache
-		input     []*netdetect.FabricScan
+		input     *hardware.FabricInterfaceSet
 		expCached bool
 		expResult *NUMAFabric
 	}{
@@ -205,100 +208,66 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 		},
 		"successfully cached": {
 			lfc: newLocalFabricCache(nil, true),
-			input: []*netdetect.FabricScan{
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test0",
+			input: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+sockets"),
+					Name:        "test0",
+					OSDevice:    "os_test0",
 					NUMANode:    1,
-					NetDevClass: netdetect.Ether,
+					DeviceClass: hardware.Ether,
 				},
-				{
-					Provider:   "ofi+sockets",
-					DeviceName: "lo",
-					NUMANode:   1,
-				},
-				{
-					Provider:    "ofi+verbs",
-					DeviceName:  "test1",
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+verbs"),
+					Name:        "test1",
+					OSDevice:    "os_test1",
 					NUMANode:    0,
-					NetDevClass: netdetect.Infiniband,
+					DeviceClass: hardware.Infiniband,
 				},
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test2",
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+sockets"),
+					Name:        "test2",
+					OSDevice:    "os_test2",
 					NUMANode:    0,
-					NetDevClass: netdetect.Ether,
+					DeviceClass: hardware.Ether,
 				},
-			},
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+sockets"),
+					Name:        "lo",
+					OSDevice:    "lo",
+					NUMANode:    0,
+					DeviceClass: hardware.Loopback,
+				},
+			),
 			expCached: true,
 			expResult: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
 					0: {
+
 						{
-							Name:        "test1",
-							NetDevClass: netdetect.Infiniband,
+							Name:        "lo",
+							Domain:      "lo",
+							NetDevClass: hardware.Loopback,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
-							Name:        "test2",
-							NetDevClass: netdetect.Ether,
+							Name:        "os_test1",
+							Domain:      "test1",
+							NetDevClass: hardware.Infiniband,
+							Providers:   []string{"ofi+verbs"},
+						},
+						{
+							Name:        "os_test2",
+							Domain:      "test2",
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 					1: {
 						{
-							Name:        "test0",
-							NetDevClass: netdetect.Ether,
-						},
-					},
-				},
-			},
-		},
-		"with device alias": {
-			lfc: &localFabricCache{
-				enabled: atm.NewBool(true),
-				getDevAlias: func(_ context.Context, dev string) (string, error) {
-					return dev + "_alias", nil
-				},
-			},
-			input: []*netdetect.FabricScan{
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test0",
-					NUMANode:    2,
-					NetDevClass: netdetect.Ether,
-				},
-				{
-					Provider:    "ofi+verbs",
-					DeviceName:  "test1",
-					NUMANode:    1,
-					NetDevClass: netdetect.Infiniband,
-				},
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test2",
-					NUMANode:    1,
-					NetDevClass: netdetect.Ether,
-				},
-			},
-			expCached: true,
-			expResult: &NUMAFabric{
-				numaMap: map[int][]*FabricInterface{
-					1: {
-						{
-							Name:        "test1",
-							NetDevClass: netdetect.Infiniband,
-							Domain:      "test1_alias",
-						},
-						{
-							Name:        "test2",
-							NetDevClass: netdetect.Ether,
-							Domain:      "test2_alias",
-						},
-					},
-					2: {
-						{
-							Name:        "test0",
-							NetDevClass: netdetect.Ether,
-							Domain:      "test0_alias",
+							Name:        "os_test0",
+							Domain:      "test0",
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
@@ -356,17 +325,17 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 					0: {
 						{
 							Name:        "test1",
-							NetDevClass: netdetect.Infiniband,
+							NetDevClass: hardware.Infiniband,
 						},
 						{
 							Name:        "test2",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
 						},
 					},
 					1: {
 						{
 							Name:        "test0",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
 						},
 					},
 				},
@@ -411,42 +380,48 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 			0: {
 				{
 					Name:        "test1",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
 					Domain:      "test1_alias",
+					Providers:   []string{"ofi+verbs"},
 				},
 				{
 					Name:        "test2",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
 					Domain:      "test2_alias",
+					Providers:   []string{"ofi+sockets"},
 				},
 			},
 			1: {
 				{
 					Name:        "test3",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
 					Domain:      "test3_alias",
+					Providers:   []string{"ofi+verbs"},
 				},
 				{
 					Name:        "test4",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
 					Domain:      "test4_alias",
+					Providers:   []string{"ofi+verbs"},
 				},
 				{
 					Name:        "test5",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
 					Domain:      "test5_alias",
+					Providers:   []string{"ofi+sockets"},
 				},
 			},
 			2: {
 				{
 					Name:        "test6",
-					NetDevClass: netdetect.Ether,
-					Domain:      "test6_alias",
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+sockets"},
 				},
 				{
 					Name:        "test7",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
 					Domain:      "test7_alias",
+					Providers:   []string{"ofi+sockets", "ofi+verbs"},
 				},
 			},
 		},
@@ -455,7 +430,8 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 	for name, tc := range map[string]struct {
 		lfc         *localFabricCache
 		numaNode    int
-		netDevClass uint32
+		netDevClass hardware.NetDevClass
+		provider    string
 		expDevice   *FabricInterface
 		expErr      error
 	}{
@@ -466,14 +442,28 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 			lfc:    &localFabricCache{},
 			expErr: NotCachedErr,
 		},
-		"success": {
+		"request verbs": {
 			lfc:         newTestFabricCache(t, nil, populatedCache),
-			numaNode:    1,
-			netDevClass: netdetect.Ether,
+			numaNode:    2,
+			provider:    "ofi+verbs",
+			netDevClass: hardware.Ether,
 			expDevice: &FabricInterface{
-				Name:        "test5",
-				NetDevClass: netdetect.Ether,
-				Domain:      "test5_alias",
+				Name:        "test7",
+				NetDevClass: hardware.Ether,
+				Domain:      "test7_alias",
+				Providers:   []string{"ofi+sockets", "ofi+verbs"},
+			},
+		},
+		"request sockets": {
+			lfc:         newTestFabricCache(t, nil, populatedCache),
+			numaNode:    0,
+			provider:    "ofi+sockets",
+			netDevClass: hardware.Ether,
+			expDevice: &FabricInterface{
+				Name:        "test2",
+				NetDevClass: hardware.Ether,
+				Domain:      "test2_alias",
+				Providers:   []string{"ofi+sockets"},
 			},
 		},
 	} {
@@ -488,7 +478,11 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 				}
 			}
 
-			dev, err := tc.lfc.GetDevice(tc.numaNode, tc.netDevClass)
+			if tc.provider == "" {
+				tc.provider = "ofi+tcp"
+			}
+
+			dev, err := tc.lfc.GetDevice(tc.numaNode, tc.netDevClass, tc.provider)
 
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expDevice, dev); diff != "" {

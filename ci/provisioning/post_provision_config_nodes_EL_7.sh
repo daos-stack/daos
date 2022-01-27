@@ -46,6 +46,7 @@ EOF
 
     # Mellanox OFED hack
     if ls -d /usr/mpi/gcc/openmpi-*; then
+        mkdir -p /etc/modulefiles/mpi/
         cat <<EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
 #%Module 1.0
 #
@@ -69,15 +70,6 @@ setenv			MPI_COMPILER	openmpi-x86_64
 setenv			MPI_SUFFIX	_openmpi
 setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.0rc5
 EOF
-    fi
-
-    # CORCI-1096
-    grep 'relayhost' /etc/postfix/main.cf
-    echo 'relayhost = [mail.wolf.hpdd.intel.com]' >> /etc/postfix/main.cf
-    if ! postfix reload; then
-        postfix reload
-        echo "Error $? reloading postfix"
-        exit 1
     fi
 
 }

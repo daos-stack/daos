@@ -76,6 +76,7 @@ daos_tests:
     test_rebuild_26: DAOS_Rebuild_26
     test_rebuild_27: DAOS_Rebuild_27
     test_rebuild_28: DAOS_Rebuild_28
+    test_rebuild_29: DAOS_Rebuild_29
   daos_test:
     test_rebuild_0to10: r
     test_rebuild_12to15: r
@@ -92,6 +93,7 @@ daos_tests:
     test_rebuild_26: r
     test_rebuild_27: r
     test_rebuild_28: r
+    test_rebuild_29: r
   args:
     test_rebuild_0to10: -s3 -u subtests="0-10"
     test_rebuild_12to15: -s3 -u subtests="12-15"
@@ -104,10 +106,11 @@ daos_tests:
     test_rebuild_22: -s3 -u subtests="22"
     test_rebuild_23: -s3 -u subtests="23"
     test_rebuild_24: -s3 -u subtests="24"
-    test_rebuild_25: -s3 -u subtests="25"
+    test_rebuild_25: -s5 -u subtests="25"
     test_rebuild_26: -s3 -u subtests="26"
     test_rebuild_27: -s6 -u subtests="27"
     test_rebuild_28: -s3 -u subtests="28"
+    test_rebuild_29: -s5 -u subtests="29"
   stopped_ranks:
     test_rebuild_22: [7]
     test_rebuild_23: [7]
@@ -116,3 +119,4 @@ daos_tests:
     test_rebuild_26: ["random"]
     test_rebuild_27: ["random"]
     test_rebuild_28: [7]
+    test_rebuild_29: ["random"]

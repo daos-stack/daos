@@ -1807,7 +1807,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	if (tgt_cnt == 0 || tgts == NULL)
 		return -DER_INVAL;
 
-	*rank = tgts[rand() % tgt_cnt].ta_comp.co_rank;
+	*rank = tgts[d_rand() % tgt_cnt].ta_comp.co_rank;
 
 	D_FREE(tgts);
 
@@ -1922,7 +1922,7 @@ struct dc_cont_glob {
 static inline daos_size_t
 dc_cont_glob_buf_size()
 {
-       return sizeof(struct dc_cont_glob);
+	return sizeof(struct dc_cont_glob);
 }
 
 static inline void
@@ -2497,12 +2497,13 @@ dc_cont_get_attr(tse_task_t *task)
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
-		D_GOTO(out, rc);
+		D_GOTO(out_rpc, rc);
 	}
 	for (i = 0 ; i < args->n ; i++) {
 		uint64_t len;
@@ -2511,22 +2512,21 @@ dc_cont_get_attr(tse_task_t *task)
 		in->cagi_key_length += len + 1;
 		D_STRNDUP(new_names[i], args->names[i], len);
 		if (new_names[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_names[i], sizeof(char *));
 		if (rc) {
 			D_FREE(new_names[i]);
-			D_GOTO(out, rc);
+			D_GOTO(out_rpc, rc);
 		}
 	}
 
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
 			      CRT_BULK_RW, &in->cagi_bulk);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, &cb_args);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
 
 	cb_args.cra_bulk = in->cagi_bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
@@ -2539,6 +2539,8 @@ dc_cont_get_attr(tse_task_t *task)
 	crt_req_addref(cb_args.cra_rpc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
+out_rpc:
+	cont_req_cleanup(CLEANUP_RPC, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to get container attributes: "DF_RC"\n",

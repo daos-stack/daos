@@ -368,9 +368,10 @@ build with random upstream changes.
 *********************** ERROR ************************\n""" % comp)
             raise DownloadFailure(self.url, subdir)
 
-        commands = ['git clone %s %s' % (self.url, subdir)]
-        if not RUNNER.run_commands(commands):
-            raise DownloadFailure(self.url, subdir)
+        if not os.path.exists(subdir):
+            commands = ['git clone %s %s' % (self.url, subdir)]
+            if not RUNNER.run_commands(commands):
+                raise DownloadFailure(self.url, subdir)
         self.get_specific(subdir, **kw)
 
     def get_specific(self, subdir, **kw):
@@ -382,15 +383,29 @@ build with random upstream changes.
             branch = self.branch
         self.branch = branch
         if self.branch:
+            command = ['cd %s && git checkout %s' % (subdir, branch)]
+            if not RUNNER.run_commands(command):
+                command = ['cd %s && git fetch -t -a' % (subdir)]
+                if not RUNNER.run_commands(command):
+                    raise DownloadFailure(self.url, subdir)
             self.commit_sha = self.branch
             self.checkout_commit(subdir)
 
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is not None:
+            command = ['cd %s && git checkout %s' % (subdir, passed_commit_sha)]
+            if not RUNNER.run_commands(command):
+                command = ['cd %s && git fetch -t -a' % (subdir)]
+                if not RUNNER.run_commands(command):
+                    raise DownloadFailure(self.url, subdir)
             self.commit_sha = passed_commit_sha
             self.checkout_commit(subdir)
 
+	# reset patched diff
+        command = ['cd %s && git reset --hard HEAD' % (subdir)]
+        if not RUNNER.run_commands(command):
+            raise DownloadFailure(self.url, subdir)
         # Now apply any patches specified
         self.apply_patches(subdir, kw.get("patches", None))
         self.update_submodules(subdir)
@@ -599,7 +614,8 @@ class PreReqComponent():
         for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
                     "http_proxy", "https_proxy",
                     "PKG_CONFIG_PATH", "MODULEPATH",
-                    "MODULESHOME", "MODULESLOADED"]:
+                    "MODULESHOME", "MODULESLOADED",
+                    "I_MPI_ROOT"]:
             value = os.environ.get(var)
             if value:
                 real_env[var] = value
@@ -1348,12 +1364,6 @@ class _Component():
                                      '_%s.crc' % self.name)
         self.patch_path = self.prereqs.get_build_dir()
 
-    def src_exists(self):
-        """Check if the source directory exists"""
-        if self.src_path and os.path.exists(self.src_path):
-            return True
-        return False
-
     def _delete_old_file(self, path):
         """delete the old file"""
         if os.path.exists(path):
@@ -1377,12 +1387,13 @@ class _Component():
             patch_name = "%s_patch_%03d" % (self.name, patchnum)
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
-            command = ['rm -f %s' % patch_path,
-                       'curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
+            patches.append(patch_path)
+            if os.path.exists(patch_path):
+                continue
+            command = ['curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
                        % (patch_path, raw)]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
-            patches.append(patch_path)
         return patches
 
     def get(self):
@@ -1392,11 +1403,6 @@ class _Component():
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
-        if self.src_exists():
-            print('Using existing sources at %s for %s' \
-                % (self.src_path, self.name))
-            # NB: Don't apply patches to existing sources
-            return
 
         if not self.retriever:
             print('Using installed version of %s' % self.name)
@@ -1758,8 +1764,7 @@ class _Component():
 
             self._check_prereqs_build_deps()
 
-            if not self.src_exists():
-                self.get()
+            self.get()
 
             self.prereqs.load_config(self.name, self.src_path)
 

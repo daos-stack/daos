@@ -1,6 +1,6 @@
 # DAOS Environment Variables
 
-This section lists the environment variables used by DAOS. 
+This section lists the environment variables used by DAOS.
 
 !!! warning
     Many of these variables are used for development purposes only,
@@ -62,7 +62,7 @@ Environment variables in this section only apply to the client side.
 
 |Variable                 |Description|
 |-------------------------|-----------|
-|FI\_MR\_CACHE\_MAX\_COUNT|Enable MR caching in OFI layer. Recommended to be set to 0 (disable) when CRT\_DISABLE\_MEM\_PIN is NOT set to 1. INTEGER. Default to unset.|
+|FI\_MR\_CACHE\_MAX\_COUNT|Enable MR (Memory Registration) caching in OFI layer. Recommended to be set to 0 (disable) when CRT\_DISABLE\_MEM\_PIN is NOT set to 1. INTEGER. Default to unset.|
 
 
 ## Debug System (Client & Server)
