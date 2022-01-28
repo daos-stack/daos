@@ -13,7 +13,7 @@ import threading
 import random
 from filecmp import cmp
 from apricot import TestWithServers
-from general_utils import run_command, DaosTestError, get_log_file
+from general_utils import run_command, DaosTestError
 from command_utils_base import CommandFailure
 import slurm_utils
 from ClusterShell.NodeSet import NodeSet
