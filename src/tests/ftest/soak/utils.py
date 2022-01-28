@@ -1151,14 +1151,14 @@ def build_job_script(self, commands, job, nodesperjob):
     # if additional cmds are needed in the batch script
     prepend_cmds = [
         "set -e",
-        "echo \" Job_Start_Time \"`date \+\"%Y-%m-%d %T\"`",
+        r"echo \" Job_Start_Time \"`date \+\"%Y-%m-%d %T\"`",
         "daos pool query {} ".format(self.pool[1].uuid),
         "daos pool query {} ".format(self.pool[0].uuid)
         ]
     append_cmds = [
         "daos pool query {} ".format(self.pool[1].uuid),
         "daos pool query {} ".format(self.pool[0].uuid),
-        "echo \" Job_End_Time \"`date \+\"%Y-%m-%d %T\"`"
+        r"echo \" Job_End_Time \"`date \+\"%Y-%m-%d %T\"`"
         ]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines
