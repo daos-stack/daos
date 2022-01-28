@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -389,11 +389,15 @@ func TestHardware_PCIDevices_Add(t *testing.T) {
 	for name, tc := range map[string]struct {
 		devices   PCIDevices
 		newDev    *PCIDevice
+		expErr    error
 		expResult PCIDevices
 	}{
-		"nil": {},
+		"nil": {
+			expErr: errors.New("nil"),
+		},
 		"add nil Device": {
 			devices:   PCIDevices{},
+			expErr:    errors.New("nil"),
 			expResult: PCIDevices{},
 		},
 		"add to empty": {
@@ -459,8 +463,9 @@ func TestHardware_PCIDevices_Add(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			tc.devices.Add(tc.newDev)
+			err := tc.devices.Add(tc.newDev)
 
+			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.devices); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}

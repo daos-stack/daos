@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -232,7 +232,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 				engineCfg = engineCfg.
 					WithStorage(
 						storage.NewTierConfig().
-							WithBdevClass("nvme").
+							WithStorageClass("nvme").
 							WithBdevDeviceList("foo", "bar"),
 					)
 			}
@@ -423,7 +423,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 					WithTargetCount(tc.targetCount).
 					WithStorage(
 						storage.NewTierConfig().
-							WithBdevClass("nvme").
+							WithStorageClass("nvme").
 							WithBdevDeviceList("foo", "bar"),
 					)
 				r := engine.NewTestRunner(nil, engineCfg)
@@ -496,10 +496,10 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 		WithTargetCount(1).
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmMountPoint("/foo/bar"),
 			storage.NewTierConfig().
-				WithBdevClass("nvme").
+				WithStorageClass("nvme").
 				WithBdevDeviceList("foo", "bar"),
 		)
 	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil)

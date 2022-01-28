@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,7 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -64,8 +63,6 @@ type logCmd struct {
 
 func (c *logCmd) setLog(log *logging.LeveledLogger) {
 	c.log = log
-	// Initialize the netdetect logger
-	netdetect.SetLogger(log)
 }
 
 func exitWithError(log *logging.LeveledLogger, err error) {

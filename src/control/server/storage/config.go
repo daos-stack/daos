@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -117,9 +117,9 @@ func (tc *TierConfig) WithTier(tier int) *TierConfig {
 	return tc
 }
 
-// WithScmClass defines the type of SCM storage to be configured.
-func (tc *TierConfig) WithScmClass(scmClass string) *TierConfig {
-	tc.Class = Class(scmClass)
+// WithStorageClass defines the type of storage (scm or bdev) to be configured.
+func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
+	tc.Class = Class(cls)
 	return tc
 }
 
@@ -139,12 +139,6 @@ func (tc *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
 // WithScmDeviceList sets the list of devices to be used for SCM storage.
 func (tc *TierConfig) WithScmDeviceList(devices ...string) *TierConfig {
 	tc.Scm.DeviceList = devices
-	return tc
-}
-
-// WithBdevClass defines the type of block device storage to be used.
-func (tc *TierConfig) WithBdevClass(bdevClass string) *TierConfig {
-	tc.Class = Class(bdevClass)
 	return tc
 }
 
