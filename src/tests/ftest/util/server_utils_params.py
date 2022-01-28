@@ -159,10 +159,6 @@ class DaosServerYamlParameters(YamlParameters):
         for engine_params in self.engine_params:
             engine_params.get_params(test)
 
-        if self.nr_hugepages.value == 0 and not self.using_nvme:
-            self.log.debug("Disabling hugepages when bdev class is not 'nvme'")
-            self.nr_hugepages.update(-1, "nr_hugepages")
-
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
 
