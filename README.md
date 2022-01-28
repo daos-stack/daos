@@ -2,15 +2,15 @@
 
 [![License](https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg)](./LICENSE)
 [![Coverity Scan Build Status](https://img.shields.io/coverity/scan/3015.svg)](https://scan.coverity.com/projects/daos-stack-daos)
-[![Build](https://github.com/daos-stack/daos/actions/workflows/ci2.yml/badge.svg)
-[![Codespell](https://github.com/daos-stack/daos/actions/workflows/spelling.yml/badge.svg)
-[![Doxygen](https://github.com/daos-stack/daos/actions/workflows/doxygen.yml/badge.svg)
+[![Build](https://github.com/daos-stack/daos/actions/workflows/ci2.yml/badge.svg)]
+[![Codespell](https://github.com/daos-stack/daos/actions/workflows/spelling.yml/badge.svg)]
+[![Doxygen](https://github.com/daos-stack/daos/actions/workflows/doxygen.yml/badge.svg)]
 
-Please file issues in our [Jira issue tracker](http://jira.daos.io)
-
-<a href="https://daos.io/">
+<p class="aligncenter">
+<a href="https://daos.io">
 <img src="https://avatars.githubusercontent.com/u/20561043?s=400&u=db7cd0ada987ba59c21c3de5f9e7cffba73c3325&v=4"  width="200" height="200">
 </a>
+</p>
 
 ## What is DAOS?
 
@@ -22,8 +22,10 @@ while presenting a key-value storage interface and providing features such as
 transactional non-blocking I/O, advanced data protection with self-healing on
 top of commodity hardware, end-to-end data integrity, fine-grained data control
 and elastic storage to optimize performance and cost.
-It supports multiple application interfaces including filesystems, Hadoop/Spark
-connector, TensorFlow-IO, native Python dictionary bindings, HDF5 and MPI-IO.
+
+DAOS supports multiple application interfaces including a parallel filesystem,
+Hadoop/Spark connector, TensorFlow-IO, native Python dictionary bindings, HDF5,
+MPI-IO and more to come.
 
 ## License
 
