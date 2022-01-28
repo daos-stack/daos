@@ -4,6 +4,8 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
+
 import os
 import time
 import random
@@ -25,8 +27,6 @@ from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
-
-# pylint: disable=pylint-too-many-lines
 
 H_LOCK = threading.Lock()
 
@@ -248,12 +248,13 @@ def run_event_check(self, since, until):
     Returns list of any matched events found in system log
 
     """
+    # pylint: disable=too-many-nested-blocks
+
     events_found = []
     detected = 0
     events = self.params.get("events", "/run/*")
     # check events on all server nodes
     hosts = list(set(self.hostlist_servers))
-    # pylint: disable=pylint-too-many-nested-blocks
     if events:
         for journalctl_type in ["kernel", "daos_server"]:
             for output in get_journalctl(self, hosts, since, until, journalctl_type):
@@ -947,6 +948,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
         cmd: cmdline string
 
     """
+    # pylint: disable=too-many-nested-blocks
+
     commands = []
     mdtest_params = os.path.join(os.sep, "run", job_spec, "*")
     # mdtest job specs with a list of parameters; update each value
@@ -959,7 +962,6 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     num_of_files_dirs = self.params.get(
         "num_of_files_dirs", mdtest_params)
     # update mdtest cmdline for each additional mdtest obj
-    # pylint: disable=pylint-too-many-nested-blocks
     for api in api_list:
         if api in ["POSIX"] and ppn > 16:
             continue
