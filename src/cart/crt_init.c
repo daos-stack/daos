@@ -381,18 +381,19 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 					"but crt_group_config_path_set failed "
 					"rc: %d, ignore the ENV.\n", path, rc);
 			else
-				D_DEBUG(DB_ALL, "set group_config_path as "
-					"%s.\n", path);
+				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
 		}
 
-		addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
+		if (opt && opt->cio_provider)
+			addr_env = opt->cio_provider;
+		else
+			addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
+
 		if (addr_env == NULL) {
-			D_DEBUG(DB_ALL, "ENV %s not found.\n",
-				CRT_PHY_ADDR_ENV);
+			D_DEBUG(DB_ALL, "ENV %s not found.\n", CRT_PHY_ADDR_ENV);
 			goto do_init;
-		} else{
-			D_DEBUG(DB_ALL, "EVN %s: %s.\n", CRT_PHY_ADDR_ENV,
-				addr_env);
+		} else {
+			D_DEBUG(DB_ALL, "EVN %s: %s.\n", CRT_PHY_ADDR_ENV, addr_env);
 		}
 
 		provider_found = false;
@@ -474,7 +475,7 @@ do_init:
 		}
 
 		if (crt_na_type_is_ofi(prov)) {
-			rc = crt_na_ofi_config_init(prov);
+			rc = crt_na_ofi_config_init(prov, opt);
 			if (rc != 0) {
 				D_ERROR("crt_na_ofi_config_init() failed, "
 					DF_RC"\n", DP_RC(rc));
@@ -745,7 +746,7 @@ crt_port_range_verify(int port)
 	}
 }
 
-int crt_na_ofi_config_init(int provider)
+int crt_na_ofi_config_init(int provider, crt_init_options_t *opt)
 {
 	char		*port_str;
 	char		*interface;
@@ -761,7 +762,11 @@ int crt_na_ofi_config_init(int provider)
 
 	na_ofi_cfg = &crt_gdata.cg_prov_gdata[provider].cpg_na_ofi_config;
 
-	interface = getenv("OFI_INTERFACE");
+	if (opt && opt->cio_interface)
+		interface = opt->cio_interface;
+	else
+		interface = getenv("OFI_INTERFACE");
+
 	if (interface != NULL && strlen(interface) > 0) {
 		D_STRNDUP(na_ofi_cfg->noc_interface, interface, 64);
 		if (na_ofi_cfg->noc_interface == NULL)
@@ -772,7 +777,11 @@ int crt_na_ofi_config_init(int provider)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	domain = getenv("OFI_DOMAIN");
+	if (opt && opt->cio_domain)
+		domain = opt->cio_domain;
+	else
+		domain = getenv("OFI_DOMAIN");
+
 	if (domain == NULL) {
 		D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n",
 			interface);
@@ -837,7 +846,12 @@ int crt_na_ofi_config_init(int provider)
 	}
 
 	port = -1;
-	port_str = getenv("OFI_PORT");
+
+	if (opt && opt->cio_port)
+		port_str = opt->cio_port;
+	else
+		port_str = getenv("OFI_PORT");
+
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
 			D_DEBUG(DB_ALL, "ignoring invalid OFI_PORT %s.",
