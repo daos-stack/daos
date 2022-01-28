@@ -1433,7 +1433,7 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		}
 		sgl_move_forward(sgl, &sgl_idx, kds->kd_key_len);
 		if (rc) {
-			D_ERROR("iterate %dth failed: rc"DF_RC"\n", i,
+			D_ERROR("iterate %dth failed: "DF_RC"\n", i,
 				DP_RC(rc));
 			break;
 		}
