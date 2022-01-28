@@ -39,5 +39,5 @@ class FioSmall(FioBase):
         :avocado: tags=fio,checksum,tx,dfuse
         :avocado: tags=fiosmall
         """
-        self.dfuse_bind_cores = 4
+        self.dfuse_bind_cores = '0-3'
         self.execute_fio()

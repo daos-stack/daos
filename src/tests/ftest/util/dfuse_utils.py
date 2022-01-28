@@ -25,6 +25,7 @@ class DfuseCommand(ExecutableCommand):
         self.cuuid = FormattedParameter("--container {}")
         self.mount_dir = FormattedParameter("--mountpoint {}")
         self.sys_name = FormattedParameter("--sys-name {}")
+        self.thread_count = FormattedParameter("--thread-count {}")
         self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.enable_caching = FormattedParameter("--enable-caching", False)
@@ -275,7 +276,7 @@ class Dfuse(DfuseCommand):
         # run dfuse command
         cmd = self.env.get_export_str()
         if bind_cores:
-            cmd += 'numactl --physcpubind 0-{} '.format(bind_cores - 1)
+            cmd += 'numactl --physcpubind {} '.format(bind_cores - 1)
         cmd += str(self)
         self.log.info("Command is '{}'".format(cmd))
         ret_code = pcmd(self.hosts, cmd, timeout=30)
