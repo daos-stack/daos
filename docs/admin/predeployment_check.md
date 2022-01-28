@@ -316,12 +316,12 @@ Now the SSDs can be accessed by SPDK we can use the `nvme_manage` tool to format
 the SSDs with a 4K block size.
 
 `nvme_manage` tool is provided by SPDK and will be found in the following locations:
-- `/usr/bin/nvme_manage` if DAOS-maintained spdk-21.07-10 (or greater) RPM is installed
+- `/usr/bin/spdk/nvme_manage` if DAOS-maintained spdk-21.07-10 (or greater) RPM is installed
 - `<daos_src>/install/prereq/release/spdk/bin/nvme_manage` after build from DAOS source
 
 Choose to format a SSD, use option "6" for formatting:
 ```bash
-$ sudo /usr/bin/nvme_manage
+$ sudo /usr/bin/spdk/nvme_manage
 NVMe Management Options
 [1: list controllers]
 [2: create namespace]
