@@ -535,6 +535,116 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
 	return RSVC_CLIENT_PROCEED;
 }
 
+typedef int (*ds_pool_call_cb_t)(uuid_t uuid, crt_endpoint_t *ep, void *arg, int *rc_svc,
+				 struct rsvc_hint *hint);
+
+int
+ds_pool_call(uuid_t uuid, d_rank_list_t *ranks, ds_pool_call_cb_t cb, void *arg)
+{
+	struct rsvc_client	client;
+	crt_endpoint_t		ep;
+	struct d_backoff_seq	backoff_seq;
+	int			rc_svc = 0;
+	struct rsvc_hint	hint = {0};
+	int			rc;
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		goto out;
+
+	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */,
+				8 /* next (ms) */, 1 << 10 /* max (ms) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
+
+rechoose:
+	ep.ep_grp = NULL;
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto out_backoff_seq;
+	}
+
+	rc = cb(uuid, &ep, arg, &rc_svc, &hint);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc, rc == 0 ? rc_svc : -DER_IO,
+				      rc == 0 ? &hint : NULL);
+	if (rc == RSVC_CLIENT_RECHOOSE ||
+	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(rc_svc))) {
+		dss_sleep(d_backoff_seq_next(&backoff_seq));
+		goto rechoose;
+	}
+	rc = rc_svc;
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to create pool: "DF_RC"\n", DP_UUID(uuid), DP_RC(rc));
+
+out_backoff_seq:
+	d_backoff_seq_fini(&backoff_seq);
+	rsvc_client_fini(&client);
+out:
+	return rc;
+}
+
+struct pool_create_arg {
+	d_rank_list_t  *cpc_ranks;
+	int		cpc_ndomains;
+	uint32_t       *cpc_domains;
+	daos_prop_t    *cpc_prop;
+};
+
+static int pool_create(uuid_t uuid, d_rank_list_t *ranks, int ndomains, uint32_t *domains,
+		       daos_prop_t *prop, struct rsvc_hint *hint);
+
+static int
+call_pool_create(uuid_t uuid, crt_endpoint_t *ep, void *varg, int *rc_svc, struct rsvc_hint *hint)
+{
+	struct pool_create_arg *arg = varg;
+	struct dss_module_info *info = dss_get_module_info();
+	crt_rpc_t	       *rpc;
+	struct pool_create_in  *in;
+	struct pool_create_out *out;
+	int			rc;
+
+	if (ep->ep_rank == dss_self_rank()) {
+		*rc_svc = pool_create(uuid, arg->cpc_ranks, arg->cpc_ndomains, arg->cpc_domains,
+				      arg->cpc_prop, hint);
+		rc = 0;
+		goto out;
+	}
+
+	/* Create a POOL_CREATE request. */
+	rc = pool_req_create(info->dmi_ctx, ep, POOL_CREATE, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: "DF_RC"\n", DP_UUID(uuid),
+			DP_RC(rc));
+		return rc;
+	}
+	in = crt_req_get(rpc);
+	uuid_copy(in->pri_op.pi_uuid, uuid);
+	uuid_clear(in->pri_op.pi_hdl);
+	in->pri_ntgts = arg->cpc_ranks->rl_nr;
+	in->pri_tgt_ranks = arg->cpc_ranks;
+	in->pri_prop = arg->cpc_prop;
+	in->pri_ndomains = arg->cpc_ndomains;
+	in->pri_domains.ca_count = arg->cpc_ndomains;
+	in->pri_domains.ca_arrays = arg->cpc_domains;
+
+	/* Send the POOL_CREATE request. */
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		goto out_rpc;
+
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+	*rc_svc = out->pro_op.po_rc;
+	*hint = out->pro_op.po_hint;
+
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	return rc;
+}
+
 /**
  * Create a (combined) pool(/container) service. This method shall be called on
  * a single storage node in the pool.
@@ -551,19 +661,12 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
  *					list of pool service replica ranks
  */
 int
-ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		   const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		   daos_prop_t *prop, d_rank_list_t *svc_addrs)
+ds_pool_svc_create(uuid_t pool_uuid, int ntargets, const char *group, d_rank_list_t *target_addrs,
+		   int ndomains, uint32_t *domains, daos_prop_t *prop, d_rank_list_t *svc_addrs)
 {
 	d_rank_list_t	       *ranks;
 	d_iov_t			psid;
-	struct rsvc_client	client;
-	struct dss_module_info *info = dss_get_module_info();
-	crt_endpoint_t		ep;
-	crt_rpc_t	       *rpc;
-	struct pool_create_in  *in;
-	struct pool_create_out *out;
-	struct d_backoff_seq	backoff_seq;
+	struct pool_create_arg	arg;
 	int			rc;
 
 	D_ASSERTF(ntargets == target_addrs->rl_nr, "ntargets=%u num=%u\n",
@@ -574,73 +677,19 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
+	d_iov_set(&psid, pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, true /* create */,
 				true /* bootstrap */, ds_rsvc_get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
-	rc = rsvc_client_init(&client, ranks);
-	if (rc != 0)
-		D_GOTO(out_creation, rc);
+	arg.cpc_ranks = target_addrs;
+	arg.cpc_ndomains = ndomains;
+	arg.cpc_domains = domains;
+	arg.cpc_prop = prop;
 
-	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */,
-				8 /* next (ms) */, 1 << 10 /* max (ms) */);
-	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
+	rc = ds_pool_call(pool_uuid, ranks, call_pool_create, &arg);
 
-rechoose:
-	/* Create a POOL_CREATE request. */
-	ep.ep_grp = NULL;
-	rc = rsvc_client_choose(&client, &ep);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out_backoff_seq;
-	}
-	rc = pool_req_create(info->dmi_ctx, &ep, POOL_CREATE, &rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out_backoff_seq;
-	}
-	in = crt_req_get(rpc);
-	uuid_copy(in->pri_op.pi_uuid, pool_uuid);
-	uuid_clear(in->pri_op.pi_hdl);
-	in->pri_ntgts = ntargets;
-	in->pri_tgt_ranks = (d_rank_list_t *)target_addrs;
-	in->pri_prop = prop;
-	in->pri_ndomains = ndomains;
-	in->pri_domains.ca_count = ndomains;
-	in->pri_domains.ca_arrays = (uint32_t *)domains;
-
-	/* Send the POOL_CREATE request. */
-	rc = dss_rpc_send(rpc);
-	out = crt_reply_get(rpc);
-	D_ASSERT(out != NULL);
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      rc == 0 ? out->pro_op.po_rc : -DER_IO,
-				      rc == 0 ? &out->pro_op.po_hint : NULL);
-	if (rc == RSVC_CLIENT_RECHOOSE ||
-	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->pro_op.po_rc))) {
-		crt_req_decref(rpc);
-		dss_sleep(d_backoff_seq_next(&backoff_seq));
-		D_GOTO(rechoose, rc);
-	}
-	rc = out->pro_op.po_rc;
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		D_GOTO(out_rpc, rc);
-	}
-
-	rc = daos_rank_list_copy(svc_addrs, ranks);
-	D_ASSERTF(rc == 0, "daos_rank_list_copy: "DF_RC"\n", DP_RC(rc));
-out_rpc:
-	crt_req_decref(rpc);
-out_backoff_seq:
-	d_backoff_seq_fini(&backoff_seq);
-	rsvc_client_fini(&client);
-out_creation:
 	if (rc != 0)
 		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, ranks,
 				  NULL, true /* destroy */);
@@ -651,12 +700,12 @@ out:
 }
 
 int
-ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+ds_pool_svc_destroy(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 {
 	d_iov_t		psid;
 	int		rc;
 
-	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
+	d_iov_set(&psid, pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, svc_ranks,
 			       NULL /* excluded */, true /* destroy */);
 	if (rc != 0)
@@ -1792,11 +1841,10 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
  * We use this RPC to not only create the pool metadata but also initialize the
  * pool/container service DB.
  */
-void
-ds_pool_create_handler(crt_rpc_t *rpc)
+static int
+pool_create(uuid_t uuid, d_rank_list_t *ranks, int ndomains, uint32_t *domains, daos_prop_t *prop,
+	    struct rsvc_hint *hint)
 {
-	struct pool_create_in  *in = crt_req_get(rpc);
-	struct pool_create_out *out = crt_reply_get(rpc);
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
 	d_iov_t			value;
@@ -1804,64 +1852,54 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	daos_prop_t	       *prop_dup = NULL;
 	int			rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
-		DP_UUID(in->pri_op.pi_uuid), rpc);
-
-	if (in->pri_ntgts != in->pri_tgt_ranks->rl_nr)
-		D_GOTO(out, rc = -DER_PROTO);
-	if (in->pri_ndomains != in->pri_domains.ca_count)
-		D_GOTO(out, rc = -DER_PROTO);
-
-	/* This RPC doesn't care about whether the service is up. */
-	rc = pool_svc_lookup(in->pri_op.pi_uuid, &svc);
+	/* We don't care if the service is up. */
+	rc = pool_svc_lookup(uuid, &svc);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	/*
-	 * Simply serialize this whole RPC with rsvc_step_{up,down}_cb() and
-	 * ds_rsvc_stop().
+	 * Simply serialize this whole operation with rsvc_step_{up,down}_cb()
+	 * and ds_rsvc_stop().
 	 */
 	ABT_mutex_lock(svc->ps_rsvc.s_mutex);
 
 	if (svc->ps_rsvc.s_stop) {
-		D_DEBUG(DB_MD, DF_UUID": pool service already stopping\n",
-			DP_UUID(svc->ps_uuid));
-		D_GOTO(out_mutex, rc = -DER_CANCELED);
+		D_DEBUG(DB_MD, DF_UUID": pool service already stopping\n", DP_UUID(svc->ps_uuid));
+		rc = -DER_CANCELED;
+		goto out_mutex;
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, RDB_NIL_TERM, &tx);
 	if (rc != 0)
-		D_GOTO(out_mutex, rc);
+		goto out_mutex;
 	ABT_rwlock_wrlock(svc->ps_lock);
 	ds_cont_wrlock_metadata(svc->ps_cont_svc);
 
 	/* See if the DB has already been initialized. */
 	d_iov_set(&value, NULL /* buf */, 0 /* size */);
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_map_buffer,
-			   &value);
+	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_map_buffer, &value);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0)
-			D_DEBUG(DF_DSMS, DF_UUID": db already initialized\n",
-				DP_UUID(svc->ps_uuid));
+			D_DEBUG(DB_MD, DF_UUID": db already initialized\n", DP_UUID(svc->ps_uuid));
 		else
-			D_ERROR(DF_UUID": failed to look up pool map: "
-				DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(out_tx, rc);
+			D_ERROR(DF_UUID": failed to look up pool map: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto out_tx;
 	}
 
 	/* duplicate the default properties, overwrite it with pool create
 	 * parameter and then write to pool meta data.
 	 */
-	prop_dup = daos_prop_dup(&pool_prop_default, true /* pool */,
-				 false /* input */);
+	prop_dup = daos_prop_dup(&pool_prop_default, true /* pool */, false /* input */);
 	if (prop_dup == NULL) {
-		D_ERROR("daos_prop_dup failed.\n");
-		D_GOTO(out_tx, rc = -DER_NOMEM);
+		D_ERROR(DF_UUID": daos_prop_dup failed\n", DP_UUID(svc->ps_uuid));
+		rc = -DER_NOMEM;
+		goto out_tx;
 	}
-	rc = pool_prop_default_copy(prop_dup, in->pri_prop);
+	rc = pool_prop_default_copy(prop_dup, prop);
 	if (rc) {
-		D_ERROR("daos_prop_default_copy failed.\n");
-		D_GOTO(out_tx, rc);
+		D_ERROR(DF_UUID": daos_prop_default_copy failed\n", DP_UUID(svc->ps_uuid));
+		goto out_prop_dup;
 	}
 
 	/* Initialize the DB and the metadata for this pool. */
@@ -1869,27 +1907,25 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	attr.dsa_order = 8;
 	rc = rdb_tx_create_root(&tx, &attr);
 	if (rc != 0)
-		D_GOTO(out_tx, rc);
-	rc = init_pool_metadata(&tx, &svc->ps_root, in->pri_ntgts, NULL /* group */,
-				in->pri_tgt_ranks, prop_dup, in->pri_ndomains,
-				in->pri_domains.ca_arrays);
+		goto out_prop_dup;
+	rc = init_pool_metadata(&tx, &svc->ps_root, ranks->rl_nr, NULL /* group */, ranks,
+				prop_dup, ndomains, domains);
 	if (rc != 0)
-		D_GOTO(out_tx, rc);
-	rc = ds_cont_init_metadata(&tx, &svc->ps_root, in->pri_op.pi_uuid);
+		goto out_prop_dup;
+	rc = ds_cont_init_metadata(&tx, &svc->ps_root, svc->ps_uuid);
 	if (rc != 0)
-		D_GOTO(out_tx, rc);
+		goto out_prop_dup;
 
 	rc = rdb_tx_commit(&tx);
-	if (rc != 0)
-		D_GOTO(out_tx, rc);
 
-out_tx:
+out_prop_dup:
 	daos_prop_free(prop_dup);
+out_tx:
 	ds_cont_unlock_metadata(svc->ps_cont_svc);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		goto out_svc;
 
 	if (svc->ps_rsvc.s_state == DS_RSVC_UP_EMPTY) {
 		/*
@@ -1899,13 +1935,12 @@ out_tx:
 		 * call yet, we should call pool_svc_step_up() to finish
 		 * stepping up.
 		 */
-		D_DEBUG(DF_DSMS, DF_UUID": trying to finish stepping up\n",
-			DP_UUID(in->pri_op.pi_uuid));
+		D_DEBUG(DB_MD, DF_UUID": trying to finish stepping up\n", DP_UUID(svc->ps_uuid));
 		rc = pool_svc_step_up_cb(&svc->ps_rsvc);
 		if (rc != 0) {
 			D_ASSERT(rc != DER_UNINIT);
 			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
-			D_GOTO(out_svc, rc);
+			goto out_svc;
 		}
 		svc->ps_rsvc.s_state = DS_RSVC_UP;
 		ABT_cond_broadcast(svc->ps_rsvc.s_state_cv);
@@ -1914,12 +1949,37 @@ out_tx:
 out_mutex:
 	ABT_mutex_unlock(svc->ps_rsvc.s_mutex);
 out_svc:
-	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pro_op.po_hint);
+	ds_rsvc_set_hint(&svc->ps_rsvc, hint);
 	pool_svc_put(svc);
 out:
+	return rc;
+}
+
+void
+ds_pool_create_handler(crt_rpc_t *rpc)
+{
+	struct pool_create_in  *in = crt_req_get(rpc);
+	struct pool_create_out *out = crt_reply_get(rpc);
+	int			rc;
+
+	D_DEBUG(DB_MD, DF_UUID": processing rpc %p\n", DP_UUID(in->pri_op.pi_uuid), rpc);
+
+	if (in->pri_ntgts != in->pri_tgt_ranks->rl_nr) {
+		rc = -DER_PROTO;
+		goto out;
+	}
+	if (in->pri_ndomains != in->pri_domains.ca_count) {
+		rc = -DER_PROTO;
+		goto out;
+	}
+
+	rc = pool_create(in->pri_op.pi_uuid, in->pri_tgt_ranks, in->pri_ndomains,
+			 in->pri_domains.ca_arrays, in->pri_prop, &out->pro_op.po_hint);
+
+out:
 	out->pro_op.po_rc = rc;
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: "DF_RC"\n",
-		DP_UUID(in->pri_op.pi_uuid), rpc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: "DF_RC"\n", DP_UUID(in->pri_op.pi_uuid), rpc,
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
