@@ -39,7 +39,7 @@
 
 #define DAOS_ON_VALGRIND D_ON_VALGRIND
 
-#define DF_OID		DF_U64"."DF_U64
+#define DF_OID		DF_X64"."DF_X64
 #define DP_OID(o)	(o).hi, (o).lo
 
 #define DF_UOID		DF_OID".%u"

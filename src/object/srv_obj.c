@@ -1569,6 +1569,16 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			dcf_corrupt(orw->orw_sgls.ca_arrays,
 				    orw->orw_sgls.ca_count);
 		}
+	} else {
+		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, orwo->orw_iod_csums.ca_arrays,
+					 biod, ioc->ioc_coc->sc_csummer,
+					 orw->orw_iod_array.oia_iod_nr);
+
+		if (rc != 0)
+			D_ERROR(DF_C_UOID_DKEY " verify_bio_csum failed: "
+				DF_RC"\n",
+				DP_C_UOID_DKEY(orw->orw_oid, dkey),
+				DP_RC(rc));
 	}
 	if (obj_rpc_is_fetch(rpc) && create_map) {
 		/* EC degraded fetch converted original iod to replica daos ext,
@@ -3698,14 +3708,14 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 
 		if (rc != 0) {
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
-				D_ERROR("Data Verification failed (object: "
-					DF_OID"): %d\n",
-					DP_OID(oid), rc);
+				D_ERROR("Data Verification failed. obj: "DF_OID", "
+					"akey: "DF_KEY"): %d\n",
+					DP_OID(oid), DP_KEY(&iod->iod_name), rc);
 			} else if (iod->iod_type == DAOS_IOD_ARRAY) {
-				D_ERROR("Data Verification failed (object: "
-					DF_OID ", extent: "DF_RECX"): %d\n",
-					DP_OID(oid), DP_RECX(iod->iod_recxs[i]),
-					rc);
+				D_ERROR("Data Verification failed. obj: "DF_OID ", akey: "DF_KEY", "
+					"extent: "DF_RECX"): %d\n",
+					DP_OID(oid), DP_KEY(&iod->iod_name),
+					DP_RECX(iod->iod_recxs[i]), rc);
 			}
 			break;
 		}
