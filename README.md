@@ -6,7 +6,9 @@
 [![Codespell](https://github.com/daos-stack/daos/actions/workflows/spelling.yml/badge.svg)](https://github.com/daos-stack/daos/actions/workflows/spelling.yml)
 [![Doxygen](https://github.com/daos-stack/daos/actions/workflows/doxygen.yml/badge.svg)](https://github.com/daos-stack/daos/actions/workflows/doxygen.yml)
 
-[![](https://avatars.githubusercontent.com/u/20561043?s=400&u=db7cd0ada987ba59c21c3de5f9e7cffba73c3325&v=4)](https://daos.io)
+<a href="https://docs.daos.io/">
+<img src="https://avatars.githubusercontent.com/u/20561043?s=400&u=db7cd0ada987ba59c21c3de5f9e7cffba73c3325&v=4" width="200" height="200">
+</a>
 
 ## What is DAOS?
 
