@@ -6,7 +6,7 @@
 [![Codespell](https://github.com/daos-stack/daos/actions/workflows/spelling.yml/badge.svg)](https://github.com/daos-stack/daos/actions/workflows/spelling.yml)
 [![Doxygen](https://github.com/daos-stack/daos/actions/workflows/doxygen.yml/badge.svg)](https://github.com/daos-stack/daos/actions/workflows/doxygen.yml)
 
-[![](./docs/daos_logo_wh.png)](https://daos.io)
+[![](https://avatars.githubusercontent.com/u/20561043?s=400&u=db7cd0ada987ba59c21c3de5f9e7cffba73c3325&v=4)](https://daos.io)
 
 ## What is DAOS?
 
@@ -32,7 +32,6 @@ information.
 ## Documentation
 
 The DAOS documentation is available [online](https://docs.daos.io/latest).
-
 More information can also be found on the [wiki](http://wiki.daos.io).
 
 ## Contacts
@@ -48,6 +47,7 @@ An invitation to join the slack workspace is automatically sent when joining
 the community [mailing list](https://daos.groups.io/g/daos).
 
 DAOS is a SODA Foundation project.
+
 <a href="https://sodafoundation.io/">
 <img src="https://sodafoundation.io/wp-content/uploads/2020/01/SODA_logo_outline_color_800x800.png"  width="200" height="200">
 </a>
