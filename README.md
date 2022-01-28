@@ -2,15 +2,11 @@
 
 [![License](https://img.shields.io/badge/License-BSD--2--Clause--Patent-blue.svg)](./LICENSE)
 [![Coverity Scan Build Status](https://img.shields.io/coverity/scan/3015.svg)](https://scan.coverity.com/projects/daos-stack-daos)
-[![Build](https://github.com/daos-stack/daos/actions/workflows/ci2.yml/badge.svg)]
-[![Codespell](https://github.com/daos-stack/daos/actions/workflows/spelling.yml/badge.svg)]
-[![Doxygen](https://github.com/daos-stack/daos/actions/workflows/doxygen.yml/badge.svg)]
+[![Build](https://github.com/daos-stack/daos/actions/workflows/ci2.yml/badge.svg)](https://github.com/daos-stack/daos/actions/workflows/ci2.yml)
+[![Codespell](https://github.com/daos-stack/daos/actions/workflows/spelling.yml/badge.svg)](https://github.com/daos-stack/daos/actions/workflows/spelling.yml)
+[![Doxygen](https://github.com/daos-stack/daos/actions/workflows/doxygen.yml/badge.svg)](https://github.com/daos-stack/daos/actions/workflows/doxygen.yml)
 
-<p class="aligncenter">
-<a href="https://daos.io">
-<img src="https://avatars.githubusercontent.com/u/20561043?s=400&u=db7cd0ada987ba59c21c3de5f9e7cffba73c3325&v=4"  width="200" height="200">
-</a>
-</p>
+![https://daos.io](https://avatars.githubusercontent.com/u/20561043?s=400&u=db7cd0ada987ba59c21c3de5f9e7cffba73c3325&v=4)
 
 ## What is DAOS?
 
