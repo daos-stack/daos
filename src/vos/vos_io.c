@@ -2252,13 +2252,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
 
+	umem = vos_ioc2umm(ioc);
+
 	if (err != 0)
 		goto abort;
 
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
-
-	umem = vos_ioc2umm(ioc);
 
 	err = vos_tx_begin(dth, umem);
 	if (err != 0)
@@ -2316,6 +2316,15 @@ abort:
 				  ioc->ic_bound)) {
 			err = -DER_TX_RESTART;
 		}
+	}
+
+	if (err == 0 && ioc->ic_epr.epr_hi > ioc->ic_obj->obj_df->vo_max_write) {
+		if (DAOS_ON_VALGRIND)
+			err = umem_tx_xadd_ptr(umem, &ioc->ic_obj->obj_df->vo_max_write,
+					       sizeof(ioc->ic_obj->obj_df->vo_max_write),
+					       POBJ_XADD_NO_SNAPSHOT);
+		if (err == 0)
+			ioc->ic_obj->obj_df->vo_max_write = ioc->ic_epr.epr_hi;
 	}
 
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -252,6 +252,8 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 	}
 	obj = val_iov.iov_buf;
+	/** Since we just allocated it, we can save a tx_add later to set this */
+	obj->vo_max_write = epoch;
 
 	vos_ilog_ts_ignore(vos_cont2umm(cont), &obj->vo_ilog);
 	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
@@ -621,8 +623,8 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 	it_entry->ie_child_type = VOS_ITER_DKEY;
 
-	vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
-			     &it_entry->ie_last_update);
+	it_entry->ie_last_update = obj->vo_max_write;
+
 	return 0;
 }
 
