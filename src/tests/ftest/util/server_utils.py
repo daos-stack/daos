@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -356,18 +356,18 @@ class DaosServerManager(SubprocessManager):
                 "Failed to start servers before format: {}".format(
                     error)) from error
 
-    def detect_engine_start(self, host_qty=None):
+    def detect_engine_start(self, hosts_qty=None):
         """Detect when all the engines have started.
 
         Args:
-            host_qty (int): number of servers expected to have been started.
+            hosts_qty (int): number of servers expected to have been started.
 
         Raises:
             ServerFailed: if there was an error starting the servers after
                 formatting.
 
         """
-        if host_qty is None:
+        if hosts_qty is None:
             hosts_qty = len(self._hosts)
 
         if self.detect_start_via_dmg:
@@ -409,7 +409,8 @@ class DaosServerManager(SubprocessManager):
         #   - the expected number of pattern matches are detected (success)
         #   - the time out is reached (failure)
         #   - the subprocess is no longer running (failure)
-        while not complete and not timed_out and sub_process.poll() is None:
+        while not complete and not timed_out \
+                and (sub_process is None or sub_process.poll() is None):
             detected = self.detect_engine_states(expected_states)
             complete = detected == self.manager.job.pattern_count
             timed_out = time.time() - start > self.manager.job.pattern_timeout.value
