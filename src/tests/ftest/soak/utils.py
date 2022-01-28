@@ -18,7 +18,7 @@ from dfuse_utils import Dfuse
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
-    run_pcmd, get_clush_command
+    run_pcmd
 import slurm_utils
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
