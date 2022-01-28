@@ -27,7 +27,7 @@
 /*
  * Aggregation of pool/container/object/keys disk format change.
  */
-#define DS_POOL_GLOBAL_VERSION		1
+#define DS_POOL_GLOBAL_VERSION		2
 
 /*
  * Pool object

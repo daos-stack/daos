@@ -94,6 +94,7 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 		    entry->dpe_type == DAOS_PROP_CO_OWNER ||
 		    entry->dpe_type == DAOS_PROP_PO_OWNER_GROUP ||
 		    entry->dpe_type == DAOS_PROP_CO_OWNER_GROUP ||
+		    entry->dpe_type == DAOS_PROP_PO_PERF_DOMAIN ||
 		    entry->dpe_type == DAOS_PROP_PO_POLICY) {
 			rc = crt_proc_d_string_t(proc, proc_op,
 						 &entry->dpe_str);

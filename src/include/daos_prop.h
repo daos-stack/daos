@@ -98,6 +98,10 @@ enum daos_pool_props {
 	 * Pool upgrade status.
 	 */
 	DAOS_PROP_PO_UPGRADE_STATUS,
+	/**
+	 * The pool performance domain
+	 */
+	DAOS_PROP_PO_PERF_DOMAIN,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -133,6 +137,11 @@ enum {
 	DAOS_UPGRADE_STATUS_COMPLETED = 2,
 	DAOS_UPGRADE_STATUS_FAILED = 3,
 };
+
+/**
+ * default performance domain is root
+ */
+#define DAOS_PROP_PO_PERF_DOMAIN_DEFAULT "root"
 
 /**
  * Number of pool property types
@@ -512,6 +521,16 @@ daos_label_is_valid(const char *label)
 
 /* default policy string */
 #define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
+
+/**
+ * Check if DAOS pool performance domain string is valid, string
+ * has same requirement as label.
+ */
+static inline bool
+daos_perf_domain_is_valid(const char *perf_domain)
+{
+	return daos_label_is_valid(perf_domain);
+}
 
 /** daos properties, for pool or container */
 typedef struct {

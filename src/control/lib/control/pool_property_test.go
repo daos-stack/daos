@@ -206,6 +206,17 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "deadd00d",
 			expErr: errors.New("invalid"),
 		},
+		"perf_domain-valid": {
+			name:    "perf_domain",
+			value:   "valid",
+			expStr:  "perf_domain:valid",
+			expJson: []byte(`{"name":"perf_domain","description":"Pool performance domain","value":"valid"}`),
+		},
+		"perf_domain-invalid": {
+			name:   "perf_domain",
+			value:  "bad domain",
+			expErr: errors.New("invalid perf domain"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			prop, err := control.PoolProperties().GetProperty(tc.name)

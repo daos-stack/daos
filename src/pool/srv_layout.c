@@ -38,6 +38,7 @@ RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
 RDB_STRING_KEY(ds_pool_prop_, redun_fac);
 RDB_STRING_KEY(ds_pool_prop_, ec_pda);
 RDB_STRING_KEY(ds_pool_prop_, rp_pda);
+RDB_STRING_KEY(ds_pool_prop_, perf_domain);
 RDB_STRING_KEY(ds_pool_attr_, user);
 
 /** default properties, should cover all optional pool properties */
@@ -89,7 +90,10 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_PO_UPGRADE_STATUS,
 		.dpe_val	= DAOS_UPGRADE_STATUS_NOT_STARTED,
-	}
+	}, {
+		.dpe_type	= DAOS_PROP_PO_PERF_DOMAIN,
+		.dpe_str	= DAOS_PROP_PO_PERF_DOMAIN_DEFAULT,
+ 	}
 };
 
 daos_prop_t pool_prop_default = {

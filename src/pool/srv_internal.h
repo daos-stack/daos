@@ -56,6 +56,7 @@ struct pool_iv_prop {
 	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		pip_policy_str[DAOS_PROP_POLICYSTR_MAX_LEN];
+	char		pip_perf_domain[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
 	uint64_t	pip_reclaim;

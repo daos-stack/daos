@@ -263,6 +263,13 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			if (entry_def->dpe_str == NULL)
 				return -DER_NOMEM;
 			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			D_FREE(entry_def->dpe_str);
+			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
+			if (entry_def->dpe_str == NULL)
+				return -DER_NOMEM;
+			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
 				struct daos_acl *acl = entry->dpe_val_ptr;
@@ -438,6 +445,18 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			val32 = entry->dpe_val;
 			d_iov_set(&value, &val32, sizeof(val32));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_upgrade_status,
+					   &value);
+			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			if (entry->dpe_str == NULL ||
+			    strlen(entry->dpe_str) == 0) {
+				entry = daos_prop_entry_get(&pool_prop_default,
+							    entry->dpe_type);
+				D_ASSERT(entry != NULL);
+			}
+			d_iov_set(&value, entry->dpe_str,
+				  strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_perf_domain,
 					   &value);
 			break;
 		default:
@@ -2107,6 +2126,35 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 
+	if (bits & DAOS_PO_QUERY_PROP_PERF_DOMAIN) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_perf_domain,
+				   &value);
+		if (rc == -DER_NONEXIST && global_ver < 2) {
+			rc = 0;
+			D_STRNDUP(prop->dpp_entries[idx].dpe_str,
+				  DAOS_PROP_PO_PERF_DOMAIN_DEFAULT,
+				  strlen(DAOS_PROP_PO_PERF_DOMAIN_DEFAULT));
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+			goto skip;
+		} else  if (rc != 0) {
+			return rc;
+		}
+		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
+			D_ERROR("bad perf domain length %zu (> %d).\n",
+				value.iov_len, DAOS_PROP_LABEL_MAX_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+skip:
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_PERF_DOMAIN;
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
+		idx++;
+	}
+
 	return 0;
 }
 
@@ -3166,6 +3214,17 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 				break;
 			case DAOS_PROP_PO_SVC_LIST:
 				break;
+			case DAOS_PROP_PO_PERF_DOMAIN:
+				D_ASSERT(strlen(entry->dpe_str) <=
+					 DAOS_PROP_LABEL_MAX_LEN);
+				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
+					    DAOS_PROP_LABEL_MAX_LEN) != 0) {
+					D_ERROR("mismatch %s - %s.\n",
+						entry->dpe_str,
+						iv_entry->dpe_str);
+					rc = -DER_IO;
+				}
+				break;
 			default:
 				D_ASSERTF(0, "bad dpe_type %d\n",
 					  entry->dpe_type);
@@ -4067,6 +4126,23 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		if (rc) {
 			D_ERROR(DF_UUID": failed to upgrade 'upgrade status' "
 				"of pool, %d.\n", DP_UUID(pool_uuid), rc);
+			D_GOTO(out_free, rc);
+		}
+		need_commit = true;
+	}
+
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_perf_domain, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		d_iov_set(&value, DAOS_PROP_PO_PERF_DOMAIN_DEFAULT,
+			  strlen(DAOS_PROP_PO_PERF_DOMAIN_DEFAULT));
+		rc = rdb_tx_update(tx, &svc->ps_root,
+				   &ds_pool_prop_perf_domain, &value);
+		if (rc != 0) {
+			D_ERROR("failed to write pool performain domain prop, "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out_free, rc);
 		}
 		need_commit = true;

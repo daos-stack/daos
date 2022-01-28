@@ -26,7 +26,7 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_POOL_MD_VERSION 7
+#define DS_POOL_MD_VERSION 8
 
 /* Lowest compatible layout version */
 #define DS_POOL_MD_VERSION_LOW 4
@@ -75,6 +75,7 @@ extern d_iov_t ds_pool_prop_policy;		/* string (tiering policy) */
 extern d_iov_t ds_pool_prop_global_version;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_status;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_global_version;/* uint32_t */
+extern d_iov_t ds_pool_prop_perf_domain;	/* string */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*

@@ -233,6 +233,18 @@ func PoolProperties() PoolPropertyMap {
 				"failed":      daos.PoolUpgradeStatusFailed,
 			},
 		},
+		"perf_domain": {
+			Property: PoolProperty{
+				Number:      daos.PoolPropertyPerfDomain,
+				Description: "Pool performance domain",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					if !daos.PerfDomainIsValid(s) {
+						return nil, errors.Errorf("invalid perf domain %q", s)
+					}
+					return &PoolPropertyValue{s}, nil
+				},
+			},
+		},
 	}
 }
 
