@@ -669,40 +669,27 @@ func TestServer_prepBdevStorage(t *testing.T) {
 // found and doesn't return an error if SPDK fails to init. Emulated NVMe (SPDK AIO mode) should
 // also be covered.
 func TestServer_scanBdevStorage(t *testing.T) {
-	// basic engine configs populated enough to complete validation
-	basicEngineCfg := func(i int) *engine.Config {
-		return engine.MockConfig().WithFabricInterfacePort(20000).
-			WithPinnedNumaNode(uint(i)).WithFabricInterface(fmt.Sprintf("ib%d", i))
-	}
-	scmTier := func(i int) *storage.TierConfig {
-		return storage.NewTierConfig().WithStorageClass(storage.ClassDcpm.String()).
-			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", i)).
-			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", i))
-	}
-	//	nvmeTier := func(i int) *storage.TierConfig {
-	//		return storage.NewTierConfig().WithStorageClass(storage.ClassNvme.String()).
-	//			WithBdevDeviceList(common.MockPCIAddr(int32(i)))
-	//	}
-	scmEngine := func(i int) *engine.Config {
-		return basicEngineCfg(i).WithStorage(scmTier(i)).WithTargetCount(8)
-	}
-	//	nvmeEngine := func(i int) *engine.Config {
-	//		return basicEngineCfg(i).WithStorage(scmTier(i), nvmeTier(i)).WithTargetCount(16)
-	//	}
-
 	for name, tc := range map[string]struct {
-		srvCfgExtra func(*config.Server) *config.Server
-		bmbc        *bdev.MockBackendConfig
-		expErr      error
+		bmbc   *bdev.MockBackendConfig
+		expErr error
 	}{
 		"spdk fails init": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(scmEngine(0), scmEngine(1))
-			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanErr: errors.New("spdk failed"),
 			},
-			expCalls: 
+		},
+		"bdev in config not found by spdk": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: storage.FaultBdevNotFound(common.MockPCIAddr()),
+			},
+			expErr: storage.FaultBdevNotFound(common.MockPCIAddr()),
+		},
+		"successful scan": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.MockNvmeControllers(1),
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -710,9 +697,6 @@ func TestServer_scanBdevStorage(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
-			if tc.srvCfgExtra != nil {
-				cfg = tc.srvCfgExtra(cfg)
-			}
 
 			// test only with 2M hugepage size
 			if err := cfg.Validate(log, 2048, nil); err != nil {

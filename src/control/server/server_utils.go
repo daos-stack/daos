@@ -29,7 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -268,8 +267,8 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
-		// Return error if configured bdev is missing.
-		if bdev.FaultBdevNotFound().Equals(err) {
+		// Return error if fault code is for BdevNotFound.
+		if storage.FaultBdevNotFound().Equals(err) {
 			return nil, err
 		}
 		// Keep going for other scan related failures.

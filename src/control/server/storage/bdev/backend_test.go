@@ -126,14 +126,14 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 		"missing": {
 			reqAddrList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
 			inCtrlrs:    storage.NvmeControllers{ctrlr1, ctrlr3},
-			expErr:      FaultBdevNotFound(ctrlr2.PciAddr),
+			expErr:      storage.FaultBdevNotFound(ctrlr2.PciAddr),
 		},
 		"vmd devices; vmd not enabled": {
 			reqAddrList: []string{"0000:85:05.5"},
 			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
 				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
 				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
-			expErr: FaultBdevNotFound("0000:85:05.5"),
+			expErr: storage.FaultBdevNotFound("0000:85:05.5"),
 		},
 		"vmd devices; vmd enabled": {
 			vmdEnabled:  true,
