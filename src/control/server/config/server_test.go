@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -470,7 +471,82 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigHelperStreamCountMismatch(1, 4, 0, 9),
 		},
-		"insufficient hugepages": {
+		"out of range hugepages; low": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugePages(-2048)
+			},
+			expErr: FaultConfigNrHugepagesOutOfRange,
+		},
+		"out of range hugepages; high": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugePages(math.MaxInt32 + 1)
+			},
+			expErr: FaultConfigNrHugepagesOutOfRange,
+		},
+		"disabled hugepages; bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugePages(-1).
+					WithEngines(
+						engine.NewConfig().
+							WithStorage(
+								storage.NewTierConfig().
+									WithStorageClass("ram").
+									WithScmRamdiskSize(1).
+									WithScmMountPoint("/foo"),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0"),
+							).
+							WithFabricInterfacePort(1234).
+							WithFabricInterface("eth0").
+							WithTargetCount(8).
+							WithPinnedNumaNode(0),
+					)
+			},
+			expErr: FaultConfigHugepagesDisabled,
+		},
+		"disabled hugepages; emulated bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugePages(-1).
+					WithEngines(
+						engine.NewConfig().
+							WithStorage(
+								storage.NewTierConfig().
+									WithStorageClass("ram").
+									WithScmRamdiskSize(1).
+									WithScmMountPoint("/foo"),
+								storage.NewTierConfig().
+									WithStorageClass("file").
+									WithBdevDeviceList("/tmp/daos-bdev").
+									WithBdevFileSize(16),
+							).
+							WithFabricInterfacePort(1234).
+							WithFabricInterface("eth0").
+							WithTargetCount(8).
+							WithPinnedNumaNode(0),
+					)
+			},
+			expErr: FaultConfigHugepagesDisabled,
+		},
+		"disabled hugepages; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugePages(-1).
+					WithEngines(
+						engine.NewConfig().
+							WithStorage(
+								storage.NewTierConfig().
+									WithStorageClass("ram").
+									WithScmRamdiskSize(1).
+									WithScmMountPoint("/foo"),
+							).
+							WithFabricInterfacePort(1234).
+							WithFabricInterface("eth0").
+							WithTargetCount(8).
+							WithPinnedNumaNode(0),
+					)
+			},
+		},
+		"insufficient hugepages set in config": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugePages(2048).
 					WithEngines(
@@ -527,6 +603,49 @@ func TestServerConfig_Validation(t *testing.T) {
 						).
 						WithStorageConfigOutputPath("/foo/daos_nvme.conf").
 						WithStorageVosEnv("NVME").
+						WithFabricInterfacePort(1234).
+						WithFabricInterface("eth0").
+						WithTargetCount(8).
+						WithPinnedNumaNode(0),
+				),
+		},
+		"calculated hugepages; emulated bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(
+					engine.NewConfig().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("file").
+								WithBdevDeviceList("/tmp/daos-bdev").
+								WithBdevFileSize(16),
+						).
+						WithFabricInterfacePort(1234).
+						WithFabricInterface("eth0").
+						WithTargetCount(8).
+						WithPinnedNumaNode(0),
+				)
+			},
+			expConfig: baseCfg().
+				WithAccessPoints("hostname1:10001").
+				WithNrHugePages(4096).
+				WithEngines(
+					engine.NewConfig().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/foo"),
+							storage.NewTierConfig().
+								WithStorageClass("file").
+								WithBdevDeviceList("/tmp/daos-bdev").
+								WithBdevFileSize(16),
+						).
+						WithStorageConfigOutputPath("/foo/daos_nvme.conf").
+						WithStorageVosEnv("AIO").
 						WithFabricInterfacePort(1234).
 						WithFabricInterface("eth0").
 						WithTargetCount(8).
