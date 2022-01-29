@@ -29,6 +29,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -261,16 +262,22 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 }
 
 // scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
-func scanBdevStorage(srv *server) *storage.BdevScanResponse {
+func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList: cfgGetBdevs(srv.cfg),
+		DeviceList:  cfgGetBdevs(srv.cfg),
+		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
-		srv.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan Failed"))
-		return &storage.BdevScanResponse{}
+		// Return error if configured bdev is missing.
+		if bdev.FaultBdevNotFound().Equals(err) {
+			return nil, err
+		}
+		// Keep going for other scan related failures.
+		srv.log.Errorf("%s\n", errors.Wrap(err, "NVMe Scan Failed"))
+		return &storage.BdevScanResponse{}, nil
 	}
 
-	return nvmeScanResp
+	return nvmeScanResp, nil
 }
 
 // Minimum recommended number of hugepages has already been calculated and set in config so verify

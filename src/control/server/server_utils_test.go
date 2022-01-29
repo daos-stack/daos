@@ -584,6 +584,124 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
+//		"emulated nvme: AIO-file": 
+//		"emulated nvme: AIO-kdev": 
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
+			if tc.srvCfgExtra != nil {
+				cfg = tc.srvCfgExtra(cfg)
+			}
+
+			// test only with 2M hugepage size
+			if err := cfg.Validate(log, 2048, nil); err != nil {
+				t.Fatal(err)
+			}
+
+			srv, err := newServer(log, cfg, &system.FaultDomain{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			mbb := bdev.NewMockBackend(tc.bmbc)
+			mbp := bdev.NewProvider(log, mbb)
+			sp := scm.NewMockSysProvider(log, nil)
+
+			srv.ctlSvc = &ControlService{
+				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
+					sp,
+					scm.NewProvider(log, scm.NewMockBackend(nil), sp),
+					mbp),
+				srvCfg: cfg,
+			}
+
+			gotErr := prepBdevStorage(srv, !tc.iommuDisabled)
+
+			mbb.RLock()
+			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls); diff != "" {
+				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+			}
+			mbb.RUnlock()
+
+			mbb.RLock()
+			if diff := cmp.Diff(tc.expResetCalls, mbb.ResetCalls); diff != "" {
+				t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
+			}
+			mbb.RUnlock()
+
+			common.CmpErr(t, tc.expPrepErr, gotErr)
+			if tc.expPrepErr != nil {
+				return
+			}
+
+			if len(srv.cfg.Engines) == 0 {
+				return
+			}
+
+			mockGetHugePageInfo := func() (*common.HugePageInfo, error) {
+				t.Logf("returning %d free hugepages from mock", tc.hugePagesFree)
+				return &common.HugePageInfo{
+					PageSizeKb: 2048,
+					Free:       tc.hugePagesFree,
+				}, tc.getHpiErr
+			}
+
+			runner := engine.NewRunner(log, srv.cfg.Engines[0])
+			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner)
+
+			gotErr = updateMemValues(srv, ei, mockGetHugePageInfo)
+			common.CmpErr(t, tc.expMemChkErr, gotErr)
+			if tc.expMemChkErr != nil {
+				return
+			}
+
+			common.AssertEqual(t, tc.expMemSize, ei.runner.GetConfig().MemSize,
+				"unexpected memory size")
+			common.AssertEqual(t, tc.expHugePageSize, ei.runner.GetConfig().HugePageSz,
+				"unexpected huge page size")
+		})
+	}
+}
+
+// TestServer_scanBdevStorage validates that an error it returned in the case that a SSD is not
+// found and doesn't return an error if SPDK fails to init. Emulated NVMe (SPDK AIO mode) should
+// also be covered.
+func TestServer_scanBdevStorage(t *testing.T) {
+	// basic engine configs populated enough to complete validation
+	basicEngineCfg := func(i int) *engine.Config {
+		return engine.MockConfig().WithFabricInterfacePort(20000).
+			WithPinnedNumaNode(uint(i)).WithFabricInterface(fmt.Sprintf("ib%d", i))
+	}
+	scmTier := func(i int) *storage.TierConfig {
+		return storage.NewTierConfig().WithStorageClass(storage.ClassDcpm.String()).
+			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", i)).
+			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", i))
+	}
+	nvmeTier := func(i int) *storage.TierConfig {
+		return storage.NewTierConfig().WithStorageClass(storage.ClassNvme.String()).
+			WithBdevDeviceList(common.MockPCIAddr(int32(i)))
+	}
+	scmEngine := func(i int) *engine.Config {
+		return basicEngineCfg(i).WithStorage(scmTier(i)).WithTargetCount(8)
+	}
+	nvmeEngine := func(i int) *engine.Config {
+		return basicEngineCfg(i).WithStorage(scmTier(i), nvmeTier(i)).WithTargetCount(16)
+	}
+
+	for name, tc := range map[string]struct {
+		srvCfgExtra func(*config.Server) *config.Server
+		expErr      error
+	}{
+		"vfio disabled": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithDisableVFIO(true).
+					WithEngines(nvmeEngine(0), nvmeEngine(1))
+			},
+			expPrepErr: FaultVfioDisabled,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
