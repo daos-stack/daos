@@ -15,16 +15,17 @@
 struct d_slab_reg {
 	/* Perform any one-time setup or assigning constants.
 	 */
-	void	(*sr_init)(void *, void *);
+	void	(*sr_init)(void *, void *, void *);
 
 	/* Prepare an object for use by freeing any old data
 	 * and allocating new data.
 	 * Returns true on success.
 	 */
-	bool	(*sr_reset)(void *);
+	bool	(*sr_reset)(void *, void *);
 
 	/* Called once at teardown */
-	void	(*sr_release)(void *);
+	void	(*sr_release)(void *, void *);
+	void	*sr_type_arg;
 	char	*sr_name;
 	int	sr_size;
 	int	sr_offset;
@@ -41,7 +42,7 @@ struct d_slab_reg {
  * however once max_desc is reached no more descriptors will be created.
  */
 
-#define POOL_TYPE_INIT(itype, imember) .sr_size = sizeof(struct itype),	\
+#define SLAB_TYPE_INIT(itype, imember) .sr_size = sizeof(struct itype),	\
 		.sr_offset = offsetof(struct itype, imember),		\
 		.sr_name = #itype,
 
@@ -98,8 +99,10 @@ struct d_slab_type *
 d_slab_register(struct d_slab *, struct d_slab_reg *);
 
 /* Allocate a data structure in performant way */
-void *
-d_slab_acquire(struct d_slab_type *);
+#define d_slab_acquire(type, retptr)	\
+	d_slab_acquire_(type, ((void **)retptr))
+int
+d_slab_acquire_(struct d_slab_type *, void **retptr);
 
 /* Release a data structure in a performant way */
 void

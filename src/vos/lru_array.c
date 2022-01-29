@@ -74,9 +74,13 @@ lrua_array_alloc_one(struct lru_array *array, struct lru_sub *sub)
 	uint32_t		 idx;
 
 	rec_size = sizeof(*entry) + array->la_payload_size;
-	D_ALLOC(sub->ls_table, rec_size * nr_ents);
-	if (sub->ls_table == NULL)
-		return -DER_NOMEM;
+	if (sub->ls_table == NULL) {
+		D_ALLOC(sub->ls_table, rec_size * nr_ents);
+		if (sub->ls_table == NULL)
+			return -DER_NOMEM;
+	} else {
+		memset(sub->ls_table, 0, rec_size * nr_ents);
+	}
 
 	/** Add newly allocated ones to head of list */
 	d_list_del(&sub->ls_link);
@@ -142,7 +146,7 @@ manual_find_free(struct lru_array *array, struct lru_entry **entryp,
 				/** Remove the entry from the free sub list so
 				 * we stop looking in it.
 				 */
-				d_list_del(&sub->ls_link);
+				d_list_del_init(&sub->ls_link);
 			}
 			return 0;
 		}
@@ -365,4 +369,105 @@ lrua_array_aggregate(struct lru_array *array)
 		d_list_add_tail(&sub->ls_link, &array->la_unused_sub);
 		array_free_one(array, sub);
 	}
+}
+
+static bool
+slab_reset(void *arg, void *type_arg)
+{
+	struct lru_array	*array;
+	struct lru_ref		*ref = arg;
+	struct lru_ref_type	*type = type_arg;
+	struct lru_slab_info	*info = &type->rt_info;
+	struct lru_sub		*sub;
+	int			 rc;
+	int			 i;
+
+	array = ref->lr_array;
+	if (array != NULL)
+		goto reset;
+
+	rc = lrua_array_alloc(&ref->lr_array, info->si_nr_ent, info->si_nr_arrays,
+			      info->si_payload_size, info->si_flags, &info->si_cbs, info->si_arg);
+	if (rc != 0) {
+		ref->lr_array = NULL;
+		return false;
+	}
+
+	return true;
+
+reset:
+	for (i = 0; i < array->la_array_nr; i++) {
+		sub = &array->la_sub[i];
+		if (sub->ls_table == NULL)
+			continue;
+		array_free_one(array, sub);
+		if (!d_list_empty(&sub->ls_link))
+			d_list_del(&sub->ls_link);
+		d_list_add_tail(&sub->ls_link, &array->la_unused_sub);
+	}
+
+	rc = lrua_array_alloc_one(array, &array->la_sub[0]);
+	if (rc != 0) {
+		D_FREE(array);
+		ref->lr_array = NULL;
+		return false;
+	}
+
+	return true;
+}
+
+static void
+slab_release(void *arg, void *type_arg)
+{
+	struct lru_ref		*ref = arg;
+
+	if (ref->lr_array == NULL)
+		return;
+
+	lrua_array_free(ref->lr_array);
+	ref->lr_array = NULL;
+}
+
+int
+lrua_slab_init(struct d_slab *slab, const struct lru_slab_info *info, int max_inflight,
+	       int max_free, struct lru_ref_type **ref_typep)
+{
+	struct lru_ref_type	*ref_type;
+	struct d_slab_reg	 lru_reg = {
+		.sr_init		= NULL,
+		.sr_reset		= slab_reset,
+		.sr_release		= slab_release,
+		.sr_type_arg		= NULL,
+		.sr_max_desc		= max_inflight,
+		.sr_max_free_desc	= max_free,
+		SLAB_TYPE_INIT(lru_ref, lr_link)
+	};
+
+	*ref_typep = NULL;
+
+	D_ALLOC_PTR(ref_type);
+	if (ref_type == NULL)
+		return -DER_NOMEM;
+
+	lru_reg.sr_type_arg = ref_type;
+
+	ref_type->rt_slab_mgr = slab;
+	ref_type->rt_info = *info;
+
+	ref_type->rt_type = d_slab_register(slab, &lru_reg);
+
+	if (ref_type->rt_type == NULL) {
+		D_FREE(ref_type);
+		return -DER_NOMEM;
+	}
+
+	*ref_typep = ref_type;
+
+	return 0;
+}
+
+void
+lrua_slab_fini(struct lru_ref_type *ref_type)
+{
+	D_FREE(ref_type);
 }

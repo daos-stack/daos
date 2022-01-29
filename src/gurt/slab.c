@@ -16,17 +16,17 @@ debug_dump(struct d_slab_type *type)
 {
 	D_TRACE_INFO(type, "DescAlloc type %p '%s'", type,
 		     type->st_reg.sr_name);
-	D_TRACE_DEBUG(DB_ANY, type, "size %d offset %d", type->st_reg.sr_size,
+	D_TRACE_DEBUG(DB_MEM, type, "size %d offset %d", type->st_reg.sr_size,
 		      type->st_reg.sr_offset);
-	D_TRACE_DEBUG(DB_ANY, type, "Count: free %d pending %d total %d",
+	D_TRACE_DEBUG(DB_MEM, type, "Count: free %d pending %d total %d",
 		      type->st_free_count, type->st_pending_count,
 		      type->st_count);
-	D_TRACE_DEBUG(DB_ANY, type, "Calls: init %d reset %d release %d",
+	D_TRACE_DEBUG(DB_MEM, type, "Calls: init %d reset %d release %d",
 		      type->st_init_count, type->st_reset_count,
 		      type->st_release_count);
-	D_TRACE_DEBUG(DB_ANY, type, "OP: init %d reset %d", type->st_op_init,
+	D_TRACE_DEBUG(DB_MEM, type, "OP: init %d reset %d", type->st_op_init,
 		      type->st_op_reset);
-	D_TRACE_DEBUG(DB_ANY, type, "No restock: current %d hwm %d",
+	D_TRACE_DEBUG(DB_MEM, type, "No restock: current %d hwm %d",
 		      type->st_no_restock, type->st_no_restock_hwm);
 }
 
@@ -42,8 +42,8 @@ d_slab_init(struct d_slab *slab, void *arg)
 	if (rc != -DER_SUCCESS)
 		return rc;
 
-	D_TRACE_UP(DB_ANY, slab, arg, "slab");
-	D_TRACE_DEBUG(DB_ANY, slab, "Creating a data slab manager");
+	D_TRACE_UP(DB_MEM, slab, arg, "slab");
+	D_TRACE_DEBUG(DB_MEM, slab, "Creating a data slab manager");
 
 	slab->slab_init = true;
 	slab->slab_arg = arg;
@@ -84,7 +84,7 @@ d_slab_destroy(struct d_slab *slab)
 	if (rc != 0)
 		D_TRACE_ERROR(slab, "Failed to destroy lock %d %s",
 			      rc, strerror(rc));
-	D_TRACE_DOWN(DB_ANY, slab);
+	D_TRACE_DOWN(DB_MEM, slab);
 }
 
 /* Helper function for migrating objects from pending list to free list.
@@ -105,7 +105,7 @@ restock(struct d_slab_type *type, int count)
 
 	if (type->st_reg.sr_max_free_desc != 0 &&
 	    type->st_free_count >= type->st_reg.sr_max_free_desc) {
-		D_TRACE_DEBUG(DB_ANY, type, "free_count %d, max_free_desc %d, "
+		D_TRACE_DEBUG(DB_MEM, type, "free_count %d, max_free_desc %d, "
 			      "cannot append.", type->st_free_count,
 			      type->st_reg.sr_max_free_desc);
 		return 0;
@@ -115,7 +115,7 @@ restock(struct d_slab_type *type, int count)
 		void *ptr = (void *)entry - type->st_reg.sr_offset;
 		bool rcb = true;
 
-		D_TRACE_DEBUG(DB_ANY, type, "Resetting %p", ptr);
+		D_TRACE_DEBUG(DB_MEM, type, "Resetting %p", ptr);
 
 		d_list_del(entry);
 		type->st_pending_count--;
@@ -123,7 +123,7 @@ restock(struct d_slab_type *type, int count)
 		if (type->st_reg.sr_reset) {
 			type->st_reset_count++;
 			reset_calls++;
-			rcb = type->st_reg.sr_reset(ptr);
+			rcb = type->st_reg.sr_reset(ptr, type->st_reg.sr_type_arg);
 		}
 		if (rcb) {
 			d_list_add(entry, &type->st_free_list);
@@ -159,7 +159,7 @@ d_slab_reclaim(struct d_slab *slab)
 	d_list_for_each_entry(type, &slab->slab_list, st_type_list) {
 		d_list_t *entry, *enext;
 
-		D_TRACE_DEBUG(DB_ANY, type, "Resetting type");
+		D_TRACE_DEBUG(DB_MEM, type, "Resetting type");
 
 		D_MUTEX_LOCK(&type->st_lock);
 
@@ -173,7 +173,7 @@ d_slab_reclaim(struct d_slab *slab)
 			void *ptr = (void *)entry - type->st_reg.sr_offset;
 
 			if (type->st_reg.sr_release) {
-				type->st_reg.sr_release(ptr);
+				type->st_reg.sr_release(ptr, type->st_reg.sr_type_arg);
 				type->st_release_count++;
 			}
 
@@ -182,7 +182,7 @@ d_slab_reclaim(struct d_slab *slab)
 			type->st_free_count--;
 			type->st_count--;
 		}
-		D_TRACE_DEBUG(DB_ANY, type, "%d in use", type->st_count);
+		D_TRACE_DEBUG(DB_MEM, type, "%d in use", type->st_count);
 		if (type->st_count) {
 			D_TRACE_INFO(type,
 				     "Active descriptors (%d) of type '%s'",
@@ -210,10 +210,10 @@ create(struct d_slab_type *type)
 
 	type->st_init_count++;
 	if (type->st_reg.sr_init)
-		type->st_reg.sr_init(ptr, type->st_slab->slab_arg);
+		type->st_reg.sr_init(ptr, type->st_slab->slab_arg, type->st_reg.sr_type_arg);
 
 	if (type->st_reg.sr_reset) {
-		if (!type->st_reg.sr_reset(ptr)) {
+		if (!type->st_reg.sr_reset(ptr, type->st_reg.sr_type_arg)) {
 			D_TRACE_INFO(type, "entry %p failed reset", ptr);
 			D_FREE(ptr);
 			return NULL;
@@ -272,7 +272,7 @@ d_slab_register(struct d_slab *slab, struct d_slab_reg *reg)
 		return NULL;
 	}
 
-	D_TRACE_UP(DB_ANY, type, slab, reg->sr_name);
+	D_TRACE_UP(DB_MEM, type, slab, reg->sr_name);
 
 	D_INIT_LIST_HEAD(&type->st_free_list);
 	D_INIT_LIST_HEAD(&type->st_pending_list);
@@ -311,12 +311,13 @@ d_slab_register(struct d_slab *slab, struct d_slab_reg *reg)
  * This is to be considered on the critical path so should be as lightweight
  * as posslble.
  */
-void *
-d_slab_acquire(struct d_slab_type *type)
+int
+d_slab_acquire_(struct d_slab_type *type, void **retptr)
 {
 	void		*ptr = NULL;
 	d_list_t	*entry;
-	bool		at_limit = false;
+	int		 rc;
+	bool		 at_limit = false;
 
 	D_MUTEX_LOCK(&type->st_lock);
 
@@ -347,13 +348,18 @@ d_slab_acquire(struct d_slab_type *type)
 
 	D_MUTEX_UNLOCK(&type->st_lock);
 
-	if (ptr)
+	*retptr = ptr;
+	if (ptr) {
 		D_TRACE_DEBUG(DB_ANY, type, "Using %p", ptr);
-	else if (at_limit)
+		rc = 0;
+	} else if (at_limit) {
 		D_TRACE_INFO(type, "Descriptor limit hit");
-	else
+		rc = -DER_AGAIN;
+	} else {
 		D_TRACE_WARN(type, "Failed to allocate for type");
-	return ptr;
+		rc = -DER_NOMEM;
+	}
+	return rc;
 }
 
 /* Release an object ready for reuse
@@ -367,7 +373,6 @@ d_slab_release(struct d_slab_type *type, void *ptr)
 {
 	d_list_t *entry = ptr + type->st_reg.sr_offset;
 
-	D_TRACE_DOWN(DB_ANY, ptr);
 	D_MUTEX_LOCK(&type->st_lock);
 	type->st_pending_count++;
 	d_list_add_tail(entry, &type->st_pending_list);
@@ -388,7 +393,7 @@ d_slab_release(struct d_slab_type *type, void *ptr)
 void
 d_slab_restock(struct d_slab_type *type)
 {
-	D_TRACE_DEBUG(DB_ANY, type, "Count (%d/%d/%d)", type->st_pending_count,
+	D_TRACE_DEBUG(DB_MEM, type, "Count (%d/%d/%d)", type->st_pending_count,
 		      type->st_free_count, type->st_count);
 
 	D_MUTEX_LOCK(&type->st_lock);

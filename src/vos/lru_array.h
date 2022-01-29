@@ -14,6 +14,7 @@
 #define __LRU_ARRAY__
 
 #include <daos/common.h>
+#include <gurt/slab.h>
 
 struct lru_callbacks {
 	/** Called when an entry is going to be evicted from cache */
@@ -93,6 +94,60 @@ struct lru_array {
 	/** Allocated subarrays */
 	struct lru_sub		 la_sub[0];
 };
+
+/** Information describing the LRU arrays in a slab */
+struct lru_slab_info {
+	/** Optional callbacks for the LRU array */
+	struct lru_callbacks	 si_cbs;
+	/** Optional argument for the LRU array callbacks */
+	void			*si_arg;
+	/** The number of entries in the array */
+	uint32_t		 si_nr_ent;
+	/** The number of subarrays in the array */
+	uint32_t		 si_nr_arrays;
+	/** Payload size */
+	uint16_t		 si_payload_size;
+	/** LRU array flags */
+	uint32_t		 si_flags;
+};
+
+/** An LRU slab payload */
+struct lru_ref {
+	d_list_t		 lr_link;
+	/** Pointer to the array. It should always be allocated when one is acquired */
+	struct lru_array	*lr_array;
+};
+
+/** Returned pointer to use to acquire/release an LRU array */
+struct lru_ref_type {
+	/** Pointer to the slab manager */
+	struct d_slab		*rt_slab_mgr;
+	/** The slab type, returned from d_slab_reg */
+	struct d_slab_type	*rt_type;
+	/** Cached info passed into init */
+	struct lru_slab_info	 rt_info;
+};
+
+/** Register a type of LRU array to be allocated using a slab
+ *
+ * \param slab[in]		The initialized slab manager
+ * \param info[in]		Array allocation information
+ * \param max_inflight[in]	Maximum number of allocated LRU arrays
+ * \param max_free[in]		Maximum allocated arrays to keep
+ * \param ref_type[out]		Returned handle
+ *
+ * \return 0 on success, failure otherwise
+ */
+int
+lrua_slab_init(struct d_slab *slab, const struct lru_slab_info *info, int max_inflight,
+	       int max_free, struct lru_ref_type **ref_type);
+
+/** Free the data associated with a the LRU slab type
+ *
+ * \param ref_type[in]	 handle
+ */
+void
+lrua_slab_fini(struct lru_ref_type *ref_type);
 
 /** Internal converter for real index to sub array index */
 #define lrua_idx2sub(array, idx)	\
