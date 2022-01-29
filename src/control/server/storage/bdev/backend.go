@@ -294,6 +294,9 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
+	// Only filter devices if all have a PCI address, avoid validating the presence of emulated
+	// NVMe devices as they may not exist yet e.g. for SPDK AIO-file the devices are created on
+	// format.
 	needDevs := req.DeviceList.PCIAddressSetPtr()
 	spdkOpts := &spdk.EnvOptions{
 		PCIAllowList: needDevs,
@@ -302,7 +305,7 @@ func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 
 	restoreAfterInit, err := sb.binding.init(sb.log, spdkOpts)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to init nvme")
 	}
 	defer restoreAfterInit()
 
