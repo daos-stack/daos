@@ -148,6 +148,8 @@ int
 placement_tests_run(bool verbose);
 int
 pda_tests_run(bool verbose);
+int
+dist_tests_run(bool verbose, uint32_t num_obj, int obj_class);
 
 static inline void
 verbose_msg(char *msg, ...)
