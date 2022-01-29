@@ -625,7 +625,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithPinnedNumaNode(0),
 				),
 		},
-		"zero hugepages set in config": {
+		"zero hugepages set in config; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
 					engine.NewConfig().
