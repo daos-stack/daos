@@ -70,7 +70,7 @@ server operations:
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
 |Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
+|[Privileged Helper](https://docs.daos.io/v2.2/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
