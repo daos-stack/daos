@@ -98,11 +98,6 @@ server_config_val: !mux
       - "nr_hugepages"
       - -100
       - "FAIL"
-  nr_hugepages_small_negative_int:
-    config_val:
-      - "nr_hugepages"
-      - -1
-      - "PASS"
   nr_hugepages_positive_int:
     config_val:
       - "nr_hugepages"

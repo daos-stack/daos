@@ -546,7 +546,7 @@ func TestServerConfig_Validation(t *testing.T) {
 					)
 			},
 		},
-		"insufficient hugepages set in config": {
+		"insufficient hugepages set in config; bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugePages(2048).
 					WithEngines(
@@ -568,7 +568,64 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigInsufficientHugePages(4096, 2048),
 		},
-		"calculated hugepages": {
+		"insufficient hugepages set in config; emulated bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugePages(2048).
+					WithEngines(
+						engine.NewConfig().
+							WithStorage(
+								storage.NewTierConfig().
+									WithStorageClass("ram").
+									WithScmRamdiskSize(1).
+									WithScmMountPoint("/foo"),
+								storage.NewTierConfig().
+									WithStorageClass("file").
+									WithBdevDeviceList("/tmp/daos-bdev").
+									WithBdevFileSize(16),
+							).
+							WithFabricInterfacePort(1234).
+							WithFabricInterface("eth0").
+							WithTargetCount(8).
+							WithPinnedNumaNode(0),
+					)
+			},
+			expErr: FaultConfigInsufficientHugePages(4096, 2048),
+		},
+		"insufficient hugepages set in config; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithNrHugePages(2048).
+					WithEngines(
+						engine.NewConfig().
+							WithStorage(
+								storage.NewTierConfig().
+									WithStorageClass("ram").
+									WithScmRamdiskSize(1).
+									WithScmMountPoint("/foo"),
+							).
+							WithFabricInterfacePort(1234).
+							WithFabricInterface("eth0").
+							WithTargetCount(8).
+							WithPinnedNumaNode(0),
+					)
+			},
+			expConfig: baseCfg().
+				WithAccessPoints("hostname1:10001").
+				WithNrHugePages(2048).
+				WithEngines(
+					engine.NewConfig().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/foo"),
+						).
+						WithFabricInterfacePort(1234).
+						WithFabricInterface("eth0").
+						WithTargetCount(8).
+						WithPinnedNumaNode(0),
+				),
+		},
+		"zero hugepages set in config": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
 					engine.NewConfig().
@@ -609,7 +666,7 @@ func TestServerConfig_Validation(t *testing.T) {
 						WithPinnedNumaNode(0),
 				),
 		},
-		"calculated hugepages; emulated bdevs configured": {
+		"zero hugepages set in config; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
 					engine.NewConfig().
@@ -646,6 +703,38 @@ func TestServerConfig_Validation(t *testing.T) {
 						).
 						WithStorageConfigOutputPath("/foo/daos_nvme.conf").
 						WithStorageVosEnv("AIO").
+						WithFabricInterfacePort(1234).
+						WithFabricInterface("eth0").
+						WithTargetCount(8).
+						WithPinnedNumaNode(0),
+				),
+		},
+		"zero hugepages set in config; no bdevs configured": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(
+					engine.NewConfig().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/foo"),
+						).
+						WithFabricInterfacePort(1234).
+						WithFabricInterface("eth0").
+						WithTargetCount(8).
+						WithPinnedNumaNode(0),
+				)
+			},
+			expConfig: baseCfg().
+				WithAccessPoints("hostname1:10001").
+				WithEngines(
+					engine.NewConfig().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/foo"),
+						).
 						WithFabricInterfacePort(1234).
 						WithFabricInterface("eth0").
 						WithTargetCount(8).
