@@ -757,6 +757,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		goto failed;
 	}
 
+	pool->vp_metrics = metrics;
 	if (bio_nvme_configured() && pool_df->pd_nvme_sz != 0) {
 		struct vea_unmap_context	 unmap_ctxt;
 		struct vos_pool_metrics		*vp_metrics = metrics;
