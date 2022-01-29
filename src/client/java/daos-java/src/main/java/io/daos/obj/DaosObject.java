@@ -543,6 +543,10 @@ public class DaosObject {
     }
   }
 
+  public DaosObjectId getOid() {
+    return oid;
+  }
+
   /**
    * close object if it's open.
    *
