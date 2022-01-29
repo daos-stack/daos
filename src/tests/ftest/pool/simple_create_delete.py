@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2017-2021 Intel Corporation.
+  (C) Copyright 2017-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -23,8 +23,9 @@ class SimpleCreateDeleteTest(TestWithServers):
         Test basic pool creation.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=tiny
-        :avocado: tags=pool,smoke,simple_create
+        :avocado: tags=vm
+        :avocado: tags=pool,smoke
+        :avocado: tags=simple_create
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -44,9 +45,6 @@ class SimpleCreateDeleteTest(TestWithServers):
         else:
             gid = gidlist[0]
         expected_for_param.append(gidlist[1])
-
-        setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        expected_for_param.append(setidlist[1])
 
         expected_result = 'PASS'
         for result in expected_for_param:
