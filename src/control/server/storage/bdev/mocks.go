@@ -30,10 +30,8 @@ type (
 	MockBackend struct {
 		sync.RWMutex
 		cfg            MockBackendConfig
-		ResetCalls     []storage.BdevPrepareRequest
 		PrepareCalls   []storage.BdevPrepareRequest
-		ScanCalls      []storage.BdevScanRequest
-		FormatCalls    []storage.BdevFormatRequest
+		ResetCalls     []storage.BdevPrepareRequest
 		WriteConfCalls []storage.BdevWriteConfigRequest
 	}
 )
@@ -53,10 +51,6 @@ func DefaultMockBackend() *MockBackend {
 }
 
 func (mb *MockBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	mb.Lock()
-	mb.ScanCalls = append(mb.ScanCalls, req)
-	mb.Unlock()
-
 	if mb.cfg.ScanRes == nil {
 		mb.cfg.ScanRes = &storage.BdevScanResponse{}
 	}
@@ -65,10 +59,6 @@ func (mb *MockBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 }
 
 func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	mb.Lock()
-	mb.FormatCalls = append(mb.FormatCalls, req)
-	mb.Unlock()
-
 	if mb.cfg.FormatRes == nil {
 		mb.cfg.FormatRes = &storage.BdevFormatResponse{}
 	}

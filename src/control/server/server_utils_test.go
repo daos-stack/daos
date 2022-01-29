@@ -583,8 +583,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		//		"emulated nvme: AIO-file":
-		//		"emulated nvme: AIO-kdev":
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
