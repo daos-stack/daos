@@ -552,6 +552,8 @@ gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
 	int			 num_domains;
 	int                      rc;
 
+	if (num_pds < 1)
+		num_pds = 1;
 	num_domains = num_pds * fdoms_per_pd;
 	if (num_pds >= 2)
 		nr = num_pds;
