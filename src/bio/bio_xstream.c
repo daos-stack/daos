@@ -42,6 +42,8 @@
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
 unsigned int bio_chk_cnt_max;
+/* NUMA node affinity */
+unsigned int bio_numa_node;
 /* Per-xstream initial DMA buffer size (in chunk count) */
 static unsigned int bio_chk_cnt_init;
 /* Diret RDMA over SCM */
@@ -65,8 +67,6 @@ struct bio_nvme_data {
 	uint64_t		 bd_scan_age;
 	/* Path to input SPDK JSON NVMe config file */
 	const char		*bd_nvme_conf;
-	/* NUMA node affinity */
-	int			 bd_numa_node;
 	/* When using SPDK primary mode, specifies memory allocation in MB */
 	int			 bd_mem_size;
 	bool			 bd_started;
@@ -97,7 +97,7 @@ bio_spdk_env_init(void)
 		}
 	}
 
-	/*
+	/**
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
 	 * Currently we can't guarantee clean shutdown (no hugepages leaked).
 	 * Setting mem_size could cause EAL: Not enough memory available error,
@@ -166,10 +166,10 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		return -DER_INVAL;
 	}
 
+	bio_numa_node = 0;
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
 	nvme_glb.bd_nvme_conf = NULL;
-	nvme_glb.bd_numa_node = DAOS_NVME_NUMANODE_NONE;
 	nvme_glb.bd_bypass_health_collect = bypass_health_collect;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
 
@@ -245,7 +245,9 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	vmd_led_period = env ? atoi(env) : 0;
 	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
-	nvme_glb.bd_numa_node = numa_node;
+	if (numa_node > 0)
+		bio_numa_node = (unsigned int)numa_node;
+
 	nvme_glb.bd_mem_size = mem_size;
 	nvme_glb.bd_nvme_conf = nvme_conf;
 
