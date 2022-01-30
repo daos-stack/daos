@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -28,6 +29,7 @@ type Runner struct {
 	log     logging.Logger
 	running atm.Bool
 	cmd     *exec.Cmd
+	cmdMut  sync.RWMutex
 }
 
 // NewRunner returns a configured engine.Runner
@@ -74,14 +76,18 @@ func (r *Runner) run(ctx context.Context, args, env []string, errOut chan<- erro
 		return errors.Wrapf(common.GetExitStatus(err),
 			"%s (instance %d) failed to start", binPath, r.Config.Index)
 	}
+	r.cmdMut.Lock()
 	r.cmd = cmd
+	r.cmdMut.Unlock()
 
 	waitDone := make(chan struct{})
 	go func() {
 		r.running.SetTrue()
 		defer r.running.SetFalse()
 
-		errOut <- errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", binPath)
+		r.cmdMut.Lock()
+		defer r.cmdMut.Unlock()
+		errOut <- errors.Wrapf(common.GetExitStatus(r.cmd.Wait()), "%s exited", binPath)
 
 		close(waitDone)
 	}()
@@ -90,6 +96,8 @@ func (r *Runner) run(ctx context.Context, args, env []string, errOut chan<- erro
 		select {
 		case <-ctx.Done():
 			r.log.Infof("%s:%d context canceled; shutting down", engineBin, r.Config.Index)
+			r.cmdMut.RLock()
+			defer r.cmdMut.RUnlock()
 			if err := r.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 				r.log.Errorf("%s:%d failed to kill process: %s", engineBin, r.Config.Index, err)
 			}
@@ -128,12 +136,16 @@ func (r *Runner) Signal(signal os.Signal) error {
 
 	r.log.Debugf("Signalling I/O Engine instance %d (%s)", r.Config.Index, signal)
 
+	r.cmdMut.Lock()
+	defer r.cmdMut.Unlock()
 	return r.cmd.Process.Signal(signal)
 }
 
 // GetLastPid returns the PID after runner has exited, return
 // zero if no cmd or ProcessState exists.
 func (r *Runner) GetLastPid() uint64 {
+	r.cmdMut.RLock()
+	defer r.cmdMut.RUnlock()
 	if r.cmd == nil || r.cmd.ProcessState == nil {
 		return 0
 	}
