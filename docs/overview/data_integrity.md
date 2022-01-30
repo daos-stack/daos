@@ -41,8 +41,8 @@ received.
 
 !!! note
     Checksums for keys are not stored on the server. A hash of the key is
-    calculated and used to index the key in the server tree of the keys
-    (see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores)).
+    calculated and used to index the key in the server tree of the keys,
+    see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/release/2.0/src/vos/README.md#key-array-stores).
     It is also expected that keys are stored only in Storage Class Memory which
     has reliable data integrity protection.
 
@@ -54,7 +54,7 @@ received from the client to verify the integrity of the value. If the checksums
 don't match, then data corruption has occurred and an error is returned to the
 client indicating that the client should try the update again. Whether "server
 verify" is enabled or not, the server will store the checksum.
-See [VOS](https://github.com/daos-stack/daos/blob/master/src/vos/README.md)
+See [VOS](https://github.com/daos-stack/daos/blob/release/2.0/src/vos/README.md)
 for more info about checksum management and storage in VOS.
 
 On a fetch, the server will return the stored checksum to the client with the
@@ -86,7 +86,7 @@ Unlike Single Values, Array Values can be updated and fetched at any part of
 an array. In addition, updates to an array are versioned, so a fetch can include
 parts from multiple versions of the array. Each of these versioned parts of an
 array are called extents. The following diagrams illustrate a couple examples
-(also see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores) for
+(also see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/release/2.0/src/vos/README.md#key-array-stores) for
 more information):
 
 
@@ -113,9 +113,8 @@ The gray boxes around the extents represent the chunks.
 
 ![](../graph/data_integrity/array_with_chunks.png)
 
-(
-See [Object Layer](https://github.com/daos-stack/daos/blob/master/src/object/README.md)
-for more details about the checksum process on object update and fetch)
+See [Object Layer](https://github.com/daos-stack/daos/blob/release/2.0/src/object/README.md)
+for more details about the checksum process on object update and fetch.
 
 ## Checksum calculations
 The actual checksum calculations are done by the
@@ -123,7 +122,7 @@ The actual checksum calculations are done by the
 and [isa-l_crypto](https://github.com/intel/isa-l_crypto) libraries. However,
 these libraries are abstracted away from much of DAOS and a common checksum
 library is used with appropriate adapters to the actual isa-l implementations.
-[common checksum library](../../src/common/README.md#checksum)
+[common checksum library](https://github.com/daos-stack/daos/blob/release/2.0/src/common/README.md#checksum)
 
 ## Performance Impact
 Calculating checksums can be CPU intensive and will impact performance. To

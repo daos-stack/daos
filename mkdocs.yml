@@ -34,7 +34,7 @@ theme:
         - search.highlight
 
 extra:
-    homepage: http://daos.io
+    homepage: https://docs.daos.io/
     version:
         provider: mike
 
@@ -109,5 +109,5 @@ nav:
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
-        - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
+        - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/release/2.0/src/README.md'
         - 'DAOS API Documentation': 'html/index.html'
