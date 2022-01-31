@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeFio, check_aggregation_status
-from apricot import skipForTicket
+
 
 class EcodFioRebuild(ErasureCodeFio):
     # pylint: disable=too-many-ancestors
@@ -60,7 +60,6 @@ class EcodFioRebuild(ErasureCodeFio):
             # Read and verify the original data.
             self.fio_cmd.run()
 
-    @skipForTicket("DAOS-8082")
     def test_ec_online_rebuild_fio(self):
         """Jira ID: DAOS-7320.
 
@@ -83,7 +82,6 @@ class EcodFioRebuild(ErasureCodeFio):
         """
         self.execution('on-line')
 
-    @skipForTicket("DAOS-8612")
     def test_ec_offline_rebuild_fio(self):
         """Jira ID: DAOS-7320.
 
