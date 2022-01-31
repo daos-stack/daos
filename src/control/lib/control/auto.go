@@ -371,20 +371,28 @@ func mapPMems(nss storage.ScmNamespaces) numaPMemsMap {
 
 // numSSDsMap is an alias for a map of NUMA node ID to slice of NVMe SSD PCI
 // addresses.
-type numaSSDsMap map[int]sort.StringSlice
+type numaSSDsMap map[int]*hardware.PCIAddressSet
 
-// mapSSDs maps NUMA node ID to NVMe SSD PCI addresses, sort addresses.
-func mapSSDs(ssds storage.NvmeControllers) numaSSDsMap {
+// mapSSDs maps NUMA node ID to NVMe SSD PCI address set.
+func mapSSDs(ssds storage.NvmeControllers) (numaSSDsMap, error) {
 	nssds := make(numaSSDsMap)
 	for _, ssd := range ssds {
 		nn := int(ssd.SocketID)
-		nssds[nn] = append(nssds[nn], ssd.PciAddr)
-	}
-	for _, ssds := range nssds {
-		ssds.Sort()
+		if _, exists := nssds[nn]; exists {
+			if err := nssds[nn].AddStrings(ssd.PciAddr); err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		newAddrSet, err := hardware.NewPCIAddressSetFromString(ssd.PciAddr)
+		if err != nil {
+			return nil, err
+		}
+		nssds[nn] = newAddrSet
 	}
 
-	return nssds
+	return nssds, nil
 }
 
 type storageDetails struct {
@@ -396,6 +404,8 @@ type storageDetails struct {
 // validate checks sufficient PMem devices and SSD NUMA groups exist for the
 // required number of engines. Minimum thresholds for SSD group size is also
 // checked.
+//
+// TODO 9932: set bdev_class to ram if --use-tmpfs-scm is set
 func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSDs int) error {
 	log.Debugf("numa to pmem mappings: %v", sd.numaPMems)
 	if len(sd.numaPMems) < engineCount {
@@ -407,7 +417,7 @@ func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSD
 		log.Debug("nvme disabled, skip validation")
 
 		for nn := 0; nn < engineCount; nn++ {
-			sd.numaSSDs[nn] = []string{}
+			sd.numaSSDs[nn] = hardware.MustNewPCIAddressSet()
 		}
 
 		return nil
@@ -416,12 +426,13 @@ func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSD
 	for nn := 0; nn < engineCount; nn++ {
 		ssds, exists := sd.numaSSDs[nn]
 		if !exists {
-			sd.numaSSDs[nn] = []string{} // populate empty lists for missing entries
+			// populate empty sets for missing entries
+			sd.numaSSDs[nn] = hardware.MustNewPCIAddressSet()
 		}
 		log.Debugf("ssds bound to numa %d: %v", nn, ssds)
 
-		if len(ssds) < minNrSSDs {
-			return errors.Errorf(errInsufNrSSDs, nn, minNrSSDs, len(ssds))
+		if ssds.Len() < minNrSSDs {
+			return errors.Errorf(errInsufNrSSDs, nn, minNrSSDs, ssds.Len())
 		}
 	}
 
@@ -442,9 +453,13 @@ func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount i
 		return nil, err
 	}
 
+	numaSSDs, err := mapSSDs(storageSet.HostStorage.NvmeDevices)
+	if err != nil {
+		return nil, errors.Wrap(err, "mapping ssd addresses to numa node")
+	}
 	sd := &storageDetails{
 		numaPMems:    mapPMems(storageSet.HostStorage.ScmNamespaces),
-		numaSSDs:     mapSSDs(storageSet.HostStorage.NvmeDevices),
+		numaSSDs:     numaSSDs,
 		hugePageSize: storageSet.HostStorage.HugePageInfo.PageSizeKb,
 	}
 	if err := sd.validate(req.Log, engineCount, req.MinNrSSDs); err != nil {
@@ -537,7 +552,7 @@ func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (
 
 	numaCoreCounts := make(numaCoreCountsMap)
 	for numaID, ssds := range numaSSDs {
-		coreCounts, err := checkCPUs(log, len(ssds), coresPerNuma)
+		coreCounts, err := checkCPUs(log, ssds.Len(), coresPerNuma)
 		if err != nil {
 			return nil, err
 		}
@@ -558,6 +573,8 @@ func defaultEngineCfg(idx int) *engine.Config {
 // genConfig generates server config file from details of network, storage and CPU hardware after
 // performing some basic sanity checks.
 func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
+	log.Debug("generating config")
+
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
 	}
@@ -573,27 +590,29 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 	}
 
 	// enforce consistent ssd count across engine configs
-	minSsds := math.MaxUint32
-	numaWithMinSsds := 0
+	minSSDs := math.MaxUint32
+	numaWithMinSSDs := 0
 	if len(sd.numaSSDs) > 0 {
 		if len(sd.numaSSDs) < nd.engineCount {
 			return nil, errors.New("invalid number of ssd groups") // should never happen
 		}
 
 		for numa, ssds := range sd.numaSSDs {
-			if len(ssds) < minSsds {
-				minSsds = len(ssds)
-				numaWithMinSsds = numa
+			if ssds.Len() < minSSDs {
+				minSSDs = ssds.Len()
+				numaWithMinSSDs = numa
 			}
 		}
+		log.Debugf("selecting %d ssds per engine", minSSDs)
 	}
 
 	if len(ccs) < nd.engineCount {
 		return nil, errors.New("invalid number of core count groups") // should never happen
 	}
 	// enforce consistent target and helper count across engine configs
-	nrTgts := ccs[numaWithMinSsds].nrTgts
-	nrHlprs := ccs[numaWithMinSsds].nrHlprs
+	nrTgts := ccs[numaWithMinSSDs].nrTgts
+	nrHlprs := ccs[numaWithMinSSDs].nrHlprs
+	log.Debugf("selecting %d targets and %d helper threads per engine", nrTgts, nrHlprs)
 
 	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
@@ -608,11 +627,34 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 					WithScmDeviceList(sd.numaPMems[nn][0]),
 			)
 		}
-		if len(sd.numaSSDs) > 0 && len(sd.numaSSDs[nn]) > 0 {
+		if len(sd.numaSSDs) > 0 && sd.numaSSDs[nn].Len() > 0 {
+			ssds := sd.numaSSDs[nn]
+			if ssds.Len() > minSSDs {
+				log.Debugf("larger number of SSDs (%d) on NUMA-%d than the "+
+					"lowest common number across all relevant NUMA nodes "+
+					"(%d), configuration is not balanced.", ssds.Len(), nn,
+					minSSDs)
+				if ssds.HasVMD() {
+					return nil, FaultConfigVMDImbalance
+				}
+				log.Debugf("only using %d SSDs from NUMA-%d from an available %d",
+					minSSDs, nn, ssds.Len())
+
+				ssdAddrs := ssds.Strings()[:minSSDs]
+				ssds = hardware.MustNewPCIAddressSet(ssdAddrs...)
+			}
+
+			// If addresses are VMD backing devices, convert to the logical VMD address
+			// as this is what is expected in the server config.
+			newAddrSet, err := ssds.BackingToVMDAddresses(log)
+			if err != nil {
+				return nil, errors.Wrap(err, "converting backing addresses to vmd")
+			}
+
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(sd.numaSSDs[nn][:minSsds]...),
+					WithBdevDeviceList(newAddrSet.Strings()...),
 			)
 		}
 

@@ -80,14 +80,12 @@ type EnvOptions struct {
 }
 
 func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
-	if o.EnableVMD {
-		// DPDK will not accept VMD backing device addresses so convert to VMD addresses
-		newSet, err := o.PCIAllowList.BackingToVMDAddresses(log)
-		if err != nil {
-			return err
-		}
-		o.PCIAllowList = newSet
+	// DPDK will not accept VMD backing device addresses so convert to VMD addresses
+	newSet, err := o.PCIAllowList.BackingToVMDAddresses(log)
+	if err != nil {
+		return err
 	}
+	o.PCIAllowList = newSet
 
 	return nil
 }
