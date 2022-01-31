@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -197,7 +197,6 @@ class OSAOfflineParallelTest(OSAUtils):
             else:
                 self.assertTrue(pver_end >= 25,
                                 "Pool Version Error:  at the end")
-
 
         # Finally run IOR to read the data and perform daos_container_check
         for val in range(0, num_pool):
