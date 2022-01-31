@@ -292,5 +292,6 @@ def main():
 
     os.unlink(pylint3_rc)
 
+
 if __name__ == '__main__':
     main()
