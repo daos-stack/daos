@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -15,7 +15,6 @@ class IorEasy(PerformanceTestBase):
             Create a pool, container, and run IOR Easy.
 
     :avocado: recursive
-    :avocado: tags=performance,performance_ior,performance_ior_easy
     """
 
     def test_performance_ior_easy_dfs_sx(self):
@@ -23,7 +22,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=performance_dfs
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
         :avocado: tags=performance_ior_easy_dfs_sx
         """
         self.run_performance_ior(namespace="/run/ior_dfs_sx/*")
@@ -33,7 +32,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,large
-        :avocado: tags=performance_dfs
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
         :avocado: tags=performance_ior_easy_dfs_ec_16p2gx
         """
         self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*")
@@ -43,7 +42,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=performance_dfuse
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfuse
         :avocado: tags=performance_ior_easy_dfuse_sx
         """
         self.run_performance_ior(namespace="/run/ior_dfuse_sx/*")
@@ -53,7 +52,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,large
-        :avocado: tags=performance_dfuse
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfuse
         :avocado: tags=performance_ior_easy_dfuse_16p2gx
         """
         self.run_performance_ior(namespace="/run/ior_dfuse_ec_16p2gx/*")
@@ -63,7 +62,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,large
-        :avocado: tags=performance_dfs
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
         :avocado: tags=performance_ior_easy_dfs_ec_4p2gx_stop_write
         """
         self.run_performance_ior(
@@ -75,7 +74,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,large
-        :avocado: tags=performance_dfs
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
         :avocado: tags=performance_ior_easy_dfs_ec_4p2gx_stop_read
         """
         self.run_performance_ior(
@@ -87,7 +86,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,large
-        :avocado: tags=performance_dfs
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
         :avocado: tags=performance_ior_easy_dfs_ec_16p2gx_stop_write
         """
         self.run_performance_ior(
@@ -99,7 +98,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,large
-        :avocado: tags=performance_dfs
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
         :avocado: tags=performance_ior_easy_dfs_ec_16p2gx_stop_read
         """
         self.run_performance_ior(
@@ -111,7 +110,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=performance_hdf5
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_hdf5
         :avocado: tags=performance_ior_easy_hdf5_sx
         """
         self.run_performance_ior(namespace="/run/ior_hdf5_sx/*")
@@ -121,7 +120,7 @@ class IorEasy(PerformanceTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=performance_mpiio
+        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_mpiio
         :avocado: tags=performance_ior_easy_mpiio_sx
         """
         self.run_performance_ior(namespace="/run/ior_mpiio_sx/*")
