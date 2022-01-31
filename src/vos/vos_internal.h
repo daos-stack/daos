@@ -20,6 +20,7 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
+#include <daos_srv/policy.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
 #include "vos_ilog.h"
@@ -134,8 +135,29 @@ agg_reserve_space(daos_size_t *rsrvd)
 	rsrvd[DAOS_MEDIA_NVME]	+= size;
 }
 
+enum {
+	AGG_OP_SCAN = 0,	/* scanned obj/dkey/akey */
+	AGG_OP_SKIP,		/* skipped obj/dkey/akey */
+	AGG_OP_DEL,		/* deleted obj/dkey/akey */
+	AGG_OP_MAX,
+};
+
+struct vos_agg_metrics {
+	struct d_tm_node_t	*vam_epr_dur;		/* EPR(Epoch Range) scan duration */
+	struct d_tm_node_t	*vam_obj[AGG_OP_MAX];
+	struct d_tm_node_t	*vam_dkey[AGG_OP_MAX];
+	struct d_tm_node_t	*vam_akey[AGG_OP_MAX];
+	struct d_tm_node_t	*vam_uncommitted;	/* Hit uncommitted entries */
+	struct d_tm_node_t	*vam_csum_errs;		/* Hit CSUM errors */
+	struct d_tm_node_t	*vam_del_sv;		/* Deleted SV records */
+	struct d_tm_node_t	*vam_del_ev;		/* Deleted EV records */
+	struct d_tm_node_t	*vam_merge_recs;	/* Total merged EV records */
+	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
+};
+
 struct vos_pool_metrics {
-	void	*vp_vea_metrics;
+	void			*vp_vea_metrics;
+	struct vos_agg_metrics	 vp_agg_metrics;
 	/* TODO: add more metrics for VOS */
 };
 
@@ -180,9 +202,11 @@ struct vos_pool {
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
-	struct vos_metrics	*vp_metrics;
+	struct vos_pool_metrics	*vp_metrics;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
+	/** Tiering policy */
+	struct policy_desc_t	vp_policy_desc;
 };
 
 /**
@@ -999,19 +1023,6 @@ key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 daos_size_t
 vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum);
 
-/*
- * A simple media selection policy embedded in VOS, which select media by
- * akey type and record size.
- */
-static inline uint16_t
-vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
-{
-	if (pool->vp_vea_info == NULL)
-		return DAOS_MEDIA_SCM;
-
-	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
-}
-
 int
 vos_dedup_init(struct vos_pool *pool);
 void
@@ -1090,9 +1101,9 @@ gc_reserve_space(daos_size_t *rsrvd);
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
- *			1 if a reprobe is needed (entry is removed or not
- *			visible)
- *			negative value otherwise
+ *			Positive value if a reprobe is needed
+ *			(1: entry is removed; 2: entry is invisible)
+ *			Negative value otherwise
  */
 int
 oi_iter_aggregate(daos_handle_t ih, bool range_discard);
@@ -1105,9 +1116,9 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard);
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
- *			1 if a reprobe is needed (entry is removed or not
- *			visible)
- *			negative value otherwise
+ *			Positive value if a reprobe is needed
+ *			(1: entry is removed; 2: entry is invisible)
+ *			Negative value otherwise
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);

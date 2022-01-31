@@ -3795,6 +3795,10 @@ class AllocFailTestRun():
                 if line.endswith(': DER_NOMEM(-1009): Out of memory'):
                     continue
 
+                # This is what the go code uses for system errors.
+                if line.endswith(': errno 12 (Cannot allocate memory)'):
+                    continue
+
                 # This is what DH_PERROR_DER uses
                 if line.endswith(': Out of memory (-1009)'):
                     continue
@@ -4128,6 +4132,55 @@ def test_fi_get_attr(server, conf, wf):
     destroy_container(conf, pool, container)
     return rc
 
+def test_fi_cont_query(server, conf, wf):
+    """Run daos cont query with fi"""
+
+    pool = server.get_test_pool_id()
+
+    container = create_cont(conf, pool, ctype='POSIX')
+
+    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'query',
+           pool,
+           container]
+
+    test_cmd = AllocFailTest(conf, 'cont-query', cmd)
+    test_cmd.wf = wf
+
+    test_cmd.check_daos_stderr = True
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = True
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
+    return rc
+
+
+def test_fi_cont_check(server, conf, wf):
+    """Run daos cont check with fi"""
+
+    pool = server.get_test_pool_id()
+
+    container = create_cont(conf, pool)
+
+    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'check',
+           pool,
+           container]
+
+    test_cmd = AllocFailTest(conf, 'cont-check', cmd)
+    test_cmd.wf = wf
+
+    test_cmd.check_daos_stderr = True
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = True
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
+    return rc
+
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection"""
 
@@ -4232,11 +4285,14 @@ def run(wf, args):
                 # list-container test.
                 fatal_errors.add_result(test_alloc_fail(server, conf))
 
-                # Container attribute tests
+                # Container query test.
+                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-                # Tests work but report failures.
-                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+
+                # Container attribute tests
+                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
