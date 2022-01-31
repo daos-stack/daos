@@ -276,7 +276,7 @@ class Dfuse(DfuseCommand):
         # run dfuse command
         cmd = self.env.get_export_str()
         if bind_cores:
-            cmd += 'numactl --physcpubind {} '.format(bind_cores)
+            cmd += 'taskset -c {} '.format(bind_cores)
         cmd += str(self)
         self.log.info("Command is '{}'".format(cmd))
         ret_code = pcmd(self.hosts, cmd, timeout=30)
