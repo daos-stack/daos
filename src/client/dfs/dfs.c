@@ -4098,7 +4098,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	if (gid != -1) {
 		d_iov_set(&sg_iovs[i], &gid, sizeof(gid_t));
 		recx[i].rx_idx	= GID_IDX;
-		recx[i].rx_nr	= sizeof(uid_t);
+		recx[i].rx_nr	= sizeof(gid_t);
 		i++;
 	}
 
