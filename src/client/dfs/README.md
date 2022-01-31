@@ -84,7 +84,7 @@ Directory Object
         chunk_size: chunk_size of file (0 if default or not a file)
         object class: default object class of objects under this dir
         uid: user identifier
-        gid: group idnetifier
+        gid: group identifier
         size: symlink size (0 for files/dirs)
     A-key "x:xattr1"	// extended attribute name (if any)
     A-key "x:xattr2"	// extended attribute name (if any)
