@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.1.0~rc4-3%{?dist}
-%global libfabric_version 1.14.0~rc3-2
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       2.0.0
-Release:       5%{?relval}%{?dist}
+Version:       2.0.1
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -517,6 +517,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Thu Jan 27 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.1-2
+- Fix issue in backward compatibility code.
+
+* Sat Jan 22 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.1-1
+- Version bump to 2.0.1
+
+* Wed Jan 19 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-6
+- Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
 * Wed Jan 12 2022 Phillip Henderson <phillip.henderson@intel.com> 2.0.0-5
 - Fix name of daos serialize package
 

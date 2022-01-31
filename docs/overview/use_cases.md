@@ -125,7 +125,7 @@ individual tasks, but not committed, are automatically rolled back.
 
 ### Producer/Consumer
 
-In the previous <a href="6a">figure</a>, we have two examples of
+In the previous <a href="#6a">figure</a>, we have two examples of
 producer/consumer. The down-sample job consumes raw timesteps generated
 by the simulation job and produces sampled timesteps analyzed by the
 post-process job. The DAOS stack provides specific mechanisms for
