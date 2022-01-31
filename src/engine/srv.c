@@ -447,7 +447,7 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		rc = daos_abt_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
+		rc = daos_abt_thread_create(dx, dx->dx_pools[DSS_POOL_NVME_POLL],
 					    dss_nvme_poll_ult, attr,
 					    ABT_THREAD_ATTR_NULL, NULL);
 		ABT_thread_attr_free(&attr);
@@ -565,6 +565,9 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	dx->dx_xstream	= ABT_XSTREAM_NULL;
 	dx->dx_sched	= ABT_SCHED_NULL;
 	dx->dx_progress	= ABT_THREAD_NULL;
+#ifdef ULT_MMAP_STACK
+	D_INIT_LIST_HEAD(&dx->stack_free_list);
+#endif
 
 	return dx;
 
@@ -581,6 +584,20 @@ err_free:
 static inline void
 dss_xstream_free(struct dss_xstream *dx)
 {
+#ifdef ULT_MMAP_STACK
+	mmap_stack_desc_t *mmap_stack_desc;
+
+	while ((mmap_stack_desc = d_list_pop_entry(&dx->stack_free_list,
+						   mmap_stack_desc_t,
+						   stack_list)) != NULL) {
+		D_INFO("Draining a mmap()'ed stack, alloced="DF_U64", free="DF_U64"\n",
+		       dx->alloced_stacks, dx->free_stacks);
+		munmap(mmap_stack_desc->stack, mmap_stack_desc->stack_size);
+		--dx->alloced_stacks;
+		--dx->free_stacks;
+		atomic_fetch_sub(&nb_mmap_stacks, 1);
+	}
+#endif
 	hwloc_bitmap_free(dx->dx_cpuset);
 	D_FREE(dx);
 }
@@ -696,7 +713,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	}
 
 	/** start progress ULT */
-	rc = daos_abt_thread_create(dx->dx_pools[DSS_POOL_NET_POLL],
+	rc = daos_abt_thread_create(dx, dx->dx_pools[DSS_POOL_NET_POLL],
 				    dss_srv_handler, dx, attr,
 				    &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {

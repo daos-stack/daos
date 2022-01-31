@@ -491,20 +491,48 @@ abt_init(int argc, char *argv[])
 	}
 
 #ifdef ULT_MMAP_STACK
+	FILE* fp;
+
+	/* read vm.max_map_count from /proc instead of using sysctl() API
+	 * as it seems the preferred way ...
+	 */
+	fp = fopen ("/proc/sys/vm/max_map_count", "r");
+	if (fp == NULL) {
+		D_ERROR("Unable to open /proc/sys/vm/max_map_count: %s\n",
+			strerror(errno));
+	} else {
+		int n;
+
+		n = fscanf(fp, "%d", &max_nb_mmap_stacks);
+		if (n == EOF) {
+			D_ERROR("Unable to read vm.max_map_count value: %s\n",
+				strerror(errno));
+			/* just in case, to ensure value can be later safely
+			 * compared and thus no ULT stack be mmap()'ed
+			 */
+			max_nb_mmap_stacks = 0;
+		} else {
+			/* need a minimum value to start mmap() ULT stacks */
+			if (max_nb_mmap_stacks < MIN_VM_MAX_MAP_COUNT) {
+				D_WARN("vm.max_map_count (%d) value is too low (< %d) to start mmap() ULT stacks\n",
+				       max_nb_mmap_stacks, MIN_VM_MAX_MAP_COUNT);
+				max_nb_mmap_stacks = 0;
+			} else {
+				/* consider half can be used to mmap() ULT
+				 * stacks
+				 */
+				max_nb_mmap_stacks /= 2;
+				D_INFO("Will be able to mmap() %d ULT stacks\n",
+				       max_nb_mmap_stacks);
+			}
+		}
+	}
+			
 	rc = ABT_key_create(free_stack, &stack_key);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT key for stack create failed: %d\n", rc);
 		ABT_finalize();
 		return dss_abterr2der(rc);
-	}
-
-	D_INIT_LIST_HEAD(&stack_free_list);
-	rc = D_MUTEX_INIT(&stack_free_list_lock, NULL);
-	if (rc != 0) {
-		D_ERROR("Failed to initialize stacks free-list:" DF_RC "\n",
-			DP_RC(rc));
-		ABT_finalize();
-		return rc;
 	}
 #endif
 	dss_abt_init = true;
@@ -516,19 +544,7 @@ static void
 abt_fini(void)
 {
 #ifdef ULT_MMAP_STACK
-	mmap_stack_desc_t *mmap_stack_desc;
-
 	ABT_key_free(&stack_key);
-
-	D_MUTEX_LOCK(&stack_free_list_lock);
-	while ((mmap_stack_desc = d_list_pop_entry(&stack_free_list,
-						   mmap_stack_desc_t,
-						   stack_list)) != NULL) {
-		D_MUTEX_UNLOCK(&stack_free_list_lock);
-		munmap(mmap_stack_desc->stack, mmap_stack_desc->stack_size);
-		D_MUTEX_LOCK(&stack_free_list_lock);
-	}
-	D_MUTEX_UNLOCK(&stack_free_list_lock);
 #endif
 	dss_abt_init = false;
 	ABT_finalize();
