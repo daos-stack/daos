@@ -409,7 +409,8 @@ class DaosServerManager(SubprocessManager):
         #   - the expected number of pattern matches are detected (success)
         #   - the time out is reached (failure)
         #   - the subprocess is no longer running (failure)
-        while not complete and not timed_out and sub_process.poll() is None:
+        while not complete and not timed_out \
+                and (sub_process is None or sub_process.poll() is None):
             detected = self.detect_engine_states(expected_states)
             complete = detected == self.manager.job.pattern_count
             timed_out = time.time() - start > self.manager.job.pattern_timeout.value
@@ -632,6 +633,36 @@ class DaosServerManager(SubprocessManager):
                 "Multiple system states ({}) detected:\n  {}".format(
                     states, data))
         return states[0]
+
+    def check_rank_state(self, rank, valid_state, max_checks=1):
+        """Check the state of single rank in DAOS system
+
+        Args:
+            rankv(int): daos rank whose state need's to be checked
+            valid_state (str): expected state for the rank
+            max_checks (int, optional): number of times to check the state
+                Defaults to 1.
+        Raises:
+            ServerFailed: if there was error obtaining the data for daos
+                          system query
+        Returns:
+            bool: returns True if there is a match for checked state,
+                  else False.
+        """
+        checks = 0
+        while checks < max_checks:
+            if checks > 0:
+                time.sleep(1)
+            data = self.get_current_state()
+            if not data:
+                # The regex failed to get the rank and state
+                raise ServerFailed(
+                "Error obtaining {} output: {}".format(self.dmg, data))
+            checks += 1
+            if data[rank]["state"] == valid_state:
+                return True
+
+        return False
 
     def check_system_state(self, valid_states, max_checks=1):
         """Check that the DAOS system state is one of the provided states.
