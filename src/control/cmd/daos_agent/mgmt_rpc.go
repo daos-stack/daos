@@ -37,7 +37,7 @@ type mgmtModule struct {
 	numaGetter     hardware.ProcessNUMAProvider
 }
 
-func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	uc, ok := session.Conn.(*net.UnixConn)
 	if !ok {
 		return nil, errors.Errorf("session.Conn type conversion failed")
@@ -54,8 +54,6 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := context.TODO() // FIXME: Should be the top-level context.
 
 	switch method {
 	case drpc.MethodGetAttachInfo:

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -38,7 +38,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	sockPath := filepath.Join(cmd.cfg.RuntimeDir, agentSockName)
 	cmd.log.Debugf("Full socket path is now: %s", sockPath)
 
-	drpcServer, err := drpc.NewDomainSocketServer(ctx, cmd.log, sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(cmd.log, sockPath)
 	if err != nil {
 		cmd.log.Errorf("Unable to create socket server: %v", err)
 		return err
@@ -76,7 +76,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		monitor:    procmon,
 	})
 
-	err = drpcServer.Start()
+	err = drpcServer.Start(ctx)
 	if err != nil {
 		cmd.log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
 		return err
@@ -109,7 +109,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 		}
 	}()
 	<-finish
-	drpcServer.Shutdown()
 
 	cmd.log.Debugf("shutdown complete in %s", time.Since(shutdownRcvd))
 	return nil
