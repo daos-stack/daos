@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,6 +73,19 @@ typedef struct crt_init_options {
 	uint32_t	cio_max_unexpected_size;
 			/** swim crt index */
 	int		cio_swim_crt_idx;
+
+	/** if set, used as a provider value instead of CRT_PHY_ADDR_STR env */
+	char		*cio_provider;
+
+	/** If set, used as an interface setting instead of OFI_INTERFACE env */
+	char		*cio_interface;
+
+	/** If set, used as a domain setting instead of OFI_DOMAIN env */
+	char		*cio_domain;
+
+	/** If set, used as a port setting instead of OFI_PORT env */
+	char		*cio_port;
+
 } crt_init_options_t;
 
 typedef int		crt_status_t;

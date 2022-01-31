@@ -68,6 +68,10 @@ enum daos_pool_props {
 	 */
 	DAOS_PROP_PO_SVC_LIST,
 	DAOS_PROP_PO_EC_CELL_SZ,
+	/**
+	 * Media selection policy
+	 */
+	DAOS_PROP_PO_POLICY,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -431,6 +435,9 @@ daos_label_is_valid(const char *label)
 
 	return true;
 }
+
+/** max length of the policy string */
+#define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
 
 /** daos properties, for pool or container */
 typedef struct {
