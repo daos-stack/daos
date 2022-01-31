@@ -14,7 +14,6 @@ the client with fault injection of D_ALLOC() usage.
 # pylint: disable=protected-access
 
 import os
-import bz2
 import sys
 import time
 import uuid
@@ -79,6 +78,7 @@ class NLTConf():
         self.max_log_size = None
         self.valgrind_errors = False
         self.lt = CulmTimer()
+        self.lt_compress = CulmTimer()
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
         self.tmp_dir = None
@@ -90,7 +90,10 @@ class NLTConf():
                 os.rmdir(self.tmp_dir)
             os.makedirs(self.tmp_dir)
 
+        self._compress_procs = []
+
     def __del__(self):
+        self.flush_bz2()
         os.rmdir(self.dfuse_parent_dir)
 
     def set_wf(self, wf):
@@ -114,6 +117,25 @@ class NLTConf():
 
     def __getitem__(self, key):
         return self.bc[key]
+
+    def compress_file(self, filename):
+        """Compress a file using bz2 for space reasons
+
+        Launch a bzip2 process in the background as this is time consuming, and each time
+        a new process is launched then reap any previous ones which have completed.
+        """
+
+        # pylint: disable=consider-using-with
+        self._compress_procs[:] = (proc for proc in self._compress_procs if proc.poll())
+        self._compress_procs.append(subprocess.Popen(['bzip2', '--best', filename]))
+
+    def flush_bz2(self):
+        """Wait for all bzip2 subprocess to finish"""
+        self.lt_compress.start()
+        for proc in self._compress_procs:
+            proc.wait()
+        self._compress_procs = []
+        self.lt_compress.stop()
 
 class CulmTimer():
     """Class to keep track of elapsed time so we know where to focus performance tuning"""
@@ -738,6 +760,7 @@ class DaosServer():
                       .format(len(procs), self.engines)
             entry['message'] = message
             self.conf.wf.issues.append(entry)
+            self._add_test_case('server_stop', failure=message)
         rc = self.run_dmg(['system', 'stop'])
         if rc.returncode != 0:
             print(rc)
@@ -767,8 +790,8 @@ class DaosServer():
         ret = self._sp.wait(timeout=5)
         print('rc from server is {}'.format(ret))
 
-        compress_file(self.agent_log.name)
-        compress_file(self.control_log.name)
+        self.conf.compress_file(self.agent_log.name)
+        self.conf.compress_file(self.control_log.name)
 
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
@@ -1174,6 +1197,7 @@ def run_daos_cmd(conf,
                  cmd,
                  show_stdout=False,
                  valgrind=True,
+                 log_check=True,
                  use_json=False):
     """Run a DAOS command
 
@@ -1199,14 +1223,18 @@ def run_daos_cmd(conf,
     exec_cmd.extend(cmd)
 
     cmd_env = get_base_env()
+    if not log_check:
+        del cmd_env['DD_MASK']
+        del cmd_env['DD_SUBSYS']
+        del cmd_env['D_LOG_MASK']
 
-    prefix = 'dnt_cmd_{}_'.format(get_inc_id())
-    log_file = tempfile.NamedTemporaryFile(prefix=prefix,
-                                           suffix='.log',
-                                           dir=conf.tmp_dir,
-                                           delete=False)
+    with tempfile.NamedTemporaryFile(prefix='dnt_cmd_{}_'.format(get_inc_id()),
+                                     suffix='.log',
+                                     dir=conf.tmp_dir,
+                                     delete=False) as lf:
+        log_name = lf.name
+        cmd_env['D_LOG_FILE'] = log_name
 
-    cmd_env['D_LOG_FILE'] = log_file.name
     cmd_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
 
     rc = subprocess.run(exec_cmd,
@@ -1230,9 +1258,7 @@ def run_daos_cmd(conf,
     if rc.returncode < 0:
         show_memleaks = False
 
-    rc.fi_loc = log_test(conf,
-                         log_file.name,
-                         show_memleaks=show_memleaks)
+    rc.fi_loc = log_test(conf, log_name, show_memleaks=show_memleaks)
     vh.convert_xml()
     # If there are valgrind errors here then mark them for later reporting but
     # do not abort.  This allows a full-test run to report all valgrind issues
@@ -1246,18 +1272,23 @@ def run_daos_cmd(conf,
         rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
-def _create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, valgrind=False):
-    """Helper function for create_cont"""
+def create_cont(conf,
+                pool=None,
+                cont=None,
+                ctype=None,
+                label=None,
+                path=None,
+                valgrind=False,
+                log_check=True):
+    """Create a container and return the uuid"""
 
-    cmd = ['container',
-           'create']
+    cmd = ['container', 'create']
 
     if pool:
         cmd.append(pool)
 
     if label:
-        cmd.extend(['--properties',
-                    'label:{}'.format(label)])
+        cmd.extend(['--properties', 'label:{}'.format(label)])
 
     if path:
         cmd.extend(['--path', path])
@@ -1269,15 +1300,15 @@ def _create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, 
     if cont:
         cmd.extend(['--cont', cont])
 
-    rc = run_daos_cmd(conf, cmd, use_json=True, valgrind=valgrind)
-    print('rc is {}'.format(rc))
-    print(rc.json)
-    return rc
+    def _create_cont():
+        """Helper function for create_cont"""
 
-def create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, valgrind=False):
-    """Create a container and return the uuid"""
+        rc = run_daos_cmd(conf, cmd, use_json=True, log_check=log_check, valgrind=valgrind)
+        print('rc is {}'.format(rc))
+        print(rc.json)
+        return rc
 
-    rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
+    rc = _create_cont()
 
     if rc.returncode == 1 and \
        rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
@@ -1286,18 +1317,27 @@ def create_cont(conf, pool=None, cont=None, ctype=None, label=None, path=None, v
         # remove and retry in this case.
         if path is None:
             destroy_container(conf, pool, label)
-            rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
+            rc = _create_cont()
 
     assert rc.returncode == 0, rc
     return rc.json['response']['container_uuid']
 
-def destroy_container(conf, pool, container, valgrind=True):
+def destroy_container(conf, pool, container, valgrind=True, log_check=True):
     """Destroy a container"""
     cmd = ['container', 'destroy', pool, container]
-    rc = run_daos_cmd(conf, cmd, valgrind=valgrind)
-    print('rc is {}'.format(rc))
-    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
-    return rc.stdout.decode('utf-8').strip()
+    rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True, log_check=log_check)
+    print(rc)
+    if rc.returncode == 1 and rc.json['status'] == -1012:
+        # This shouldn't happen but can on unclean shutdown, file it as a test failure so it does
+        # not get lost, however destroy the container and attempt to continue.
+        # DAOS-8860
+        conf.wf.add_test_case('destroy_container_{}/{}'.format(pool, container),
+                              failure='Failed to destroy container',
+                              output=rc)
+        cmd = ['container', 'destroy', '--force', pool, container]
+        rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True)
+        print(rc)
+    assert rc.returncode == 0, rc
 
 def check_dfs_tool_output(output, oclass, csize):
     """verify daos fs tool output"""
@@ -2487,10 +2527,15 @@ def run_posix_tests(server, conf, test=None):
                                            pool.id(),
                                            ctype="POSIX",
                                            valgrind=False,
+                                           log_check=False,
                                            label=fn)
                 pt.container_label = fn
                 rc = obj()
-                destroy_container(conf, pool.id(), pt.container_label, valgrind=False)
+                destroy_container(conf,
+                                  pool.id(),
+                                  pt.container_label,
+                                  valgrind=False,
+                                  log_check=False)
                 pt.container = None
             except Exception as inst:
                 trace = ''.join(traceback.format_tb(inst.__traceback__))
@@ -2628,25 +2673,6 @@ def setup_log_test(conf):
 
     lt.wf = conf.wf
 
-def compress_file(filename):
-    """Compress a file using bz2 for space reasons"""
-    small = bz2.BZ2Compressor()
-
-    fd = open(filename, 'rb')
-
-    nfd = open('{}.bz2'.format(filename), 'wb')
-    lines = fd.read(64*1024)
-    while lines:
-        new_data = bz2.compress(lines)
-        if new_data:
-            nfd.write(new_data)
-        lines = fd.read(64*1024)
-    new_data = small.flush()
-    if new_data:
-        nfd.write(new_data)
-
-    os.unlink(filename)
-
 # https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
 def sizeof_fmt(num, suffix='B'):
     """Return size as a human readable string"""
@@ -2667,10 +2693,8 @@ def log_timer(func):
         rc = None
         try:
             rc = func(*args, **kwargs)
-        except NLTestFail:
+        finally:
             conf.lt.stop()
-            raise
-        conf.lt.stop()
         return rc
 
     return log_timer_wrapper
@@ -2693,11 +2717,18 @@ def log_test(conf,
     if os.path.exists('{}.old'.format(filename)):
         raise Exception('Log file exceeded max size')
     fstat = os.stat(filename)
+    if fstat.st_size == 0:
+        os.unlink(filename)
+        return None
     if not quiet:
         print('Running log_test on {} {}'.format(filename,
                                                  sizeof_fmt(fstat.st_size)))
 
     log_iter = lp.LogIter(filename)
+
+    # LogIter will have opened the file and seek through it as required, so start a background
+    # process to compress it in parallel with the log tracing.
+    conf.compress_file(filename)
 
     lto = lt.LogTest(log_iter, quiet=quiet)
 
@@ -2725,7 +2756,6 @@ def log_test(conf,
                            os.path.basename(filename),
                            fi_signal)
         if not lto.fi_triggered:
-            compress_file(filename)
             raise NLTestNoFi
 
     functions = set()
@@ -2742,8 +2772,6 @@ def log_test(conf,
 
     if check_fstat and 'dfuse___fxstat' not in functions:
         raise NLTestNoFunction('dfuse___fxstat')
-
-    compress_file(filename)
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
         raise Exception('Max log size exceeded, {} > {}'\
@@ -3256,7 +3284,10 @@ class AllocFailTestRun():
         self.fault_injected = None
         self.loc = loc
 
-        prefix = 'dnt_fi_{}_{}_'.format(aft.description, loc)
+        if loc is None:
+            prefix = 'dnt_fi_{}_reference_'.format(aft.description)
+        else:
+            prefix = 'dnt_fi_{}_{:04d}_'.format(aft.description, loc)
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
                                                     dir=self.aft.conf.tmp_dir,
@@ -3707,6 +3738,7 @@ def test_alloc_fail(server, conf):
 def run(wf, args):
     """Main entry point"""
 
+    # pylint: disable=too-many-branches
     conf = load_conf(args)
 
     wf_server = WarningsFactory('nlt-server-leaks.json', post=True, check='Server leak checking')
@@ -3781,36 +3813,40 @@ def run(wf, args):
         args.dfuse_debug = 'WARN'
         server = DaosServer(conf, test_class='no-debug')
         server.start()
-        if fi_test:
-            # Most of the fault injection tests go here, they are then run on docker containers
-            # so can be performed in parallel.
+        try:
+            if fi_test:
+                # Most of the fault injection tests go here, they are then run on docker containers
+                # so can be performed in parallel.
 
-            wf_client = WarningsFactory('nlt-client-leaks.json')
-            # list-container test.
-            fatal_errors.add_result(test_alloc_fail(server, conf))
+                wf_client = WarningsFactory('nlt-client-leaks.json')
 
-            # Container attribute tests
+                # list-container test.
+                fatal_errors.add_result(test_alloc_fail(server, conf))
 
-            # Tests work but report failures.
-            # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-            # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                # Container attribute tests
 
-            # filesystem copy test.
-            fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                # Tests work but report failures.
+                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-            wf_client.close()
+                # filesystem copy test.
+                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
-        if fi_test_dfuse:
-            # We cannot yet run dfuse inside docker containers and some of the failure modes aren't
-            # well handled so continue to run the dfuse fault injection test on real hardware.
+                wf_client.close()
 
-            # Read-via-IL test, requires dfuse.
-            fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+            if fi_test_dfuse:
+                # We cannot yet run dfuse inside docker containers and some of the failure modes
+                # aren't well handled so continue to run the dfuse fault injection test on real
+                # hardware.
 
-        if args.perf_check:
-            check_readdir_perf(server, conf)
-        if server.stop(wf_server) != 0:
-            fatal_errors.fail()
+                # Read-via-IL test, requires dfuse.
+                fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+
+            if args.perf_check:
+                check_readdir_perf(server, conf)
+        finally:
+            if server.stop(wf_server) != 0:
+                fatal_errors.fail()
 
     if fatal_errors.errors:
         wf.add_test_case('Errors', 'Significant errors encountered')
@@ -3822,7 +3858,9 @@ def run(wf, args):
         fatal_errors.add_result(True)
 
     wf_server.close()
+    conf.flush_bz2()
     print('Total time in log analysis: {:.2f} seconds'.format(conf.lt.total))
+    print('Total time in log compression: {:.2f} seconds'.format(conf.lt_compress.total))
     return fatal_errors
 
 def main():
