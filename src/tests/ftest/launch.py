@@ -804,12 +804,13 @@ def get_vmd_address_backed_nvme(host_list, vmd_disks, vmd_controllers):
     if not check_remote_output(task, command):
         print("ERROR: Issuing command '{}'".format(command))
     else:
-        # Verify each server host has the same NVMe device behind VMD addresses.
+        # Verify each server host has the same NVMe devices behind the same VMD addresses.
         output_data = list(task.iter_buffers())
         if len(output_data) > 1:
             print("ERROR: Non-homogeneous NVMe device behind VMD addresses.")
         elif len(output_data) == 1:
-            # Remove the VMD PCI address if no NVMe is backed-up and connected.
+            # Add any VMD controller addresses found in the /sys/block output that are also
+            # included in the provided list of VMD controllers.
             output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
             for device in vmd_controllers:
                 if device in output_str:
