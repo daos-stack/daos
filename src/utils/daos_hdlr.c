@@ -99,6 +99,14 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 		D_PRINT("label:\t\t\t%s\n", entry->dpe_str);
 	}
 
+	entry = daos_prop_entry_get(props, DAOS_PROP_PO_POLICY);
+	if (entry == NULL || entry->dpe_str == NULL) {
+		fprintf(ap->errstream, "policy property not found\n");
+		rc = -DER_INVAL;
+	} else {
+		D_PRINT("policy:\t\t\t%s\n", entry->dpe_str);
+	}
+
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL) {
 		fprintf(ap->errstream,

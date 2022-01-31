@@ -29,6 +29,9 @@
 #include <string.h>
 #include <fcntl.h>
 
+#include <daos_pool.h>
+#include <daos_srv/policy.h>
+
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -794,6 +797,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
+
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
@@ -997,9 +1001,11 @@ vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys)
 }
 
 int
-vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 {
 	struct vos_pool		*pool;
+	int			i;
+	struct policy_desc_t	*p;
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL)
@@ -1010,6 +1016,17 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 		return -DER_NOSYS;
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
+		break;
+	case VOS_PO_CTL_SET_POLICY:
+		if (param == NULL)
+			return -DER_INVAL;
+
+		p = param;
+		pool->vp_policy_desc.policy = p->policy;
+
+		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
+			pool->vp_policy_desc.params[i] = p->params[i];
+
 		break;
 	}
 
