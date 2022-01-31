@@ -601,6 +601,14 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			D_ASSERTF(rc == 0,
 				  "crtu_dc_mgmt_net_cfg_rank_add failed; rc=%d",
 				  rc);
+
+		if (rc != 0) {
+			D_ERROR("Failed to add ranks to their service group %s; rc=%d\n",
+				srv_group_name,
+				rc);
+			crt_group_view_destroy(*grp);
+			assert(0);
+		}
 	}
 
 	rc = crt_group_size(*grp, &grp_size);
