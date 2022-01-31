@@ -846,6 +846,7 @@ class TestWithServers(TestWithoutServers):
                 "Starting server: group=%s, hosts=%s, config=%s",
                 manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
+            manager.manager.job.update_pattern("normal", len(manager.hosts))
             try:
                 manager.manager.run()
             except CommandFailure as error:

@@ -147,6 +147,7 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 			sysfs.Provider{},
 		),
 		common.CmpOptIgnoreFieldAnyType("log"),
+		cmpopts.IgnoreFields(hardware.FabricScanner{}, "mutex"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
