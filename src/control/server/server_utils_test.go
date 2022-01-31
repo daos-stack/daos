@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -373,6 +374,112 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			if tc.expErr != nil {
 				return
 			}
+		})
+	}
+}
+
+func TestServer_getNetDevClass(t *testing.T) {
+	configA := func() *engine.Config {
+		return engine.MockConfig().
+			WithLogFile("a").
+			WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("a"),
+			).
+			WithFabricInterfacePort(42)
+	}
+	configB := func() *engine.Config {
+		return engine.MockConfig().
+			WithLogFile("b").
+			WithStorage(
+				storage.NewTierConfig().
+					WithStorageClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("b"),
+			).
+			WithFabricInterfacePort(43)
+	}
+
+	for name, tc := range map[string]struct {
+		configA      *engine.Config
+		configB      *engine.Config
+		expNetDevCls hardware.NetDevClass
+		expErr       error
+	}{
+		"successful validation with matching Infiniband": {
+			configA: configA().
+				WithFabricInterface("ib1"),
+			configB: configB().
+				WithFabricInterface("ib0"),
+			expNetDevCls: hardware.Infiniband,
+		},
+		"successful validation with matching Ethernet": {
+			configA: configA().
+				WithFabricInterface("eth0"),
+			configB: configB().
+				WithFabricInterface("eth1"),
+			expNetDevCls: hardware.Ether,
+		},
+		"mismatching net dev class with primary server as ib0 / Infiniband": {
+			configA: configA().
+				WithFabricInterface("ib0"),
+			configB: configB().
+				WithFabricInterface("eth0"),
+			expErr: config.FaultConfigInvalidNetDevClass(1, hardware.Infiniband, hardware.Ether, "eth0"),
+		},
+		"mismatching net dev class with primary server as eth0 / Ethernet": {
+			configA: configA().
+				WithFabricInterface("eth0"),
+			configB: configB().
+				WithFabricInterface("ib0"),
+			expErr: config.FaultConfigInvalidNetDevClass(1, hardware.Ether, hardware.Infiniband, "ib0"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fis := hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Name:        "eth0",
+					OSDevice:    "eth0",
+					DeviceClass: hardware.Ether,
+					Providers:   common.NewStringSet("test"),
+				},
+				&hardware.FabricInterface{
+					Name:        "eth1",
+					OSDevice:    "eth1",
+					DeviceClass: hardware.Ether,
+					NUMANode:    1,
+					Providers:   common.NewStringSet("test"),
+				},
+				&hardware.FabricInterface{
+					Name:        "ib0",
+					OSDevice:    "ib0",
+					DeviceClass: hardware.Infiniband,
+					Providers:   common.NewStringSet("test"),
+				},
+				&hardware.FabricInterface{
+					Name:        "ib1",
+					OSDevice:    "ib1",
+					DeviceClass: hardware.Infiniband,
+					NUMANode:    1,
+					Providers:   common.NewStringSet("test"),
+				},
+			)
+
+			cfg := config.DefaultServer().
+				WithFabricProvider("test").
+				WithEngines(tc.configA, tc.configB)
+
+			gotNetDevCls, gotErr := getFabricNetDevClass(cfg, fis)
+
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			common.AssertEqual(t, tc.expNetDevCls, gotNetDevCls,
+				"unexpected config network device class")
 		})
 	}
 }

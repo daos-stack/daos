@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -674,7 +674,7 @@ func createPropSlice(props *C.daos_prop_t, numProps int) propSlice {
 func allocProps(numProps int) (props *C.daos_prop_t, entries propSlice, err error) {
 	props = C.daos_prop_alloc(C.uint(numProps))
 	if props == nil {
-		return nil, nil, errors.New("failed to allocate properties list")
+		return nil, nil, errors.Wrap(drpc.DaosNoMemory, "failed to allocate properties list")
 	}
 
 	props.dpp_nr = 0
