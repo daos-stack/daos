@@ -74,6 +74,7 @@ fio:
     numjobs: 10
     directory: "/tmp/daos_dfuse"
     verify: 'crc32'
+    api: dfs
     verify_pattern: '0xabcdabcd'
     do_verify: 1
     iodepth: 10
