@@ -88,7 +88,7 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 
 	var bdevsInCfg bool
 	for _, ei := range c.harness.Instances() {
-		if ei.HasBlockDevices() {
+		if ei.GetStorage().HasBlockDevices() {
 			bdevsInCfg = true
 		}
 	}
@@ -245,7 +245,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 			continue
 		}
 
-		if err := ei.StorageWriteNvmeConfig(ctx); err != nil {
+		if err := ei.GetStorage().WriteNvmeConfig(ctx, c.log); err != nil {
 			instanceErrored[ei.Index()] = err.Error()
 			cResults = append(cResults, ei.newCret("", err))
 		}
@@ -268,7 +268,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	return resp, nil
 }
 
-// StorageNvmeRebind adds a newly added SSD to a DAOS engine's NVMe config to allow it to be used.
+// StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
 func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
 	c.log.Debugf("received StorageNvmeRebind RPC %v", req)
 
@@ -307,7 +307,7 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 	return resp, nil
 }
 
-// StorageNvmeAddDevice rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
+// StorageNvmeAddDevice adds a newly added SSD to a DAOS engine's NVMe config to allow it to be used.
 func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {
 	c.log.Debugf("received StorageNvmeAddDevice RPC %v", req)
 
@@ -315,30 +315,28 @@ func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.Nv
 		return nil, errors.New("nil request")
 	}
 
-	instances := c.harness.Instances()
+	engines := c.harness.Instances()
 	engineIndex := req.GetEngineIndex()
-	if len(instances) <= int(engineIndex) {
+	if len(engines) <= int(engineIndex) {
 		return nil, errors.Errorf("engine with index %d not found", engineIndex)
 	}
 	defer func() {
 		err = errors.Wrapf(err, "engine %d", engineIndex)
 	}()
 
-	engine := instances[engineIndex]
-	ei, ok := engine.(*EngineInstance)
-	if !ok {
-		return nil, errors.New("not an EngineInstance")
-	}
+	engineStorage := engines[engineIndex].GetStorage()
 
-	bdevCfgs := ei.storage.GetBdevConfigs()
+	bdevCfgs := engineStorage.GetBdevConfigs()
 	if len(bdevCfgs) == 0 {
 		return nil, errors.New("no bdev storage tiers in config")
 	}
+
 	tierIndex := req.GetBdevTierIndex()
 	if len(bdevCfgs) <= int(tierIndex) {
 		return nil, errors.Errorf("bdev tier with index %d not found", tierIndex)
 	}
 	tierCfg := bdevCfgs[tierIndex]
+
 	c.log.Debugf("bdev list to be updated: %+v", tierCfg.Bdev.DeviceList)
 	if err := tierCfg.Bdev.DeviceList.AddStrings(req.PciAddr); err != nil {
 		return nil, errors.Errorf("updating bdev list for tier %d", tierIndex)
@@ -346,7 +344,7 @@ func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.Nv
 	c.log.Debugf("updated bdev list: %+v", tierCfg.Bdev.DeviceList)
 
 	resp = new(ctlpb.NvmeAddDeviceResp)
-	if err := ei.StorageWriteNvmeConfig(ctx); err != nil {
+	if err := engineStorage.WriteNvmeConfig(ctx, c.log); err != nil {
 		err = errors.Wrapf(err, "write nvme config for engine %d", engineIndex)
 		c.log.Error(err.Error())
 
