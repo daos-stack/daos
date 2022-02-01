@@ -373,7 +373,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         stddev_value = metrics["engine_io_dtx_committed_stddev"]
 
         # DTX committed value should be equal to the number of transactions.
-        if (transfer_size == "512"):
+        if transfer_size == "512":
             transfer_size = "512B"
 
         # num operations = (blocksize / xfersize) * repetitions + ops for create/remove
@@ -383,11 +383,11 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         test_ops *= repetitions
         num_operations += test_ops
 
-        if (dtx_value != num_operations):
+        if dtx_value != num_operations:
             self.log.error("engine_io_dtx_committed NOT verified, %s != %s",
                            dtx_value, num_operations)
             status = False
-        if (min_value != 0):
+        if min_value != 0:
             self.log.error("engine_io_dtx_committed_min != 0")
             status = False
         if not ((max_value >= dtx_value >= min_value) and (
