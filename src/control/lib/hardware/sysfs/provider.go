@@ -22,6 +22,18 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+var netSubsystems = []string{"cxi", "infiniband", "net"}
+
+func isNetwork(subsystem string) bool {
+	for _, netSubsystem := range netSubsystems {
+		if subsystem == netSubsystem {
+			return true
+		}
+	}
+
+	return false
+}
+
 // NewProvider creates a new SysfsProvider.
 func NewProvider(log logging.Logger) *Provider {
 	return &Provider{
@@ -73,7 +85,7 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 	topo := &hardware.Topology{}
 
 	// For now we only fetch network devices from sysfs.
-	for _, subsystem := range []string{"cxi", "infiniband", "net"} {
+	for _, subsystem := range netSubsystems {
 		if err := s.addDevices(topo, subsystem); err != nil {
 			return nil, err
 		}
@@ -93,9 +105,9 @@ func (s *Provider) addDevices(topo *hardware.Topology, subsystem string) error {
 		}
 
 		var dev *hardware.PCIDevice
-		switch subsystem {
-		case "net", "infiniband", "cxi":
-			dev, err = s.getNetworkDevice(path)
+		switch {
+		case isNetwork(subsystem):
+			dev, err = s.getNetworkDevice(path, subsystem)
 			if err != nil {
 				s.log.Debug(err.Error())
 				return nil
@@ -129,11 +141,7 @@ func (s *Provider) addDevices(topo *hardware.Topology, subsystem string) error {
 	return err
 }
 
-func (s *Provider) isNet(path string) bool {
-	return strings.HasPrefix(path, s.sysPath("class", "net"))
-}
-
-func (s *Provider) getNetworkDevice(path string) (*hardware.PCIDevice, error) {
+func (s *Provider) getNetworkDevice(path, subsystem string) (*hardware.PCIDevice, error) {
 	// Network devices will have the device/net subdirectory structure
 	netDev, err := ioutil.ReadDir(filepath.Join(path, "device", "net"))
 	if err != nil {
@@ -147,7 +155,7 @@ func (s *Provider) getNetworkDevice(path string) (*hardware.PCIDevice, error) {
 	devName := filepath.Base(path)
 
 	var devType hardware.DeviceType
-	if s.isNet(path) {
+	if subsystem == "net" {
 		devType = hardware.DeviceTypeNetInterface
 	} else {
 		devType = hardware.DeviceTypeOFIDomain
