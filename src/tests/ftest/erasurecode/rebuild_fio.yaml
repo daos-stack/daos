@@ -70,6 +70,7 @@ container:
 fio:
   names:
     - test
+  api: POSIX
   test:
     numjobs: 10
     directory: "/tmp/daos_dfuse"
