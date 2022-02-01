@@ -573,8 +573,6 @@ func defaultEngineCfg(idx int) *engine.Config {
 // genConfig generates server config file from details of network, storage and CPU hardware after
 // performing some basic sanity checks.
 func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
-	log.Debug("generating config")
-
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
 	}
@@ -635,8 +633,12 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 					"(%d), configuration is not balanced.", ssds.Len(), nn,
 					minSSDs)
 				if ssds.HasVMD() {
+					// Not currently possible to restrict the number of backing
+					// devices used behind a VMD so refuse to generate config.
 					return nil, FaultConfigVMDImbalance
 				}
+
+				// Restrict SSDs used so that number is equal across engines.
 				log.Debugf("only using %d SSDs from NUMA-%d from an available %d",
 					minSSDs, nn, ssds.Len())
 
@@ -644,8 +646,8 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 				ssds = hardware.MustNewPCIAddressSet(ssdAddrs...)
 			}
 
-			// If addresses are VMD backing devices, convert to the logical VMD address
-			// as this is what is expected in the server config.
+			// If addresses are for VMD backing devices, convert to the logical VMD
+			// endpoint address as this is what is expected in the server config.
 			newAddrSet, err := ssds.BackingToVMDAddresses(log)
 			if err != nil {
 				return nil, errors.Wrap(err, "converting backing addresses to vmd")
