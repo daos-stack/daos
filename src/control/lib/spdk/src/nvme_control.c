@@ -118,13 +118,15 @@ write_complete(void *arg, const struct spdk_nvme_cpl *completion)
 }
 
 static struct wipe_res_t *
-wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
+wipe_ctrlr(struct ctrlr_entry *centry)
 {
 	struct lba0_data	 data;
-	struct wipe_res_t	*res = NULL, *tmp = NULL;
+	struct wipe_res_t	*res = NULL;
+	struct wipe_res_t	*tmp = NULL;
 	int			 rc;
 	struct spdk_nvme_qpair	*qpair;
 	char			*buf;
+	struct ns_entry		*nentry;
 
 	res = init_wipe_res();
 
@@ -135,6 +137,7 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 		res->rc = -NVMEC_ERR_PCI_ADDR_FMT;
 		return res;
 	}
+	fprintf(stderr, "wiping controller at %s'\n", res->ctrlr_pci_addr);
 
 	/** allocate NVMe queue pair for the controller */
 	qpair = spdk_nvme_ctrlr_alloc_io_qpair(centry->ctrlr, NULL, 0);
@@ -153,6 +156,8 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 		return res;
 	}
 
+	nentry = centry->nss;
+
 	/** iterate over the namespaces and wipe them out individually */
 	while (nentry != NULL) {
 		uint32_t sector_size;
@@ -161,8 +166,14 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 			/** first iteration */
 			tmp = res;
 		} else {
-			/** allocate new res */
+			/** allocate new result */
 			res = init_wipe_res();
+			rc = spdk_pci_addr_fmt(res->ctrlr_pci_addr, sizeof(res->ctrlr_pci_addr),
+					       &centry->pci_addr);
+			if (rc != 0) {
+				res->rc = -NVMEC_ERR_PCI_ADDR_FMT;
+				break;
+			}
 			res->next = tmp;
 			tmp = res;
 		}
@@ -171,6 +182,8 @@ wipe_ctrlr(struct ctrlr_entry *centry, struct ns_entry *nentry)
 		res->ns_id = spdk_nvme_ns_get_id(nentry->ns);
 		sector_size = spdk_nvme_ns_get_sector_size(nentry->ns);
 
+		fprintf(stderr, "wiping ns %d on controller at %s'\n",
+			res->ns_id, res->ctrlr_pci_addr);
 		data.result = LBA0_WRITE_PENDING;
 		data.ns_entry = nentry;
 
@@ -218,7 +231,7 @@ wipe_ctrlrs(void)
 	struct wipe_res_t	*start = NULL, *end = NULL;
 
 	while (centry != NULL) {
-		struct wipe_res_t *results = wipe_ctrlr(centry, centry->nss);
+		struct wipe_res_t *results = wipe_ctrlr(centry);
 		struct wipe_res_t *tmp = results;
 
 		if (results == NULL) {

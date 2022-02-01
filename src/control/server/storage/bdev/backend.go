@@ -336,6 +336,11 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*sto
 	for _, result := range results {
 		sb.log.Debugf("processing spdk format result %+v", result)
 
+		if result.CtrlrPCIAddr == "" {
+			return nil, errors.Errorf("result is missing ctrlr address: %+v",
+				result)
+		}
+
 		if _, exists := resultMap[result.CtrlrPCIAddr]; !exists {
 			resultMap[result.CtrlrPCIAddr] = make(map[int]error)
 		}
