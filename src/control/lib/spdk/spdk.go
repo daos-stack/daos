@@ -79,18 +79,6 @@ type EnvOptions struct {
 	EnableVMD    bool                    // flag if VMD functionality should be enabled
 }
 
-// NewEnvOptions returns an initialized EnvOptions struct.
-func NewEnvOptions(addrSet *hardware.PCIAddressSet, enableVMD bool) *EnvOptions {
-	if addrSet == nil {
-		addrSet = hardware.MustNewPCIAddressSet()
-	}
-
-	return &EnvOptions{
-		PCIAllowList: addrSet,
-		EnableVMD:    enableVMD,
-	}
-}
-
 func (eo *EnvOptions) sanitizeAllowList(log logging.Logger) error {
 	if eo == nil {
 		return errors.New("nil EnvOptions")
@@ -122,7 +110,7 @@ func (ei *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 		return errors.New("nil EnvOptions")
 	}
 	if opts.PCIAllowList == nil {
-		return errors.New("nil EnvOptions.PCIAllowList")
+		opts.PCIAllowList = hardware.MustNewPCIAddressSet()
 	}
 
 	log.Debugf("spdk init go opts: %+v", opts)

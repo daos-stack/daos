@@ -295,7 +295,10 @@ func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
 	needDevs := req.DeviceList.PCIAddressSetPtr()
-	spdkOpts := spdk.NewEnvOptions(needDevs, req.VMDEnabled)
+	spdkOpts := &spdk.EnvOptions{
+		PCIAllowList: needDevs,
+		EnableVMD:    req.VMDEnabled,
+	}
 
 	restoreAfterInit, err := sb.binding.init(sb.log, spdkOpts)
 	if err != nil {
@@ -435,7 +438,10 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 		needDevs = dl
 	}
 
-	spdkOpts := spdk.NewEnvOptions(needDevs, req.VMDEnabled)
+	spdkOpts := &spdk.EnvOptions{
+		PCIAllowList: needDevs,
+		EnableVMD:    req.VMDEnabled,
+	}
 
 	restoreAfterInit, err := sb.binding.init(sb.log, spdkOpts)
 	if err != nil {
