@@ -23,7 +23,7 @@ ABT_key stack_key;
 
 /* XXX both thresholds will need to be determined based on the
  * number of XStreams, and an estimate of the non-stacks mmap()'ed
- * regions required (where malloc() itselfs will use mmap() when allocating
+ * regions required (where malloc() itself will use mmap() when allocating
  * chunks of size > M_MMAP_THRESHOLD, and there is a M_MMAP_MAX maximum for
  * such number of chunks, both can be updated dynamically using mallopt() !!...)
  */

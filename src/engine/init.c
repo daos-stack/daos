@@ -491,12 +491,12 @@ abt_init(int argc, char *argv[])
 	}
 
 #ifdef ULT_MMAP_STACK
-	FILE* fp;
+	FILE *fp;
 
 	/* read vm.max_map_count from /proc instead of using sysctl() API
 	 * as it seems the preferred way ...
 	 */
-	fp = fopen ("/proc/sys/vm/max_map_count", "r");
+	fp = fopen("/proc/sys/vm/max_map_count", "r");
 	if (fp == NULL) {
 		D_ERROR("Unable to open /proc/sys/vm/max_map_count: %s\n",
 			strerror(errno));
@@ -527,7 +527,7 @@ abt_init(int argc, char *argv[])
 			}
 		}
 	}
-			
+
 	rc = ABT_key_create(free_stack, &stack_key);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT key for stack create failed: %d\n", rc);

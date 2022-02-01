@@ -15,7 +15,7 @@
  * This aims to allow for a better way to detect/protect against stack
  * overflow situations along with automatic growth capability.
  * Each individual stack will be mmap()'ed with MAP_GROWSDOWN causing
- * the Kernel to reserve stack_guard_gap number of prior additional pages 
+ * the Kernel to reserve stack_guard_gap number of prior additional pages
  * that will be reserved for no other mapping and prevented to be accessed.
  * The stacks are managed as a pool, using the mmap_stack_desc_t struct
  * being located at the bottom (upper addresses) of each stack and being
