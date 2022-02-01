@@ -263,6 +263,10 @@ func (srv *server) addEngines(ctx context.Context) error {
 	// recovered by the engine storage provider(s) during scan even if devices are in use.
 	nvmeScanResp := scanBdevStorage(srv)
 
+	if len(srv.cfg.Engines) == 0 {
+		return nil
+	}
+
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {

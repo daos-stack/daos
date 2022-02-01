@@ -397,6 +397,7 @@ func mapSSDs(ssds storage.NvmeControllers) (numaSSDsMap, error) {
 
 type storageDetails struct {
 	hugePageSize int
+	vmdEnabled   bool
 	numaPMems    numaPMemsMap
 	numaSSDs     numaSSDsMap
 }
@@ -424,15 +425,19 @@ func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSD
 	}
 
 	for nn := 0; nn < engineCount; nn++ {
-		ssds, exists := sd.numaSSDs[nn]
-		if !exists {
+		if _, exists := sd.numaSSDs[nn]; !exists {
 			// populate empty sets for missing entries
 			sd.numaSSDs[nn] = hardware.MustNewPCIAddressSet()
 		}
+		ssds := sd.numaSSDs[nn]
 		log.Debugf("ssds bound to numa %d: %v", nn, ssds)
 
 		if ssds.Len() < minNrSSDs {
 			return errors.Errorf(errInsufNrSSDs, nn, minNrSSDs, ssds.Len())
+		}
+
+		if ssds.HasVMD() {
+			sd.vmdEnabled = true
 		}
 	}
 
@@ -686,7 +691,8 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		WithFabricProvider(engines[0].Fabric.Provider).
 		WithEngines(engines...).
 		WithControlLogFile(defaultControlLogFile).
-		WithNrHugePages(reqHugePages)
+		WithNrHugePages(reqHugePages).
+		WithEnableVMD(sd.vmdEnabled)
 
 	return cfg, cfg.Validate(log, sd.hugePageSize, nil)
 }
