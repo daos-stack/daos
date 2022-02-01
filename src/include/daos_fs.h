@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,10 +48,10 @@ typedef struct dfs dfs_t;
  * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
  * for read / write access (O_RDONLY, O_RDRW).
  */
-#define DFS_BALANCED	4 /** DFS operations using a DTX */
-#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
-#define DFS_RDONLY	O_RDONLY
-#define DFS_RDWR	O_RDWR
+#define DFS_BALANCED	4 /**< DFS operations using a DTX */
+#define DFS_RELAXED	0 /**< DFS operations do not use a DTX (default mode). */
+#define DFS_RDONLY	O_RDONLY /**< Open container read-only */
+#define DFS_RDWR	O_RDWR /**< Open container read-write */
 
 /** struct holding attributes for a DFS container */
 typedef struct {
@@ -63,7 +63,7 @@ typedef struct {
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
-	/*
+	/**
 	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
 	 * If set to 0 or more generally not set to balanced explicitly, relaxed
 	 * mode will be used. In the future, Balanced mode will be the default.
@@ -936,7 +936,6 @@ dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, dao
 		}							\
 		_ret;							\
 	})
-
 
 #endif /* __cplusplus */
 #endif /* __DAOS_FS_H__ */
