@@ -193,12 +193,6 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDev
 			continue
 		}
 
-		if !fabricIF.HasProvider(provider) {
-			n.log.Debugf("Excluding device: %s, network device class: %s. Doesn't support provider",
-				fabricIF.Name, fabricIF.NetDevClass)
-			continue
-		}
-
 		if err := n.validateDevice(fabricIF); err != nil {
 			n.log.Infof("Excluding device %q: %s", fabricIF.Name, err.Error())
 			continue
