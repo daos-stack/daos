@@ -3,7 +3,7 @@
 We are pleased to announce the release of DAOS version 2.0.
 
 
-# DAOS Version 2.0.1 (2022-01-28)
+# DAOS Version 2.0.1 (2022-01-31)
 
 !!! note
     DAOS version 2.0.1 does not include the latest functional and security
@@ -31,6 +31,16 @@ The DAOS 2.0.1 release contains the following updates on top of DAOS 2.0.0:
   described in [DAOS-9325](https://daosio.atlassian.net/browse/DAOS-9325)
 
 - `spdk` has been updated from 21.07-8 to 21.07-11 (minor fixes only).
+
+## Known Issues and limitations
+
+During SOAK testing of DAOS 2.0.1,
+some test jobs have failed with DER\_CSUM(-2021) checksum errors.
+This sighting is currently being investigated to determine if this is
+caused by a client-side issue with the checksum verification code,
+triggered by a hardware media error in the testing environment, or is
+a bug in the server code that may potentially cause a data corruption.
+See [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9725).
 
 
 # DAOS Version 2.0.0 (2021-12-23)
