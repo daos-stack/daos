@@ -1487,7 +1487,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 		D_GOTO(pool_close, rc);
 
 	/* Open the remote object */
-	rc = dsc_obj_open(coh, mrone->mo_oid.id_pub, DAOS_OO_RW, &oh);
+	rc = dsc_obj_open(coh, mrone->mo_oid.id_pub, DAOS_OO_RO, &oh);
 	if (rc)
 		D_GOTO(cont_close, rc);
 
@@ -2377,7 +2377,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		D_GOTO(out_pool, rc);
 	}
 
-	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RW, &oh);
+	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RO, &oh);
 	if (rc) {
 		D_ERROR("dsc_obj_open failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_cont, rc);
