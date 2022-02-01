@@ -226,7 +226,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		provider != CRT_NA_UCX_RC_O && provider != CRT_NA_UCX_UD_O &&
 		provider != CRT_NA_UCX_RC_UD_O &&
 		provider != CRT_NA_UCX_RC_X && provider != CRT_NA_UCX_UD_X &&
-		provider != CRT_NA_UCX_RC_UD_X)) {
+		provider != CRT_NA_UCX_RC_UD_X && provider != CRT_NA_UCX_DC_X)) {
 		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
 			     	ctx->cc_self_uri, &uri_len);
 		if (rc != 0) {

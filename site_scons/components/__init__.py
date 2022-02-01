@@ -172,7 +172,18 @@ def define_mercury(reqs):
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
     retriever = \
         GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
-                         True)
+	True)
+
+    reqs.define("UCX", headers=['ucp.h'], libs=['ucp'])
+
+    UCX = ""
+    if reqs.check_component('UCX'):
+                          UCX = '-DNA_USE_UCX=ON '
+                          '-DUCX_INCLUDE_DIR=/usr/include '
+                          '-DUCP_LIBRARY=/usr/lib64/libucp.so ' 
+                          '-DUCS_LIBRARY=/usr/lib64/libucs.so '
+                          '-DUCT_LIBRARY=/usr/lib64/libuct.so '
+    
     reqs.define('mercury',
                 retriever=retriever,
                 commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
@@ -186,6 +197,7 @@ def define_mercury(reqs):
                           + MERCURY_DEBUG +
                           '-DBUILD_TESTING=OFF '
                           '-DNA_USE_OFI=ON '
+			  + UCX +
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON ../mercury ' +
                           check(reqs, 'ofi',
