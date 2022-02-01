@@ -334,6 +334,8 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*sto
 
 	// build pci address to namespace errors map
 	for _, result := range results {
+		sb.log.Debugf("processing spdk format result %+v", result)
+
 		if _, exists := resultMap[result.CtrlrPCIAddr]; !exists {
 			resultMap[result.CtrlrPCIAddr] = make(map[int]error)
 		}
@@ -345,6 +347,8 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*sto
 
 		resultMap[result.CtrlrPCIAddr][int(result.NsID)] = result.Err
 	}
+
+	sb.log.Debugf("spdk ns format result map %+v", resultMap)
 
 	// populate device responses for failed/formatted namespacess
 	for addr, nsErrMap := range resultMap {
@@ -379,6 +383,7 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*sto
 		}
 
 		devResp.Formatted = true
+		sb.log.Debugf("format device response for %q: %+v", addr, devResp)
 		resp.DeviceResponses[addr] = devResp
 	}
 
@@ -449,6 +454,7 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 	}
 	defer restoreAfterInit()
 
+	sb.log.Debugf("calling spdk bindings format")
 	results, err := sb.binding.Format(sb.log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "spdk format %s", needDevs)

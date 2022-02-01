@@ -142,7 +142,8 @@ func resultPCIAddresses(results []*FormatResult) []string {
 // Attempt wipe of each controller namespace's LBA-0.
 // Afterwards remove lockfile for each formatted device.
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
-	results, err := collectFormatResults(C.nvme_wipe_namespaces(),
+	log.Debugf("wiping nvme namespaces through spdk")
+	results, err := collectFormatResults(log, C.nvme_wipe_namespaces(),
 		"NVMe Format(): C.nvme_wipe_namespaces()")
 
 	pciAddrs := resultPCIAddresses(results)
@@ -311,7 +312,8 @@ func collectCtrlrs(retPtr *C.struct_ret_t, msgFail string) (storage.NvmeControll
 
 // collectFormatResults parses return struct to collect slice of
 // nvme.FormatResult.
-func collectFormatResults(retPtr *C.struct_ret_t, msgFail string) ([]*FormatResult, error) {
+func collectFormatResults(log logging.Logger, retPtr *C.struct_ret_t, msgFail string) ([]*FormatResult, error) {
+	log.Debugf("collecting results of wiping nvme namespaces through spdk")
 	defer clean(retPtr)
 
 	if err := checkRet(retPtr, msgFail); err != nil {
@@ -321,7 +323,10 @@ func collectFormatResults(retPtr *C.struct_ret_t, msgFail string) ([]*FormatResu
 	var fmtResults []*FormatResult
 	fmtResult := retPtr.wipe_results
 	for fmtResult != nil {
-		fmtResults = append(fmtResults, c2GoFormatResult(fmtResult))
+		log.Debugf("c wipe result: %+v", fmtResult)
+		goRes := c2GoFormatResult(fmtResult)
+		log.Debugf("go wipe result: %+v", goRes)
+		fmtResults = append(fmtResults, goRes)
 		fmtResult = fmtResult.next
 	}
 
