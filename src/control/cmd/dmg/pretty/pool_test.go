@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -323,7 +323,7 @@ two      6.0 TB 83%  12%       8/64
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage: []*control.PoolTierUsage{
 							exampleUsage[0],
-							&control.PoolTierUsage{TierName: "NVME"},
+							{TierName: "NVME"},
 						},
 						TargetsTotal:    64,
 						TargetsDisabled: 8,

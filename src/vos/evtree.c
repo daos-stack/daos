@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1233,7 +1233,7 @@ evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
 	}
 }
 
-int
+static int
 evt_desc_log_add(struct evt_context *tcx, struct evt_desc *desc)
 {
 	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;

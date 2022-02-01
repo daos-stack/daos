@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -273,7 +273,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			tCfg := storage.NewTierConfig().
-				WithBdevClass(storage.ClassNvme.String()).
+				WithStorageClass(storage.ClassNvme.String()).
 				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
 
 			engineCfg := engine.MockConfig().WithStorage(tCfg)
@@ -461,7 +461,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 			},
@@ -491,7 +491,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 			},
@@ -522,7 +522,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 			},
@@ -556,12 +556,12 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(2).PciAddr),
 				},
 			},
@@ -602,12 +602,12 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(2).PciAddr),
 				},
 			},
@@ -649,12 +649,12 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(2).PciAddr),
 				},
 			},
@@ -699,12 +699,12 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(2).PciAddr),
 				},
 			},
@@ -751,7 +751,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockPbScmMount0.Path).
 						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
 				},
@@ -789,7 +789,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockPbScmMount0.Path).
 						WithScmDeviceList("/dev/foo", "/dev/bar"),
 				},
@@ -829,7 +829,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassRam.String()).
+						WithStorageClass(storage.ClassRam.String()).
 						WithScmMountPoint(mockPbScmMount0.Path).
 						WithScmRamdiskSize(16),
 				},
@@ -895,20 +895,20 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockPbScmMount0.Path).
 						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 				{
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmMountPoint(mockPbScmMount1.Path).
 						WithScmDeviceList(mockPbScmNamespace1.Blockdev),
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(2).PciAddr),
 				},
 			},
@@ -955,7 +955,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 			},
@@ -990,7 +990,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 			},
@@ -1028,7 +1028,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 			},
@@ -1602,11 +1602,11 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					WithStorage(
 						storage.NewTierConfig().
 							WithScmMountPoint(scmMount).
-							WithScmClass(tc.sClass.String()).
+							WithStorageClass(tc.sClass.String()).
 							WithScmRamdiskSize(uint(tc.sSize)).
 							WithScmDeviceList(tc.sDevs[idx]),
 						storage.NewTierConfig().
-							WithBdevClass(tc.bClass.String()).
+							WithStorageClass(tc.bClass.String()).
 							WithBdevFileSize(tc.bSize).
 							WithBdevDeviceList(tc.bDevs[idx]...),
 					)

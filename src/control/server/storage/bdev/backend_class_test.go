@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -379,7 +379,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
       {
         "params": {
           "begin": 0,
-          "end": 7
+          "end": 255
         },
         "method": "hotplug_busid_range"
       }
@@ -461,7 +461,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				WithFabricInterfacePort(42).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmMountPoint("scmmnt"),
 					&tc.confIn,
@@ -470,11 +470,10 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				WithStorageEnableHotplug(tc.enableHotplug)
 
 			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
-				&engineConfig.Storage, storage.MockGetTopology)
+				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
 			if err != nil {
 				t.Fatal(err)
 			}
-			req.VMDEnabled = tc.enableVmd
 
 			gotErr := writeJsonConfig(log, &req)
 			common.CmpErr(t, tc.expErr, gotErr)
