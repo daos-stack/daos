@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -64,7 +64,7 @@ func (s *Provider) GetNetDevClass(dev string) (hardware.NetDevClass, error) {
 	return hardware.NetDevClass(res), err
 }
 
-// GetTopology builds a minimal topology of network devices from the contents of sysfs.
+// GetTopology builds a topology from the contents of sysfs.
 func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) {
 	if s == nil {
 		return nil, errors.New("sysfs provider is nil")
@@ -72,24 +72,24 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 
 	topo := &hardware.Topology{}
 
-	err := filepath.Walk(s.sysPath("devices"), func(path string, fi os.FileInfo, err error) error {
+	// For now we only fetch network devices from sysfs.
+	for _, subsystem := range []string{"cxi", "infiniband", "net"} {
+		if err := s.addDevices(topo, subsystem); err != nil {
+			return nil, err
+		}
+	}
+
+	return topo, nil
+}
+
+func (s *Provider) addDevices(topo *hardware.Topology, subsystem string) error {
+	err := filepath.Walk(s.sysPath("class", subsystem), func(path string, fi os.FileInfo, err error) error {
 		if fi == nil {
 			return nil
 		}
 
 		if err != nil {
 			return err
-		}
-
-		if s.isVirtual(path) {
-			// skip virtual devices
-			return nil
-		}
-
-		subsystem, err := s.getSubsystemClass(path)
-		if err != nil {
-			// Current directory does not represent a device
-			return nil
 		}
 
 		var dev *hardware.PCIDevice
@@ -123,22 +123,14 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 	})
 
 	if err == io.EOF || err == nil {
-		return topo, nil
-	}
-	return nil, err
-}
-
-func (s *Provider) isVirtual(path string) bool {
-	return strings.HasPrefix(path, s.sysPath("devices", "virtual"))
-}
-
-func (s *Provider) getSubsystemClass(path string) (string, error) {
-	subsysPath, err := filepath.EvalSymlinks(filepath.Join(path, "subsystem"))
-	if err != nil {
-		return "", errors.Wrap(err, "couldn't get subsystem data")
+		return nil
 	}
 
-	return filepath.Base(subsysPath), nil
+	return err
+}
+
+func (s *Provider) isNet(path string) bool {
+	return strings.HasPrefix(path, s.sysPath("class", "net"))
 }
 
 func (s *Provider) getNetworkDevice(path string) (*hardware.PCIDevice, error) {
@@ -153,10 +145,9 @@ func (s *Provider) getNetworkDevice(path string) (*hardware.PCIDevice, error) {
 	}
 
 	devName := filepath.Base(path)
-	netDevName := netDev[0].Name()
 
 	var devType hardware.DeviceType
-	if netDevName == devName {
+	if s.isNet(path) {
 		devType = hardware.DeviceTypeNetInterface
 	} else {
 		devType = hardware.DeviceTypeOFIDomain
