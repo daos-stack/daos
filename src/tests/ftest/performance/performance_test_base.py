@@ -298,9 +298,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             # Try this even if IOR failed because it could give us useful info
             self.verify_system_status()
 
-            # Must manually stop because ior is ran in a subprocess
-            self.stop_dfuse()
-
     def run_performance_ior(self, namespace=None, use_intercept=True, stop_delay_write=None,
                             stop_delay_read=None, num_iterations=1,
                             restart_between_iterations=True):
