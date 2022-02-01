@@ -291,10 +291,6 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
-        # Additionally try to prepare any discovered VMD NVMe devices.
-        if "True" in os.environ["DAOS_ENABLE_VMD"]:
-            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
-
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
             using_dcpm = self.manager.job.using_dcpm
@@ -454,10 +450,6 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.nvme_only.value = True
         cmd.sub_command_class.sub_command_class.reset.value = True
         cmd.sub_command_class.sub_command_class.force.value = True
-
-        # Use VMD option when resetting storage if it's prepared with VMD.
-        if "True" in os.environ["DAOS_ENABLE_VMD"]:
-            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=120)
@@ -952,13 +944,13 @@ class DaosServerManager(SubprocessManager):
             nvme_size.  This is intended to allow testing of these combinations.
 
         Args:
-            size (object): the str, int, or None value for the dmp pool create
+            size (object): the str, int, or None value for the dmg pool create
                 size parameter.
-            tier_ratio (object): the int or None value for the dmp pool create
+            tier_ratio (object): the int or None value for the dmg pool create
                 size parameter.
-            scm_size (object): the str, int, or None value for the dmp pool
+            scm_size (object): the str, int, or None value for the dmg pool
                 create scm_size parameter.
-            nvme_size (object): the str, int, or None value for the dmp pool
+            nvme_size (object): the str, int, or None value for the dmg pool
                 create nvme_size parameter.
             min_targets (int, optional): the minimum number of targets per
                 engine that can be configured. Defaults to 1.
