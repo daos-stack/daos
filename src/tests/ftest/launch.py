@@ -8,7 +8,6 @@
 # this needs to be disabled as list_tests.py is still using python2
 # pylint: disable=raise-missing-from
 
-
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from datetime import datetime
 import errno
