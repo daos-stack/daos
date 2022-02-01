@@ -377,7 +377,7 @@ public class DaosFileSystem extends FileSystem {
 
     daosFile.createNewFile(
             Constants.DAOS_MODLE,
-            DaosObjectType.OC_SX,
+            DaosObjectClass.OC_SX,
             this.chunkSize,
             true);
 
