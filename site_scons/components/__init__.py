@@ -178,11 +178,11 @@ def define_mercury(reqs):
 
     UCX = ""
     if reqs.check_component('UCX'):
-                          UCX = '-DNA_USE_UCX=ON '
-                          '-DUCX_INCLUDE_DIR=/usr/include '
-                          '-DUCP_LIBRARY=/usr/lib64/libucp.so ' 
-                          '-DUCS_LIBRARY=/usr/lib64/libucs.so '
-                          '-DUCT_LIBRARY=/usr/lib64/libuct.so '
+        UCX = '-DNA_USE_UCX=ON '
+        '-DUCX_INCLUDE_DIR=/usr/include '
+        '-DUCP_LIBRARY=/usr/lib64/libucp.so '
+        '-DUCS_LIBRARY=/usr/lib64/libucs.so '
+        '-DUCT_LIBRARY=/usr/lib64/libuct.so '
     
     reqs.define('mercury',
                 retriever=retriever,
