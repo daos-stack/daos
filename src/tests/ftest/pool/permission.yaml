@@ -19,8 +19,6 @@ pool:
     name: daos_server
 createtests:
     createmode: !mux
-        mode_RO:
-            mode: 73
         mode_RW:
             mode: 146
         mode_EX:
