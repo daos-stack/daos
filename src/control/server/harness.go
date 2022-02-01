@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -59,7 +59,7 @@ type Engine interface {
 	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
 	StorageFormatNVMe() commonpb.NvmeControllerResults
-	StorageWriteNvmeConfig() error
+	StorageWriteNvmeConfig(context.Context) error
 
 	// This is a more reasonable surface that will be easier to maintain and test.
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)

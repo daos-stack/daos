@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -85,8 +85,8 @@ func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
 	return
 }
 
-func (ei *EngineInstance) bdevWriteNvmeConfig() error {
-	return ei.storage.WriteNvmeConfig()
+func (ei *EngineInstance) bdevWriteNvmeConfig(ctx context.Context) error {
+	return ei.storage.WriteNvmeConfig(ctx, ei.log)
 }
 
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
@@ -155,7 +155,6 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 
 // StorageWriteNvmeConfig writes output NVMe config file used to allocate devices to be used by an
 // engine process.
-func (ei *EngineInstance) StorageWriteNvmeConfig() error {
-	ei.log.Infof("Writing nvme config file for %s instance %d", build.DataPlaneName, ei.Index())
-	return ei.bdevWriteNvmeConfig()
+func (ei *EngineInstance) StorageWriteNvmeConfig(ctx context.Context) error {
+	return ei.bdevWriteNvmeConfig(ctx)
 }

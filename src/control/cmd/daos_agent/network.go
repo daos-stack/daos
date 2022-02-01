@@ -13,11 +13,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
-)
-
-const (
-	defaultExcludeInterfaces = "lo"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
 type netScanCmd struct {
@@ -34,43 +31,25 @@ func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
 }
 
 func (cmd *netScanCmd) Execute(_ []string) error {
-	netCtx, err := netdetect.Init(context.Background())
+	fabricScanner := hwprov.DefaultFabricScanner(cmd.log)
+
+	results, err := fabricScanner.Scan(context.Background())
 	if err != nil {
-		return err
-	}
-	defer netdetect.CleanUp(netCtx)
-
-	if !netdetect.HasNUMA(netCtx) {
-		cmd.printUnlessJson("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
-	}
-
-	provider := cmd.FabricProvider
-	if strings.EqualFold(cmd.FabricProvider, "all") {
-		provider = ""
-	}
-
-	results, err := netdetect.ScanFabric(netCtx, provider, defaultExcludeInterfaces)
-	if err != nil {
-		exitWithError(cmd.log, err)
 		return nil
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, results)
+	if cmd.FabricProvider == "" {
+		cmd.FabricProvider = "all"
 	}
 
-	hf := &control.HostFabric{}
-	for _, fi := range results {
-		hf.AddInterface(&control.HostFabricInterface{
-			Provider: fi.Provider,
-			Device:   fi.DeviceName,
-			NumaNode: uint32(fi.NUMANode),
-		})
-	}
-
+	hf := fabricInterfaceSetToHostFabric(results, cmd.FabricProvider)
 	hfm := make(control.HostFabricMap)
 	if err := hfm.Add("localhost", hf); err != nil {
 		return err
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(os.Stdout, hfm)
 	}
 
 	var bld strings.Builder
@@ -80,4 +59,36 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 	cmd.log.Info(bld.String())
 
 	return nil
+}
+
+func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProvider string) *control.HostFabric {
+	hf := &control.HostFabric{}
+	for _, fiName := range fis.Names() {
+		fi, err := fis.GetInterface(fiName)
+		if err != nil {
+			continue
+		}
+
+		if fi.DeviceClass == hardware.Loopback {
+			// Ignore loopback
+			continue
+		}
+
+		name := fi.OSDevice
+		if name == "" {
+			name = fi.Name
+		}
+		for _, provider := range fi.Providers.ToSlice() {
+			if filterProvider == "all" || strings.HasPrefix(provider, filterProvider) {
+				hf.AddInterface(&control.HostFabricInterface{
+					Provider:    provider,
+					Device:      name,
+					NumaNode:    uint32(fi.NUMANode),
+					NetDevClass: fi.DeviceClass,
+				})
+			}
+		}
+	}
+
+	return hf
 }

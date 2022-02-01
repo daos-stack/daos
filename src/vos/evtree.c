@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1233,7 +1233,7 @@ evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
 	}
 }
 
-int
+static int
 evt_desc_log_add(struct evt_context *tcx, struct evt_desc *desc)
 {
 	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
@@ -2787,7 +2787,7 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	rc = 0; /* Assume there is no data */
 	evt_ent_array_for_each(ent, tcx->tc_iter.it_entries) {
 		if (ent->en_minor_epc != EVT_MINOR_EPC_MAX) {
-			D_DEBUG(DB_IO, "Found "DF_ENT", stopping search\n", DP_ENT(ent));
+			D_INFO("Found orphaned extent "DF_ENT"\n", DP_ENT(ent));
 			rc = 1;
 			break;
 		}
@@ -2795,7 +2795,6 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	}
 out:
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
-	evt_tcx_decref(tcx); /* -1 for open */
 	return rc;
 }
 

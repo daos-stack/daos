@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,7 +69,8 @@ struct ds_cont_child {
 				 sc_closing:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
-				 sc_vos_agg_active:1;
+				 sc_vos_agg_active:1,
+				 sc_ec_agg_active:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
@@ -135,7 +136,7 @@ struct agg_param {
 };
 
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
-				   daos_epoch_range_t *epr, bool full_scan,
+				   daos_epoch_range_t *epr, uint32_t flags,
 				   struct agg_param *param, uint64_t *msecs);
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
@@ -224,39 +225,6 @@ int ds_cont_revoke_snaps(struct ds_iv_ns *ns, uuid_t cont_uuid,
 /** find the container open handle from its uuid */
 int ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid,
 		     struct ds_cont_hdl **coh_p);
-
-struct csum_recalc {
-	struct evt_extent	 cr_log_ext;
-	struct evt_extent	*cr_phy_ext;
-	struct agg_phy_ent	*cr_phy_ent; /* Incomplete ex vos_aggregate.c */
-	struct dcs_csum_info	*cr_phy_csum;
-	daos_off_t		 cr_phy_off;
-	unsigned int		 cr_prefix_len;
-	unsigned int		 cr_suffix_len;
-};
-
-struct csum_recalc_args {
-	struct bio_sglist	*cra_bsgl;	/* read sgl */
-	d_sg_list_t		*cra_sgl;	/* write sgl */
-	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
-	struct csum_recalc	*cra_recalcs;   /* recalc info */
-	void			*cra_buf;	/* read buffer */
-	struct bio_xs_context	*cra_bio_ctxt;	/* used to log error */
-	daos_size_t		 cra_seg_size;  /* size of coalesced entry */
-	unsigned int		 cra_seg_cnt;   /* # of read segments */
-	unsigned int		 cra_buf_len;	/* length of read buffer */
-	int			 cra_tgt_id;	/* VOS target ID */
-	int			 cra_rc;	/* return code */
-	ABT_eventual		 csum_eventual;
-};
-
-/* Callback function to pass to vos_aggregation */
-void
-ds_csum_recalc(void *args);
-
-/* Used for VOS unit tests */
-void
-ds_csum_agg_recalc(void *args);
 
 int dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		  unsigned int flags, daos_handle_t *coh);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,7 @@
 /**
  * DAOS server threading model:
  * 1) a set of "target XS (xstream) set" per engine (dss_tgt_nr)
- * There is a "-c" option of daos_server to set the number.
+ * There is a "-t" option of daos_server to set the number.
  * For DAOS pool, one target XS set per VOS target to avoid extra lock when
  * accessing VOS file.
  * With in each target XS set, there is one "main XS":
@@ -122,6 +122,32 @@ struct dss_xstream_data {
 };
 
 static struct dss_xstream_data	xstream_data;
+
+int
+dss_xstream_set_affinity(struct dss_xstream *dxs)
+{
+	int rc;
+
+	/**
+	 * Set cpu affinity
+	 */
+	rc = hwloc_set_cpubind(dss_topo, dxs->dx_cpuset, HWLOC_CPUBIND_THREAD);
+	if (rc) {
+		D_ERROR("failed to set cpu affinity: %d\n", errno);
+		return rc;
+	}
+
+	/**
+	 * Set memory affinity, but fail silently if it does not work since some
+	 * systems return ENOSYS.
+	 */
+	rc = hwloc_set_membind(dss_topo, dxs->dx_cpuset, HWLOC_MEMBIND_BIND,
+			       HWLOC_MEMBIND_THREAD);
+	if (rc)
+		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
+
+	return 0;
+}
 
 bool
 dss_xstream_exiting(struct dss_xstream *dxs)
@@ -323,23 +349,9 @@ dss_srv_handler(void *arg)
 	int				 rc;
 	bool				 signal_caller = true;
 
-	/**
-	 * Set cpu affinity
-	 */
-	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
-	if (rc) {
-		D_ERROR("failed to set cpu affinity: %d\n", errno);
-		goto signal;
-	}
-
-	/**
-	 * Set memory affinity, but fail silently if it does not work since some
-	 * systems return ENOSYS.
-	 */
-	rc = hwloc_set_membind(dss_topo, dx->dx_cpuset, HWLOC_MEMBIND_BIND,
-			       HWLOC_MEMBIND_THREAD);
+	rc = dss_xstream_set_affinity(dx);
 	if (rc)
-		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
+		goto signal;
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG, dx->dx_xs_id, dx->dx_tgt_id);
@@ -919,19 +931,11 @@ dss_xstreams_init(void)
 	if (sched_prio_disabled)
 		D_INFO("ULT prioritizing is disabled.\n");
 
-	d_getenv_int("DAOS_SCHED_STATS_INTVL", &sched_stats_intvl);
-	if (sched_stats_intvl != 0) {
-		D_INFO("Print sched stats every %u seconds\n",
-		       sched_stats_intvl);
-		/* Convert seconds to milliseconds */
-		sched_stats_intvl = sched_stats_intvl * 1000;
-	}
-
 	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
-		       sched_stats_intvl, SCHED_RELAX_INTVL_DEFAULT);
+		       sched_relax_intvl, SCHED_RELAX_INTVL_DEFAULT);
 		sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 	} else {
 		D_INFO("CPU relax interval is set to %u msecs\n",

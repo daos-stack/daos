@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,11 +27,9 @@ class IoConfGen(ExecutableCommand):
 
         Args:
             command (str): string of the command to be executed.
-            path (str, optional): path to location of command binary file.
-                Defaults to ""
+            path (str, optional): path to location of command binary file. Defaults to ""
         """
-        super().__init__("/run/gen_io_conf/*",
-                                        "daos_gen_io_conf", path)
+        super().__init__("/run/gen_io_conf/*", "daos_gen_io_conf", path)
         self.verbose = True
         self.env = env
         self.ranks = FormattedParameter("-g {}")
@@ -54,9 +52,8 @@ class IoConfGen(ExecutableCommand):
 
         """
         success_msg = 'daos_run_io_conf completed successfully'
-        command = " ".join([os.path.join(self._path, "daos_run_io_conf"),
-                            " -n ", dmg_config_file,
-                            self.filename.value])
+        command = " ".join([os.path.join(self._path, "daos_run_io_conf"), " -n ",
+                            dmg_config_file, self.filename.value])
 
         manager = Orterun(command)
         # run daos_run_io_conf Command using Openmpi
@@ -82,8 +79,7 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
 
     Args:
         record_size(Number): Record Size to fill the data.
-        filename (string): Filename (with/without path) for
-                           creating the data set.
+        filename (string): Filename (with/without path) for creating the data set.
     """
     rand_ofs_end = random.randint(1, record_size - 1) #nosec
     rand_ofs_start = rand_ofs_end - 1
@@ -93,12 +89,12 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
         "akey akey_0",
         "iod_size 1",
         "pool --query",
-        "update --tx 0 --recx \"[0, {}]045\"".format(record_size),
-        "update --tx 1 --recx \"[{}, {}]123\"".format(
+        "update --tx 0 --recx \"[0, {}]045 \"".format(record_size),
+        "update --tx 1 --recx \"[{}, {}]123 \"".format(
             rand_ofs_start, rand_ofs_end),
         "fetch  --tx 1 -v --recx \"[0, {0}]045 [{0}, {1}]123 [{1}, "
         "{2}]045\"".format(rand_ofs_start, rand_ofs_end, record_size),
-        "pool --query")
+        "pool --query\n")
 
     try:
         file_hd = open(filename, "w+")
@@ -131,8 +127,7 @@ class IoConfTestBase(TestWithServers):
         """Execute the rebuild test steps."""
         self.setup_test_pool()
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
-        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), self.testfile,
-                            env=pool_env)
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), self.testfile, env=pool_env)
         io_conf.get_params(self)
         io_conf.run()
         # Run test file using daos_run_io_conf
@@ -147,6 +142,7 @@ class IoConfTestBase(TestWithServers):
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
         io_conf = IoConfGen(os.path.join(self.prefix, "bin"), self.testfile,
                             env=pool_env)
+
         io_conf.get_params(self)
         for record_size in total_sizes:
             print("Start test for record size = {}".format(record_size))
