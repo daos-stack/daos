@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -85,6 +85,8 @@ struct dtx_handle {
 					 dth_verified:1,
 					 /* The DTX handle is aborted. */
 					 dth_aborted:1,
+					 /* The modification is done by others. */
+					 dth_already:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 

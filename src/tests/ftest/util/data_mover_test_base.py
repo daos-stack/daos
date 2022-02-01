@@ -7,7 +7,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import os
 
 from command_utils_base import CommandFailure
-from daos_utils import DaosCommand
 from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
 from ior_test_base import IorTestBase
@@ -110,7 +109,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dfuse_hosts = self.agent_managers[0].hosts
 
         # initialize daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd = self.get_daos_command()
 
         # Get the processes for each explicitly
         # This is needed because both IorTestBase and MdtestBase

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@
 #include <daos.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
+#include "vos_policy.h"
 
 /** I/O context */
 struct vos_io_context {
@@ -2130,8 +2131,8 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = vos_media_select(vos_cont2pool(ioc->ic_cont),
-					 iod->iod_type, size);
+		media = vos_policy_media_select(vos_cont2pool(ioc->ic_cont),
+					 iod->iod_type, size, VOS_IOS_GENERIC);
 
 		recx_csum = (iod_csums != NULL) ? &iod_csums[i] : NULL;
 
@@ -2252,13 +2253,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
 
+	umem = vos_ioc2umm(ioc);
+
 	if (err != 0)
 		goto abort;
 
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
-
-	umem = vos_ioc2umm(ioc);
 
 	err = vos_tx_begin(dth, umem);
 	if (err != 0)
@@ -2316,6 +2317,15 @@ abort:
 				  ioc->ic_bound)) {
 			err = -DER_TX_RESTART;
 		}
+	}
+
+	if (err == 0 && ioc->ic_epr.epr_hi > ioc->ic_obj->obj_df->vo_max_write) {
+		if (DAOS_ON_VALGRIND)
+			err = umem_tx_xadd_ptr(umem, &ioc->ic_obj->obj_df->vo_max_write,
+					       sizeof(ioc->ic_obj->obj_df->vo_max_write),
+					       POBJ_XADD_NO_SNAPSHOT);
+		if (err == 0)
+			ioc->ic_obj->obj_df->vo_max_write = ioc->ic_epr.epr_hi;
 	}
 
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,

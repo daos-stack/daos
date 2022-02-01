@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -350,7 +350,7 @@ struct vos_obj_df {
 	/** Offset of known existing dkey */
 	umem_off_t			vo_known_dkey;
 	/** Attributes for future use */
-	uint64_t			vo_attr;
+	daos_epoch_t			vo_max_write;
 	/** Incarnation log for the object */
 	struct ilog_df			vo_ilog;
 	/** VOS dkey btree root */
