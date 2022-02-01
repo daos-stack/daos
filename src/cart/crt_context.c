@@ -220,15 +220,15 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		crt_context_destroy(ctx, true);
 		D_GOTO(out, rc);
 	}
-	
+
 	if (crt_is_service() || (provider != CRT_NA_UCX_RC &&
 		provider != CRT_NA_UCX_UD && provider != CRT_NA_UCX_RC_UD &&
 		provider != CRT_NA_UCX_RC_O && provider != CRT_NA_UCX_UD_O &&
 		provider != CRT_NA_UCX_RC_UD_O &&
 		provider != CRT_NA_UCX_RC_X && provider != CRT_NA_UCX_UD_X &&
 		provider != CRT_NA_UCX_RC_UD_X && provider != CRT_NA_UCX_DC_X)) {
-		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
-			     	ctx->cc_self_uri, &uri_len);
+			rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
+					     ctx->cc_self_uri, &uri_len);
 		if (rc != 0) {
 			D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
