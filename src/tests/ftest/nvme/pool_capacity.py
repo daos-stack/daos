@@ -201,8 +201,7 @@ class NvmePoolCapacity(TestWithServers):
             # Verify the queue and make sure no FAIL for any IOR run
             # Test should fail with ENOSPC.
             while not self.out_queue.empty():
-                if (self.out_queue.get() == "FAIL" and test[4] == "PASS") \
-                     or (self.out_queue.get() != "FAIL" and test[4] == "FAIL"):
+                if (self.out_queue.get() == "FAIL" and test[4] == "PASS"):
                     self.fail("FAIL")
 
             # Destroy the last num_pool pools created

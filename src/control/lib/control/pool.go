@@ -165,7 +165,6 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 	}
 
 	out.Uuid = uuid.New().String()
-
 	return
 }
 
@@ -271,6 +270,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 
 	pcr := new(PoolCreateResp)
 	pcr.UUID = pbReq.Uuid
+
 	return pcr, convert.Types(pbPcr, pcr)
 }
 
@@ -570,7 +570,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	if err != nil {
 		return nil, err
 	}
-
 	pbResp, ok := msResp.(*mgmtpb.PoolGetPropResp)
 	if !ok {
 		return nil, errors.New("unable to extract PoolGetPropResp from MS response")

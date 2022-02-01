@@ -898,6 +898,7 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	d_list_for_each_entry_safe(dsp, tmp, check_list, dsp_link) {
 		int		leader_tgt = PO_COMP_ID_ALL;
 		int		tgt;
+		int		count = 0;
 		bool		drop = false;
 
 		if (!(dsp->dsp_mbs.dm_flags & DMF_CONTAIN_LEADER)) {
@@ -973,8 +974,15 @@ again:
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
-		if (target->ta_comp.co_status != PO_COMP_ST_UPIN)
+		if (target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+			if (unlikely(++count % 10 == 3))
+				D_WARN("Get stale DTX leader %u/%u (st: %x) for "DF_DTI
+				       " %d times, maybe dead loop\n",
+				       target->ta_comp.co_rank, target->ta_comp.co_id,
+				       target->ta_comp.co_status, DP_DTI(&dsp->dsp_xid), count);
+
 			goto again;
+		}
 
 		d_list_for_each_entry(drr, &head, drr_link) {
 			if (drr->drr_rank == target->ta_comp.co_rank &&
