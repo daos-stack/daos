@@ -5,6 +5,19 @@
  */
 #ifndef __DUAL_PROVIDER_COMMON_H__
 #define __DUAL_PROVIDER_COMMON_H__
+static int do_shutdown;
+static int g_my_rank;
+
+
+static void
+exit_on_line(int line)
+{
+	printf("Failed on line %d\n", line);
+	exit(0);
+}
+
+#define error_exit() exit_on_line(__LINE__)
+
 
 #define MY_BASE 0x010000000
 #define MY_VER  0
@@ -69,6 +82,35 @@ struct crt_proto_format my_proto_fmt = {
 };
 
 static int
+bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
+{
+	void	*buff;
+	int	rc;
+
+	DBG_PRINT("Bulk transfer failed with rc=%d\n", info->bci_rc);
+	if (info->bci_rc != 0) {
+		error_exit();
+	}
+
+	DBG_PRINT("Bulk transfer done\n");
+
+	rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
+	if (rc != 0) {
+		D_ERROR("Failed to send response\n");
+		error_exit();
+	}
+
+	crt_bulk_free(info->bci_bulk_desc->bd_local_hdl);
+
+	buff = info->bci_arg;
+	D_FREE(buff);
+
+	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
+
+	return 0;
+}
+
+static int
 handler_ping(crt_rpc_t *rpc)
 {
 	struct RPC_PING_in	*input;
@@ -80,6 +122,46 @@ handler_ping(crt_rpc_t *rpc)
 
 	output->rc = 0;
 	DBG_PRINT("Sizes: %d %d\n", input->size1, input->size2);
+
+	if (g_my_rank == 1) {
+		struct crt_bulk_desc	bulk_desc;
+		crt_bulk_t		dst_bulk;
+		char			*dst;
+		d_sg_list_t		sgl;
+
+		DBG_PRINT("Initiating transfer\n");
+
+		D_ALLOC_ARRAY(dst, input->size2);
+
+		rc = d_sgl_init(&sgl, 1);
+		if (rc != 0)
+			error_exit();
+
+		sgl.sg_iovs[0].iov_buf = dst;
+		sgl.sg_iovs[0].iov_buf_len = input->size2;
+		sgl.sg_iovs[0].iov_len = input->size2;
+
+		rc = crt_bulk_create(rpc->cr_ctx, &sgl, CRT_BULK_RW, &dst_bulk);
+		if (rc != 0)
+			error_exit();
+
+		RPC_PUB_ADDREF(rpc);
+		bulk_desc.bd_rpc = rpc;
+		bulk_desc.bd_bulk_op = CRT_BULK_GET;
+		bulk_desc.bd_remote_hdl = input->bulk_hdl2;
+		bulk_desc.bd_remote_off = 0;
+		bulk_desc.bd_local_hdl = dst_bulk;
+		bulk_desc.bd_local_off = 0;
+		bulk_desc.bd_len = input->size2;
+		rc = crt_bulk_bind_transfer(&bulk_desc, bulk_transfer_done_cb,
+				       dst, NULL);
+		if (rc != 0) {
+			D_ERROR("transfer failed; rc=%d\n", rc);
+			error_exit();
+		}
+		
+	}
+
 	rc = crt_reply_send(rpc);
 	if (rc)
 		D_ERROR("Failed with rc=%d\n", rc);
@@ -87,7 +169,6 @@ handler_ping(crt_rpc_t *rpc)
 	return 0;
 }
 
-static int do_shutdown;
 
 static int
 handler_shutdown(crt_rpc_t *rpc)

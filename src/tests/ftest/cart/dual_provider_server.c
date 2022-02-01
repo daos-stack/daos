@@ -22,15 +22,6 @@
 
 #include "dual_provider_common.h"
 
-static void
-exit_on_line(int line)
-{
-	printf("Failed on line %d\n", line);
-	exit(0);
-}
-
-#define error_exit() exit_on_line(__LINE__)
-
 
 
 static void
@@ -101,8 +92,6 @@ int main(int argc, char **argv)
 	uint32_t	grp_size;
 	crt_group_t	*grp;
 	char		*save_ptr;
-	d_rank_t	my_rank;
-
 
 	/* Get self rank and a group config file from envs set by crt_launch */
 	env_self_rank = getenv("CRT_L_RANK");
@@ -113,8 +102,8 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	my_rank = atoi(env_self_rank);
-	crtu_test_init(my_rank, 20, true, true);
+	g_my_rank = atoi(env_self_rank);
+	crtu_test_init(g_my_rank, 20, true, true);
 
 	iface0 = default_iface0;
 	iface1 = default_iface1;
@@ -186,7 +175,7 @@ int main(int argc, char **argv)
 	}
 
 	printf("----------------------------------------\n");
-	printf("My_rank: %d\n", my_rank);
+	printf("My_rank: %d\n", g_my_rank);
 	printf("Provider0: '%s' Interface0: '%s' Domain0: '%s'\n", provider0, iface0, domain0);
 	printf("Provider1: '%s' Interface1: '%s' Domain1: '%s'\n", provider1, iface1, domain1);
 	printf("File to transfer: '%s'\n",
@@ -229,7 +218,7 @@ int main(int argc, char **argv)
 	if (!grp)
 		error_exit();
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(g_my_rank);
 	if (rc != 0)
 		error_exit();
 
@@ -251,7 +240,7 @@ int main(int argc, char **argv)
 				break;
 			}
 
-			if (parsed_rank == my_rank)
+			if (parsed_rank == g_my_rank)
 				continue;
 
 
@@ -267,7 +256,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	rc = crt_rank_uri_get(grp, my_rank, 0, &my_uri);
+	rc = crt_rank_uri_get(grp, g_my_rank, 0, &my_uri);
 	if (rc)
 		error_exit();
 
@@ -276,12 +265,12 @@ int main(int argc, char **argv)
 	if (rc)
 		error_exit();
 
-	DBG_PRINT("self_rank=%d uri=%s file=%s group_size=%d\n", my_rank, my_uri, env_group_cfg, grp_size);
+	DBG_PRINT("self_rank=%d uri=%s file=%s group_size=%d\n", g_my_rank, my_uri, env_group_cfg, grp_size);
 
 	D_FREE(my_uri);
 
 
-	if (my_rank == 0) {
+	if (g_my_rank == 0) {
 		DBG_PRINT("Saving group config info\n");
 		rc = crt_group_config_save(NULL, true);
 		if (rc)
