@@ -15,6 +15,43 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+type ctxKey string
+
+const (
+	topoKey    ctxKey = "hwlocTopology"
+	cleanupKey ctxKey = "hwlocFreeTopology"
+)
+
+// CacheContext adds a cache of the hwloc topology to the provided context.
+func CacheContext(parent context.Context, log logging.Logger) (context.Context, error) {
+	topo, cleanup, err := NewProvider(log).initTopology()
+	if err != nil {
+		return parent, err
+	}
+
+	topoCtx := context.WithValue(parent, topoKey, topo)
+	return context.WithValue(topoCtx, cleanupKey, cleanup), nil
+}
+
+// Cleanup frees the hwloc cache in the context, if any.
+func Cleanup(ctx context.Context) error {
+	cleanup, ok := ctx.Value(cleanupKey).(func())
+	if !ok {
+		return errors.New("context has no hwloc cleanup function")
+	}
+	cleanup()
+	return nil
+}
+
+func topologyFromContext(ctx context.Context) (*topology, error) {
+	topo, ok := ctx.Value(topoKey).(*topology)
+	if !ok {
+		return nil, errors.New("no topology cached in context")
+	}
+
+	return topo, nil
+}
+
 // NewProvider returns a new hwloc Provider.
 func NewProvider(log logging.Logger) *Provider {
 	return &Provider{
@@ -32,7 +69,7 @@ type Provider struct {
 // GetTopology fetches a simplified hardware topology via hwloc.
 func (p *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) {
 	ch := make(chan topologyResult)
-	go p.getTopologyAsync(ch)
+	go p.getTopologyAsync(ctx, ch)
 
 	select {
 	case <-ctx.Done():
@@ -47,10 +84,10 @@ type topologyResult struct {
 	err      error
 }
 
-func (p *Provider) getTopologyAsync(ch chan topologyResult) {
+func (p *Provider) getTopologyAsync(ctx context.Context, ch chan topologyResult) {
 	p.log.Debugf("getting topology with hwloc version 0x%x", p.api.compiledVersion())
 
-	topo, cleanup, err := p.initTopology()
+	topo, cleanup, err := p.getRawTopology(ctx)
 	if err != nil {
 		ch <- topologyResult{
 			err: err,
@@ -72,6 +109,17 @@ func (p *Provider) getTopologyAsync(ch chan topologyResult) {
 			NUMANodes: nodes,
 		},
 	}
+}
+
+func (p *Provider) getRawTopology(ctx context.Context) (*topology, func(), error) {
+	if topo, err := topologyFromContext(ctx); err == nil {
+		// NB: If we're using the cached topology, we needn't worry about freeing it now.
+		// The caller that initialized the context will clean it up when they're done
+		// with it.
+		return topo, func() {}, nil
+	}
+
+	return p.initTopology()
 }
 
 // initTopo initializes the hwloc topology and returns it to the caller along with the topology
@@ -339,7 +387,7 @@ func osDevTypeToHardwareDevType(osType int) hardware.DeviceType {
 
 // GetNUMANodeIDForPID fetches the NUMA node ID associated with a given process ID.
 func (p *Provider) GetNUMANodeIDForPID(ctx context.Context, pid int32) (uint, error) {
-	topo, cleanupTopo, err := p.initTopology()
+	topo, cleanupTopo, err := p.getRawTopology(ctx)
 	if err != nil {
 		return 0, errors.Wrap(err, "initializing topology")
 	}

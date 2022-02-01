@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
@@ -76,7 +77,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 		monitor:    procmon,
 	})
 
-	err = drpcServer.Start(ctx)
+	// Cache hwloc data in context on startup, since it'll be used extensively at runtime.
+	hwlocCtx, err := hwloc.CacheContext(ctx, cmd.log)
+	if err != nil {
+		return err
+	}
+	defer hwloc.Cleanup(hwlocCtx)
+
+	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
 		cmd.log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
 		return err
