@@ -700,5 +700,4 @@ daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_pro
 	})
 
 #endif /* __cplusplus */
-
 #endif /* __DAOS_CONT_H__ */
