@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -298,6 +298,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             # Try this even if IOR failed because it could give us useful info
             self.verify_system_status()
 
+            # Must manually stop because ior is ran in a subprocess
+            self.stop_dfuse()
+
     def run_performance_ior(self, namespace=None, use_intercept=True, stop_delay_write=None,
                             stop_delay_read=None, num_iterations=1,
                             restart_between_iterations=True):
@@ -398,6 +401,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.ior_cmd.sw_wearout.update(None)
             self.ior_cmd.sw_deadline.update(None)
             self._run_performance_ior_single(stop_rank_read_s, intercept)
+
+            # Manually stop dfuse after ior read completes
+            self.stop_dfuse()
 
             # Wait for rebuild if we stopped a rank
             if stop_rank_read_s:

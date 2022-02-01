@@ -9,7 +9,7 @@ hosts:
     - client-E
     - client-F
     - client-G
-timeout: 210
+timeout: 240
 server_config:
     name: daos_server
     control_log_mask: INFO
