@@ -16,7 +16,7 @@ class EcodMdtest(MdtestBase):
     :avocado: recursive
     """
 
-    def test_ec_mdtest_large(self):
+    def test_ec_mdtest_smoke(self):
         """Jira ID: DAOS-2494.
 
         Test Description:
