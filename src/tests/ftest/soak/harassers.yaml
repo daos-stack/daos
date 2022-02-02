@@ -161,6 +161,7 @@ ior_harasser:
         mount_dir: "/tmp/daos_dfuse/ior"
         disable_caching: True
 fio_harasser:
+  job_timeout: 20
   names:
       - global
       - test

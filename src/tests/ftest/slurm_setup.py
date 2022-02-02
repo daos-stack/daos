@@ -21,7 +21,7 @@ distro_info = detect()
 SLURM_CONF = "/etc/slurm/slurm.conf"
 PACKAGE_VERSION = None
 if "suse" in distro_info.name.lower():
-    distro = "suse.lp153"
+    distro = "suse.lp{}{}".format(distro_info.version, distro_info.release)
 elif "centos" in distro_info.name.lower() and distro_info.version == "7":
     distro = "el7"
     PACKAGE_VERSION = "18.08.8-1.{}.x86_64".format(distro)

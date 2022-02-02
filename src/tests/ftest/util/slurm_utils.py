@@ -266,7 +266,7 @@ def watch_job(handle, maxwait, test_obj):
         test_obj.job_done(params)
 
 
-def srun_str(hosts, cmd, srun_params=None):
+def srun_str(hosts, cmd, srun_params=None, timeout=None):
     """Create string of cmd with srun and params.
 
     Args:
@@ -282,6 +282,8 @@ def srun_str(hosts, cmd, srun_params=None):
     params = ""
     if hosts is not None:
         params_list.append("--nodelist {}".format(hosts))
+    if timeout is not None:
+        params_list.append("--time {}".format(timeout))
     if srun_params is not None:
         for key, value in list(srun_params.items()):
             params_list.extend(["--{}={}".format(key, value)])
@@ -290,20 +292,24 @@ def srun_str(hosts, cmd, srun_params=None):
     return str(cmd)
 
 
-def srun(hosts, cmd, srun_params=None, timeout=30):
+def srun(hosts, cmd, srun_params=None, timeout=60):
     """Run srun cmd on slurm partition.
 
     Args:
         hosts (str): hosts to allocate
         cmd (str): cmdline to execute
         srun_params(dict): additional params for srun
+        timeout
 
     Returns:
         CmdResult: object containing the result (exit status, stdout, etc.) of
             the srun command
 
     """
-    cmd = srun_str(hosts, cmd, srun_params)
+    srun_time = int(timeout/60)
+    if srun_time < 1:
+        srun_time = 1
+    cmd = srun_str(hosts, cmd, srun_params, str(srun_time))
     try:
         result = run_command(cmd, timeout)
     except DaosTestError as error:

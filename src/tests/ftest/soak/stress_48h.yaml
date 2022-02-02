@@ -146,6 +146,7 @@ ior_stress:
         mount_dir: "/tmp/daos_dfuse/ior/"
         disable_caching: True
 fio_stress:
+  job_timeout: 30
   names:
     - global
     - test

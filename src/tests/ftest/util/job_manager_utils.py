@@ -390,10 +390,10 @@ class Mpirun(JobManager):
         # Pass the environment variables via the process.run method env argument
         if append and self.env is not None:
             # Update the existing dictionary with the new values
-            self.env.update(env_vars)
+            self.genv.update(env_vars.get_list())
         else:
             # Overwrite/create the dictionary of environment variables
-            self.env = EnvironmentVariables(env_vars)
+            self.genv.update((EnvironmentVariables(env_vars)).get_list())
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -402,7 +402,7 @@ class Mpirun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.envlist.update_default(env_vars.get_list())
+        self.genv.update_default(env_vars.get_list())
 
     def run(self):
         """Run the mpirun command.

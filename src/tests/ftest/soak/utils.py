@@ -175,7 +175,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
                 source_dir, shared_dir_tmp)
             try:
-                slurm_utils.srun(NodeSet.fromlist([host]), command, self.srun_params)
+                slurm_utils.srun(NodeSet.fromlist([host]), command, self.srun_params, timeout=300)
             except DaosTestError as error:
                 raise SoakTestError(
                     "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(
@@ -190,7 +190,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
         command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
             source_dir, shared_dir)
         try:
-            slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params)
+            slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params, timeout=300)
         except DaosTestError as error:
             raise SoakTestError(
                 "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(
@@ -517,7 +517,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers)
+        rank = random.randint(0, exclude_servers) #nosec
 
         if targets >= 8:
             tgt_idx = None
@@ -595,7 +595,7 @@ def launch_server_stop_start(self, pools, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers)
+        rank = random.randint(0, exclude_servers) #nosec
         # init the status dictionary
         params = {"name": name,
                   "status": status,
@@ -813,14 +813,14 @@ def cleanup_dfuse(self):
         slurm_utils.srun(
             NodeSet.fromlist(
                 self.hostlist_clients), "{}".format(
-                    ";".join(cmd)), self.srun_params, timeout=180)
+                    ";".join(cmd)), self.srun_params, timeout=600)
     except slurm_utils.SlurmFailed as error:
         self.log.info("Dfuse processes not stopped Error:%s", error)
     try:
         slurm_utils.srun(
             NodeSet.fromlist(
                 self.hostlist_clients), "{}".format(
-                    ";".join(cmd2)), self.srun_params, timeout=180)
+                    ";".join(cmd2)), self.srun_params, timeout=600)
     except slurm_utils.SlurmFailed as error:
         self.log.info("Dfuse mountpoints not deleted Error:%s", error)
 
@@ -918,8 +918,6 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     mpirun_cmd = Mpirun(ior_cmd, mpitype="mpich")
                     mpirun_cmd.assign_processes(nodesperjob * ppn)
                     mpirun_cmd.assign_environment(env, True)
-                    env_list = mpirun_cmd.env.get_list()
-                    mpirun_cmd.genv.update(env_list)
                     mpirun_cmd.ppn.update(ppn)
                     sbatch_cmds.append(str(mpirun_cmd))
                     sbatch_cmds.append("status=$?")
@@ -1015,8 +1013,6 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mpirun_cmd = Mpirun(mdtest_cmd, mpitype="mpich")
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
                         mpirun_cmd.assign_environment(env, True)
-                        env_list = mpirun_cmd.env.get_list()
-                        mpirun_cmd.genv.update(env_list)
                         mpirun_cmd.ppn.update(ppn)
                         sbatch_cmds.append(str(mpirun_cmd))
                         sbatch_cmds.append("status=$?")
@@ -1156,14 +1152,14 @@ def build_job_script(self, commands, job, nodesperjob):
     # if additional cmds are needed in the batch script
     prepend_cmds = [
         "set -e",
-        r"echo \" Job_Start_Time \"`date \+\"%Y-%m-%d %T\"`",
+        "echo \" Job_Start_Time \"`date \+\"%Y-%m-%d %T\"`",
         "daos pool query {} ".format(self.pool[1].uuid),
         "daos pool query {} ".format(self.pool[0].uuid)
         ]
     append_cmds = [
         "daos pool query {} ".format(self.pool[1].uuid),
         "daos pool query {} ".format(self.pool[0].uuid),
-        r"echo \" Job_End_Time \"`date \+\"%Y-%m-%d %T\"`"
+        "echo \" Job_End_Time \"`date \+\"%Y-%m-%d %T\"`"
         ]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines

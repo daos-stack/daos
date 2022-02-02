@@ -134,7 +134,7 @@ ior_smoke:
         mount_dir: "/tmp/daos_dfuse/ior/"
         disable_caching: True
 fio_smoke:
-    # maximum timeout for a single job in test in minutes
+    job_timeout: 10
     names:
         - global
         - test
