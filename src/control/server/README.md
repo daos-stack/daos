@@ -61,7 +61,7 @@ handlers triggered on receipt of control service RPCs will typically end-up
 calling into native-C storage or network libraries through the relevant
 go bindings e.g. [ipmctl](/src/control/lib/ipmctl/README.md),
 [spdk](/src/control/lib/ipmctl/README.md) or
-[netdetect](/src/control/lib/netdetect/README.md).
+[hardware](/src/control/lib/hardware).
 
 Such broadcast commands (which will be issued after connecting to a list of
 hosts) will usually be issued by the

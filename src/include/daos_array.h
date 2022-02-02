@@ -125,7 +125,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_KV_FLAT | DAOS_OT_DKEY_UINT64 |
+ *			be set to DAOS_OT_KV_FLAT | DAOS_OT_DKEY_UINT64 |
  *			DAOS_OT_ARRAY.
  * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW

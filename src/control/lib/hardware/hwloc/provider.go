@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -255,7 +254,7 @@ func (p *Provider) getPCIDevsPerNUMANode(topo *topology, nodes hardware.NodeMap)
 			return err
 		}
 
-		var addr *common.PCIAddress
+		var addr *hardware.PCIAddress
 		var linkSpeed float64
 		switch osDevType {
 		case osDevTypeNetwork, osDevTypeOpenFabrics:
@@ -322,7 +321,7 @@ func (p *Provider) getDeviceNUMANodeID(dev *object, topo *topology) uint {
 		}
 	}
 
-	p.log.Debugf("Unable to determine NUMA socket ID. Using NUMA 0")
+	p.log.Debugf("Unable to determine NUMA socket ID for device %q, using NUMA 0", dev.name())
 	return 0
 
 }

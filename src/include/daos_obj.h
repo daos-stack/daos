@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -93,10 +93,13 @@ enum daos_otype_t {
 
 	/** Byte Array with no metadata (eg DFS/POSIX) */
 	DAOS_OT_ARRAY_BYTE	= 13,
+	/** reserved: 1-level flat KV store */
+	DAOS_OT_KV_FLAT		= 14,
+
+	DAOS_OT_MAX		= 14,
 
 	/** Mask for convenience (16-bit) */
-	DAOS_OT_MASK            = ((1 << 16) - 1),
-
+	DAOS_OT_MASK		= ((1 << 16) - 1),
 	/**
 	 * reserved: Multi Dimensional Array
 	 * DAOS_OT_ARRAY_MD	= 64,
@@ -107,6 +110,12 @@ enum daos_otype_t {
 	 * DAOS_OT_BDEV	= 96,
 	 */
 };
+
+static inline bool
+daos_otype_t_is_valid(enum daos_otype_t type)
+{
+	return type <= DAOS_OT_MAX;
+}
 
 static inline enum daos_otype_t
 daos_obj_id2type(daos_obj_id_t oid)
@@ -545,8 +554,8 @@ enum {
  */
 int
 daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
-		       enum daos_otype_t type, daos_oclass_id_t cid,
-		       daos_oclass_hints_t hints, uint32_t args);
+		      enum daos_otype_t type, daos_oclass_id_t cid,
+		      daos_oclass_hints_t hints, uint32_t args);
 
 /**
  * Open an DAOS object.
@@ -1134,5 +1143,4 @@ daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 #if defined(__cplusplus)
 }
 #endif /* __cplusplus */
-
 #endif /* __DAOS_OBJ_H__ */
