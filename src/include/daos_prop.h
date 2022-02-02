@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -368,6 +368,10 @@ struct daos_prop_entry {
 /** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
 #define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
 
+/** default values for unset labels */
+#define DAOS_PROP_CO_LABEL_DEFAULT "container_label_not_set"
+#define DAOS_PROP_PO_LABEL_DEFAULT "pool_label_not_set"
+
 /**
  * Check if DAOS (pool or container property) label string is valid.
  * DAOS labels must consist only of alphanumeric characters, colon ':',
@@ -393,6 +397,11 @@ daos_label_is_valid(const char *label)
 	/** Check the length */
 	len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN + 1);
 	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN)
+		return false;
+
+	/** Check that the label is not a default value */
+	if (strncmp(label, DAOS_PROP_CO_LABEL_DEFAULT, DAOS_PROP_LABEL_MAX_LEN) == 0 ||
+		strncmp(label, DAOS_PROP_PO_LABEL_DEFAULT, DAOS_PROP_LABEL_MAX_LEN) == 0)
 		return false;
 
 	/** Verify that it contains only alphanumeric characters or :.-_ */
