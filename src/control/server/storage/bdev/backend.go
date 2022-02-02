@@ -334,6 +334,11 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*sto
 
 	// build pci address to namespace errors map
 	for _, result := range results {
+		if result.CtrlrPCIAddr == "" {
+			return nil, errors.Errorf("result is missing ctrlr address: %+v",
+				result)
+		}
+
 		if _, exists := resultMap[result.CtrlrPCIAddr]; !exists {
 			resultMap[result.CtrlrPCIAddr] = make(map[int]error)
 		}
@@ -379,6 +384,7 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*sto
 		}
 
 		devResp.Formatted = true
+		sb.log.Debugf("format device response for %q: %+v", addr, devResp)
 		resp.DeviceResponses[addr] = devResp
 	}
 

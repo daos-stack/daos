@@ -1283,7 +1283,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1319,7 +1319,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1388,7 +1388,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
