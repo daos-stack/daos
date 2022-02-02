@@ -21,14 +21,25 @@
 /* ABT_key for mmap()'ed ULT stacks */
 ABT_key stack_key;
 
-/* XXX both thresholds will need to be determined based on the
- * number of XStreams, and an estimate of the non-stacks mmap()'ed
- * regions required (where malloc() itself will use mmap() when allocating
- * chunks of size > M_MMAP_THRESHOLD, and there is a M_MMAP_MAX maximum for
- * such number of chunks, both can be updated dynamically using mallopt() !!...)
+/* XXX both per-xstream thresholds may need to be determined based on the
+ * number of XStreams, and max_nb_mmap_stacks (see below).
  */
 #define MAX_PERCENT_FREE_STACKS 20
 #define MAX_NUMBER_FREE_STACKS 2000
+
+/* per-engine max number of mmap()'ed ULTs stacks, to be based on
+ * vm.max_map_count minus an estimate of the non-stacks
+ * mmap()'ed regions required (where malloc() itselfs will use mmap() when
+ * allocating chunks of size > M_MMAP_THRESHOLD, and there is a M_MMAP_MAX
+ * maximum for such number of chunks, both can be updated dynamically using
+ * mallopt() !!...) for engine operations (including pre-reqs ...).
+ */
+int max_nb_mmap_stacks;
+
+/* engine's current number of mmap()'ed ULTs stacks, to be [in,de]cremented
+ * atomically and compared to max_nb_mmap_stacks
+ */
+ATOMIC int nb_mmap_stacks;
 
 /* callback to free stack upon ULT exit during stack_key deregister */
 void free_stack(void *arg)
@@ -50,6 +61,7 @@ void free_stack(void *arg)
 	    dx->free_stacks/dx->alloced_stacks * 100 > MAX_PERCENT_FREE_STACKS) {
 		do_munmap = true;
 		--dx->alloced_stacks;
+		atomic_fetch_sub(&nb_mmap_stacks, 1);
 	} else {
 		d_list_add_tail(&desc->stack_list, &dx->stack_free_list);
 		++dx->free_stacks;
@@ -106,7 +118,7 @@ int mmap_stack_thread_create(struct dss_xstream *dx, ABT_pool pool,
 		ABT_thread_attr_get_stack(attr, &stack, &stack_size);
 		if (stack != NULL) {
 			/* an other external stack allocation method is being
-			 *  used, nothing to do
+			 * used, nothing to do
 			 */
 			rc = ABT_thread_create(pool, thread_func, thread_arg,
 					       attr, newthread);
@@ -157,7 +169,20 @@ int mmap_stack_thread_create(struct dss_xstream *dx, ABT_pool pool,
 	} else {
 		D_ASSERT(dx->free_stacks == 0);
 mmap_alloc:
-		++dx->alloced_stacks;
+		/* XXX this test is racy, but if max_nb_mmap_stacks value is
+		 * high enough it does not matter as we do not expect so many
+		 * concurrent ULTs creations during mmap() syscall to cause
+		 * nb_mmap_stacks to significantly exceed max_nb_mmap_stacks ...
+		 */
+		if (nb_mmap_stacks >= max_nb_mmap_stacks) {
+			/* use Argobots standard way !! */
+			D_INFO("nb_mmap_stacks (%d) > max_nb_mmap_stacks (%d), so using Argobots standard method for stack allocation\n",
+			       nb_mmap_stacks, max_nb_mmap_stacks);
+			rc = ABT_thread_create(pool, thread_func, thread_arg,
+					       attr, newthread);
+			return rc;
+		}
+
 		stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE,
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
@@ -165,10 +190,12 @@ mmap_alloc:
 			D_ERROR("Failed mmap() stack of size %zd : %s, alloced="DF_U64", free="
 				DF_U64"\n", stack_size, strerror(errno),
 				dx->alloced_stacks, dx->free_stacks);
-			--dx->alloced_stacks;
 			/* return an ABT error */
 			D_GOTO(out_err, rc = ABT_ERR_MEM);
 		}
+
+		++dx->alloced_stacks;
+		atomic_fetch_add(&nb_mmap_stacks, 1);
 
 		/* put descriptor at bottom of mmap()'ed stack */
 		mmap_stack_desc = (mmap_stack_desc_t *)(stack + stack_size -
@@ -282,7 +309,21 @@ int mmap_stack_thread_create_on_xstream(struct dss_xstream *dx,
 	} else {
 		D_ASSERT(dx->free_stacks == 0);
 mmap_alloc:
-		++dx->alloced_stacks;
+		/* XXX this test is racy, but if max_nb_mmap_stacks value is
+		 * high enough it does not matter as we do not expect so many
+		 * concurrent ULTs creations during mmap() syscall to cause
+		 * nb_mmap_stacks to significantly exceed max_nb_mmap_stacks ...
+		 */
+		if (nb_mmap_stacks >= max_nb_mmap_stacks) {
+			/* use Argobots standard way !! */
+			D_INFO("nb_mmap_stacks (%d) > max_nb_mmap_stacks (%d), so using Argobots standard method for stack allocation\n",
+			       nb_mmap_stacks, max_nb_mmap_stacks);
+			rc = ABT_thread_create_on_xstream(xstream, thread_func,
+							  thread_arg, attr,
+							  newthread);
+			return rc;
+		}
+
 		stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE,
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
@@ -290,10 +331,12 @@ mmap_alloc:
 			D_ERROR("Failed to mmap() stack of size %zd : %s, alloced="DF_U64", free="
 				DF_U64"\n", stack_size, strerror(errno),
 				dx->alloced_stacks, dx->free_stacks);
-			--dx->alloced_stacks;
 			/* return an ABT error */
 			D_GOTO(out_err, rc = ABT_ERR_MEM);
 		}
+
+		++dx->alloced_stacks;
+		atomic_fetch_add(&nb_mmap_stacks, 1);
 
 		/* put descriptor at bottom of mmap()'ed stack */
 		mmap_stack_desc = (mmap_stack_desc_t *)(stack + stack_size -

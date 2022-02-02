@@ -29,6 +29,18 @@
 #ifdef ULT_MMAP_STACK
 #include <sys/mman.h>
 #include <abt.h>
+#include <gurt/atomic.h>
+
+/* the minimum value for vm.max_map_count to allow for mmap()'ed ULT stacks
+ * usage. In fact, DEFAULT_MAX_MAP_COUNT, the Kernel's default value !!
+ */
+#define MIN_VM_MAX_MAP_COUNT 65530
+
+/* per-engine max number of mmap()'ed ULTs stacks */
+extern int max_nb_mmap_stacks;
+
+/* engine's current number of mmap()'ed ULTs stacks */
+extern ATOMIC int nb_mmap_stacks;
 
 /* mmap()'ed stacks can allow for a bigger size with no impact on
  * memory footprint if unused
