@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1442,8 +1442,15 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
 			 * physical entry, in addition to re-assigning address.
+			 * Because of ent_in is truncated, the dst buf len
+			 * should always be big enough.
 			 */
-			phy_ent->pe_csum_info = ent_in->ei_csum;
+			D_ASSERT(phy_ent->pe_csum_info.cs_buf_len >=
+				 ent_in->ei_csum.cs_buf_len);
+			phy_ent->pe_csum_info.cs_nr = ent_in->ei_csum.cs_nr;
+			memcpy(phy_ent->pe_csum_info.cs_csum,
+			       ent_in->ei_csum.cs_csum,
+			       ent_in->ei_csum.cs_buf_len);
 		}
 	}
 
@@ -2017,7 +2024,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 			return rc;
 		}
 	} else {
-		/* Can't be the first logcial entry */
+		/* Can't be the first logical entry */
 		D_ASSERT(phy_ext.ex_lo != lgc_ext.ex_lo);
 	}
 
