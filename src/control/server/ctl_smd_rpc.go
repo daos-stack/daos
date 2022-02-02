@@ -94,10 +94,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 
 		i := 0 // output index
 		for _, dev := range rResp.Devices {
-			state, err := storage.NvmeDevStateFromString(dev.DevState)
-			if err != nil {
-				return errors.Wrapf(err, "eval state for dev %q", dev.TrAddr)
-			}
+			state := storage.NvmeDevStateFromString(dev.DevState)
 
 			if req.StateMask != 0 && req.StateMask&state.Uint32() == 0 {
 				continue // skip device completely if mask doesn't match

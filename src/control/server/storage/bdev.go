@@ -42,6 +42,7 @@ const (
 	NvmeStateInUse    NvmeDevState = C.NVME_DEV_FL_INUSE
 	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
 	NvmeStateIdentify NvmeDevState = C.NVME_DEV_FL_IDENTIFY
+	NvmeStateUnknown  NvmeDevState = C.NVME_DEV_STATE_INVALID
 )
 
 // IsNew returns true if SSD is not in use by DAOS.
@@ -76,17 +77,12 @@ func (bs NvmeDevState) Uint32() uint32 {
 }
 
 // NvmeDevStateFromString converts a status string into a state bitset.
-func NvmeDevStateFromString(status string) (NvmeDevState, error) {
+func NvmeDevStateFromString(status string) NvmeDevState {
 	cStr := C.CString(status)
 	defer C.free(unsafe.Pointer(cStr))
 
-	cState := C.nvme_str2state(cStr)
+	return NvmeDevState(C.nvme_str2state(cStr))
 
-	if cState == C.NVME_DEV_STATE_INVALID {
-		return NvmeDevState(0), FaultBdevNvmeDevStateInvalid
-	}
-
-	return NvmeDevState(cState), nil
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -205,11 +201,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	state, err := NvmeDevStateFromString(from.NvmeStateStr)
-	if err != nil {
-		return err
-	}
-	sd.NvmeState = state
+	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
 
 	return nil
 }
