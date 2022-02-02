@@ -387,6 +387,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
+%{_libdir}/libdaos_common.so
 %doc
 
 %files server
@@ -430,7 +431,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysctldir}/%{sysctl_script_name}
 
 %files client
-%{_libdir}/libdaos_common.so
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -531,8 +531,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Jan 18 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-19
+* Wed Feb 02 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-20
 - Remove direct MPI dependency from most of tests
+
+* Wed Jan 19 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-19
+- Move libdaos_common.so from daos-client to daos package
 
 * Mon Jan 17 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-18
 - Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
