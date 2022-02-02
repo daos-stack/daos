@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -345,7 +345,7 @@ public class DaosEventQueue {
     if (expNbrOfRet == 0) {
       return moved;
     }
-    while (true) {
+    while (nbrOfAcquired > 0) {
       aborted = 0;
       DaosClient.pollCompleted(eqWrapperHdl, completed.memoryAddress(),
           nbrOfAcquired, timeOutMs < 0 ? DEFAULT_POLL_TIMEOUT_MS : timeOutMs);
@@ -377,6 +377,7 @@ public class DaosEventQueue {
         return nbr;
       }
     }
+    return 0;
   }
 
   private int moveAttachment(List<Attachment> completedList, Class<? extends Attachment> klass,
@@ -398,6 +399,10 @@ public class DaosEventQueue {
   }
 
   private void detainAttachment(Attachment attachment) {
+    if (attachment.isDiscarded()) {
+      attachment.release();
+      return;
+    }
     Class<?> klass = attachment.getClass();
     List<Attachment> list = attMap.get(klass);
     if (list == null) {
@@ -564,6 +569,16 @@ public class DaosEventQueue {
      * @return true or false
      */
     boolean alwaysBoundToEvt();
+
+    /**
+     * discard attachment
+     */
+    void discard();
+
+    /**
+     * check if attachment is discarded. If true, it may be discarded when poll and detain attachment.
+     */
+    boolean isDiscarded();
 
     /**
      * release resources if any.

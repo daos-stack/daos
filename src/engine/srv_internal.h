@@ -7,7 +7,7 @@
 #define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_engine.h>
-#include <daos/stack_mmap.h>
+#include "stack_mmap.h"
 #include <gurt/telemetry_common.h>
 
 /**
@@ -26,12 +26,15 @@ enum {
 };
 
 struct sched_stats {
-	uint64_t	ss_tot_time;	/* Total CPU time (ms) */
-	uint64_t	ss_relax_time;	/* CPU relax time (ms) */
-	uint64_t	ss_busy_ts;	/* Last busy timestamp (ms) */
-	uint64_t	ss_print_ts;	/* Last stats print timestamp (ms) */
-	uint64_t	ss_watchdog_ts;	/* Last watchdog print ts (ms) */
-	void		*ss_last_unit;	/* Last executed unit */
+	struct d_tm_node_t	*ss_total_time;		/* Total CPU time (ms) */
+	struct d_tm_node_t	*ss_relax_time;		/* CPU relax time (ms) */
+	struct d_tm_node_t	*ss_wq_len;		/* Wait queue length */
+	struct d_tm_node_t	*ss_sq_len;		/* Sleep queue length */
+	struct d_tm_node_t	*ss_cycle_duration;	/* Cycle duration (ms) */
+	struct d_tm_node_t	*ss_cycle_size;		/* Total ULTs in a cycle */
+	uint64_t		 ss_busy_ts;		/* Last busy timestamp (ms) */
+	uint64_t		 ss_watchdog_ts;	/* Last watchdog print ts (ms) */
+	void			*ss_last_unit;		/* Last executed unit */
 };
 
 struct sched_info {
@@ -77,6 +80,12 @@ struct dss_xstream {
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
+#ifdef ULT_MMAP_STACK
+	/* per-xstream pool of free stacks */
+	d_list_t		stack_free_list;
+	uint64_t		alloced_stacks;
+	uint64_t		free_stacks;
+#endif
 };
 
 /** Engine module's metrics */
@@ -101,7 +110,7 @@ extern int		dss_core_depth;
 /** number of physical cores, w/o hyper-threading */
 extern int		dss_core_nr;
 /** start offset index of the first core for service XS */
-extern int		dss_core_offset;
+extern unsigned int	dss_core_offset;
 /** NUMA node to bind to */
 extern int		dss_numa_node;
 /** bitmap describing core allocation */
@@ -253,7 +262,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = daos_abt_thread_create(abt_pool, func, arg, t_attr, thread);
+	rc = daos_abt_thread_create(dx, abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 

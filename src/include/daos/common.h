@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -153,10 +153,10 @@ char *DP_UUID(const void *uuid);
 #define DP_KEY(key)		(int)((key)->iov_len)
 #else
 char *daos_key2str(daos_key_t *key);
+#define DF_KEY_STR_SIZE		64
 
-#define DF_KEY			"[%d] '%.*s'"
+#define DF_KEY			"[%d] '%s'"
 #define DP_KEY(key)		(int)(key)->iov_len,	\
-				(int)(key)->iov_len,	\
 				daos_key2str(key)
 #endif
 
@@ -278,16 +278,13 @@ daos_getutime(void)
 	return d_time2us(tv);
 }
 
-static inline int daos_gettime_coarse(uint64_t *time)
+static inline uint64_t
+daos_gettime_coarse(void)
 {
-	struct timespec	now;
-	int		rc;
+	struct timespec	tv;
 
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	if (rc == 0)
-		*time = now.tv_sec;
-
-	return rc;
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+	return tv.tv_sec;
 }
 
 /** Function table for combsort and binary search */
@@ -342,7 +339,7 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 	} while (0)
 /** Get the leftover space in an iov of sgl */
 #define daos_iov_left(sgl, iov_idx, iov_off)				\
-	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+	((sgl)->sg_iovs[iov_idx].iov_buf_len - (iov_off))
 /** get remaining space in an iov, assuming that iov_len is used and
  * iov_buf_len is total in buf
  */

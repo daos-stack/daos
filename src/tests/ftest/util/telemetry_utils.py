@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -55,6 +55,21 @@ class TelemetryUtils():
         "engine_events_last_event_ts",
         "engine_servicing_at",
         "engine_started_at"]
+    ENGINE_SCHED_METRICS = [
+        "engine_sched_total_time",
+        "engine_sched_relax_time",
+        "engine_sched_wait_queue",
+        "engine_sched_sleep_queue",
+        "engine_sched_cycle_duration",
+        "engine_sched_cycle_duration_max",
+        "engine_sched_cycle_duration_mean",
+        "engine_sched_cycle_duration_min",
+        "engine_sched_cycle_duration_stddev",
+        "engine_sched_cycle_size",
+        "engine_sched_cycle_size_max",
+        "engine_sched_cycle_size_mean",
+        "engine_sched_cycle_size_min",
+        "engine_sched_cycle_size_stddev"]
     ENGINE_IO_DTX_COMMITTABLE_METRICS = [
         "engine_io_dtx_committable",
         "engine_io_dtx_committable_max",
@@ -452,6 +467,7 @@ class TelemetryUtils():
 
         """
         all_metrics_names = list(self.ENGINE_EVENT_METRICS)
+        all_metrics_names.extend(self.ENGINE_SCHED_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
         all_metrics_names.extend(self.GO_METRICS)
@@ -463,8 +479,12 @@ class TelemetryUtils():
         # Add engine network metrics for the configured provider
         try:
             provider = re.sub("[+;]", "_", server.manager.job.get_config_value("provider"))
+            if provider == "ofi_tcp":
+                provider = "ofi_tcp_ofi_rxm"
+            elif provider == "ofi_verbs":
+                provider = "ofi_verbs_ofi_rxm"
         except TypeError:
-            provider = "ofi_sockets"
+            provider = "ofi_tcp_ofi_rxm"
         net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
         all_metrics_names.extend(net_metrics)
 

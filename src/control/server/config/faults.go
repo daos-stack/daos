@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 var (
@@ -126,11 +126,38 @@ func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
-func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
+func FaultConfigBdevCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigBdevCountMismatch,
+		fmt.Sprintf("the total number of bdev_list entries in all tiers is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal number of total bdev_list entries and restart",
+	)
+}
+
+func FaultConfigTargetCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigTargetCountMismatch,
+		fmt.Sprintf("the target count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for targets parameter and restart",
+	)
+}
+
+func FaultConfigHelperStreamCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigHelperStreamCountMismatch,
+		fmt.Sprintf("the helper stream count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for nr_xs_helpers parameter and restart",
+	)
+}
+
+func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass hardware.NetDevClass, iface string) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigInvalidNetDevClass,
 		fmt.Sprintf("I/O Engine %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
-			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
+			curIdx, iface, thisDevClass, primaryDevClass),
 		"ensure that each I/O Engine specifies a fabric_iface with a matching device class and restart",
 	)
 }

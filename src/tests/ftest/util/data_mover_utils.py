@@ -72,9 +72,9 @@ class MfuCommandBase(ExecutableCommand):
             kwargs: name, value pairs of class Parameters
 
         """
-        for a in kwargs:
-            attr = getattr(self, a)
-            attr.update(kwargs[a], a)
+        for k, v in kwargs.items():
+            attr = getattr(self, k)
+            attr.update(v, k)
 
     @staticmethod
     def __param_sort(k):
@@ -112,7 +112,7 @@ class MfuCommandBase(ExecutableCommand):
 
         Args:
             processes: Number of processes for the command.
-            job_manager: Job manager variable to set/assign  
+            job_manager: Job manager variable to set/assign
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -288,10 +288,11 @@ class FsCopy():
         """
         self.src = None
         self.dst = None
+        self.preserve_props = None
         self.daos_cmd = daos_cmd
         self.log = log
 
-    def set_fs_copy_params(self, src=None, dst=None):
+    def set_fs_copy_params(self, src=None, dst=None, preserve_props=None):
         """Set the daos fs copy params.
 
         Args:
@@ -305,6 +306,8 @@ class FsCopy():
             self.src = src
         if dst:
             self.dst = dst
+        if preserve_props:
+            self.preserve_props = preserve_props
 
     def run(self):
         # pylint: disable=arguments-differ
@@ -320,7 +323,8 @@ class FsCopy():
         """
         self.log.info("Starting daos filesystem copy")
 
-        return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst)
+        return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
+	    preserve_props=self.preserve_props)
 
 class ContClone():
     """Class defining an object of type ContClone.

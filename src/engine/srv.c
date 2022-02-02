@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,7 @@
 /**
  * DAOS server threading model:
  * 1) a set of "target XS (xstream) set" per engine (dss_tgt_nr)
- * There is a "-c" option of daos_server to set the number.
+ * There is a "-t" option of daos_server to set the number.
  * For DAOS pool, one target XS set per VOS target to avoid extra lock when
  * accessing VOS file.
  * With in each target XS set, there is one "main XS":
@@ -122,6 +122,32 @@ struct dss_xstream_data {
 };
 
 static struct dss_xstream_data	xstream_data;
+
+int
+dss_xstream_set_affinity(struct dss_xstream *dxs)
+{
+	int rc;
+
+	/**
+	 * Set cpu affinity
+	 */
+	rc = hwloc_set_cpubind(dss_topo, dxs->dx_cpuset, HWLOC_CPUBIND_THREAD);
+	if (rc) {
+		D_ERROR("failed to set cpu affinity: %d\n", errno);
+		return rc;
+	}
+
+	/**
+	 * Set memory affinity, but fail silently if it does not work since some
+	 * systems return ENOSYS.
+	 */
+	rc = hwloc_set_membind(dss_topo, dxs->dx_cpuset, HWLOC_MEMBIND_BIND,
+			       HWLOC_MEMBIND_THREAD);
+	if (rc)
+		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
+
+	return 0;
+}
 
 bool
 dss_xstream_exiting(struct dss_xstream *dxs)
@@ -323,23 +349,9 @@ dss_srv_handler(void *arg)
 	int				 rc;
 	bool				 signal_caller = true;
 
-	/**
-	 * Set cpu affinity
-	 */
-	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
-	if (rc) {
-		D_ERROR("failed to set cpu affinity: %d\n", errno);
-		goto signal;
-	}
-
-	/**
-	 * Set memory affinity, but fail silently if it does not work since some
-	 * systems return ENOSYS.
-	 */
-	rc = hwloc_set_membind(dss_topo, dx->dx_cpuset, HWLOC_MEMBIND_BIND,
-			       HWLOC_MEMBIND_THREAD);
+	rc = dss_xstream_set_affinity(dx);
 	if (rc)
-		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
+		goto signal;
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG, dx->dx_xs_id, dx->dx_tgt_id);
@@ -447,7 +459,7 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		rc = daos_abt_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
+		rc = daos_abt_thread_create(dx, dx->dx_pools[DSS_POOL_NVME_POLL],
 					    dss_nvme_poll_ult, attr,
 					    ABT_THREAD_ATTR_NULL, NULL);
 		ABT_thread_attr_free(&attr);
@@ -565,6 +577,9 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	dx->dx_xstream	= ABT_XSTREAM_NULL;
 	dx->dx_sched	= ABT_SCHED_NULL;
 	dx->dx_progress	= ABT_THREAD_NULL;
+#ifdef ULT_MMAP_STACK
+	D_INIT_LIST_HEAD(&dx->stack_free_list);
+#endif
 
 	return dx;
 
@@ -581,6 +596,20 @@ err_free:
 static inline void
 dss_xstream_free(struct dss_xstream *dx)
 {
+#ifdef ULT_MMAP_STACK
+	mmap_stack_desc_t *mmap_stack_desc;
+
+	while ((mmap_stack_desc = d_list_pop_entry(&dx->stack_free_list,
+						   mmap_stack_desc_t,
+						   stack_list)) != NULL) {
+		D_INFO("Draining a mmap()'ed stack, alloced="DF_U64", free="DF_U64"\n",
+		       dx->alloced_stacks, dx->free_stacks);
+		munmap(mmap_stack_desc->stack, mmap_stack_desc->stack_size);
+		--dx->alloced_stacks;
+		--dx->free_stacks;
+		atomic_fetch_sub(&nb_mmap_stacks, 1);
+	}
+#endif
 	hwloc_bitmap_free(dx->dx_cpuset);
 	D_FREE(dx);
 }
@@ -696,7 +725,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	}
 
 	/** start progress ULT */
-	rc = daos_abt_thread_create(dx->dx_pools[DSS_POOL_NET_POLL],
+	rc = daos_abt_thread_create(dx, dx->dx_pools[DSS_POOL_NET_POLL],
 				    dss_srv_handler, dx, attr,
 				    &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
@@ -902,19 +931,11 @@ dss_xstreams_init(void)
 	if (sched_prio_disabled)
 		D_INFO("ULT prioritizing is disabled.\n");
 
-	d_getenv_int("DAOS_SCHED_STATS_INTVL", &sched_stats_intvl);
-	if (sched_stats_intvl != 0) {
-		D_INFO("Print sched stats every %u seconds\n",
-		       sched_stats_intvl);
-		/* Convert seconds to milliseconds */
-		sched_stats_intvl = sched_stats_intvl * 1000;
-	}
-
 	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
-		       sched_stats_intvl, SCHED_RELAX_INTVL_DEFAULT);
+		       sched_relax_intvl, SCHED_RELAX_INTVL_DEFAULT);
 		sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 	} else {
 		D_INFO("CPU relax interval is set to %u msecs\n",

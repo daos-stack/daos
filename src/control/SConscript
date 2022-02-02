@@ -8,7 +8,7 @@ from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib')
+Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -86,7 +86,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
 
     if libs is None:
         libs = []
-    libs.extend(gurt_lib)
+    libs.extend([gurt_lib, cart_lib])
 
     def gen_build_id():
         """generate a unique build id per binary for use by RPM
@@ -112,7 +112,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
     denv.Command(build_bin, src + libs,
-                 'cd %s; %s build -mod vendor -v %s %s %s -o %s %s' %
+                 'cd %s; %s build -mod vendor %s %s %s -o %s %s' %
                  (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv),
                   get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely

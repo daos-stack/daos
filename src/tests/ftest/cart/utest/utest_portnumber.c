@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -201,7 +201,7 @@ static void
 test_port_sockets(void **state)
 {
 	setenv("OFI_INTERFACE", "eth0", 1);
-	setenv("CRT_PHY_ADDR_STR", "ofi+sockets", 1);
+	setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
 	run_test_fork(state);
 };
 
