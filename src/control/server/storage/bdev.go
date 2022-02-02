@@ -83,7 +83,7 @@ func NvmeDevStateFromString(status string) (NvmeDevState, error) {
 	cState := C.nvme_str2state(cStr)
 
 	if cState == C.NVME_DEV_STATE_INVALID {
-		return NvmeDevState(0), errors.Errorf("%q is an invalid nvme dev status string", status)
+		return NvmeDevState(0), FaultBdevNvmeDevStateInvalid
 	}
 
 	return NvmeDevState(cState), nil
