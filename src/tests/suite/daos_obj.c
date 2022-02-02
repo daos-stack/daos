@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2203,8 +2203,21 @@ next_step:
 	assert_rc_equal(rc, 0);
 
 	/** fetch */
-	iod.iod_size	= DAOS_REC_ANY;
+	print_message("fetch with zero iov_len\n");
+	iod.iod_size	= 1;
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= tmp_len * 1;
+	iod.iod_nr	= 1;
+	sg_iov[0].iov_len = 0;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
+	assert_rc_equal(rc, 0);
+
 	print_message("reading data back with less buffer ...\n");
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= tmp_len;
+	iod.iod_nr	= 3;
+	iod.iod_size	= DAOS_REC_ANY;
 	buf_out = step == 1 ? stack_buf_out : bulk_buf_out;
 	memset(buf_out, 0, buf_len);
 	tmp_len = buf_len / 2;
@@ -3402,8 +3415,10 @@ io_obj_key_query(void **state)
 	assert_rc_equal(rc, 0);
 
 	dkey_val = 10;
+	val_iov.iov_buf_len += 1024;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
+	d_iov_set(&val_iov, &update_var, sizeof(update_var));
 
 	recx.rx_idx = 50;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);

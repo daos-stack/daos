@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -843,7 +843,8 @@ ec_data_seg_add(daos_recx_t *recx, daos_size_t iod_size, d_sg_list_t *sgl,
 	recx_size = recx_nr * iod_size;
 	tgt = obj_ec_tgt_of_recx_idx(recx_idx, stripe_rec_nr, cell_rec_nr);
 	daos_sgl_consume(sgl, iov_idx, iov_off, recx_size, iovs, iov_nr);
-	D_ASSERT(iov_nr <= iov_capa);
+	D_ASSERTF(iov_nr <= iov_capa, "%d > %d, iod_size "DF_U64"\n",
+		  iov_nr, iov_capa, iod_size);
 	obj_ec_seg_insert(sorter, tgt, iovs, iov_nr);
 	/* add remaining recxs */
 	recx_idx = roundup(recx_idx + 1, cell_rec_nr);

@@ -19,6 +19,9 @@
 			(c)->sc_leader_aliveness, (c)->sc_leader_term,	\
 			(c)->sc_leader_index, (c)->sc_next
 
+/* Maximum value for rsvc_client.sc_leader_aliveness */
+#define LEADER_ALIVENESS_MAX 1
+
 static inline void
 rsvc_client_reset_leader(struct rsvc_client *client)
 {
@@ -176,12 +179,11 @@ rsvc_client_process_hint(struct rsvc_client *client,
 			return;
 		} else if (hint->sh_term == client->sc_leader_term) {
 			if (ep->ep_rank == hint->sh_rank) {
-				if (client->sc_leader_aliveness < 2) {
-					D_DEBUG(DB_MD, "leader rank %u bump "
-						"aliveness %u -> 2\n",
-						hint->sh_rank,
-						client->sc_leader_aliveness);
-					client->sc_leader_aliveness = 2;
+				if (client->sc_leader_aliveness < LEADER_ALIVENESS_MAX) {
+					D_DEBUG(DB_MD, "leader rank %u bump aliveness %u -> %u\n",
+						hint->sh_rank, client->sc_leader_aliveness,
+						LEADER_ALIVENESS_MAX);
+					client->sc_leader_aliveness = LEADER_ALIVENESS_MAX;
 				}
 			}
 			return;
@@ -209,14 +211,15 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	client->sc_leader_term = hint->sh_term;
 	client->sc_leader_known = true;
 	/*
-	 * If from_leader, set the aliveness to 2 so that upon a crt error
-	 * we'll give the leader another try before turning to others. (If node
-	 * failures were more frequent than message losses, then 1 should be
-	 * used instead.). A new leader may briefly reply NOTLEADER while
-	 * stepping up, in which case "from_leader=false" and inspect further.
+	 * If from_leader, set the aliveness to MAX so that (if MAX > 1) upon a
+	 * crt error we'll give the leader more tries before turning to others.
+	 * (If node failures were more frequent than message losses, then a
+	 * smaller MAX should be used instead.). A new leader may briefly reply
+	 * NOTLEADER while stepping up, in which case "from_leader=false" and
+	 * inspect further.
 	 */
 	becoming_leader = (ep->ep_rank == hint->sh_rank);
-	client->sc_leader_aliveness = (from_leader || becoming_leader) ? 2 : 1;
+	client->sc_leader_aliveness = (from_leader || becoming_leader) ? LEADER_ALIVENESS_MAX : 1;
 	D_DEBUG(DB_MD, "new hint from rank %u: hint.term="DF_U64
 		" hint.rank=%u\n", ep->ep_rank, hint->sh_term, hint->sh_rank);
 }

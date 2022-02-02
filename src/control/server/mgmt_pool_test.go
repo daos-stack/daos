@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -144,6 +144,8 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 	defaultScmBytes := uint64(float64(defaultTotal) * DefaultPoolScmRatio)
 	defaultNvmeBytes := uint64(float64(defaultTotal) * DefaultPoolNvmeRatio)
 	testTargetCount := 8
+	minPoolScm := minPoolScm(uint64(testTargetCount), 1)
+	minPoolNvme := minPoolNvme(uint64(testTargetCount), 1)
 	scmTooSmallRatio := 0.01
 	scmTooSmallTotal := uint64(testTargetCount * engine.NvmeMinBytesPerTarget)
 	scmTooSmallReq := uint64(float64(scmTooSmallTotal) * scmTooSmallRatio)
@@ -174,7 +176,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 				Tierratio:  []float64{scmTooSmallRatio},
 				Ranks:      []uint32{0},
 			},
-			expErr: FaultPoolScmTooSmall(scmTooSmallReq, testTargetCount),
+			expErr: FaultPoolScmTooSmall(scmTooSmallReq, minPoolScm),
 		},
 		"auto sizing (not enough NVMe)": {
 			in: &mgmtpb.PoolCreateReq{
@@ -182,7 +184,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 				Tierratio:  []float64{DefaultPoolScmRatio, DefaultPoolNvmeRatio},
 				Ranks:      []uint32{0},
 			},
-			expErr: FaultPoolNvmeTooSmall(uint64(float64(nvmeTooSmallReq)*DefaultPoolNvmeRatio), testTargetCount),
+			expErr: FaultPoolNvmeTooSmall(uint64(float64(nvmeTooSmallReq)*DefaultPoolNvmeRatio), minPoolNvme),
 		},
 		"auto sizing (no NVMe in config)": {
 			disableNVMe: true,
@@ -213,14 +215,14 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 				Tierbytes: []uint64{scmTooSmallReq},
 				Ranks:     []uint32{0},
 			},
-			expErr: FaultPoolScmTooSmall(scmTooSmallReq, testTargetCount),
+			expErr: FaultPoolScmTooSmall(scmTooSmallReq, minPoolScm),
 		},
 		"manual sizing (not enough NVMe)": {
 			in: &mgmtpb.PoolCreateReq{
 				Tierbytes: []uint64{defaultScmBytes, nvmeTooSmallReq},
 				Ranks:     []uint32{0},
 			},
-			expErr: FaultPoolNvmeTooSmall(nvmeTooSmallReq, testTargetCount),
+			expErr: FaultPoolNvmeTooSmall(nvmeTooSmallReq, minPoolNvme),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
