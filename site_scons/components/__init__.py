@@ -174,16 +174,17 @@ def define_mercury(reqs):
         GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
 	True)
 
-    reqs.define("UCX", headers=['ucp.h'], libs=['ucp'])
+    reqs.define("UCX", libs=['ucp'])
 
-    UCX = ""
     if reqs.check_component('UCX'):
         UCX = '-DNA_USE_UCX=ON ' \
         '-DUCX_INCLUDE_DIR=/usr/include '\
         '-DUCP_LIBRARY=/usr/lib64/libucp.so '\
         '-DUCS_LIBRARY=/usr/lib64/libucs.so '\
-        '-DUCT_LIBRARY=/usr/lib64/libuct.so ' 
- 
+        '-DUCT_LIBRARY=/usr/lib64/libuct.so '
+    else:
+         UCX = ""
+
     reqs.define('mercury',
                 retriever=retriever,
                 commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
