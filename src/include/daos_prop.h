@@ -399,11 +399,6 @@ daos_label_is_valid(const char *label)
 	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN)
 		return false;
 
-	/** Check that the label is not a default value */
-	if (strncmp(label, DAOS_PROP_CO_LABEL_DEFAULT, DAOS_PROP_LABEL_MAX_LEN) == 0 ||
-		strncmp(label, DAOS_PROP_PO_LABEL_DEFAULT, DAOS_PROP_LABEL_MAX_LEN) == 0)
-		return false;
-
 	/** Verify that it contains only alphanumeric characters or :.-_ */
 	for (i = 0; i < len; i++) {
 		char c = label[i];

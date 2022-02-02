@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,13 +21,11 @@ func TestDrpc_LabelIsValid(t *testing.T) {
 		label     string
 		expResult bool
 	}{
-		"zero-length fails":       {"", false},
-		"overlength fails":        {strings.Repeat("x", drpc.MaxLabelLength+1), false},
-		"uuid fails":              {"54f26bfd-628f-4762-a28a-1c42bcb6565b", false},
-		"pool default fails":      {"pool_label_not_set", false},
-		"container default fails": {"container_label_not_set", false},
-		"max-length ok":           {strings.Repeat("x", drpc.MaxLabelLength), true},
-		"valid chars ok":          {"this:is_a_valid-label.", true},
+		"zero-length fails": {"", false},
+		"overlength fails":  {strings.Repeat("x", drpc.MaxLabelLength+1), false},
+		"uuid fails":        {"54f26bfd-628f-4762-a28a-1c42bcb6565b", false},
+		"max-length ok":     {strings.Repeat("x", drpc.MaxLabelLength), true},
+		"valid chars ok":    {"this:is_a_valid-label.", true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotResult := drpc.LabelIsValid(tc.label)

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -93,11 +93,6 @@ func TestControl_PoolProperties(t *testing.T) {
 		"label-invalid": {
 			name:   "label",
 			value:  "bad label",
-			expErr: errors.New("invalid label"),
-		},
-		"label-sneaky-default": {
-			name:   "label",
-			value:  "pool_label_not_set",
 			expErr: errors.New("invalid label"),
 		},
 		"reclaim-disabled": {

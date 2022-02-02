@@ -144,7 +144,7 @@ class Label(TestWithServers):
         self.pool = []
         errors = []
         label_outs = [
-            ("pool_label_not_set", "invalid label"),
+            ("pool_label_not_set", "Invalid parameters"),
             ("23ab123e-5296-4f95-be14-641de40b4d5a", "invalid label"),
             (get_random_string(128), "invalid label")
         ]
