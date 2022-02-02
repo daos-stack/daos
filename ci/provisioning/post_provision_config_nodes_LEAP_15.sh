@@ -117,7 +117,7 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
-        RETRY_COUNT=4 retry_dnf 360 "${repo_server}" install $LSB_RELEASE
+        RETRY_COUNT=4 retry_dnf 360 "${repo_server}" install "$LSB_RELEASE"
     fi
 
     if [ "$DISTRO_NAME" = "centos7" ] && lspci | grep "ConnectX-6"; then
