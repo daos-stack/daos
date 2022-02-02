@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -193,7 +193,13 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				}
 			}
 
-			testDeadline, ok := t.Deadline()
+			deadliner, ok := (interface{})(t).(interface{ Deadline() (time.Time, bool) })
+			if !ok {
+				t.Log("go version < 1.15; skipping stragglers check")
+				return
+			}
+
+			testDeadline, ok := deadliner.Deadline()
 			if !ok {
 				panic("no deadline")
 			}
@@ -286,7 +292,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 					return defaultMessage, nil
 				},
 			},
-			expErr: context.DeadlineExceeded,
+			expErr: errors.New("timed out"),
 		},
 		"parent context canceled": {
 			withCancel: func() *ctxCancel {

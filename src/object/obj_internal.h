@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,6 +66,7 @@ struct dc_obj_shard {
 #define do_target_id	do_pl_shard.po_target
 #define do_fseq		do_pl_shard.po_fseq
 #define do_rebuilding	do_pl_shard.po_rebuilding
+#define do_reintegrating do_pl_shard.po_reintegrating
 
 /** client object layout */
 struct dc_obj_layout {
@@ -109,6 +110,20 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
+/* to record EC singv fetch stat from different shards */
+struct shard_fetch_stat {
+	/* iod_size for array; or iod_size for EC singv on shard 0 or parity shards, those shards
+	 * always be updated when EC singv being overwritten.
+	 */
+	daos_size_t		sfs_size;
+	/* iod_size on other shards, possibly be missed when EC singv overwritten. */
+	daos_size_t		sfs_size_other;
+	/* rc on shard 0 or parity shards */
+	int32_t			sfs_rc;
+	/* rc on other data shards */
+	int32_t			sfs_rc_other;
+};
+
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending
@@ -123,6 +138,8 @@ struct obj_reasb_req {
 	daos_obj_id_t			 orr_oid;
 	/* epoch for IO (now only used for fetch */
 	struct dtx_epoch		 orr_epoch;
+	/* original obj IO API args */
+	daos_obj_rw_t			*orr_args;
 	/* original user input iods/sgls */
 	daos_iod_t			*orr_uiods;
 	d_sg_list_t			*orr_usgls;
@@ -144,10 +161,10 @@ struct obj_reasb_req {
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
-	/* target bitmap, one bit for each target (from first data cell to last
-	 * parity cell.
-	 */
+	/* target bitmap, one bit for each target (from first data cell to last parity cell. */
 	uint8_t				*tgt_bitmap;
+	/* fetch stat, one per iod */
+	struct shard_fetch_stat		*orr_fetch_stat;
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
@@ -170,8 +187,6 @@ struct obj_reasb_req {
 					 orr_singv_only:1,
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
 					 orr_iom_realloc:1,
-	/* iod_size is set by IO reply */
-					 orr_size_set:1,
 	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
 					 orr_fail_alloc:1;
 };
@@ -247,16 +262,9 @@ struct migrate_pool_tls {
 	ABT_cond		mpt_inflight_cond;
 	ABT_mutex		mpt_inflight_mutex;
 	int			mpt_inflight_max_ult;
+	uint32_t		mpt_opc;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
-	/* Indicates whether objects on the migration destination should be
-	 * removed prior to migrating new data here. This is primarily useful
-	 * for reintegration to ensure that any data that has adequate replica
-	 * data to reconstruct will prefer the remote data over possibly stale
-	 * existing data. Objects that don't have remote replica data will not
-	 * be removed.
-	 */
-				mpt_del_local_objs:1,
 				mpt_fini:1;
 };
 
@@ -285,6 +293,8 @@ struct obj_pool_metrics {
 	struct d_tm_node_t	*opm_update_restart;
 	/** Total number of resent update operations (type = counter) */
 	struct d_tm_node_t	*opm_update_resent;
+	/** Total number of retry update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_retry;
 };
 
 struct obj_tls {
@@ -340,6 +350,7 @@ struct shard_auxi_args {
 struct shard_rw_args {
 	struct shard_auxi_args	 auxi;
 	daos_obj_rw_t		*api_args;
+	d_sg_list_t		*sgls_dup;
 	struct dtx_id		 dti;
 	uint64_t		 dkey_hash;
 	crt_bulk_t		*bulks;
@@ -464,10 +475,10 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
-int
-dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
-	      daos_oclass_id_t *oc_id_);
+int dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
+		  enum daos_otype_t otype, daos_oclass_hints_t hints,
+		  enum daos_obj_redun *ord, uint32_t *nr);
+
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
@@ -494,8 +505,8 @@ int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 			   daos_key_t *dkey, daos_key_t *akey,
 			   daos_recx_t *recx, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, struct dtx_id *dti,
-			   unsigned int *map_ver, daos_handle_t th,
-			   tse_task_t *task);
+			   unsigned int *map_ver, unsigned int req_map_ver,
+			   daos_handle_t th, tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
@@ -763,7 +774,7 @@ obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 	if (dkey == NULL)
 		return 0;
 
-	if (daos_obj_id2feat(oid) & DAOS_OF_DKEY_UINT64)
+	if (daos_is_dkey_uint64(oid))
 		return *(uint64_t *)dkey->iov_buf;
 
 	return d_hash_murmur64((unsigned char *)dkey->iov_buf,

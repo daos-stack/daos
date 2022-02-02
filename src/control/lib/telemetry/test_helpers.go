@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/drpc"
 )
 
 /*
@@ -34,6 +35,18 @@ add_metric(struct d_tm_node_t **node, int metric_type, char *sh_desc,
            char *lng_desc, const char *str)
 {
 	return d_tm_add_metric(node, metric_type, sh_desc, lng_desc, str);
+}
+
+static int
+add_eph_dir(struct d_tm_node_t **node, size_t size_bytes, const char *str)
+{
+	return d_tm_add_ephemeral_dir(node, size_bytes, str);
+}
+
+static int
+del_eph_dir(const char *str)
+{
+	return d_tm_del_ephemeral_dir(str);
 }
 */
 import "C"
@@ -107,13 +120,13 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 		case MetricTypeGauge:
 			rc := C.add_metric(&tm.node, C.D_TM_GAUGE, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
+				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
 			}
 			C.d_tm_set_gauge(tm.node, C.uint64_t(tm.Cur))
 		case MetricTypeStatsGauge:
 			rc := C.add_metric(&tm.node, C.D_TM_STATS_GAUGE, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", tm.Name, rc)
+				t.Fatalf("failed to add %s: %s", tm.Name, drpc.DaosStatus(rc))
 			}
 			for _, val := range []float64{tm.min, tm.max, tm.Cur} {
 				C.d_tm_set_gauge(tm.node, C.uint64_t(val))
@@ -121,13 +134,13 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 		case MetricTypeCounter:
 			rc := C.add_metric(&tm.node, C.D_TM_COUNTER, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
+				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
 			}
 			C.d_tm_inc_counter(tm.node, C.ulong(tm.Cur))
 		case MetricTypeDuration:
 			rc := C.add_metric(&tm.node, C.D_TM_DURATION|C.D_TM_CLOCK_REALTIME, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
+				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
 			}
 			C.d_tm_mark_duration_start(tm.node, C.D_TM_CLOCK_REALTIME)
 			time.Sleep(time.Duration(tm.Cur))
@@ -135,17 +148,43 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 		case MetricTypeTimestamp:
 			rc := C.add_metric(&tm.node, C.D_TM_TIMESTAMP, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
+				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
 			}
 			C.d_tm_record_timestamp(tm.node)
 		case MetricTypeSnapshot:
 			rc := C.add_metric(&tm.node, C.D_TM_TIMER_SNAPSHOT|C.D_TM_CLOCK_REALTIME, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %d", fullName, rc)
+				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
 			}
 			C.d_tm_take_timer_snapshot(tm.node, C.D_TM_CLOCK_REALTIME)
+		case MetricTypeDirectory:
+			rc := C.add_metric(&tm.node, C.D_TM_DIRECTORY, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
+			if rc != 0 {
+				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
+			}
+		case MetricTypeLink:
+			rc := C.add_eph_dir(&tm.node, 1024, C.CString(fullName))
+			if rc != 0 {
+				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
+			}
 		default:
 			t.Fatalf("metric type %d not supported", mt)
+		}
+	}
+}
+
+func RemoveTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
+	t.Helper()
+
+	for mt, tm := range testMetrics {
+		if mt != MetricTypeLink {
+			continue
+		}
+
+		fullName := tm.FullPath()
+		rc := C.del_eph_dir(C.CString(fullName))
+		if rc != 0 {
+			t.Fatalf("failed to remove %s: %s", fullName, drpc.DaosStatus(rc))
 		}
 	}
 }

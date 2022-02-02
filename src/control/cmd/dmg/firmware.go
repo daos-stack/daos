@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,13 +17,13 @@ import (
 
 // firmwareOption defines a DMG option that enables firmware management in DAOS.
 type firmwareOption struct {
-	Firmware firmwareCmd `command:"firmware" alias:"fw" hidden:"true" description:"Manage the storage device firmware"`
+	Firmware firmwareCmd `command:"firmware" hidden:"true" description:"Manage the storage device firmware"`
 }
 
 // firmwareCmd defines the firmware management subcommands.
 type firmwareCmd struct {
-	Query  firmwareQueryCmd  `command:"query" alias:"q" description:"Query device firmware versions and status on DAOS storage nodes"`
-	Update firmwareUpdateCmd `command:"update" alias:"u" description:"Update the device firmware on DAOS storage nodes"`
+	Query  firmwareQueryCmd  `command:"query" description:"Query device firmware versions and status on DAOS storage nodes"`
+	Update firmwareUpdateCmd `command:"update" description:"Update the device firmware on DAOS storage nodes"`
 }
 
 // firmwareQueryCmd is used to query the storage device firmware on a set of DAOS hosts.

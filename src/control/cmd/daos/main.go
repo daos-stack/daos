@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
@@ -110,15 +110,16 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 }
 
 type cliOptions struct {
-	Debug      bool          `long:"debug" description:"enable debug output"`
-	Verbose    bool          `long:"verbose" description:"enable verbose output (when applicable)"`
-	JSON       bool          `long:"json" short:"j" description:"enable JSON output"`
-	Container  containerCmd  `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
-	Pool       poolCmd       `command:"pool" description:"perform tasks related to DAOS pools"`
-	Filesystem fsCmd         `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
-	Object     objectCmd     `command:"object" alias:"obj" description:"DAOS object operations"`
-	Version    versionCmd    `command:"version" description:"print daos version"`
-	ManPage    common.ManCmd `command:"manpage" hidden:"true"`
+	Debug      bool                    `long:"debug" description:"enable debug output"`
+	Verbose    bool                    `long:"verbose" description:"enable verbose output (when applicable)"`
+	JSON       bool                    `long:"json" short:"j" description:"enable JSON output"`
+	Container  containerCmd            `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
+	Pool       poolCmd                 `command:"pool" description:"perform tasks related to DAOS pools"`
+	Filesystem fsCmd                   `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
+	Object     objectCmd               `command:"object" alias:"obj" description:"DAOS object operations"`
+	Version    versionCmd              `command:"version" description:"print daos version"`
+	DumpTopo   cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	ManPage    cmdutil.ManCmd          `command:"manpage" hidden:"true"`
 }
 
 type versionCmd struct{}
@@ -153,7 +154,7 @@ or query/manage an object inside a container.`
 			return nil
 		}
 
-		if manCmd, ok := cmd.(common.ManPageWriter); ok {
+		if manCmd, ok := cmd.(cmdutil.ManPageWriter); ok {
 			manCmd.SetWriteFunc(p.WriteManPage)
 			return cmd.Execute(args)
 		}
@@ -184,6 +185,12 @@ or query/manage an object inside a container.`
 				return err
 			}
 			defer fini()
+		}
+
+		if argsCmd, ok := cmd.(cmdutil.ArgsHandler); ok {
+			if err := argsCmd.CheckArgs(args); err != nil {
+				return err
+			}
 		}
 
 		if err := cmd.Execute(args); err != nil {

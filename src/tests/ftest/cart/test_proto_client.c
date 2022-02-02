@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -78,7 +78,8 @@ test_run()
 			     test.tg_remote_group_name,
 			     &grp, &rank_list, &test.tg_crt_ctx,
 			     &test.tg_tid, 1,
-			     test.tg_use_cfg, NULL);
+			     test.tg_use_cfg, NULL,
+			     test.tg_use_daos_agent_env);
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");

@@ -1,10 +1,11 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
+import base64
 
 
 class QueryAttributeTest(TestWithServers):
@@ -53,6 +54,7 @@ class QueryAttributeTest(TestWithServers):
         query_result = daos_cmd.pool_query(pool=self.pool.uuid)
         actual_uuid = query_result["response"]["uuid"]
         actual_size = query_result["response"]["tier_stats"][0]["total"]
+        actual_size_roundup = int(actual_size/100000)*100000
 
         expected_uuid = self.pool.uuid.lower()
         if expected_uuid != actual_uuid:
@@ -60,10 +62,10 @@ class QueryAttributeTest(TestWithServers):
                 "Expected = {}; Actual = {}".format(expected_uuid, actual_uuid)
             errors.append(msg)
 
-        if expected_size != actual_size:
-            msg = "Unexpected Total Storage Tier 0 size from daos pool " +\
-                "query! Expected = {}; Actual = {}".format(
-                    expected_size, actual_size)
+        if expected_size != actual_size_roundup:
+            msg = "#Unexpected Total Storage Tier 0 size from daos pool " +\
+                "query! Expected = {}; Actual roundup = {}".format(
+                    expected_size, actual_size_roundup)
             errors.append(msg)
 
         # 2. Test pool set-attr, get-attr, and list-attrs.
@@ -85,7 +87,7 @@ class QueryAttributeTest(TestWithServers):
         # List the attribute names and compare against those set.
         attrs = daos_cmd.pool_list_attrs(pool=self.pool.uuid)
         for attr in attrs["response"]:
-            actual_attrs.append(attr["name"])
+            actual_attrs.append(attr)
 
         actual_attrs.sort()
         expected_attrs.sort()
@@ -100,7 +102,7 @@ class QueryAttributeTest(TestWithServers):
         for i in range(5):
             output = daos_cmd.pool_get_attr(
                 pool=self.pool.uuid, attr=sample_attrs[i])
-            actual_val = output["response"]["value"]
+            actual_val = base64.b64decode(output["response"]["value"]).decode()
             if sample_vals[i] != actual_val:
                 msg = "Unexpected attribute value! " +\
                     "Expected = {}; Actual = {}".format(

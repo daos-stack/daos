@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,6 +29,7 @@ noop_handler(int arg) {
 }
 
 static int bg_fd;
+static struct d_fault_attr_t *start_fault_attr;
 
 /* Send a message to the foreground thread */
 static int
@@ -156,24 +157,6 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 	exit(2);
 }
 
-static int
-ll_loop_fn(struct dfuse_info *dfuse_info)
-{
-	int			ret;
-
-	/* Blocking */
-	if (dfuse_info->di_threaded)
-		ret = dfuse_loop(dfuse_info);
-	else
-		ret = fuse_session_loop(dfuse_info->di_session);
-	if (ret != 0)
-		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d %s",
-				ret, strerror(ret));
-
-	return ret;
-}
-
 /*
  * Creates a fuse filesystem for any plugin that needs one.
  *
@@ -181,41 +164,51 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
  * a filesystem.
  * Returns true on success, false on failure.
  */
-bool
-dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
-		  struct fuse_lowlevel_ops *flo,
-		  struct fuse_args *args)
+int
+dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args)
 {
-	struct dfuse_info	*dfuse_info;
-	int			rc;
+	struct dfuse_info		*dfuse_info;
+	int				rc;
 
 	dfuse_info = fs_handle->dpi_info;
 
-	dfuse_info->di_session = fuse_session_new(args,
-						   flo,
-						   sizeof(*flo),
-						   fs_handle);
-	if (!dfuse_info->di_session)
-		goto cleanup;
+	dfuse_info->di_session = fuse_session_new(args, &dfuse_ops, sizeof(dfuse_ops), fs_handle);
+	if (dfuse_info->di_session == NULL) {
+		DFUSE_TRA_ERROR(dfuse_info, "Could not create fuse session");
+		return -DER_INVAL;
+	}
 
-	rc = fuse_session_mount(dfuse_info->di_session,
-				dfuse_info->di_mountpoint);
+	/* This is used by the fault injection testing to simulate starting dfuse and test the
+	 * error paths.  This testing is harder if we allow the mount to happen, so for the
+	 * purposes of the test allow dfuse to cleanly return and exit at this point.  An
+	 * added advantage here is that it allows us to run dfuse startup tests in docker
+	 * containers, without the fuse devices present
+	 */
+	if (D_SHOULD_FAIL(start_fault_attr))
+		return -DER_SUCCESS;
+
+	rc = fuse_session_mount(dfuse_info->di_session,	dfuse_info->di_mountpoint);
+	if (rc != 0) {
+		DFUSE_TRA_ERROR("Could not mount fuse");
+		return -DER_INVAL;
+	}
+
+	rc = dfuse_send_to_fg(0);
+	if (rc != -DER_SUCCESS)
+		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
+
+	/* Blocking */
+	if (dfuse_info->di_threaded)
+		rc = dfuse_loop(dfuse_info);
+	else
+		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
-		goto cleanup;
+		DFUSE_TRA_ERROR(dfuse_info,
+				"Fuse loop exited with return code: %d (%s)", rc, strerror(rc));
 
-	fuse_opt_free_args(args);
-
-	if (dfuse_send_to_fg(0) != -DER_SUCCESS)
-		goto cleanup;
-
-	rc = ll_loop_fn(dfuse_info);
 	fuse_session_unmount(dfuse_info->di_session);
-	if (rc)
-		goto cleanup;
 
-	return true;
-cleanup:
-	return false;
+	return daos_errno2der(rc);
 }
 
 static void
@@ -285,7 +278,7 @@ show_help(char *name)
 int
 main(int argc, char **argv)
 {
-	struct dfuse_projection_info	*fs_handle;
+	struct dfuse_projection_info	*fs_handle = NULL;
 	struct dfuse_info	*dfuse_info = NULL;
 	struct dfuse_pool	*dfp = NULL;
 	struct dfuse_cont	*dfs = NULL;
@@ -297,6 +290,7 @@ main(int argc, char **argv)
 	char			*cont_name = NULL;
 	char			c;
 	int			rc;
+	int			rc2;
 	char			*path = NULL;
 	bool			have_thread_count = false;
 
@@ -446,11 +440,13 @@ main(int argc, char **argv)
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_debug, rc);
 
+	start_fault_attr = d_fault_attr_lookup(100);
+
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
 	rc = dfuse_fs_init(dfuse_info, &fs_handle);
 	if (rc != 0)
-		D_GOTO(out_debug, rc);
+		D_GOTO(out_fini, rc);
 
 	/* Firsly check for attributes on the path.  If this option is set then
 	 * it is expected to work.
@@ -473,7 +469,7 @@ main(int argc, char **argv)
 			 * because the path is supposed to provide
 			 * pool/container details and it's an error if it can't.
 			 */
-			printf("Error reading attr from path %d %s\n", rc, strerror(rc));
+			printf("Error reading attr from path (%d) %s\n", rc, strerror(rc));
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 
@@ -535,27 +531,36 @@ main(int argc, char **argv)
 		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
 	if (rc != 0) {
 		printf("Failed to connect to container (%d) %s\n", rc, strerror(rc));
-		D_GOTO(out_daos, rc = daos_errno2der(rc));
+		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
+
+	rc = dfuse_fs_start(fs_handle, dfs);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out_cont, rc);
 
 	/* The container created by dfuse_cont_open() will have taken a ref on the pool, so drop the
 	 * initial one.
 	 */
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 
-	if (uuid_is_null(dfp->dfp_pool))
-		dfs->dfs_ops = &dfuse_pool_ops;
-
-	rc = dfuse_start(fs_handle, dfs);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(out_daos, rc);
+	rc = dfuse_fs_stop(fs_handle);
 
 	/* Remove all inodes from the hash tables */
-	rc = dfuse_fs_fini(fs_handle);
-
+	rc2 = dfuse_fs_fini(fs_handle);
+	if (rc == -DER_SUCCESS)
+		rc = rc2;
 	fuse_session_destroy(dfuse_info->di_session);
-
+	goto out_fini;
+out_cont:
+	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
+out_pool:
+	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 out_daos:
+	rc2 = dfuse_fs_fini(fs_handle);
+	if (rc == -DER_SUCCESS)
+		rc = rc2;
+out_fini:
+	D_FREE(fs_handle);
 	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
 out_debug:

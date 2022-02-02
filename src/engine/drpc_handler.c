@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,7 +35,7 @@ drpc_hdlr_fini(void)
 static bool
 module_id_is_valid(int module_id)
 {
-	return module_id < NUM_DRPC_MODULES;
+	return (module_id >= 0 && module_id < NUM_DRPC_MODULES);
 }
 
 int

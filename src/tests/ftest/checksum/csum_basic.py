@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -62,7 +62,7 @@ class CsumContainerValidation(TestWithServers):
         Test ID: DAOS-3927
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=all,full_regression,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=checksum
         :avocado: tags=basic_checksum_object
         """

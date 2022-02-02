@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -194,6 +194,12 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 			Name: "collect_test/my_gauge",
 			Cur:  2020,
 		},
+		MetricTypeStatsGauge: &TestMetric{
+			Name: "collect_test/my_stats_gauge",
+			Cur:  4242,
+			min:  10,
+			max:  5000,
+		},
 		MetricTypeTimestamp: &TestMetric{
 			Name: "ts",
 		},
@@ -279,7 +285,8 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 				wg.Done()
 			}()
 
-			err := CollectMetrics(ctx, ch)
+			s := NewSchema()
+			err := CollectMetrics(ctx, s, ch)
 
 			common.CmpErr(t, tc.expErr, err)
 

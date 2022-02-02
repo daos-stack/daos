@@ -1,4 +1,4 @@
-# (C) Copyright 2019-2021 Intel Corporation.
+# (C) Copyright 2019-2022 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -42,12 +42,12 @@ class DCont():
 
     Attributes
     ----------
-    path : string
-        Path for container representation in unified namespace
     pool : string
         Pool label or UUID string
     cont : string
         Container label or UUID string
+    path : string
+        Path for container representation in unified namespace
 
     Methods
     -------
@@ -90,7 +90,7 @@ class DCont():
         """ Look up DAOS object associated with name """
 
         (ret, hi, lo, otype) = pydaos_shim.cont_get(DAOS_MAGIC, self._hdl, name)
-        if ret == pydaos_shim.DER_NONEXIST:
+        if ret == -pydaos_shim.DER_NONEXIST:
             raise DObjNotFound(name)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to look up name", ret)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -406,8 +406,7 @@ daos_event_launch(struct daos_event *ev)
 	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL) {
-			D_ERROR("Can't find eq from handle %"PRIu64"\n",
-				evx->evx_eqh.cookie);
+			D_ERROR("Can't find eq from handle %"PRIu64"\n", evx->evx_eqh.cookie);
 			return -DER_NONEXIST;
 		}
 
@@ -575,8 +574,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 	if (daos_handle_is_valid(evx->evx_eqh)) {
 		epa.eqx = daos_eq_lookup(evx->evx_eqh);
 		if (epa.eqx == NULL) {
-			D_ERROR("Can't find eq from handle %"PRIu64"\n",
-				evx->evx_eqh.cookie);
+			D_ERROR("Can't find eq from handle %"PRIu64"\n", evx->evx_eqh.cookie);
 			return -DER_NONEXIST;
 		}
 	}
@@ -620,8 +618,7 @@ daos_eq_create(daos_handle_t *eqh)
 
 	rc = crt_context_create(&eqx->eqx_ctx);
 	if (rc) {
-		D_WARN("Failed to create CART context; using the global one "
-		       "("DF_RC")\n", DP_RC(rc));
+		D_WARN("Failed to create CART context; using the global one, "DF_RC"\n", DP_RC(rc));
 		eqx->eqx_ctx = daos_eq_ctx;
 	}
 
@@ -690,6 +687,7 @@ eq_progress_cb(void *arg)
 	if (epa->eqx->eqx_finalizing) { /* no new event is coming */
 		D_ASSERT(d_list_empty(&eq->eq_running));
 		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
+		D_ERROR("EQ Progress called while EQ is finalizing\n");
 		return -DER_NONEXIST;
 	}
 
@@ -712,13 +710,15 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	struct eq_progress_arg	epa;
 	int			rc;
 
-	if (n_events == 0)
+	if (n_events == 0 || events == NULL)
 		return -DER_INVAL;
 
 	/** look up private eq */
 	epa.eqx = daos_eq_lookup(eqh);
-	if (epa.eqx == NULL)
+	if (epa.eqx == NULL) {
+		D_ERROR("Invalid EQ handle %"PRIu64"\n", eqh.cookie);
 		return -DER_NONEXIST;
+	}
 
 	epa.n_events	= n_events;
 	epa.events	= events;
@@ -750,8 +750,10 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 	int				 count;
 
 	eqx = daos_eq_lookup(eqh);
-	if (eqx == NULL)
+	if (eqx == NULL) {
+		D_ERROR("Invalid EQ handle %"PRIu64"\n", eqh.cookie);
 		return -DER_NONEXIST;
+	}
 
 	eq = daos_eqx2eq(eqx);
 
@@ -1064,8 +1066,10 @@ daos_event_fini(struct daos_event *ev)
 
 	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
-		if (eqx == NULL)
+		if (eqx == NULL) {
+			D_ERROR("Invalid EQ handle %"PRIu64"\n", evx->evx_eqh.cookie);
 			return -DER_NONEXIST;
+		}
 		eq = daos_eqx2eq(eqx);
 		D_MUTEX_LOCK(&eqx->eqx_lock);
 	}
@@ -1188,8 +1192,7 @@ daos_event_abort(struct daos_event *ev)
 	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL) {
-			D_ERROR("Invalid EQ handle %"PRIu64"\n",
-				evx->evx_eqh.cookie);
+			D_ERROR("Invalid EQ handle %"PRIu64"\n", evx->evx_eqh.cookie);
 			return -DER_NONEXIST;
 		}
 		D_MUTEX_LOCK(&eqx->eqx_lock);
@@ -1227,8 +1230,7 @@ daos_event_priv_get(daos_event_t **ev)
 	}
 
 	if (evx->evx_status != DAOS_EVS_READY) {
-		D_CRIT("private event is inuse, status=%d\n",
-		       evx->evx_status);
+		D_CRIT("private event is inuse, status=%d\n", evx->evx_status);
 		return -DER_BUSY;
 	}
 	*ev = &ev_thpriv;
@@ -1262,8 +1264,12 @@ daos_event_priv_wait()
 		/** progress succeeded, loop can exit if event completed */
 		if (rc == 0) {
 			rc = ev_thpriv.ev_error;
-			if (rc)
+			if (rc) {
+				rc2 = daos_event_priv_reset();
+				D_ASSERT(rc2 == 0);
+				ev_thpriv_is_init = true;
 				break;
+			}
 			continue;
 		}
 
@@ -1271,9 +1277,11 @@ daos_event_priv_wait()
 		if (rc == -DER_TIMEDOUT)
 			continue;
 
+		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
+
 		/*
-		 * other progress failure; op should fail with that err. reset
-		 * the private event first so it can be resused.
+		 * other progress failure; op should fail with that err. reset the private event
+		 * first so it can be resused.
 		 */
 		rc2 = daos_event_priv_reset();
 		D_ASSERT(rc2 == 0);

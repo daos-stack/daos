@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -141,6 +141,7 @@ struct dss_module_metrics cont_metrics = {
 	.dmm_tags = DAOS_SYS_TAG,
 	.dmm_init = ds_cont_metrics_alloc,
 	.dmm_fini = ds_cont_metrics_free,
+	.dmm_nr_metrics = ds_cont_metrics_count,
 };
 
 struct dss_module cont_module =  {

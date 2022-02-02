@@ -1,13 +1,13 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import shutil
+from tempfile import mkdtemp
 import traceback
 import uuid
-import threading
-import queue
 
 from avocado.core.exceptions import TestFail
 
@@ -15,28 +15,45 @@ from apricot import TestWithServers
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
+from thread_manager import ThreadManager
 
 
-def ior_runner_thread(manager, uuids, results):
-    """IOR run thread method.
+def run_ior_loop(manager, uuids, tmpdir_base):
+    """IOR run for each UUID provided.
 
     Args:
         manager (str): mpi job manager command
-        uuids (list): [description]
-        results (queue): queue for returning thread results
+        uuids (list): list of container UUIDs
+        tmpdir_base (str): base directory for the mpi orte_tmpdir_base mca parameter
+
+    Returns:
+        list: a list of CmdResults from each ior command run
+
     """
+    results = []
+    errors = []
     for index, cont_uuid in enumerate(uuids):
         manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
+
+        # Create a unique temporary directory for the the manager command
+        tmp_dir = mkdtemp(dir=tmpdir_base)
+        manager.tmpdir_base.update(tmp_dir, "tmpdir_base")
+
         try:
-            manager.run()
+            results.append(manager.run())
         except CommandFailure as error:
-            print(
-                "--- FAIL --- Thread-{0} Failed to run IOR {1}: "
-                "Exception {2}".format(
-                    index,
-                    "read" if "-r" in manager.job.flags.value else "write",
-                    str(error)))
-            results.put("FAIL")
+            ior_mode = "read" if "-r" in manager.job.flags.value else "write"
+            errors.append(
+                "IOR {} Loop {}/{} failed for container {}: {}".format(
+                    ior_mode, index, len(uuids), cont_uuid, error))
+        finally:
+            # Remove the unique temporary directory and its contents to avoid conflicts
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    if errors:
+        raise CommandFailure(
+            "IOR failed in {}/{} loops: {}".format(len(errors), len(uuids), "\n".join(errors)))
+    return results
 
 
 class ObjectMetadata(TestWithServers):
@@ -55,9 +72,24 @@ class ObjectMetadata(TestWithServers):
     CREATED_CONTAINERS_LIMIT = 3500
 
     def __init__(self, *args, **kwargs):
-        """Initialize a ObjectMetadata object."""
+        """Initialize a TestWithServers object."""
         super().__init__(*args, **kwargs)
-        self.out_queue = None
+        self.ior_managers = []
+
+    def pre_tear_down(self):
+        """Tear down steps to optionally run before tearDown().
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        error_list = []
+        if self.ior_managers:
+            self.test_log.info("Stopping IOR job managers")
+            error_list = self._stop_managers(self.ior_managers, "IOR job manager")
+        else:
+            self.log.debug("no pre-teardown steps defined")
+        return error_list
 
     def create_pool(self):
         """Create a pool and display the svc ranks."""
@@ -161,30 +193,6 @@ class ObjectMetadata(TestWithServers):
                 self.log.error("  %s", error)
         self.container = []
         return len(errors) == 0
-
-    def thread_control(self, threads, operation):
-        """Start threads and wait until all threads are finished.
-
-        Args:
-            threads (list): list of threads to execute
-            operation (str): IOR operation, e.g. "read" or "write"
-
-        Returns:
-            str: "PASS" if all threads completed successfully; "FAIL" otherwise
-
-        """
-        self.create_pool()
-        self.d_log.debug("IOR {0} Threads Started -----".format(operation))
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
-
-        while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
-                return "FAIL"
-        self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
-        return "PASS"
 
     def test_metadata_fillup(self):
         """JIRA ID: DAOS-1512.
@@ -358,7 +366,6 @@ class ObjectMetadata(TestWithServers):
         self.create_pool()
         files_per_thread = 400
         total_ior_threads = 5
-        self.out_queue = queue.Queue()
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
@@ -366,13 +373,15 @@ class ObjectMetadata(TestWithServers):
             [str(uuid.uuid4()) for _ in range(files_per_thread)]
             for _ in range(total_ior_threads)]
 
+        # Setup the thread manager
+        thread_manager = ThreadManager(run_ior_loop, self.timeout - 30)
+
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
         for operation in ("write", "read"):
             # Create the IOR threads
-            threads = []
             for index in range(total_ior_threads):
-                # Define the arguments for the ior_runner_thread method
+                # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
                 ior_cmd.set_daos_params(self.server_group, self.pool)
@@ -380,29 +389,28 @@ class ObjectMetadata(TestWithServers):
                     "F", "/run/ior/ior{}flags/".format(operation))
 
                 # Define the job manager for the IOR command
-                manager = Orterun(ior_cmd)
-                env = ior_cmd.get_default_env(str(manager))
-                manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-                manager.assign_processes(processes)
-                manager.assign_environment(env)
+                self.ior_managers.append(Orterun(ior_cmd))
+                env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
+                self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
+                self.ior_managers[-1].assign_processes(processes)
+                self.ior_managers[-1].assign_environment(env)
+                self.ior_managers[-1].verbose = False
 
                 # Add a thread for these IOR arguments
-                threads.append(
-                    threading.Thread(
-                        target=ior_runner_thread,
-                        kwargs={
-                            "manager": manager,
-                            "uuids": list_of_uuid_lists[index],
-                            "results": self.out_queue}))
-
+                thread_manager.add(
+                    manager=self.ior_managers[-1], uuids=list_of_uuid_lists[index],
+                    tmpdir_base=self.test_dir)
                 self.log.info(
                     "Created %s thread %s with container uuids %s", operation,
                     index, list_of_uuid_lists[index])
 
             # Launch the IOR threads
-            if self.thread_control(threads, operation) == "FAIL":
-                self.d_log.error("IOR {} Thread FAIL".format(operation))
-                self.fail("IOR {} Thread FAIL".format(operation))
+            self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)
+            failed_thread_count = thread_manager.check_run()
+            if failed_thread_count > 0:
+                msg = "{} FAILED IOR {} Thread(s)".format(failed_thread_count, operation)
+                self.d_log.error(msg)
+                self.fail(msg)
 
             # Restart the agents and servers after the write / before the read
             if operation == "write":
@@ -412,17 +420,14 @@ class ObjectMetadata(TestWithServers):
                     len(errors), 0,
                     "Error stopping agents:\n  {}".format("\n  ".join(errors)))
 
-                # Stop the servers
-                errors = self.stop_servers()
+                # Restart the servers w/o formatting the storage
+                errors = self.restart_servers()
                 self.assertEqual(
                     len(errors), 0,
                     "Error stopping servers:\n  {}".format("\n  ".join(errors)))
 
                 # Start the agents
                 self.start_agent_managers()
-
-                # Start the servers
-                self.start_server_managers()
 
         self.log.info("Test passed")
 

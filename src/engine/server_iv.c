@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -195,6 +195,7 @@ iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns, struct ds_iv_ns **p_ns)
 		if (ns->iv_stop) {
 			D_DEBUG(DB_MD, DF_UUID" stopping\n",
 				DP_UUID(ns->iv_pool_uuid));
+			*p_ns = ns;
 			return -DER_SHUTDOWN;
 		}
 		ds_iv_ns_get(ns);
@@ -422,21 +423,17 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	if (entry->iv_class->iv_class_ops &&
 	    entry->iv_class->iv_class_ops->ivc_ent_fetch)
-		rc = entry->iv_class->iv_class_ops->ivc_ent_fetch(entry, &key,
-								  iv_value,
-								  priv);
+		rc = entry->iv_class->iv_class_ops->ivc_ent_fetch(entry, &key, iv_value, priv);
 	else
 		rc = daos_sgl_copy_data(iv_value, &entry->iv_value);
 
-	/* store the value of the result */
-	if (flags & CRT_IV_FLAG_PENDING_FETCH &&
-	    rc == -DER_IVCB_FORWARD) {
-		D_DEBUG(DB_MD, "[%d:%d] reset to 0 during IV aggregation.\n",
-			key.rank, key.class_id);
-		rc = 0;
+output:
+	if (flags & CRT_IV_FLAG_PENDING_FETCH && rc == -DER_IVCB_FORWARD) {
+		/* For pending fetch request, let's reset to DER_NOTLEADER for retry */
+		D_DEBUG(DB_MD, "[%d:%d] reset NOTLEADER to retry.\n", key.rank, key.class_id);
+		rc = -DER_NOTLEADER;
 	}
 
-output:
 	ds_iv_ns_put(ns);
 	return rc;
 }
@@ -611,21 +608,32 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	*priv = priv_entry;
 
 out:
-	if (rc && alloc_entry) {
-		d_list_del(&entry->iv_link);
-		iv_entry_free(entry);
+	if (rc) {
+		if (alloc_entry) {
+			d_list_del(&entry->iv_link);
+			iv_entry_free(entry);
+		}
+		ds_iv_ns_put(ns);
 	}
 
-	ds_iv_ns_put(ns);
-	return 0;
+	return rc;
 }
 
 static int
 ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 {
+	struct ds_iv_ns		*ns = NULL;
 	struct iv_priv_entry	*priv_entry = priv;
 	struct ds_iv_entry	*entry;
 	int			 rc;
+
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0) {
+		if (ns != NULL)
+			ds_iv_ns_put(ns); /* balance ivc_on_get */
+		return rc;
+	}
+	D_ASSERT(ns != NULL);
 
 	D_ASSERT(priv_entry != NULL);
 
@@ -635,20 +643,24 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	/* Let's deal with iv_value first */
 	d_sgl_fini(iv_value, true);
 
-	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
-							priv_entry->priv);
+	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry, priv_entry->priv);
 	if (rc)
-		return rc;
+		D_GOTO(put, rc);
 
 	D_FREE(priv_entry);
 	D_DEBUG(DB_TRACE, "Put entry %p/%d\n", entry, entry->iv_ref - 1);
 	if (--entry->iv_ref > 0)
-		return 0;
+		D_GOTO(put, rc);
 
 	d_list_del(&entry->iv_link);
 	iv_entry_free(entry);
 
-	return 0;
+put:
+	/* one for lookup, the other one for balanced the get */
+	ds_iv_ns_put(ns);
+	ds_iv_ns_put(ns);
+
+	return rc;
 }
 
 static int
@@ -850,6 +862,8 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 		d_list_del(&entry->iv_link);
 		iv_entry_free(entry);
 	}
+
+	D_INFO(DF_UUID" ns stopped\n", DP_UUID(ns->iv_pool_uuid));
 }
 
 unsigned int
@@ -948,11 +962,8 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	int			rc;
 
 	rc = ABT_future_create(1, NULL, &future);
-	if (rc) {
-		if (sync != NULL && sync->ivs_comp_cb)
-			sync->ivs_comp_cb(sync->ivs_comp_cb_arg, rc);
+	if (rc)
 		return rc;
-	}
 
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
@@ -1001,7 +1012,7 @@ out:
 	return rc;
 }
 
-struct sync_comp_cb_arg {
+struct iv_op_ult_arg {
 	d_sg_list_t	iv_value;
 	struct ds_iv_key iv_key;
 	struct ds_iv_ns	*ns;
@@ -1012,88 +1023,15 @@ struct sync_comp_cb_arg {
 };
 
 static int
-iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
-      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc);
-
-static int
-sync_comp_cb(void *arg, int rc)
+_iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+       crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
 {
-	struct sync_comp_cb_arg *cb_arg = arg;
-
-	if (cb_arg == NULL)
-		return rc;
-
-	/* Let's retry asynchronous IV only for GRPVER for the moment */
-	if (cb_arg->retry && rc == -DER_GRPVER && !cb_arg->ns->iv_stop) {
-		int rc1;
-
-		/* If the IV ns leader has been changed, then it will retry
-		 * in the mean time, it will rely on others to update the
-		 * ns for it.
-		 */
-		D_WARN("retry for class %d opc %d rc "DF_RC"\n",
-			cb_arg->iv_key.class_id, IV_UPDATE, DP_RC(rc));
-		rc1 = iv_op(cb_arg->ns, &cb_arg->iv_key, &cb_arg->iv_value,
-			    &cb_arg->iv_sync, cb_arg->shortcut, cb_arg->retry,
-			    cb_arg->opc);
-		if (rc1) {
-			D_ERROR("ds iv update retry failed: %d\n", rc1);
-			rc = rc1;
-		}
-	}
-
-	ds_iv_ns_put(cb_arg->ns);
-	d_sgl_fini(&cb_arg->iv_value, true);
-	D_FREE(cb_arg);
-	return rc;
-}
-
-static int
-iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
-      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
-{
-	struct ds_iv_key *_key = key;
-	d_sg_list_t	 *_value = value;
 	int rc;
 
 	if (ns->iv_stop)
 		return -DER_SHUTDOWN;
 retry:
-	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY) {
-		struct sync_comp_cb_arg *arg = NULL;
-
-		/* Register asynchronous sync(lazy mode) callback */
-		D_ALLOC_PTR(arg);
-		if (arg == NULL)
-			return -DER_NOMEM;
-
-		/* Asynchronous mode, let's realloc the value and key, since
-		 * the input parameters will be invalid after the call.
-		 */
-		if (value) {
-			rc = daos_sgl_alloc_copy_data(&arg->iv_value, value);
-			if (rc) {
-				D_FREE(arg);
-				return -DER_NOMEM;
-			}
-		}
-
-		memcpy(&arg->iv_key, key, sizeof(*key));
-		arg->shortcut = shortcut;
-		arg->iv_sync = *sync;
-		arg->retry = retry;
-		ds_iv_ns_get(ns);
-		arg->ns = ns;
-		arg->opc = opc;
-
-		sync->ivs_comp_cb = sync_comp_cb;
-		sync->ivs_comp_cb_arg = arg;
-		if (value)
-			_value = &arg->iv_value;
-		_key = &arg->iv_key;
-	}
-
-	rc = iv_op_internal(ns, _key, _value, sync, shortcut, opc);
+	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
 		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
@@ -1108,14 +1046,88 @@ retry:
 		}
 
 		/* otherwise retry and wait for others to update the ns. */
+		/* IV fetch might return IVCB_FORWARD if the IV fetch forward RPC is queued,
+		 * but inflight fetch request return IVCB_FORWARD, then queued RPC will
+		 * reply IVCB_FORWARD.
+		 */
 		D_WARN("retry upon %d for class %d opc %d\n", rc,
 		       key->class_id, opc);
-		/* Yield to avoid hijack the cycle if IV RPC is not sent */
-		ABT_thread_yield();
+		/* sleep 1sec and retry */
+		dss_sleep(1000);
 		goto retry;
 	}
 
 	return rc;
+}
+
+static void
+iv_op_ult(void *arg)
+{
+	struct iv_op_ult_arg *ult_arg = arg;
+
+	D_ASSERT(ult_arg->iv_sync.ivs_mode == CRT_IV_SYNC_LAZY);
+	/* Since it will put LAZY sync in a separate and asynchronous ULT, so
+	 * let's use EAGER mode in CRT to make it simipler.
+	 */
+	ult_arg->iv_sync.ivs_mode = CRT_IV_SYNC_EAGER;
+	_iv_op(ult_arg->ns, &ult_arg->iv_key,
+	       ult_arg->iv_value.sg_nr == 0 ? NULL : &ult_arg->iv_value,
+	       &ult_arg->iv_sync, ult_arg->shortcut, ult_arg->retry, ult_arg->opc);
+	ds_iv_ns_put(ult_arg->ns);
+	d_sgl_fini(&ult_arg->iv_value, true);
+	D_FREE(ult_arg);
+}
+
+static int
+iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+	    crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
+{
+	struct iv_op_ult_arg	*ult_arg;
+	int			rc;
+
+	D_ALLOC_PTR(ult_arg);
+	if (ult_arg == NULL)
+		return -DER_NOMEM;
+
+	/* Asynchronous mode, let's realloc the value and key, since
+	 * the input parameters will be invalid after the call.
+	 */
+	if (value) {
+		rc = daos_sgl_alloc_copy_data(&ult_arg->iv_value, value);
+		if (rc) {
+			D_FREE(ult_arg);
+			return -DER_NOMEM;
+		}
+	}
+
+	memcpy(&ult_arg->iv_key, key, sizeof(*key));
+	ult_arg->shortcut = shortcut;
+	ult_arg->iv_sync = *sync;
+	ult_arg->retry = retry;
+	ds_iv_ns_get(ns);
+	ult_arg->ns = ns;
+	ult_arg->opc = opc;
+	rc = dss_ult_create(iv_op_ult, ult_arg, DSS_XS_SYS, 0, 0, NULL);
+	if (rc != 0) {
+		ds_iv_ns_put(ult_arg->ns);
+		d_sgl_fini(&ult_arg->iv_value, true);
+		D_FREE(ult_arg);
+	}
+
+	return rc;
+}
+
+static int
+iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
+{
+	if (ns->iv_stop)
+		return -DER_SHUTDOWN;
+
+	if (sync && sync->ivs_mode == CRT_IV_SYNC_LAZY)
+		return iv_op_async(ns, key, value, sync, shortcut, retry, opc);
+
+	return _iv_op(ns, key, value, sync, shortcut, retry, opc);
 }
 
 /**

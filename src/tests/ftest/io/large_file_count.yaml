@@ -9,27 +9,18 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 7200
+timeout: 5000
 server_config:
   name: daos_server
   servers:
-    log_mask: ERR
     bdev_class: nvme
-    bdev_list: ["0000:81:00.0","0000:da:00.0"]
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
-    scm_size: 400
 pool:
-  createmode:
-    mode_RW:
-      mode: 146
-  createset:
-    setname: daos_server
-  createsize:
-    scm_size: 40000000000
-    nvme_size: 400000000000 # large nvme_size for mdtest 1M file creation
-  createsvc:
-    svcn: 3
+  name: daos_server
+  scm_size: 40G
+  nvme_size: 400G
   control_method: dmg
 container:
   type: POSIX
@@ -40,19 +31,15 @@ largefilecount:
     - POSIX
   object_class:
     - SX
-    - RP_3GX
+    - EC_2P1GX
 ior:
   np: 30
   dfs_destroy: False
-  iorflags:
-    sequential:
-      flags: "-v -D 300 -W -w -r -R"
+  flags: "-v -D 300 -W -w -r -R -F"
   test_file: /testFile
   repetitions: 1
-  transfersize_blocksize:
-    4K:
-      transfer_size: '4K'
-      block_size: '2G'
+  transfer_size: '1M'
+  block_size: '7G'
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
   disable_caching: True
@@ -60,11 +47,10 @@ dfuse:
 mdtest:
   client_processes:
     np: 30
-  num_of_files_dirs: 1667         # creating total of 50K files
-  num_of_files_dirs_rc: 33334    # creating total of 1M files
+  num_of_files_dirs: 33334     # creating total of 1M files
   test_dir: "/"
   iteration: 1
-  dfs_destroy: True
+  dfs_destroy: False
   manager: "MPICH"
   flags: "-F -C"
   write_bytes: 4096

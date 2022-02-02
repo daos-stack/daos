@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2021 Intel Corporation.
+  (C) Copyright 2021-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,7 +30,7 @@ class HarnessAdvancedTest(TestWithServers):
         :avocado: tags=harness,harness_advanced_test,test_core_files
         """
         # Choose a server find the pid of its daos_engine process
-        host = choice(self.server_managers[0].hosts)
+        host = choice(self.server_managers[0].hosts) #nosec
         self.log.info("Obtaining pid of the daos_engine process on %s", host)
         pid = None
         result = run_pcmd([host], "pgrep --list-full daos_engine", 20)

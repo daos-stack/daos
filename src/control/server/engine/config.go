@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,29 +7,29 @@
 package engine
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 const maxHelperStreamCount = 2
 
-// ErrNoPinnedNumaNode error indicates no NUMA node has been pinned in this
-// engine's configuration.
-var ErrNoPinnedNumaNode = errors.New("pinned NUMA node was not configured")
-
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
 	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
 	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
-	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
+	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
+	DisableSRX      bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -49,15 +49,6 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
 	}
-}
-
-// GetNumaNode retrieves the value configured by the YML if it was supplied
-// returns an error if it was not configured.
-func (fc *FabricConfig) GetNumaNode() (uint, error) {
-	if fc.PinnedNumaNode != nil {
-		return *fc.PinnedNumaNode, nil
-	}
-	return 0, ErrNoPinnedNumaNode
 }
 
 // Validate ensures that the configuration meets minimum standards.
@@ -157,8 +148,8 @@ type Config struct {
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
 	ServiceThreadCore int            `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
-	SystemName        string         `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
-	SocketDir         string         `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
+	SystemName        string         `yaml:"-" cmdLongFlag:"--group" cmdShortFlag:"-g"`
+	SocketDir         string         `yaml:"-" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
 	LogMask           string         `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
 	LogFile           string         `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
 	LegacyStorage     LegacyStorage  `yaml:",inline,omitempty"`
@@ -166,6 +157,7 @@ type Config struct {
 	Fabric            FabricConfig   `yaml:",inline"`
 	EnvVars           []string       `yaml:"env_vars,omitempty"`
 	EnvPassThrough    []string       `yaml:"env_pass_through,omitempty"`
+	PinnedNumaNode    *uint          `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
@@ -178,8 +170,42 @@ func NewConfig() *Config {
 	}
 }
 
+// ValidateFabric validates the fabric configuration against actual fabric devices and NUMA config.
+func (c *Config) ValidateFabric(ctx context.Context, log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+	fi, err := fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
+	if err != nil {
+		return err
+	}
+
+	return errors.Wrap(c.setAffinity(ctx, log, fi), "setting numa affinity for engine")
+}
+
+// setAffinity ensures engine NUMA locality is assigned and valid.
+func (c *Config) setAffinity(ctx context.Context, log logging.Logger, fi *hardware.FabricInterface) error {
+	ifaceNumaNode := fi.NUMANode
+
+	if c.PinnedNumaNode != nil {
+		// validate that numa node is correct for the given device
+		if ifaceNumaNode != *c.PinnedNumaNode {
+			log.Errorf("misconfiguration: network interface %s is on NUMA "+
+				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
+				ifaceNumaNode, *c.PinnedNumaNode)
+		}
+		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
+		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
+
+		return nil
+	}
+
+	// set engine numa node index to that of selected fabric interface
+	c.Fabric.NumaNodeIndex = ifaceNumaNode
+	c.Storage.NumaNodeIndex = ifaceNumaNode
+
+	return nil
+}
+
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate() error {
+func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
@@ -188,8 +214,8 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
-	if c.LogMask != "" {
-		return ValidateLogMasks(c.LogMask)
+	if err := ValidateLogMasks(c.LogMask); err != nil {
+		return errors.Wrap(err, "validate engine log masks")
 	}
 
 	return nil
@@ -310,6 +336,12 @@ func (c *Config) WithStorageEnableHotplug(enable bool) *Config {
 	return c
 }
 
+// WithStorageNumaNodeIndex sets the NUMA node index to be used by this instance.
+func (c *Config) WithStorageNumaNodeIndex(nodeIndex uint) *Config {
+	c.Storage.NumaNodeIndex = nodeIndex
+	return c
+}
+
 // WithSocketDir sets the path to the instance's dRPC socket directory.
 func (c *Config) WithSocketDir(dir string) *Config {
 	c.SocketDir = dir
@@ -340,9 +372,9 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	return c
 }
 
-// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
-func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
-	c.Fabric.PinnedNumaNode = numa
+// WithFabricNumaNodeIndex sets the NUMA node index to be used by this instance.
+func (c *Config) WithFabricNumaNodeIndex(nodeIndex uint) *Config {
+	c.Fabric.NumaNodeIndex = nodeIndex
 	return c
 }
 
@@ -403,5 +435,11 @@ func (c *Config) WithMemSize(memsize int) *Config {
 // WithHugePageSize sets the configured hugepage size on this instance.
 func (c *Config) WithHugePageSize(hugepagesz int) *Config {
 	c.HugePageSz = hugepagesz
+	return c
+}
+
+// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
+func (c *Config) WithPinnedNumaNode(numa uint) *Config {
+	c.PinnedNumaNode = &numa
 	return c
 }

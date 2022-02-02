@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,7 +52,11 @@ dc_pool_init(void)
 void
 dc_pool_fini(void)
 {
-	daos_rpc_unregister(&pool_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&pool_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister pool RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 static void

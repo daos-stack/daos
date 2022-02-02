@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -128,7 +128,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
 
         # Create a number of containers and verify metrics
         for loop in range(1, container_qty + 1):
-            self.create_container(random.choice([True, False]))
+            self.create_container(random.choice([True, False])) #nosec
             self.log.info(
                 "Container %s/%s: After create()", loop, container_qty)
             self.check_metrics()

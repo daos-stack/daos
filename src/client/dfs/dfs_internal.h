@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,8 +58,8 @@ dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
  * destination exists.
  */
 int
-dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent, char *new_name,
-		  daos_obj_id_t *moid, daos_obj_id_t *oid);
+dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, char *name,
+		  dfs_obj_t *new_parent, char *new_name, daos_obj_id_t *moid, daos_obj_id_t *oid);
 
 /* Set the in-memory parent, but takes the parent, rather than another file object */
 void

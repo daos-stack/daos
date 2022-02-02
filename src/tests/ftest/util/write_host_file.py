@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -29,7 +29,7 @@ def write_host_file(hostlist, path='/tmp', slots=1):
     """
 
     log = getLogger()
-    unique = random.randint(1, 100000)
+    unique = random.randint(1, 100000) #nosec
 
     if not os.path.exists(path):
         os.makedirs(path)

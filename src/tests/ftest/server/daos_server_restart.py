@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -37,6 +37,10 @@ class DaosServerTest(TestWithServers):
         self.server_managers[0].dmg.storage_format(reformat)
         self.log.info("=Restart daos_server, detect_engine_start().")
         self.server_managers[0].detect_engine_start()
+        self.log.info("=Restart daos_agent, stop")
+        self.stop_agents()
+        self.log.info("=Restart daos_agent, start")
+        self.start_agent_managers()
 
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)

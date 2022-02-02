@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,7 +63,11 @@ typedef struct {
 	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
 
-#define DAOS_ANCHOR_INIT	((daos_anchor_t){DAOS_ANCHOR_TYPE_ZERO})
+#define DAOS_ANCHOR_INIT	{ .da_type = DAOS_ANCHOR_TYPE_ZERO,	\
+				  .da_shard = 0,			\
+				  .da_flags = 0,			\
+				  .da_sub_anchors = 0,			\
+				  .da_buf = { 0 } }
 
 /** Generic handle for various DAOS components like container, object, etc. */
 typedef struct {

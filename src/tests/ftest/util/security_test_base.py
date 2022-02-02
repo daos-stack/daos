@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -26,7 +26,7 @@ def acl_entry(usergroup, name, perm, permissions=None):
 
     """
     if perm == "random":
-        perm = random.choice(permissions)
+        perm = random.choice(permissions) #nosec
     if perm == "nonexist":
         return ""
     if "group" in usergroup:

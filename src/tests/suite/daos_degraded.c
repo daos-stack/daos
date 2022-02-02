@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -257,9 +257,6 @@ degraded_setup(void **state)
 static int
 degraded_teardown(void **state)
 {
-#if 0
-	print_message("degraded_teardown(): At the moment, the daos_pool_destroy() call may time out, since the client MGMT_POOL_DESTROY RPC has the same timeout as the server RDB_STOP RPC(s) to the killed server(s). (Previously, the same issue affects the daos_pool_disconnect() call.)\n");
-#endif
 	return test_teardown(state);
 }
 

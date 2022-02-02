@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,5 +18,6 @@ int dc_kv_get(tse_task_t *task);
 int dc_kv_put(tse_task_t *task);
 int dc_kv_remove(tse_task_t *task);
 int dc_kv_list(tse_task_t *task);
+daos_handle_t daos_kv2objhandle(daos_handle_t oh);
 
 #endif /* __DAOS_KVX_H__ */

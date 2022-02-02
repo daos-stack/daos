@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,7 @@ compound_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	D_ASSERT(remain->vfe_blk_off == vfe->vfe_blk_off);
 
 	/* Remove the found free extent from compound index */
-	free_class_remove(&vsi->vsi_class, entry);
+	free_class_remove(vsi, entry);
 
 	if (remain->vfe_blk_cnt == vfe->vfe_blk_cnt) {
 		d_iov_set(&key, &vfe->vfe_blk_off, sizeof(vfe->vfe_blk_off));
@@ -39,11 +39,9 @@ compound_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		/* Adjust in-tree offset & length */
 		remain->vfe_blk_off += vfe->vfe_blk_cnt;
 		remain->vfe_blk_cnt -= vfe->vfe_blk_cnt;
-		rc = daos_gettime_coarse(&remain->vfe_age);
-		if (rc)
-			return rc;
+		remain->vfe_age = get_current_age();
 
-		rc = free_class_add(&vsi->vsi_class, entry);
+		rc = free_class_add(vsi, entry);
 	}
 
 	return rc;
@@ -87,7 +85,7 @@ reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 	resrvd->vre_blk_off = vfe.vfe_blk_off;
 	resrvd->vre_blk_cnt = vfe.vfe_blk_cnt;
 
-	vsi->vsi_stat[STAT_RESRV_HINT] += 1;
+	inc_stats(vsi, STAT_RESRV_HINT, 1);
 
 	D_DEBUG(DB_IO, "["DF_U64", %u]\n", resrvd->vre_blk_off,
 		resrvd->vre_blk_cnt);
@@ -144,9 +142,9 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 		D_ASSERT(tot_blks >= (half_blks + blk_cnt));
 
 		/* Shrink the original extent to half size */
-		free_class_remove(&vsi->vsi_class, entry);
+		free_class_remove(vsi, entry);
 		entry->ve_ext.vfe_blk_cnt = half_blks;
-		rc = free_class_add(&vsi->vsi_class, entry);
+		rc = free_class_add(vsi, entry);
 		if (rc)
 			return rc;
 
@@ -154,9 +152,7 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 		if (tot_blks > (half_blks + blk_cnt)) {
 			vfe.vfe_blk_off = blk_off + half_blks + blk_cnt;
 			vfe.vfe_blk_cnt = tot_blks - half_blks - blk_cnt;
-			rc = daos_gettime_coarse(&vfe.vfe_age);
-			if (rc)
-				return rc;
+			vfe.vfe_age = get_current_age();
 
 			rc = compound_free(vsi, &vfe, VEA_FL_NO_MERGE |
 						VEA_FL_NO_ACCOUNTING);
@@ -169,7 +165,7 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 	resrvd->vre_blk_off = vfe.vfe_blk_off;
 	resrvd->vre_blk_cnt = blk_cnt;
 
-	vsi->vsi_stat[STAT_RESRV_LARGE] += 1;
+	inc_stats(vsi, STAT_RESRV_LARGE, 1);
 
 	D_DEBUG(DB_IO, "["DF_U64", %u]\n", resrvd->vre_blk_off,
 		resrvd->vre_blk_cnt);
@@ -309,7 +305,7 @@ reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
 			resrvd->vre_blk_off = vfe.vfe_blk_off;
 			resrvd->vre_blk_cnt = blk_cnt;
 
-			vsi->vsi_stat[STAT_RESRV_SMALL] += 1;
+			inc_stats(vsi, STAT_RESRV_SMALL, 1);
 
 			D_DEBUG(DB_IO, "["DF_U64", %u]\n",
 				resrvd->vre_blk_off, resrvd->vre_blk_cnt);
@@ -392,9 +388,6 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 		if (found_end > vfe_end) {
 			frag.vfe_blk_off = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
 			frag.vfe_blk_cnt = found_end - vfe_end;
-			rc = daos_gettime_coarse(&frag.vfe_age);
-			if (rc)
-				return rc;
 
 			d_iov_set(&key_in, &frag.vfe_blk_off,
 				  sizeof(frag.vfe_blk_off));
@@ -411,9 +404,6 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 		found->vfe_blk_off = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
 		found->vfe_blk_cnt = found_end - vfe_end;
-		rc = daos_gettime_coarse(&found->vfe_age);
-		if (rc)
-			return rc;
 	} else {
 		/* Remove the original free extent from persistent tree */
 		rc = dbtree_delete(btr_hdl, BTR_PROBE_BYPASS, &key_out, NULL);

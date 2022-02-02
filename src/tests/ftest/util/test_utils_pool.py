@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -149,7 +149,7 @@ class TestPool(TestDaosApiBase):
 
         """
         uuid = None
-        if self.pool:
+        if self.pool and self.pool.uuid:
             uuid = self.pool.get_uuid_str()
         return uuid
 
@@ -386,21 +386,13 @@ class TestPool(TestDaosApiBase):
         if self.pool:
             self.log.info("Get-prop for Pool: %s", self.identifier)
 
-            if self.control_method.value == self.USE_DMG and self.dmg:
-                # If specific property are not provided, get all the property
-                self.dmg.pool_get_prop(self.identifier, prop_name)
+            # If specific property are not provided, get all the property
+            self.dmg.pool_get_prop(self.identifier, prop_name)
 
-                if self.dmg.result.exit_status == 0:
-                    prop_value = json.loads(
-                        self.dmg.result.stdout)['response'][0]['value']
+            if self.dmg.result.exit_status == 0:
+                prop_value = json.loads(
+                    self.dmg.result.stdout)['response'][0]['value']
 
-            elif self.control_method.value == self.USE_DMG:
-                self.log.error("Error: Undefined dmg command")
-
-            else:
-                self.log.error(
-                    "Error: Undefined control_method: %s",
-                    self.control_method.value)
         return prop_value
 
     @fail_on(CommandFailure)
@@ -420,6 +412,7 @@ class TestPool(TestDaosApiBase):
         """
         if self.pool:
             self.connect()
+            self.log.info("Querying pool %s", self.identifier)
             self._call_method(self.pool.pool_query, {})
             self.info = self.pool.pool_info
 
@@ -611,6 +604,26 @@ class TestPool(TestDaosApiBase):
 
         return status
 
+    def get_rebuild_state(self, verbose=True):
+        """Get the rebuild state from the dmg pool query.
+
+        Args:
+            verbose (bool, optional): whether to display the rebuild data. Defaults to True.
+
+        Returns:
+            [type]: [description]
+        """
+        self.set_query_data()
+        try:
+            if verbose:
+                self.log.info(
+                    "Pool %s query rebuild data: %s\n",
+                    self.uuid, self.query_data["response"]["rebuild"])
+            return self.query_data["response"]["rebuild"]["state"]
+        except KeyError as error:
+            self.log.error("Unable to detect rebuild state: %s", error)
+            return None
+
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
 
@@ -626,8 +639,13 @@ class TestPool(TestDaosApiBase):
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
 
+        # Expect the state to be 'busy' or 'done' when waiting for rebuild to start or 'done' when
+        # waiting for rebuild to complete.
+        expected_states = ["busy", "done"] if to_start else ["done"]
+
         start = time()
-        while self.rebuild_complete() == to_start:
+        # while self.rebuild_complete() == to_start:
+        while self.get_rebuild_state() not in expected_states:
             self.log.info(
                 "  Rebuild %s ...",
                 "has not yet started" if to_start else "in progress")

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -101,12 +101,14 @@ class ListVerboseTest(IorTestBase):
         output = {}
 
         for pool in pool_list_out:
+            scm_size = -1
             scm_free = -1
             nvme_free = -1
             scm_imbalance = -1
             nvme_imbalance = -1
             for usage in pool["usage"]:
                 if usage["tier_name"] == "SCM":
+                    scm_size = usage["size"]
                     scm_free = usage["free"]
                     scm_imbalance = usage["imbalance"]
                 elif usage["tier_name"] == "NVME":
@@ -114,13 +116,38 @@ class ListVerboseTest(IorTestBase):
                     nvme_imbalance = usage["imbalance"]
 
             output[pool["uuid"]] = {
-                "scm": scm_free,
+                "scm_size": scm_size,
+                "scm_free": scm_free,
                 "nvme": nvme_free,
                 "scm_imbalance": scm_imbalance,
                 "nvme_imbalance": nvme_imbalance
             }
 
         return output
+
+    def verify_scm_size(self, actual, created, rank_count):
+        """Verify SCM size using the threshold.
+
+        SCM size in pool list is slightly higher than the created value. Verify
+        that it's smaller than the threshold (target_count * (4K - 1)).
+
+        Args:
+            actual (int): SCM size from pool list verbose.
+            created (int): SCM size used to create the pool.
+            rank_count (int): Number of ranks that the pool is created on.
+        """
+        targets = self.params.get("targets", "/run/server_config/*/")
+        self.log.info("rank_count = %d; targets = %d", rank_count, targets)
+
+        total_targets = rank_count * targets
+        threshold = total_targets * 3999
+        diff = actual - created
+        self.log.info(
+            "actual = %d; created = %d; diff = %d", actual, created, diff)
+
+        msg = "Round up amount is too big! Threshold = {}, Diff = {}".format(
+            threshold, diff)
+        self.assertTrue(diff < threshold, msg)
 
     def verify_pool_lists(self, targets_disabled, scm_size, nvme_size):
         """Call dmg pool list and verify.
@@ -144,14 +171,27 @@ class ListVerboseTest(IorTestBase):
         # Create expected_pools. Use data from actual and the parameters.
         for index, pool in enumerate(self.pool):
             pool_free_data = free_data[pool.uuid.lower()]
+
+            # Verify scm_size using the threshold rather than the exact match.
+            rank_count = len(pool.target_list.value)
+            if scm_size[index] is None:
+                created = pool.scm_size.value * rank_count
+            else:
+                created = scm_size[index]
+            self.verify_scm_size(
+                pool_free_data["scm_size"], created, rank_count)
+
+            # Verify the output except free, imbalance, and scm_size; they're
+            # passed in to create_expected() to bypass the validation.
             expected_pools.append(
                 self.create_expected(
-                    pool=pool, scm_free=pool_free_data["scm"],
+                    pool=pool, scm_free=pool_free_data["scm_free"],
                     nvme_free=pool_free_data["nvme"],
                     scm_imbalance=pool_free_data["scm_imbalance"],
                     nvme_imbalance=pool_free_data["nvme_imbalance"],
                     targets_disabled=targets_disabled[index],
-                    scm_size=scm_size[index], nvme_size=nvme_size[index]))
+                    scm_size=pool_free_data["scm_size"],
+                    nvme_size=nvme_size[index]))
 
         # Sort pools by UUID.
         actual_pools.sort(key=lambda item: item.get("uuid"))

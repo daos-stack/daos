@@ -1,12 +1,11 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Dynamic group testing for primary and secondary groups
  */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -17,6 +16,12 @@
 #include <cart/api.h>
 
 #include "crt_utils.h"
+
+/*
+ * By default expect RPCs to finish in 10 seconds; increase timeout for
+ * when running under the valgrind
+ */
+static int g_exp_rpc_timeout = 10;
 
 #define MY_BASE 0x010000000
 #define MY_VER  0
@@ -288,6 +293,7 @@ int main(int argc, char **argv)
 	crt_group_t		*grp;
 	crt_context_t		crt_ctx[NUM_SERVER_CTX];
 	pthread_t		progress_thread[NUM_SERVER_CTX];
+	struct test_options	*opts = crtu_get_opts();
 	d_rank_list_t		*mod_ranks;
 	char			*uris[10];
 	d_rank_list_t		*mod_prim_ranks;
@@ -308,19 +314,29 @@ int main(int argc, char **argv)
 	sem_t			sem;
 	int			tag;
 	int			rc;
+	int			num_attach_retries = 20;
 
 	env_self_rank = getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
 
+	/* When under valgrind bump expected timeouts to 60 seconds */
+	if (D_ON_VALGRIND) {
+		DBG_PRINT("Valgrind env detected. bumping timeouts\n");
+		g_exp_rpc_timeout = 60;
+		num_attach_retries = 60;
+	}
+
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	crtu_test_init(my_rank, 20, true, true);
+	crtu_test_init(my_rank, num_attach_retries, true, true);
+
+	if (D_ON_VALGRIND)
+		crtu_set_shutdown_delay(5);
 
 	rc = d_log_init();
 	assert(rc == 0);
 
 	DBG_PRINT("Server starting up\n");
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -356,6 +372,14 @@ int main(int argc, char **argv)
 		assert(rc == 0);
 	}
 
+	if (opts->is_swim_enabled) {
+		rc = crt_swim_init(0);
+		if (rc != 0) {
+			D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+			assert(0);
+		}
+	}
+
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 
 	rc = crt_rank_self_set(my_rank);
@@ -382,12 +406,6 @@ int main(int argc, char **argv)
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
 			my_uri, grp_cfg_file);
 	D_FREE(my_uri);
-
-	rc = crt_swim_init(0);
-	if (rc != 0) {
-		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
-		assert(0);
-	}
 
 	rc = crt_group_size(NULL, &grp_size);
 	if (rc != 0) {
@@ -576,7 +594,7 @@ int main(int argc, char **argv)
 				D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 				assert(0);
 			}
-			crtu_sem_timedwait(&sem, 10, __LINE__);
+			crtu_sem_timedwait(&sem, g_exp_rpc_timeout, __LINE__);
 			DBG_PRINT("RPC to rank=%d finished\n", rank);
 		}
 	}
@@ -599,7 +617,7 @@ int main(int argc, char **argv)
 		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 		assert(0);
 	}
-	crtu_sem_timedwait(&sem, 10, __LINE__);
+	crtu_sem_timedwait(&sem, g_exp_rpc_timeout, __LINE__);
 	DBG_PRINT("CORRPC to secondary group finished\n");
 
 	/* Send shutdown RPC to all nodes except for self */
@@ -629,7 +647,7 @@ int main(int argc, char **argv)
 			D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 			assert(0);
 		}
-		crtu_sem_timedwait(&sem, 10, __LINE__);
+		crtu_sem_timedwait(&sem, g_exp_rpc_timeout, __LINE__);
 	}
 	D_FREE(rank_list->rl_ranks);
 	D_FREE(rank_list);
@@ -658,7 +676,7 @@ int main(int argc, char **argv)
 	}
 
 	for (i = 0; i < 10; i++) {
-		rc = asprintf(&uris[i], "ofi+sockets://127.0.0.1:%d",
+		rc = asprintf(&uris[i], "ofi+tcp;ofi_rxm://127.0.0.1:%d",
 				10000 + i);
 		if (rc == -1) {
 			D_ERROR("asprintf() failed\n");

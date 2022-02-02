@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -93,7 +93,7 @@ class BasicSnapshot(TestWithServers):
                 "Committing 500 additional transactions to the same KV")
             more_transactions = 500
             while more_transactions:
-                size = random.randint(1, 250) + 1
+                size = random.randint(1, 250) + 1 #nosec
                 new_data = get_random_bytes(size)
                 new_obj = self.container.write_an_obj(
                     new_data, size, dkey, akey, obj_cls=obj_cls)

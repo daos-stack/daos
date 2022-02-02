@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,10 +18,8 @@
 #define NUM_SEGS	4
 
 static daos_size_t chunk_size = 16;
-static daos_ofeat_t feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
-	DAOS_OF_ARRAY;
-static daos_ofeat_t featb = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
-	DAOS_OF_ARRAY | DAOS_OF_ARRAY_BYTE;
+static enum daos_otype_t type = DAOS_OT_ARRAY;
+static enum daos_otype_t typeb = DAOS_OT_ARRAY_BYTE;
 
 static void simple_array_mgmt(void **state);
 static void contig_mem_contig_arr_io(void **state);
@@ -75,7 +73,7 @@ simple_array_mgmt(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
-	daos_handle_t	oh;
+	daos_handle_t	oh, oh2;
 	daos_size_t	cell_size = 0, csize = 0;
 	daos_size_t	size;
 	int		rc;
@@ -93,12 +91,17 @@ simple_array_mgmt(void **state)
 			       &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
 			       &oh, NULL);
 	assert_rc_equal(rc, 0);
+
+	/** create the same array again, should fail */
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
+			       &oh2, NULL);
+	assert_rc_equal(rc, -DER_EXIST);
 
 	rc = daos_array_get_attr(oh, &csize, &cell_size);
 	assert_rc_equal(rc, 0);
@@ -154,25 +157,22 @@ simple_array_mgmt(void **state)
 	rc = daos_array_destroy(oh, DAOS_TX_NONE, NULL);
 	assert_rc_equal(rc, 0);
 
-	daos_handle_t temp_oh;
-
 	rc = daos_array_open(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
-			     &cell_size, &csize, &temp_oh, NULL);
-	assert_rc_equal(rc, -DER_NO_PERM);
+			     &cell_size, &csize, &oh2, NULL);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	rc = daos_array_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** Test the open_with_attr interface */
 
-	/** Open_with_attr with DAOS_OF_ARRAY, should fail */
-	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
+	/** Open_with_attr with DAOS_OT_ARRAY, should fail */
+	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 	rc = daos_array_open_with_attr(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
 				       4, chunk_size, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
-	oid = daos_test_oid_gen(arg->coh, OC_SX,
-				DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT,
+	oid = daos_test_oid_gen(arg->coh, OC_SX, DAOS_OT_ARRAY_ATTR,
 				0, arg->myrank);
 	rc = daos_array_open_with_attr(arg->coh, oid, DAOS_TX_NONE, DAOS_OO_RW,
 				       4, chunk_size, &oh, NULL);
@@ -224,7 +224,7 @@ small_io(void **state)
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = daos_test_oid_gen(arg->coh, OC_SX, feat, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
@@ -356,7 +356,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = daos_test_oid_gen(arg->coh, OC_SX,
-					(cell_size == 1) ? featb : feat, 0, 0);
+					(cell_size == 1) ? typeb : type, 0, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_rc_equal(rc, 0);
@@ -514,7 +514,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = daos_test_oid_gen(arg->coh, OC_SX,
-					(cell_size == 1) ? featb : feat, 0, 0);
+					(cell_size == 1) ? typeb : type, 0, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_rc_equal(rc, 0);
@@ -671,7 +671,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = daos_test_oid_gen(arg->coh, OC_SX,
-					(cell_size == 1) ? featb : feat, 0, 0);
+					(cell_size == 1) ? typeb : type, 0, 0);
 		rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, cell_size,
 				       chunk_size, &oh, NULL);
 		assert_rc_equal(rc, 0);
@@ -824,7 +824,7 @@ read_empty_records(void **state)
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = daos_test_oid_gen(arg->coh, OC_SX, featb, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
 
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
@@ -937,7 +937,7 @@ strided_array(void **state)
 	int		rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = daos_test_oid_gen(arg->coh, OC_SX, featb, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
@@ -1028,7 +1028,7 @@ truncate_array(void **state)
 	daos_size_t	size;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	oid = daos_test_oid_gen(arg->coh, OC_SX, featb, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
 
 	/** create the array */
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,

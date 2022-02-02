@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -278,15 +278,14 @@ rebuild_pool_connect_internal(void *data)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
 
-		print_message("pool connect "DF_UUIDF"\n",
-		DP_UUID(arg->pool.pool_uuid));
+		print_message("pool connect %s\n", arg->pool.pool_str);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->multi_rank)
@@ -305,7 +304,7 @@ rebuild_pool_connect_internal(void *data)
 	/** open container */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
+		rc = daos_cont_open(arg->pool.poh, arg->co_str,
 				    DAOS_COO_RW | DAOS_COO_FORCE,
 				    &arg->coh, &arg->co_info, NULL);
 		if (rc)
@@ -817,6 +816,7 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	daos_size_t	chunk_size = 32 * 1024 * 4;
 	daos_size_t	fetch_size = 0;
 	uuid_t		co_uuid;
+	char		str[37];
 	char		filename[32];
 	d_rank_t	ranks[4] = { -1 };
 	int		idx = 0;
@@ -826,9 +826,16 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	int		i;
 	int		rc;
 
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+	dfs_attr_t attr = {};
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl,
 			     &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -848,7 +855,7 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	/* Full stripe update */
 	sprintf(filename, "degrade_file");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
@@ -899,7 +906,8 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 
 #if 0

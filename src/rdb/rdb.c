@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -368,7 +368,14 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	 */
 	rc = vos_pool_open(path, (unsigned char *)uuid,
 			   VOS_POF_SMALL | VOS_POF_EXCL, &pool);
-	if (rc != 0) {
+	if (rc == -DER_ID_MISMATCH) {
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
+				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */, NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */, NULL /* data */,
+				     "%s: incompatible DB UUID: "DF_UUIDF"\n", path, DP_UUID(uuid));
+		goto err;
+	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to open %s: "DF_RC"\n", DP_UUID(uuid),
 			path, DP_RC(rc));
 		goto err;
@@ -399,12 +406,10 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	d_iov_set(&value, &version, sizeof(version));
 	rc = rdb_mc_lookup(mc, RDB_MC_ATTRS, &rdb_mc_version, &value);
 	if (rc == -DER_NONEXIST) {
-		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
-				     NULL /* pool */, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
+				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */, NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */, NULL /* data */,
 				     DF_UUID": %s: incompatible layout version",
 				     DP_UUID(uuid), path);
 		rc = -DER_DF_INCOMPT;
@@ -415,15 +420,12 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		goto err_mc;
 	}
 	if (version < RDB_LAYOUT_VERSION_LOW || version > RDB_LAYOUT_VERSION) {
-		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
-				     NULL /* pool */, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     DF_UUID": %s: incompatible layout version:"
-				     " %u not in [%u, %u]", DP_UUID(uuid), path,
-				     version, RDB_LAYOUT_VERSION_LOW,
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
+				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */, NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */, NULL /* data */,
+				     DF_UUID": %s: incompatible layout version: %u not in [%u, %u]",
+				     DP_UUID(uuid), path, version, RDB_LAYOUT_VERSION_LOW,
 				     RDB_LAYOUT_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto err_mc;

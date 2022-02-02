@@ -1,11 +1,11 @@
 # DAOS System Administration
 
-## System RAS Events
+## RAS Events
 
 Reliability, Availability, and Serviceability (RAS) related events are
-communicated and logged within DAOS.
+communicated and logged within DAOS and syslog.
 
-### RAS Event Structure
+### Event Structure
 
 The following table describes the structure of a DAOS RAS event, including
 descriptions of mandatory and optional fields.
@@ -30,15 +30,21 @@ descriptions of mandatory and optional fields.
 | Control Operation | Optional             | Recommended automatic action, if any.                    |
 | Data              | Optional             | Specific instance data treated as a blob.                |
 
+Below is an example of a RAS event signaling an exclusion of an unresponsive
+engine:
 
-### RAS Event IDs
+```
+&&& RAS EVENT id: [swim_rank_dead] ts: [2021-11-21T13:32:31.747408+0000] host: [wolf-112.wolf.hpdd.intel.com] type: [STATE_CHANGE] sev: [NOTICE] msg: [SWIM marked rank as dead.] pid: [253454] tid: [1] rank: [6] inc: [63a058833280000]
+```
+
+### Event List
 
 The following table lists supported DAOS RAS events, including IDs, type,
 severity, message, description, and cause.
 
 |Event|Event type|Severity|Message|Description|Cause|
 |:----|:----|:----|:----|:----|:----|
-|engine\_format required|INFO\_ONLY|NOTICE|DAOS engine <idx\> requires a <type\> format|Indicates engine is waiting for allocated storage to be formatted on formatted on instance <idx\> with dmg tool. <type\> can be either SCM or Metadata.|DAOS server attempts to bring-up an engine that has unformatted storage.|
+| engine\_format\_required|INFO\_ONLY|NOTICE|DAOS engine <idx\> requires a <type\> format|Indicates engine is waiting for allocated storage to be formatted on formatted on instance <idx\> with dmg tool. <type\> can be either SCM or Metadata.|DAOS server attempts to bring-up an engine that has unformatted storage.|
 | engine\_died| STATE\_CHANGE| ERROR| DAOS engine <idx\> exited exited unexpectedly: <error\> | Indicates engine instance <idx\> unexpectedly. <error> describes the exit state returned from exited daos\_engine process.| N/A                          |
 | engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
 | engine\_clock\_drift| INFO\_ONLY   | ERROR| clock drift detected| Indicates CART comms layer has detected clock skew between engines.| NTP may not be syncing clocks across DAOS system.      |
@@ -48,7 +54,7 @@ severity, message, description, and cause.
 | pool\_replicas\_updated| STATE\_CHANGE| NOTICE| List of pool service replica ranks has been updated.| Indicates a pool service replica list has changed. The event contains the new service replica list in a custom payload. | When a pool service replica rank becomes unavailable a new rank is selected to replace it (if available). |
 | pool\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with pool data in local storage that has an incompatible layout version. |
 | container\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with container data in local storage that has an incompatible layout version.|
-| rdb\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>]]| Indicates the given rdb's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with rdb data in local storage that has an incompatible layout version.|
+| rdb\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>]] OR incompatible DB UUID: <uuid\> | Indicates the given RDB's layout version does not match any of the versions supported by the currently running DAOS software, or the given RDB's UUID does not match the expected UUID (usually because the RDB belongs to a pool created by a pre-2.0 DAOS version).| DAOS engine is started with rdb data in local storage that has an incompatible layout version.|
 | swim\_rank\_alive| STATE\_CHANGE| NOTICE| TBD| The SWIM protocol has detected the specified rank is responsive.| A remote DAOS engine has become responsive.|
 | swim\_rank\_dead| STATE\_CHANGE| NOTICE| SWIM rank marked as dead.| The SWIM protocol has detected the specified rank is unresponsive.| A remote DAOS engine has become unresponsive.|
 | system\_start\_failed| INFO\_ONLY| ERROR| System startup failed, <errors\>| Indicates that a user initiated controlled startup failed. <errors\> shows which ranks failed.| Ranks failed to start.|
@@ -73,7 +79,9 @@ at the time of daos\_server startup).
 If a single arg is passed, then this will be used as the log masks setting.
 
 Example usage:
-`dmg server set-logmasks ERR,mgmt=DEBUG`
+```
+dmg server set-logmasks ERR,mgmt=DEBUG
+```
 
 The input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the
 syntax is identical to what is expected by the 'D_LOG_MASK' environment variable.
@@ -117,8 +125,6 @@ DAOS host may be queried at a time.
 
 The output of these commands is available in JSON by using the `-j` option.
 
-##### List Metrics
-
 To list all metrics for the server with descriptions:
 
 ```
@@ -126,8 +132,6 @@ dmg telemetry [-l <host>] [-p <telemetry-port>] metrics list
 ```
 
 If no host is provided, the default is localhost. The default port is 9191.
-
-##### Query Metrics
 
 To query the values of one or more metrics on the server:
 
@@ -196,11 +200,58 @@ See `daos_metrics -h` for details on how to filter metrics.
 
 ## Storage Operations
 
+Storage subcommands can be used to operate on host storage.
+```bash
+$ dmg storage --help
+Usage:
+  dmg [OPTIONS] storage <command>
+
+...
+
+Available commands:
+  format    Format SCM and NVMe storage attached to remote servers.
+  identify  Blink the status LED on a given VMD device for visual SSD identification.
+  query     Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info.
+  replace   Replace a storage device that has been hot-removed with a new device.
+  scan      Scan SCM and NVMe storage attached to remote servers.
+  set       Manually set the device state.
+```
+
+Storage query subcommands can be used to get detailed information about how DAOS
+is using host storage.
+```bash
+$ dmg storage query --help
+Usage:
+  dmg [OPTIONS] storage query <command>
+
+...
+
+Available commands:
+  device-health  Query the device health
+  list-devices   List storage devices on the server
+  list-pools     List pools on the server
+  target-health  Query the target health
+  usage          Show SCM & NVMe storage space utilization per storage server
+```
+
 ### Space Utilization
 
 To query SCM and NVMe storage space usage and show how much space is available to
 create new DAOS pools with, run the following command:
 
+- Query Per-Server Space Utilization:
+```bash
+$ dmg storage query usage --help
+Usage:
+  dmg [OPTIONS] storage query usage
+
+...
+```
+
+The command output shows online DAOS storage utilization, only including storage
+statistics for devices that have been formatted by DAOS control-plane and assigned
+to a currently running rank of the DAOS system. This represents the storage that
+can host DAOS pools.
 ```bash
 $ dmg storage query usage
 Hosts   SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
@@ -208,11 +259,6 @@ Hosts   SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
 wolf-71 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 ```
-
-The command output shows online DAOS storage utilization, only including storage
-statistics for devices that have been formatted by DAOS control-plane and assigned
-to a currently running rank of the DAOS system. This represents the storage that
-can host DAOS pools.
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
@@ -231,12 +277,6 @@ that can be specified is approximately `dmg pool create -s 1T -n 5T` (may need t
 specify slightly below the maximum to take account of negligible metadata
 overhead).
 
-### Storage Scrubbing
-
-Support for end-to-end data integrity is planned for DAOS v1.2 and
-background checksum scrubbing for v2.2. Once available, that
-functionality will be documented here.
-
 ### SSD Management
 
 #### Health Monitoring
@@ -244,8 +284,43 @@ functionality will be documented here.
 Useful admin dmg commands to query NVMe SSD health:
 
 - Query Per-Server Metadata:
-  - `dmg storage query (list-devices|list-pools)`
-  - `dmg storage scan --nvme-meta` shows mapping of metadata to NVMe controllers
+```bash
+$ dmg storage query list-devices --help
+Usage:
+  dmg [OPTIONS] storage query list-devices [list-devices-OPTIONS]
+
+...
+
+[list-devices command options]
+      -r, --rank=         Constrain operation to the specified server rank
+      -b, --health        Include device health in results
+      -u, --uuid=         Device UUID (all devices if blank)
+      -e, --show-evicted  Show only evicted faulty devices
+```
+```bash
+$ dmg storage query list-pools --help
+Usage:
+  dmg [OPTIONS] storage query list-pools [list-pools-OPTIONS]
+
+...
+
+[list-pools command options]
+      -r, --rank=     Constrain operation to the specified server rank
+      -u, --uuid=     Pool UUID (all pools if blank)
+      -v, --verbose   Show more detail about pools
+```
+```bash
+$ dmg storage scan --nvme-meta --help
+Usage:
+  dmg [OPTIONS] storage scan [scan-OPTIONS]
+
+...
+
+[scan command options]
+      -v, --verbose      List SCM & NVMe device details
+      -n, --nvme-health  Display NVMe device health statistics
+      -m, --nvme-meta    Display server meta data held on NVMe storage
+```
 
 The NVMe storage query list-devices and list-pools commands query the persistently
 stored SMD device and pool tables, respectively. The device table maps the internal
@@ -256,6 +331,9 @@ states are the following:
   - EVICTED: the device is no longer in-use by DAOS
   - UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
   - NEW: the device is plugged and available and not currently in-use by DAOS
+
+To list only devices in the EVICTED state, use the (--show-evicted|-e) option to the
+list-devices command.
 
 The transport address is also listed for the device. This is either the PCIe address
 for normal NVMe SSDs, or the BDF format address of the backing NVMe SSDs behind a
@@ -305,21 +383,53 @@ boro-11
 ```
 
 - Query Storage Device Health Data:
-  - `dmg storage query (device-health|target-health)`
-  - `dmg storage scan --nvme-health` shows NVMe controller health stats
+```bash
+$ dmg storage query device-health --help
+Usage:
+  dmg [OPTIONS] storage query device-health [device-health-OPTIONS]
+
+...
+
+[device-health command options]
+      -u, --uuid=     Device UUID
+```
+```bash
+$ dmg storage query target-health --help
+Usage:
+  dmg [OPTIONS] storage query target-health [target-health-OPTIONS]
+
+...
+
+[target-health command options]
+      -r, --rank=     Server rank hosting target
+      -t, --tgtid=    VOS target ID to query
+```
+```bash
+$ dmg storage scan --nvme-health --help
+Usage:
+  dmg [OPTIONS] storage scan [scan-OPTIONS]
+
+...
+
+[scan command options]
+      -v, --verbose      List SCM & NVMe device details
+      -n, --nvme-health  Display NVMe device health statistics
+      -m, --nvme-meta    Display server meta data held on NVMe storage
+```
 
 The NVMe storage query device-health and target-health commands query the device
 health data, including NVMe SSD health stats and in-memory I/O error and checksum
 error counters. The server rank and device state are also listed. The device health
 data can either be queried by device UUID (device-health command) or by VOS target ID
 along with the server rank (target-health command). The same device health information
-is displayed with both command options.
+is displayed with both command options. Additionally, vendor-specific SMART stats are
+displayed, currently for Intel devices only. Note: A reasonable timed workload > 60 min
+must be ran for the SMART stats to register (Raw values are 65535). Media wear percentage
+can be calculated by dividing by 1024 to find the percentage of the maximum rated cycles.
 ```bash
-$ dmg -l boro-11 storage query device-health
-  --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg -l boro-11 storage query device-health --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 or
-$ dmg -l boro-11 storage query target-health
-  --rank=0 --tgtid=0
+$ dmg -l boro-11 storage query target-health --rank=0 --tgtid=0
 -------
 boro-11
 -------
@@ -327,6 +437,7 @@ boro-11
     UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
       Targets:[0 1 2 3] Rank:0 State:NORMAL
       Health Stats:
+        Timestamp:2021-09-13T11:12:34.000+00:00
         Temperature:289K(15C)
         Controller Busy Time:0s
         Power Cycles:0
@@ -344,10 +455,45 @@ boro-11
         Device Reliability: OK
         Read Only: OK
         Volatile Memory Backup: OK
-```
-#### Eviction and Hotplug
+      Intel Vendor SMART Attributes:
+        Program Fail Count:
+           Normalized:100%
+           Raw:0
+        Erase Fail Count:
+           Normalized:100%
+           Raw:0
+        Wear Leveling Count:
+           Normalized:100%
+           Min:24
+           Max:25
+           Avg:24
+        End-to-End Error Detection Count:0
+        CRC Error Count:0
+        Timed Workload, Media Wear:65535
+        Timed Workload, Host Read/Write Ratio:65535
+        Timed Workload, Timer:65535
+        Thermal Throttle Status:0%
+        Thermal Throttle Event Count:0
+        Retry Buffer Overflow Counter:0
+        PLL Lock Loss Count:0
+        NAND Bytes Written:244081
+        Host Bytes Written:52114
 
-- Manually Evict an NVMe SSD: `dmg storage set nvme-faulty`
+```
+#### Exclusion and Hotplug
+
+- Manually exclude an NVMe SSD:
+```bash
+$ dmg storage set nvme-faulty --help
+Usage:
+  dmg [OPTIONS] storage set nvme-faulty [nvme-faulty-OPTIONS]
+
+...
+
+[nvme-faulty command options]
+      -u, --uuid=     Device UUID to set
+      -f, --force     Do not require confirmation
+```
 
 To manually evict an NVMe SSD (auto eviction will be supported in a future release),
 the device state needs to be set to "FAULTY" by running the following command:
@@ -367,7 +513,33 @@ will remain evicted until device replacement occurs).
     Full NVMe hot plug capability will be available and supported in DAOS 2.2 release.
     Use is currently intended for testing only and is not supported for production.
 
-- Replace an Evicted SSD with a New Device: `dmg storage replace nvme`
+- To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
+and bound instead to a user-space driver so that the device can be used with DAOS.
+
+To rebind a SSD on a single host, run the following command (replace SSD PCI address and
+hostname with appropriate values):
+```bash
+$ dmg storage nvme-rebind -a 0000:84:00.0 -l wolf-167
+Command completed successfully
+```
+
+The device will now be bound to a user-space driver (e.g. VFIO) and can be accessed by
+DAOS I/O engine processes (and used in the following `dmg storage replace nvme` command
+as a new device).
+
+- Replace an excluded SSD with a New Device:
+```bash
+$ dmg storage replace nvme --help
+Usage:
+  dmg [OPTIONS] storage replace nvme [nvme-OPTIONS]
+
+...
+
+[nvme command options]
+          --old-uuid= Device UUID of hot-removed SSD
+          --new-uuid= Device UUID of new device
+          --no-reint  Bypass reintegration of device and just bring back online.
+```
 
 To replace an NVMe SSD with an evicted device and reintegrate it into use with
 DAOS, run the following command:
@@ -382,7 +554,7 @@ boro-11
 The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
 
-- Reuse a FAULTY Device: `dmg storage replace nvme`
+- Reuse a FAULTY Device:
 
 In order to reuse a device that was previously set as FAULTY and evicted from the DAOS
 system, an admin can run the following command (setting the old device UUID to be the
@@ -407,7 +579,17 @@ to be physically available on the hardware as well as enabled in the system BIOS
 The feature supports two LED device events: locating a healthy device and locating
 an evicted device.
 
-- Locate a Healthy SSD: `dmg storage identify vmd`
+- Locate a Healthy SSD:
+```bash
+$ dmg storage identify vmd --help
+Usage:
+  dmg [OPTIONS] storage identify vmd [vmd-OPTIONS]
+
+...
+
+[vmd command options]
+          --uuid=     Device UUID of the VMD device to identify
+```
 
 To quickly identify an SSD in question, an administrator can run the following
 command:
@@ -435,10 +617,10 @@ device would remain in this state until replaced by a new device.
 
 ## System Operations
 
-The DAOS Control Server acting as the access point records details of DAOS I/O
-Server instances that join the DAOS system. Once an I/O Engine has joined the
-DAOS system, it is identified by a unique system "rank". Multiple ranks can
-reside on the same host machine, accessible via the same network address.
+The DAOS server acting as the access point records details of engines
+that join the DAOS system. Once an engine has joined the DAOS system, it is
+identified by a unique system "rank". Multiple ranks can reside on the same
+host machine, accessible via the same network address.
 
 A DAOS system can be shutdown and restarted to perform maintenance and/or
 reboot hosts. Pool data and state will be maintained providing no changes are
@@ -447,75 +629,149 @@ made to the rank's metadata stored on persistent memory.
 Storage reformat can also be performed after system shutdown. Pools will be
 removed and storage wiped.
 
-System commands will be handled by the DAOS Server listening at the access point
-address specified as the first entry in the DMG config file "hostlist" parameter.
+System commands will be handled by a DAOS Server acting as access point and
+listening on the address specified in the DMG config file "hostlist" parameter.
 See
 [`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
 for details.
 
-The "access point" address should be the same as that specified in the server
-config file
+At least one of the addresses in the hostlist parameters should match one of the
+"access point" addresses specified in the server config file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
-specified when starting `daos_server` instances.
+that is supplied when starting `daos_server` instances.
 
-!!! warning
-    Controlled start/stop/reformat have some known limitations.
-    While individual system instances can be stopped, if a subset is restarted,
-    existing pools will not be automatically integrated with restarted instances.
+- Commands used to manage a DAOS System:
+```bash
+$ dmg system --help
+Usage:
+  dmg [OPTIONS] system <command>
+
+...
+
+Available commands:
+  cleanup       Clean up all resources associated with the specified machine
+  erase         Erase system metadata prior to reformat
+  leader-query  Query for current Management Service leader
+  list-pools    List all pools in the DAOS system
+  query         Query DAOS system status
+  start         Perform start of stopped DAOS system
+  stop          Perform controlled shutdown of DAOS system
+```
 
 ### Membership
 
-The system membership can be queried using the command:
+The system membership refers to the DAOS engine processes that have registered,
+or joined, a specific DAOS system.
 
-`$ dmg system query [--verbose] [--ranks <rankset>|--host-ranks <hostset>]`
+- Query System Membership:
+```bash
+$ dmg system query --help
+Usage:
+  dmg [OPTIONS] system query [query-OPTIONS]
 
-- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.
-storagehost[0,5-10],10.8.1.[20-100]
-- `--verbose` flag gives more information on each rank
+...
+
+[query command options]
+      -r, --ranks=      Comma separated ranges or individual system ranks to operate on
+          --rank-hosts= Hostlist representing hosts whose managed ranks are to be operated on
+      -v, --verbose     Display more member details
+```
+
+The `--ranks` takes a pattern describing rank ranges e.g., 0,5-10,20-100.
+The `--rank-hosts` takes a pattern describing host ranges e.g. storagehost[0,5-10],10.8.1.[20-100].
 
 The output table will provide system rank mappings to host address and instance
 UUID, in addition to the rank state.
 
+DAOS engines run a gossip-based protocol called SWIM that provides efficient
+and scalable fault detection. When an engine is reported as unresponsive, a
+RAS event is raised and the associated engine is marked as excluded in the
+output of `dmg system query`. The engine can be stopped (see next section)
+and then restarted to rejoin the system. An failed engine might also be excluded
+from the pools it hosted, please check the pool operation section on how to
+reintegrate an excluded engine.
+
 ### Shutdown
 
-When up and running, the entire system can be shutdown with the command:
+When up and running, the entire system can be shutdown.
 
-`$ dmg system stop [--force] [--ranks <rankset>|--host-ranks <hostset>]`
+- Stop a System:
+```bash
+$ dmg system stop --help
+Usage:
+  dmg [OPTIONS] system stop [stop-OPTIONS]
 
-- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.
-storagehost[0,5-10],10.8.1.[20-100]
+...
+
+[stop command options]
+      -r, --ranks=      Comma separated ranges or individual system ranks to operate on
+          --rank-hosts= Hostlist representing hosts whose managed ranks are to be operated on
+          --force       Force stop DAOS system members
+```
+
+The `--ranks` takes a pattern describing rank ranges e.g., 0,5-10,20-100.
+The `--rank-hosts` takes a pattern describing host ranges e.g. storagehost[0,5-10],10.8.1.[20-100].
 
 The output table will indicate action and result.
 
-DAOS Control Servers will continue to operate and listen on the management
-network.
+While the engines are stopped, the DAOS servers will continue to
+operate and listen on the management network.
+
+!!! warning
+    All engines monitor each other and pro-actively exclude unresponsive
+    members. It is critical to properly stop a DAOS system as with dmg in
+    the case of a planned maintenance on all or a majority of the DAOS
+    storage nodes. An abrupt reboot of the storage nodes might result
+    in massive exclusion that will take time to recover.
+
+The force option can be passed to for cases when a clean shutown is not working.
+Monitoring is not disabled in this case and spurious exclusion might happen,
+but the engines are guaranteed to be killed.
+
+dmg also allows to stop a subsection of engines identified by ranks or hostnames.
+This is useful to stop (and restart) misbehaving engines.
 
 ### Start
 
-To start the system after a controlled shutdown run the command:
+The system can be started backup after a controlled shutdown.
 
-`$ dmg system start [--ranks <rankset>|--host-ranks <hostset>]`
+- Start a System:
+```bash
+$ dmg system start --help
+Usage:
+  dmg [OPTIONS] system start [start-OPTIONS]
 
-- `<rankset>` is a pattern describing rank ranges e.g. 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.
-storagehost[0,5-10],10.8.1.[20-100]
+...
+
+[start command options]
+      -r, --ranks=      Comma separated ranges or individual system ranks to operate on
+          --rank-hosts= Hostlist representing hosts whose managed ranks are to be operated on
+```
+
+The `--ranks` takes a pattern describing rank ranges e.g., 0,5-10,20-100.
+The `--rank-hosts` takes a pattern describing host ranges e.g. storagehost[0,5-10],10.8.1.[20-100].
 
 The output table will indicate action and result.
 
 DAOS I/O Engines will be started.
 
-### Reformat
+As for shutdown, a subsection of engines identified by ranks or hostname can be
+specified on the command line:
 
-To reformat the system after a controlled shutdown run the command:
+If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
+be reintegrated. Please see the pool operation section for more information.
 
-`$ dmg storage format --reformat`
+### Storage Reformat
 
-- `--reformat` flag indicates that a reformat operation should be
+To reformat the system after a controlled shutdown, run the command:
+
+`$ dmg storage format --force`
+
+- `--force` flag indicates that a (re)format operation should be
 performed disregarding existing filesystems
 - if no record of previously running ranks can be found, reformat is
-performed on hosts in dmg config file hostlist
+performed on the hosts that are specified in the `daos_control.yml`
+config file's `hostlist` parameter.
 - if system membership has records of previously running ranks, storage
 allocated to those ranks will be formatted
 
@@ -523,124 +779,88 @@ The output table will indicate action and result.
 
 DAOS I/O Engines will be started, and all DAOS pools will have been removed.
 
-### Manual Fresh Start
+!!! note
+    While it should not be required during normal operations, one may still want
+    to restart the DAOS installation from scratch without using the DAOS control plane.
 
-To reset the DAOS metadata across all hosts, the system must be reformatted.
-First, ensure all `daos_server` processes on all hosts have been
-stopped, then for each SCM mount specified in the config file
-(`scm_mount` in the `servers` section) umount and wipe FS signatures.
+    First, ensure all `daos_server` processes on all hosts have been
+    stopped, then for each SCM mount specified in the config file
+    (`scm_mount` in the `servers` section) umount and wipe FS signatures.
 
-Example illustration with two IO instances specified in the config file:
+    ```bash
+    $ umount /mnt/daos0
+    $ umount /mnt/daos1
+    $ wipefs -a /dev/pmem0
+    $ wipefs -a /dev/pmem0
+    ```
+    Then restart DAOS Servers and format.
 
-- `clush -w wolf-[118-121,130-133] umount /mnt/daos1`
 
-- `clush -w wolf-[118-121,130-133] umount /mnt/daos0`
+### System Erase
 
-- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem1`
+To erase the DAOS sorage configuration, the `dmg system erase`
+command can be used. Before doing this, the affected engines need to be
+stopped by running `dmg system stop` (if necessary with the `--force` flag).
+The erase operation will destroy any pools that may still exist, and will
+unconfigure the storage. It will not stop the daos\_server process, so
+the `dmg` command can still be used. For example, the system can be
+formatted again by running `dmg storage format`.
 
-- `clush -w wolf-[118-121,130-133] wipefs -a /dev/pmem0`
+!!! note
+    Note that `dmg system erase` does not currently reset the SCM.
+    The `/dev/pmemX` devices will remain mounted,
+    and the PMem configuration will not be reset to Memory Mode.
+    To completely unconfigure the SCM, it is advisable to run
+    `daos_server storage prepare --scm-only --reset` which will
+    completely reset the PMem. A reboot will be required to finalize
+    the change of the PMem allocation goals.
 
-- Then restart DAOS Servers and format.
-
-### Fault Domain
-
-Details on how to drain an individual storage node or fault domain (e.g.
-rack) in preparation for maintenance activity and how to reintegrate it
-will be provided in a future revision.
 
 ### System Extension
 
-Ability to add new DAOS server instances to a pre-existing DAOS system
-will be documented in a future revision.
+To add a new server to an existing DAOS system, one should install:
 
-## Fault Management
+- the relevant certificates
+- the server yaml file pointing to the access points of the running
+  DAOS system
 
-DAOS relies on massively distributed single-ported storage. Each target
-is thus effectively a single point of failure. DAOS achieves
-availability and durability of both data and metadata by providing
-redundancy across targets in different fault domains.
+The daos\_control.yml file should also be updated to include the new DAOS server.
 
-### Fault Detection & Isolation
+Then starts the daos\_server via systemd and format the new server via
+dmg as follows:
 
-DAOS servers are monitored within a DAOS system through a gossip-based
-protocol called SWIM[^1] that provides accurate, efficient, and scalable
-server fault detection.
+```
+$ dmg storage format -l ${new_storage_node}
+```
 
-Storage attached to each DAOS target is monitored through periodic local
-health assessment. Whenever a local storage I/O error is returned to the
-DAOS server, an internal health check procedure will be called
-automatically. This procedure makes an overall health assessment by
-analyzing the IO error code and device SMART/Health data. If the result
-is negative, the target will be marked as faulty, and further I/Os to
-this target will be rejected and re-routed.
+new_storage_node should be replaced with the hostname or the IP address of the
+new storage node (comma separated list or range of hosts for multiple nodes)
+to be added.
 
-Once detected, the faulty target or servers (effectively a set of
-targets) must be excluded from each pool membership. This process is
-triggered either manually by the administrator or automatically (see
-the next section for more information). Upon exclusion from the pool map,
-each target starts the collective rebuild process automatically to
-restore data redundancy. The rebuild process is designed to operate
-online while servers continue to process incoming I/O operations from
-applications.
+Upon completion of the format operation, the new storage nodes will join
+the system (this can be checked with `dmg system query -v`).
 
-Tools to monitor and manage rebuild are still under development.
-
-### Rebuild Throttling
-
-The rebuild process may consume many resources on each server and
-can be throttled to reduce the impact on application performance. This
-current logic relies on CPU cycles on the storage nodes. By default, the
-rebuild process is configured to consume up to 30% of the CPU cycles,
-leaving the other 70% for regular I/O operations.
-
-During the rebuild process, the user can set the throttle to guarantee that
-the rebuild will not use more resources than the user setting. The user can
-only set the CPU cycle for now. For example, if the user set the
-throttle to 50, then the rebuild will at most use 50% of the CPU cycle to do
-the rebuild job. The default rebuild throttle for CPU cycle is 30. This
-parameter can be changed via the daos_mgmt_set_params() API call and
-will be eventually available through the management tools.
+!!! note
+    New pools created after the extension will automatically use the newly added
+    nodes (if membership is not restricted on the dmg command line). That being
+    said, existing pools won't be automatically extended to use the new servers.
+    Please see the pool operation section for how to extend the pool membership.
 
 ## Software Upgrade
 
-Interoperability in DAOS is handled via protocol and schema versioning
-for persistent data structures. Further instructions on how to manage
-DAOS software upgrades will be provided in a future revision.
+The DAOS v2.0 wire protocol and persistent layout is not compatible with
+previous DAOS versions and would require a reformat and all client and server
+nodes to be upgraded to a 2.x version.
 
-### Protocol Interoperability
+!!! warning
+    Attempts to start DAOS v2.0 over a system formatted with a previous DAOS
+    version will trigger a RAS event and cause all the engines to abort.
+    Similarly, a 2.0 DAOS client or engine will refuse to communicate with a
+    peer that runs an incompatible version.
 
-Limited protocol interoperability is provided by the DAOS storage stack.
-Version compatibility checks will be performed to verify that:
+DAOS v2.0 will maintain interoperability for both the wire protocol and
+persistent layout with any future v2.x versions. That being said, it is
+required that all engines in the same system run the same DAOS version.
 
--   All targets in the same pool run the same protocol version.
-
--   Client libraries linked with the application may be up to one
-    protocol version older than the targets.
-
-If a protocol version mismatch is detected among storage targets in the
-same pool, the entire DAOS system will fail to start up and will report
-failure to the control API. Similarly, the connection from clients
-running a protocol version incompatible with the targets will return an
-error.
-
-### Persistent Layout
-
-The schema of persistent data structures may evolve from time to time to
-fix bugs, add new optimizations, or support new features. To that end,
-the persistent data structures support schema versioning.
-
-Upgrading the schema version will not be performed automatically and
-must be initiated by the administrator. A dedicated upgrade tool will be
-provided to upgrade the schema version to the latest one. All targets in
-the same pool must have the same schema version. Version checks are
-performed at system initialization time to enforce this constraint.
-
-To limit the validation matrix, each new DAOS release will be published
-with a list of supported schema versions. To run with the new DAOS
-release, administrators will then need to upgrade the DAOS system to one
-of the supported schema versions. New pool shards will always be
-formatted with the latest version. This versioning schema only applies
-to a data structure stored in persistent memory and not to block storage
-that only stores user data with no metadata.
-
-[^1]: https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914
+!!! warning
+    Rolling upgrade is not supporting at this time.

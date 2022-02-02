@@ -1,8 +1,10 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
+#define _GNU_SOURCE
 
 #include "io_daos_DaosClient.h"
 #include <sys/stat.h>
@@ -35,27 +37,16 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
 	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
 								0);
-	uuid_t pool_uuid;
 	jlong ret;
 	daos_handle_t poh;
 	int rc;
 
-	if (!uuid_parse(pool_str, pool_uuid)) {
-		rc = daos_pool_connect(pool_uuid,
-				       server_group,
-				       flags,
-				       &poh /* returned pool handle */,
-				       NULL /* returned pool info */,
-				       NULL /* event */);
-	} else {
-		rc = daos_pool_connect(pool_str,
-				       server_group,
-				       flags,
-				       &poh /* returned pool handle */,
-				       NULL /* returned pool info */,
-				       NULL /* event */);
-	}
-
+	rc = daos_pool_connect(pool_str,
+			       server_group,
+			       flags,
+			       &poh /* returned pool handle */,
+			       NULL /* returned pool info */,
+			       NULL /* event */);
 	if (rc) {
 		char *msg = NULL;
 
@@ -123,12 +114,7 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
 	int rc;
 
 	memcpy(&poh, &poolHandle, sizeof(poh));
-	if (!uuid_parse(cont_str, cont_uuid)) {
-		rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
-	} else {
-		rc = daos_cont_open(poh, cont_str, mode, &coh, &co_info, NULL);
-	}
-
+	rc = daos_cont_open(poh, cont_str, mode, &coh, &co_info, NULL);
 	if (rc) {
 		char *msg = NULL;
 
@@ -174,18 +160,18 @@ Java_io_daos_DaosClient_daosListContAttrs(JNIEnv *env,
 {
 	daos_handle_t coh;
 	char *buffer = (char *)address;
-	int buffer_size;
+	size_t buffer_size;
 	int rc;
 
-	memcpy(&buffer_size, buffer, 4);
-	buffer += 4;
+	memcpy(&buffer_size, buffer, 8);
+	buffer += 8;
 	memcpy(&coh, &contHandle, sizeof(coh));
 	rc = daos_cont_list_attr(coh, buffer, &buffer_size, NULL);
 	if (rc) {
 		throw_base(env, "Failed to list attributes from container", rc, 0, 0);
 	} else {
-		buffer -= 4;
-		memcpy(buffer, &buffer_size, 4);
+		buffer -= 8;
+		memcpy(buffer, &buffer_size, 8);
 	}
 }
 
@@ -241,7 +227,10 @@ Java_io_daos_DaosClient_daosGetContAttrs(JNIEnv *env,
 	}
 
 	memcpy(&coh, &contHandle, sizeof(coh));
-	rc = daos_cont_get_attr(coh, n, names, values, sizes, NULL);
+	rc = daos_cont_get_attr(coh, n,
+				(const char * const *)names,
+				(void * const *)values,
+				sizes, NULL);
 	if (rc) {
 		throw_base(env, "Failed to get attributes from container", rc, 0, 0);
 		goto rel;
@@ -318,7 +307,10 @@ Java_io_daos_DaosClient_daosSetContAttrs(JNIEnv *env,
 	}
 
 	memcpy(&coh, &contHandle, sizeof(coh));
-	rc = daos_cont_set_attr(coh, n, names, values, sizes, NULL);
+	rc = daos_cont_set_attr(coh, n,
+				(const char * const *)names,
+				(const void * const *)values,
+				sizes, NULL);
 	if (rc) {
 		throw_base(env, "Failed to set attributes to container", rc, 0, 0);
 	}
@@ -355,11 +347,11 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env,
 	if (eq == NULL) {
 		goto fail;
 	}
-	eq->events = (daos_event_t **)malloc(
-		nbrOfEvents * sizeof(daos_event_t *));
+	eq->events = (data_event_t **)malloc(
+		nbrOfEvents * sizeof(data_event_t *));
 	eq->polled_events = (daos_event_t **)malloc(
 		nbrOfEvents * sizeof(daos_event_t *));
-	if (eq->events == NULL || eq->polled_events == NULL) {
+	if (eq->events == NULL | eq->polled_events == NULL) {
 		char *msg = NULL;
 
 		asprintf(&msg,
@@ -372,7 +364,7 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env,
 	eq->nbrOfEvents = nbrOfEvents;
 	eq->eqhdl = eqhdl;
 	for (i = 0; i < nbrOfEvents; i++) {
-		eq->events[i] = (daos_event_t *)malloc(sizeof(daos_event_t));
+		eq->events[i] = (data_event_t *)malloc(sizeof(data_event_t));
 		if (eq->events[i] == NULL) {
 			char *msg = NULL;
 
@@ -382,7 +374,7 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env,
 			throw_base(env, msg, rc, 1, 0);
 			goto fail;
 		}
-		rc = daos_event_init(eq->events[i], eqhdl, NULL);
+		rc = daos_event_init(&eq->events[i]->event, eqhdl, NULL);
 		if (rc) {
 			char *msg = NULL;
 
@@ -391,7 +383,7 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env,
 			throw_base(env, msg, rc, 1, 0);
 			goto fail;
 		}
-		eq->events[i]->ev_debug = i;
+		eq->events[i]->event.ev_debug = i;
 	}
 
 fail:
@@ -399,7 +391,7 @@ fail:
 		count = i;
 		while (i >= 0) {
 			if (eq->events[i] && i < count) {
-				daos_event_fini(eq->events[i]);
+				daos_event_fini(&eq->events[i]->event);
 			}
 			i--;
 		}
@@ -466,19 +458,19 @@ Java_io_daos_DaosClient_abortEvent(JNIEnv *env,
 				   jshort eid)
 {
 	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
-	daos_event_t *event = eq->events[eid];
+	data_event_t *event = eq->events[eid];
 	int rc;
 
-	if (event->ev_error != EVENT_IN_USE) {
+	if (event->status != EVENT_IN_USE) {
 		return 0;
 	}
-	rc = daos_event_abort(event);
-	event->ev_error = 0;
+	rc = daos_event_abort(&event->event);
+	event->status = 0;
 	if (rc) {
 		char *msg = NULL;
 
-		asprintf(&msg, "Failed to abort event (%d)",
-			 event->ev_debug);
+		asprintf(&msg, "Failed to abort event (%ld)",
+			 event->event.ev_debug);
 		throw_base(env, msg, rc, 1, 0);
 	}
 	return 1;
@@ -493,7 +485,7 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env,
 	int i;
 	int rc;
 	int count = 0;
-	daos_event_t *ev;
+	data_event_t *ev;
 
 	while (daos_eq_poll(eq->eqhdl, 1, 1000, eq->nbrOfEvents,
 			    eq->polled_events)) {
@@ -508,7 +500,7 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env,
 			if (!ev) {
 				continue;
 			}
-			rc = daos_event_fini(ev);
+			rc = daos_event_fini(&ev->event);
 			if (rc) {
 				char *msg = NULL;
 
@@ -532,7 +524,7 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env,
 fin:
 	if (eq->events) {
 		for (i = 0; i < eq->nbrOfEvents; i++) {
-		ev = eq->events[i];
+			ev = eq->events[i];
 			if (ev) {
 				free(ev);
 			}
@@ -557,14 +549,7 @@ JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosFinalize(JNIEnv *env,
 				     jclass clientClass)
 {
-	int rc = daos_eq_lib_fini();
-
-	if (rc) {
-		printf("Failed to finalize EQ lib rc: %d\n", rc);
-		printf("error msg: %.256s\n", d_errstr(rc));
-	}
-
-	rc = daos_fini();
+	int rc = daos_fini();
 	if (rc) {
 		printf("Failed to finalize daos rc: %d\n", rc);
 		printf("error msg: %.256s\n", d_errstr(rc));

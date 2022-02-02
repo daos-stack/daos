@@ -159,13 +159,13 @@ is owned by the user.
 
 Additionally, there are several optional command-line options:
 
-| **Command-line Option** | **Description**         |
-| ----------------------- | ----------------------- |
-| --pool=<uuid\>          | pool uuid to connect to |
-| --container=<uuid\>     | container uuid to open  |
-| --sys-name=<name\>      | DAOS system name        |
-| --foreground            | run in foreground       |
-| --singlethreaded        | run single threaded     |
+| **Command-line Option**    | **Description**                  |
+| -------------------------- | -------------------------------- |
+| --pool=<label\|uuid\>      | pool label or uuid to connect to |
+| --container=<label\|uuid\> | container label or uuid to open  |
+| --sys-name=<name\>         | DAOS system name                 |
+| --foreground               | run in foreground                |
+| --singlethreaded           | run single threaded              |
 
 When DFuse starts, it will register a single mount with the kernel, at the
 location specified by the `--mountpoint` option. This mount will be
@@ -173,87 +173,24 @@ visible in `/proc/mounts`, and possibly in the output of `df`.
 The contents of multiple pools/containers will be accessible via this
 single kernel mountpoint.
 
-### Operation Modes
-
-DFuse will only create one kernel level mount point regardless of how it is
-launched. How POSIX containers are represented within that mount point varies
-depending on the DFuse command-line options.
-DFuse can operate in three modes.
-
-#### Single Container Mode
-
-That's the most common use case where a pool and a POSIX container are provided
-on the command line. The mount point will map to the root of the container
-itself. Files can be accessed by simply concatenating the mount point and the
-name of the file, relative to the root of the container.
+Below is an example of creating and mounting a POSIX container under
+the /tmp/dfuse mountpoint.
 
 ```bash
-$ daos cont create tank -l mycont -t POSIX
-  Container UUID : 8a8f08bb-5034-41e8-b7ae-0cdce347c558
-  Container Label: mycont
-  Container Type : POSIX
-
-Successfully created container 8a8f08bb-5034-41e8-b7ae-0cdce347c558
 $ mkdir /tmp/dfuse
+
 $ dfuse -m /tmp/dfuse --pool tank --cont mycont
+
 $ touch /tmp/dfuse/foo
+
 $ ls -l /tmp/dfuse/
 total 0
 -rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+
 $ df -h /tmp/dfuse/
 Filesystem      Size  Used Avail Use% Mounted on
 dfuse           9.4G  326K  9.4G   1% /tmp/dfuse
-$ fusermount3 -u /tmp/dfuse/
 ```
-
-#### Pool Mode
-
-If a pool uuid is specified but not a container uuid, then the containers can be
-accessed by the path `<mount point>/<container uuid>`. The container uuid
-will have to be provided from an external source.
-
-```bash
-$ daos cont create tank -l mycont2 -t POSIX
-  Container UUID : 0db21789-5372-4f2a-b7bc-14c0a5e968df
-  Container Label: mycont2
-  Container Type : POSIX
-
-Successfully created container 0db21789-5372-4f2a-b7bc-14c0a5e968df
-$ dfuse -m /tmp/dfuse --pool tank
-$ ls -l /tmp/dfuse/
-ls: cannot open directory '/tmp/dfuse/': Operation not supported
-$ ls -l /tmp/dfuse/0db21789-5372-4f2a-b7bc-14c0a5e968df
-total 0
-$ ls -l /tmp/dfuse/8a8f08bb-5034-41e8-b7ae-0cdce347c558
-total 0
--rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
-$ fusermount3 -u /tmp/dfuse/
-```
-
-#### System Mode
-
-If neither a pool or container is specified, then pools and container can be
-accessed by the path `<mount point>/<pool uuid>/<container uuid>`. However it
-should be noted that `readdir()` and therefore `ls` do not work on either mount
-points or directories representing pools here. So the pool and container uuids
-will have to be provided from an external source.
-
-```bash
-$ dfuse -m /tmp/dfuse
-$ df -h /tmp/dfuse
-Filesystem      Size  Used Avail Use% Mounted on
-dfuse              -     -     -    - /tmp/dfuse
-$ daos pool query tank | grep -- -.*-
-Pool 004abf7c-26c8-4cba-9059-8b3be39161fc, ntarget=32, disabled=0, leader=0, version=1
-$ ls -l /tmp/dfuse/004abf7c-26c8-4cba-9059-8b3be39161fc/0db21789-5372-4f2a-b7bc-14c0a5e968df
-total 0
-$ ls -l /tmp/dfuse/004abf7c-26c8-4cba-9059-8b3be39161fc/8a8f08bb-5034-41e8-b7ae-0cdce347c558
-total 0
--rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
-```
-
-While this mode is not expected to be used directly by users, it is useful for
-the unified namespace integration.
 
 ### Links into other Containers
 
@@ -300,7 +237,7 @@ $ dfuse -m /tmp/dfuse --pool tank --cont mycont
 $ cd /tmp/dfuse/
 $ ls
 foo
-$ daos cont create tank -l mycont3 --type POSIX --path ./link_to_externa_container
+$ daos cont create tank --label mycont3 --type POSIX --path ./link_to_externa_container
   Container UUID : 933944a9-ddf2-491a-bdbf-4442f0437d56
   Container Label: mycont3
   Container Type : POSIX
@@ -351,7 +288,8 @@ to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
 | dfuse-direct-io-disable | Force use of page cache for this container ("on"/"off")        |
 
 For metadata caching attributes specify the duration that the cache should be
-valid for, specified in seconds, and allowing 'S' or 'M' suffix.
+valid for, specified in seconds or with a 's', 'm', 'h' or 'd' suffix for seconds,
+minutes, hours or days.
 
 dfuse-data-cache should be set to "on", or "off" if set, any other value will
 log an error, and result in the cache being off.  The O\_DIRECT flag for open
@@ -374,6 +312,32 @@ These are two command line options to control the DFuse process itself.
 
 These will affect all containers accessed via DFuse, regardless of any
 container attributes.
+
+### Permissions
+
+DFuse can serve data from any user's container, but needs appropriate permissions in order to do
+this.
+
+File ownership within containers is set by the container being served, with the owner of the
+container owning all files within that container, so if looking at the container of another user
+then all entries within that container will be owned by that user, and file-based permissions
+checks by the kernel will be made on that basis.
+
+Should write permission be granted to another user then any newly created files will also be
+owned by the container owner, regardless of the user used to create them.  Permissions are only
+checked on connect, so if permissions are revoked users need to
+restart DFuse for these to be picked up.
+
+#### Pool permissions.
+
+DFuse needs 'r' permission for pools only.
+
+#### Container permissions.
+
+DFuse needs 'r', 't', and 'a' permissions to run: read for accessing the data, 't' to read container
+properties to know the container type and 'a' to read the ACLs to know the container owner.
+
+Write permission for the container is optional; however, without it the container will be read-only.
 
 ### Stopping DFuse
 
@@ -475,3 +439,70 @@ $ D_IL_REPORT=-1 LD_PRELOAD=/usr/lib64/libioil.so dd if=/dev/zero of=./bar bs=1G
     function to close stderr on exit, so for many basic commands such as cp and cat
     whilst the interception library will work it is not possible to see the summary
     generated by the interception library.
+
+### Advanced Usage
+
+DFuse will only create one kernel level mount point regardless of how it is
+launched. How POSIX containers are represented within that mount point varies
+depending on the DFuse command-line options. In addition to mounting a single
+POSIX container, DFuse can also operate in two other modes detailed below.
+
+#### Pool Mode
+
+If a pool uuid is specified but not a container uuid, then the containers can be
+accessed by the path `<mount point>/<container uuid>`. The container uuid
+will have to be provided from an external source.
+
+```bash
+$ daos cont create tank --label mycont --type POSIX
+   Container UUID : 8a8f08bb-5034-41e8-b7ae-0cdce347c558
+   Container Label: mycont
+   Container Type : POSIX
+ Successfully created container 8a8f08bb-5034-41e8-b7ae-0cdce347c558
+
+$ daos cont create tank --label mycont2 --type POSIX
+  Container UUID : 0db21789-5372-4f2a-b7bc-14c0a5e968df
+  Container Label: mycont2
+  Container Type : POSIX
+
+Successfully created container 0db21789-5372-4f2a-b7bc-14c0a5e968df
+
+$ dfuse -m /tmp/dfuse --pool tank
+
+$ ls -l /tmp/dfuse/
+ls: cannot open directory '/tmp/dfuse/': Operation not supported
+
+$ ls -l /tmp/dfuse/0db21789-5372-4f2a-b7bc-14c0a5e968df
+total 0
+
+$ ls -l /tmp/dfuse/8a8f08bb-5034-41e8-b7ae-0cdce347c558
+total 0
+-rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+
+$ fusermount3 -u /tmp/dfuse/
+```
+
+#### System Mode
+
+If neither a pool or container is specified, then pools and container can be
+accessed by the path `<mount point>/<pool uuid>/<container uuid>`. However it
+should be noted that `readdir()` and therefore `ls` do not work on either mount
+points or directories representing pools here. So the pool and container uuids
+will have to be provided from an external source.
+
+```bash
+$ dfuse -m /tmp/dfuse
+$ df -h /tmp/dfuse
+Filesystem      Size  Used Avail Use% Mounted on
+dfuse              -     -     -    - /tmp/dfuse
+$ daos pool query tank | grep -- -.*-
+Pool 004abf7c-26c8-4cba-9059-8b3be39161fc, ntarget=32, disabled=0, leader=0, version=1
+$ ls -l /tmp/dfuse/004abf7c-26c8-4cba-9059-8b3be39161fc/0db21789-5372-4f2a-b7bc-14c0a5e968df
+total 0
+$ ls -l /tmp/dfuse/004abf7c-26c8-4cba-9059-8b3be39161fc/8a8f08bb-5034-41e8-b7ae-0cdce347c558
+total 0
+-rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+```
+
+While this mode is not expected to be used directly by users, it is useful for
+the unified namespace integration.

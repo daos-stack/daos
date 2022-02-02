@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -44,7 +44,7 @@ func (tc *TransportConfig) String() string {
 // component. ServerName is only needed if the config is being used as a
 // transport credential for a gRPC tls client.
 type CertificateConfig struct {
-	ServerName      string           `yaml:"server_name,omitempty"`
+	ServerName      string           `yaml:"-"`
 	ClientCertDir   string           `yaml:"client_cert_dir,omitempty"`
 	CARootPath      string           `yaml:"ca_cert"`
 	CertificatePath string           `yaml:"cert"`

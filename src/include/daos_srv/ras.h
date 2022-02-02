@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,6 +47,7 @@
 	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")	\
 	X(RAS_POOL_DF_INCOMPAT,						\
 	  "pool_durable_format_incompatible")				\
+	X(RAS_POOL_DEFER_DESTROY,	"pool_destroy_deferred")	\
 	X(RAS_CONT_DF_INCOMPAT,						\
 	  "container_durable_format_incompatible")			\
 	X(RAS_RDB_DF_INCOMPAT,						\
@@ -144,7 +145,7 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
  * with a '$' to indicate so. See ds_notify_ras_event for parameter
  * documentation.
  */
-void
+void __attribute__((weak, __format__(__printf__, 13, 14)))
 ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 		     d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
 		     uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data,

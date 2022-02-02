@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,6 +68,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		co_hdr->coh_root = grp_root;
 	}
 
+	D_ASSERT(co_hdr->coh_bulk_hdl == CRT_BULK_NULL);
 	co_hdr->coh_bulk_hdl = co_bulk_hdl;
 
 	rpc_priv->crp_corpc_info = co_info;
@@ -151,8 +152,10 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	crt_rpc_t			*rpc_req;
 	struct crt_rpc_priv		*rpc_priv;
+	struct crt_corpc_hdr		*co_hdr;
 	struct crt_bulk_desc		*bulk_desc;
 	crt_bulk_t			 local_bulk_hdl;
+	crt_bulk_t			 remote_bulk_hdl;
 	void				*bulk_buf;
 	int				 rc = 0;
 
@@ -163,9 +166,18 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	D_ASSERT(rpc_req != NULL && bulk_buf != NULL);
 
 	rpc_priv = container_of(rpc_req, struct crt_rpc_priv, crp_pub);
+	co_hdr = &rpc_priv->crp_coreq_hdr;
 
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
+	remote_bulk_hdl = bulk_desc->bd_remote_hdl;
 	D_ASSERT(local_bulk_hdl != NULL);
+
+	/* chained bulk done, free remote_bulk_hdl, reset co_hdr->coh_bulk_hdl as NULL as
+	 * crt_corpc_initiate() will reuse it as chained bulk handle for child RPC.
+	 */
+	D_ASSERT(remote_bulk_hdl != NULL && remote_bulk_hdl == co_hdr->coh_bulk_hdl);
+	crt_bulk_free(remote_bulk_hdl);
+	co_hdr->coh_bulk_hdl = NULL;
 
 	if (rc != 0) {
 		RPC_ERROR(rpc_priv, "crt_corpc_chained_bulk_cb, bulk failed: "
@@ -632,7 +644,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 
 	rc = cb_info->cci_rc;
 	if (rc != 0) {
-		RPC_ERROR(child_rpc_priv, "error, rc: "DF_RC"\n", DP_RC(rc));
+		RPC_CERROR(crt_quiet_error(rc), DB_NET, child_rpc_priv, "error, rc: "DF_RC"\n",
+			   DP_RC(rc));
 		co_info->co_rc = rc;
 	}
 	/* propagate failure rc to parent */
@@ -809,9 +822,9 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 				   &children_rank_list, &ver_match);
 
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_tree_get_children(group %s) failed: "DF_RC"\n",
-			  co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
+		RPC_CERROR(crt_quiet_error(rc), DB_NET, rpc_priv,
+			   "crt_tree_get_children(group %s) failed: "DF_RC"\n",
+			   co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
 		D_GOTO(forward_done, rc);
 	}

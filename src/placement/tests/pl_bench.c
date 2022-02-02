@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -210,10 +210,13 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 	D_ASSERT(layout_table != NULL);
 
 	for (i = 0; i < BENCHMARK_COUNT; i++) {
+		int rc;
+
 		memset(&obj_table[i], 0, sizeof(obj_table[i]));
 		obj_table[i].omd_id.lo = rand();
 		obj_table[i].omd_id.hi = 5;
-		daos_obj_set_oid(&obj_table[i].omd_id, 0, OC_RP_4G2, 0);
+		rc = daos_obj_set_oid_by_class(&obj_table[i].omd_id, 0, OC_RP_4G2, 0);
+		D_ASSERT(rc == 0);
 		obj_table[i].omd_ver = 1;
 	}
 
@@ -468,11 +471,14 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 	D_ASSERT(obj_table != NULL);
 
 	for (obj_idx = 0; obj_idx < test_entries; obj_idx++) {
+		int rc;
+
 		memset(&obj_table[obj_idx], 0, sizeof(obj_table[obj_idx]));
 		obj_table[obj_idx].omd_id.lo = rand();
 		obj_table[obj_idx].omd_id.hi = 5;
-		daos_obj_set_oid(&obj_table[obj_idx].omd_id, 0,
-				 OC_RP_4G2, 0);
+		rc = daos_obj_set_oid_by_class(&obj_table[obj_idx].omd_id, 0,
+					       OC_RP_4G2, 0);
+		D_ASSERT(rc == 0);
 		obj_table[obj_idx].omd_ver = 1;
 	}
 

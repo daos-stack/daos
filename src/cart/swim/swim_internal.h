@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,11 +100,13 @@ struct swim_context {
 
 	uint64_t		 sc_default_ping_timeout;
 	uint64_t		 sc_expect_progress_time;
-	uint64_t		 sc_last_success_time;
 	uint64_t		 sc_next_tick_time;
+	uint64_t		 sc_next_event;
 	uint64_t		 sc_deadline;
 
 	uint64_t		 sc_piggyback_tx_max;
+
+	unsigned int		 sc_glitch:1;
 };
 
 static inline int

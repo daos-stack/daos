@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,13 +28,13 @@ public class DaosAbsFsImpl extends DelegateToFileSystem {
   }
 
   /**
-   * not used in DAOS. Just return 1 as fake port.
+   * not used in DAOS. Just return -1 as fake port.
    *
-   * @return 1
+   * @return -1
    */
   @Override
   public int getUriDefaultPort() {
-    return 1;
+    return -1;
   }
 
   @Override

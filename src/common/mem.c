@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -377,14 +377,6 @@ static umem_ops_t	pmem_ops = {
 int
 umem_tx_errno(int err)
 {
-	if (err == 0)
-		err = pmemobj_tx_errno();
-
-	if (err == 0) {
-		D_ERROR("Transaction aborted for unknown reason\n");
-		return -DER_MISC;
-	}
-
 	if (err < 0) {
 		if (err < -DER_ERR_GURT_BASE)
 			return err; /* aborted by DAOS */

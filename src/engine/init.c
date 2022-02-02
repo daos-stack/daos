@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,10 +60,10 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
-int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
+unsigned int		dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation */
-int			dss_nvme_hugepage_size;
+unsigned int		dss_nvme_hugepage_size;
 
 /** I/O Engine instance index */
 unsigned int		dss_instance_idx;
@@ -75,7 +75,7 @@ int			dss_core_depth;
 /** number of physical cores, w/o hyperthreading */
 int			dss_core_nr;
 /** start offset index of the first core for service XS */
-int			dss_core_offset;
+unsigned int		dss_core_offset;
 /** NUMA node to bind to */
 int			dss_numa_node = -1;
 hwloc_bitmap_t	core_allocation_bitmap;
@@ -86,7 +86,7 @@ int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 /** Number of storage tiers: 2 for SCM and NVMe */
-int dss_storage_tiers = 2;
+unsigned int		dss_storage_tiers = 2;
 
 /** Flag to indicate Arbogots is initialized */
 static bool dss_abt_init;
@@ -248,7 +248,7 @@ modules_load(void)
  * passed in preferred number of threads.
  */
 static int
-dss_tgt_nr_get(int ncores, int nr, bool oversubscribe)
+dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
 {
 	int tgt_nr;
 
@@ -320,10 +320,10 @@ dss_topo_init()
 		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
 					    tgt_oversub);
 
-		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %d "
+		if (dss_core_offset >= dss_core_nr) {
+			D_ERROR("invalid dss_core_offset %u "
 				"(set by \"-f\" option),"
-				" should within range [0, %d]",
+				" should within range [0, %u]",
 				dss_core_offset, dss_core_nr - 1);
 			return -DER_INVAL;
 		}
@@ -374,7 +374,7 @@ dss_topo_init()
 
 	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
 				    tgt_oversub);
-	if (dss_core_offset < 0 || dss_core_offset >= dss_num_cores_numa_node) {
+	if (dss_core_offset >= dss_num_cores_numa_node) {
 		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
 			"should within range [0, %d]", dss_core_offset,
 			dss_num_cores_numa_node - 1);
@@ -576,9 +576,9 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 static int
 server_init(int argc, char *argv[])
 {
-	uint64_t		 bound;
-	unsigned int		 ctx_nr;
-	int			 rc;
+	uint64_t		bound;
+	unsigned int		ctx_nr;
+	int			rc;
 	struct engine_metrics	*metrics;
 
 	/*
@@ -740,7 +740,7 @@ server_init(int argc, char *argv[])
 	d_tm_record_timestamp(metrics->ready_time);
 
 	/** Report rank */
-	d_tm_set_counter(metrics->rank_id, dss_self_rank());
+	d_tm_set_gauge(metrics->rank_id, dss_self_rank());
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
@@ -870,6 +870,19 @@ Options:\n\
 		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
 }
 
+static int arg_strtoul(const char *str, unsigned int *value, const char *opt)
+{
+	char *ptr_parse_end = NULL;
+
+	*value = strtoul(str, &ptr_parse_end, 0);
+	if (ptr_parse_end && *ptr_parse_end != '\0') {
+		printf("invalid numeric value: %s (set by %s)\n", str, opt);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 static int
 parse(int argc, char **argv)
 {
@@ -913,13 +926,14 @@ parse(int argc, char **argv)
 			printf("\"-c\" option is deprecated, please use \"-t\" "
 			       "instead.\n");
 		case 't':
-			nr_threads = atoi(optarg);
+			rc = arg_strtoul(optarg, &nr_threads, "\"-t\"");
 			break;
 		case 'x':
-			dss_tgt_offload_xs_nr = atoi(optarg);
+			rc = arg_strtoul(optarg, &dss_tgt_offload_xs_nr,
+					 "\"-x\"");
 			break;
 		case 'f':
-			dss_core_offset = atoi(optarg);
+			rc = arg_strtoul(optarg, &dss_core_offset, "\"-f\"");
 			break;
 		case 'g':
 			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
@@ -947,22 +961,23 @@ parse(int argc, char **argv)
 			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'r':
-			dss_nvme_mem_size = atoi(optarg);
+			rc = arg_strtoul(optarg, &dss_nvme_mem_size, "\"-r\"");
 			break;
 		case 'H':
-			dss_nvme_hugepage_size = atoi(optarg);
+			rc = arg_strtoul(optarg, &dss_nvme_hugepage_size,
+					 "\"-H\"");
 			break;
 		case 'h':
 			usage(argv[0], stdout);
 			break;
 		case 'I':
-			dss_instance_idx = atoi(optarg);
+			rc = arg_strtoul(optarg, &dss_instance_idx, "\"-I\"");
 			break;
 		case 'b':
 			dss_nvme_bypass_health_check = true;
 			break;
 		case 'T':
-			dss_storage_tiers = atoi(optarg);
+			rc = arg_strtoul(optarg, &dss_storage_tiers, "\"-T\"");
 			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
 				printf("Requires 1 or 2 tiers\n");
 				rc = -DER_INVAL;

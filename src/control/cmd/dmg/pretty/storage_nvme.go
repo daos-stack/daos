@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -114,17 +114,17 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 	if stat.ProgFailCntNorm > 0 {
 		fmt.Fprintf(out, "Intel Vendor SMART Attributes:\n")
 		fmt.Fprintf(iw, "Program Fail Count:\n")
-		fmt.Fprintf(iw, "   Normalized(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "   Normalized:%d%%\n",
 			uint8(stat.ProgFailCntNorm))
 		fmt.Fprintf(iw, "   Raw:%d\n",
 			uint64(stat.ProgFailCntRaw))
 		fmt.Fprintf(iw, "Erase Fail Count:\n")
-		fmt.Fprintf(iw, "   Normalized(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "   Normalized:%d%%\n",
 			uint8(stat.EraseFailCntNorm))
 		fmt.Fprintf(iw, "   Raw:%d\n",
 			uint64(stat.EraseFailCntRaw))
 		fmt.Fprintf(iw, "Wear Leveling Count:\n")
-		fmt.Fprintf(iw, "   Normalized(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "   Normalized:%d%%\n",
 			uint8(stat.WearLevelingCntNorm))
 		fmt.Fprintf(iw, "   Min:%d\n",
 			uint16(stat.WearLevelingCntMin))
@@ -136,13 +136,13 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 			uint64(stat.EndtoendErrCntRaw))
 		fmt.Fprintf(iw, "CRC Error Count:%d\n",
 			uint64(stat.CrcErrCntRaw))
-		fmt.Fprintf(iw, "Timed Workload, Media Wear(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "Timed Workload, Media Wear:%d\n",
 			uint64(stat.MediaWearRaw))
-		fmt.Fprintf(iw, "Timed Workload, Host Reads:%d\n",
+		fmt.Fprintf(iw, "Timed Workload, Host Read/Write Ratio:%d\n",
 			uint64(stat.HostReadsRaw))
 		fmt.Fprintf(iw, "Timed Workload, Timer:%d\n",
 			uint64(stat.WorkloadTimerRaw))
-		fmt.Fprintf(iw, "Thermal Throttle Status(%s):%d\n", "%%",
+		fmt.Fprintf(iw, "Thermal Throttle Status:%d%%\n",
 			uint8(stat.ThermalThrottleStatus))
 		fmt.Fprintf(iw, "Thermal Throttle Event Count:%d\n",
 			uint64(stat.ThermalThrottleEventCnt))

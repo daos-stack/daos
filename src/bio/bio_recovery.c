@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,6 +70,7 @@ teardown_xstream(void *arg)
 		return;
 	}
 
+	xs_ctxt->bxc_ready = 0;
 	/* This xstream is torndown */
 	if (xs_ctxt->bxc_io_channel == NULL)
 		return;
@@ -200,7 +201,6 @@ setup_xstream(void *arg)
 {
 	struct bio_xs_context	*xs_ctxt = arg;
 	struct bio_blobstore	*bbs;
-	struct bio_bdev		*d_bdev;
 	struct bio_io_context	*ioc;
 	int			 closed_blobs = 0;
 
@@ -244,10 +244,7 @@ setup_xstream(void *arg)
 			xs_ctxt, closed_blobs);
 		return;
 	}
-
-	d_bdev = bbs->bb_dev;
-	D_ASSERT(d_bdev != NULL);
-	D_ASSERT(d_bdev->bb_name != NULL);
+	xs_ctxt->bxc_ready = 1;
 }
 
 static void
@@ -341,6 +338,10 @@ bs_loaded:
 	D_ASSERT(is_server_started());
 	for (i = 0; i < bbs->bb_ref; i++) {
 		struct bio_xs_context	*xs_ctxt = bbs->bb_xs_ctxts[i];
+
+		/* Setup for the xsteam is done */
+		if (xs_ctxt->bxc_ready)
+			continue;
 
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);
 		spdk_thread_send_msg(xs_ctxt->bxc_thread, setup_xstream,

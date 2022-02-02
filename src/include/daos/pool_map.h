@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,9 +18,9 @@
 #define POOL_MAP_VER_2		(2)
 #define POOL_MAP_VERSION	POOL_MAP_VER_2
 
-#define DF_TARGET "Target[%d] (rank %u idx %u status %u)"
+#define DF_TARGET "Target[%d] (rank %u idx %u status %u ver %u)"
 #define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index,\
-		     t->ta_comp.co_status
+		     t->ta_comp.co_status, t->ta_comp.co_ver
 
 /**
  * pool component types
@@ -220,11 +220,9 @@ void pool_buf_free(struct pool_buf *buf);
 int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
-int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
-		int map_version, int ndomains, int nnodes, int ntargets,
-		const uint32_t *domains, uuid_t target_uuids[],
-		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
-		uint32_t dss_tgt_nr);
+int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
+		 int nnodes, int ntargets, const uint32_t *domains, const d_rank_list_t *ranks,
+		 uint32_t dss_tgt_nr);
 
 int pool_map_comp_cnt(struct pool_map *map);
 

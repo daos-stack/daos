@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,7 +8,9 @@
 #define __CRT_DEBUG_H__
 
 #ifndef CRT_USE_GURT_FAC
+#ifndef DD_FAC
 #define DD_FAC(name)	crt_##name##_logfac
+#endif /* !DD_FAC */
 #endif
 
 #ifndef D_LOGFAC

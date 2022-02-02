@@ -17,7 +17,7 @@ from the server. There are variations on this approach depending on the type of
 data being protected, but the following diagram shows the basic checksum flow.
 ![Basic Checksum Flow](../graph/data_integrity/basic_checksum_flow.png)
 
-# Configuring
+## Configuring
 
 Data integrity is configured for each container.
 See [Storage Model](./storage.md) for more information about how data is
@@ -25,13 +25,13 @@ organized in DAOS. See the Data Integrity in
 the [Container User Guide](../user/container.md#data-integrity) for details on
 how to setup a container with data integrity.
 
-# Keys and Value Objects
+## Keys and Value Objects
 
 Because DAOS is a key/value store, the data for both keys and values is
 protected, however, the approach is slightly different. For the two different
 value types, single and array, the approach is also slightly different.
 
-## Keys
+### Keys
 On an update and fetch, the client calculates a checksum for the data used
 as the distribution and attribute keys and will send it to the server within the
 RPC. The server verifies the keys with the checksum.
@@ -46,7 +46,7 @@ received.
     It is also expected that keys are stored only in Storage Class Memory which
     has reliable data integrity protection.
 
-## Values
+### Values
 On an update, the client will calculate a checksum for the data of the value and
 will send it to the server within the RPC. If "server verify" is enabled, the
 server will calculate a new checksum for the value and compare with the checksum
@@ -69,7 +69,7 @@ of values. The following diagram illustrates a basic example.
 
 ![Basic Checksum Flow](../graph/data_integrity/basic_checksum_flow.png)
 
-### Single Value
+#### Single Value
 A Single Value is an atomic value, meaning that writes to a single value will
 update the entire value and reads retrieve the entire value. Other DAOS features
 such as Erasure Codes might split a Single Value into multiple shards to be
@@ -81,7 +81,7 @@ Note that it is possible for a single value, or shard of a single value, to
 be smaller than the checksum derived from it. It is advised that if an
 application needs many small single values to use an Array Type instead.
 
-### Array Values
+#### Array Values
 Unlike Single Values, Array Values can be updated and fetched at any part of
 an array. In addition, updates to an array are versioned, so a fetch can include
 parts from multiple versions of the array. Each of these versioned parts of an
@@ -117,7 +117,7 @@ The gray boxes around the extents represent the chunks.
 See [Object Layer](https://github.com/daos-stack/daos/blob/master/src/object/README.md)
 for more details about the checksum process on object update and fetch)
 
-# Checksum calculations
+## Checksum calculations
 The actual checksum calculations are done by the
  [isa-l](https://github.com/intel/isa-l)
 and [isa-l_crypto](https://github.com/intel/isa-l_crypto) libraries. However,
@@ -125,13 +125,13 @@ these libraries are abstracted away from much of DAOS and a common checksum
 library is used with appropriate adapters to the actual isa-l implementations.
 [common checksum library](../../src/common/README.md#checksum)
 
-# Performance Impact
+## Performance Impact
 Calculating checksums can be CPU intensive and will impact performance. To
  mitigate performance impact, checksum types with hardware acceleration should
  be chosen. For example, CRC32C is supported by recent Intel CPUs, and many are
  accelerated via SIMD.
 
-# Quality
+## Quality
 Unit and functional testing is performed at many layers.
 
 | Test executable   | What's tested | Key test files |
@@ -141,7 +141,7 @@ Unit and functional testing is performed at many layers.
 | srv_checksum_tests | Server side logic for adding fetched checksums to an array request. Checksums are appropriately copied or created depending on extent layout. | src/object/tests/srv_checksum_tests.c |
 | daos_test | daos_obj_update/fetch with checksums enabled. The -z flag can be used for specific checksum tests. Also --csum_type flag can be used to enable  checksums with any of the other daos_tests | src/tests/suite/daos_checksum.c |
 
-## Running Tests
+### Running Tests
 **With daos_server not running**
 
 ```

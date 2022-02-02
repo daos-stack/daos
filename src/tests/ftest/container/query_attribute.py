@@ -1,12 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from daos_utils import DaosCommand
 import base64
+
 
 class ContainerQueryAttributeTest(TestWithServers):
     # pylint: disable=anomalous-backslash-in-string
@@ -35,16 +35,6 @@ class ContainerQueryAttributeTest(TestWithServers):
         self.expected_cont_uuid = None
         self.daos_cmd = None
 
-    def create_pool_container(self):
-        """Create a pool and a container in the pool.
-
-        Save some variables so that we can use them in the tests.
-        """
-        self.add_pool()
-        self.daos_cmd = DaosCommand(self.bin)
-        self.expected_cont_uuid = self.daos_cmd.get_output(
-            "container_create", pool=self.pool.uuid)[0]
-
     def test_container_query_attr(self):
         """JIRA ID: DAOS-4640
 
@@ -55,21 +45,27 @@ class ContainerQueryAttributeTest(TestWithServers):
         Use Cases:
             Test container query, set-attr, get-attr, and list-attrs.
 
-        :avocado: tags=all,pool,small,full_regression,cont_query_attr
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=container,cont_query_attr
         """
-        # Test pool query.
-        self.create_pool_container()
+        # Create a pool and a container.
+        self.add_pool()
+        self.add_container(pool=self.pool)
+
+        self.daos_cmd = self.get_daos_command()
+
         # Call daos container query, obtain pool and container UUID, and
         # compare against those used when creating the pool and the container.
         kwargs = {
             "pool": self.pool.uuid,
-            "cont": self.expected_cont_uuid
+            "cont": self.container.uuid
         }
         data = self.daos_cmd.container_query(**kwargs)['response']
         actual_pool_uuid = data['pool_uuid']
         actual_cont_uuid = data['container_uuid']
         self.assertEqual(actual_pool_uuid, self.pool.uuid.lower())
-        self.assertEqual(actual_cont_uuid, self.expected_cont_uuid)
+        self.assertEqual(actual_cont_uuid, self.container.uuid.lower())
 
         # Test container set-attr, get-attr, and list-attrs with different
         # types of characters.
@@ -109,12 +105,15 @@ class ContainerQueryAttributeTest(TestWithServers):
         # Set and verify get-attr.
         errors = []
         expected_attrs = []
+
         for attr_value in attr_values:
             self.daos_cmd.container_set_attr(
                 pool=actual_pool_uuid, cont=actual_cont_uuid,
                 attr=attr_value[0], val=attr_value[1])
+
             kwargs["attr"] = attr_value[0]
             data = self.daos_cmd.container_get_attr(**kwargs)['response']
+
             actual_val = base64.b64decode(data["value"]).decode()
             if attr_value[1] in escape_to_not:
                 # Special character string.
@@ -133,6 +132,7 @@ class ContainerQueryAttributeTest(TestWithServers):
                 expected_attrs.append(escape_to_not[attr_value[0]])
             else:
                 expected_attrs.append(attr_value[0])
+
         self.assertEqual(len(errors), 0, "; ".join(errors))
 
         # Verify that attr-lists works with test_strings.
@@ -142,7 +142,7 @@ class ContainerQueryAttributeTest(TestWithServers):
             "cont": actual_cont_uuid
         }
         data = self.daos_cmd.container_list_attrs(**kwargs)['response']
-        actual_attrs = list(data.keys())
+        actual_attrs = list(data)
         actual_attrs.sort()
         self.log.debug(str(actual_attrs))
         self.assertEqual(actual_attrs, expected_attrs)
@@ -156,25 +156,36 @@ class ContainerQueryAttributeTest(TestWithServers):
         Use Cases:
             Test daos container list-attrs with 50 attributes.
 
-        :avocado: tags=all,pool,small,full_regression,cont_list_attrs
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=container,cont_list_attrs
         """
-        self.create_pool_container()
+        # Create a pool and a container.
+        self.add_pool()
+        self.add_container(pool=self.pool)
+
+        self.daos_cmd = self.get_daos_command()
+
         expected_attrs = []
         vals = []
+
         for i in range(50):
             expected_attrs.append("attr" + str(i))
             vals.append("val" + str(i))
+
         for expected_attr, val in zip(expected_attrs, vals):
             _ = self.daos_cmd.container_set_attr(
-                pool=self.pool.uuid, cont=self.expected_cont_uuid,
+                pool=self.pool.uuid, cont=self.container.uuid,
                 attr=expected_attr, val=val)
+
         expected_attrs.sort()
+
         kwargs = {
             "pool": self.pool.uuid,
-            "cont": self.expected_cont_uuid
+            "cont": self.container.uuid
         }
         data = self.daos_cmd.container_list_attrs(**kwargs)['response']
-        actual_attrs = list(data.keys())
+        actual_attrs = list(data)
         actual_attrs.sort()
         self.assertEqual(
             expected_attrs, actual_attrs, "Unexpected output from list_attrs")

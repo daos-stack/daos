@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +21,7 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <sys/stat.h>
 
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX

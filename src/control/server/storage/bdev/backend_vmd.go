@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,65 +15,114 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// findPciAddrsWithDomain returns controllers that match the input prefix in the
-// domain component of their PCI address.
-func findPciAddrsWithDomain(inCtrlrs storage.NvmeControllers, prefix string) ([]string, error) {
-	var outPciAddrs []string
+func getVMD(inAddr string) (*hardware.PCIAddress, error) {
+	addr, err := hardware.NewPCIAddress(inAddr)
+	if err != nil {
+		return nil, errors.Wrap(err, "controller pci address invalid")
+	}
 
-	for _, ctrlr := range inCtrlrs {
-		domain, _, _, _, err := common.ParsePCIAddress(ctrlr.PciAddr)
+	if !addr.IsVMDBackingAddress() {
+		return nil, nil
+	}
+
+	vmdAddr, err := addr.BackingToVMDAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	return vmdAddr, nil
+}
+
+// mapVMDToBackingDevs stores found vmd backing device details under vmd address key.
+func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) (map[string]storage.NvmeControllers, error) {
+	vmds := make(map[string]storage.NvmeControllers)
+
+	for _, ctrlr := range foundCtrlrs {
+		vmdAddr, err := getVMD(ctrlr.PciAddr)
 		if err != nil {
 			return nil, err
 		}
-		if fmt.Sprintf("%x", domain) == prefix {
-			outPciAddrs = append(outPciAddrs, ctrlr.PciAddr)
+		if vmdAddr == nil {
+			continue // not a backing device address
+		}
+
+		if _, exists := vmds[vmdAddr.String()]; !exists {
+			vmds[vmdAddr.String()] = make(storage.NvmeControllers, 0)
+		}
+
+		// add backing device details to vmd address key in map
+		vmds[vmdAddr.String()] = append(vmds[vmdAddr.String()], ctrlr)
+	}
+
+	return vmds, nil
+}
+
+// mapVMDToBackingAddrs stores found vmd backing device addresses under vmd address key.
+func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hardware.PCIAddressSet, error) {
+	vmds := make(map[string]*hardware.PCIAddressSet)
+
+	for _, ctrlr := range foundCtrlrs {
+		vmdAddr, err := getVMD(ctrlr.PciAddr)
+		if err != nil {
+			return nil, err
+		}
+		if vmdAddr == nil {
+			continue // not a backing device address
+		}
+
+		if _, exists := vmds[vmdAddr.String()]; !exists {
+			vmds[vmdAddr.String()] = new(hardware.PCIAddressSet)
+		}
+
+		// add backing device address to vmd address key in map
+		if err := vmds[vmdAddr.String()].AddStrings(ctrlr.PciAddr); err != nil {
+			return nil, err
 		}
 	}
 
-	return outPciAddrs, nil
+	return vmds, nil
 }
 
-// substVMDAddrs replaces VMD PCI addresses in input device list with the
-// PCI addresses of the backing devices behind the VMD.
-//
-// Select any PCI addresses that have the compressed VMD address BDF as backing
-// address domain.
+// substVMDAddrs replaces VMD PCI addresses in input device list with the PCI
+// addresses of the backing devices behind the VMD.
 //
 // Return new device list with PCI addresses of devices behind the VMD.
-func substVMDAddrs(inPCIAddrs []string, foundCtrlrs storage.NvmeControllers) ([]string, error) {
+func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeControllers) (*hardware.PCIAddressSet, error) {
 	if len(foundCtrlrs) == 0 {
 		return nil, nil
 	}
 
-	var outPciAddrs []string
-	for _, dev := range inPCIAddrs {
-		_, b, d, f, err := common.ParsePCIAddress(dev)
-		if err != nil {
-			return nil, err
-		}
-		matchDevs, err := findPciAddrsWithDomain(foundCtrlrs,
-			fmt.Sprintf("%02x%02x%02x", b, d, f))
-		if err != nil {
-			return nil, err
-		}
-		if len(matchDevs) == 0 {
-			outPciAddrs = append(outPciAddrs, dev)
-			continue
-		}
-		outPciAddrs = append(outPciAddrs, matchDevs...)
+	vmds, err := mapVMDToBackingAddrs(foundCtrlrs)
+	if err != nil {
+		return nil, err
 	}
 
-	return outPciAddrs, nil
+	// swap input vmd addresses with respective backing addresses
+	outPCIAddrs := new(hardware.PCIAddressSet)
+	for _, inAddr := range inPCIAddrs.Addresses() {
+		toAdd := []*hardware.PCIAddress{inAddr}
+
+		if backing, exists := vmds[inAddr.String()]; exists {
+			toAdd = backing.Addresses()
+		}
+
+		if err := outPCIAddrs.Add(toAdd...); err != nil {
+			return nil, err
+		}
+	}
+
+	return outPCIAddrs, nil
 }
 
 // substituteVMDAddresses wraps around substVMDAddrs and takes a BdevScanResponse
 // reference along with a logger.
-func substituteVMDAddresses(log logging.Logger, inPCIAddrs []string, bdevCache *storage.BdevScanResponse) ([]string, error) {
+func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressSet, bdevCache *storage.BdevScanResponse) (*hardware.PCIAddressSet, error) {
 	if bdevCache == nil || len(bdevCache.Controllers) == 0 {
 		log.Debugf("no bdev cache to find vmd backing devices (devs: %v)", inPCIAddrs)
 		return nil, nil
@@ -91,13 +140,22 @@ func substituteVMDAddresses(log logging.Logger, inPCIAddrs []string, bdevCache *
 	return dl, nil
 }
 
-// detectVMD returns whether VMD devices have been found and a slice of VMD
-// PCI addresses if found.
-func detectVMD() ([]string, error) {
+// DetectVMD returns whether VMD devices have been found and a slice of VMD
+// PCI addresses if found. Implements vmdDetectFn.
+func DetectVMD() (*hardware.PCIAddressSet, error) {
+	distro := system.GetDistribution()
+	var lspciCmd *exec.Cmd
+
 	// Check available VMD devices with command:
-	// "$lspci | grep  -i -E "201d | Volume Management Device"
-	lspciCmd := exec.Command("lspci")
-	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
+	// "$lspci | grep  -i -E "Volume Management Device"
+	switch {
+	case distro.ID == "opensuse-leap" || distro.ID == "opensuse" || distro.ID == "sles":
+		lspciCmd = exec.Command("/sbin/lspci")
+	default:
+		lspciCmd = exec.Command("lspci")
+	}
+
+	vmdCmd := exec.Command("grep", "-i", "-E", "Volume Management Device")
 	var cmdOut bytes.Buffer
 	var prefixIncluded bool
 
@@ -108,7 +166,7 @@ func detectVMD() ([]string, error) {
 	_ = lspciCmd.Wait()
 
 	if cmdOut.Len() == 0 {
-		return []string{}, nil
+		return hardware.NewPCIAddressSet()
 	}
 
 	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
@@ -116,9 +174,6 @@ func detectVMD() ([]string, error) {
 		// sometimes the output may not include "0000:" prefix
 		// usually when muliple devices are in PCI_ALLOWED
 		vmdCount = bytes.Count(cmdOut.Bytes(), []byte("Volume"))
-		if vmdCount == 0 {
-			vmdCount = bytes.Count(cmdOut.Bytes(), []byte("201d"))
-		}
 	} else {
 		prefixIncluded = true
 	}
@@ -142,62 +197,70 @@ func detectVMD() ([]string, error) {
 		return nil, errors.New("error parsing cmd output")
 	}
 
-	return vmdAddrs, nil
+	return hardware.NewPCIAddressSet(vmdAddrs...)
 }
 
-// vmdProcessFilters takes an input request and a list of discovered VMD addresses.
+// vmdFilterAddresses takes an input request and a list of discovered VMD addresses.
 // The VMD addresses are validated against the input request allow and block lists.
 // The output allow list will only contain VMD addresses if either both input allow
 // and block lists are empty or if included in allow and not included in block lists.
-func vmdProcessFilters(inReq *storage.BdevPrepareRequest, vmdPCIAddrs []string) storage.BdevPrepareRequest {
-	var outAllowList []string
+func vmdFilterAddresses(inReq *storage.BdevPrepareRequest, vmdPCIAddrs *hardware.PCIAddressSet) (*storage.BdevPrepareRequest, error) {
+	outAllowList := new(hardware.PCIAddressSet)
 	outReq := *inReq
 
-	if inReq.PCIAllowList == "" && inReq.PCIBlockList == "" {
-		outReq.PCIAllowList = strings.Join(vmdPCIAddrs, storage.BdevPciAddrSep)
-		outReq.PCIBlockList = ""
-		return outReq
+	inAllowList, err := hardware.NewPCIAddressSetFromString(inReq.PCIAllowList)
+	if err != nil {
+		return nil, err
+	}
+	inBlockList, err := hardware.NewPCIAddressSetFromString(inReq.PCIBlockList)
+	if err != nil {
+		return nil, err
 	}
 
-	if inReq.PCIAllowList != "" {
-		allowed := strings.Split(inReq.PCIAllowList, storage.BdevPciAddrSep)
-		for _, addr := range vmdPCIAddrs {
-			if common.Includes(allowed, addr) {
-				outAllowList = append(outAllowList, addr)
-			}
-		}
-		if len(outAllowList) == 0 {
+	// Set allow list to all VMD addresses if no allow or block lists in request.
+	if inAllowList.IsEmpty() && inBlockList.IsEmpty() {
+		outReq.PCIAllowList = vmdPCIAddrs.String()
+		outReq.PCIBlockList = ""
+		return &outReq, nil
+	}
+
+	// Add VMD addresses to output allow list if included in request allow list.
+	if !inAllowList.IsEmpty() {
+		inclAddrs := inAllowList.Intersect(vmdPCIAddrs)
+
+		if inclAddrs.IsEmpty() {
 			// no allowed vmd addresses
 			outReq.PCIAllowList = ""
 			outReq.PCIBlockList = ""
-			return outReq
+			return &outReq, nil
 		}
+
+		outAllowList = inclAddrs
 	}
 
-	if inReq.PCIBlockList != "" {
-		var outList []string
-		inList := outAllowList // in case vmdPCIAddrs list has already been filtered
-		if len(inList) == 0 {
+	if !inBlockList.IsEmpty() {
+		// use outAllowList in case vmdPCIAddrs list has already been filtered
+		inList := outAllowList
+
+		if inList.IsEmpty() {
 			inList = vmdPCIAddrs
 		}
-		blocked := strings.Split(inReq.PCIBlockList, storage.BdevPciAddrSep)
-		for _, addr := range inList {
-			if !common.Includes(blocked, addr) {
-				outList = append(outList, addr)
-			}
-		}
-		outAllowList = outList
-		if len(outAllowList) == 0 {
-			// no allowed vmd addresses
+
+		exclAddrs := inList.Difference(inBlockList)
+
+		if exclAddrs.IsEmpty() {
+			// all vmd addresses are blocked
 			outReq.PCIAllowList = ""
 			outReq.PCIBlockList = ""
-			return outReq
+			return &outReq, nil
 		}
+
+		outAllowList = exclAddrs
 	}
 
-	outReq.PCIAllowList = strings.Join(outAllowList, storage.BdevPciAddrSep)
+	outReq.PCIAllowList = outAllowList.String()
 	outReq.PCIBlockList = ""
-	return outReq
+	return &outReq, nil
 }
 
 // getVMDPrepReq determines if VMD devices are going to be used and returns a
@@ -214,23 +277,30 @@ func getVMDPrepReq(log logging.Logger, req *storage.BdevPrepareRequest, vmdDetec
 		return nil, errors.Wrap(err, "VMD could not be enabled")
 	}
 
-	if len(vmdPCIAddrs) == 0 {
+	if vmdPCIAddrs.IsEmpty() {
 		log.Debug("vmd prep: no vmd devices found")
 		return nil, nil
 	}
 	log.Debugf("volume management devices detected: %v", vmdPCIAddrs)
 
-	vmdReq := vmdProcessFilters(req, vmdPCIAddrs)
-
-	if req.PCIAllowList != "" && vmdReq.PCIAllowList == "" {
-		log.Debugf("vmd prep: %v devices not allowed", vmdPCIAddrs)
-		return nil, nil
+	vmdReq, err := vmdFilterAddresses(req, vmdPCIAddrs)
+	if err != nil {
+		return nil, err
 	}
-	if req.PCIBlockList != "" && vmdReq.PCIAllowList == "" {
-		log.Debugf("vmd prep: %v devices blocked", vmdPCIAddrs)
-		return nil, nil
-	}
-	log.Debugf("volume management devices selected: %v", vmdReq.PCIAllowList)
 
-	return &vmdReq, nil
+	// No addrs left after filtering
+	if vmdReq.PCIAllowList == "" {
+		if req.PCIAllowList != "" {
+			log.Debugf("vmd prep: %q devices not allowed", vmdPCIAddrs)
+			return nil, nil
+		}
+		if req.PCIBlockList != "" {
+			log.Debugf("vmd prep: %q devices blocked", vmdPCIAddrs)
+			return nil, nil
+		}
+	}
+
+	log.Debugf("volume management devices selected: %q", vmdReq.PCIAllowList)
+
+	return vmdReq, nil
 }

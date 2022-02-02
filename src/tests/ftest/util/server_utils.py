@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -121,6 +121,9 @@ class DaosServerManager(SubprocessManager):
 
         # Storage and network information
         self.information = DaosServerInformation(self.dmg)
+
+        # Flag used to determine which method is used to detect that the server has started
+        self.detect_start_via_dmg = False
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -349,22 +352,30 @@ class DaosServerManager(SubprocessManager):
                 "Failed to start servers before format: {}".format(
                     error)) from error
 
-    def detect_engine_start(self, host_qty=None):
+    def detect_engine_start(self, hosts_qty=None):
         """Detect when all the engines have started.
 
         Args:
-            host_qty (int): number of servers expected to have been started.
+            hosts_qty (int): number of servers expected to have been started.
 
         Raises:
             ServerFailed: if there was an error starting the servers after
                 formatting.
 
         """
-        if host_qty is None:
+        if hosts_qty is None:
             hosts_qty = len(self._hosts)
-        self.log.info("<SERVER> Waiting for the daos_engine to start")
-        self.manager.job.update_pattern("normal", hosts_qty)
-        if not self.manager.check_subprocess_status(self.manager.process):
+
+        if self.detect_start_via_dmg:
+            self.log.info("<SERVER> Waiting for the daos_engine to start via dmg system query")
+            self.manager.job.update_pattern("dmg", hosts_qty)
+            started = self.get_detected_engine_count(self.manager.process)
+        else:
+            self.log.info("<SERVER> Waiting for the daos_engine to start")
+            self.manager.job.update_pattern("normal", hosts_qty)
+            started = self.manager.check_subprocess_status(self.manager.process)
+
+        if not started:
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
@@ -373,6 +384,56 @@ class DaosServerManager(SubprocessManager):
 
         # Define the expected states for each rank
         self._expected_states = self.get_current_state()
+
+    def get_detected_engine_count(self, sub_process):
+        """Get the number of detected joined engines.
+
+        Args:
+            sub_process (process.SubProcess): subprocess used to run the command
+
+        Returns:
+            int: number of patterns detected in the job output
+
+        """
+        expected_states = self.manager.job.pattern.split(",")
+        detected = 0
+        complete = False
+        timed_out = False
+        start = time.time()
+
+        # Search for patterns in the dmg system query output:
+        #   - the expected number of pattern matches are detected (success)
+        #   - the time out is reached (failure)
+        #   - the subprocess is no longer running (failure)
+        while not complete and not timed_out \
+                and (sub_process is None or sub_process.poll() is None):
+            detected = self.detect_engine_states(expected_states)
+            complete = detected == self.manager.job.pattern_count
+            timed_out = time.time() - start > self.manager.job.pattern_timeout.value
+            if not complete and not timed_out:
+                time.sleep(1)
+
+        # Summarize results
+        self.manager.job.report_subprocess_status(start, detected, complete, timed_out, sub_process)
+
+        return complete
+
+    def detect_engine_states(self, expected_states):
+        """Detect the number of engine states that match the expected states.
+
+        Args:
+            expected_states (list): a list of engine state strings to detect
+
+        Returns:
+            int: number of engine states that match the expected states
+
+        """
+        detected = 0
+        states = self.get_current_state()
+        for rank in sorted(states):
+            if states[rank]["state"].lower() in expected_states:
+                detected += 1
+        return detected
 
     def reset_storage(self):
         """Reset the server storage.
@@ -564,6 +625,36 @@ class DaosServerManager(SubprocessManager):
                 "Multiple system states ({}) detected:\n  {}".format(
                     states, data))
         return states[0]
+
+    def check_rank_state(self, rank, valid_state, max_checks=1):
+        """Check the state of single rank in DAOS system
+
+        Args:
+            rankv(int): daos rank whose state need's to be checked
+            valid_state (str): expected state for the rank
+            max_checks (int, optional): number of times to check the state
+                Defaults to 1.
+        Raises:
+            ServerFailed: if there was error obtaining the data for daos
+                          system query
+        Returns:
+            bool: returns True if there is a match for checked state,
+                  else False.
+        """
+        checks = 0
+        while checks < max_checks:
+            if checks > 0:
+                time.sleep(1)
+            data = self.get_current_state()
+            if not data:
+                # The regex failed to get the rank and state
+                raise ServerFailed(
+                "Error obtaining {} output: {}".format(self.dmg, data))
+            checks += 1
+            if data[rank]["state"] == valid_state:
+                return True
+
+        return False
 
     def check_system_state(self, valid_states, max_checks=1):
         """Check that the DAOS system state is one of the provided states.
@@ -774,19 +865,24 @@ class DaosServerManager(SubprocessManager):
         engines = generated_yaml["engines"]
         for i, engine in enumerate(engines):
             self.log.info("engine %d", i)
-            self.log.info("scm_mount = %s", engine["scm_mount"])
-            self.log.info("scm_class = %s", engine["scm_class"])
-            self.log.info("scm_list = %s", engine["scm_list"])
+            for storage_tier in engine["storage"]:
+                if storage_tier["class"] != "dcpm":
+                    continue
 
-            per_engine_yaml_parameters =\
-                DaosServerYamlParameters.PerEngineYamlParameters(i)
-            per_engine_yaml_parameters.scm_mount.update(engine["scm_mount"])
-            per_engine_yaml_parameters.scm_class.update(engine["scm_class"])
-            per_engine_yaml_parameters.scm_size.update(None)
-            per_engine_yaml_parameters.scm_list.update(engine["scm_list"])
+                self.log.info("scm_mount = %s", storage_tier["scm_mount"])
+                self.log.info("class = %s", storage_tier["class"])
+                self.log.info("scm_list = %s", storage_tier["scm_list"])
 
-            self.manager.job.yaml.engine_params.append(
-                per_engine_yaml_parameters)
+                per_engine_yaml_parameters =\
+                    DaosServerYamlParameters.PerEngineYamlParameters(i)
+                per_engine_yaml_parameters.scm_mount.update(storage_tier["scm_mount"])
+                per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
+                per_engine_yaml_parameters.scm_size.update(None)
+                per_engine_yaml_parameters.scm_list.update(storage_tier["scm_list"])
+                per_engine_yaml_parameters.reset_yaml_data_updated()
+
+                self.manager.job.yaml.engine_params.append(
+                    per_engine_yaml_parameters)
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.
@@ -848,13 +944,13 @@ class DaosServerManager(SubprocessManager):
             nvme_size.  This is intended to allow testing of these combinations.
 
         Args:
-            size (object): the str, int, or None value for the dmp pool create
+            size (object): the str, int, or None value for the dmg pool create
                 size parameter.
-            tier_ratio (object): the int or None value for the dmp pool create
+            tier_ratio (object): the int or None value for the dmg pool create
                 size parameter.
-            scm_size (object): the str, int, or None value for the dmp pool
+            scm_size (object): the str, int, or None value for the dmg pool
                 create scm_size parameter.
-            nvme_size (object): the str, int, or None value for the dmp pool
+            nvme_size (object): the str, int, or None value for the dmg pool
                 create nvme_size parameter.
             min_targets (int, optional): the minimum number of targets per
                 engine that can be configured. Defaults to 1.

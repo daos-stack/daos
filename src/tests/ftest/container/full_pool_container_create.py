@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from general_utils import get_random_bytes, DaosTestError
 from test_utils_container import TestContainerData
 
@@ -15,9 +15,7 @@ class FullPoolContainerCreate(TestWithServers):
     :avocado: recursive
     """
 
-    # Cancel test for small pool size due to DAOS-8400
-    CANCEL_FOR_TICKET = [["DAOS-8400", "size", 134217728]]
-
+    @skipForTicket("DAOS-8400, DAOS-5813")
     def test_no_space_cont_create(self):
         """JIRA ID: DAOS-1169 DAOS-7374
 

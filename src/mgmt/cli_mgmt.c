@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -205,6 +205,12 @@ put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 	d_rank_list_free(info->ms_ranks);
 }
 
+void
+dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
+{
+	return put_attach_info(info, resp);
+}
+
 /*
  * Get the attach info (i.e., rank URIs) for name. To avoid duplicating the
  * rank URIs, we return the GetAttachInfo response directly. Callers are
@@ -303,6 +309,13 @@ out:
 	return rc;
 }
 
+int
+dc_get_attach_info(const char *name, bool all_ranks,
+		   struct dc_mgmt_sys_info *info,
+		   Mgmt__GetAttachInfoResp **respp) {
+	return get_attach_info(name, all_ranks, info, respp);
+}
+
 #define SYS_INFO_BUF_SIZE 16
 
 /*
@@ -367,22 +380,29 @@ int dc_mgmt_net_cfg(const char *name)
 	}
 
 	ofi_interface = getenv("OFI_INTERFACE");
+	ofi_domain = getenv("OFI_DOMAIN");
 	if (!ofi_interface) {
 		rc = setenv("OFI_INTERFACE", info.interface, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
-	} else {
-		D_INFO("Using client provided OFI_INTERFACE: %s\n",
-			ofi_interface);
-	}
 
-	ofi_domain = getenv("OFI_DOMAIN");
-	if (!ofi_domain) {
+		/*
+		 * If we use the agent as the source, client env shouldn't be allowed to override
+		 * the domain. Otherwise we could get a mismatch between interface and domain.
+		 */
+		if (ofi_domain)
+			D_WARN("Ignoring OFI_DOMAIN '%s' because OFI_INTERFACE is not set; using "
+			       "automatic configuration instead\n", ofi_domain);
+
 		rc = setenv("OFI_DOMAIN", info.domain, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+		D_INFO("Using client provided OFI_INTERFACE: %s\n", ofi_interface);
+
+		/* If the client env didn't provide a domain, we can assume we don't need one. */
+		if (ofi_domain)
+			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
 
 	D_DEBUG(DB_MGMT,
@@ -401,7 +421,6 @@ cleanup:
 
 static int send_monitor_request(struct dc_pool *pool, int request_type)
 {
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
 	Mgmt__PoolMonitorReq	 req = MGMT__POOL_MONITOR_REQ__INIT;
 	uint8_t			 *reqb;
@@ -436,8 +455,7 @@ static int send_monitor_request(struct dc_pool *pool, int request_type)
 	}
 	mgmt__pool_monitor_req__pack(&req, reqb);
 
-	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-			      request_type, &dreq);
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT, request_type, &dreq);
 	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_ctx;
@@ -490,7 +508,6 @@ dc_mgmt_notify_pool_connect(struct dc_pool *pool) {
 int
 dc_mgmt_notify_exit(void)
 {
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
 	Drpc__Call		 *dreq;
 	Drpc__Response		 *dresp;
@@ -799,7 +816,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	 */
 	ms_ranks = sys->sy_info.ms_ranks;
 	D_ASSERT(ms_ranks->rl_nr > 0);
-	idx = rand() % ms_ranks->rl_nr;
+	idx = d_rand() % ms_ranks->rl_nr;
 	ctx = daos_get_crt_ctx();
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_FIND, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
@@ -911,7 +928,11 @@ dc_mgmt_init()
 void
 dc_mgmt_fini()
 {
-	daos_rpc_unregister(&mgmt_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&mgmt_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 int dc2_mgmt_svc_rip(tse_task_t *task)

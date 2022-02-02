@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,27 +38,6 @@ class UUIDCornerCase(TestWithServers):
 
         # Make self.pool use UUID.
         self.pool.use_label = False
-
-        # Destroy with UUID.
-        self.verify_destroy_uuid()
-
-    def test_create_destroy_uuid(self):
-        """Test ID: JIRA-7943
-
-        Test Description: Create without label, destroy with UUID.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool,uuid_corner_case,create_without_label_destroy_uuid
-        """
-        self.add_pool(create=False)
-
-        # Make the TestPool object to use UUID.
-        self.pool.use_label = False
-        self.pool.label.update(None)
-
-        # Create without a label.
-        self.pool.create()
 
         # Destroy with UUID.
         self.verify_destroy_uuid()

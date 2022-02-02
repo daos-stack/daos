@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -272,15 +272,23 @@ obj_ec_seg_pack(struct obj_ec_seg_sorter *sorter, d_sg_list_t *sgl)
 		}							       \
 	} while (0)
 
-static void
+static int
 obj_ec_recov_tgt_recx_nrs(struct obj_reasb_req *reasb_req,
 			  uint32_t *tgt_recx_nrs)
 {
 	struct obj_ec_fail_info	*fail_info = reasb_req->orr_fail;
 	struct daos_oclass_attr	*oca = reasb_req->orr_oca;
 	uint32_t		 tgt, tgt_nr;
+	int			 rc = 0;
 
 	D_ASSERT(fail_info != NULL);
+	if (fail_info->efi_ntgts > obj_ec_parity_tgt_nr(oca)) {
+		rc = -DER_DATA_LOSS;
+		D_ERROR(DF_OID" efi_ntgts %d > parity_tgt_nr %d, "DF_RC"\n",
+			DP_OID(reasb_req->orr_oid), fail_info->efi_ntgts,
+			obj_ec_parity_tgt_nr(oca), DP_RC(rc));
+		goto out;
+	}
 	for (tgt = 0, tgt_nr = 0; tgt < obj_ec_tgt_nr(oca); tgt++) {
 		if (obj_ec_tgt_in_err(fail_info->efi_tgt_list,
 				      fail_info->efi_ntgts, tgt))
@@ -292,6 +300,9 @@ obj_ec_recov_tgt_recx_nrs(struct obj_reasb_req *reasb_req,
 	}
 	D_ASSERTF(tgt_nr == obj_ec_data_tgt_nr(oca), "%d != %d",
 		  tgt_nr, obj_ec_data_tgt_nr(oca));
+
+out:
+	return rc;
 }
 
 /** scan the iod to find the full_stripe recxs and some help info */
@@ -313,7 +324,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	bool				 parity_seg_counted = false;
 	bool				 frag_seg_counted = false;
 	bool				 punch;
-	int				 i, j, idx, rc;
+	int				 i, j, idx, rc = 0;
 
 	if (reasb_req->orr_size_fetched)
 		return 0;
@@ -353,10 +364,11 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 			ec_all_tgt_recx_nrs(oca, tgt_recx_nrs, j);
 		} else {
 			if (reasb_req->orr_recov)
-				obj_ec_recov_tgt_recx_nrs(reasb_req,
-							  tgt_recx_nrs);
+				rc = obj_ec_recov_tgt_recx_nrs(reasb_req, tgt_recx_nrs);
 			else
 				ec_data_tgt_recx_nrs(oca, tgt_recx_nrs, j);
+			if (rc)
+				goto out;
 			continue;
 		}
 
@@ -560,6 +572,8 @@ obj_ec_recx_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
 	int			 rc = 0;
 
 	if (recx_array->oer_stripe_total == 0)
+		D_GOTO(out, rc = 0);
+	if (iod->iod_size == DAOS_REC_ANY) /* punch case */
 		D_GOTO(out, rc = 0);
 	singv = (iod->iod_type == DAOS_IOD_SINGLE);
 	if (singv) {
@@ -829,7 +843,8 @@ ec_data_seg_add(daos_recx_t *recx, daos_size_t iod_size, d_sg_list_t *sgl,
 	recx_size = recx_nr * iod_size;
 	tgt = obj_ec_tgt_of_recx_idx(recx_idx, stripe_rec_nr, cell_rec_nr);
 	daos_sgl_consume(sgl, iov_idx, iov_off, recx_size, iovs, iov_nr);
-	D_ASSERT(iov_nr <= iov_capa);
+	D_ASSERTF(iov_nr <= iov_capa, "%d > %d, iod_size "DF_U64"\n",
+		  iov_nr, iov_capa, iod_size);
 	obj_ec_seg_insert(sorter, tgt, iovs, iov_nr);
 	/* add remaining recxs */
 	recx_idx = roundup(recx_idx + 1, cell_rec_nr);
@@ -1466,8 +1481,15 @@ obj_ec_singv_req_reasb(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
 				singv_parity = true;
 		} else {
 			if (reasb_req->orr_recov) {
-				struct obj_ec_fail_info	*fail_info =
-							 reasb_req->orr_fail;
+				struct obj_ec_fail_info	*fail_info = reasb_req->orr_fail;
+
+				if (fail_info->efi_ntgts > obj_ec_parity_tgt_nr(oca)) {
+					rc = -DER_DATA_LOSS;
+					D_ERROR(DF_OID" efi_ntgts %d > parity_tgt_nr %d, "DF_RC"\n",
+						DP_OID(reasb_req->orr_oid), fail_info->efi_ntgts,
+						obj_ec_parity_tgt_nr(oca), DP_RC(rc));
+					goto out;
+				}
 
 				tgt_nr = 0;
 				for (idx = 0; idx < obj_ec_tgt_nr(oca); idx++) {
@@ -1553,6 +1575,9 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	struct obj_ec_codec *codec;
 	uint32_t	i;
 	int		rc;
+
+	if (reasb_req->orr_usgls == NULL) /* punch case */
+		return 0;
 
 	codec = codec_get(reasb_req, reasb_req->orr_oid);
 	if (codec == NULL) {
@@ -2760,6 +2785,8 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 		for (j = 0; j < r_oiod->oiod_nr; j++) {
 			r_siod = &r_oiod->oiod_siods[j];
 			tgt = r_siod->siod_tgt_idx;
+			if (isclr(tgt_bitmap, tgt))
+				continue;
 			tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, tgt_nr, tgt);
 			D_ASSERT(tgt_oiod && tgt_oiod->oto_tgt_idx == tgt);
 			tgt_oiod->oto_offs[i] = r_siod->siod_off;

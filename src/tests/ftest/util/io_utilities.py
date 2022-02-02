@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -113,7 +113,7 @@ class DirTree():
                 "{0} object is not initialized".format(
                     self.__class__.__name__))
 
-        needle_path = random.choice(self._needles_paths)
+        needle_path = random.choice(self._needles_paths) #nosec
         needle_name = os.path.basename(needle_path)
         return needle_name, needle_path
 
@@ -161,7 +161,7 @@ class DirTree():
             return
 
         for count in range(self._needles_count):
-            new_path = os.path.dirname(random.choice(self._needles_paths))
+            new_path = os.path.dirname(random.choice(self._needles_paths)) #nosec
             suffix = "_{:05d}.needle".format(count)
             fd, _ = tempfile.mkstemp(
                 dir=new_path, prefix=self._needles_prefix, suffix=suffix)

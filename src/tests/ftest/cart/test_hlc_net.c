@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -218,7 +218,7 @@ static int srv_init(void)
 
 	dbg("---%s--->", __func__);
 
-	rc = crt_init(CRT_DEFAULT_GRPID, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(CRT_DEFAULT_GRPID, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	D_ASSERTF(rc == 0, " crt_init failed %d\n", rc);
 
 	rc = crt_proto_register(&test_proto_fmt);

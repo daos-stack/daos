@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
-	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -325,17 +324,6 @@ func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
 	}
 
 	common.CmpErr(t, expectedError, err)
-}
-
-func getTestClusterEventReqBytes(t *testing.T, event *sharedpb.RASEvent, seq uint64) []byte {
-	req := &sharedpb.ClusterEventReq{Event: event, Sequence: seq}
-	reqBytes, err := proto.Marshal(req)
-
-	if err != nil {
-		t.Fatalf("Couldn't create fake request: %v", err)
-	}
-
-	return reqBytes
 }
 
 func TestSrvModule_HandleClusterEvent_Invalid(t *testing.T) {

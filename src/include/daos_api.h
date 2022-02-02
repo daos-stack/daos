@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -174,7 +174,9 @@ daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
 static inline int
 daos_anchor_init(daos_anchor_t *anchor, unsigned int opts)
 {
-	*anchor = DAOS_ANCHOR_INIT;
+	daos_anchor_t	_anchor = DAOS_ANCHOR_INIT;
+
+	*anchor = _anchor;
 	return 0;
 }
 

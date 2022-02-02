@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,7 +53,7 @@ query(void **state)
 		return;
 
 	/** connect to the pool */
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -90,7 +90,7 @@ create(void **state)
 		return;
 
 	/** connect to the pool in read-only mode */
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -98,8 +98,7 @@ create(void **state)
 
 	/** create container with read-only handle */
 	print_message("creating container with read-only pool handle ...\n");
-	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL, NULL);
+	rc = daos_cont_create(poh, &uuid, NULL, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 
 	/** close local RO handle */
@@ -107,7 +106,7 @@ create(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -118,8 +117,7 @@ create(void **state)
 
 	/** create container with invalid handle */
 	print_message("creating container with stale pool handle ...\n");
-	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL, NULL);
+	rc = daos_cont_create(poh, &uuid, NULL, NULL);
 	assert_rc_equal(rc, -DER_NO_HDL);
 
 	/** close local handle */
@@ -134,21 +132,21 @@ destroy(void **state)
 	test_arg_t		*arg = *state;
 	daos_handle_t		 poh;
 	uuid_t			 uuid;
+	char			 str[37];
 	int			 rc;
 
 	if (arg->myrank != 0)
 		return;
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
 	assert_rc_equal(rc, 0);
 
 	/** create container */
-	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL, NULL);
+	rc = daos_cont_create(poh, &uuid, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** invalidate local pool handle */
@@ -156,7 +154,8 @@ destroy(void **state)
 
 	/** destroy container with invalid handle */
 	print_message("destroying container with stale pool handle ...\n");
-	rc = daos_cont_destroy(poh, uuid, true, NULL);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_destroy(poh, str, true, NULL);
 	assert_rc_equal(rc, -DER_NO_HDL);
 
 	/** close local handle */
@@ -164,7 +163,7 @@ destroy(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** connect to the pool in read-only mode */
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -172,7 +171,7 @@ destroy(void **state)
 
 	/** destroy container with RO handle */
 	print_message("destroying container with read-only pool handle ...\n");
-	rc = daos_cont_destroy(poh, uuid, true, NULL);
+	rc = daos_cont_destroy(poh, str, true, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 
 	/** close local RO handle */
@@ -180,7 +179,7 @@ destroy(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -189,7 +188,7 @@ destroy(void **state)
 	/** destroy container with valid handle */
 	print_message("really destroying container with valid pool handle "
 		      "...\n");
-	rc = daos_cont_destroy(poh, uuid, true, NULL);
+	rc = daos_cont_destroy(poh, str, true, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** close local handle */
@@ -210,7 +209,7 @@ open(void **state)
 		return;
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -221,7 +220,7 @@ open(void **state)
 
 	/** open container while pool handle has been revoked */
 	print_message("opening container with revoked pool handle ...\n");
-	rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	rc = daos_cont_open(poh, arg->co_str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_NO_HDL);
 
 	/** close pool handle */
@@ -229,7 +228,7 @@ open(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** reconnect to the pool in read-only mode */
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 			       DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -239,7 +238,7 @@ open(void **state)
 	 * only applies to creating/deleting containers.
 	 */
 	print_message("opening container RW with RO pool handle ...\n");
-	rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	rc = daos_cont_open(poh, arg->co_str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_close(coh, NULL);
@@ -249,7 +248,7 @@ open(void **state)
 	poh_invalidate_local(&poh);
 
 	/** open container while pool handle has been revoked */
-	rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RO, &coh, NULL, NULL);
+	rc = daos_cont_open(poh, arg->co_str, DAOS_COO_RO, &coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_NO_HDL);
 
 
@@ -282,7 +281,7 @@ io_invalid_poh(void **state)
 
 	if (arg->myrank == 0) {
 		/** connect to the pool in read-write mode */
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW, &poh,
 				       NULL /* info */,
 				       NULL /* ev */);
@@ -293,7 +292,7 @@ io_invalid_poh(void **state)
 
 	if (arg->myrank == 1) {
 		/** open container in read/write mode */
-		rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RW, &coh, NULL,
+		rc = daos_cont_open(poh, arg->co_str, DAOS_COO_RW, &coh, NULL,
 				    NULL);
 		assert_rc_equal(rc, 0);
 	}
@@ -368,9 +367,9 @@ io_invalid_coh(void **state)
 	daos_handle_t		 coh;
 	daos_obj_id_t		 oid;
 	daos_handle_t		 oh;
-	d_iov_t		 dkey;
+	d_iov_t			 dkey;
 	d_sg_list_t		 sgl;
-	d_iov_t		 sg_iov;
+	d_iov_t			 sg_iov;
 	daos_iod_t		 iod;
 	daos_recx_t		 recx;
 	char			 buf[STACK_BUF_LEN];
@@ -381,7 +380,7 @@ io_invalid_coh(void **state)
 
 	if (arg->myrank == 0) {
 		/** open container in read/write mode */
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
+		rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW,
 				    &coh, NULL, NULL);
 		assert_rc_equal(rc, 0);
 	}
@@ -466,7 +465,7 @@ update_ro(void **state)
 
 	if (arg->myrank == 0) {
 		/** open container in read/write mode */
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RO,
+		rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RO,
 				    &coh, NULL, NULL);
 		assert_rc_equal(rc, 0);
 	}

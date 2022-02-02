@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -111,7 +111,7 @@ int main(int argc, char **argv)
 	rc = d_log_init();
 	assert(rc == 0);
 
-	rc = crt_init("manyserver", CRT_FLAG_BIT_SERVER);
+	rc = crt_init("manyserver", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
 		printf("Could not start server, rc = %d", rc);
 		return -1;

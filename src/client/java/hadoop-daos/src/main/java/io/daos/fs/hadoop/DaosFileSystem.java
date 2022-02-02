@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -219,7 +219,7 @@ public class DaosFileSystem extends FileSystem {
 
   @Override
   public int getDefaultPort() {
-    return 1;
+    return 0;
   }
 
   private void checkSizeMin(int size, int min, String msg) {
@@ -377,7 +377,7 @@ public class DaosFileSystem extends FileSystem {
 
     daosFile.createNewFile(
             Constants.DAOS_MODLE,
-            DaosObjectType.OC_SX,
+            DaosObjectClass.OC_SX,
             this.chunkSize,
             true);
 

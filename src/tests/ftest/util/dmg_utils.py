@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -785,6 +785,43 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("cont", "set-owner"), pool=pool, cont=cont, user=user, group=group)
 
+    def system_cleanup(self, machinename=None, verbose=True):
+        """Release all resources associated with the specified machine.
+
+        Args:
+            machinename (str): Specify machine to clean up resources for.
+            verbose (bool): Retrieve list of pools cleaned up and handle counts.
+
+        Raises:
+            CommandFailure: if the dmg system cleanup command fails.
+
+        Returns:
+            dict: dictionary of output in JSON format
+        """
+        # Sample output:
+        #  "response": {
+        #    "results": [
+        #      {
+        #        "status": 0,
+        #        "msg": "",
+        #        "pool_id": "591ab37d-9efe-4b90-a102-afce50adb8cd",
+        #        "count": 6
+        #      },
+        #      {
+        #        "status": 0,
+        #        "msg": "",
+        #        "pool_id": "168824c4-0000-41e1-a93c-6013a12ae53f",
+        #        "count": 6
+        #      }
+        #    ]
+        #  },
+        #  "error": null,
+        #  "status": 0
+        #}
+
+        return self._get_json_result(
+            ("system", "cleanup"), machinename=machinename, verbose=verbose)
+
     def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
 
@@ -1097,6 +1134,18 @@ class DmgCommand(DmgCommandBase):
         """
         return self._parse_pool_list("svc_reps", **kwargs)
 
+    def version(self):
+        """Call dmg version.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_result(["version"])
 
 def check_system_query_status(data):
     """Check if any server crashed.

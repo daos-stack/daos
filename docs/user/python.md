@@ -186,5 +186,5 @@ False
 ## Arrays
 
 Class representing of DAOS array leveraging the numpy's dispatch mechanism.
-See https://numpy.org/doc/stable/user/basics.dispatch.html for more info.
+See [https://numpy.org/doc/stable/user/basics.dispatch.html](https://numpy.org/doc/stable/user/basics.dispatch.html) for more info.
 Work in progress

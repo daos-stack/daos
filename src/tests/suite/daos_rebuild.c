@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -279,7 +279,7 @@ rebuild_destroy_container_cb(void *data)
 		return rc;
 
 	while (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1, NULL);
+		rc = daos_cont_destroy(arg->pool.poh, arg->co_str, 1, NULL);
 		if (rc == -DER_BUSY || rc == -DER_IO) {
 			print_message("Container is busy, wait\n");
 			sleep(1);
@@ -1295,6 +1295,40 @@ rebuild_kill_rank_during_rebuild(void **state)
 			 arg->pool.alive_svc, ranks_to_kill[0]);
 }
 
+static void
+rebuild_kill_PS_leader_during_rebuild(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	d_rank_t	leader;
+	int		i;
+
+	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
+		print_message("need at least 5 svcs, -s5\n");
+		return;
+	}
+
+	test_get_leader(arg, &leader);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], 6);
+	}
+	rebuild_io(arg, oids, OBJ_NR);
+
+	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+			 arg->pool.alive_svc, 6);
+	/* hang the rebuild */
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_SCAN_HANG, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 5,
+				      0, NULL);
+	}
+	sleep(2);
+	rebuild_single_pool_rank(arg, leader, true);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: drop rebuild scan reply",
@@ -1367,6 +1401,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_fail_all_replicas, rebuild_sub_setup, rebuild_sub_teardown},
 	{"REBUILD28: rebuild kill rank during rebuild",
 	 rebuild_kill_rank_during_rebuild, rebuild_sub_setup,
+	 rebuild_sub_teardown},
+	{"REBUILD29: rebuild kill PS leader during rebuild",
+	 rebuild_kill_PS_leader_during_rebuild, rebuild_sub_setup,
 	 rebuild_sub_teardown},
 };
 

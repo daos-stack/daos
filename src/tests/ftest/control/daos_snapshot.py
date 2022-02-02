@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -126,7 +126,7 @@ class DaosSnapshotTest(TestWithServers):
 
         Use Cases:
             See class description.
-        
+
         :avocado: tags=all,small,container,full_regression,daos_snapshot_range
         """
         self.prepare_pool_container()

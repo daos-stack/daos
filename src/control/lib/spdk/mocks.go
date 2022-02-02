@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,13 +54,6 @@ type MockNvmeCfg struct {
 // MockNvmeImpl is an implementation of the Nvme interface.
 type MockNvmeImpl struct {
 	Cfg MockNvmeCfg
-}
-
-// CleanLockfiles removes SPDK lockfiles after binding operations.
-func (n *MockNvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
-	log.Debugf("mock clean lockfiles pci addresses: %v", pciAddrs)
-
-	return nil
 }
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,

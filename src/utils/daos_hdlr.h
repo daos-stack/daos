@@ -1,11 +1,13 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_HDLR_H__
 #define __DAOS_HDLR_H__
+
+#include <daos_fs.h>
 
 enum fs_op {
 	FS_COPY,
@@ -89,6 +91,7 @@ struct cmd_args_s {
 	char			*path;		/* --path cont namespace */
 	char			*src;		/* --src path for fs copy */
 	char			*dst;		/* --dst path for fs copy */
+	char			*preserve_props; /* --path to metadata file */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
 	uint32_t		mode;		/* --posix consistency mode */
@@ -109,6 +112,10 @@ struct cmd_args_s {
 	/* DFS related */
 	char			*dfs_prefix;	/* --dfs-prefix name */
 	char			*dfs_path;	/* --dfs-path file/dir */
+
+	/* autotest related */
+	bool			skip_big;	/* skip big tests */
+	int			deadline_limit;	/* deadline limit for tests */
 
 	FILE			*ostream;	/* help_hdlr() stream */
 	char			*outfile;	/* --outfile path */
@@ -190,28 +197,29 @@ int pool_autotest_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  */
 
+/* general datamover operations */
+void dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers, size_t **_sizes);
+int dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char ***_names,
+			  void ***_buffers, size_t **_sizes);
+int dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_props,
+			  bool get_oid, bool get_label, bool get_roots);
+int dm_copy_usr_attrs(struct cmd_args_s *ap, daos_handle_t src_coh, daos_handle_t dst_coh);
+
 /* filesystem operations */
 int fs_copy_hdlr(struct cmd_args_s *ap);
 int fs_dfs_hdlr(struct cmd_args_s *ap);
+int fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs);
 int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
 
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
-int cont_query_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
-int cont_destroy_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
-int cont_get_prop_hdlr(struct cmd_args_s *ap);
 int cont_set_prop_hdlr(struct cmd_args_s *ap);
-int cont_list_attrs_hdlr(struct cmd_args_s *ap);
-int cont_set_attr_hdlr(struct cmd_args_s *ap);
-int cont_get_attr_hdlr(struct cmd_args_s *ap);
-int cont_del_attr_hdlr(struct cmd_args_s *ap);
 int cont_create_snap_hdlr(struct cmd_args_s *ap);
 int cont_list_snaps_hdlr(struct cmd_args_s *ap);
 int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
-int cont_get_acl_hdlr(struct cmd_args_s *ap);
 int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
 int cont_update_acl_hdlr(struct cmd_args_s *ap);
 int cont_delete_acl_hdlr(struct cmd_args_s *ap);

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -136,6 +136,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 			break
 		}
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{})
+	case *control.SystemCleanupReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemCleanupResp{})
 	case *control.LeaderQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})
 	case *control.ListPoolsReq:
@@ -189,7 +191,6 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 				testExpectedError(t, st.expectedErr, err)
 				return
 			}
-
 			if diff := cmp.Diff(st.expectedCalls, strings.Join(conn.called, " ")); diff != "" {
 				t.Fatalf("unexpected function calls (-want, +got):\n%s\n", diff)
 			}

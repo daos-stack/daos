@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -42,7 +42,7 @@ func FaultBadPCIAddr(pciAddr string) *fault.Fault {
 }
 
 // FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
-// match a given PCI address.
+// match expected PCI addresses.
 func FaultBdevNotFound(bdevs ...string) *fault.Fault {
 	return bdevFault(
 		code.BdevNotFound,

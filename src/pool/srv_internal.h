@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,6 +54,7 @@ struct pool_iv_prop {
 	char		pip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
+	char		pip_policy_str[DAOS_PROP_POLICYSTR_MAX_LEN];
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
 	uint64_t	pip_reclaim;
@@ -191,6 +192,7 @@ void ds_stop_scrubbing_ult(struct ds_pool_child *child);
  */
 void *ds_pool_metrics_alloc(const char *path, int tgt_id);
 void ds_pool_metrics_free(void *data);
+int ds_pool_metrics_count(void);
 int ds_pool_metrics_start(struct ds_pool *pool);
 void ds_pool_metrics_stop(struct ds_pool *pool);
 

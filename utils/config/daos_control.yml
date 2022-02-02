@@ -12,7 +12,7 @@
 # Specify the associated DAOS systems.
 # Name must match name specified in the daos_server.yml file on the server.
 #
-# NOTE: Changing the name is not supported in DAOS 1.0, it must be daos_server
+# NOTE: Changing the name is not supported yet, it must be daos_server
 #
 # default: daos_server
 #name: daos_server

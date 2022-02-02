@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -172,7 +172,7 @@ class MetaOverhead():
 
     def init_dkeys(self, oid, obj_spec, num_of_targets):
         """Handle akey specification"""
-        start_pool = random.randint(0, self.num_pools - 1)
+        start_pool = random.randint(0, self.num_pools - 1) #nosec
         pool_idx = start_pool
 
         for dkey_spec in obj_spec.get("dkeys"):

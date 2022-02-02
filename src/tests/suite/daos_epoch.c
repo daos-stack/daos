@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,17 +101,22 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 }
 
 static int
-cont_create(test_arg_t *arg, uuid_t uuid)
+cont_create(test_arg_t *arg, uuid_t *uuid)
 {
-	uuid_generate(uuid);
-	print_message("creating container "DF_UUIDF"\n", DP_UUID(uuid));
-	return daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+	int rc;
+
+	rc = daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+	print_message("created container "DF_UUIDF"\n", DP_UUID(*uuid));
+	return rc;
 }
 
 static int
 cont_destroy(test_arg_t *arg, const uuid_t uuid)
 {
+	char str[37];
+
 	print_message("destroying container "DF_UUID"\n", DP_UUID(uuid));
+	uuid_unparse(uuid, str);
 	return daos_cont_destroy(arg->pool.poh, uuid, 1, NULL);
 }
 
@@ -119,9 +124,11 @@ static int
 cont_open(test_arg_t *arg, const uuid_t uuid, unsigned int flags,
 	  daos_handle_t *coh)
 {
+	char	str[37];
 	print_message("opening container "DF_UUIDF" (flags=%X)\n",
 		      DP_UUID(uuid), flags);
-	return daos_cont_open(arg->pool.poh, uuid, flags, coh, &arg->co_info,
+	uuid_unparse(uuid, str);
+	return daos_cont_open(arg->pool.poh, str, flags, coh, &arg->co_info,
 			      NULL);
 }
 
@@ -143,7 +150,7 @@ test_epoch_aggregate(void **argp)
 	daos_epoch_t		epoch, epc_hi = 0;
 	int			i;
 
-	MUST(cont_create(arg, cont_uuid));
+	MUST(cont_create(arg, &cont_uuid));
 	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
@@ -212,7 +219,7 @@ test_snapshots(void **argp)
 	daos_cont_info_t	cinfo;
 	int			rc;
 
-	MUST(cont_create(arg, co_uuid));
+	MUST(cont_create(arg, &co_uuid));
 	print_message("Initial container open after create, nsnapshots=0 lsnapshot=0\n");
 	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
 	assert_int_equal(arg->co_info.ci_nsnapshots, 0);

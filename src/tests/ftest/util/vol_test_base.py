@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2020-2021 Intel Corporation.
+(C) Copyright 2020-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -42,7 +42,7 @@ class VolTestBase(DfuseTestBase):
         # Assign the test to run
         self.job_manager.job = ExecutableCommand(
             namespace=None, command=testname, path=test_repo,
-            check_results=["FAILED"])
+            check_results=["FAILED", "stderr"])
 
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(self.pool.uuid)

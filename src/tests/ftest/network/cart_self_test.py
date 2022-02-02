@@ -1,18 +1,15 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
-
 from apricot import TestWithServers
 
 from command_utils_base import \
     EnvironmentVariables, FormattedParameter, CommandFailure
 from command_utils import ExecutableCommand
 from job_manager_utils import Orterun
-from general_utils import get_log_file
 
 class CartSelfTest(TestWithServers):
     """Runs a few variations of CaRT self-test.
@@ -45,7 +42,8 @@ class CartSelfTest(TestWithServers):
             self.max_inflight_rpcs = FormattedParameter(max_rpc_opt)
 
             self.repetitions = FormattedParameter("--repetitions {0}")
-            self.attach_info = FormattedParameter("--path {0}")
+            self.use_daos_agent_env = FormattedParameter(
+                "--use-daos-agent-env", True)
 
     def __init__(self, *args, **kwargs):
         """Initialize a CartSelfTest object."""
@@ -78,16 +76,12 @@ class CartSelfTest(TestWithServers):
             self.server_managers[0].get_config_value("provider")
         self.cart_env["OFI_INTERFACE"] = \
             self.server_managers[0].get_config_value("fabric_iface")
+        self.cart_env["DAOS_AGENT_DRPC_DIR"] = "/var/run/daos_agent/"
+
         self.server_managers[0].manager.assign_environment(self.cart_env, True)
 
         # Start the daos server
         self.start_server_managers()
-
-        # Generate a uri file using daos_agent dump-attachinfo
-        attachinfo_file = "{}.attach_info_tmp".format(self.server_group)
-        self.uri_file = get_log_file(attachinfo_file)
-        agent_cmd = self.agent_managers[0].manager.job
-        agent_cmd.dump_attachinfo(self.uri_file)
 
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.
@@ -102,8 +96,6 @@ class CartSelfTest(TestWithServers):
         # Get the self_test command line parameters
         orterun.job.get_params(self)
         orterun.job.group_name.update(self.server_group, "group_name")
-        orterun.job.attach_info.update(
-            os.path.dirname(self.uri_file), "attach_info")
 
         # Setup the environment variables for the self_test orterun command
         orterun.assign_environment(self.cart_env)

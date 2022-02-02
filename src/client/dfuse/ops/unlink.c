@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,7 +54,7 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 	 * for cases where the kernel knows which file it deleted.
 	 */
 	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
-		(strncmp(ie->ie_name, name, NAME_MAX + 1) != 0)) {
+		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
 		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx.'%s'",
 				ie->ie_parent, ie->ie_name);
 

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -87,9 +87,7 @@ class MpioUtils():
 
         # environment variables only to be set on client node
         env = EnvironmentVariables()
-        env["DAOS_POOL"] = "{}".format(pool_uuid)
-        env["DAOS_CONT"] = "{}".format(cont_uuid)
-        env["DAOS_BYPASS_DUNS"] = "1"
+        env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(pool_uuid, cont_uuid)
         mpirun = os.path.join(self.mpichinstall, "bin", "mpirun")
 
         executables = {
@@ -117,10 +115,10 @@ class MpioUtils():
         commands = []
         if test_name == "romio":
             commands.append(
-                "{} -fname=daos:test1 -subset".format(
+                "{} -fname=daos:/test1 -subset".format(
                     executables[test_name][0]))
         elif test_name == "llnl":
-            env["MPIO_USER_PATH"] = "daos:"
+            env["MPIO_USER_PATH"] = "daos:/"
             for exe in executables[test_name]:
                 commands.append(
                     "{} -np {} --hostfile {} {} 1".format(

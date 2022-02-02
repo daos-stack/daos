@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -72,7 +72,7 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 	}
 
 	rankMsg := ""
-	if sb := ei.getSuperblock(); sb != nil {
+	if sb := ei.getSuperblock(); sb != nil && sb.Rank != nil {
 		rankMsg = fmt.Sprintf(" (rank %s)", sb.Rank)
 	}
 
@@ -165,7 +165,7 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	dresp, err := ei.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "GetBioHealth dRPC call")
 	}
 
 	resp := &ctlpb.BioHealthResp{}
@@ -174,7 +174,7 @@ func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealth
 	}
 
 	if resp.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "getBioHealth failed")
+		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "GetBioHealth response status")
 	}
 
 	return resp, nil
@@ -198,13 +198,66 @@ func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 	return resp, nil
 }
 
-// updateInUseBdevs updates-in-place the input list of controllers with
-// new NVMe health stats and SMD metadata info.
+func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevResp_Device) (*storage.SmdDevice, error) {
+	smdDev := new(storage.SmdDevice)
+	if err := convert.Types(smd, smdDev); err != nil {
+		return nil, errors.Wrap(err, "convert smd")
+	}
+
+	engineRank, err := ei.GetRank()
+	if err != nil {
+		return nil, errors.Wrapf(err, "get rank")
+	}
+
+	smdDev.Rank = engineRank
+	smdDev.TrAddr = smd.GetTrAddr()
+
+	return smdDev, nil
+}
+
+func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdDevice, ctrlr *storage.NvmeController) (bool, error) {
+	msg := fmt.Sprintf("instance %d: smd %s with transport address %s", ei.Index(),
+		smdDev.UUID, smdDev.TrAddr)
+
+	pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
+	if err != nil {
+		status, ok := errors.Cause(err).(drpc.DaosStatus)
+
+		// if error indicates non-existent health and smd has abnormal state then return
+		if ok && status == drpc.DaosNonexistant && !smdDev.NvmeState.IsNormal() {
+			ei.log.Debugf("%s: health stats not found, device states: %q", msg,
+				smdDev.NvmeState.String())
+
+			return false, nil
+		}
+
+		return false, errors.Wrapf(err, "instance %d, ctrlr %s", ei.Index(), smdDev.TrAddr)
+	}
+
+	// populate space usage for each smd device from health stats
+	smdDev.TotalBytes = pbStats.TotalBytes
+	smdDev.AvailBytes = pbStats.AvailBytes
+	msg = fmt.Sprintf("%s: smd space usage updated", msg)
+
+	if ctrlr == nil {
+		ei.log.Debug(msg)
+		return false, nil
+	}
+
+	ctrlr.HealthStats = new(storage.NvmeHealth)
+	if err := convert.Types(pbStats, ctrlr.HealthStats); err != nil {
+		return false, errors.Wrap(err, "convert health stats")
+	}
+
+	ei.log.Debugf("%s: health stats updated", msg)
+	return true, nil
+}
+
+// updateInUseBdevs updates-in-place the input list of controllers with new NVMe health stats and
+// SMD metadata info.
 //
-// Query each SmdDevice on each I/O Engine instance for health stats,
-// map input controllers to their concatenated model+serial keys then
-// retrieve metadata and health stats for each SMD device (blobstore) on
-// a given I/O Engine instance. Update input map with new stats/smd info.
+// Query each SmdDevice on each I/O Engine instance for health stats and update existing controller
+// data in ctrlrMap using PCI address key.
 func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
 	smdDevs, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
@@ -212,52 +265,36 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 	}
 
 	hasUpdatedHealth := make(map[string]bool)
-	for _, dev := range smdDevs.Devices {
-		msg := fmt.Sprintf("instance %d: smd %s with transport address %s",
-			ei.Index(), dev.GetUuid(), dev.GetTrAddr())
-
-		ctrlr, exists := ctrlrMap[dev.GetTrAddr()]
+	for _, smd := range smdDevs.Devices {
+		ctrlr, exists := ctrlrMap[smd.GetTrAddr()]
 		if !exists {
-			return errors.Errorf("%s: didn't match any known controllers", msg)
+			return errors.Errorf("instance %d: smd %s: unknown controller %s",
+				ei.Index(), smd.GetUuid(), smd.GetTrAddr())
 		}
 
-		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-			DevUuid: dev.GetUuid(),
-		})
+		smdDev, err := ei.getSmdDetails(smd)
 		if err != nil {
-			return errors.Wrapf(err, "instance %d getBioHealth()", ei.Index())
+			return errors.Wrapf(err, "collect smd info for ctrlr %s", ctrlr.PciAddr)
 		}
 
-		health := new(storage.NvmeHealth)
-		if err := convert.Types(pbStats, health); err != nil {
-			return errors.Wrapf(err, msg)
-		}
-
-		// multiple updates for the same key expected when
-		// more than one controller namespaces (and resident
-		// blobstores) exist, stats will be the same for each
+		// multiple updates for the same key expected when more than one controller
+		// namespaces (and resident blobstores) exist, stats will be the same for each
+		// so only pass valid ctrlr reference when stats haven't yet been updated
+		var ctrlrRef *storage.NvmeController
 		if _, already := hasUpdatedHealth[ctrlr.PciAddr]; !already {
-			ctrlr.HealthStats = health
-			msg = fmt.Sprintf("%s: health stats updated", msg)
+			ctrlrRef = ctrlr
+		}
+
+		ctrlrUpdated, err := ei.addBdevStats(ctx, smdDev, ctrlrRef)
+		if err != nil {
+			return err
+		}
+
+		if ctrlrUpdated {
 			hasUpdatedHealth[ctrlr.PciAddr] = true
 		}
 
-		smdDev := new(storage.SmdDevice)
-		if err := convert.Types(dev, smdDev); err != nil {
-			return errors.Wrapf(err, "convert smd for ctrlr %s", ctrlr.PciAddr)
-		}
-		engineRank, err := ei.GetRank()
-		if err != nil {
-			return errors.Wrapf(err, "get rank")
-		}
-		smdDev.Rank = engineRank
-		smdDev.TrAddr = dev.GetTrAddr()
-		// space utilization stats for each smd device
-		smdDev.TotalBytes = pbStats.TotalBytes
-		smdDev.AvailBytes = pbStats.AvailBytes
-
 		ctrlr.UpdateSmd(smdDev)
-		ei.log.Debugf("%s: smd usage updated", msg)
 	}
 
 	return nil

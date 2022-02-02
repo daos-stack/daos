@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -774,6 +774,9 @@ process_ext:
 			set_visibility(this_ent, EVT_COVERED);
 			evt_ent_addr_update(tcx, temp_ent,
 					    evt_extent_width(this_ext));
+			temp = cur_update;
+			cur_update = cur_update->next;
+			d_list_del(temp);
 			/** Leave marking it covered until processed */
 			cur_update = evt_insert_sorted(temp_ent,
 						    to_process,
@@ -791,10 +794,12 @@ process_ext:
 
 static int
 evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
-		 struct evt_entry_array *ent_array, int *num_visible)
+		 struct evt_entry_array *ent_array, int *num_visible,
+		 bool removals_only)
 {
 	struct evt_extent	*this_ext;
 	struct evt_extent	*next_ext;
+	struct evt_list_entry	*le;
 	struct evt_entry	*this_ent;
 	struct evt_entry	*next_ent;
 	struct evt_entry	*temp_ent;
@@ -841,6 +846,18 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 
 	if (d_list_empty(&covered))
 		return 0;
+
+	if (removals_only) {
+		/** We just want to see records not covered by a removal.  At this point,
+		 *  every record remaining in the list satisfies this condition so mark them all
+		 *  visible for sorting.
+		 */
+		d_list_for_each_entry(le, &covered, le_link) {
+			this_ent = &le->le_ent;
+			evt_mark_visible(this_ent, false, num_visible);
+		}
+		return 0;
+	}
 
 	/* Now uncover entries */
 	current = covered.next;
@@ -983,8 +1000,8 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		      evt_ent_list_cmp);
 
 		/* Now separate entries into covered and visible */
-		rc = evt_find_visible(tcx, filter, ent_array, &num_visible);
-
+		rc = evt_find_visible(tcx, filter, ent_array, &num_visible,
+				      (flags & EVT_ITER_REMOVALS) != 0);
 		if (rc != 0) {
 			if (rc == -DER_AGAIN)
 				continue; /* List reallocated, start over */
@@ -1000,7 +1017,7 @@ re_sort:
 		total = ent_array->ea_ent_nr;
 		compar = evt_ent_list_cmp;
 	} else {
-		D_ASSERT(flags & EVT_VISIBLE);
+		D_ASSERT(flags & (EVT_ITER_VISIBLE | EVT_ITER_REMOVALS));
 		compar = evt_ent_list_cmp_visible;
 		total = num_visible;
 	}
@@ -1216,7 +1233,7 @@ evt_desc_log_status(struct evt_context *tcx, daos_epoch_t epoch,
 	}
 }
 
-int
+static int
 evt_desc_log_add(struct evt_context *tcx, struct evt_desc *desc)
 {
 	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
@@ -2525,9 +2542,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * properly.
 				 */
 				if (range_overlap != RT_OVERLAP_SAME) {
-					if (rect->rc_minor_epc ==
-					    EVT_MINOR_EPC_MAX)
-						break; /* Need to adjust it */
 					D_ERROR("Same epoch partial "
 						"overwrite not supported:"
 						DF_RECT" overlaps with "DF_RECT
@@ -2665,8 +2679,9 @@ evt_find(daos_handle_t toh, const struct evt_filter *filter,
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
 				filter, &rect, ent_array);
+
 	if (rc == 0)
-		rc = evt_ent_array_sort(tcx, ent_array, filter, EVT_VISIBLE);
+		rc = evt_ent_array_sort(tcx, ent_array, filter, EVT_ITER_VISIBLE);
 
 	return rc;
 }
@@ -2772,7 +2787,7 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	rc = 0; /* Assume there is no data */
 	evt_ent_array_for_each(ent, tcx->tc_iter.it_entries) {
 		if (ent->en_minor_epc != EVT_MINOR_EPC_MAX) {
-			D_DEBUG(DB_IO, "Found "DF_ENT", stopping search\n", DP_ENT(ent));
+			D_INFO("Found orphaned extent "DF_ENT"\n", DP_ENT(ent));
 			rc = 1;
 			break;
 		}
@@ -2780,7 +2795,6 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	}
 out:
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
-	evt_tcx_decref(tcx); /* -1 for open */
 	return rc;
 }
 
@@ -3637,26 +3651,19 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	if (rc != 0)
 		goto done;
 
+	rc = evt_ent_array_sort(tcx, ent_array, &filter, EVT_ITER_REMOVALS);
+	if (rc != 0)
+		goto done;
+
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
 		goto done;
 
 	evt_ent_array_for_each(ent, ent_array) {
-		if (ent->en_minor_epc == EVT_MINOR_EPC_MAX)
-			continue; /* Skip existing removal records */
-		entry.ei_rect.rc_ex = ent->en_ext;
+		D_ASSERT(ent->en_minor_epc != EVT_MINOR_EPC_MAX);
+		entry.ei_rect.rc_ex = ent->en_sel_ext;
 		entry.ei_bound = entry.ei_rect.rc_epc = ent->en_epoch;
 		entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
-
-		/** One could make the case for removal for intact extents here but it has the
-		 *  potential for messing with aggregation's implicit assumption that it is the
-		 *  remover of extents.  If the extent is only partially covered, we do need to
-		 *  adjust the bounds before inserting the removal record.
-		 */
-		if (ent->en_ext.ex_lo < ext->ex_lo)
-			entry.ei_rect.rc_ex.ex_lo = ext->ex_lo;
-		if (ent->en_ext.ex_hi > ext->ex_hi)
-			entry.ei_rect.rc_ex.ex_hi = ext->ex_hi;
 
 		D_DEBUG(DB_IO, "Insert removal record "DF_RECT"\n", DP_RECT(&entry.ei_rect));
 		BIO_ADDR_SET_HOLE(&entry.ei_addr);

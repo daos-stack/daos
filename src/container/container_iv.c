@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,7 +49,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 	int		 rc;
 
 	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL, &root_hdl);
+	rc = dbtree_create(DBTREE_CLASS_UV, 0, 4, &uma, NULL, &root_hdl);
 	if (rc != 0) {
 		D_ERROR("failed to create tree: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -776,13 +776,16 @@ retry:
 		D_GOTO(free, rc = 0);
 	}
 
-	D_ALLOC(*snapshots,
-	      sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
-	if (*snapshots == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
+	if (snapshots != NULL) {
+		D_ALLOC(*snapshots,
+		      sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
+		if (*snapshots == NULL)
+			D_GOTO(free, rc = -DER_NOMEM);
 
-	memcpy(*snapshots, iv_entry->iv_snap.snaps,
-	       sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
+		memcpy(*snapshots, iv_entry->iv_snap.snaps,
+		       sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
+	}
+
 	*snap_count = iv_entry->iv_snap.snap_cnt;
 
 free:
@@ -1321,15 +1324,80 @@ out:
 	return rc;
 }
 
+struct iv_snapshot_ult_arg {
+	struct ds_iv_ns *ns;
+	uuid_t		cont_uuid;
+	ABT_eventual	eventual;
+	int		snapshot_cnt;
+	uint64_t	**snapshots;
+};
+
+static void
+cont_iv_snapshot_fetch_ult(void *data)
+{
+	struct iv_snapshot_ult_arg	*arg = data;
+	int				rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	rc = cont_iv_snapshots_fetch(arg->ns, arg->cont_uuid, arg->snapshots,
+				     &arg->snapshot_cnt);
+	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
+}
+
+int
+cont_iv_snapshot_fetch_non_sys(struct ds_iv_ns *ns, uuid_t cont_uuid,
+			       uint64_t **snapshots, int *snapshot_cnt)
+{
+	struct iv_snapshot_ult_arg	arg;
+	ABT_eventual		eventual;
+	int			*status;
+	int			rc;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	arg.ns = ns;
+	uuid_copy(arg.cont_uuid, cont_uuid);
+	arg.snapshots = snapshots;
+	arg.snapshot_cnt = 0;
+	arg.eventual = eventual;
+	/* XXX: EC aggregation periodically fetches cont prop */
+	rc = dss_ult_periodic(cont_iv_snapshot_fetch_ult, &arg, DSS_XS_SYS, 0,
+			      DSS_DEEP_STACK_SZ, NULL);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out, rc = dss_abterr2der(rc));
+	if (*status != 0)
+		D_GOTO(out, rc = *status);
+
+	if (snapshots != NULL)
+		snapshots = arg.snapshots;
+
+	if (snapshot_cnt)
+		*snapshot_cnt = arg.snapshot_cnt;
+out:
+	ABT_eventual_free(&eventual);
+	return rc;
+}
+
 /*
  * exported APIs
  */
 int
 ds_cont_fetch_snaps(struct ds_iv_ns *ns, uuid_t cont_uuid,
-		    uint64_t **snapshots, int *snap_count)
+		    uint64_t **snapshots, int *snapshot_count)
 {
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	return cont_iv_snapshots_fetch(ns, cont_uuid, snapshots, snap_count);
+	if (ns == NULL || uuid_is_null(cont_uuid))
+		return -DER_INVAL;
+
+	if (dss_get_module_info()->dmi_xs_id == 0)
+		return cont_iv_snapshots_fetch(ns, cont_uuid, snapshots,
+					       snapshot_count);
+	return cont_iv_snapshot_fetch_non_sys(ns, cont_uuid, snapshots, snapshot_count);
 }
 
 int

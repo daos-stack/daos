@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -326,8 +326,12 @@ enum {
 	VOS_IT_PUNCHED		= (1 << 6),
 	/** Cleanup stale DTX entry. */
 	VOS_IT_CLEANUP_DTX	= (1 << 7),
+	/** Cleanup stale DTX entry. */
+	VOS_IT_FOR_DISCARD	= (1 << 8),
+	/** Entry is not committed */
+	VOS_IT_UNCOMMITTED	= (1 << 9),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 8) - 1,
+	VOS_IT_MASK		= (1 << 10) - 1,
 };
 
 /**

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -123,22 +123,43 @@ func (m MgmtMethod) ID() int32 {
 
 func (m MgmtMethod) String() string {
 	if s, ok := map[MgmtMethod]string{
-		MethodPrepShutdown:    "PrepShutdown",
-		MethodPingRank:        "Ping",
-		MethodSetRank:         "SetRank",
-		MethodSetLogMasks:     "SetLogMasks",
-		MethodSetUp:           "Setup",
-		MethodGroupUpdate:     "GroupUpdate",
-		MethodPoolCreate:      "PoolCreate",
-		MethodPoolDestroy:     "PoolDestroy",
-		MethodPoolEvict:       "PoolEvict",
-		MethodPoolExclude:     "PoolExclude",
-		MethodPoolDrain:       "PoolDrain",
-		MethodPoolExtend:      "PoolExtend",
-		MethodPoolReintegrate: "PoolReintegrate",
-		MethodPoolQuery:       "PoolQuery",
-		MethodPoolSetProp:     "PoolSetProp",
-		MethodListPools:       "ListPools",
+		MethodPrepShutdown:         "PrepShutdown",
+		MethodPingRank:             "PingRank",
+		MethodSetRank:              "SetRank",
+		MethodSetLogMasks:          "SetLogMasks",
+		MethodCreateMS:             "CreateMS",
+		MethodStartMS:              "StartMS",
+		MethodJoin:                 "Join",
+		MethodGetAttachInfo:        "GetAttachInfo",
+		MethodPoolCreate:           "PoolCreate",
+		MethodPoolDestroy:          "PoolDestroy",
+		MethodPoolEvict:            "PoolEvict",
+		MethodPoolExclude:          "PoolExclude",
+		MethodPoolDrain:            "PoolDrain",
+		MethodPoolExtend:           "PoolExtend",
+		MethodPoolReintegrate:      "PoolReintegrate",
+		MethodBioHealth:            "BioHealth",
+		MethodSetUp:                "SetUp",
+		MethodSmdDevs:              "SmdDevs",
+		MethodSmdPools:             "SmdPools",
+		MethodPoolGetACL:           "PoolGetACL",
+		MethodListPools:            "ListPools",
+		MethodPoolOverwriteACL:     "PoolOverwriteACL",
+		MethodPoolUpdateACL:        "PoolUpdateACL",
+		MethodPoolDeleteACL:        "PoolDeleteACL",
+		MethodDevStateQuery:        "DevStateQuery",
+		MethodSetFaultyState:       "SetFaultyState",
+		MethodReplaceStorage:       "ReplaceStorage",
+		MethodListContainers:       "ListContainers",
+		MethodPoolQuery:            "PoolQuery",
+		MethodPoolSetProp:          "PoolSetProp",
+		MethodContSetOwner:         "ContSetOwner",
+		MethodGroupUpdate:          "GroupUpdate",
+		MethodNotifyPoolConnect:    "NotifyPoolConnect",
+		MethodNotifyPoolDisconnect: "NotifyPoolDisconnect",
+		MethodNotifyExit:           "NotifyExit",
+		MethodIdentifyStorage:      "IdentifyStorage",
+		MethodPoolGetProp:          "PoolGetProp",
 	}[m]; ok {
 		return s
 	}

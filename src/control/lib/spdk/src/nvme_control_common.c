@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2019-2021 Intel Corporation.
+* (C) Copyright 2019-2022 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
 */
@@ -360,7 +360,7 @@ populate_dev_health(struct nvme_stats *stats,
 				SPDK_NVME_INTEL_SMART_MEDIA_WEAR) {
 			atb = isp->attributes[i];
 			stats->media_wear_raw =
-				extend_to_uint64(atb.raw_value, 6) >> 10;
+					extend_to_uint64(atb.raw_value, 6);
 		}
 		if (isp->attributes[i].code ==
 				SPDK_NVME_INTEL_SMART_HOST_READ_PERCENTAGE) {
@@ -495,7 +495,8 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 fail:
 	ret->rc = rc;
 	if (ret->rc == 0)
-		ret->rc = -1;
+		/* Catch unexpected failures */
+		ret->rc = -EINVAL;
 	if (ctrlr_tmp)
 		free(ctrlr_tmp);
 	clean_ret(ret);

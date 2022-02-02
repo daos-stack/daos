@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -109,6 +109,10 @@ func (cmd *poolBaseCmd) disconnectPool() {
 	rc := C.daos_pool_disconnect(cmd.cPoolHandle, nil)
 	if rc == -C.DER_NOMEM {
 		rc = C.daos_pool_disconnect(cmd.cPoolHandle, nil)
+		// DAOS-8866, daos_pool_disconnect() might have failed, but worked anyway.
+		if rc == -C.DER_NO_HDL {
+			rc = -C.DER_SUCCESS
+		}
 	}
 
 	if err := daosError(rc); err != nil {
@@ -292,7 +296,10 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attrs.asMap(), nil)
+		if cmd.Verbose {
+			return cmd.outputJSON(attrs.asMap(), nil)
+		}
+		return cmd.outputJSON(attrs.asList(), nil)
 	}
 
 	var bld strings.Builder
@@ -393,6 +400,9 @@ func (cmd *poolDelAttrCmd) Execute(_ []string) error {
 
 type poolAutoTestCmd struct {
 	poolBaseCmd
+
+	SkipBig       C.bool `long:"skip-big" short:"S" description:"skip big tests"`
+	DeadlineLimit C.int  `long:"deadline-limit" short:"D" description:"deadline limit for test (seconds)"`
 }
 
 func (cmd *poolAutoTestCmd) Execute(_ []string) error {
@@ -419,6 +429,10 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
+
+	ap.skip_big = C.bool(cmd.SkipBig)
+
+	ap.deadline_limit = C.int(cmd.DeadlineLimit)
 
 	rc := C.pool_autotest_hdlr(ap)
 	if err := daosError(rc); err != nil {

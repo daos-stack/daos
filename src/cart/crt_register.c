@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,7 +80,8 @@ crt_opc_map_L3_destroy(struct crt_opc_map_L3 *L3_entry)
 
 	L3_entry->L3_num_slots_total = 0;
 	L3_entry->L3_num_slots_used = 0;
-	D_FREE(L3_entry->L3_map);
+	if (L3_entry->L3_map)
+		D_FREE(L3_entry->L3_map);
 }
 
 static void
@@ -97,7 +98,8 @@ crt_opc_map_L2_destroy(struct crt_opc_map_L2 *L2_entry)
 	L2_entry->L2_num_slots_total = 0;
 	L2_entry->L2_num_slots_used = 0;
 
-	D_FREE(L2_entry->L2_map);
+	if (L2_entry->L2_map)
+		D_FREE(L2_entry->L2_map);
 }
 
 void

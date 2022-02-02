@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -46,6 +46,8 @@ unsigned int bio_chk_cnt_max;
 static unsigned int bio_chk_cnt_init;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
+/* Whether SPDK inited */
+bool bio_spdk_inited;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -79,13 +81,20 @@ bio_spdk_env_init(void)
 	struct spdk_env_opts	 opts;
 	int			 rc;
 
-	D_ASSERT(nvme_glb.bd_nvme_conf != NULL);
-
 	/* Only print error and more severe to stderr. */
 	spdk_log_set_print_level(SPDK_LOG_ERROR);
 
 	spdk_env_opts_init(&opts);
-	opts.name = "daos";
+	opts.name = "daos_engine";
+
+	if (bio_nvme_configured()) {
+		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
+		if (rc != 0) {
+			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
+				DP_RC(rc));
+			goto out;
+		}
+	}
 
 	/*
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
@@ -99,11 +108,19 @@ bio_spdk_env_init(void)
 
 	opts.env_context = (char *)dpdk_cli_override_opts;
 
+	if (bio_nvme_configured()) {
+		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
+		if (rc != 0) {
+			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
+	}
+
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
 	spdk_unaffinitize_thread();
@@ -113,9 +130,10 @@ bio_spdk_env_init(void)
 		rc = -DER_INVAL;
 		D_ERROR("Failed to init SPDK thread lib, "DF_RC"\n", DP_RC(rc));
 		spdk_env_fini();
-		return rc;
 	}
-
+out:
+	if (opts.pci_allowed != NULL)
+		D_FREE(opts.pci_allowed);
 	return rc;
 }
 
@@ -132,13 +150,23 @@ bypass_health_collect()
 }
 
 int
-bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-	      int hugepage_size, int tgt_nr, struct sys_db *db,
-	      bool bypass_health_collect)
+bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
+	      unsigned int hugepage_size, unsigned int tgt_nr,
+	      struct sys_db *db, bool bypass_health_collect)
 {
 	char		*env;
 	int		 rc, fd;
 	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
+
+	if (tgt_nr <= 0) {
+		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
+		return -DER_INVAL;
+	}
+
+	if (nvme_conf && strlen(nvme_conf) > 0 && mem_size == 0) {
+		D_ERROR("Hugepages must be configured when NVMe SSD is configured\n");
+		return -DER_INVAL;
+	}
 
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
@@ -164,22 +192,14 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
-	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
-		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
+	/* Hugepages disabled */
+	if (mem_size == 0) {
+		D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
+			bio_chk_cnt_max, size_mb);
+		D_INFO("Hugepages are not specified, skip NVMe setup.\n");
 		return 0;
 	}
 
-	fd = open(nvme_conf, O_RDONLY, 0600);
-	if (fd < 0) {
-		D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
-		       nvme_conf, DP_RC(daos_errno2der(errno)));
-		return 0;
-	}
-	close(fd);
-
-	D_ASSERT(tgt_nr > 0);
-	D_ASSERT(mem_size > 0);
-	D_ASSERT(hugepage_size > 0);
 	/*
 	 * Hugepages are not enough to sustain average I/O workload
 	 * (~1GB per xstream).
@@ -191,6 +211,16 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		return -DER_INVAL;
 	}
 
+	if (nvme_conf && strlen(nvme_conf) > 0) {
+		fd = open(nvme_conf, O_RDONLY, 0600);
+		if (fd < 0)
+			D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
+			       nvme_conf, DP_RC(daos_errno2der(errno)));
+		else
+			close(fd);
+	}
+
+	D_ASSERT(hugepage_size > 0);
 	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
 	       bio_chk_cnt_max, size_mb);
@@ -225,6 +255,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 		nvme_glb.bd_nvme_conf = NULL;
 		goto fini_smd;
 	}
+	bio_spdk_inited = true;
 
 	return 0;
 
@@ -241,7 +272,7 @@ free_mutex:
 static void
 bio_spdk_env_fini(void)
 {
-	if (nvme_glb.bd_nvme_conf != NULL) {
+	if (bio_spdk_inited) {
 		spdk_thread_lib_fini();
 		spdk_env_fini();
 	}
@@ -377,8 +408,7 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		if (timeout != 0) {
 			cur_time = daos_getmtime_coarse();
 
-			D_ASSERT(cur_time >= start_time);
-			if (cur_time - start_time > timeout)
+			if (cur_time > (start_time + timeout))
 				return -DER_TIMEDOUT;
 		}
 	}
@@ -1012,6 +1042,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	bool			 assigned = false;
 	int			 rc;
 
+	D_ASSERT(!ctxt->bxc_ready);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
@@ -1135,6 +1166,7 @@ retry:
 		rc = -DER_NOMEM;
 		goto out;
 	}
+	ctxt->bxc_ready = 1;
 
 out:
 	D_ASSERT(dev_info != NULL);
@@ -1158,6 +1190,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt == NULL)
 		return;
 
+	ctxt->bxc_ready = 0;
 	if (ctxt->bxc_io_channel != NULL) {
 		spdk_bs_free_io_channel(ctxt->bxc_io_channel);
 		ctxt->bxc_io_channel = NULL;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -128,10 +128,10 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 
 	rc = sem_init(&dtm->tm_finish, 0, 0);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = errno);
 	rc = D_MUTEX_INIT(&dtm->tm_lock, NULL);
 	if (rc != 0)
-		D_GOTO(out_sem, rc);
+		D_GOTO(out_sem, daos_der2errno(rc));
 
 	D_MUTEX_LOCK(&dtm->tm_lock);
 	for (i = 0 ; i < dfuse_info->di_thread_count ; i++) {

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,15 +35,15 @@
 extern "C" {
 #else
 #define d_is_uuid(var)								\
-	(__builtin_types_compatible_p(typeof(var), uuid_t) ||			\
-	 __builtin_types_compatible_p(typeof(var), unsigned char *) ||		\
-	 __builtin_types_compatible_p(typeof(var), const unsigned char *) ||	\
-	 __builtin_types_compatible_p(typeof(var), const uuid_t))
+	(__builtin_types_compatible_p(__typeof__(var), uuid_t) ||			\
+	 __builtin_types_compatible_p(__typeof__(var), unsigned char *) ||		\
+	 __builtin_types_compatible_p(__typeof__(var), const unsigned char *) ||	\
+	 __builtin_types_compatible_p(__typeof__(var), const uuid_t))
 #define d_is_string(var)						\
-	(__builtin_types_compatible_p(typeof(var), char *) ||		\
-	 __builtin_types_compatible_p(typeof(var), const char *) ||	\
-	 __builtin_types_compatible_p(typeof(var), const char []) ||	\
-	 __builtin_types_compatible_p(typeof(var), char []))
+	(__builtin_types_compatible_p(__typeof__(var), char *) ||		\
+	 __builtin_types_compatible_p(__typeof__(var), const char *) ||	\
+	 __builtin_types_compatible_p(__typeof__(var), const char []) ||	\
+	 __builtin_types_compatible_p(__typeof__(var), char []))
 #endif
 
 #if defined(__has_warning)

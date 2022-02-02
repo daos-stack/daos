@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2021 Intel Corporation.
+  (C) Copyright 2021-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,7 +27,7 @@ class HarnessBasicTest(Test):
 
         :avocado: tags=all
         :avocado: tags=hw,large,medium,ib2,small
-        :avocado: tags=harness,harness_basic_test,test_always_passes_hw
+        :avocado: tags=harness,harness_basic_test,test_always_passes,test_always_passes_hw
         :avocado: tags=always_passes
         """
         self.test_always_passes()

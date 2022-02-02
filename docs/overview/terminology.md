@@ -33,7 +33,7 @@
 |OS|Operating System|
 |PM|Persistent Memory|
 |[PMDK](https://pmem.io/pmdk/)|Persistent Memory Devevelopment Kit|
-|RAFT|Raft is a consensus algorithm used to distribute state transitions among DAOS server nodes.|
+|[RAFT](https://raft.github.io/)|Raft is a consensus algorithm used to distribute state transitions among DAOS server nodes.|
 |RAS|Reliability, Availability & Serviceability|
 |RDB|Replicated Database, containing pool metadata and maintained across DAOS servers using the Raft algorithm.|
 |RDMA/RMA|Remote (Direct) Memory Access|

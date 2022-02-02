@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,34 +55,6 @@ enum dtx_operation {
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
-/* The age unit is second. */
-
-/* If the DTX entries are not more than this count threshold,
- * then no need DTX aggregation.
- *
- * XXX: This threshold should consider the real SCM size. But
- *	it cannot be too small; otherwise, handing resent RPC
- *	make hit uncertain case and got failure -DER_EP_OLD.
- */
-#define DTX_AGG_THD_CNT_LO	((1 << 19) * 6)
-
-/* The count threshold for triggerring DTX aggregation. */
-#define DTX_AGG_THD_CNT_UP	((1 << 19) * 7)
-
-/* The time threshold for triggerring DTX aggregation. If the oldest
- * DTX in the DTX table exceeds such threshold, it will trigger DTX
- * aggregation locally.
- */
-#define DTX_AGG_THD_AGE_UP	210
-
-/* If DTX aggregation is triggered, then the DTXs with older ages than
- * this threshold will be aggregated.
- *
- * XXX: It cannot be too small; otherwise, handing resent RPC
- *	make hit uncertain case and got failure -DER_EP_OLD.
- */
-#define DTX_AGG_THD_AGE_LO	180
-
 /* The time threshold for triggerring DTX cleanup of stale entries.
  * If the oldest active DTX exceeds such threshold, it will trigger
  * DTX cleanup locally.
@@ -93,6 +65,50 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * older ages than this threshold will be cleanup.
  */
 #define DTX_CLEANUP_THD_AGE_LO	45
+
+/* The count threshold (per pool) for triggerring DTX aggregation. */
+#define DTX_AGG_THD_CNT_MAX	(1 << 24)
+#define DTX_AGG_THD_CNT_MIN	(1 << 20)
+#define DTX_AGG_THD_CNT_DEF	((1 << 19) * 7)
+
+/* If the total committed DTX entries count for the pool exceeds
+ * such threshold, it will trigger DTX aggregation locally.
+ *
+ * XXX: It is controlled via the environment "DTX_AGG_THD_CNT".
+ *	This threshold should consider the real SCM size. But
+ *	it cannot be too small; otherwise, handing resent RPC
+ *	make hit uncertain case and got failure -DER_EP_OLD.
+ */
+extern uint32_t dtx_agg_thd_cnt_up;
+
+/* If DTX aggregation is triggered, then current DTX aggregation
+ * will not stop until the committed DTX entries count for the
+ * pool down to such threshold.
+ */
+extern uint32_t dtx_agg_thd_cnt_lo;
+
+/* The age unit is second. */
+#define DTX_AGG_THD_AGE_MAX	1830
+#define DTX_AGG_THD_AGE_MIN	210
+#define DTX_AGG_THD_AGE_DEF	630
+
+/* The threshold for yield CPU when handle DTX RPC. */
+#define DTX_RPC_YIELD_THD	64
+
+/* The time threshold for triggerring DTX aggregation. If the oldest
+ * DTX in the DTX table exceeds such threshold, it will trigger DTX
+ * aggregation locally.
+ *
+ * XXX: It is controlled via the environment "DTX_AGG_THD_AGE".
+ *	It cannot be too small; otherwise, handing resent RPC
+ *	make hit uncertain case and got failure -DER_EP_OLD.
+ */
+extern uint32_t dtx_agg_thd_age_up;
+
+/* If DTX aggregation is triggered, then the DTXs with older ages than
+ * this threshold will be aggregated.
+ */
+extern uint32_t dtx_agg_thd_age_lo;
 
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
@@ -137,7 +153,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count, bool helper);
+	       struct dtx_cos_key *dcks, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 
@@ -150,10 +166,9 @@ int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,
 	DSHR_NEED_RETRY		= 2,
-	DSHR_COMMITTED		= 3,
-	DSHR_ABORTED		= 4,
-	DSHR_ABORT_FAILED	= 5,
-	DSHR_CORRUPT		= 6,
+	DSHR_IGNORE		= 3,
+	DSHR_ABORT_FAILED	= 4,
+	DSHR_CORRUPT		= 5,
 };
 
 #endif /* __DTX_INTERNAL_H__ */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,8 +48,11 @@ mdr_stop_pool_svc(void **argv)
 
 	/* Connect to the pool. */
 	if (arg->myrank == 0) {
+		char	str[37];
+
+		uuid_unparse(uuid, str);
 		print_message("connecting to pool\n");
-		rc = daos_pool_connect(uuid, arg->group,
+		rc = daos_pool_connect(str, arg->group,
 				       DAOS_PC_RW, &poh, NULL /* info */,
 				       NULL /* ev */);
 	}
@@ -115,6 +118,7 @@ mdr_stop_cont_svc(void **argv)
 	uuid_t			uuid;
 	daos_handle_t		poh;
 	daos_handle_t		coh;
+	char			str[37];
 	bool			skip = false;
 	int			rc;
 
@@ -133,15 +137,16 @@ mdr_stop_cont_svc(void **argv)
 	}
 
 	print_message("connecting to pool\n");
-	rc = daos_pool_connect(pool_uuid, arg->group,
+	uuid_unparse(pool_uuid, str);
+	rc = daos_pool_connect(str, arg->group,
 			       DAOS_PC_RW, &poh, NULL, NULL /* ev */);
 	assert_rc_equal(rc, 0);
 	print_message("creating container\n");
-	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL, NULL);
+	rc = daos_cont_create(poh, &uuid, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("opening container\n");
-	rc = daos_cont_open(poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_open(poh, str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("stopping container service leader\n");
@@ -153,7 +158,7 @@ mdr_stop_cont_svc(void **argv)
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("destroying container\n");
-	rc = daos_cont_destroy(poh, uuid, 1 /* force */, NULL);
+	rc = daos_cont_destroy(poh, str, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("disconnecting from pool\n");
 	rc = daos_pool_disconnect(poh, NULL /* ev */);

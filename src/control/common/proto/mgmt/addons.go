@@ -1,11 +1,12 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package mgmt
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -14,6 +15,31 @@ import (
 
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+func (p *PoolProperty) UnmarshalJSON(b []byte) error {
+	type fromJSON PoolProperty
+	from := struct {
+		Value struct {
+			Strval string `json:"strval"`
+			Numval uint64 `json:"numval"`
+		}
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(p),
+	}
+
+	if err := json.Unmarshal(b, &from); err != nil {
+		return err
+	}
+
+	if from.Value.Strval != "" {
+		p.SetValueString(from.Value.Strval)
+	} else {
+		p.SetValueNumber(from.Value.Numval)
+	}
+
+	return nil
+}
 
 // SetValueString sets the Value field to a string.
 func (p *PoolProperty) SetValueString(strVal string) {

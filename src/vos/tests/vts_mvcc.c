@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -167,7 +167,8 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 	D_ASSERT(L_O < strlen(path));
 	oid->id_pub.lo = (i << 8) + path[L_O];
 	daos_obj_set_oid(&oid->id_pub,
-			 DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64, 0, 0);
+			 daos_obj_feat2type(DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64),
+			 OR_RP_1, 1, 0);
 	oid->id_shard = 0;
 	oid->id_pad_32 = 0;
 }
@@ -764,7 +765,7 @@ tx_query(daos_handle_t coh, struct tx_helper *txh, daos_epoch_t epoch,
 	dth = start_tx(coh, oid, epoch, txh);
 
 	rc = vos_obj_query_key(coh, oid, flags, epoch, dkey, akey, recx,
-			       0, 0, dth);
+			       NULL, 0, 0, dth);
 
 	stop_tx(coh, txh, rc == 0, false);
 
@@ -1093,17 +1094,6 @@ struct conflicting_rw_excluded_case {
 };
 
 static struct conflicting_rw_excluded_case conflicting_rw_excluded_cases[] = {
-	/** Used to disable specific tests as necessary */
-	/** These specific tests can be enabled when DAOS-4698 is fixed
-	 *  and the line in vos_obj.c that references this ticket is
-	 *  uncommented.
-	 */
-	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	0, false},
-	{false,	"punchd_dne",	"cod",	"puncho_one",	"co",	1, false},
-	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	0, false},
-	{false,	"puncha_ane",	"coda",	"puncho_one",	"co",	1, false},
-	{false, "puncha_ane",   "coda", "puncho_one",   "co",   0, true},
-	{false, "punchd_dne",   "cod",  "puncho_one",   "co",   0, true},
 };
 
 static int64_t
@@ -1556,8 +1546,7 @@ out:
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &wtx->th_saved_xid, 1, NULL);
 		else
-			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
-					   &wtx->th_saved_xid, 1);
+			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, &wtx->th_saved_xid, DAOS_EPOCH_MAX);
 		assert(rc >= 0 || rc == -DER_NONEXIST);
 	}
 
@@ -1566,8 +1555,7 @@ out:
 			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
 					    &atx->th_saved_xid, 1, NULL);
 		else
-			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, DAOS_EPOCH_MAX,
-					   &atx->th_saved_xid, 1);
+			rc = vos_dtx_abort(arg->ctx.tc_co_hdl, &atx->th_saved_xid, DAOS_EPOCH_MAX);
 		assert(rc >= 0 || rc == -DER_NONEXIST);
 	}
 

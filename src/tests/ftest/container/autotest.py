@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,12 +18,13 @@ class ContainerAutotestTest(TestWithServers):
     def test_container_autotest(self):
         """Test container autotest.
 
-        :avocado: tags=all,full_regression,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=container,autotest,containerautotest,quick
         """
         self.log.info("Create a pool")
         self.add_pool()
+        self.pool.set_query_data()
         daos_cmd = self.get_daos_command()
         self.log.info("Autotest start")
         try:
@@ -32,3 +33,5 @@ class ContainerAutotestTest(TestWithServers):
         except CommandFailure as error:
             self.log.error("Error: %s", error)
             self.fail("daos pool autotest failed!")
+        finally:
+            self.pool.set_query_data()

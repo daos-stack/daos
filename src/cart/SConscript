@@ -22,16 +22,6 @@ SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_swim.c', 'crt_tree.c', 'crt_tree_flat.c', 'crt_tree_kary.c',
        'crt_tree_knomial.c', 'crt_hlc.c', 'crt_hlct.c']
 
-LIB_SRC = ['crt_utils.c']
-
-####################################
-# Create cart utility share objects
-####################################
-def build_utility_shared_obj(denv):
-    """Build cart utility library"""
-    cart_utils_objs  = denv.SharedObject(LIB_SRC)
-    Export('cart_utils_objs')
-
 # pylint: disable=unused-argument
 def macro_expand(target, source, env):
     """Function for PostAction"""
@@ -91,9 +81,6 @@ def scons():
 
     denv = env.Clone(LIBS=[])
 
-    # Generate cart utility shared objects
-    build_utility_shared_obj(denv)
-
     denv.AppendUnique(LIBS=['gurt'])
     prereqs.require(denv, 'mercury')
 
@@ -103,10 +90,8 @@ def scons():
     if compiler != 'covc':
         pp_env = denv.Clone()
 
-        # pylint: disable=no-member
         pp_files = pp_env.Preprocess(SRC)
         pp_env.AddPostAction(pp_files, SCons.Action.Action(macro_expand, None))
-        # pylint: enable=no-member
 
         denv.Requires(cart_targets, pp_files)
 

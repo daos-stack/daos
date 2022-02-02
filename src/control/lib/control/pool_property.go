@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -68,7 +68,7 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return nil, rbErr
 					}
-					if rsPct < 0 || rsPct > 100 {
+					if rsPct > 100 {
 						return nil, rbErr
 					}
 					return &PoolPropertyValue{rsPct}, nil
@@ -114,6 +114,19 @@ func PoolProperties() PoolPropertyMap {
 					return humanize.IBytes(n)
 				},
 				jsonNumeric: true,
+			},
+		},
+		"policy": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyPolicy,
+				Description: "Tier placement policy",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					if !drpc.PoolPolicyIsValid(s) {
+						return nil, errors.Errorf("invalid policy string %q", s)
+					}
+					return &PoolPropertyValue{s}, nil
+
+				},
 			},
 		},
 	}

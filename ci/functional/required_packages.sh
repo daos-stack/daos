@@ -21,7 +21,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
         openmpi="openmpi3"
     fi
 
-    pkgs="$prefix hwloc ndctl          \
+    pkgs="$prefix ndctl                \
           fio patchutils ior           \
           romio-tests                  \
           testmpio                     \
@@ -34,7 +34,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
           MACSio-$openmpi              \
           mpifileutils-mpich"
 else
-    echo "I don't know which packages should be installed for distro"
+    echo "I don't know which packages should be installed for distro" \
          "\"$distro\""
     exit 1
 fi

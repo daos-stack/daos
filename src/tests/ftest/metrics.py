@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +9,7 @@
 import os
 import sys
 import fnmatch
-import subprocess
+import subprocess #nosec
 import jira
 from jira import JIRA
 

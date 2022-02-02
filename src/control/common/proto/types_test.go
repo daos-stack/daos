@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,19 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+func TestProto_ConvertNvmeNamespace(t *testing.T) {
+	pb := MockNvmeNamespace()
+	native, err := (*NvmeNamespace)(pb).ToNative()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expNative := storage.MockNvmeNamespace()
+
+	if diff := cmp.Diff(expNative, native, common.DefaultCmpOpts()...); diff != "" {
+		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+	}
+}
+
 func TestProto_ConvertNvmeHealth(t *testing.T) {
 	pb := MockNvmeHealth(1)
 	native, err := (*NvmeHealth)(pb).ToNative()
@@ -31,13 +44,13 @@ func TestProto_ConvertNvmeHealth(t *testing.T) {
 	}
 }
 
-func TestProto_ConvertNvmeNamespace(t *testing.T) {
-	pb := MockNvmeNamespace()
-	native, err := (*NvmeNamespace)(pb).ToNative()
+func TestProto_ConvertSmdDevice(t *testing.T) {
+	pb := MockSmdDevice("0000:80:00.0", 1)
+	native, err := (*SmdDevice)(pb).ToNative()
 	if err != nil {
 		t.Fatal(err)
 	}
-	expNative := storage.MockNvmeNamespace()
+	expNative := storage.MockSmdDevice("0000:80:00.0", 1)
 
 	if diff := cmp.Diff(expNative, native, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)

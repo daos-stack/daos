@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,6 +56,12 @@ ds_cont_metrics_alloc(const char *path, int tgt_id)
 		D_ERROR("failed to add close counter: " DF_RC "\n", DP_RC(rc));
 
 	return metrics;
+}
+
+int
+ds_cont_metrics_count(void)
+{
+	return (sizeof(struct cont_pool_metrics) / sizeof(struct d_tm_node_t *));
 }
 
 /**
