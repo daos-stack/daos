@@ -183,7 +183,7 @@ def define_mercury(reqs):
         '-DUCS_LIBRARY=/usr/lib64/libucs.so '\
         '-DUCT_LIBRARY=/usr/lib64/libuct.so '
     else:
-         UCX = ""
+        UCX = ""
 
     reqs.define('mercury',
                 retriever=retriever,
