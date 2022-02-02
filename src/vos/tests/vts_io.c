@@ -142,7 +142,7 @@ gen_oid_stable(enum daos_otype_t type)
 	uoid.id_pub.lo = oid_count;
 	oid_count += 66179; /* prime */
 	uoid.id_pub.lo |= hdr;
-	daos_obj_set_oid(&uoid.id_pub, type, OR_RP_3, 1, oid_seed);
+	daos_obj_set_oid(&uoid.id_pub, daos_obj_type(type), OR_RP_3, 1, oid_seed);
 	oid_count += 1171; /* prime */
 
 	vts_cntr.cn_oids++;

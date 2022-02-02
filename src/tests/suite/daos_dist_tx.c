@@ -945,7 +945,7 @@ dtx_init_oid_req_akey(test_arg_t *arg, daos_obj_id_t *oids, struct ioreq *reqs,
 	int	i;
 
 	for (i = 0; i < oid_req_cnt; i++) {
-		oids[i] = daos_test_oid_gen(arg->coh, ocs[i], type, 0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, ocs[i], daos_obj_type(type), 0, arg->myrank);
 		ioreq_init(&reqs[i], arg->coh, oids[i], types[i], arg);
 	}
 
