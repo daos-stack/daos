@@ -3,8 +3,8 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-1%{?dist}
-%global libfabric_version 1.14.0~rc3-2
+%global mercury_version 2.1.0~rc4-3%{?dist}
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       16%{?relval}%{?dist}
+Release:       19%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -32,7 +32,7 @@ BuildRequires: python36-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: mercury-devel = %{mercury_version}
+BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
@@ -139,7 +139,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -167,7 +167,7 @@ Requires: ipmctl > 02.00.00.3816
 # When 1.11.2 is released, we can change this to >= 1.11.2
 Requires: libpmemobj = 1.11.0-3%{?dist}
 %endif
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
@@ -180,7 +180,7 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
@@ -395,6 +395,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
+%{_libdir}/libdaos_common.so
 %doc
 
 %files server
@@ -438,7 +439,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysctldir}/%{sysctl_script_name}
 
 %files client
-%{_libdir}/libdaos_common.so
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -539,6 +539,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Jan 19 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-19
+- Move libdaos_common.so from daos-client to daos package
+
+* Mon Jan 17 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-18
+- Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
+* Thu Dec 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-17
+- Update to v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage
+- Change mercury pinning to be >= instead of strict =
+
 * Thu Dec 16 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-16
 - Add BR: python-rpm-macros for Leap 15 as python3-base dropped that
   as a R:

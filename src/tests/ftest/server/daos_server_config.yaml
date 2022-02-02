@@ -92,7 +92,7 @@ server_config_val: !mux
     config_val:
       - "nr_hugepages"
       - 1000000000000000000
-      - "PASS"
+      - "FAIL"
   nr_hugepages_negative_int:
     config_val:
       - "nr_hugepages"

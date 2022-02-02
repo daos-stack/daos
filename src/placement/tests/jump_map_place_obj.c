@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -980,7 +980,7 @@ all_healthy(void **state)
 		uint32_t grp_nr;
 
 		gen_oid(&oid, 0, 0, object_classes[i]);
-		oa = daos_oclass_attr_find(oid, NULL, &grp_nr);
+		oa = daos_oclass_attr_find(oid, &grp_nr);
 		grp_sz = daos_oclass_grp_size(oa);
 
 		/* skip those gigantic layouts for saving time */

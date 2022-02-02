@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -85,7 +85,7 @@ class TestWithTelemetry(TestWithServers):
 
         self.log.info("Test PASSED")
 
-    def get_min_max_mean_stddev(self, prefix, total_targets, target_per_rank):
+    def get_min_max_mean_stddev(self, prefix, total_targets, targets_per_rank):
         """Get four lists of min, max, mean, stddev.
 
         Sample get_pool_metrics output.
@@ -123,7 +123,7 @@ class TestWithTelemetry(TestWithServers):
                 mean, or stddev at the end.
             total_targets (int): Total number of targets in all the ranks and
                 hosts in the output.
-            target_per_rank (int): Number of target per rank.
+            targets_per_rank (int): Number of target per rank.
 
         Returns:
             dict: min, max, mean, stddev from each target in a dict.
@@ -151,7 +151,7 @@ class TestWithTelemetry(TestWithServers):
             for rank_to_dicts in pool_out[specific_metrics[0]].values():
                 for target_to_val in rank_to_dicts.values():
                     for target, value in target_to_val.items():
-                        values[int(target) + offset * target_per_rank] = value
+                        values[int(target) + offset * targets_per_rank] = value
 
                     offset += 1
 
@@ -161,7 +161,7 @@ class TestWithTelemetry(TestWithServers):
         return output
 
     @staticmethod
-    def verify_stats(enum_metrics, metric_suffix, test_latency):
+    def verify_stats(enum_metrics, metric_prefix, test_latency):
         """Verify the statistical correctness of the min, max, mean, stddev.
 
         See get_min_max_mean_stddev() for sample.
@@ -175,7 +175,8 @@ class TestWithTelemetry(TestWithServers):
 
         Args:
             enum_metrics (dict): get_min_max_mean_stddev() output.
-            metric_suffix (str): Metric suffix.
+            metric_prefix (str): Metric prefix. For example,
+                engine_io_ops_dkey_enum_active_
             test_latency (bool): Whether this validation is for latency.
 
         Returns:
@@ -198,22 +199,22 @@ class TestWithTelemetry(TestWithServers):
             if test_latency:
                 if min_list[tgt] == 0:
                     errors.append(
-                        "{}min is 0 at target {}!".format(metric_suffix, tgt))
+                        "{}min is 0 at target {}!".format(metric_prefix, tgt))
             else:
                 if min_list[tgt] != 0:
                     errors.append(
                         "{}min is NOT 0 at target {}!".format(
-                            metric_suffix, tgt))
+                            metric_prefix, tgt))
 
             if mean_list[tgt] < min_list[tgt] or max_list[tgt] < mean_list[tgt]:
                 errors.append(
                     "{}mean is invalid at target {}!".format(
-                        metric_suffix, tgt))
+                        metric_prefix, tgt))
 
             if stddev_list[tgt] > max_list[tgt] - min_list[tgt]:
                 errors.append(
                     "{}stddev is invalid at target {}!".format(
-                        metric_suffix, tgt))
+                        metric_prefix, tgt))
 
         return errors
 
