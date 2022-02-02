@@ -37,8 +37,6 @@ class Permission(TestWithServers):
         # parameter used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')
 
-        if createmode == 73:
-            expected_result = RESULT_FAIL
         if createmode == 511 and permissions == 0:
             expected_result = RESULT_PASS
         elif createmode in [146, 511] and permissions == 1:
@@ -85,10 +83,7 @@ class Permission(TestWithServers):
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
 
-        if createmode == 73:
-            permissions = 0
-            expected_result = RESULT_FAIL
-        elif createmode in [146, 511]:
+        if createmode in [146, 511]:
             permissions = 1
             expected_result = RESULT_PASS
         elif createmode == 292:
