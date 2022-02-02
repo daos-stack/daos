@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2158,7 +2158,7 @@ io_query_key(void **state)
 			rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 					       DAOS_GET_MAX | DAOS_GET_RECX,
 					       epoch + 3, &dkey, &akey,
-					       &recx_read, 0, 0, NULL);
+					       &recx_read, NULL, 0, 0, NULL);
 			assert_rc_equal(rc, 0);
 			assert_int_equal(recx_read.rx_idx, 0);
 			assert_int_equal(recx_read.rx_nr, 1);
@@ -2167,7 +2167,7 @@ io_query_key(void **state)
 			rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 					       DAOS_GET_MAX | DAOS_GET_RECX,
 					       epoch + 2, &dkey, &akey,
-					       &recx_read, 0, 0, NULL);
+					       &recx_read, NULL, 0, 0, NULL);
 			assert_rc_equal(rc, 0);
 			assert_int_equal(recx_read.rx_idx, 2);
 			assert_int_equal(recx_read.rx_nr, 1);
@@ -2176,7 +2176,7 @@ io_query_key(void **state)
 					       DAOS_GET_DKEY | DAOS_GET_AKEY |
 					       DAOS_GET_MAX | DAOS_GET_RECX,
 					       epoch + 3, &dkey_read,
-					       &akey_read, &recx_read, 0, 0, NULL);
+					       &akey_read, &recx_read, NULL, 0, 0, NULL);
 			assert_rc_equal(rc, 0);
 			assert_int_equal(recx_read.rx_idx, 0);
 			assert_int_equal(recx_read.rx_nr, 1);
@@ -2190,7 +2190,7 @@ io_query_key(void **state)
 					       DAOS_GET_DKEY | DAOS_GET_AKEY |
 					       DAOS_GET_MAX | DAOS_GET_RECX,
 					       epoch + 2, &dkey_read,
-					       &akey_read, &recx_read, 0, 0, NULL);
+					       &akey_read, &recx_read, NULL, 0, 0, NULL);
 			assert_rc_equal(rc, 0);
 			assert_int_equal(recx_read.rx_idx, 2);
 			assert_int_equal(recx_read.rx_nr, 1);
@@ -2202,7 +2202,7 @@ io_query_key(void **state)
 			rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 					       DAOS_GET_MIN | DAOS_GET_RECX,
 					       epoch + 3, &dkey, &akey,
-					       &recx_read, 0, 0, NULL);
+					       &recx_read, NULL, 0, 0, NULL);
 			assert_rc_equal(rc, 0);
 			assert_int_equal(recx_read.rx_idx, 0);
 			assert_int_equal(recx_read.rx_nr, 1);
@@ -2211,7 +2211,7 @@ io_query_key(void **state)
 			rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 					       DAOS_GET_MIN | DAOS_GET_RECX,
 					       epoch + 2, &dkey, &akey,
-					       &recx_read, 0, 0, NULL);
+					       &recx_read, NULL, 0, 0, NULL);
 			assert_rc_equal(rc, 0);
 			assert_int_equal(recx_read.rx_idx, 0);
 			assert_int_equal(recx_read.rx_nr, 1);
@@ -2220,7 +2220,7 @@ io_query_key(void **state)
 					       DAOS_GET_DKEY | DAOS_GET_AKEY |
 					       DAOS_GET_MIN | DAOS_GET_RECX,
 					       epoch + 3, &dkey_read,
-					       &akey_read, &recx_read, 0, 0, NULL);
+					       &akey_read, &recx_read, NULL, 0, 0, NULL);
 			assert_rc_equal(rc, 0);
 			assert_int_equal(recx_read.rx_idx, 0);
 			assert_int_equal(recx_read.rx_nr, 1);
@@ -2234,7 +2234,7 @@ io_query_key(void **state)
 					       DAOS_GET_DKEY | DAOS_GET_AKEY |
 					       DAOS_GET_MIN | DAOS_GET_RECX,
 					       epoch + 2, &dkey_read,
-					       &akey_read, &recx_read, 0, 0, NULL);
+					       &akey_read, &recx_read, NULL, 0, 0, NULL);
 			assert_rc_equal(rc, 0);
 			assert_int_equal(recx_read.rx_idx, 0);
 			assert_int_equal(recx_read.rx_nr, 1);
@@ -2263,13 +2263,13 @@ io_query_key(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_AKEY |
 			       DAOS_GET_MIN, epoch++, &dkey, &akey_read, NULL,
-			       0, 0, NULL);
+			       NULL, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)akey_read.iov_buf, KEY_INC * 2);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_AKEY |
 			       DAOS_GET_MAX, epoch++, &dkey, &akey_read, NULL,
-			       0, 0, NULL);
+			       NULL, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)akey_read.iov_buf, MAX_INT_KEY - KEY_INC);
 
@@ -2282,12 +2282,12 @@ io_query_key(void **state)
 	}
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_AKEY |
 			       DAOS_GET_MAX, epoch++, &dkey, &akey_read, NULL,
-			       0, 0, NULL);
+			       NULL, 0, 0, NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_AKEY |
 			       DAOS_GET_DKEY | DAOS_GET_MAX, epoch++,
-			       &dkey_read, &akey_read, NULL, 0, 0, NULL);
+			       &dkey_read, &akey_read, NULL, NULL, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)akey_read.iov_buf, MAX_INT_KEY);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, MAX_INT_KEY - KEY_INC);
@@ -2296,7 +2296,7 @@ io_query_key(void **state)
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_AKEY |
 			       DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX,
 			       epoch++, &dkey_read, &akey_read,
-			       &recx_read, 0, 0, NULL);
+			       &recx_read, NULL, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)akey_read.iov_buf, MAX_INT_KEY - KEY_INC);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, MAX_INT_KEY - KEY_INC);
@@ -2316,7 +2316,7 @@ io_query_key(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |
 			       DAOS_GET_MIN, epoch++, &dkey_read, NULL, NULL,
-			       0, 0, NULL);
+			       NULL, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, KEY_INC * 2);
 
@@ -2326,7 +2326,7 @@ io_query_key(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |
 			       DAOS_GET_MAX, 0 /* Ignored epoch */, &dkey_read,
-			       NULL, NULL, 0, 0, dth);
+			       NULL, NULL, NULL, 0, 0, dth);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, MAX_INT_KEY - KEY_INC);
 
@@ -2352,7 +2352,7 @@ io_query_key(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_DKEY |
 			       DAOS_GET_MAX, epoch++, &dkey_read, NULL, NULL,
-			       0, 0, NULL);
+			       NULL, 0, 0, NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 }
 
@@ -2415,7 +2415,7 @@ io_query_key_punch_update(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_MAX | DAOS_GET_DKEY | DAOS_GET_RECX,
-			       epoch++, &dkey, &akey, &recx_read, 0, 0, NULL);
+			       epoch++, &dkey, &akey, &recx_read, NULL, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(recx_read.rx_idx, 0);
 	assert_int_equal(recx_read.rx_nr, sizeof("Goodbye"));
@@ -2430,7 +2430,7 @@ io_query_key_punch_update(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_MAX | DAOS_GET_DKEY | DAOS_GET_RECX,
-			       epoch++, &dkey, &akey, &recx_read, 0, 0, NULL);
+			       epoch++, &dkey, &akey, &recx_read, NULL, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(recx_read.rx_idx, 0);
 	assert_int_equal(recx_read.rx_nr, sizeof("World"));
@@ -2441,7 +2441,7 @@ io_query_key_punch_update(void **state)
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_MAX | DAOS_GET_DKEY | DAOS_GET_RECX,
-			       epoch++, &dkey, &akey, &recx_read, 0, 0, NULL);
+			       epoch++, &dkey, &akey, &recx_read, NULL, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(recx_read.rx_nr, sizeof("Hello"));
 	assert_int_equal(recx_read.rx_idx, 0);
@@ -2464,21 +2464,21 @@ io_query_key_negative(void **state)
 			       DAOS_GET_DKEY | DAOS_GET_AKEY |
 			       DAOS_GET_MAX | DAOS_GET_RECX, 4,
 			       &dkey_read, &akey_read,
-			       &recx_read, 0, 0, NULL);
+			       &recx_read, NULL, 0, 0, NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_DKEY | DAOS_GET_AKEY |
 			       DAOS_GET_MIN | DAOS_GET_RECX, 4,
 			       &dkey_read, &akey_read,
-			       &recx_read, 0, 0, NULL);
+			       &recx_read, NULL, 0, 0, NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	gen_query_tree(arg, oid);
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, arg->oid,
 			       DAOS_GET_DKEY | DAOS_GET_MAX, 4,
-			       NULL, NULL, NULL, 0, 0, NULL);
+			       NULL, NULL, NULL, NULL, 0, 0, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
