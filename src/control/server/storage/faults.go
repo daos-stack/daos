@@ -14,16 +14,6 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
-// FaultBdevNvmeDevStateInvalid creates a Fault when an invalid NVMe device state string is
-// encountered.
-func FaultBdevNvmeDevStateInvalid(status string) *fault.Fault {
-	return storageFault(
-		code.BdevNvmeDevStateInvalid,
-		fmt.Sprintf("%q is an invalid NVMe dev status string", status),
-		"",
-	)
-}
-
 // FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
 // match expected PCI addresses.
 func FaultBdevNotFound(bdevs ...string) *fault.Fault {

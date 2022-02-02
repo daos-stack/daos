@@ -85,7 +85,6 @@ const (
 	BdevNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
-	BdevNvmeDevStateInvalid
 )
 
 // DAOS system fault codes
