@@ -16,6 +16,7 @@
 #include <daos_types.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
+/** This is just a test */
 
 /** Ensure the values of recx flags map to those exported by evtree */
 D_CASSERT((uint32_t)VOS_VIS_FLAG_UNKNOWN == (uint32_t)EVT_UNKNOWN);
