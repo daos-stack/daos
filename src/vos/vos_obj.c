@@ -40,6 +40,7 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund, 
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
 	struct dcs_csum_info	 csum;
+	printf("Hello World\n");
 
 	tree_rec_bundle2iov(rbund, &riov);
 
