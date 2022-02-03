@@ -9,10 +9,35 @@ set -eux
 : "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
 
+repo_server_pragma=$(echo "$COMMIT_MESSAGE" | sed -ne '/^Repo-server: */s/.*: *//p')
+if [ -n "$repo_server_pragma" ]; then
+    IFS=" " read -r -a repo_servers <<< "$repo_server_pragma"
+else
+    # default is artifactory
+    repo_servers=(artifactory nexus)
+fi
+
+# Update the repo files
+for repo_server in "${repo_servers[@]}"; do
+    if ! fetch_repo_config "$repo_server"; then
+        # leave the existing on-image repo config alone if the repo fetch fails
+        send_mail "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
+    fi
+done
+time dnf -y repolist
+
+if ! curl -o /usr/local/sbin/set_local_repos.sh-tmp "${REPO_FILE_URL}set_local_repos.sh"; then
+    send_mail "Fetch set_local_repos.sh failed.  Continuing on with in-image copy."
+else
+    cat /usr/local/sbin/set_local_repos.sh-tmp > /usr/local/sbin/set_local_repos.sh
+    rm -f /usr/local/sbin/set_local_repos.sh-tmp
+fi
+
+set_local_repos.sh "${repo_servers[0]}"
+
 retry_dnf() {
     local monitor_threshold="$1"
-    local repo_server="${2:-}"
-    shift 2
+    shift
 
     local args=("dnf" "-y" "${@}")
     local attempt=0
@@ -30,10 +55,10 @@ retry_dnf() {
         rc=${PIPESTATUS[0]}
         (( attempt++ )) || true
         if [ "$attempt" -gt 0 ]; then
-            if [ "$attempt" -eq 2 ] && [ -n "$repo_server" ]; then
+            if [ "$attempt" -eq 2 ] && [ ${#repo_servers[@]} -gt 1 ]; then
                 # but we were using an experimental repo server, so fall back to the
                 # non-experimental one after trying twice with the experimental one
-                fetch_repo_config ""
+                set_local_repos.sh "${repo_servers[1]}}"
                 dnf -y makecache
             fi
             sleep "${RETRY_DELAY_SECONDS:-$DAOS_STACK_RETRY_DELAY_SECONDS}"
@@ -140,16 +165,16 @@ timeout_cmd() {
 }
 
 fetch_repo_config() {
-    local repo_server="${1:-}"
+    local repo_server="$1"
 
-    repo_file="daos_ci-${DISTRO_NAME}${repo_server:+-$repo_server}.repo"
-    local repopath="${REPOS_DIR}"/daos_ci-"$DISTRO_NAME".repo
+    repo_file="daos_ci-${DISTRO_NAME}-$repo_server.repo"
+    local repopath="${REPOS_DIR}/$repo_file"
     if ! curl -f -o "$repopath" \
               "$REPO_FILE_URL$repo_file"; then
         return 1
     fi
     # ugly hackery for nexus repo naming
-    if [ -z "$repo_server" ]; then
+    if [ "$repo_server" = "nexus" ]; then
         version="$(lsb_release -sr)"
         version=${version%.*}
         sed -i -e "s/\$releasever/$version/g" "$repopath"

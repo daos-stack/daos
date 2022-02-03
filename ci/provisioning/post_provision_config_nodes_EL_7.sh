@@ -103,34 +103,6 @@ post_provision_config_nodes() {
         dnf -y config-manager --disable epel-modular appstream powertools
     fi
 
-    # Use remote repo config instead of image-installed repos
-    # shellcheck disable=SC2207
-    if ! old_repo_files=($(ls "${REPOS_DIR}"/*.repo)); then
-        echo "Failed to determine old repo files"
-        exit 1
-    fi
-    local repo_server
-    repo_server=$(echo "$COMMIT_MESSAGE" | sed -ne '/^Repo-server: */s/.*: *//p')
-    if [ "$repo_server" = "nexus" ]; then
-        repo_server=""
-    elif [ "$repo_server" = "" ]; then
-        repo_server="artifactory"
-    fi
-    if ! fetch_repo_config "$repo_server"; then
-        # leave the existing on-image repo config alone if the repo fetch fails
-        send_mail "Fetch repo file for repo server \"$repo_server\" failed.  Continuing on with in-image repos."
-    else
-        if ! rm -f "${old_repo_files[@]}"; then
-            echo "Failed to remove old repo files"
-            exit 1
-        fi
-        if [ "$DISTRO_NAME" = "centos8" ]; then
-            # shellcheck disable=SC2034
-            POWERTOOLSREPO="daos_ci-centos8-powertools"
-        fi
-    fi
-    time dnf -y repolist
-
     if [ -n "$INST_REPOS" ]; then
         local repo
         for repo in $INST_REPOS; do
@@ -156,7 +128,8 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
-        RETRY_COUNT=4 retry_dnf 360 "${repo_server}" install $LSB_RELEASE
+    # shellcheck disable=SC2154
+        RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
     fi
 
     if [ "$DISTRO_NAME" = "centos7" ] && lspci | grep "ConnectX-6"; then
@@ -168,7 +141,8 @@ post_provision_config_nodes() {
 
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ]; then
-        if ! RETRY_COUNT=4 retry_dnf 360 "${repo_server}" install $INST_RPMS; then
+    # shellcheck disable=SC2154
+        if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
             rc=${PIPESTATUS[0]}
             dump_repos
             exit "$rc"
@@ -180,7 +154,8 @@ post_provision_config_nodes() {
     lsb_release -a
 
     # now make sure everything is fully up-to-date
-    if ! RETRY_COUNT=4 retry_dnf 600 "${repo_server}" upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    # shellcheck disable=SC2154
+    if ! RETRY_COUNT=4 retry_dnf 600 upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
     fi
