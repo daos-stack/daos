@@ -523,6 +523,17 @@ uint64_t
 crt_hlc2unixnsec(uint64_t hlc);
 
 /**
+ * Return timespec from HLC
+ *
+ * \param[in]	hlc	HLC timestamp
+ * \param[out]	ts	timespec struct
+ *
+ * \return		DER_SUCCESS on success, negative value if error
+ */
+int
+crt_hlc2timespec(uint64_t hlc, struct timespec *ts);
+
+/**
  * Return the HLC timestamp of unixnsec in hlc.
  *
  * \param[in] unixnsec         Unix nanosecond timestamp

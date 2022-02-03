@@ -44,6 +44,13 @@ typedef struct {
 	daos_size_t		arr_nr_read;
 } daos_array_iod_t;
 
+typedef struct {
+	/** Array size (in records) */
+	daos_size_t	st_size;
+	/** Max epoch of array modification (mtime) */
+	daos_epoch_t	st_max_epoch;
+} daos_array_stbuf_t;
+
 /**
  * Convenience function to generate a DAOS Array object ID by encoding the private DAOS bits of the
  * object address space.
@@ -313,8 +320,26 @@ daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
-		    daos_event_t *ev);
+daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size, daos_event_t *ev);
+
+/**
+ * Stat array to retrieve size and mtime.
+ *
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	th	Transaction handle.
+ * \param[out]	stbuf	Returned stat info.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ */
+int
+daos_array_stat(daos_handle_t oh, daos_handle_t th, daos_array_stbuf_t *stbuf, daos_event_t *ev);
 
 /**
  * Set the array size (truncate) in records. If array is shrinking, we punch

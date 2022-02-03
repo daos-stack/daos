@@ -5558,7 +5558,7 @@ shard_query_key_task(tse_task_t *task)
 	api_args = args->kqa_api_args;
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
 				    api_args->dkey, api_args->akey,
-				    api_args->recx, args->kqa_coh_uuid,
+				    api_args->recx, api_args->max_epoch, args->kqa_coh_uuid,
 				    args->kqa_cont_uuid, &args->kqa_dti,
 				    &args->kqa_auxi.obj_auxi->map_ver_reply,
 				    args->kqa_auxi.obj_auxi->map_ver_req,

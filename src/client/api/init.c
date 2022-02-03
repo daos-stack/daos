@@ -113,6 +113,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_array_punch, sizeof(daos_array_io_t)},
 	{dc_array_get_size, sizeof(daos_array_get_size_t)},
 	{dc_array_set_size, sizeof(daos_array_set_size_t)},
+	{dc_array_stat, sizeof(daos_array_stat_t)},
 
 	/** Key-Value Store */
 	{dc_kv_open, sizeof(daos_kv_open_t)},

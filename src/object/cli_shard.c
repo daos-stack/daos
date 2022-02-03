@@ -1982,6 +1982,7 @@ struct obj_query_key_cb_args {
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
 	daos_recx_t		*recx;
+	daos_epoch_t		*max_epoch;
 	struct dc_object	*obj;
 	struct dc_obj_shard	*shard;
 	struct dtx_epoch	epoch;
@@ -2154,8 +2155,10 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	}
 
 	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			D_GOTO(out, rc = 0);
+		if (rc == -DER_NONEXIST) {
+			D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
+			D_GOTO(set_max_epoch, rc = 0);
+		}
 
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY)
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
@@ -2239,6 +2242,10 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		obj_shard_query_recx_post(cb_args, okqi->okqi_oid.id_shard,
 					  okqo, get_max, changed);
 	}
+
+set_max_epoch:
+	if (cb_args->max_epoch && *cb_args->max_epoch < okqo->okqo_max_epoch)
+		*cb_args->max_epoch = okqo->okqo_max_epoch;
 	D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
 
 out:
@@ -2251,7 +2258,7 @@ out:
 int
 dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 		       uint32_t flags, struct dc_object *obj, daos_key_t *dkey,
-		       daos_key_t *akey, daos_recx_t *recx,
+		       daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
 		       const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       struct dtx_id *dti, unsigned int *map_ver,
 		       unsigned int req_map_ver, daos_handle_t th, tse_task_t *task)
@@ -2287,19 +2294,19 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 		D_GOTO(out, rc);
 
 	crt_req_addref(req);
-	cb_args.rpc	= req;
-	cb_args.map_ver = map_ver;
-	cb_args.oid	= shard->do_id;
-	cb_args.dkey	= dkey;
-	cb_args.akey	= akey;
-	cb_args.recx	= recx;
-	cb_args.obj	= obj;
-	cb_args.shard	= shard;
-	cb_args.epoch	= *epoch;
-	cb_args.th	= th;
+	cb_args.rpc		= req;
+	cb_args.map_ver		= map_ver;
+	cb_args.oid		= shard->do_id;
+	cb_args.dkey		= dkey;
+	cb_args.akey		= akey;
+	cb_args.recx		= recx;
+	cb_args.obj		= obj;
+	cb_args.shard		= shard;
+	cb_args.epoch		= *epoch;
+	cb_args.th		= th;
+	cb_args.max_epoch	= max_epoch;
 
-	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args,
-				       sizeof(cb_args));
+	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)
 		D_GOTO(out_req, rc);
 

@@ -1194,6 +1194,82 @@ dfs_test_mt_connect(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static bool
+check_ts(struct timespec l, struct timespec r)
+{
+	if (l.tv_sec == r.tv_sec)
+		return l.tv_nsec < r.tv_nsec;
+	else
+		return l.tv_sec < r.tv_sec;
+}
+
+static void
+dfs_test_mtime(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*file;
+	char			*f = "test_mtime";
+	d_sg_list_t		sgl;
+	d_iov_t			iov;
+	char			buf[64];
+	struct stat		stbuf;
+	struct timespec		prev_ts;
+	daos_size_t		size;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, f, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, NULL, f, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	d_iov_set(&iov, buf, 64);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+	dts_buf_render(buf, 64);
+	rc = dfs_write(dfs_mt, file, &sgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, NULL, f, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 64);
+	check_ts(prev_ts, stbuf.st_mtim);
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	rc = dfs_read(dfs_mt, file, &sgl, 0, &size, NULL);
+	assert_int_equal(rc, 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, NULL, f, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 64);
+	assert_int_equal(prev_ts.tv_sec, stbuf.st_mtim.tv_sec);
+	assert_int_equal(prev_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
+
+	rc = dfs_punch(dfs_mt, file, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	check_ts(prev_ts, stbuf.st_mtim);
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, f, 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1223,6 +1299,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_handles, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
 	  dfs_test_mt_connect, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST15: DFS stat mtime",
+	  dfs_test_mtime, async_disable, test_case_teardown},
 };
 
 static int

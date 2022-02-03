@@ -503,7 +503,7 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 			   uint32_t flags, struct dc_object *obj,
 			   daos_key_t *dkey, daos_key_t *akey,
-			   daos_recx_t *recx, const uuid_t coh_uuid,
+			   daos_recx_t *recx, daos_epoch_t *max_epoch, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, struct dtx_id *dti,
 			   unsigned int *map_ver, unsigned int req_map_ver,
 			   daos_handle_t th, tse_task_t *task);

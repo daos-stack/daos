@@ -3679,7 +3679,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
-			       okqi->okqi_epoch, dkey, akey, query_recx, NULL,
+			       okqi->okqi_epoch, dkey, akey, query_recx, &okqo->okqo_max_epoch,
 			       cell_size, stripe_size, dth);
 	if (rc == 0 && (query_flags & VOS_GET_RECX_EC)) {
 		okqo->okqo_recx = ec_recx[0];

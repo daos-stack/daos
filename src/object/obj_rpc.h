@@ -292,12 +292,14 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((uint32_t)		(okqo_pad32_1)		CRT_VAR) \
 	((daos_key_t)		(okqo_dkey)		CRT_VAR) \
 	((daos_key_t)		(okqo_akey)		CRT_VAR) \
-	/* recx for visible extent */				\
+	/* recx for visible extent */				 \
 	((daos_recx_t)		(okqo_recx)		CRT_VAR) \
-	/* recx for EC parity space */				\
+	/* recx for EC parity space */				 \
 	((daos_recx_t)		(okqo_recx_parity)	CRT_VAR) \
-	/* recx for punched EC extents */			\
-	((daos_recx_t)		(okqo_recx_punched)	CRT_VAR)
+	/* recx for punched EC extents */			 \
+	((daos_recx_t)		(okqo_recx_punched)	CRT_VAR) \
+	/* epoch for max write */				 \
+	((uint64_t)		(okqo_max_epoch)	CRT_VAR)
 
 CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 
