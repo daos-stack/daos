@@ -1408,6 +1408,7 @@ static int
 iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 {
 	daos_anchor_t	anchor;
+	daos_anchor_t	anchor_des;
 	int		key_nr;
 	int		i;
 	uint32_t	number;
@@ -1415,6 +1416,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 	/** Enumerate all mixed NVMe and SCM records */
 	key_nr = 0;
 	memset(&anchor, 0, sizeof(anchor));
+	memset(&anchor_des, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_epoch_range_t	eprs[5];
 		daos_recx_t		recxs[5];
@@ -1428,6 +1430,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 
 		for (i = 0; i < (number - 1); i++) {
 			assert_true(size == iod_size);
+			assert_true(recxs[i].rx_idx < recxs[i+1].rx_idx);
 			/* Print a subset of enumerated records */
 			if ((i + key_nr) % ENUM_PRINT != 0)
 				continue;
@@ -1440,8 +1443,17 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 				      i + key_nr, (int)size,
 				      (int)recxs[i].rx_nr,
 				      (int)recxs[i].rx_idx);
-
 		}
+
+		number = 5;
+		enumerate_rec(DAOS_TX_NONE, dkey, akey, &size,
+			      &number, recxs, eprs, &anchor_des, false, req);
+		if (number == 0)
+			continue;
+		for (i = 0; i < (number - 1); i++) {
+			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
+		}
+
 		key_nr += number;
 	}
 
