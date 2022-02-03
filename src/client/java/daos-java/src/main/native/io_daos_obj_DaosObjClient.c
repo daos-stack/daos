@@ -1,8 +1,10 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
+#define _GNU_SOURCE
 
 #include "io_daos_dfs_DaosFsClient.h"
 #include "DaosObjectAttribute.pb-c.h"
@@ -20,30 +22,24 @@ parse_object_id(char *buffer, daos_obj_id_t *oid)
 
 JNIEXPORT void JNICALL
 Java_io_daos_obj_DaosObjClient_encodeObjectId(JNIEnv *env, jclass clientClass,
-		jlong oidBufferAddress, jint feats,
-		jstring objectClass, jint args)
+		jlong oidBufferAddress, jlong contHandle, jint objectType,
+		jstring objectClass, jint hint, jint args)
 {
 	daos_obj_id_t oid;
-	uint16_t type;
+	daos_handle_t coh;
+	enum daos_otype_t otype = (enum daos_otype_t)objectType;
+	uint32_t oclass;
 	const char *oclass_name = (*env)->GetStringUTFChars(env, objectClass,
 			NULL);
 	char *buffer = (char *)oidBufferAddress;
 
-	type = daos_oclass_name2id(oclass_name);
-	if (!type) {
-		char *tmp = "unsupported object class, %s";
-		char *msg = NULL;
-
-		asprintf(&msg, tmp, oclass_name);
-		throw_obj(env, msg, CUSTOM_ERR6);
-		goto out;
-	}
+	memcpy(&coh, &contHandle, sizeof(coh));
+	oclass = daos_oclass_name2id(oclass_name);
 	parse_object_id(buffer, &oid);
-	daos_obj_generate_id(&oid, feats, type, args);
+	daos_obj_generate_oid(coh, &oid, otype, oclass, hint, args);
 	memcpy(buffer, &oid.hi, 8);
 	memcpy(buffer + 8, &oid.lo, 8);
 
-out:
 	(*env)->ReleaseStringUTFChars(env, objectClass, oclass_name);
 }
 
@@ -65,7 +61,7 @@ Java_io_daos_obj_DaosObjClient_openObject(JNIEnv *env, jclass clientClass,
 		char *tmp = "Failed to open DAOS object with mode (%d)";
 		char *msg = NULL;
 
-		asprintf(msg, tmp, mode);
+		asprintf(&msg, tmp, mode);
 		throw_obj(env, msg, rc);
 		return -1;
 	}
@@ -288,13 +284,13 @@ decode_initial(data_desc_t *desc, char *desc_buffer)
 		/* sgl */
 		memcpy(&value64, desc_buffer, 8);
 		desc_buffer += 8;
-		d_iov_set(&desc->iovs[i], value64,
+		d_iov_set(&desc->iovs[i], (void *)value64,
 			nbr_of_record * desc->record_size);
 		desc->sgls[i].sg_iovs = &desc->iovs[i];
 		desc->sgls[i].sg_nr = 1;
 		desc->sgls[i].sg_nr_out = 0;
 	}
-	desc->ret_buf_address = desc_buffer;
+	desc->ret_buf_address = (uint64_t)desc_buffer;
 	return 0;
 }
 
@@ -482,11 +478,11 @@ decode(JNIEnv *env, jlong objectHandle, jint nbrOfAkeys,
 	desc_buffer += 2;
 	d_iov_set(dkey, desc_buffer, len);
 	desc_buffer += len;
-	if (desc_buffer - descBufAddress > descBufCap) {
+	if ((uint64_t)desc_buffer - descBufAddress > descBufCap) {
 		char *msg = NULL;
 
 		asprintf(&msg, "length %ld exceeds buffer capacity %d",
-			 desc_buffer - descBufAddress, descBufCap);
+			 (uint64_t)desc_buffer - descBufAddress, descBufCap);
 		throw_obj(env, msg, CUSTOM_ERR7);
 		return 1;
 	}
@@ -767,14 +763,73 @@ allocate_simple_desc(char *descBufAddress, data_desc_simple_t *desc,
 		/* sgl */
 		memcpy(&address, desc_buffer, 8);
 		desc_buffer += 8;
-		d_iov_set(&desc->iovs[i], address, 0);
+		d_iov_set(&desc->iovs[i], (void *)address, 0);
 		desc->sgls[i].sg_iovs = &desc->iovs[i];
 		desc->sgls[i].sg_nr = 1;
 		desc->sgls[i].sg_nr_out = 0;
 	}
-	desc->ret_buf_address = desc_buffer;
+	desc->ret_buf_address = (uint64_t)desc_buffer;
 	/* put address to the start of desc buffer */
 	memcpy((char *)descBufAddress, &desc, 8);
+	return 0;
+}
+
+static int
+allocate_desc_update_async(char *descBuf, data_desc_upd_async_t *desc,
+			   int reuse)
+{
+	char *desc_buffer = descBuf;
+	uint16_t value16 = 0;
+
+	desc->maxKeyLen = 0;
+	if (reuse) {
+		/* set max key len */
+		memcpy(&desc->maxKeyLen, desc_buffer, 2);
+		desc_buffer += 2;
+	}
+	desc->event = NULL;
+	/* set dkey address */
+	if (!reuse) {
+		memcpy(&value16, desc_buffer, 2);
+	}
+	desc_buffer += 2;
+	d_iov_set(&desc->dkey, desc_buffer, value16);
+	desc_buffer += (desc->maxKeyLen == 0 ? value16 : desc->maxKeyLen);
+	/* entries */
+	desc->iods = (daos_iod_t *)calloc(1, sizeof(daos_iod_t));
+	desc->sgls = (d_sg_list_t *)calloc(1, sizeof(d_sg_list_t));
+	desc->recxs = (daos_recx_t *)calloc(1, sizeof(daos_recx_t));
+	desc->iovs = (d_iov_t *)calloc(1, sizeof(d_iov_t));
+	daos_iod_t *iod;
+
+	if (desc->iods == NULL || desc->sgls == NULL
+		|| desc->recxs == NULL || desc->iovs == NULL) {
+		return CUSTOM_ERR3;
+	}
+
+	/* iod */
+	/* akey */
+	iod = &desc->iods[0];
+	if (!reuse) {
+		memcpy(&value16, desc_buffer, 2);
+	}
+	desc_buffer += 2;
+	d_iov_set(&iod->iod_name, desc_buffer, value16);
+	desc_buffer += (desc->maxKeyLen == 0 ? value16 : desc->maxKeyLen);
+	iod->iod_type = DAOS_IOD_ARRAY;
+	iod->iod_size = 1;
+	iod->iod_nr = 1;
+	iod->iod_recxs = &desc->recxs[0];
+	/* sgl */
+	d_iov_set(&desc->iovs[0], 0, 0);
+	desc->sgls[0].sg_iovs = &desc->iovs[0];
+	desc->sgls[0].sg_nr = 1;
+	desc->sgls[0].sg_nr_out = 0;
+	desc->ret_buf_address = (uint64_t)desc_buffer;
+	/* put address to the start of desc buffer */
+	if (reuse) {
+		memcpy(descBuf - 8, &desc, 8);
+	}
 	return 0;
 }
 
@@ -821,6 +876,30 @@ Java_io_daos_obj_DaosObjClient_allocateSimDescGroup(
 	return *(jlong *)&grp;
 }
 
+JNIEXPORT void JNICALL
+Java_io_daos_obj_DaosObjClient_allocateDescUpdAsync(
+		JNIEnv *env, jclass clientClass,
+		jlong memAddress)
+{
+	char *buffer = (char *)memAddress;
+	char *msg = "memory allocation failed";
+	int rc;
+	data_desc_upd_async_t *desc = (data_desc_upd_async_t *)malloc(
+		sizeof(data_desc_upd_async_t));
+
+	if (desc == NULL) {
+		throw_const_obj(env, msg, CUSTOM_ERR3);
+		return;
+	}
+	/* skip native desc hdl */
+	buffer += 8;
+	rc = allocate_desc_update_async(buffer, desc, 1);
+	if (rc) {
+		throw_const_obj(env, "allocation failed",
+				rc);
+	}
+}
+
 JNIEXPORT jlong JNICALL
 Java_io_daos_obj_DaosObjClient_releaseSimDescGroup(
 		JNIEnv *env, jclass clientClass, jlong grpHdl)
@@ -833,6 +912,32 @@ Java_io_daos_obj_DaosObjClient_releaseSimDescGroup(
 	}
 	free(grp->descs);
 	free(grp);
+}
+
+static void
+release_desc_upd_async(data_desc_upd_async_t *desc) {
+	if (desc->iods) {
+		free(desc->iods);
+	}
+	if (desc->sgls) {
+		free(desc->sgls);
+	}
+	if (desc->recxs) {
+		free(desc->recxs);
+	}
+	if (desc->iovs) {
+		free(desc->iovs);
+	}
+	free(desc);
+}
+
+JNIEXPORT void JNICALL
+Java_io_daos_obj_DaosObjClient_releaseDescUpdAsync(
+		JNIEnv *env, jclass clientClass, jlong descPtr)
+{
+	data_desc_upd_async_t *desc = *(data_desc_upd_async_t **)&descPtr;
+
+	release_desc_upd_async(desc);
 }
 
 JNIEXPORT void JNICALL
@@ -860,7 +965,7 @@ static int
 update_ret_code(void *udata, daos_event_t *ev, int ret)
 {
 	data_desc_simple_t *desc = (data_desc_simple_t *)udata;
-	char *desc_buffer = desc->ret_buf_address;
+	char *desc_buffer = (char *)desc->ret_buf_address;
 
 	memcpy(desc_buffer, &ret, 4);
 	if (ev) {
@@ -903,6 +1008,114 @@ Java_io_daos_obj_DaosObjClient_updateObjectSimple(
 				async ? &desc->event->event : NULL);
 	if (rc) {
 		throw_const_obj(env, "Failed to update DAOS object", rc);
+	}
+}
+
+static int
+update_ret_code_no_decode(void *udata, daos_event_t *ev, int ret)
+{
+	data_desc_upd_async_t *desc = (data_desc_upd_async_t *)udata;
+	char *desc_buffer = (char *)desc->ret_buf_address;
+
+	memcpy(desc_buffer, &ret, 4);
+	if (ev) {
+		ev->ev_error = 0;
+	}
+	/* free native desc if not reuse */
+	if (desc->maxKeyLen == -1) {
+		release_desc_upd_async(desc);
+	}
+	return 0;
+}
+
+JNIEXPORT void JNICALL
+Java_io_daos_obj_DaosObjClient_updateObjNoDecode(JNIEnv *env,
+		jobject clientObj, jlong objPtr,
+		jlong descBufAddress, jlong eqWrapHdl,
+		jshort eqId, jlong offset, jint len,
+		jlong dataBufAddress)
+{
+	daos_handle_t oh;
+	char *desc_buf = (char *)descBufAddress;
+	char *data_buf = (char *)dataBufAddress;
+	data_desc_upd_async_t *desc = NULL;
+	uint64_t descPtr;
+	uint16_t value16;
+	daos_iod_t *iod;
+	int rc;
+
+	memcpy(&oh, &objPtr, 8);
+	memcpy(&descPtr, desc_buf, 8);
+	desc_buf += 8;
+	if (descPtr != 0L) { /* reusable */
+		/* skip maxlen */
+		desc_buf += 2;
+		desc = *(data_desc_upd_async_t **)&descPtr;
+		/* dkey */
+		memcpy(&value16, desc_buf, 2);
+		desc_buf += 2;
+		desc->dkey.iov_len = desc->dkey.iov_buf_len
+				= value16;
+		desc_buf += desc->maxKeyLen;
+		/* akey */
+		memcpy(&value16, desc_buf, 2);
+		desc_buf += 2;
+		iod = &desc->iods[0];
+		iod->iod_name.iov_len =
+			iod->iod_name.iov_buf_len = value16;
+		desc_buf += desc->maxKeyLen;
+	} else { /* not reusable */
+		char *msg = "memory allocation failed";
+
+		desc =	(data_desc_upd_async_t *)malloc(
+			sizeof(data_desc_upd_async_t));
+
+		if (desc == NULL) {
+			throw_const_obj(env,
+			msg,
+			CUSTOM_ERR3);
+			return;
+		}
+		rc = allocate_desc_update_async(desc_buf, desc, 0);
+		if (rc) {
+			throw_const_obj(env, "allocation failed",
+					rc);
+			return;
+		}
+
+	}
+	/* event */
+	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)
+				&eqWrapHdl;
+
+	desc->event = eq->events[eqId];
+	/* offset */
+	desc->recxs[0].rx_idx = offset;
+	/* length */
+	desc->recxs[0].rx_nr = (uint64_t)len;
+	/* sgl */
+	d_iov_set(&desc->iovs[0], data_buf, (uint64_t)len);
+	desc->sgls[0].sg_nr_out = 0;
+	rc = daos_event_register_comp_cb(&desc->event->event,
+		update_ret_code_no_decode,
+		desc);
+	if (rc) {
+		char *msg = "Failed to register update callback";
+
+		throw_const_obj(env,
+				msg,
+				rc);
+		return;
+	}
+	desc->event->status = EVENT_IN_USE;
+	desc->event->event.ev_error = 0;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0L, &desc->dkey,
+			1, desc->iods,
+			desc->sgls, &desc->event->event);
+	if (rc) {
+		throw_const_obj(env,
+				"Failed to update DAOS object",
+				rc);
 	}
 }
 
@@ -998,12 +1211,12 @@ decode_async(JNIEnv *env, jlong descBufAddress,
 		/* sgl */
 		memcpy(&value64, desc_buffer, 8);
 		desc_buffer += 8;
-		d_iov_set(&desc->iovs[i], value64, value);
+		d_iov_set(&desc->iovs[i], (void *)value64, value);
 		desc->sgls[i].sg_iovs = &desc->iovs[i];
 		desc->sgls[i].sg_nr = 1;
 		desc->sgls[i].sg_nr_out = 0;
 	}
-	desc->ret_buf_address = desc_buffer;
+	desc->ret_buf_address = (uint64_t)desc_buffer;
 	*ret_desc = desc;
 	return 0;
 }
@@ -1012,7 +1225,7 @@ static int
 update_ret_code_async(void *udata, daos_event_t *ev, int ret)
 {
 	data_desc_async_t *desc = (data_desc_async_t *)udata;
-	char *desc_buffer = desc->ret_buf_address;
+	char *desc_buffer = (char *)desc->ret_buf_address;
 
 	memcpy(desc_buffer, &ret, 4);
 	desc->event->status = 0;
@@ -1035,7 +1248,7 @@ Java_io_daos_obj_DaosObjClient_updateObjectAsync(
 	if (rc) {
 		char *msg = "Failed to allocate memory";
 
-		throw_exception_const_msg_object(env, msg, rc);
+		throw_const_obj(env, msg, rc);
 		goto fail;
 	}
 	desc->event->status = EVENT_IN_USE;
@@ -1045,7 +1258,7 @@ Java_io_daos_obj_DaosObjClient_updateObjectAsync(
 	if (rc) {
 		char *msg = "Failed to register update callback";
 
-		throw_exception_const_msg_object(env, msg, rc);
+		throw_const_obj(env, msg, rc);
 		goto fail;
 	}
 	rc = daos_obj_update(oh, DAOS_TX_NONE, flags, &desc->dkey,
@@ -1054,7 +1267,7 @@ Java_io_daos_obj_DaosObjClient_updateObjectAsync(
 	if (rc) {
 		char *msg = "Failed to update DAOS object asynchronously";
 
-		throw_exception_const_msg_object(env, msg, rc);
+		throw_const_obj(env, msg, rc);
 		goto fail;
 	}
 	return;
@@ -1067,7 +1280,7 @@ static int
 update_actual_size(void *udata, daos_event_t *ev, int ret)
 {
 	data_desc_simple_t *desc = (data_desc_simple_t *)udata;
-	char *desc_buffer = desc->ret_buf_address;
+	char *desc_buffer = (char *)desc->ret_buf_address;
 	int i;
 	uint32_t value;
 
@@ -1133,7 +1346,7 @@ static int
 update_actual_size_async(void *udata, daos_event_t *ev, int ret)
 {
 	data_desc_async_t *desc = (data_desc_async_t *)udata;
-	char *desc_buffer = desc->ret_buf_address;
+	char *desc_buffer = (char *)desc->ret_buf_address;
 	int i;
 	uint32_t value;
 
@@ -1165,7 +1378,7 @@ Java_io_daos_obj_DaosObjClient_fetchObjectAsync(
 	if (rc) {
 		char *msg = "Failed to allocate memory";
 
-		throw_exception_const_msg_object(env, msg, rc);
+		throw_const_obj(env, msg, rc);
 		goto fail;
 	}
 	desc->event->status = EVENT_IN_USE;
@@ -1175,7 +1388,7 @@ Java_io_daos_obj_DaosObjClient_fetchObjectAsync(
 	if (rc) {
 		char *msg = "Failed to register fetch callback";
 
-		throw_exception_const_msg_object(env, msg, rc);
+		throw_const_obj(env, msg, rc);
 		goto fail;
 	}
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, flags, &desc->dkey,
@@ -1184,7 +1397,7 @@ Java_io_daos_obj_DaosObjClient_fetchObjectAsync(
 	if (rc) {
 		char *msg = "Failed to fetch DAOS object asynchronously";
 
-		throw_exception_const_msg_object(env, msg, rc);
+		throw_const_obj(env, msg, rc);
 		goto fail;
 	}
 	return;

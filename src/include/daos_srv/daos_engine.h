@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -137,6 +137,7 @@ void dss_unregister_key(struct dss_module_key *key);
 /* Opaque xstream configuration data */
 struct dss_xstream;
 
+int  dss_xstream_set_affinity(struct dss_xstream *dxs);
 bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
 daos_epoch_t dss_get_start_epoch(void);
@@ -736,6 +737,7 @@ struct dss_enum_arg {
 			int			kds_len;
 			d_sg_list_t	       *sgl;
 			d_iov_t			csum_iov;
+			uint32_t		ec_cell_sz;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */

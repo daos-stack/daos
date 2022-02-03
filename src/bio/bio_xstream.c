@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,7 +87,7 @@ bio_spdk_env_init(void)
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
 
-	if (nvme_glb.bd_nvme_conf != NULL) {
+	if (bio_nvme_configured()) {
 		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
 		if (rc != 0) {
 			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
@@ -107,6 +107,14 @@ bio_spdk_env_init(void)
 		opts.shm_id = nvme_glb.bd_shm_id;
 
 	opts.env_context = (char *)dpdk_cli_override_opts;
+
+	if (bio_nvme_configured()) {
+		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
+		if (rc != 0) {
+			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
+	}
 
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {

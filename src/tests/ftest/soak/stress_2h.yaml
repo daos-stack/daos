@@ -19,7 +19,7 @@ setup:
     start_agents: False
 server_config:
     name: daos_server
-    provider: ofi+sockets
+    provider: ofi+tcp
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:

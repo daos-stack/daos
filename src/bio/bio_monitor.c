@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -333,20 +333,20 @@ populate_intel_smart_stats(struct bio_dev_health *bdh)
 				SPDK_NVME_INTEL_SMART_WEAR_LEVELING_COUNT) {
 			atb = isp->attributes[i];
 			stats->wear_leveling_cnt_norm = atb.normalized_value;
-			d_tm_set_counter(bdh->bdh_wear_leveling_cnt_norm,
-					 atb.normalized_value);
+			d_tm_set_gauge(bdh->bdh_wear_leveling_cnt_norm,
+				       atb.normalized_value);
 			stats->wear_leveling_cnt_min = atb.raw_value[0] |
 						       atb.raw_value[1] << 8;
-			d_tm_set_counter(bdh->bdh_wear_leveling_cnt_min,
-					 stats->wear_leveling_cnt_min);
+			d_tm_set_gauge(bdh->bdh_wear_leveling_cnt_min,
+				       stats->wear_leveling_cnt_min);
 			stats->wear_leveling_cnt_max = atb.raw_value[2] |
 						       atb.raw_value[3] << 8;
-			d_tm_set_counter(bdh->bdh_wear_leveling_cnt_max,
-					 stats->wear_leveling_cnt_max);
+			d_tm_set_gauge(bdh->bdh_wear_leveling_cnt_max,
+				       stats->wear_leveling_cnt_max);
 			stats->wear_leveling_cnt_avg = atb.raw_value[4] |
 						       atb.raw_value[5] << 8;
-			d_tm_set_counter(bdh->bdh_wear_leveling_cnt_avg,
-					 stats->wear_leveling_cnt_avg);
+			d_tm_set_gauge(bdh->bdh_wear_leveling_cnt_avg,
+				       stats->wear_leveling_cnt_avg);
 		}
 		if (isp->attributes[i].code ==
 				SPDK_NVME_INTEL_SMART_E2E_ERROR_COUNT) {
@@ -370,16 +370,16 @@ populate_intel_smart_stats(struct bio_dev_health *bdh)
 			/* divide raw value by 1024 to derive the percentage */
 			stats->media_wear_raw =
 					extend_to_uint64(atb.raw_value, 6);
-			d_tm_set_counter(bdh->bdh_media_wear_raw,
-					 stats->media_wear_raw);
+			d_tm_set_gauge(bdh->bdh_media_wear_raw,
+				       stats->media_wear_raw);
 		}
 		if (isp->attributes[i].code ==
 				SPDK_NVME_INTEL_SMART_HOST_READ_PERCENTAGE) {
 			atb = isp->attributes[i];
 			stats->host_reads_raw =
 					extend_to_uint64(atb.raw_value, 6);
-			d_tm_set_counter(bdh->bdh_host_reads_raw,
-					 stats->host_reads_raw);
+			d_tm_set_gauge(bdh->bdh_host_reads_raw,
+				       stats->host_reads_raw);
 		}
 		if (isp->attributes[i].code ==
 				SPDK_NVME_INTEL_SMART_TIMER) {
@@ -393,8 +393,8 @@ populate_intel_smart_stats(struct bio_dev_health *bdh)
 				SPDK_NVME_INTEL_SMART_THERMAL_THROTTLE_STATUS) {
 			atb = isp->attributes[i];
 			stats->thermal_throttle_status = atb.raw_value[0];
-			d_tm_set_counter(bdh->bdh_thermal_throttle_status,
-					 stats->thermal_throttle_status);
+			d_tm_set_gauge(bdh->bdh_thermal_throttle_status,
+				       stats->thermal_throttle_status);
 			stats->thermal_throttle_event_cnt =
 					extend_to_uint64(&atb.raw_value[1], 4);
 			d_tm_set_counter(bdh->bdh_thermal_throttle_event_cnt,
@@ -476,9 +476,8 @@ populate_health_stats(struct bio_dev_health *bdh)
 	d_tm_set_gauge(bdh->bdh_temp_warn, dev_state->temp_warn);
 
 	/** reliability */
-	d_tm_set_counter(bdh->bdh_avail_spare, page->available_spare);
-	d_tm_set_counter(bdh->bdh_avail_spare_thres,
-			 page->available_spare_threshold);
+	d_tm_set_gauge(bdh->bdh_avail_spare, page->available_spare);
+	d_tm_set_gauge(bdh->bdh_avail_spare_thres, page->available_spare_threshold);
 	dev_state->avail_spare_warn	= cw.bits.available_spare ? true
 								  : false;
 	d_tm_set_gauge(bdh->bdh_avail_spare_warn, dev_state->avail_spare_warn);

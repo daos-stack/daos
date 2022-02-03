@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -740,7 +740,7 @@ server_init(int argc, char *argv[])
 	d_tm_record_timestamp(metrics->ready_time);
 
 	/** Report rank */
-	d_tm_set_counter(metrics->rank_id, dss_self_rank());
+	d_tm_set_gauge(metrics->rank_id, dss_self_rank());
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",

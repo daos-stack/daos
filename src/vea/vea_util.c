@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -334,7 +334,7 @@ vea_metrics_alloc(const char *path, int tgt_id)
 
 		snprintf(desc, sizeof(desc), "number of %s frags", frags_type2str(type));
 
-		rc = d_tm_add_metric(&metrics->vm_frags[i], D_TM_COUNTER, desc, "frags",
+		rc = d_tm_add_metric(&metrics->vm_frags[i], D_TM_GAUGE, desc, "frags",
 				     "%s/%s/frags/%s/tgt_%u", path, VEA_TELEMETRY_DIR,
 				     frags_type2str(type), tgt_id);
 		if (rc)
@@ -383,7 +383,7 @@ update_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr, bool de
 		}
 		frag_idx = type - STAT_FRAGS_LARGE;
 		if (metrics && metrics->vm_frags[frag_idx])
-			d_tm_set_counter(metrics->vm_frags[frag_idx], vsi->vsi_stat[type]);
+			d_tm_set_gauge(metrics->vm_frags[frag_idx], vsi->vsi_stat[type]);
 		break;
 	case STAT_FREE_BLKS:
 		if (dec) {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,15 +14,14 @@
 
 static int
 vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
-		    daos_epoch_t epoch, uint32_t intent, void *args)
+		    daos_epoch_t epoch, uint32_t intent, bool retry, void *args)
 {
 	int	rc;
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(coh, tx_id, epoch, intent,
-					DTX_RT_ILOG);
+	rc = vos_dtx_check_availability(coh, tx_id, epoch, intent, DTX_RT_ILOG, retry);
 	if (rc < 0)
 		return rc;
 
@@ -400,7 +399,7 @@ update:
 
 	ilog_close(loh);
 
-	if (rc == -DER_ALREADY) /* operation had no effect */
+	if (rc == -DER_ALREADY && (dth == NULL || !dth->dth_already)) /* operation had no effect */
 		rc = 0;
 done:
 	VOS_TX_LOG_FAIL(rc, "Could not update ilog %p at "DF_X64": "DF_RC"\n",
@@ -500,7 +499,7 @@ punch_log:
 
 	ilog_close(loh);
 
-	if (rc == -DER_ALREADY) /* operation had no effect */
+	if (rc == -DER_ALREADY && (dth == NULL || !dth->dth_already)) /* operation had no effect */
 		rc = 0;
 	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
 			DP_RC(rc));
