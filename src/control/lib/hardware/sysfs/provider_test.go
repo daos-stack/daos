@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -274,7 +274,7 @@ func TestProvider_GetTopology(t *testing.T) {
 				},
 			},
 		},
-		"exclude virtual devices": {
+		"virtual device": {
 			setup: func(t *testing.T, root string) {
 				for _, dev := range []struct {
 					class string
@@ -317,6 +317,11 @@ func TestProvider_GetTopology(t *testing.T) {
 							},
 							{
 								Name:    "net0",
+								Type:    hardware.DeviceTypeNetInterface,
+								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+							},
+							{
+								Name:    "virt_net0",
 								Type:    hardware.DeviceTypeNetInterface,
 								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
 							},
