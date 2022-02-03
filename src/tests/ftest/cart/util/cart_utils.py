@@ -384,6 +384,7 @@ class CartTest(TestWithoutServers):
 
         tst_host = self.params.get("{}".format(host), "/run/hosts/*/")
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
+        tst_processes = len(tst_host)*int(tst_ppn)
         logparse = self.params.get("logparse", "/run/tests/*/")
 
         if tst_slt is not None:
@@ -431,6 +432,7 @@ class CartTest(TestWithoutServers):
         job.mca.update(mca_flags)
         job.hostfile.update(hostfile)
         job.pprnode.update(tst_ppn)
+        job.processes.update(tst_processes)
         return str(job)
 
     def convert_xml(self, xml_file):
