@@ -82,9 +82,8 @@ struct evt_desc_cbs {
 	 * this method is absent.
 	 */
 	int		(*dc_log_status_cb)(struct umem_instance *umm,
-					    daos_epoch_t epoch,
-					    struct evt_desc *desc, int intent,
-					    void *args);
+					    daos_epoch_t epoch, struct evt_desc *desc,
+					    int intent, bool retry, void *args);
 	void		 *dc_log_status_args;
 	/** Add a descriptor to undo log */
 	int		(*dc_log_add_cb)(struct umem_instance *umm,
