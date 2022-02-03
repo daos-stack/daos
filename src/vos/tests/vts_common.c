@@ -56,7 +56,7 @@ vts_alloc_gen_fname(char **fname)
 {
 	int rc;
 
-	rc = asprintf(fname, "%s.%d", vos_path, gc++);
+	rc = asprintf(fname, "%s/vpool.%d", vos_path, gc++);
 	if (rc < 0) {
 		print_error("Failed to allocate memory for fname: rc = %d\n", rc);
 		return rc;
