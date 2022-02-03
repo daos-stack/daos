@@ -18,7 +18,7 @@ import glob
 from apricot import TestWithoutServers
 from general_utils import stop_processes
 from write_host_file import write_host_file
-from job_manage_utils import Orterun
+from job_manager_utils import Orterun
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
