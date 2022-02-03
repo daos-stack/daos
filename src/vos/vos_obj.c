@@ -8,6 +8,7 @@
  *
  * vos/vos_obj.c
  */
+/* This is a test */
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
