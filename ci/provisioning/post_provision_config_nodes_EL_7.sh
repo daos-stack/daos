@@ -90,6 +90,9 @@ post_provision_config_nodes() {
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
+    # shellcheck disable=SC2154
+    update_repos "$DISTRO_NAME" "${repo_servers[@]}"
+
     time dnf -y repolist
     # the group repo is always on the test image
     #add_group_repo
