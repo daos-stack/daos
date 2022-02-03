@@ -41,7 +41,7 @@ func TestStorage_BdevDeviceList(t *testing.T) {
 		"empty": {
 			expList:    &BdevDeviceList{},
 			expYamlStr: "[]\n",
-			expJSONStr: "null",
+			expJSONStr: "[]",
 		},
 		"valid pci addresses": {
 			devices: []string{"0000:81:00.0", "0000:82:00.0"},
@@ -63,10 +63,7 @@ func TestStorage_BdevDeviceList(t *testing.T) {
 		"non-pci devices": {
 			devices: []string{"/dev/block0", "/dev/block1"},
 			expList: &BdevDeviceList{
-				stringBdevSet: stringSet{
-					"/dev/block0": struct{}{},
-					"/dev/block1": struct{}{},
-				},
+				stringBdevSet: common.NewStringSet("/dev/block0", "/dev/block1"),
 			},
 			expYamlStr: `
 - /dev/block0
@@ -149,10 +146,7 @@ func TestStorage_BdevDeviceList_FromYAML(t *testing.T) {
 - /dev/block1
 `,
 			expList: &BdevDeviceList{
-				stringBdevSet: stringSet{
-					"/dev/block0": struct{}{},
-					"/dev/block1": struct{}{},
-				},
+				stringBdevSet: common.NewStringSet("/dev/block0", "/dev/block1"),
 			},
 		},
 		"mixed pci and non-pci devices": {
@@ -200,10 +194,7 @@ func TestStorage_BdevDeviceList_FromJSON(t *testing.T) {
 		"non-pci devices": {
 			input: `["/dev/block0","/dev/block1"]`,
 			expList: &BdevDeviceList{
-				stringBdevSet: stringSet{
-					"/dev/block0": struct{}{},
-					"/dev/block1": struct{}{},
-				},
+				stringBdevSet: common.NewStringSet("/dev/block0", "/dev/block1"),
 			},
 		},
 		"mixed pci and non-pci devices": {

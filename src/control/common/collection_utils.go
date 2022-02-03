@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,15 +29,32 @@ func (s StringSet) ToSlice() []string {
 	return slice
 }
 
-// Add adds zero or more strings to the StringSet.
-func (s StringSet) Add(values ...string) {
+// AddUnique adds zero or more strings to the StringSet,
+// and returns an error if any already exist.
+func (s StringSet) AddUnique(values ...string) error {
 	if s == nil {
-		return
+		return nil
 	}
 
+	dupes := StringSet{}
 	for _, str := range values {
+		if _, exists := s[str]; exists {
+			dupes.Add(str)
+			continue
+		}
 		s[str] = struct{}{}
 	}
+
+	if len(dupes) > 0 {
+		return errors.Errorf("duplicate strings: %s", dupes)
+	}
+
+	return nil
+}
+
+// Add adds zero or more strings to the StringSet.
+func (s StringSet) Add(values ...string) {
+	s.AddUnique(values...)
 }
 
 // Has checks if the passed string is in the StringSet.

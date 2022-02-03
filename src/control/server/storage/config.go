@@ -10,13 +10,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
@@ -148,7 +148,7 @@ func (tc *TierConfig) WithBdevDeviceList(devices ...string) *TierConfig {
 	if set, err := NewBdevDeviceList(devices...); err == nil {
 		tc.Bdev.DeviceList = set
 	} else {
-		tc.Bdev.DeviceList = &BdevDeviceList{stringBdevSet: stringSet{}}
+		tc.Bdev.DeviceList = &BdevDeviceList{stringBdevSet: common.StringSet{}}
 		for _, d := range devices {
 			tc.Bdev.DeviceList.stringBdevSet.Add(d)
 		}
@@ -267,25 +267,6 @@ func (sc *ScmConfig) Validate(class Class) error {
 	return nil
 }
 
-type stringSet map[string]struct{}
-
-func (ss stringSet) Add(s string) error {
-	if _, exists := ss[s]; exists {
-		return errors.Errorf("duplicate device %q", s)
-	}
-	ss[s] = struct{}{}
-	return nil
-}
-
-func (ss stringSet) Strings() []string {
-	var out []string
-	for s := range ss {
-		out = append(out, s)
-	}
-	sort.Strings(out)
-	return out
-}
-
 // BdevDeviceList represents a set of block device addresses.
 type BdevDeviceList struct {
 	// As this is the most common use case, we'll make the embedded type's methods
@@ -293,7 +274,7 @@ type BdevDeviceList struct {
 	hardware.PCIAddressSet
 
 	// As a fallback for non-PCI bdevs, maintain a map of strings.
-	stringBdevSet stringSet
+	stringBdevSet common.StringSet
 }
 
 // maybePCI does a quick check to see if a string could possibly be a PCI address.
@@ -312,33 +293,33 @@ func (bdl *BdevDeviceList) fromStrings(addrs []string) error {
 	}
 
 	if bdl.stringBdevSet == nil {
-		bdl.stringBdevSet = stringSet{}
+		bdl.stringBdevSet = common.StringSet{}
 	}
 
 	for _, strAddr := range addrs {
 		if !maybePCI(strAddr) {
-			if err := bdl.stringBdevSet.Add(strAddr); err != nil {
-				return err
+			if err := bdl.stringBdevSet.AddUnique(strAddr); err != nil {
+				return errors.Wrap(err, "bdev_list")
 			}
 			continue
 		}
 
 		addr, err := hardware.NewPCIAddress(strAddr)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "bdev_list")
 		}
 
 		if bdl.Contains(addr) {
-			return errors.Errorf("duplicate PCI address %s", addr)
+			return errors.Errorf("bdev_list: duplicate PCI address %s", addr)
 		}
 
 		if err := bdl.Add(addr); err != nil {
-			return err
+			return errors.Wrap(err, "bdev_list")
 		}
 	}
 
 	if len(bdl.stringBdevSet) > 0 && bdl.PCIAddressSet.Len() > 0 {
-		return errors.New("cannot mix PCI and non-PCI block device addresses")
+		return errors.New("bdev_list: cannot mix PCI and non-PCI block device addresses")
 	}
 
 	return nil
@@ -409,7 +390,7 @@ func (bdl *BdevDeviceList) Equals(other *BdevDeviceList) bool {
 // Devices returns a slice of strings representing the block device addresses.
 func (bdl *BdevDeviceList) Devices() []string {
 	if bdl.PCIAddressSet.Len() == 0 {
-		return bdl.stringBdevSet.Strings()
+		return bdl.stringBdevSet.ToSlice()
 	}
 
 	var addresses []string
@@ -425,7 +406,7 @@ func (bdl *BdevDeviceList) String() string {
 
 // NewBdevDeviceList creates a new BdevDeviceList from a list of strings.
 func NewBdevDeviceList(devices ...string) (*BdevDeviceList, error) {
-	bdl := &BdevDeviceList{stringBdevSet: stringSet{}}
+	bdl := &BdevDeviceList{stringBdevSet: common.StringSet{}}
 	return bdl, bdl.fromStrings(devices)
 }
 
@@ -549,7 +530,7 @@ func (bc *BdevConfig) Validate(class Class) error {
 }
 
 // parsePCIBusRange takes a string of format <Begin-End> and returns the begin and end values.
-// Number bdle is detected from the string prefixes e.g. 0x for hexadecimal.
+// Number base is detected from the string prefixes e.g. 0x for hexadecimal.
 // bitSize parameter sets a cut-off for the return values e.g. 8 for uint8.
 func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 	if numRange == "" {
