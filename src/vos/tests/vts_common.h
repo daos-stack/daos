@@ -44,6 +44,7 @@
 #define	VP_OPS 10
 
 #define STORAGE_PATH_LEN 96
+extern char  vos_path[STORAGE_PATH_LEN];
 
 extern int gc;
 

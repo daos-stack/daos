@@ -39,8 +39,8 @@ enum {
 	TCX_READY,
 };
 
-int		gc, oid_cnt;
-extern char	vos_path[STORAGE_PATH_LEN];
+int	gc, oid_cnt;
+char	vos_path[STORAGE_PATH_LEN];
 
 bool
 vts_file_exists(const char *filename)

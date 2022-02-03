@@ -23,8 +23,6 @@
 #include <vos_internal.h>
 #include <linux/limits.h>
 
-char	vos_path[STORAGE_PATH_LEN] = "";
-
 static void
 print_usage()
 {
@@ -160,7 +158,7 @@ main(int argc, char **argv)
 				print_error("%s is longer than STORAGE_PATH_LEN.\n", optarg);
 				goto exit_0;
 			}
-			strncpy(vos_path, optarg, STORAGE_PATH_LEN-1);
+			strncpy(vos_path, optarg, STORAGE_PATH_LEN);
 			break;
 		case 'h':
 			print_usage();
@@ -194,7 +192,7 @@ main(int argc, char **argv)
 	}
 
 	if (vos_path[0] == '\0') {
-		strncpy(vos_path, "/mnt/daos", STORAGE_PATH_LEN-1);
+		strcpy(vos_path, "/mnt/daos");
 	}
 
 	rc = vos_self_init(vos_path);
