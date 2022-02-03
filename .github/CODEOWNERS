@@ -8,7 +8,10 @@ utils/rpms @daos-stack/release-engineering
 *.go @daos-stack/go-owners
 
 # any PR that touches VOS files should get a review from VOS
-src/vos/ src/common/btree @daos-stack/VOS
+src/vos/ @daos-stack/VOS
+
+# any PR that touches btree files should get a review from VOS
+src/common/btree*.* @daos-stack/VOS
 
 # Jenkinsfile changes should be reviewed by Release Engineering
 Jenkinsfile @daos-stack/release-engineering
