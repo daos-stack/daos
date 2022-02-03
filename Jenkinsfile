@@ -694,7 +694,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label "stage_vm9"
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -713,7 +713,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label "stage_vm9"
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -732,7 +732,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label "stage_vm9"
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -751,7 +751,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label "stage_vm9"
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -770,7 +770,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label "stage_vm9"
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -971,7 +971,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
+                        label "wolf-52_vmd5"
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
