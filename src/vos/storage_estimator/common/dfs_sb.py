@@ -253,6 +253,7 @@ class VOS_SIZE(BASE_CLASS):
         self._lib.d_free_string(ctypes.byref(self._data))
 
     def get_vos_size_str(self, alloc_overhead, vospath):
+        """vospath - mount point of daos. Default is /mnt/daos"""
         print('  Reading VOS structures from current installation')
         ret = self._lib.get_vos_structure_sizes_yaml(
             ctypes.c_int(alloc_overhead),
