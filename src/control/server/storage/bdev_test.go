@@ -92,7 +92,7 @@ func Test_NvmeDevStateFromString_invalid(t *testing.T) {
 			expState: NvmeStateUnknown,
 			expStr:   "UNKNOWN",
 		},
-		"unrecognised string": {
+		"unrecognized string": {
 			inStr:    "BAD",
 			expState: NvmeStateUnknown,
 			expStr:   "UNKNOWN",
