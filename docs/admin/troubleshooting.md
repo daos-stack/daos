@@ -414,6 +414,271 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 		$ dmg pool destroy --pool=$DAOS_POOL --force
 		Pool-destroy command succeeded
 
+### ipmctl
+
+IPMCTL utility is used for Intel® Optane™ persistent memory for managing, diagnostic and testing purpose.
+[IPMCTL user guide](https://docs.pmem.io/ipmctl-user-guide/) has more details about the utility.
+
+We can use the [diagnostic](https://docs.pmem.io/ipmctl-user-guide/debug/run-diagnostic) and
+[show error log](https://docs.pmem.io/ipmctl-user-guide/debug/show-error-log) functionality to debug the PCMEM related issues.
+
+#### Run a full diagnostic test on clean system
+
+        #ipmctl start -diagnostic
+        --Test = Quick
+           State = Ok
+           Message = The quick health check succeeded.
+           --SubTest = Manageability
+                  State = Ok
+           --SubTest = Boot status
+                  State = Ok
+           --SubTest = Health
+                  State = Ok
+
+        --Test = Config
+           State = Ok
+           Message = The platform configuration check succeeded.
+           --SubTest = PMem module specs
+                  State = Ok
+           --SubTest = Duplicate PMem module
+                  State = Ok
+           --SubTest = System Capability
+                  State = Ok
+           --SubTest = Namespace LSA
+                  State = Ok
+           --SubTest = PCD
+                  State = Ok
+
+        --Test = Security
+           State = Ok
+           Message = The security check succeeded.
+           --SubTest = Encryption status
+                  State = Ok
+           --SubTest = Inconsistency
+                  State = Ok
+
+        --Test = FW
+           State = Ok
+           Message = The firmware consistency and settings check succeeded.
+           --SubTest = FW Consistency
+                  State = Ok
+           --SubTest = Viral Policy
+                  State = Ok
+           --SubTest = Threshold check
+                  State = Ok
+           --SubTest = System Time
+                  State = Ok
+
+#### Run quick diagnostic test on clean system.
+
+        #ipmctl start -diagnostic quick
+        --Test = Quick
+           State = Ok
+           Message = The quick health check succeeded.
+           --SubTest = Manageability
+                  State = Ok
+           --SubTest = Boot status
+                  State = Ok
+           --SubTest = Health
+                  State = Ok
+
+#### Run quick diagnostic test on system which has health warning.
+
+        #ipmctl start -diagnostic quick
+        --Test = Quick
+           State = Warning
+           --SubTest = Manageability
+                  State = Ok
+           --SubTest = Boot status
+                  State = Ok
+           --SubTest = Health
+                  State = Warning
+                  Message.1 = The quick health check detected that PMem module 0x0001 is reporting a bad health state Noncritical failure (Package Sparing occurred).
+                  Message.2 = The quick health check detected that PMem module 0x0001 is reporting that it has no package spares available.
+
+#### Run quick diagnostic test on system where PCMEM life remaining percentage is below threshold
+
+        #ipmctl start -diagnostic quick
+        --Test = Quick
+           State = Warning
+           --SubTest = Manageability
+                  State = Ok
+           --SubTest = Boot status
+                  State = Ok
+           --SubTest = Health
+                  State = Warning
+                  Message.1 = The quick health check detected that PMem module 0x0001 is reporting percentage remaining at 10% which is less than the alarm threshold 50%
+
+#### Run showerror Thermal and Media log on clean system.
+
+        #ipmctl show -error Thermal
+        No errors found on PMem module 0x0001
+        No errors found on PMem module 0x0011
+        No errors found on PMem module 0x0021
+        No errors found on PMem module 0x0101
+        No errors found on PMem module 0x0111
+        No errors found on PMem module 0x0121
+        No errors found on PMem module 0x1001
+        No errors found on PMem module 0x1011
+        No errors found on PMem module 0x1021
+        No errors found on PMem module 0x1101
+        No errors found on PMem module 0x1111
+        No errors found on PMem module 0x1121
+        Show Error executed successfully
+
+        #ipmctl show -error Media
+        No errors found on PMem module 0x0001
+        No errors found on PMem module 0x0011
+        No errors found on PMem module 0x0021
+        No errors found on PMem module 0x0101
+        No errors found on PMem module 0x0111
+        No errors found on PMem module 0x0121
+        No errors found on PMem module 0x1001
+        No errors found on PMem module 0x1011
+        No errors found on PMem module 0x1021
+        No errors found on PMem module 0x1101
+        No errors found on PMem module 0x1111
+        No errors found on PMem module 0x1121
+        Show Error executed successfully
+
+#### Run showerror command for Thermal and Media log on non clean system.
+
+        #ipmctl show -error Thermal  Level=Low
+         DimmID | System Timestamp    | Temperature | Reported
+        =============================================================
+         0x0001 | 02/02/2022 21:45:26 | 86          | User Alarm Trip
+         0x0001 | 02/03/2022 00:06:36 | 86          | User Alarm Trip
+        No errors found on PMem module 0x0011
+        No errors found on PMem module 0x0021
+        No errors found on PMem module 0x0101
+        No errors found on PMem module 0x0111
+        No errors found on PMem module 0x0121
+        No errors found on PMem module 0x1001
+        No errors found on PMem module 0x1011
+        No errors found on PMem module 0x1021
+        No errors found on PMem module 0x1101
+        No errors found on PMem module 0x1111
+        No errors found on PMem module 0x1121
+
+        # ipmctl show -error Media
+         DimmID | System Timestamp    | Error Type
+        =============================================================
+         0x0001 | 01/12/2022 21:18:53 | 0x04 - Locked/Illegal Access
+         0x0001 | 01/12/2022 21:18:53 | 0x04 - Locked/Illegal Access
+         ....
+         ....
+         ....
+         0x1121 | 02/03/2022 16:50:17 | 0x04 - Locked/Illegal Access
+         0x1121 | 02/03/2022 16:50:17 | 0x04 - Locked/Illegal Access
+        Show Error executed successfully
+
+### ndctl
+
+NDCTL is another utility library for managing the PCMEM. It can detect the media errors and scrub it to avoide accesses that could lead to uncorrectable memory error handling events.
+[NDCTL user guide](https://docs.pmem.io/ndctl-user-guide/) has more details about the utility.
+
+#### Read bad blocks data from sys on clean system.
+
+	# cat /sys/block/pmem*/badblocks
+	#
+
+#### [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list) command on clean system.
+
+        # ndctl list -M
+        [
+          {
+                "dev":"namespace1.0",
+                "mode":"fsdax",
+                "map":"dev",
+                "size":3183575302144,
+                "uuid":"c0d02d75-2629-4393-ae91-44e914c82e7d",
+                "sector_size":512,
+                "align":2097152,
+                "blockdev":"pmem1",
+          },
+          {
+                "dev":"namespace0.0",
+                "mode":"fsdax",
+                "map":"dev",
+                "size":3183575302144,
+                "uuid":"7294d1c0-2145-436b-a2af-3115db839832",
+                "sector_size":512,
+                "align":2097152,
+                "blockdev":"pmem0"
+          }
+        ]
+
+#### [ndctl start-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-start-scrub) command ran on system which has bad blocks.
+
+	# ndctl start-scrub
+	[
+	  {
+		"provider":"ACPI.NFIT",
+		"dev":"ndbus0",
+		"scrub_state":"active",
+		"firmware":{
+		  "activate_method":"reset"
+		}
+	  }
+	]
+
+#### [ndctl wait-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/untitled-2) command ran on system which has bad blocks. Scrubbing takes time and this command will take longer time (~8-10 min) based on number of PCMEM on the system.
+
+	# ndctl wait-scrub
+	[
+	  {
+		"provider":"ACPI.NFIT",
+		"dev":"ndbus0",
+		"scrub_state":"idle",
+		"firmware":{
+		  "activate_method":"reset"
+		}
+	  }
+	]
+
+
+#### Read bad blocks data from sys after scrubbing is finished.
+
+	# cat /sys/block/pmem*/badblocks
+	42 8
+
+#### [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list) command execution on system where bad blocks are scrubbed.
+
+	# ndctl list -M
+	[
+	  {
+		"dev":"namespace1.0",
+		"mode":"fsdax",
+		"map":"dev",
+		"size":3183575302144,
+		"uuid":"c0d02d75-2629-4393-ae91-44e914c82e7d",
+		"sector_size":512,
+		"align":2097152,
+		"blockdev":"pmem1",
+		"badblock_count":8,
+		"badblocks":[
+		  {
+			"offset":42,
+			"length":8,
+			"dimms":[
+			  "nmem8",
+			  "nmem10"
+			]
+		  }
+		]
+	  },
+	  {
+		"dev":"namespace0.0",
+		"mode":"fsdax",
+		"map":"dev",
+		"size":3183575302144,
+		"uuid":"7294d1c0-2145-436b-a2af-3115db839832",
+		"sector_size":512,
+		"align":2097152,
+		"blockdev":"pmem0"
+	  }
+	]
+
 ## Bug Report
 
 Bugs should be reported through our issue tracker[^1] with a test case
@@ -427,3 +692,5 @@ To avoid problems with attaching large files, please attach the logs
 in a compressed container format, such as .zip or .tar.bz2.
 
 [^1]: http://jira.daos.io
+
+
