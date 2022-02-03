@@ -70,14 +70,14 @@ func Test_NvmeDevState(t *testing.T) {
 				"unexpected IsNormal() result")
 			common.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
 				"unexpected IsFaulty() result")
-			common.AssertEqual(t, tc.expStr, tc.state.StatusString(),
+			common.AssertEqual(t, tc.expStr, tc.state.String(),
 				"unexpected status string")
 
-			stateNew := NvmeDevStateFromString(tc.state.StatusString())
+			stateNew := NvmeDevStateFromString(tc.state.String())
 
-			common.AssertEqual(t, tc.state.StatusString(), stateNew.StatusString(),
+			common.AssertEqual(t, tc.state.String(), stateNew.String(),
 				fmt.Sprintf("expected string %s to yield state %s",
-					tc.state.StatusString(), stateNew.StatusString()))
+					tc.state.String(), stateNew.String()))
 		})
 	}
 }
@@ -102,7 +102,7 @@ func Test_NvmeDevStateFromString_invalid(t *testing.T) {
 			state := NvmeDevStateFromString(tc.inStr)
 
 			common.AssertEqual(t, tc.expState, state, "unexpected state")
-			common.AssertEqual(t, tc.expStr, state.StatusString(), "unexpected states string")
+			common.AssertEqual(t, tc.expStr, state.String(), "unexpected states string")
 		})
 	}
 }

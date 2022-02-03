@@ -60,12 +60,12 @@ func (bs NvmeDevState) IsFaulty() bool {
 	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty != 0
 }
 
-// StatusString summarizes the device status.
-func (bs NvmeDevState) StatusString() string {
+func (bs NvmeDevState) String() string {
 	return C.GoString(C.nvme_state2str(C.int(bs)))
 }
 
-func (bs NvmeDevState) String() string {
+// States lists each flag in state bitset.
+func (bs NvmeDevState) States() string {
 	return fmt.Sprintf("plugged: %v, in-use: %v, faulty: %v, identify: %v",
 		bs&C.NVME_DEV_FL_PLUGGED != 0, bs&C.NVME_DEV_FL_INUSE != 0,
 		bs&C.NVME_DEV_FL_FAULTY != 0, bs&C.NVME_DEV_FL_IDENTIFY != 0)
@@ -176,7 +176,7 @@ func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
 		NvmeStateStr string `json:"dev_state"`
 		*toJSON
 	}{
-		NvmeStateStr: sd.NvmeState.StatusString(),
+		NvmeStateStr: sd.NvmeState.String(),
 		toJSON:       (*toJSON)(sd),
 	})
 }

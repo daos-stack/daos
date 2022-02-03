@@ -106,7 +106,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 					DevUuid: dev.Uuid,
 				})
 				if err != nil {
-					return errors.Wrapf(err, "device %s, states %q", dev, state.String())
+					return errors.Wrapf(err, "device %s, states %q", dev, state.States())
 				}
 				dev.Health = health
 			}
