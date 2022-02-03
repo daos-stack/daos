@@ -284,7 +284,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	struct vos_pool		*pool = NULL;
 	int			 rc = 0, enabled = 1;
 
-	if (!path || uuid_is_null(uuid))
+	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
 
 	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64", "
@@ -500,48 +500,19 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	if (rc)
 		return rc;
 
+	if (daos_file_is_dax(path))
+		return -DER_INVAL;
+
 	/**
 	 * NB: no need to explicitly destroy container index table because
 	 * pool file removal will do this for free.
 	 */
-	if (daos_file_is_dax(path)) {
-		int	 fd;
-		int	 len = 2 * (1 << 20UL);
-		void	*addr;
-
-		fd = open(path, O_RDWR);
-		if (fd < 0) {
-			if (errno == ENOENT)
-				D_GOTO(exit, rc = 0);
-
-			D_ERROR("Failed to open %s: %d\n", path, errno);
-			D_GOTO(exit, rc = daos_errno2der(errno));
-		}
-
-		addr = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-		if (addr == MAP_FAILED) {
-			close(fd);
-			D_ERROR("Failed to mmap %s, len:%d: %d\n", path, len,
-				errno);
-			D_GOTO(exit, rc = daos_errno2der(errno));
-		}
-		memset((char *)addr, 0, len);
-
-		rc = munmap(addr, len);
-		if (rc) {
-			close(fd);
-			D_ERROR("Failed to munmap %s: %d\n", path, errno);
-			D_GOTO(exit, rc = daos_errno2der(errno));
-		}
-		close(fd);
-	} else {
-		rc = remove(path);
-		if (rc) {
-			if (errno == ENOENT)
-				D_GOTO(exit, rc = 0);
-			D_ERROR("Failure deleting file from PMEM: %s\n",
-				strerror(errno));
-		}
+	rc = remove(path);
+	if (rc) {
+		if (errno == ENOENT)
+			D_GOTO(exit, rc = 0);
+		D_ERROR("Failure deleting file from PMEM: %s\n",
+			strerror(errno));
 	}
 exit:
 	return rc;
