@@ -22,7 +22,7 @@ hosts:
   test_clients:
     - client-A
     - client-B
-timeout: 1300
+timeout: 1600
 setup:
   start_agents_once: False
   start_servers_once: False
