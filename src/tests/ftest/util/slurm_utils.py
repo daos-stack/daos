@@ -306,9 +306,7 @@ def srun(hosts, cmd, srun_params=None, timeout=60):
             the srun command
 
     """
-    srun_time = int(timeout/60)
-    if srun_time < 1:
-        srun_time = 1
+    srun_time = max(int(timeout/60), 1)
     cmd = srun_str(hosts, cmd, srun_params, str(srun_time))
     try:
         result = run_command(cmd, timeout)
