@@ -125,6 +125,7 @@ const (
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
 	ServerPoolNoLabel
+	ServerIncompatibleComponents
 )
 
 // server config fault codes
