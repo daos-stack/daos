@@ -62,11 +62,16 @@ based upon their role.  Admin and client nodes require the installation
 of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
-1. Configure access to the [DAOS package repository]([https://packages.daos.io/v2.0/),
+1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.0/),
    using the subdirectory that matches the CentOS Linux of the nodes:
 
+	**For CentOS7:**
+
 		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
-		# **or**
+
+
+	**For CentOS8:**
+
 		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS8/packages/x86_64/daos_packages.repo'
 
 
