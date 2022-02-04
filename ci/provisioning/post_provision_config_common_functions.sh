@@ -32,7 +32,7 @@ retry_dnf() {
             if [ "$attempt" -eq 2 ] && [ ${#repo_servers[@]} -gt 1 ]; then
                 # but we were using an experimental repo server, so fall back to the
                 # non-experimental one after trying twice with the experimental one
-                set_local_repos.sh "${repo_servers[1]}}"
+                set_local_repos.sh "${repo_servers[1]}"
                 dnf -y makecache
             fi
             sleep "${RETRY_DELAY_SECONDS:-$DAOS_STACK_RETRY_DELAY_SECONDS}"
@@ -165,7 +165,6 @@ fetch_repo_config() {
 
 update_repos() {
     local DISTRO_NAME="$1"
-    local repo_servers=("$2")
 
     # Update the repo files
     local repo_server

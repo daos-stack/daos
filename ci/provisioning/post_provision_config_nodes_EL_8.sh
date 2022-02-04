@@ -49,7 +49,7 @@ distro_custom() {
                    clustershell
 
     # why do we disable this?
-    dnf -y config-manager --disable "$POWERTOOLSREPO"
+    #dnf -y config-manager --disable "$POWERTOOLSREPO"
 
 }
 
@@ -70,7 +70,7 @@ post_provision_config_nodes() {
     fi
 
     # shellcheck disable=SC2154
-    update_repos "$DISTRO_NAME" "${repo_servers[@]}"
+    update_repos "$DISTRO_NAME"
 
     time dnf -y repolist
     # the group repo is always on the test image
@@ -81,9 +81,10 @@ post_provision_config_nodes() {
     # workaround until new snapshot images are produced
     # Assume if APPSTREAM is locally proxied so is epel-modular
     # so disable the upstream epel-modular repo
-    if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}" ]; then
-        dnf -y config-manager --disable epel-modular appstream powertools
-    fi
+    # I don't think this is needed any more
+    #if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}" ]; then
+    #    dnf -y config-manager --disable epel-modular appstream powertools
+    #fi
 
     if [ -n "$INST_REPOS" ]; then
         local repo
