@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -37,7 +37,7 @@ func (cmd *DumpTopologyCmd) Execute(_ []string) error {
 	}
 
 	log := logging.NewCommandLineLogger()
-	hwProv := hwloc.NewProvider(log)
+	hwProv := hwprov.DefaultTopologyProvider(log)
 	topo, err := hwProv.GetTopology(context.Background())
 	if err != nil {
 		return err

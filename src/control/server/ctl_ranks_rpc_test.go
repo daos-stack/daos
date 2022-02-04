@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -712,13 +712,13 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 					WithTargetCount(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram"),
+							WithStorageClass("ram"),
 					),
 				engine.MockConfig().
 					WithTargetCount(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram"),
+							WithStorageClass("ram"),
 					),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)

@@ -6,7 +6,6 @@
 '''
 import time
 from ec_utils import ErasureCodeIor, check_aggregation_status
-from apricot import skipForTicket
 
 class EcodAggregationOffRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -112,7 +111,6 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         """
         self.execution(agg_trigger=True)
 
-    @skipForTicket("DAOS-9208")
     def test_ec_offline_agg_during_rebuild(self):
         """Jira ID: DAOS-7313.
 
