@@ -534,6 +534,19 @@ The device will now be bound to a user-space driver (e.g. VFIO) and can be acces
 DAOS I/O engine processes (and used in the following `dmg storage replace nvme` command
 as a new device).
 
+- Once an engine is using a newly added (hot-inserted) SSD it can be added to the persistent
+NVMe config (stored on SCM) so that on engine restart the new device will be used.
+
+To update the engine's persistent NVMe config with the new SSD transport address, run the
+following command (replace SSD PCI address, engine index and hostname with appropriate values):
+```bash
+$ dmg storage nvme-add-device -a 0000:84:00.0 -e 0 -l wolf-167
+Command completed successfully
+```
+
+The device will now be registered in the engine's persistant NVMe config so that when restarted,
+the newly added SSD will be used.
+
 - Replace an excluded SSD with a New Device:
 ```bash
 $ dmg storage replace nvme --help
