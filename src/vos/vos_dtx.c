@@ -118,11 +118,14 @@ dtx_set_aborted(uint32_t *tx_lid)
 
 static inline int
 dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
-	       bool hit_again, int pos)
+	       bool hit_again, bool retry, int pos)
 {
 	struct dtx_share_peer	*dsp;
 	struct dtx_memberships	*mbs;
 	bool			 s_try = false;
+
+	if (!retry)
+		return -DER_INPROGRESS;
 
 	if (dth == NULL)
 		goto out;
@@ -1074,7 +1077,7 @@ vos_dtx_append(struct dtx_handle *dth, umem_off_t record, uint32_t type)
  */
 int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
-			   daos_epoch_t epoch, uint32_t intent, uint32_t type)
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type, bool retry)
 {
 	struct dtx_handle		*dth = vos_dth_get();
 	struct vos_container		*cont;
@@ -1207,7 +1210,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 				    intent == DAOS_INTENT_IGNORE_NONCOMMITTED)
 					return ALB_UNAVAILABLE;
 
-				return dtx_inprogress(dae, dth, true, 4);
+				return dtx_inprogress(dae, dth, true, true, 4);
 			}
 		}
 	}
@@ -1225,7 +1228,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 * modification to guarantee the transaction semantics.
 		 */
 		if (dtx_is_valid_handle(dth))
-			return dtx_inprogress(dae, dth, false, 5);
+			return dtx_inprogress(dae, dth, false, true, 5);
 
 		return ALB_UNAVAILABLE;
 	}
@@ -1238,7 +1241,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	 * the leader.
 	 */
 	if (intent == DAOS_INTENT_MIGRATION)
-		return dtx_inprogress(dae, dth, false, 6);
+		return dtx_inprogress(dae, dth, false, true, 6);
 
 	if (intent == DAOS_INTENT_DEFAULT) {
 		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
@@ -1246,13 +1249,13 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			/* Non-leader or rebuild case, return -DER_INPROGRESS,
 			 * then the caller will retry the RPC (with leader).
 			 */
-			return dtx_inprogress(dae, dth, false, 1);
+			return dtx_inprogress(dae, dth, false, true, 1);
 
 		/* For transactional read, has to wait the non-committed
 		 * modification to guarantee the transaction semantics.
 		 */
 		if (dtx_is_valid_handle(dth))
-			return dtx_inprogress(dae, dth, false, 2);
+			return dtx_inprogress(dae, dth, false, true, 2);
 
 		/* For stand-alone read on leader, ignore non-committed DTX. */
 		return ALB_UNAVAILABLE;
@@ -1274,7 +1277,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			 */
 			return ALB_UNAVAILABLE;
 
-		return dtx_inprogress(dae, dth, false, 3);
+		return dtx_inprogress(dae, dth, false, retry, 3);
 	}
 
 	D_ASSERTF(intent == DAOS_INTENT_UPDATE,
