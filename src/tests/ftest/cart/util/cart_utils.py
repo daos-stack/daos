@@ -395,6 +395,10 @@ class CartTest(TestWithoutServers):
             hostfile = write_host_file(tst_host,
                                        daos_test_shared_dir,
                                        tst_ppn)
+        mca_flags = ["btl self,tcp"]
+
+        if self.provider == "ofi+psm2":
+            mca_flags.append("pml ob1")
 
         tst_cmd = env
 
@@ -424,6 +428,7 @@ class CartTest(TestWithoutServers):
             tst_cmd += " " + tst_arg
 
         job = Orterun(tst_cmd)
+        job.mca.update(mca_flags)
         job.hostfile.update(hostfile)
         job.pprnode.update(tst_ppn)
         job.processes.update(tst_processes)

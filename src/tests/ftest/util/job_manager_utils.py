@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -349,6 +349,10 @@ class Mpirun(JobManager):
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
+        if mpitype == "openmpi":
+            self.genv = FormattedParameter("-genv {}", None)
+        else:
+            self.genv = FormattedParameter("-x {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
@@ -389,10 +393,10 @@ class Mpirun(JobManager):
         # Pass the environment variables via the process.run method env argument
         if append and self.env is not None:
             # Update the existing dictionary with the new values
-            self.env.update(env_vars)
+            self.genv.update(env_vars.get_list())
         else:
             # Overwrite/create the dictionary of environment variables
-            self.env = EnvironmentVariables(env_vars)
+            self.genv.update((EnvironmentVariables(env_vars)).get_list())
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -401,7 +405,7 @@ class Mpirun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.envlist.update_default(env_vars.get_list())
+        self.genv.update_default(env_vars.get_list())
 
     def run(self):
         """Run the mpirun command.

@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
-import ast
 import os
 import yaml
 
@@ -389,11 +388,6 @@ class YamlParameters(ObjectWithParameters):
         self.title = title
         self.other_params = other_params
 
-        # Option to disable generating config file
-        default_gen_config = ast.literal_eval(
-            os.environ.get("DAOS_TEST_GEN_CONFIG", "True"))
-        self.generate_config = BasicParameter(None, default_gen_config)
-
     def get_params(self, test):
         """Get values for the yaml parameters from the test yaml file.
 
@@ -423,10 +417,6 @@ class YamlParameters(ObjectWithParameters):
             value = getattr(self, name).value
             if value is not None:
                 yaml_data[name] = value
-
-        # Remove the "generate_config" BasicParameter as it is not an actual
-        # yaml configuration file parameter
-        yaml_data.pop("generate_config", None)
 
         return yaml_data if self.title is None else {self.title: yaml_data}
 
@@ -473,7 +463,7 @@ class YamlParameters(ObjectWithParameters):
             bool: whether or not an updated yaml file was created
 
         """
-        create_yaml = self.generate_config.value and self.is_yaml_data_updated()
+        create_yaml = self.is_yaml_data_updated()
         if create_yaml:
             # Write a new yaml file if any of the parameters have been updated
             if filename is None:
@@ -716,7 +706,6 @@ class PositionalParameter(BasicParameter):
 
         """
         return self.position
-
 
 class CommandWithPositionalParameters(CommandWithParameters):
     """Command that uses positional parameters.
