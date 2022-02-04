@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -291,10 +291,6 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
-        # Additionally try to prepare any discovered VMD NVMe devices.
-        if "True" in os.environ["DAOS_ENABLE_VMD"]:
-            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
-
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
             using_dcpm = self.manager.job.using_dcpm
@@ -356,18 +352,18 @@ class DaosServerManager(SubprocessManager):
                 "Failed to start servers before format: {}".format(
                     error)) from error
 
-    def detect_engine_start(self, host_qty=None):
+    def detect_engine_start(self, hosts_qty=None):
         """Detect when all the engines have started.
 
         Args:
-            host_qty (int): number of servers expected to have been started.
+            hosts_qty (int): number of servers expected to have been started.
 
         Raises:
             ServerFailed: if there was an error starting the servers after
                 formatting.
 
         """
-        if host_qty is None:
+        if hosts_qty is None:
             hosts_qty = len(self._hosts)
 
         if self.detect_start_via_dmg:
@@ -409,7 +405,8 @@ class DaosServerManager(SubprocessManager):
         #   - the expected number of pattern matches are detected (success)
         #   - the time out is reached (failure)
         #   - the subprocess is no longer running (failure)
-        while not complete and not timed_out and sub_process.poll() is None:
+        while not complete and not timed_out \
+                and (sub_process is None or sub_process.poll() is None):
             detected = self.detect_engine_states(expected_states)
             complete = detected == self.manager.job.pattern_count
             timed_out = time.time() - start > self.manager.job.pattern_timeout.value
@@ -453,10 +450,6 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.nvme_only.value = True
         cmd.sub_command_class.sub_command_class.reset.value = True
         cmd.sub_command_class.sub_command_class.force.value = True
-
-        # Use VMD option when resetting storage if it's prepared with VMD.
-        if "True" in os.environ["DAOS_ENABLE_VMD"]:
-            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=120)
@@ -632,6 +625,36 @@ class DaosServerManager(SubprocessManager):
                 "Multiple system states ({}) detected:\n  {}".format(
                     states, data))
         return states[0]
+
+    def check_rank_state(self, rank, valid_state, max_checks=1):
+        """Check the state of single rank in DAOS system
+
+        Args:
+            rankv(int): daos rank whose state need's to be checked
+            valid_state (str): expected state for the rank
+            max_checks (int, optional): number of times to check the state
+                Defaults to 1.
+        Raises:
+            ServerFailed: if there was error obtaining the data for daos
+                          system query
+        Returns:
+            bool: returns True if there is a match for checked state,
+                  else False.
+        """
+        checks = 0
+        while checks < max_checks:
+            if checks > 0:
+                time.sleep(1)
+            data = self.get_current_state()
+            if not data:
+                # The regex failed to get the rank and state
+                raise ServerFailed(
+                "Error obtaining {} output: {}".format(self.dmg, data))
+            checks += 1
+            if data[rank]["state"] == valid_state:
+                return True
+
+        return False
 
     def check_system_state(self, valid_states, max_checks=1):
         """Check that the DAOS system state is one of the provided states.
@@ -921,13 +944,13 @@ class DaosServerManager(SubprocessManager):
             nvme_size.  This is intended to allow testing of these combinations.
 
         Args:
-            size (object): the str, int, or None value for the dmp pool create
+            size (object): the str, int, or None value for the dmg pool create
                 size parameter.
-            tier_ratio (object): the int or None value for the dmp pool create
+            tier_ratio (object): the int or None value for the dmg pool create
                 size parameter.
-            scm_size (object): the str, int, or None value for the dmp pool
+            scm_size (object): the str, int, or None value for the dmg pool
                 create scm_size parameter.
-            nvme_size (object): the str, int, or None value for the dmp pool
+            nvme_size (object): the str, int, or None value for the dmg pool
                 create nvme_size parameter.
             min_targets (int, optional): the minimum number of targets per
                 engine that can be configured. Defaults to 1.

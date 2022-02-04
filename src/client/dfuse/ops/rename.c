@@ -70,13 +70,25 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	fs_handle = fuse_req_userdata(req);
 
-	if (flags != 0)
+	if (flags != 0) {
+#ifdef RENAME_NOREPLACE
+		if (flags != RENAME_NOREPLACE) {
+			if (flags & RENAME_EXCHANGE)
+				DFUSE_TRA_DEBUG(parent, "Unsupported flag RENAME_EXCHANGE");
+			else
+				DFUSE_TRA_INFO(parent, "Unsupported flags %#x", flags);
+			D_GOTO(out, rc = ENOTSUP);
+		}
+#else
+		DFUSE_TRA_INFO(parent, "Unsupported flags %#x", flags);
 		D_GOTO(out, rc = ENOTSUP);
+#endif
+	}
 
 	if (!newparent)
 		newparent = parent;
 
-	rc = dfs_move_internal(parent->ie_dfs->dfs_ns, parent->ie_obj, (char *)name,
+	rc = dfs_move_internal(parent->ie_dfs->dfs_ns, flags, parent->ie_obj, (char *)name,
 			       newparent->ie_obj, (char *)newname, &moid, &oid);
 	if (rc)
 		D_GOTO(out, rc);

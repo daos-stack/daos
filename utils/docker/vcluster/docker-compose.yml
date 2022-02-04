@@ -1,0 +1,109 @@
+---
+# Copyright (C) 2021-2022 Intel Corporation
+# All rights reserved.
+#
+# Docker Compose file allowing to build and deploy locally a DAOS virtual cluster
+
+version: "3"
+
+services:
+
+  daos_server:
+    image: "daos-server:${DAOS_SERVER_VERSION}"
+    build:
+      context: "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-server/el8"
+      args:
+        - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
+        - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
+        - "DAOS_AUTH=${DAOS_AUTH}"
+        - "DAOS_HUGEPAGES_NBR=${DAOS_HUGEPAGES_NBR}"
+        - "DAOS_IFACE_NAME=${DAOS_IFACE_NAME}"
+        - "DAOS_SCM_SIZE=${DAOS_SCM_SIZE}"
+        - "DAOS_BDEV_SIZE=${DAOS_BDEV_SIZE}"
+    container_name: daos-server
+    hostname: daos-server
+    tty: true
+    # FIXME Refine needed capabilities
+    privileged: true
+    # FIXME virtual network such as bridge are not yet supported
+    network_mode: host
+    # FIXME List of hosts needed until virtual network will be supported
+    extra_hosts:
+      - "daos-server:${DAOS_IFACE_IP}"
+      - "daos-admin:${DAOS_IFACE_IP}"
+      - "daos-client:${DAOS_IFACE_IP}"
+    volumes:
+      - type: bind
+        read_only: true
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+      - type: bind
+        read_only: false
+        source: /dev/hugepages
+        target: /dev/hugepages
+      - type: tmpfs
+        target: /run
+
+  daos_admin:
+    image: "daos-admin:${DAOS_ADMIN_VERSION}"
+    build:
+      context: "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-admin/el8"
+      args:
+        - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
+        - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
+        - "DAOS_AUTH=${DAOS_AUTH}"
+        - "DAOS_ADMIN_USER=${DAOS_ADMIN_USER}"
+        - "DAOS_ADMIN_GROUP=${DAOS_ADMIN_GROUP}"
+    container_name: daos-admin
+    hostname: daos-admin
+    tty: true
+    # FIXME Refine needed capabilities
+    privileged: true
+    # FIXME virtual network such as bridge are not yet supported
+    network_mode: host
+    # FIXME List of hosts needed until virtual network will be supported
+    extra_hosts:
+      - "daos-server:${DAOS_IFACE_IP}"
+      - "daos-admin:${DAOS_IFACE_IP}"
+      - "daos-client:${DAOS_IFACE_IP}"
+    volumes:
+      - type: bind
+        read_only: true
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+      - type: tmpfs
+        target: /run
+    depends_on:
+      - daos_server
+
+  daos_client:
+    image: "daos-client:${DAOS_CLIENT_VERSION}"
+    build:
+      context: "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-client/el8"
+      args:
+        - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
+        - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
+        - "DAOS_AUTH=${DAOS_AUTH}"
+        - "DAOS_ADMIN_USER=${DAOS_ADMIN_USER}"
+        - "DAOS_ADMIN_GROUP=${DAOS_ADMIN_GROUP}"
+    container_name: daos-client
+    hostname: daos-client
+    tty: true
+    # FIXME Refine needed capabilities
+    privileged: true
+    # FIXME virtual network such as bridge are not yet supported
+    network_mode: host
+    # FIXME List of hosts needed until virtual network will be supported
+    extra_hosts:
+      - "daos-server:${DAOS_IFACE_IP}"
+      - "daos-admin:${DAOS_IFACE_IP}"
+      - "daos-client:${DAOS_IFACE_IP}"
+    volumes:
+      - type: bind
+        read_only: true
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+      - type: tmpfs
+        target: /run
+    depends_on:
+      - daos_server

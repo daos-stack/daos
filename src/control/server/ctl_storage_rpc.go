@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package server
 
 import (
 	"fmt"
+	"os/user"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -202,37 +203,45 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		}(ei)
 	}
 
-	instanceErrored := make(map[uint32]bool)
+	instanceErrored := make(map[uint32]string)
 	for formatting > 0 {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case scmResult := <-scmChan:
 			formatting--
-			if scmResult.GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-				instanceErrored[scmResult.GetInstanceidx()] = true
+			state := scmResult.GetState()
+			if state.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+				instanceErrored[scmResult.GetInstanceidx()] = state.GetError()
 			}
 			resp.Mrets = append(resp.Mrets, scmResult)
 		}
 	}
 
-	var err error
+	// allow format to complete on one instance even if another fail
 	// TODO: perform bdev format in parallel
 	for _, ei := range instances {
-		if instanceErrored[ei.Index()] {
+		if _, hasError := instanceErrored[ei.Index()]; hasError {
 			// if scm errored, indicate skipping bdev format
 			ret := ei.newCret("", nil)
 			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)
 			continue
 		}
+
 		// SCM formatted correctly on this instance, format NVMe
 		cResults := ei.StorageFormatNVMe()
 		if cResults.HasErrors() {
-			instanceErrored[ei.Index()] = true
-		} else {
-			err = ei.StorageWriteNvmeConfig()
+			instanceErrored[ei.Index()] = cResults.Errors()
+			resp.Crets = append(resp.Crets, cResults...)
+			continue
 		}
+
+		if err := ei.StorageWriteNvmeConfig(ctx); err != nil {
+			instanceErrored[ei.Index()] = err.Error()
+			cResults = append(cResults, ei.newCret("", err))
+		}
+
 		resp.Crets = append(resp.Crets, cResults...)
 	}
 
@@ -240,14 +249,52 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// Block until all instances have formatted NVMe to avoid
 	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
-	// TODO: supply allowlist of instance.Devs to init() on format.
 	for _, ei := range instances {
-		if instanceErrored[ei.Index()] {
-			c.log.Errorf(msgFormatErr, ei.Index())
+		if msg, hasError := instanceErrored[ei.Index()]; hasError {
+			c.log.Errorf("instance %d: %s", ei.Index(), msg)
 			continue
 		}
 		ei.NotifyStorageReady()
 	}
 
-	return resp, err
+	return resp, nil
+}
+
+// StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
+func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
+	c.log.Debugf("received StorageNvmeRebind RPC %v", req)
+
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	cu, err := user.Current()
+	if err != nil {
+		return nil, errors.Wrap(err, "get username")
+	}
+
+	prepReq := storage.BdevPrepareRequest{
+		// zero as hugepages already allocated on start-up
+		HugePageCount: 0,
+		TargetUser:    cu.Username,
+		PCIAllowList:  req.PciAddr,
+		Reset_:        false,
+	}
+
+	resp := new(ctlpb.NvmeRebindResp)
+	if _, err := c.NvmePrepare(prepReq); err != nil {
+		err = errors.Wrap(err, "nvme rebind")
+		c.log.Error(err.Error())
+
+		resp.State = &ctlpb.ResponseState{
+			Error:  err.Error(),
+			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+		}
+
+		return resp, nil // report prepare call result in response
+	}
+
+	c.log.Debug("responding to StorageNvmeRebind RPC")
+
+	return resp, nil
 }
