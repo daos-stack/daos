@@ -133,8 +133,9 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
-    # shellcheck disable=SC2154
-        RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+        if ! rpm -q "$LSB_RELEASE"; then
+            RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+        fi
     fi
 
     if [ "$DISTRO_NAME" = "centos7" ] && lspci | grep "ConnectX-6"; then
@@ -144,13 +145,18 @@ post_provision_config_nodes() {
         INST_RPMS="${INST_RPMS// MACSio-openmpi3}"
     fi
 
+    # shellcheck disable=SC2001
+    if ! rpm -q "$(echo "$INST_RPMS" |
+                   sed -e 's/--exclude [^ ]*//'                 \
+                       -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then
     # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ]; then
-    # shellcheck disable=SC2154
-        if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
-            rc=${PIPESTATUS[0]}
-            dump_repos
-            exit "$rc"
+        if [ -n "$INST_RPMS" ]; then
+            # shellcheck disable=SC2154
+            if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
+                rc=${PIPESTATUS[0]}
+                dump_repos
+                exit "$rc"
+            fi
         fi
     fi
 

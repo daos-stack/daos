@@ -107,13 +107,18 @@ post_provision_config_nodes() {
         INST_RPMS="${INST_RPMS// MACSio-openmpi3}"
     fi
 
-    # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ]; then
-    # shellcheck disable=SC2154
-        if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
-            rc=${PIPESTATUS[0]}
-            dump_repos
-            exit "$rc"
+    # shellcheck disable=SC2001
+    if ! rpm -q "$(echo "$INST_RPMS" |
+                   sed -e 's/--exclude [^ ]*//'                 \
+                       -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then
+        # shellcheck disable=SC2086
+        if [ -n "$INST_RPMS" ]; then
+            # shellcheck disable=SC2154
+            if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
+                rc=${PIPESTATUS[0]}
+                dump_repos
+                exit "$rc"
+            fi
         fi
     fi
 
