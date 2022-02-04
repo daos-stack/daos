@@ -71,8 +71,7 @@ class NvmePoolExclude(OSAUtils):
 
         for val in range(0, num_pool):
             self.pool = pool[val]
-            self.add_container(self.pool)
-            self.cont_list.append(self.container)
+
             for test in self.ior_test_sequence:
                 # Set chunksize for EC object class.
                 # Blocksize and Transfer size are updated under osa_utils.py.
@@ -85,6 +84,7 @@ class NvmePoolExclude(OSAUtils):
                                                 kwargs={"action": "Write",
                                                         "oclass": oclass,
                                                         "test": test}))
+                self.cont_list.append(self.container)
                 # Launch the IOR threads
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
@@ -130,6 +130,7 @@ class NvmePoolExclude(OSAUtils):
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank)
                     self.print_and_assert_on_rebuild_failure(output)
+    
 
     def test_nvme_pool_excluded(self):
         """Test ID: DAOS-2086
@@ -159,3 +160,4 @@ class NvmePoolExclude(OSAUtils):
         test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         for oclass in test_oclass:
             self.run_nvme_pool_exclude(1, oclass=oclass)
+            self.pool.destroy()
