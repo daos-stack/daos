@@ -45,3 +45,6 @@ EOF
     clush -o '-i ci_key' -l root -w "$nodes" --rcopy /tmp/artifacts --dest "$STAGE_NAME"/framework/
 
 }
+
+# set an error trap to create a junit result for any unhandled error
+trap 'junit_result "UnhandledError@$SECONDS" "Unhandled error"' ERR
