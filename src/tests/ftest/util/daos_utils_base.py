@@ -278,7 +278,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 #    -c, --cont=<UUID>
                 #           container UUID (optional)
                 self.cont = FormattedParameter("--cont={}")
-                #     -l, --label=container label
+                #     -l, --label=<container label>
                 self.label = FormattedParameter("--label={}")
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
