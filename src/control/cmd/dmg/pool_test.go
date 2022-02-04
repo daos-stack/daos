@@ -938,7 +938,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(100)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
 					NvmeBytes: uint64(1) * uint64(humanize.TByte),
 				},
 			},
@@ -971,7 +971,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(30)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(30) * uint64(humanize.GByte),
 					NvmeBytes: uint64(300) * uint64(humanize.GByte),
 				},
 			},
@@ -1063,7 +1063,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0,1,2,3",
-					ScmBytes:  uint64(50)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(50) * uint64(humanize.GByte),
 					NvmeBytes: uint64(700) * uint64(humanize.GByte),
 				},
 			},
@@ -1088,7 +1088,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(100)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
 					NvmeBytes: uint64(0),
 				},
 				WarningMsg: "Creating DAOS pool without NVME storage",
@@ -1122,7 +1122,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(100)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
 					NvmeBytes: uint64(100) * uint64(humanize.TByte),
 				},
 				WarningMsg: "SCM:NVMe ratio is less than",
@@ -1137,7 +1137,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 						{
 							MockStorageConfig: control.MockStorageConfig{
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(1) * uint64(humanize.GByte),
+								AvailBytes: uint64(1),
 							},
 						},
 					},
@@ -1200,6 +1200,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			err := poolCreateCmd.Execute(nil)
 
 			if tc.ExpectedOutput.Error != nil {
+				common.AssertTrue(t, err != nil, "Expected an error")
 				testExpectedError(t, tc.ExpectedOutput.Error, err)
 			} else {
 				common.AssertTrue(t, err == nil, "Expected no error")
