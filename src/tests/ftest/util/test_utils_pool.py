@@ -103,16 +103,15 @@ class TestPool(TestDaosApiBase):
 
         # Autosize any size/scm_size/nvme_size parameters
         # pylint: disable=too-many-boolean-expressions
-        if ((self.size.value is not None and str(self.size.value).endswith("%"))
-                or (self.scm_size.value is not None
-                    and str(self.scm_size.value).endswith("%"))
+        if ((self.scm_size.value is not None
+             and str(self.scm_size.value).endswith("%"))
                 or (self.nvme_size.value is not None
                     and str(self.nvme_size.value).endswith("%"))):
             index = self.server_index.value
             try:
                 params = test.server_managers[index].autosize_pool_params(
-                    size=self.size.value,
-                    tier_ratio=self.tier_ratio.value,
+                    size=None,
+                    tier_ratio=None,
                     scm_size=self.scm_size.value,
                     nvme_size=self.nvme_size.value,
                     min_targets=self.min_targets.value,
