@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -254,16 +254,15 @@ pool_init(struct credit_context *tsc)
 	if (tsc->tsc_scm_size == 0)
 		tsc->tsc_scm_size = (1ULL << 30);
 
-	if (!daos_file_is_dax(pmem_file)) {
-		rc = open(pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
-		if (rc < 0)
-			goto out;
+	D_ASSERT(!daos_file_is_dax(pmem_file));
+	rc = open(pmem_file, O_CREAT | O_TRUNC | O_RDWR, 0666);
+	if (rc < 0)
+		goto out;
 
-		fd = rc;
-		rc = fallocate(fd, 0, 0, tsc->tsc_scm_size);
-		if (rc)
-			goto out;
-	}
+	fd = rc;
+	rc = fallocate(fd, 0, 0, tsc->tsc_scm_size);
+	if (rc)
+		goto out;
 
 	/* Use pool size as blob size for this moment. */
 	if (tsc_create_pool(tsc)) {
