@@ -195,7 +195,7 @@ class TestDaosApiBase(ObjectWithParameters):
 
 class LabelGenerator():
     # pylint: disable=too-few-public-methods
-    """Generates label used for pool."""
+    """Generates label used for pools and containers."""
 
     def __init__(self, value=1):
         """Constructor.
