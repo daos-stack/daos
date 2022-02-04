@@ -49,7 +49,7 @@ distro_custom() {
                    clustershell
 
     # why do we disable this?
-    #dnf -y config-manager --disable "$POWERTOOLSREPO"
+    dnf -y config-manager --disable "$POWERTOOLSREPO"
 
 }
 
