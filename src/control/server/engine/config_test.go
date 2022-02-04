@@ -623,10 +623,10 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricInterface("ib1").
 				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:      "ib1",
-				OSDevice:  "ib1",
-				NUMANode:  1,
-				Providers: common.NewStringSet("ofi+verbs"),
+				Name:         "ib1",
+				NetInterface: "ib1",
+				NUMANode:     1,
+				Providers:    common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
@@ -638,10 +638,10 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricInterface("ib2").
 				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:      "ib2",
-				OSDevice:  "ib2",
-				NUMANode:  2,
-				Providers: common.NewStringSet("ofi+verbs"),
+				Name:         "ib2",
+				NetInterface: "ib2",
+				NUMANode:     2,
+				Providers:    common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
@@ -650,10 +650,10 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricInterface("ib1").
 				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:      "ib1",
-				OSDevice:  "ib1",
-				NUMANode:  1,
-				Providers: common.NewStringSet("ofi+verbs"),
+				Name:         "ib1",
+				NetInterface: "ib1",
+				NUMANode:     1,
+				Providers:    common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
@@ -663,9 +663,9 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricProvider("test").
 				WithPinnedNumaNode(1),
 			fi: &hardware.FabricInterface{
-				Name:      "net1",
-				OSDevice:  "net1",
-				Providers: common.NewStringSet("test"),
+				Name:         "net1",
+				NetInterface: "net1",
+				Providers:    common.NewStringSet("test"),
 			},
 			expNuma: 1,
 		},
@@ -675,9 +675,9 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricProvider("test").
 				WithPinnedNumaNode(1),
 			fi: &hardware.FabricInterface{
-				Name:      "net1",
-				OSDevice:  "net1",
-				Providers: common.NewStringSet("test2"),
+				Name:         "net1",
+				NetInterface: "net1",
+				Providers:    common.NewStringSet("test2"),
 			},
 			expErr: errors.New("not supported"),
 		},

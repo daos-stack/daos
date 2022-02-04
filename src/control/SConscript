@@ -38,11 +38,20 @@ def is_firmware_mgmt_build(benv):
     "Check whether this build has firmware management enabled."
     return benv["FIRMWARE_MGMT"] == 1
 
+def is_ucx_build(benv):
+    "Check whether this build has UCX enabled."
+    return benv["UCX"] == 1
+
 def get_build_tags(benv):
     "Get custom go build tags."
-    if not is_firmware_mgmt_build(benv):
+    tags = ""
+    if is_firmware_mgmt_build(benv):
+        tags += "firmware "
+    if is_ucx_build(benv):
+        tags += "ucx "
+    if tags == "":
         return ""
-    return "-tags firmware"
+    return "-tags " + tags
 
 def is_release_build(benv):
     "Check whether this build is for release."

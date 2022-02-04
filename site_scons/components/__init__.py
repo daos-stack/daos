@@ -173,7 +173,7 @@ def define_mercury(reqs):
 
     reqs.define("ucx", libs=['ucp'])
 
-    if reqs.check_component('ucx'):
+    if reqs.get_env('UCX'):
         ucx = '-DNA_USE_UCX=ON ' \
         '-DUCX_INCLUDE_DIR=/usr/include '\
         '-DUCP_LIBRARY=/usr/lib64/libucp.so '\
