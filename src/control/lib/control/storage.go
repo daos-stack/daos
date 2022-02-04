@@ -493,11 +493,14 @@ func StorageNvmeRebind(ctx context.Context, rpcClient UnaryInvoker, req *NvmeReb
 
 type (
 	// NvmeAddDeviceReq contains the parameters for a storage nvme-add-device request.
+	//
+	// If StorageTierIndex is set to -1, this indicates that the server should add the device
+	// to the first configured bdev tier.
 	NvmeAddDeviceReq struct {
 		unaryRequest
-		PCIAddr       string `json:"pci_addr"`
-		EngineIndex   uint32 `json:"engine_index"`
-		BdevTierIndex uint32 `json:"bdev_tier_index"`
+		PCIAddr          string `json:"pci_addr"`
+		EngineIndex      uint32 `json:"engine_index"`
+		StorageTierIndex int32  `json:"storage_tier_index"`
 	}
 
 	// NvmeAddDeviceResp contains the response from a storage nvme-add-device request.
@@ -505,6 +508,13 @@ type (
 		HostErrorsResp
 	}
 )
+
+// WithStorageTierIndex updates request storage tier index value and returns reference.
+func (req *NvmeAddDeviceReq) WithStorageTierIndex(i int32) *NvmeAddDeviceReq {
+	req.StorageTierIndex = i
+
+	return req
+}
 
 // StorageNvmeAddDevice adds NVMe SSD transport address to an engine configuration.
 func StorageNvmeAddDevice(ctx context.Context, rpcClient UnaryInvoker, req *NvmeAddDeviceReq) (*NvmeAddDeviceResp, error) {

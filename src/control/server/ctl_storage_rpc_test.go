@@ -274,7 +274,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 
 			tCfg := storage.NewTierConfig().
 				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
+				WithBdevDeviceList(common.MockPCIAddr(0))
 
 			engineCfg := engine.MockConfig().WithStorage(tCfg)
 			engineCfgs := []*engine.Config{engineCfg}
@@ -1809,6 +1809,323 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req         *ctlpb.NvmeAddDeviceReq
+		bmbc        *bdev.MockBackendConfig
+		storageCfgs []storage.TierConfigs
+		expErr      error
+		expDevList  []string
+		expResp     *ctlpb.NvmeAddDeviceResp
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing engine index 0": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: -1,
+			},
+			expErr: errors.New("engine with index 0"),
+		},
+		"missing engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: -1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("engine with index 1"),
+		},
+		"zero bdev configs": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: -1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+				},
+			},
+			expErr: errors.New("no bdev storage tiers"),
+		},
+		"missing bdev config index 0": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: 0,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("storage tier with index 0"),
+		},
+		"missing bdev config index 2": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: 2,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("storage tier with index 2"),
+		},
+		"success; bdev config index unspecified": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: -1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+		"success; bdev config index specified": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: 1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+		"failure; write config failed": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: -1,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				WriteConfErr: errors.New("failure"),
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{
+				State: &ctlpb.ResponseState{
+					Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+					Error:  "write nvme config for engine 0: failure",
+				},
+			},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+		"zero bdev configs; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: -1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+				},
+			},
+			expErr: errors.New("no bdev storage tiers"),
+		},
+		"missing bdev config index 0; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: 0,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("storage tier with index 0"),
+		},
+		"missing bdev config index 2; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: 2,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("storage tier with index 2"),
+		},
+		"success; bdev config index specified; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: 1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+		"failure; write config failed; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: -1,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				WriteConfErr: errors.New("failure"),
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{
+				State: &ctlpb.ResponseState{
+					Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+					Error:  "write nvme config for engine 1: failure",
+				},
+			},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			engineCfgs := []*engine.Config{}
+			for idx, tierCfgs := range tc.storageCfgs {
+				ec := engine.MockConfig().WithStorage(tierCfgs...)
+				ec.Index = uint32(idx)
+				engineCfgs = append(engineCfgs, ec)
+			}
+			serverCfg := config.DefaultServer().WithEngines(engineCfgs...)
+
+			cs := mockControlService(t, log, serverCfg, tc.bmbc, nil, nil)
+
+			resp, err := cs.StorageNvmeAddDevice(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			// Verify device list has been updated
+			es := cs.harness.Instances()[tc.req.EngineIndex].GetStorage()
+			// Assumption made that all test cases have 1 SCM tier and by this point
+			// at least one bdev tier
+			if tc.req.StorageTierIndex == -1 {
+				tc.req.StorageTierIndex = 1
+			} else if tc.req.StorageTierIndex == 0 {
+				t.Fatal("tier index expected to be > 0")
+			}
+			gotDevs := es.GetBdevConfigs()[tc.req.StorageTierIndex-1].Bdev.DeviceList.Strings()
+			if diff := cmp.Diff(tc.expDevList, gotDevs, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})

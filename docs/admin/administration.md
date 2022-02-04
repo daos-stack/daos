@@ -544,6 +544,11 @@ $ dmg storage nvme-add-device -a 0000:84:00.0 -e 0 -l wolf-167
 Command completed successfully
 ```
 
+The optional [--tier-index|-t] command parameter can be used to specify which storage tier to
+insert the SSD into, if specified then the server will attempt to insert the device into the tier
+specified by the index, if not specified then the server will attempt to insert the device into
+the bdev tier with the lowest index value (the first bdev tier).
+
 The device will now be registered in the engine's persistant NVMe config so that when restarted,
 the newly added SSD will be used.
 

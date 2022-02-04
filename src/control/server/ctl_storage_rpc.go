@@ -308,6 +308,9 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 }
 
 // StorageNvmeAddDevice adds a newly added SSD to a DAOS engine's NVMe config to allow it to be used.
+//
+//
+// If StorageTierIndex is set to -1 in request, add the device to the first configured bdev tier.
 func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {
 	c.log.Debugf("received StorageNvmeAddDevice RPC %v", req)
 
@@ -317,6 +320,7 @@ func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.Nv
 
 	engines := c.harness.Instances()
 	engineIndex := req.GetEngineIndex()
+
 	if len(engines) <= int(engineIndex) {
 		return nil, errors.Errorf("engine with index %d not found", engineIndex)
 	}
@@ -324,18 +328,24 @@ func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.Nv
 		err = errors.Wrapf(err, "engine %d", engineIndex)
 	}()
 
+	var tierCfg *storage.TierConfig
 	engineStorage := engines[engineIndex].GetStorage()
+	tierIndex := req.GetStorageTierIndex()
 
-	bdevCfgs := engineStorage.GetBdevConfigs()
-	if len(bdevCfgs) == 0 {
-		return nil, errors.New("no bdev storage tiers in config")
+	for _, tier := range engineStorage.GetBdevConfigs() {
+		if tierIndex == -1 || int(tierIndex) == tier.Tier {
+			tierCfg = tier
+			break
+		}
 	}
 
-	tierIndex := req.GetBdevTierIndex()
-	if len(bdevCfgs) <= int(tierIndex) {
-		return nil, errors.Errorf("bdev tier with index %d not found", tierIndex)
+	if tierCfg == nil {
+		if tierIndex == -1 {
+			return nil, errors.New("no bdev storage tiers in config")
+		}
+		return nil, errors.Errorf("bdev storage tier with index %d not found in config",
+			tierIndex)
 	}
-	tierCfg := bdevCfgs[tierIndex]
 
 	c.log.Debugf("bdev list to be updated: %+v", tierCfg.Bdev.DeviceList)
 	if err := tierCfg.Bdev.DeviceList.AddStrings(req.PciAddr); err != nil {
@@ -348,12 +358,11 @@ func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.Nv
 		err = errors.Wrapf(err, "write nvme config for engine %d", engineIndex)
 		c.log.Error(err.Error())
 
+		// report write conf call result in response
 		resp.State = &ctlpb.ResponseState{
 			Error:  err.Error(),
 			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
 		}
-
-		return resp, nil // report write conf call result in response
 	}
 
 	c.log.Debug("responding to StorageNvmeAddDevice RPC")

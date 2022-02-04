@@ -205,13 +205,17 @@ func (cmd *nvmeRebindCmd) Execute(args []string) error {
 }
 
 // nvmeAddDeviceCmd is the struct representing the nvme-add-device storage subcommand.
+//
+// StorageTierIndex is by default set -1 to signal the server to add the device to the first
+// configured bdev tier.
 type nvmeAddDeviceCmd struct {
 	logCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	PCIAddr     string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to add."`
-	EngineIndex uint32 `short:"e" long:"engine-index" required:"1" description:"Index of DAOS engine to add NVMe device to."`
+	PCIAddr          string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to add."`
+	EngineIndex      uint32 `short:"e" long:"engine-index" required:"1" description:"Index of DAOS engine to add NVMe device to."`
+	StorageTierIndex int32  `short:"t" long:"tier-index" default:"-1" description:"Index of storage tier on DAOS engine to add NVMe device to."`
 }
 
 // Execute is run when nvmeAddDeviceCmd activates.
@@ -224,9 +228,14 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 		return errors.New("command expects a single host in hostlist")
 	}
 
-	req := &control.NvmeAddDeviceReq{PCIAddr: cmd.PCIAddr, EngineIndex: cmd.EngineIndex}
+	req := &control.NvmeAddDeviceReq{
+		PCIAddr:          cmd.PCIAddr,
+		EngineIndex:      cmd.EngineIndex,
+		StorageTierIndex: cmd.StorageTierIndex,
+	}
 	req.SetHostList(cmd.hostlist)
 
+	cmd.log.Debugf("nvme add device req: %+v", req)
 	resp, err := control.StorageNvmeAddDevice(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
