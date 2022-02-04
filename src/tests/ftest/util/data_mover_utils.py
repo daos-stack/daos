@@ -24,29 +24,6 @@ def uuid_from_obj(obj):
         return obj.uuid
     return obj
 
-def format_daos_path(pool=None, cont=None, path=None):
-    """Format a daos path as daos://<pool>/<cont>/<path>.
-
-    Args:
-        pool (TestPool, optional): the source pool or uuid.
-        cont (TestContainer, optional): the source cont or uuid.
-        path (str, optional): cont path relative to the root.
-
-    Returns:
-        str: the formatted path.
-
-    """
-    daos_path = "daos://"
-    if pool:
-        pool_uuid = uuid_from_obj(pool)
-        daos_path += str(pool_uuid) + "/"
-    if cont:
-        cont_uuid = uuid_from_obj(cont)
-        daos_path += str(cont_uuid) + "/"
-    if path:
-        daos_path += str(path).lstrip("/")
-    return daos_path
-
 class MfuCommandBase(ExecutableCommand):
     """Base MpiFileUtils command."""
 
@@ -78,7 +55,7 @@ class MfuCommandBase(ExecutableCommand):
 
     @staticmethod
     def __param_sort(k):
-        """Key sort for get_param_names. Moves src_path and dst_path
+        """Key sort for get_param_names. Moves src and dst
            to the end of the list.
 
         Args:
@@ -88,11 +65,10 @@ class MfuCommandBase(ExecutableCommand):
             int: the sort priority
 
         """
-        if k in ("dst_path", "dst"):
-            return 3
-        if k in ("src_path", "src"):
-            return 2
-        return 1
+        return {
+            'dst':3,
+            'src':2
+        }.get(k, 0)
 
     def get_param_names(self):
         """Override the original get_param_names to sort
@@ -173,9 +149,9 @@ class DcpCommand(MfuCommandBase):
         # print help/usage
         self.print_usage = FormattedParameter("--help", False)
         # source path
-        self.src_path = BasicParameter(None)
+        self.src = BasicParameter(None)
         # destination path
-        self.dst_path = BasicParameter(None)
+        self.dst = BasicParameter(None)
 
 
 class DsyncCommand(MfuCommandBase):
@@ -220,9 +196,9 @@ class DsyncCommand(MfuCommandBase):
         # print help/usage
         self.print_usage = FormattedParameter("--help", False)
         # source path
-        self.src_path = BasicParameter(None)
+        self.src = BasicParameter(None)
         # destination path
-        self.dst_path = BasicParameter(None)
+        self.dst = BasicParameter(None)
 
 class DserializeCommand(MfuCommandBase):
     """Defines an object representing a daos-serialize command."""
@@ -242,7 +218,7 @@ class DserializeCommand(MfuCommandBase):
         # print help/usage
         self.print_usage = FormattedParameter("--help", False)
         # source path
-        self.src_path = BasicParameter(None)
+        self.src = BasicParameter(None)
 
 
 class DdeserializeCommand(MfuCommandBase):
@@ -263,7 +239,7 @@ class DdeserializeCommand(MfuCommandBase):
         # print help/usage
         self.print_usage = FormattedParameter("--help", False)
         # source path
-        self.src_path = BasicParameter(None)
+        self.src = BasicParameter(None)
 
 
 class FsCopy():
@@ -288,7 +264,7 @@ class FsCopy():
         self.daos_cmd = daos_cmd
         self.log = log
 
-    def set_fs_copy_params(self, src=None, dst=None, preserve_props=None):
+    def set_params(self, src=None, dst=None, preserve_props=None):
         """Set the daos fs copy params.
 
         Args:
@@ -342,7 +318,7 @@ class ContClone():
         self.daos_cmd = daos_cmd
         self.log = log
 
-    def set_cont_clone_params(self, src=None, dst=None):
+    def set_params(self, src=None, dst=None):
         """Set the daos container clone params.
 
         Args:
