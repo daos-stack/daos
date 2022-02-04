@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -141,13 +141,13 @@ engine_cont_fini(struct credit_context *tsc)
 }
 
 static void
-engine_fini(void)
+engine_fini(struct credit_context *tsc)
 {
 	daos_fini();
 }
 
 static int
-engine_init(void)
+engine_init(struct credit_context *tsc)
 {
 	return daos_init();
 }
@@ -184,7 +184,7 @@ dts_ctx_init(struct credit_context *tsc, struct io_engine *engine)
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
 	D_ASSERT(tsc->tsc_engine->ie_init != NULL);
-	rc = tsc->tsc_engine->ie_init();
+	rc = tsc->tsc_engine->ie_init(tsc);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;
@@ -238,7 +238,7 @@ dts_ctx_fini(struct credit_context *tsc)
 		/* fall through */
 	case DTS_INIT_MODULE:	/* finalize module */
 		D_ASSERT(tsc->tsc_engine->ie_fini != NULL);
-		tsc->tsc_engine->ie_fini();
+		tsc->tsc_engine->ie_fini(tsc);
 		/* fall through */
 	case DTS_INIT_DEBUG:	/* finalize debug system */
 		daos_debug_fini();
