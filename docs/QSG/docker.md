@@ -65,7 +65,6 @@ If hugepages have not been enabled, we will need to do so now to avoid memory fr
 The three images `daos-server`, `daos-admin` and `daos-client` could be built directly from GitHub
 or from a local tree in the same way as for the `daos-base` image.
 
-### DAOS Nodes Images
 Following command could be used to build directly the three images from GitHub:
 
 @@@ as far as can determine the tag doesnt exist	
