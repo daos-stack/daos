@@ -97,6 +97,7 @@ struct nvme_stats {
 	/* Device space utilization */
 	uint64_t	 total_bytes;
 	uint64_t	 avail_bytes;
+	uint64_t	 cluster_size;
 	/* Device health details */
 	uint32_t	 warn_temp_time;
 	uint32_t	 crit_temp_time;

@@ -48,26 +48,27 @@ message BioHealthResp {
 	// Usage stats
 	uint64 total_bytes = 25; // size of blobstore
 	uint64 avail_bytes = 26; // free space in blobstore
+	uint64 cluster_size = 27; // blobstore cluster size in bytes
 	// Intel vendor SMART attributes
-	uint32 program_fail_cnt_norm = 27; // percent remaining
-	uint64 program_fail_cnt_raw = 28; // current value
-	uint32 erase_fail_cnt_norm = 29;
-	uint64 erase_fail_cnt_raw = 30;
-	uint32 wear_leveling_cnt_norm = 31;
-	uint32 wear_leveling_cnt_min = 32;
-	uint32 wear_leveling_cnt_max = 33;
-	uint32 wear_leveling_cnt_avg = 34;
-	uint64 endtoend_err_cnt_raw = 35;
-	uint64 crc_err_cnt_raw = 36;
-	uint64 media_wear_raw = 37;
-	uint64 host_reads_raw = 38;
-	uint64 workload_timer_raw = 39;
-	uint32 thermal_throttle_status = 40;
-	uint64 thermal_throttle_event_cnt = 41;
-	uint64 retry_buffer_overflow_cnt = 42;
-	uint64 pll_lock_loss_cnt = 43;
-	uint64 nand_bytes_written = 44;
-	uint64 host_bytes_written = 45;
+	uint32 program_fail_cnt_norm = 28; // percent remaining
+	uint64 program_fail_cnt_raw = 29; // current value
+	uint32 erase_fail_cnt_norm = 30;
+	uint64 erase_fail_cnt_raw = 31;
+	uint32 wear_leveling_cnt_norm = 32;
+	uint32 wear_leveling_cnt_min = 33;
+	uint32 wear_leveling_cnt_max = 34;
+	uint32 wear_leveling_cnt_avg = 35;
+	uint64 endtoend_err_cnt_raw = 36;
+	uint64 crc_err_cnt_raw = 37;
+	uint64 media_wear_raw = 38;
+	uint64 host_reads_raw = 39;
+	uint64 workload_timer_raw = 40;
+	uint32 thermal_throttle_status = 41;
+	uint64 thermal_throttle_event_cnt = 42;
+	uint64 retry_buffer_overflow_cnt = 43;
+	uint64 pll_lock_loss_cnt = 44;
+	uint64 nand_bytes_written = 45;
+	uint64 host_bytes_written = 46;
 }
 
 message SmdDevReq {
@@ -120,7 +121,7 @@ message DevReplaceResp {
 	reserved 3;
 	int32 status = 1; // DAOS error code
 	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	string ev_state = 4; // NVMe device state
+	string dev_state = 4; // NVMe device state
 }
 
 message DevIdentifyReq {

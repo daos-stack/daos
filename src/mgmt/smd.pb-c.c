@@ -718,7 +718,7 @@ const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor =
   (ProtobufCMessageInit) ctl__bio_health_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42] =
+static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[43] =
 {
   {
     "timestamp",
@@ -997,8 +997,20 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "program_fail_cnt_norm",
+    "cluster_size",
     27,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__BioHealthResp, cluster_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "program_fail_cnt_norm",
+    28,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -1010,7 +1022,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "program_fail_cnt_raw",
-    28,
+    29,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1022,7 +1034,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "erase_fail_cnt_norm",
-    29,
+    30,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -1034,7 +1046,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "erase_fail_cnt_raw",
-    30,
+    31,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1046,7 +1058,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "wear_leveling_cnt_norm",
-    31,
+    32,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -1058,7 +1070,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "wear_leveling_cnt_min",
-    32,
+    33,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -1070,7 +1082,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "wear_leveling_cnt_max",
-    33,
+    34,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -1082,7 +1094,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "wear_leveling_cnt_avg",
-    34,
+    35,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -1094,7 +1106,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "endtoend_err_cnt_raw",
-    35,
+    36,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1106,7 +1118,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "crc_err_cnt_raw",
-    36,
+    37,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1118,7 +1130,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "media_wear_raw",
-    37,
+    38,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1130,7 +1142,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "host_reads_raw",
-    38,
+    39,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1142,7 +1154,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "workload_timer_raw",
-    39,
+    40,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1154,7 +1166,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "thermal_throttle_status",
-    40,
+    41,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
@@ -1166,7 +1178,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "thermal_throttle_event_cnt",
-    41,
+    42,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1178,7 +1190,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "retry_buffer_overflow_cnt",
-    42,
+    43,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1190,7 +1202,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "pll_lock_loss_cnt",
-    43,
+    44,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1202,7 +1214,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "nand_bytes_written",
-    44,
+    45,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1214,7 +1226,7 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
   },
   {
     "host_bytes_written",
-    45,
+    46,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
@@ -1232,48 +1244,49 @@ static const unsigned ctl__bio_health_resp__field_indices_by_name[] = {
   11,   /* field[11] = bio_unmap_errs */
   10,   /* field[10] = bio_write_errs */
   12,   /* field[12] = checksum_errs */
-  32,   /* field[32] = crc_err_cnt_raw */
+  23,   /* field[23] = cluster_size */
+  33,   /* field[33] = crc_err_cnt_raw */
   2,   /* field[2] = crit_temp_time */
   3,   /* field[3] = ctrl_busy_time */
   16,   /* field[16] = dev_reliability_warn */
   20,   /* field[20] = dev_uuid */
-  31,   /* field[31] = endtoend_err_cnt_raw */
-  25,   /* field[25] = erase_fail_cnt_norm */
-  26,   /* field[26] = erase_fail_cnt_raw */
+  32,   /* field[32] = endtoend_err_cnt_raw */
+  26,   /* field[26] = erase_fail_cnt_norm */
+  27,   /* field[27] = erase_fail_cnt_raw */
   8,   /* field[8] = err_log_entries */
-  41,   /* field[41] = host_bytes_written */
-  34,   /* field[34] = host_reads_raw */
+  42,   /* field[42] = host_bytes_written */
+  35,   /* field[35] = host_reads_raw */
   7,   /* field[7] = media_errs */
-  33,   /* field[33] = media_wear_raw */
-  40,   /* field[40] = nand_bytes_written */
-  39,   /* field[39] = pll_lock_loss_cnt */
+  34,   /* field[34] = media_wear_raw */
+  41,   /* field[41] = nand_bytes_written */
+  40,   /* field[40] = pll_lock_loss_cnt */
   4,   /* field[4] = power_cycles */
   5,   /* field[5] = power_on_hours */
-  23,   /* field[23] = program_fail_cnt_norm */
-  24,   /* field[24] = program_fail_cnt_raw */
+  24,   /* field[24] = program_fail_cnt_norm */
+  25,   /* field[25] = program_fail_cnt_raw */
   17,   /* field[17] = read_only_warn */
-  38,   /* field[38] = retry_buffer_overflow_cnt */
+  39,   /* field[39] = retry_buffer_overflow_cnt */
   19,   /* field[19] = status */
   14,   /* field[14] = temp_warn */
   13,   /* field[13] = temperature */
-  37,   /* field[37] = thermal_throttle_event_cnt */
-  36,   /* field[36] = thermal_throttle_status */
+  38,   /* field[38] = thermal_throttle_event_cnt */
+  37,   /* field[37] = thermal_throttle_status */
   0,   /* field[0] = timestamp */
   21,   /* field[21] = total_bytes */
   6,   /* field[6] = unsafe_shutdowns */
   18,   /* field[18] = volatile_mem_warn */
   1,   /* field[1] = warn_temp_time */
-  30,   /* field[30] = wear_leveling_cnt_avg */
-  29,   /* field[29] = wear_leveling_cnt_max */
-  28,   /* field[28] = wear_leveling_cnt_min */
-  27,   /* field[27] = wear_leveling_cnt_norm */
-  35,   /* field[35] = workload_timer_raw */
+  31,   /* field[31] = wear_leveling_cnt_avg */
+  30,   /* field[30] = wear_leveling_cnt_max */
+  29,   /* field[29] = wear_leveling_cnt_min */
+  28,   /* field[28] = wear_leveling_cnt_norm */
+  36,   /* field[36] = workload_timer_raw */
 };
 static const ProtobufCIntRange ctl__bio_health_resp__number_ranges[2 + 1] =
 {
   { 3, 0 },
   { 5, 1 },
-  { 0, 42 }
+  { 0, 43 }
 };
 const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor =
 {
@@ -1283,7 +1296,7 @@ const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor =
   "Ctl__BioHealthResp",
   "ctl",
   sizeof(Ctl__BioHealthResp),
-  42,
+  43,
   ctl__bio_health_resp__field_descriptors,
   ctl__bio_health_resp__field_indices_by_name,
   2,  ctl__bio_health_resp__number_ranges,

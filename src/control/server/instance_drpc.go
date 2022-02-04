@@ -237,6 +237,7 @@ func (ei *EngineInstance) addBdevStats(ctx context.Context, smdDev *storage.SmdD
 	// populate space usage for each smd device from health stats
 	smdDev.TotalBytes = pbStats.TotalBytes
 	smdDev.AvailBytes = pbStats.AvailBytes
+	smdDev.ClusterSize = pbStats.ClusterSize
 	msg = fmt.Sprintf("%s: smd space usage updated", msg)
 
 	if ctrlr == nil {

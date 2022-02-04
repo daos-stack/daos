@@ -112,6 +112,10 @@ struct  _Ctl__BioHealthResp
    */
   uint64_t avail_bytes;
   /*
+   * blobstore cluster size in bytes
+   */
+  uint64_t cluster_size;
+  /*
    * Intel vendor SMART attributes
    */
   /*
@@ -142,7 +146,7 @@ struct  _Ctl__BioHealthResp
 };
 #define CTL__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_resp__descriptor) \
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 
 
 struct  _Ctl__SmdDevReq

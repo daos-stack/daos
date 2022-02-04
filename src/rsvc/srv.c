@@ -1364,13 +1364,15 @@ static struct daos_rpc_handler rsvc_handlers[] = {
 size_t
 ds_rsvc_get_md_cap(void)
 {
-	const size_t	size_default = 1 << 27 /* 128 MB */;
+	const size_t	size_default = DEFAULT_DAOS_MD_CAP_SIZE;
 	char	       *v;
 	int		n;
 
-	v = getenv("DAOS_MD_CAP"); /* in MB */
+	v = getenv(DAOS_MD_CAP_ENV); /* in MB */
 	if (v == NULL)
 		return size_default;
+	// FIXME replace atoi to avoid buffer overlflow exploit
+	// https://wiki.sei.cmu.edu/confluence/display/c/ERR34-C.+Detect+errors+when+converting+a+string+to+a+number
 	n = atoi(v);
 	if (n < size_default >> 20) {
 		D_ERROR("metadata capacity too low; using %zu MB\n",

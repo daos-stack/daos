@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -961,13 +960,6 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	return resp, nil
 }
 
-// PoolMetadataBytes defines the amount of storage reserved for pool metadata.
-//
-// Some extra bytes are needed for the metadata of the pool: at least 135 MB are needed.  The
-// extraByes is a little bigger than this limit, because the size of the metadata will eventually
-// grow along the life of the pool.
-const PoolMetadataBytes uint64 = uint64(200) * uint64(humanize.MiByte)
-
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 //
 // TODO (DAOS-9557) This function should takes an extra parameter to filter the engine ranks to use.
@@ -1004,18 +996,6 @@ func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64
 				continue
 			}
 			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
-
-			if scmNamespaceFreeBytes < PoolMetadataBytes {
-				missingBytes := PoolMetadataBytes - scmNamespaceFreeBytes
-				msg := "Not enough SCM storage available with the SCM namespace"
-				msg += " \"%s\" of the the host %s:"
-				msg += " at least %s of SCM storage (%s missing) is needed"
-				return 0, 0, errors.Errorf(msg,
-					scmNamespace.Mount.Path,
-					hostStorageSet.HostSet.String(),
-					humanize.Bytes(PoolMetadataBytes),
-					humanize.Bytes(missingBytes))
-			}
 
 			if scmBytes > scmNamespaceFreeBytes {
 				scmBytes = scmNamespaceFreeBytes

@@ -162,6 +162,10 @@ int ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		      crt_bulk_t remote_bulk, crt_rpc_t *rpc, uint64_t *size);
 
+/**< Env defining the size of a metadata pmem pool/file in MiBs */
+#define DAOS_MD_CAP_ENV			"DAOS_MD_CAP"
+/**< Default size of a metadata pmem pool/file (128 MiB) */
+#define DEFAULT_DAOS_MD_CAP_SIZE	(1ul << 27)
 size_t ds_rsvc_get_md_cap(void);
 
 void ds_rsvc_request_map_dist(struct ds_rsvc *svc);

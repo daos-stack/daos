@@ -8,6 +8,7 @@ package engine
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -266,6 +267,25 @@ func (c *Config) HasEnvVar(name string) bool {
 		}
 	}
 	return false
+}
+
+// GetLineEnv return the value of the given environment variable to be supplied when starting an I/O
+// engine instance.
+func (c *Config) GetEnvVar(name string) (string, error) {
+	env, err := c.CmdLineEnv()
+	if err != nil {
+		return "", err
+	}
+
+	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+
+	for _, keyPair := range c.EnvVars {
+		if strings.HasPrefix(keyPair, name+"=") {
+			return keyPair[len(name+"="):], nil
+		}
+	}
+
+	return "", errors.Errorf("Undefined environment variable %q", name)
 }
 
 // WithEnvVars applies the supplied list of environment

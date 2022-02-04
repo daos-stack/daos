@@ -151,16 +151,10 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 
 		// Extra storage space needed for metadata such as the VOS file
-		if scmBytes < control.PoolMetadataBytes {
-			missingBytes := control.PoolMetadataBytes - scmBytes
-			msg := "Not enough SMC storage available with ratio %s%%:"
-			msg += " at least %s of SCM storage (%s missing) is needed"
-			return errors.Errorf(msg,
-				cmd.Size,
-				humanize.Bytes(control.PoolMetadataBytes),
-				humanize.Bytes(missingBytes))
+		if scmBytes <= 0 {
+			return errors.Errorf("Not enough SMC storage available with ratio %s%%",
+				storageRatio)
 		}
-		scmBytes -= control.PoolMetadataBytes
 
 		cmd.updateRequest(req, scmBytes, nvmeBytes)
 

@@ -6,15 +6,23 @@
 
 package server
 
+/*
+#include "daos_srv/rsvc.h"
+*/
+import "C"
+
 import (
 	"fmt"
 	"os/user"
+	"strconv"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -151,6 +159,112 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 	return newScanScmResp(c.getScmUsage(ssr))
 }
 
+// Return the number of target managing a given NVME controleur
+func (c *ControlService) getTargetCount(pciAddr string) (int, error) {
+	for _, engineCfg := range c.srvCfg.Engines {
+		targetCount := engineCfg.TargetCount
+		for _, tierCfg := range engineCfg.Storage.Tiers {
+			if tierCfg.IsBdev() {
+				for index := range tierCfg.Bdev.DeviceList {
+					if pciAddr == tierCfg.Bdev.DeviceList[index] {
+						msg := "NVME controler %s is used by %d targets"
+						c.log.Debugf(msg, pciAddr, targetCount)
+						return targetCount, nil
+					}
+				}
+			}
+		}
+	}
+
+	return 0, errors.Errorf("unknown PCI address %s", pciAddr)
+}
+
+// Adjust the NVME available size to its real usable size.
+func (c *ControlService) adjustNvmeSize(resp* ctlpb.ScanNvmeResp) {
+	for _, ctl := range resp.GetCtrlrs() {
+		pciAddr := ctl.GetPciAddr()
+		targetCount, err := c.getTargetCount(pciAddr)
+		if err != nil {
+			c.log.Errorf("Skipping NVME controleur %s: %s",
+				ctl.GetPciAddr(), err.Error())
+			continue
+		}
+
+		for _, dev := range ctl.GetSmdDevices() {
+			clusterSmdCount := dev.GetAvailBytes() / dev.GetClusterSize()
+			clusterTargetCount := clusterSmdCount / uint64(targetCount)
+			availBytes := clusterTargetCount * uint64(targetCount)
+			availBytes *= dev.GetClusterSize()
+			c.log.Infof("removing %s (%d B) storage from SMD device %s (%s)",
+				humanize.Bytes(dev.GetAvailBytes() - availBytes),
+				dev.GetAvailBytes() - availBytes,
+				dev.GetUuid(), ctl.GetPciAddr())
+			dev.AvailBytes = availBytes
+		}
+	}
+}
+
+// return the size of the ram disk file used for managing SCM metadata
+func (c *ControlService) getMetadataCapacity(mountPoint string) (uint64, error) {
+	var engineCfg *engine.Config
+	loop:
+	for index := range(c.srvCfg.Engines) {
+		for _, tierCfg := range c.srvCfg.Engines[index].Storage.Tiers {
+			if tierCfg.IsSCM() && tierCfg.Scm.MountPoint == mountPoint {
+				engineCfg = c.srvCfg.Engines[index]
+				break loop
+			}
+		}
+	}
+
+	if engineCfg == nil {
+		return 0, errors.Errorf("unknown SCM mount point %s", mountPoint)
+	}
+
+	mdCapStr, err := engineCfg.GetEnvVar(C.DAOS_MD_CAP_ENV)
+	if err != nil {
+		c.log.Debugf("using default metadata capacity with SCM %s: %s (%d B)",
+			mountPoint, humanize.Bytes(C.DEFAULT_DAOS_MD_CAP_SIZE), C.DEFAULT_DAOS_MD_CAP_SIZE)
+		return uint64(C.DEFAULT_DAOS_MD_CAP_SIZE), nil
+	}
+
+	mdCap, err := strconv.ParseUint(mdCapStr, 10, 64)
+	if err != nil {
+		return 0, errors.Wrapf(err,
+			"invalid metadata capacity: %q does not define a plain int", mdCapStr)
+	}
+	mdCap = mdCap << 20
+	c.log.Debugf("using custom metadata capacity with SCM %s: %s (%d B)",
+		mountPoint, humanize.Bytes(mdCap), mdCap)
+
+	return mdCap, nil
+}
+
+// Adjust the SCM available size to the real usable size.
+func (c *ControlService) adjustScmSize(resp* ctlpb.ScanScmResp) {
+	const mdExt4Bytes uint64 = 1 << 20 // 1MiB (i.e 1048576B) min needed 36864B
+	for _, scmNamespace := range resp.GetNamespaces() {
+		mdBytes := mdExt4Bytes
+		mdCapBytes, err := c.getMetadataCapacity(scmNamespace.GetMount().GetPath())
+		if err != nil {
+			c.log.Errorf("Skipping SCM %s: %s",
+				scmNamespace.GetMount().GetPath(), err.Error())
+			continue
+		}
+		mdBytes += mdCapBytes
+
+		if mdBytes < scmNamespace.Mount.GetAvailBytes() {
+			c.log.Infof("removing %s (%d B) storage from SCM %s",
+				humanize.Bytes(mdBytes), mdBytes, scmNamespace.Mount.GetPath())
+			scmNamespace.Mount.AvailBytes -= mdBytes
+		} else {
+			c.log.Errorf("no more storage space within SCM %s",
+				scmNamespace.Mount.GetPath())
+			scmNamespace.Mount.AvailBytes = 0
+		}
+	}
+}
+
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	c.log.Debugf("received StorageScan RPC %v", req)
@@ -164,12 +278,14 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	if err != nil {
 		return nil, err
 	}
+	c.adjustNvmeSize(respNvme)
 	resp.Nvme = respNvme
 
 	respScm, err := c.scanScm(ctx, req.Scm)
 	if err != nil {
 		return nil, err
 	}
+	c.adjustScmSize(respScm)
 	resp.Scm = respScm
 
 	c.log.Debug("responding to StorageScan RPC")
