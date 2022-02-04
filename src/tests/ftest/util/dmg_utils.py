@@ -371,6 +371,83 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("storage", "scan"), nvme_health=True)
 
+    def storage_query_usage(self):
+        """Get the result of the 'dmg storage query usage' command.
+
+        Raises:
+            CommandFailure: if the dmg pool query command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        # {
+        #   "response": {
+        #     "host_errors": {},
+        #     "HostStorage": {
+        #       "12630866472711427587": {
+        #         "storage": {
+        #           "nvme_devices": [
+        #             {
+        #               "info": "",
+        #               "model": "INTEL SSDPEDMD400G4",
+        #               "serial": "CVFT534200AY400BGN",
+        #               "pci_addr": "0000:05:00.0",
+        #               "fw_rev": "8DV10131",
+        #               "socket_id": 0,
+        #               "health_stats": null,
+        #               "namespaces": [
+        #                 {
+        #                   "id": 1,
+        #                   "size": 400088457216
+        #                 }
+        #               ],
+        #               "smd_devices": [
+        #                 {
+        #                   "dev_state": "NORMAL",
+        #                   "uuid": "259608d1-c469-4684-9986-9f7708b20ca3",
+        #                   "tgt_ids": [ 0, 1, 2, 3, 4, 5, 6, 7 ],
+        #                   "rank": 0,
+        #                   "total_bytes": 398358216704,
+        #                   "avail_bytes": 0,
+        #                   "cluster_size": 1073741824,
+        #                   "health": null,
+        #                   "tr_addr": "0000:05:00.0"
+        #                 }
+        #               ]
+        #             }
+        #           ],
+        #           "scm_modules": null,
+        #           "scm_namespaces": [
+        #             {
+        #               "uuid": "",
+        #               "blockdev": "ramdisk",
+        #               "dev": "",
+        #               "numa_node": 0,
+        #               "size": 17179869184,
+        #               "mount": {
+        #                 "class": "ram",
+        #                 "device_list": null,
+        #                 "info": "",
+        #                 "path": "/mnt/daos",
+        #                 "total_bytes": 17179869184,
+        #                 "avail_bytes": 0
+        #               }
+        #             }
+        #           ],
+        #           "scm_mount_points": null,
+        #           "smd_info": null,
+        #           "reboot_required": false
+        #         },
+        #         "hosts": "wolf-67:10001"
+        #       }
+        #     }
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(("storage", "query", "usage"))
+
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
                     tier_ratio=None, properties=None, label=None, nranks=None):
