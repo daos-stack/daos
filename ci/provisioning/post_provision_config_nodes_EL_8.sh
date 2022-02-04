@@ -85,6 +85,7 @@ post_provision_config_nodes() {
     #if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}" ]; then
     #    dnf -y config-manager --disable epel-modular appstream powertools
     #fi
+    time dnf repolist
 
     if [ -n "$INST_REPOS" ]; then
         local repo
@@ -111,8 +112,9 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
-        # shellcheck disable=SC2154
-        RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+        if ! rpm -q "$LSB_RELEASE"; then
+            RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+        fi
     fi
 
     if [ "$DISTRO_NAME" = "centos7" ] && lspci | grep "ConnectX-6"; then

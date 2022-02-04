@@ -180,6 +180,7 @@ update_repos() {
         send_mail "Fetch set_local_repos.sh failed.  Continuing on with in-image copy."
     else
         cat /usr/local/sbin/set_local_repos.sh-tmp > /usr/local/sbin/set_local_repos.sh
+        chmod +x /usr/local/sbin/set_local_repos.sh
         rm -f /usr/local/sbin/set_local_repos.sh-tmp
     fi
 

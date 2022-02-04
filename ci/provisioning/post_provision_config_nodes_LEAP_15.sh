@@ -50,22 +50,25 @@ post_provision_config_nodes() {
     fi
 
     # shellcheck disable=SC2154
-    update_repos "$DISTRO_NAME" "${repo_servers[@]}"
+    update_repos "$DISTRO_NAME"
 
     time dnf -y repolist
     # the group repo is always on the test image
     #add_group_repo
     # in fact is's on the Leap image twice so remove one
     rm -f $REPOS_DIR/daos-stack-ext-opensuse-15-stable-group.repo
-    #add_local_repo
+    # local repo won't be configured on Vagrant test nodes
+    add_local_repo
 
     # CORCI-1096
     # workaround until new snapshot images are produced
     # Assume if APPSTREAM is locally proxied so is epel-modular
     # so disable the upstream epel-modular repo
-    if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}" ]; then
-        dnf -y config-manager --disable epel-modular appstream powertools
-    fi
+    # I don't think this is needed any more
+    #if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}" ]; then
+    #    dnf -y config-manager --disable epel-modular appstream powertools
+    #fi
+    time dnf repolist
 
     if [ -n "$INST_REPOS" ]; then
         local repo
@@ -92,8 +95,9 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
-    # shellcheck disable=SC2154
-        RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+        if ! rpm -q "$LSB_RELEASE"; then
+            RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+        fi
     fi
 
     if [ "$DISTRO_NAME" = "centos7" ] && lspci | grep "ConnectX-6"; then

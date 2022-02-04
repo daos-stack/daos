@@ -42,9 +42,16 @@ $(cat "${results_files[@]}")
 </testsuite>
 EOF
 
-    clush -o '-i ci_key' -l root -w "$nodes" --rcopy /tmp/artifacts --dest "$STAGE_NAME"/framework/
+    clush -o '-i ci_key' -l root -w "$nodes" --rcopy /var/tmp/artifacts \
+                                             --dest "$STAGE_NAME"/framework/
 
 }
+
+# create this dir so that the remote copy doesn't fail if nothing actually populates it
+mkdir -p /var/tmp/artifacts
+
+# functions should inherit the ERR trap
+set -E
 
 # set an error trap to create a junit result for any unhandled error
 trap 'junit_result "UnhandledError@$SECONDS" "Unhandled error"' ERR
