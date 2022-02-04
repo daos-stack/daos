@@ -4,19 +4,19 @@ This section describes how to build and deploy Docker images to simulate a small
 
 - The `daos-server` node running a DAOS server daemon managing data storage devices such as SCM or
   NVMe disks.
-- The `daos-admin` node allowing to manage the DAOS server thanks to `dmg`command.
-- The `daos-client` node using the the DAOS server to store data.
+- The `daos-admin` node is used to manage the DAOS server thanks to the `dmg`command.
+- The `daos-client` node uses the DAOS server to store data.
 
-At this time only emulated hardware storage are supported by this Docker platform:
+At this time only emulated hardware storage is supported by this Docker platform:
 
-- SCM (i.e. Storage Class Memory) are emulated with standard RAM memory.
+- SCM (i.e. Storage Class Memory) is emulated with standard RAM memory.
 - NVMe disks are emulated with a file device.
 
 !!!warning
 Virtual Docker networking is still in development. The following are known issues:
 - [bridge](https://docs.docker.com/network/bridge/) 
 - loopback
-	- Work around - use one physical network interface for the [host](https://docs.docker.com/network/host/) use by the Docker containers  network.
+	- Workaround - use one physical network interface for the [host](https://docs.docker.com/network/host/) used by the Docker containers network.
 
 ## Hardware and Software Prerequisites
 ### Hardware Prerequisites
@@ -32,7 +32,7 @@ Virtual Docker networking is still in development. The following are known issue
 	- [Docker Hub](https://hub.docker.com/) 
 	- [Rocky Linux](https://rockylinux.org/) official repositories.  
 	- [hugepages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt) enabled
-		-linux kernel feature shall be enabled on the docker host. At least, 4096 pages of 2048kB should be available. 
+		-Linux kernel feature shall be enabled on the docker host. At least, 4096 pages of 2048kB should be available. 
 
 ### Hardware and software configuration used in this QSG
 - Server Board: Wolf Pass
@@ -42,7 +42,7 @@ Virtual Docker networking is still in development. The following are known issue
 - PMEM:(12)x16GB
 
 ## Configuring Hugepages
-Additional information in Hugepages is located in the administration portion of this guid <need link> and at (kernel.org)[https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt]
+Additional information in Hugepages is located in the administration portion of this guide <need link> and at (kernel.org)[https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt]
 	
 ### Determining Huge pages
 The number of huge pages allocated could be checked with the following command: 
@@ -77,11 +77,11 @@ $ for image in daos-server daos-admin daos-client ; do \
 @@@Need to add in the ethernet flag above to specify Ethernet adapter `DAOS_IFACE_NAME`
 Note:- `DAOS_IFACE_NAME`: Fabric network interface used by the DAOS engine (default "eth0")
 
-For aditional docker file arguments see <link>
+For additional docker, file arguments see <link>
 	
 ## Running the DAOS Containers
 
-### Via Docker Commands  @@section below needs simplification to one path, but as I cant getthis to run yet, I need guidance or a working docker image tag
+### Via Docker Commands  @@section below needs simplification to one path, but as I can’t get this to run yet, I need guidance or a working docker image tag
 
 Once the images are created, the containers could be directly started with docker with the following
 commands:
@@ -103,7 +103,7 @@ $ docker run --detach --privileged --name=daos-client --hostname=daos-client \
 	--tmpfs=/run --network=host daos-client:rocky8.4
 ```
 
-The value of the `DAOS_IFACE_IP` shall be replaced with the one of the network interface which was
+The value of the `DAOS_IFACE_IP` shall be replaced with the one of the network interfaces which was
 provided when the images have been built.
 
 Once started, the DAOS server waits for the administrator to format the system.
@@ -132,4 +132,4 @@ $ docker-compose --file utils/docker/vcluster/docker-compose.yml -- up --detach
     which was provided when the images have been built, shall be defined in the Docker
     Compose environment file `utils/docker/vcluster/.env`.
 
-As with the docker command, the system shall be formatted, pools created, etc..
+As with the docker command, the system shall be formatted, pools created, etc.
