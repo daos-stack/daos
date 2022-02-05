@@ -256,20 +256,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	return nil
 }
 
-// scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
-func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
-	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList:  cfgGetBdevs(srv.cfg),
-		BypassCache: true, // init cache on first scan
-	})
-	if err != nil {
-		srv.log.Errorf("%s\n", errors.Wrap(err, "NVMe Scan Failed"))
-		return nil, err
-	}
-
-	return nvmeScanResp, nil
-}
-
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
 // we have enough free hugepage memory to satisfy this requirement before setting mem_size and
 // hugepage_size parameters for engine.
