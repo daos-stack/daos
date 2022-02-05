@@ -251,24 +251,28 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 // addEngines creates and adds engine instances to harness then starts goroutine to execute
 // callbacks when all engines are started.
 func (srv *server) addEngines(ctx context.Context) error {
-	var allStarted sync.WaitGroup
-	registerTelemetryCallbacks(ctx, srv)
-
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
 	if err := prepBdevStorage(srv, iommuDetected()); err != nil {
-		return err
-	}
-
-	// Retrieve NVMe device details (before engines are started) so static details can be
-	// recovered by the engine storage provider(s) during scan even if devices are in use.
-	nvmeScanResp, err := scanBdevStorage(srv)
-	if err != nil {
 		return err
 	}
 
 	if len(srv.cfg.Engines) == 0 {
 		return nil
 	}
+
+	// Retrieve NVMe device details (before engines are started) so static details can be
+	// recovered by the engine storage provider(s) during scan even if devices are in use.
+	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
+		DeviceList:  cfgGetBdevs(srv.cfg),
+		BypassCache: true, // init cache on first scan
+	})
+	if err != nil {
+		srv.log.Errorf("%s\n", errors.Wrap(err, "NVMe Scan Failed"))
+		return err
+	}
+
+	var allStarted sync.WaitGroup
+	registerTelemetryCallbacks(ctx, srv)
 
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
