@@ -48,6 +48,7 @@ cat <<EOF > /etc/sysctl.d/10-daos-verbs.conf
 net.ipv4.conf.all.accept_local=1
 net.ipv4.conf.all.arp_ignore=2
 net.ipv4.conf.all.rp_filter=2
+fs.suid_dumpable=1
 EOF
 for x in \$(cd /sys/class/net/ && ls -d ib*); do
     echo \"net.ipv4.conf.\$x.rp_filter=2\"
