@@ -207,9 +207,9 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 	// Perform prepare reset based on the values in the config file.
 	// Note that prepare reset will not allocate hugepages.
-	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
-	}
+	//	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
+	//		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
+	//	}
 
 	if hasBdevs {
 		// The NrHugepages config value is a total for all engines. Distribute allocation

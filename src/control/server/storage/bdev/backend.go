@@ -190,6 +190,7 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 			return resp, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 		}
 		resp.VMDPrepared = true
+		return resp, nil
 	}
 
 	// Prepare non-VMD devices.
