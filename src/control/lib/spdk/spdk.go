@@ -115,8 +115,10 @@ func (ei *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 
 	log.Debugf("spdk init go opts: %+v", opts)
 
-	// Only print error and more severe to stderr.
-	C.spdk_log_set_print_level(C.SPDK_LOG_ERROR)
+	C.spdk_log_set_print_level(C.SPDK_LOG_DEBUG)
+	if rc := C.spdk_log_set_flag(C.CString("vmd")); rc != 0 {
+		return rc2err("spdk_log_set_flag()", rc)
+	}
 
 	if err := opts.sanitizeAllowList(log); err != nil {
 		return errors.Wrap(err, "sanitizing PCI include list")

@@ -343,7 +343,7 @@ def define_components(reqs):
                 commands=['./configure --prefix="$SPDK_PREFIX" --disable-tests '
                           '--disable-unit-tests --disable-apps --without-vhost --without-crypto '
                           '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '
-                          '--without-isal --without-vtune --with-shared',
+                          '--without-isal --without-vtune --with-shared --enable-debug',
                           'make CONFIG_ARCH={} $JOBS_OPT'.format(spdk_arch),
                           'make install',
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
