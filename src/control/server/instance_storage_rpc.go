@@ -64,10 +64,17 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 	return ei.newMntRet(cfg.Scm.MountPoint, nil), nil
 }
 
-func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
-	for _, tr := range ei.storage.FormatBdevTiers() {
+func (ei *EngineInstance) bdevFormat() (proto.NvmeControllerResults, error) {
+	inResults, err := ei.storage.FormatBdevTiers()
+	if err != nil {
+		return nil, err
+	}
+
+	var outResults proto.NvmeControllerResults
+	for _, tr := range inResults {
 		if tr.Error != nil {
-			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
+			outResults = append(outResults,
+				ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
 			continue
 		}
 		for devAddr, status := range tr.Result.DeviceResponses {
@@ -79,11 +86,11 @@ func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
 			if status.Error != nil {
 				err = status.Error
 			}
-			results = append(results, ei.newCret(devAddr, err))
+			outResults = append(outResults, ei.newCret(devAddr, err))
 		}
 	}
 
-	return
+	return outResults, nil
 }
 
 func (ei *EngineInstance) bdevWriteNvmeConfig(ctx context.Context) error {
@@ -133,25 +140,28 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 }
 
 // StorageFormatNVMe performs format on NVMe if superblock needs writing.
-func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResults) {
+func (ei *EngineInstance) StorageFormatNVMe() proto.NvmeControllerResults {
 	// If no superblock exists, format NVMe and populate response with results.
 	needsSuperblock, err := ei.NeedsSuperblock()
 	if err != nil {
 		ei.log.Errorf("engine storage for %s instance %d: NeedsSuperblock(): %s",
 			build.DataPlaneName, ei.Index(), err)
 
-		return proto.NvmeControllerResults{
-			ei.newCret("", err),
-		}
+		return proto.NvmeControllerResults{ei.newCret("", err)}
 	}
 
 	if needsSuperblock {
 		ei.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName,
 			ei.Index())
-		cResults = ei.bdevFormat()
+		cResults, err := ei.bdevFormat()
+		if err != nil {
+			return proto.NvmeControllerResults{ei.newCret("", err)}
+		}
+		return cResults
 	}
 
-	return
+	ei.log.Debugf("instance %d: skip bdev format as superblock exists", ei.Index())
+	return proto.NvmeControllerResults{}
 }
 
 // StorageWriteNvmeConfig writes output NVMe config file used to allocate devices to be used by an

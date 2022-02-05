@@ -177,6 +177,12 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 }
 
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
+	if srv.cfg.NrHugepages < 0 {
+		srv.log.Debugf("skip nvme prep as hugepages are disabled in config")
+		srv.ctlSvc.WithHugepagesDisabled()
+		return nil
+	}
+
 	hasBdevs := cfgHasBdevs(srv.cfg)
 
 	if hasBdevs {
@@ -191,9 +197,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 				return FaultIommuDisabled
 			}
 		}
-	} else if srv.cfg.NrHugepages < 0 {
-		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: -1 in config")
-		return nil
 	}
 
 	prepReq := storage.BdevPrepareRequest{
@@ -254,25 +257,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	}
 
 	return nil
-}
-
-// scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
-func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
-	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList:  cfgGetBdevs(srv.cfg),
-		BypassCache: true, // init cache on first scan
-	})
-	if err != nil {
-		// Return error if fault code is for BdevNotFound.
-		if storage.FaultBdevNotFound().Equals(err) {
-			return nil, err
-		}
-		// Keep going for other scan related failures.
-		srv.log.Errorf("%s\n", errors.Wrap(err, "NVMe Scan Failed"))
-		return &storage.BdevScanResponse{}, nil
-	}
-
-	return nvmeScanResp, nil
 }
 
 // Minimum recommended number of hugepages has already been calculated and set in config so verify

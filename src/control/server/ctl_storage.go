@@ -66,6 +66,12 @@ func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
 	return scs
 }
 
+// WithHugepagesDisabled sets hugepages disabled flag on storage provider.
+func (scs *StorageControlService) WithHugepagesDisabled() *StorageControlService {
+	scs.storage.WithHugepagesDisabled()
+	return scs
+}
+
 func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider, hpiFn common.GetHugePageInfoFn) *StorageControlService {
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, c := range ecs {

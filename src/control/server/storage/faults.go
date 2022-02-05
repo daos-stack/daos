@@ -14,6 +14,14 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
+// FaultBdevHugepagesDisabled is a Fault for when bdev backend is called but
+// hugepages have been disabled in config.
+var FaultBdevHugepagesDisabled = storageFault(
+	code.BdevHugepagesDisabled,
+	"bdev storage cannot be accessed as hugepages have been disabled in config",
+	"remove nr_hugepages parameter from config to have the value automatically calculated",
+)
+
 // FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
 // match expected PCI addresses.
 func FaultBdevNotFound(bdevs ...string) *fault.Fault {

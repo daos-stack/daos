@@ -30,14 +30,15 @@ type SystemProvider interface {
 // Provider provides storage specific capabilities.
 type Provider struct {
 	sync.RWMutex
-	log           logging.Logger
-	engineIndex   int
-	engineStorage *Config
-	Sys           SystemProvider
-	Scm           ScmProvider
-	bdev          BdevProvider
-	bdevCache     BdevScanResponse
-	vmdEnabled    bool
+	log               logging.Logger
+	engineIndex       int
+	engineStorage     *Config
+	Sys               SystemProvider
+	Scm               ScmProvider
+	bdev              BdevProvider
+	bdevCache         BdevScanResponse
+	vmdEnabled        bool
+	hugepagesDisabled bool
 }
 
 // DefaultProvider returns a provider populated with default parameters.
@@ -206,8 +207,23 @@ func (p *Provider) FormatScm(force bool) error {
 	return nil
 }
 
+func (p *Provider) checkHugepages() error {
+	p.RLock()
+	defer p.RUnlock()
+
+	if p.hugepagesDisabled {
+		return FaultBdevHugepagesDisabled
+	}
+
+	return nil
+}
+
 // PrepareBdevs attempts to configure NVMe devices to be usable by DAOS.
 func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, error) {
+	if err := p.checkHugepages(); err != nil {
+		return nil, err
+	}
+
 	resp, err := p.bdev.Prepare(req)
 
 	p.Lock()
@@ -270,13 +286,17 @@ type BdevTierFormatResult struct {
 
 // FormatBdevTiers formats all the Bdev tiers in the engine storage
 // configuration.
-func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
+func (p *Provider) FormatBdevTiers() ([]BdevTierFormatResult, error) {
+	if err := p.checkHugepages(); err != nil {
+		return nil, err
+	}
+
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
-	results = make([]BdevTierFormatResult, len(bdevCfgs))
+	results := make([]BdevTierFormatResult, len(bdevCfgs))
 
 	// A config with SCM and no block devices is valid.
 	if len(bdevCfgs) == 0 {
-		return
+		return results, nil
 	}
 
 	for i, cfg := range bdevCfgs {
@@ -306,7 +326,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 			p.engineIndex, cfg.Class, cfg.Bdev.DeviceList)
 	}
 
-	return
+	return results, nil
 }
 
 type topologyGetter func(ctx context.Context) (*hardware.Topology, error)
@@ -384,6 +404,10 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
 func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) error {
+	if err := p.checkHugepages(); err != nil {
+		return err
+	}
+
 	p.RLock()
 	vmdEnabled := p.vmdEnabled
 	engineIndex := p.engineIndex
@@ -460,6 +484,10 @@ func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierSc
 // ScanBdevTiers scans all Bdev tiers in the provider's engine storage configuration.
 // If direct is set to true, bypass cache to retrieve up-to-date details.
 func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err error) {
+	if err := p.checkHugepages(); err != nil {
+		return nil, err
+	}
+
 	return p.scanBdevTiers(direct, p.bdev.Scan)
 }
 
@@ -476,6 +504,10 @@ func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResp
 // ScanBdevs either calls into backend bdev provider to scan SSDs or returns
 // cached results if BypassCache is set to false in the request.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
+	if err := p.checkHugepages(); err != nil {
+		return nil, err
+	}
+
 	p.RLock()
 	defer p.RUnlock()
 
@@ -498,13 +530,27 @@ func (p *Provider) WithVMDEnabled() *Provider {
 	return p
 }
 
+// WithHugepagesDisabled sets hugepages disabled flag on storage provider.
+func (p *Provider) WithHugepagesDisabled() *Provider {
+	p.hugepagesDisabled = true
+	return p
+}
+
 // QueryBdevFirmware queries NVMe SSD firmware.
 func (p *Provider) QueryBdevFirmware(req NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
+	if err := p.checkHugepages(); err != nil {
+		return nil, err
+	}
+
 	return p.bdev.QueryFirmware(req)
 }
 
 // UpdateBdevFirmware queries NVMe SSD firmware.
 func (p *Provider) UpdateBdevFirmware(req NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error) {
+	if err := p.checkHugepages(); err != nil {
+		return nil, err
+	}
+
 	return p.bdev.UpdateFirmware(req)
 }
 

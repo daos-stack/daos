@@ -663,67 +663,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	}
 }
 
-// TestServer_scanBdevStorage validates that an error it returned in the case that a SSD is not
-// found and doesn't return an error if SPDK fails to init. Emulated NVMe (SPDK AIO mode) should
-// also be covered.
-func TestServer_scanBdevStorage(t *testing.T) {
-	for name, tc := range map[string]struct {
-		bmbc   *bdev.MockBackendConfig
-		expErr error
-	}{
-		"spdk fails init": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanErr: errors.New("spdk failed"),
-			},
-		},
-		"bdev in config not found by spdk": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanErr: storage.FaultBdevNotFound(common.MockPCIAddr()),
-			},
-			expErr: storage.FaultBdevNotFound(common.MockPCIAddr()),
-		},
-		"successful scan": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.MockNvmeControllers(1),
-				},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
-
-			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
-
-			// test only with 2M hugepage size
-			if err := cfg.Validate(log, 2048, nil); err != nil {
-				t.Fatal(err)
-			}
-
-			srv, err := newServer(log, cfg, &system.FaultDomain{})
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			mbb := bdev.NewMockBackend(tc.bmbc)
-			mbp := bdev.NewProvider(log, mbb)
-			sp := scm.NewMockSysProvider(log, nil)
-
-			srv.ctlSvc = &ControlService{
-				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp,
-					scm.NewProvider(log, scm.NewMockBackend(nil), sp),
-					mbp),
-				srvCfg: cfg,
-			}
-
-			_, gotErr := scanBdevStorage(srv)
-			common.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
 func TestServer_getNetDevClass(t *testing.T) {
 	configA := func() *engine.Config {
 		return engine.MockConfig().
