@@ -2710,7 +2710,7 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	if (rc)
 		return rc;
 
-	rc = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	rc = bio_iod_copy(ioc->ic_biod, false, sgls, sgl_nr);
 	rc = bio_iod_post(ioc->ic_biod, rc);
 
 	return rc;

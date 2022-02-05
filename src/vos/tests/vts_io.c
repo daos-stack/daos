@@ -591,7 +591,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	bsgl = vos_iod_sgl_at(ioh, 0);
 	assert_true(bsgl != NULL);
 
-	rc = bio_iod_copy(vos_ioh2desc(ioh), sgl, 1);
+	rc = bio_iod_copy(vos_ioh2desc(ioh), false, sgl, 1);
 	assert_rc_equal(rc, 0);
 	/*
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
