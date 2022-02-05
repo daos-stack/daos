@@ -11,7 +11,7 @@ junit_result() {
 
     cat <<EOF > results.xml
   <testcase classname="$HOSTNAME" name="$name" time="0">
-    <failure message="$msg" type="TestFail"><![CDATA[$stacktrace]]></failure>
+    <failure message="$msg" type="TestFail"><![CDATA[$stacktrace 1]]></failure>
   </testcase>
 EOF
 }
@@ -54,4 +54,4 @@ mkdir -p /var/tmp/artifacts
 set -E
 
 # set an error trap to create a junit result for any unhandled error
-trap 'junit_result "UnhandledError@$SECONDS" "Unhandled error"' ERR
+trap 'junit_result "UnhandledError" "Unhandled error in Post Restore Script step"' ERR

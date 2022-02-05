@@ -2,9 +2,10 @@
 
 stacktrace() {
     local msg=${1:-"Unchecked error condition at"}
-    local i=0
+    local i=${2:-0}
+
     while true; do
-        read -r line func file < <(caller $i)
+        read -r line func file < <(caller "$i")
         if [ -z "$line" ]; then
             # prevent cascading ERRs
             trap '' ERR
