@@ -125,11 +125,14 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 	}
 
 	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
+	if err != nil {
+		return nil, err
+	}
 
 	pciAddrs := ctrlrPCIAddresses(ctrlrs)
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
 
-	return ctrlrs, wrapCleanError(err, cleanLockfiles(log, realRemove, pciAddrs...))
+	return ctrlrs, cleanLockfiles(log, realRemove, pciAddrs...)
 }
 
 func resultPCIAddresses(results []*FormatResult) []string {
