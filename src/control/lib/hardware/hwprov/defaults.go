@@ -62,12 +62,14 @@ func DefaultFabricScanner(log logging.Logger) *hardware.FabricScanner {
 	return fs
 }
 
-// LoadRuntimeFabricLibs loads up any dynamic libraries that need to be loaded at runtime.
-func LoadRuntimeFabricLibs(log logging.Logger) (func(), error) {
+// Init loads up any dynamic libraries that need to be loaded at runtime.
+func Init(log logging.Logger) (func(), error) {
 	cleanupLibFabric, err := libfabric.Load()
 	if err != nil {
 		return nil, errors.Wrapf(err, "unable to load any fabric libraries")
 	}
 
-	return cleanupLibFabric, nil
+	return func() {
+		cleanupLibFabric()
+	}, nil
 }

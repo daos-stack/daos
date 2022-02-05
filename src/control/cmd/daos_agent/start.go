@@ -55,11 +55,11 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("Local fabric interface caching has been disabled\n")
 	}
 
-	unloadFabricLibs, err := hwprov.LoadRuntimeFabricLibs(cmd.log)
+	hwprovFini, err := hwprov.Init(cmd.log)
 	if err != nil {
 		return err
 	}
-	defer unloadFabricLibs()
+	defer hwprovFini()
 
 	netCtx, err := netdetect.Init(context.Background())
 	defer netdetect.CleanUp(netCtx)
