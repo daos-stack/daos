@@ -2454,7 +2454,8 @@ dm_connect(struct cmd_args_s *ap,
 					rc = uuid_parse(ca->dst_cont, cuuid);
 					if (rc)
 						D_GOTO(err, rc);
-					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr, NULL, NULL);
+					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr, NULL,
+							     NULL);
 				} else {
 					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr,
 							     NULL, NULL);
