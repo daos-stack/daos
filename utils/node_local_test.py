@@ -1373,9 +1373,6 @@ def create_cont(conf,
     if ctype:
         cmd.extend(['--type', ctype])
 
-#    if cont:
-#        cmd.extend(['--cont', cont])
-
     def _create_cont():
         """Helper function for create_cont"""
 
