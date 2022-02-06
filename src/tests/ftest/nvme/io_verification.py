@@ -54,7 +54,7 @@ class NvmeIoVerification(IorTestBase):
         ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool')
 
         # Loop for every pool size
-        for index in range(ior_seq_pool_qty):
+        for index in range(int(ior_seq_pool_qty)):
             # Create and connect to a pool with namespace
             self.add_pool(namespace="pool_{}".format(index))
 
@@ -114,7 +114,7 @@ class NvmeIoVerification(IorTestBase):
         ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool')
 
         # Loop for every pool size
-        for index in range(ior_seq_pool_qty):
+        for index in range(int(ior_seq_pool_qty)):
             # Create and connect to a pool with namespace
             self.add_pool(namespace="pool_{}".format(index))
 
