@@ -9,7 +9,7 @@ timeout: 700
 pool:
   control_method: dmg
   mode: 511
-  scm_size: 1073741824
+  scm_size: 1GB
   name: daos_server
 connecttests:
    connectmode: !mux
@@ -28,15 +28,6 @@ connecttests:
      badmode1:
           mode:
              - 512
-             - FAIL
-   connectsetnames: !mux
-     goodname:
-          setname:
-             - scott_server
-             - PASS
-     badname:
-          setname:
-             - NULLPTR
              - FAIL
    UUID: !mux
      gooduuid:

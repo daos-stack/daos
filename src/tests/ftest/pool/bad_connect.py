@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -21,7 +21,7 @@ class BadConnectTest(TestWithServers):
         Pass bad parameters to pool connect
 
         :avocado: tags=all,full_regression
-        :avocado: tags=tiny
+        :avocado: tags=vm
         :avocado: tags=pool,bad_connect
         """
         # Accumulate a list of pass/fail indicators representing what is
@@ -32,10 +32,6 @@ class BadConnectTest(TestWithServers):
         modelist = self.params.get("mode", '/run/connecttests/connectmode/*/')
         connectmode = modelist[0]
         expected_for_param.append(modelist[1])
-
-        setlist = self.params.get("setname",
-                                  '/run/connecttests/connectsetnames/*/')
-        expected_for_param.append(setlist[1])
 
         uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')
         connectuuid = uuidlist[0]
