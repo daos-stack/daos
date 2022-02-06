@@ -1373,8 +1373,8 @@ def create_cont(conf,
     if ctype:
         cmd.extend(['--type', ctype])
 
-    if cont:
-        cmd.extend(['--cont', cont])
+#    if cont:
+#        cmd.extend(['--cont', cont])
 
     def _create_cont():
         """Helper function for create_cont"""
@@ -2700,17 +2700,18 @@ class posix_tests():
 
         # Now create a container uuid and do an object based copy.
         # The daos command will create the target container on demand.
-        container = str(uuid.uuid4())
         cmd = ['container',
                'clone',
                '--src',
                'daos://{}/{}'.format(self.pool.uuid, self.container),
                '--dst',
-               'daos://{}/{}'.format(self.pool.uuid, container)]
+               'daos://{}/'.format(self.pool.uuid)]
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
-        destroy_container(self.conf, self.pool.id(), container)
+        lineresult = rc.stdout.decode('utf-8').splitlines()
+        assert len(lineresult) == 2
+        destroy_container(self.conf, self.pool.id(), lineresult[1][-36:])
 
 class nlt_stdout_wrapper():
     """Class for capturing stdout from threads"""
