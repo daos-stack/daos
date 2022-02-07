@@ -2,7 +2,7 @@
 
 set -eux
 
-export PS4='${HOSTNAME%%.*}:${BASH_SOURCE:+$BASH_SOURCE:}$LINENO:${FUNCNAME:+$FUNCNAME():} '
+export PS4='+ ${HOSTNAME%%.*}:${BASH_SOURCE:+$BASH_SOURCE:}$LINENO:${FUNCNAME:+$FUNCNAME():} '
 
 rm -f ci_key*
 ssh-keygen -N "" -f ci_key
