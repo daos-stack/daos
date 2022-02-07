@@ -504,7 +504,7 @@ class Srun(JobManager):
 
 
 class Systemctl(JobManager):
-    # pylint: disable=too-many-public-methods,too-many-public-methods
+    # pylint: disable=too-many-public-methods
     """A class for the systemctl job manager command."""
 
     def __init__(self, job):
