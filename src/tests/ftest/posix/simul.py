@@ -72,8 +72,6 @@ class PosixSimul(DfuseTestBase):
         If include value is set, exclude value is ignored and vice versa.
         """
         # Assuming all vms use the same OS
-        host_os = distro.linux_distribution()[0].lower()
-        version_os = distro.linux_distribution()[1]
         dfuse_hosts = self.agent_managers[0].hosts
         dfuse_mount_dir = self.params.get("mount_dir", '/run/dfuse/*')
         simul_list = self.params.get("mpi_list", '/run/*')
