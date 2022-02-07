@@ -4618,7 +4618,8 @@ int_key_setting(void **state, int size)
 	free(akey_buf);
 }
 
-static void invalid_int_key_setting(void **state) {
+static void invalid_int_key_setting(void **state)
+{
 	int_key_setting(state, 128);
 	int_key_setting(state, 3);
 }
