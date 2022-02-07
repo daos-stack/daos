@@ -380,7 +380,7 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	d_iov_t				riov;
 	int				rc;
 
-	if (cont->sc_dtx_cos_shutdown || cont->sc_closing)
+	if (!dtx_cont_opened(cont))
 		return -DER_SHUTDOWN;
 
 	D_ASSERT(dte->dte_mbs != NULL);

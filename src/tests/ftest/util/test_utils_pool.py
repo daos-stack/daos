@@ -24,7 +24,7 @@ class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None):
+                 label_generator=None, crt_timeout=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -42,8 +42,10 @@ class TestPool(TestDaosApiBase):
                 There's a link between label_generator and label. If the label
                 is used as it is, i.e., not None, label_generator must be
                 provided in order to call create(). Defaults to None.
+            crt_timeout (str, optional): value to use for the CRT_TIMEOUT when running pydaos
+                commands. Defaults to None.
         """
-        super().__init__("/run/pool/*", cb_handler)
+        super().__init__("/run/pool/*", cb_handler, crt_timeout)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -101,16 +103,15 @@ class TestPool(TestDaosApiBase):
 
         # Autosize any size/scm_size/nvme_size parameters
         # pylint: disable=too-many-boolean-expressions
-        if ((self.size.value is not None and str(self.size.value).endswith("%"))
-                or (self.scm_size.value is not None
-                    and str(self.scm_size.value).endswith("%"))
+        if ((self.scm_size.value is not None
+             and str(self.scm_size.value).endswith("%"))
                 or (self.nvme_size.value is not None
                     and str(self.nvme_size.value).endswith("%"))):
             index = self.server_index.value
             try:
                 params = test.server_managers[index].autosize_pool_params(
-                    size=self.size.value,
-                    tier_ratio=self.tier_ratio.value,
+                    size=None,
+                    tier_ratio=None,
                     scm_size=self.scm_size.value,
                     nvme_size=self.nvme_size.value,
                     min_targets=self.min_targets.value,
@@ -411,6 +412,7 @@ class TestPool(TestDaosApiBase):
         """
         if self.pool:
             self.connect()
+            self.log.info("Querying pool %s", self.identifier)
             self._call_method(self.pool.pool_query, {})
             self.info = self.pool.pool_info
 

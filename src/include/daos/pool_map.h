@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,9 +18,9 @@
 #define POOL_MAP_VER_2		(2)
 #define POOL_MAP_VERSION	POOL_MAP_VER_2
 
-#define DF_TARGET "Target[%d] (rank %u idx %u status %u)"
+#define DF_TARGET "Target[%d] (rank %u idx %u status %u ver %u)"
 #define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index,\
-		     t->ta_comp.co_status
+		     t->ta_comp.co_status, t->ta_comp.co_ver
 
 /**
  * pool component types

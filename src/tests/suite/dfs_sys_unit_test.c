@@ -81,6 +81,38 @@ dfs_sys_test_mount(void **state)
 	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+
+	/** connect to DFS without calling dfs_init(), should fail. */
+	rc = dfs_sys_connect(arg->pool.pool_str, arg->group, "cont0", O_CREAT | O_RDWR, 0, NULL,
+			     &dfs_sys);
+	assert_int_equal(rc, EACCES);
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
+	/** Connect to non existing container - should succeed as container will be created  */
+	rc = dfs_sys_connect(arg->pool.pool_str, arg->group, "cont0", O_CREAT | O_RDWR, 0, NULL,
+			     &dfs_sys);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_disconnect(dfs_sys);
+	assert_int_equal(rc, 0);
+
+	/** create a DFS container with a valid label */
+	rc = dfs_cont_create_with_label(arg->pool.poh, "cont1", NULL, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_connect(arg->pool.pool_str, arg->group, "cont1", O_CREAT | O_RDWR, 0, NULL,
+			     &dfs_sys);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_disconnect(dfs_sys);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "cont1", 0, NULL);
+	assert_rc_equal(rc, 0);
 }
 
 /**
@@ -709,6 +741,58 @@ dfs_sys_test_xattr(void **state)
 }
 
 static void
+dfs_sys_test_handles(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_sys_t		*dfs_l, *dfs_g;
+	d_iov_t			ghdl = { NULL, 0, 0 };
+	dfs_obj_t		*file;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
+	/** create and connect to DFS container */
+	rc = dfs_sys_connect(arg->pool.pool_str, arg->group, "cont0", O_CREAT | O_RDWR, 0, NULL,
+			     &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/** create a file with "local" handle */
+	rc = dfs_sys_open(dfs_l, "/file", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+			  0, NULL, &file);
+	assert_int_equal(rc, 0);
+	dfs_sys_close(file);
+
+	rc = dfs_sys_local2global_all(dfs_l, &ghdl);
+	assert_int_equal(rc, 0);
+
+	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
+	ghdl.iov_len = ghdl.iov_buf_len;
+
+	rc = dfs_sys_local2global_all(dfs_l, &ghdl);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_sys_global2local_all(O_RDWR, 0, ghdl, &dfs_g);
+	assert_int_equal(rc, 0);
+
+	/** open the file with "global" handle */
+	rc = dfs_sys_open(dfs_g, "/file", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+	dfs_sys_close(file);
+
+	rc = dfs_sys_disconnect(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_disconnect(dfs_g);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+	D_FREE(ghdl.iov_buf);
+}
+
+static void
 dfs_sys_test_chown(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -755,7 +839,9 @@ static const struct CMUnitTest dfs_sys_unit_tests[] = {
 	  dfs_sys_test_open_readdir, async_disable, test_case_teardown},
 	{ "DFS_SYS_UNIT_TEST10: DFS Sys xattr",
 	  dfs_sys_test_xattr, async_disable, test_case_teardown},
-	{ "DFS_SYS_UNIT_TEST11: DFS Sys chown",
+	{ "DFS_SYS_UNIT_TEST11: DFS Sys l2g/g2l handles",
+	  dfs_sys_test_handles, async_disable, test_case_teardown},
+	{ "DFS_SYS_UNIT_TEST12: DFS Sys chown",
 	  dfs_sys_test_chown, async_disable, test_case_teardown},
 };
 

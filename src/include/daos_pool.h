@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,7 +49,9 @@ typedef struct {
 	int			foo;
 } daos_target_perf_t;
 
-enum {
+
+/** Storage tier names */
+enum daos_media_type_t {
 	DAOS_MEDIA_SCM	= 0,
 	DAOS_MEDIA_NVME,
 	DAOS_MEDIA_MAX
