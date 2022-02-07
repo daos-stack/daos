@@ -5,13 +5,13 @@ set -eux
 junit_result() {
     local name="$1"
     local msg="$2"
-    local stacktrace="${3:-$(stacktrace "Called from")}"
+    local stacktrace="${3:-$(stacktrace "Called from" 1)}"
 
     echo -e "$msg"
 
     cat <<EOF > results.xml
   <testcase classname="$HOSTNAME" name="$name" time="0">
-    <failure message="$msg" type="TestFail"><![CDATA[$stacktrace 1]]></failure>
+    <failure message="$msg" type="TestFail"><![CDATA[$stacktrace]]></failure>
   </testcase>
 EOF
 }
@@ -54,4 +54,4 @@ mkdir -p /var/tmp/artifacts
 set -E
 
 # set an error trap to create a junit result for any unhandled error
-trap 'junit_result "UnhandledError" "Unhandled error in Post Restore Script step"' ERR
+trap 'junit_result "UnhandledError" "Unhandled error in ${STAGE_NAME} Post Restore Script step"' ERR
