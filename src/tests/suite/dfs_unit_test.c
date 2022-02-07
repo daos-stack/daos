@@ -119,7 +119,6 @@ dfs_test_mount(void **state)
 
 	/** create a DFS container with POSIX layout */
 	rc = dfs_cont_create(arg->pool.poh, &cuuid, NULL, NULL, NULL);
-	uuid_unparse(cuuid, str);
 	assert_int_equal(rc, 0);
 	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 	uuid_unparse(cuuid, str);
