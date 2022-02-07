@@ -698,7 +698,11 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 
 	D_ASSERT(obj->cob_shards_nr >= grp_size);
 
-	grp_idx = d_hash_jump(hash, obj->cob_shards_nr / grp_size);
+	/** Use round-robin distribution for array chunks and jump hash otherwise */
+	if (daos_is_array(obj->cob_md.omd_id))
+		grp_idx = hash % (obj->cob_shards_nr / grp_size);
+	else
+		grp_idx = d_hash_jump(hash, obj->cob_shards_nr / grp_size);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return grp_idx;
