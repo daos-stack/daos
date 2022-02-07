@@ -37,7 +37,7 @@ DSA_REPO_var="DAOS_STACK_$(toupper "$DISTRO")_APPSTREAM_REPO"
 retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 
 if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
-           "export PS4=$PS4
+           "export PS4='$PS4'
            MY_UID=$(id -u)
            CONFIG_POWER_ONLY=$CONFIG_POWER_ONLY
            INST_REPOS=\"$INST_REPOS\"
