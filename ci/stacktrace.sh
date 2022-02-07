@@ -16,7 +16,7 @@ stacktrace() {
         else
             echo -e "Called from: \c"
         fi
-        echo "$file:$line $func()"
+        echo "$file:$line:$func()"
         (( i++ )) || true
     done
 }
