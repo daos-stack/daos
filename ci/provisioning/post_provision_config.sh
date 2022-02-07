@@ -2,6 +2,8 @@
 
 set -eux
 
+PS4='${HOSTNAME%%.*}:${BASH_SOURCE:+$BASH_SOURCE:}$LINENO:${FUNCNAME:+FUNCNAME():} '
+
 rm -f ci_key*
 ssh-keygen -N "" -f ci_key
 cat << "EOF" > ci_key_ssh_config
@@ -52,7 +54,7 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL}\"
            COMMIT_MESSAGE=\"${COMMIT_MESSAGE-}\"
            REPO_FILE_URL=\"$REPO_FILE_URL\"
-           PS4='${HOSTNAME%%.*}:${BASH_SOURCE:+BASH_SOURCE:}$LINENO:${FUNCNAME:+FUNCNAME():} '
+           PS4='\${HOSTNAME%%.*}:\${BASH_SOURCE:+\$BASH_SOURCE:}\$LINENO:\${FUNCNAME:+FUNCNAME():} '
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)
            $(cat ci/provisioning/post_provision_config_common_functions.sh)
