@@ -10,6 +10,7 @@ import os
 import socket
 import time
 import yaml
+import random
 
 from avocado import fail_on
 
@@ -291,10 +292,6 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
-        # Additionally try to prepare any discovered VMD NVMe devices.
-        if "True" in os.environ["DAOS_ENABLE_VMD"]:
-            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
-
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
             using_dcpm = self.manager.job.using_dcpm
@@ -454,10 +451,6 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.nvme_only.value = True
         cmd.sub_command_class.sub_command_class.reset.value = True
         cmd.sub_command_class.sub_command_class.force.value = True
-
-        # Use VMD option when resetting storage if it's prepared with VMD.
-        if "True" in os.environ["DAOS_ENABLE_VMD"]:
-            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=120)
@@ -795,6 +788,42 @@ class DaosServerManager(SubprocessManager):
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
 
+    def stop_random_rank(self, daos_log, force=False, exclude_ranks=None):
+        """Kill/Stop a random server rank that is expected to be running.
+
+        Args:
+            daos_log (DaosLog): object for logging messages
+            force (bool, optional): whether to use --force option to dmg system
+                stop. Defaults to False.
+            exclude_ranks (list, optional): ranks to exclude from the random selection.
+                Default is None.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue stopping the server ranks.
+            ServerFailed: if there are no available ranks to stop.
+
+        """
+        # Exclude non-running ranks
+        rank_state = self.get_expected_states()
+        candidate_ranks = []
+        for rank, state in rank_state.items():
+            for running_state in self._states["running"]:
+                if running_state in state:
+                    candidate_ranks.append(rank)
+                    continue
+
+        # Exclude specified ranks
+        for rank in exclude_ranks or []:
+            if rank in candidate_ranks:
+                del candidate_ranks[candidate_ranks.index(rank)]
+
+        if len(candidate_ranks) < 1:
+            raise ServerFailed("No available candidate ranks to stop.")
+
+        # Stop a random rank
+        random_rank = random.choice(candidate_ranks) #nosec
+        return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
+
     def kill(self):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
@@ -952,13 +981,13 @@ class DaosServerManager(SubprocessManager):
             nvme_size.  This is intended to allow testing of these combinations.
 
         Args:
-            size (object): the str, int, or None value for the dmp pool create
+            size (object): the str, int, or None value for the dmg pool create
                 size parameter.
-            tier_ratio (object): the int or None value for the dmp pool create
+            tier_ratio (object): the int or None value for the dmg pool create
                 size parameter.
-            scm_size (object): the str, int, or None value for the dmp pool
+            scm_size (object): the str, int, or None value for the dmg pool
                 create scm_size parameter.
-            nvme_size (object): the str, int, or None value for the dmp pool
+            nvme_size (object): the str, int, or None value for the dmg pool
                 create nvme_size parameter.
             min_targets (int, optional): the minimum number of targets per
                 engine that can be configured. Defaults to 1.
@@ -1103,3 +1132,27 @@ class DaosServerManager(SubprocessManager):
             self.log.info("-" * 100)
 
         return params
+
+    def get_daos_metrics(self, verbose=False, timeout=60):
+        """Get daos_metrics for the server
+
+        Args:
+            verbose (bool, optional): pass verbose to run_pcmd. Defaults to False.
+            timeout (int, optional): pass timeout to each execution ofrun_pcmd. Defaults to 60.
+
+        Returns:
+            list: list of pcmd results for each host. See general_utils.run_pcmd for details.
+                [
+                    general_utils.run_pcmd(), # engine 0
+                    general_utils.run_pcmd()  # engine 1
+                ]
+        """
+        engines_per_host = self.get_config_value("engines_per_host") or 1
+        engines = []
+        daos_metrics_exe = os.path.join(self.manager.job.command_path, "daos_metrics")
+        for engine in range(engines_per_host):
+            results = run_pcmd(
+                hosts=self._hosts, verbose=verbose, timeout=timeout,
+                command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
+            engines.append(results)
+        return engines
