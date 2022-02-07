@@ -218,8 +218,8 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 // controller claimed by another process. Only update info for controllers
 // assigned to I/O Engines.
 func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
-	var ctrlrs storage.NvmeControllers
 	instances := cs.harness.Instances()
+	ctrlrs := storage.NvmeControllers{}
 
 	for _, ei := range instances {
 		if !ei.HasBlockDevices() {
@@ -231,7 +231,7 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 			return nil, err
 		}
 
-		// If the is not running or we aren't interested in temporal
+		// If the engine is not running or we aren't interested in temporal
 		// statistics for the bdev devices then continue to next.
 		if !ei.IsReady() || !statsReq {
 			for _, tsr := range tsrs {
