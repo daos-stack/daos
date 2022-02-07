@@ -154,7 +154,7 @@ main(int argc, char **argv)
 				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'S':
-			if (strlen(optarg) >= STORAGE_PATH_LEN) {
+			if (strnlen(optarg, STORAGE_PATH_LEN) >= STORAGE_PATH_LEN) {
 				print_error("%s is longer than STORAGE_PATH_LEN.\n", optarg);
 				goto exit_0;
 			}

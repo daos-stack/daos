@@ -47,10 +47,6 @@
 #define PRINT_RECORD(name, type, feats)					\
 	print_record(buf, #name, &name);
 
-#ifndef STORAGE_PATH_LEN
-#define STORAGE_PATH_LEN 96
-#endif
-
 static void
 print_dynamic(struct d_string_buffer_t *buf, const char *name,
 	      const struct daos_tree_overhead *ovhd)
