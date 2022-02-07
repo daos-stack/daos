@@ -52,7 +52,6 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL}\"
            COMMIT_MESSAGE=\"${COMMIT_MESSAGE-}\"
            REPO_FILE_URL=\"$REPO_FILE_URL\"
-           export PS4="+ $BASH_SOURCE:$LINENO:$FUNCNAME"
            PS4='$HOSTNAME:$BASH_SOURCE:$LINENO:$FUNCNAME(): '
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)
