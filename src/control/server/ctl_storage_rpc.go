@@ -109,7 +109,6 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 		return newScanNvmeResp(req, resp, err)
 	}
 
-	c.log.Debugf("scanning only bdevs in cfg")
 	resp, err := c.scanAssignedBdevs(ctx, req.GetHealth() || req.GetMeta())
 
 	return newScanNvmeResp(req, resp, err)

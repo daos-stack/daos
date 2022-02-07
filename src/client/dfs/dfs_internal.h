@@ -19,6 +19,30 @@ extern "C" {
 #include <daos.h>
 #include <daos_fs.h>
 
+/** enum for hash entry type */
+enum {
+	DFS_H_POOL,
+	DFS_H_CONT,
+};
+
+/** hash entry for open pool/container handles */
+struct dfs_mnt_hdls {
+	d_list_t	entry;
+	char		value[DAOS_PROP_LABEL_MAX_LEN + 1];
+	daos_handle_t	handle;
+	int		ref;
+	int		type;
+};
+
+struct dfs_mnt_hdls *
+dfs_hdl_lookup(const char *str, int type);
+void
+dfs_hdl_release(struct dfs_mnt_hdls *hdl);
+int
+dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls **_hdl);
+int
+dfs_is_init();
+
 /*
  * Get the DFS superblock D-Key and A-Keys
  *

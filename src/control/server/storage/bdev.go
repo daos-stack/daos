@@ -365,7 +365,7 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList  []string
+		DeviceList  *BdevDeviceList
 		VMDEnabled  bool
 		BypassCache bool
 	}
@@ -379,7 +379,7 @@ type (
 	// BdevTierProperties contains basic configuration properties of a bdev tier.
 	BdevTierProperties struct {
 		Class          Class
-		DeviceList     []string
+		DeviceList     *BdevDeviceList
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		Tier           int
 	}
