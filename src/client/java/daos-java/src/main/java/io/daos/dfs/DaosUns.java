@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -201,7 +201,7 @@ public class DaosUns {
     return builder.layout;
   }
 
-  public DaosObjectType getObjectType() {
+  public DaosObjectClass getObjectType() {
     return builder.objectType;
   }
 
@@ -224,7 +224,7 @@ public class DaosUns {
     private String poolUuid;
     private String contUuid;
     private Layout layout = Layout.POSIX;
-    private DaosObjectType objectType = DaosObjectType.OC_SX;
+    private DaosObjectClass objectType = DaosObjectClass.OC_SX;
     private long chunkSize = Constants.FILE_DEFAULT_CHUNK_SIZE;
     private boolean onLustre;
     private String serverGroup = Constants.POOL_DEFAULT_SERVER_GROUP;
@@ -284,7 +284,7 @@ public class DaosUns {
      * object type
      * @return this object
      */
-    public DaosUnsBuilder objectType(DaosObjectType objectType) {
+    public DaosUnsBuilder objectType(DaosObjectClass objectType) {
       this.objectType = objectType;
       return this;
     }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -68,25 +68,25 @@ func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
 	)
 }
 
-func FaultPoolNvmeTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+func FaultPoolNvmeTooSmall(minTotal, minNVMe uint64) *fault.Fault {
 	return serverFault(
 		code.ServerPoolNvmeTooSmall,
-		fmt.Sprintf("requested NVMe capacity (%s / %d) is too small (min %s per target)",
-			humanize.Bytes(reqBytes), targetCount,
+		fmt.Sprintf("requested NVMe capacity too small (min %s per target)",
 			humanize.IBytes(engine.NvmeMinBytesPerTarget)),
-		fmt.Sprintf("NVMe capacity should be larger than %s",
-			humanize.Bytes(engine.NvmeMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s NVMe",
+			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minNVMe+humanize.MiByte),
+		),
 	)
 }
 
-func FaultPoolScmTooSmall(reqBytes uint64, targetCount int) *fault.Fault {
+func FaultPoolScmTooSmall(minTotal, minSCM uint64) *fault.Fault {
 	return serverFault(
 		code.ServerPoolScmTooSmall,
-		fmt.Sprintf("requested SCM capacity (%s / %d) is too small (min %s per target)",
-			humanize.Bytes(reqBytes), targetCount,
+		fmt.Sprintf("requested SCM capacity is too small (min %s per target)",
 			humanize.IBytes(engine.ScmMinBytesPerTarget)),
-		fmt.Sprintf("SCM capacity should be larger than %s",
-			humanize.Bytes(engine.ScmMinBytesPerTarget*uint64(targetCount))),
+		fmt.Sprintf("retry the request with a pool size of at least %s, with at least %s SCM",
+			humanize.Bytes(minTotal+humanize.MiByte), humanize.Bytes(minSCM+humanize.MiByte),
+		),
 	)
 }
 

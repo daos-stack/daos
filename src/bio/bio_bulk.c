@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -628,13 +628,21 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 
 	D_ASSERT(biod && biod->bd_chk_type == BIO_CHK_TYPE_IO);
 	D_ASSERT(biod->bd_rdma);
-	D_ASSERT(biov && bio_iov2raw_len(biov) != 0);
+	D_ASSERT(biov);
 
 	if (biod->bd_bulk_hdls == NULL) {
 		rc = bulk_iod_init(biod);
 		if (rc)
 			return rc;
 	}
+
+	/* Zero length IOV */
+	if (bio_iov2req_len(biov) == 0) {
+		D_ASSERT(bio_iov2raw_len(biov) == 0);
+		bio_iov_set_raw_buf(biov, NULL);
+		goto done;
+	}
+
 	dma_biov2pg(biov, &off, &end, &pg_cnt, &pg_off);
 
 	if (bypass_bulk_cache(biod, biov, pg_cnt)) {
@@ -786,7 +794,8 @@ bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
 	if (biod->bd_bulk_hdls == NULL)
 		return NULL;
 
-	D_ASSERT(biod->bd_bulk_cnt == biod->bd_bulk_max);
+	D_ASSERTF(biod->bd_bulk_cnt == biod->bd_bulk_max, "bulk_cnt:%u, bulk_max:%u\n",
+		  biod->bd_bulk_cnt, biod->bd_bulk_max);
 	D_ASSERT(sgl_idx < biod->bd_sgl_cnt);
 
 	for (i = 0; i < sgl_idx; i++) {

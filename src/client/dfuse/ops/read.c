@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -83,7 +83,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	}
 
 	if (readahead) {
-		buff_len += READAHEAD_SIZE;
+		if (!fs_handle->dpi_info->di_wb_cache)
+			buff_len += READAHEAD_SIZE;
 	} else {
 		if (!skip_read) {
 			rc = daos_event_init(&ev->de_ev,

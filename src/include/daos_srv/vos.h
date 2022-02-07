@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,13 +38,21 @@ void
 vos_dtx_rsrvd_fini(struct dtx_handle *dth);
 
 /**
- * Generate DTX entry for the given DTX.
+ * Generate DTX entry for the given DTX, and attach it to the DTX handle.
  *
  * \param dth		[IN]	The dtx handle
  * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
  */
 int
-vos_dtx_pin(struct dtx_handle *dth, bool persistent);
+vos_dtx_attach(struct dtx_handle *dth, bool persistent);
+
+/**
+ * Detach the DTX entry from the DTX handle.
+ *
+ * \param dth		[IN]	The dtx handle
+ */
+void
+vos_dtx_detach(struct dtx_handle *dth);
 
 /**
  * Check whether DTX entry attached to the DTX handle is still valid or not.
@@ -68,7 +76,6 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
  * \param mbs		[OUT]	Pointer to the DTX participants information.
  * \param dck		[OUT]	Pointer to the key for CoS cache.
- * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -82,12 +89,12 @@ vos_dtx_validation(struct dtx_handle *dth);
  *			-DER_AGAIN means DTX re-index is in processing, not sure
  *				   about the existence of the DTX entry, need to
  *				   retry sometime later.
+ *			DTX_ST_INITED	means that the DTX is just initialized but not prepared.
  *			Other negative value if error.
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs,
-	      struct dtx_cos_key *dck, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck);
 
 /**
  * Commit the specified DTXs.
@@ -101,8 +108,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  * \return		Others are for the count of committed DTXs.
  */
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
-	       bool *rm_cos);
+vos_dtx_commit(daos_handle_t coh, struct dtx_id dtis[], int count, bool rm_cos[]);
 
 /**
  * Abort the specified DTXs.
@@ -271,10 +277,10 @@ vos_pool_destroy(const char *path, uuid_t uuid);
 /**
  * Open a Versioning Object Storage Pool (VOSP)
  *
- * \param path	[IN]	Path of the memory pool
- * \param uuid	[IN]    Pool UUID
- * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
- * \param poh	[OUT]	Returned pool handle
+ * \param path	 [IN]	Path of the memory pool
+ * \param uuid	 [IN]	Pool UUID
+ * \param flags  [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param poh	 [OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
@@ -398,6 +404,11 @@ vos_cont_close(daos_handle_t coh);
 int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
+enum {
+	VOS_AGG_FL_FORCE_SCAN	= (1UL << 0),	/* Scan all obj/dkey/akeys */
+	VOS_AGG_FL_FORCE_MERGE	= (1UL << 1),	/* Merge all coalesce-able EV records */
+};
+
 /**
  * Aggregates all epochs within the epoch range \a epr.
  * Data in all these epochs will be aggregated to the last epoch
@@ -406,17 +417,15 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  *
  * \param coh	  [IN]		Container open handle
  * \param epr	  [IN]		The epoch range of aggregation
- * \param csum_func  [IN]	Pointer to csum recalculation function
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
- * \param full_scan  [IN]	Full scan for snapshot deletion
+ * \param flags      [IN]	Aggregation flags
  *
  * \return			Zero on success, negative value if error
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
-	      void *yield_arg, bool full_scan);
+	      bool (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -1021,26 +1030,27 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * a recx is found or no more dkeys exist in which case -DER_NONEXIST is
  * returned.
  *
- * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object id
- * \param[in]	flags	mask with the following options:
- *			DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
- *			DAOS_GET_MAX, DAOS_GET_MIN
- *			User has to indicate whether to query the MAX or MIN, in
- *			addition to what needs to be queried. Providing
- *			(MAX | MIN) in any combination will return an error.
- *			i.e. user can only query MAX or MIN in one call.
+ * \param[in]	coh		Container open handle.
+ * \param[in]	oid		Object id
+ * \param[in]	flags		mask with the following options:
+ *				DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
+ *				DAOS_GET_MAX, DAOS_GET_MIN
+ *				User has to indicate whether to query the MAX or MIN, in
+ *				addition to what needs to be queried. Providing
+ *				(MAX | MIN) in any combination will return an error.
+ *				i.e. user can only query MAX or MIN in one call.
  * \param[in,out]
- *		dkey	[in]: allocated integer dkey. User can provide the dkey
- *			if not querying the max or min dkey.
- *			[out]: max or min dkey (if flag includes dkey query).
+ *		dkey		[in]: allocated integer dkey. User can provide the dkey
+ *				if not querying the max or min dkey.
+ *				[out]: max or min dkey (if flag includes dkey query).
  * \param[in,out]
- *		akey	[in]: allocated integer akey. User can provide the akey
- *			if not querying the max or min akey.
- *			[out]: max or min akey (if flag includes akey query).
- * \param[out]	recx	max or min offset in dkey/akey, and the size of the
- *			extent at the offset. If there are no visible array
- *			records, the size in the recx returned will be 0.
+ *		akey		[in]: allocated integer akey. User can provide the akey
+ *				if not querying the max or min akey.
+ *				[out]: max or min akey (if flag includes akey query).
+ * \param[out]	recx		max or min offset in dkey/akey, and the size of the
+ *				extent at the offset. If there are no visible array
+ *				records, the size in the recx returned will be 0.
+ * \param[out]	max_write	Optional: Returns max write epoch for object
  * \param[in]	cell_size cell size for EC object, used to calculated the replicated
  *                      space address on parity shard.
  * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
@@ -1056,8 +1066,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx, unsigned int cell_size, uint64_t stripe_size,
-		  struct dtx_handle *dth);
+		  daos_recx_t *recx, daos_epoch_t *max_write, unsigned int cell_size,
+		  uint64_t stripe_size, struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.
@@ -1092,6 +1102,8 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
+	/** Set pool tiering policy */
+	VOS_PO_CTL_SET_POLICY,
 };
 
 /**
@@ -1099,7 +1111,7 @@ enum vos_pool_opc {
  * mostly for debug & test
  */
 int
-vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 
 int
 vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
@@ -1134,27 +1146,6 @@ vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
 		      unsigned int bulk_perm);
 int
 vos_dedup_verify(daos_handle_t ioh);
-
-/** Raise a RAS event on incompatible durable format
- *
- * \param[in] type		Type of object with layout format
- *				incompatibility (e.g. VOS pool)
- * \param[in] version		Version of the object
- * \param[in] min_version	Minimum supported version
- * \param[in] max_version	Maximum supported version
- * \param[in] pool		(Optional) associated pool uuid
- */
-void
-vos_report_layout_incompat(const char *type, int version, int min_version,
-			   int max_version, uuid_t *uuid);
-
-#define VOS_NOTIFY_RAS_EVENTF(...)			\
-	do {						\
-		if (ds_notify_ras_eventf == NULL)	\
-			break;				\
-		ds_notify_ras_eventf(__VA_ARGS__);	\
-	} while (0)					\
-
 
 struct sys_db *vos_db_get(void);
 /**

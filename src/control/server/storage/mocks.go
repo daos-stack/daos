@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ package storage
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"time"
@@ -20,15 +21,16 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // NvmeDevState constant definitions to represent mock bitset flag combinations.
 const (
-	NvmeDevStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	NvmeDevStateNormal   NvmeDevState = NvmeDevStateNew | C.NVME_DEV_FL_INUSE
-	NvmeDevStateFaulty   NvmeDevState = NvmeDevStateNormal | C.NVME_DEV_FL_FAULTY
-	NvmeDevStateIdentify NvmeDevState = NvmeDevStateNormal | C.NVME_DEV_FL_IDENTIFY
+	MockNvmeStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
+	MockNvmeStateNormal   NvmeDevState = MockNvmeStateNew | C.NVME_DEV_FL_INUSE
+	MockNvmeStateEvicted  NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_FAULTY
+	MockNvmeStateIdentify NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_IDENTIFY
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -112,7 +114,7 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	return &SmdDevice{
 		UUID:      common.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		NvmeState: NvmeDevStateIdentify,
+		NvmeState: MockNvmeStateIdentify,
 		TrAddr:    parentTrAddr,
 	}
 }
@@ -207,4 +209,29 @@ func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys System
 	p.Scm = scm
 	p.bdev = bdev
 	return p
+}
+
+func MockGetTopology(context.Context) (*hardware.Topology, error) {
+	return &hardware.Topology{
+		NUMANodes: map[uint]*hardware.NUMANode{
+			0: hardware.MockNUMANode(0, 14).
+				WithPCIBuses(
+					[]*hardware.PCIBus{
+						{
+							LowAddress:  *hardware.MustNewPCIAddress("0000:00:00.0"),
+							HighAddress: *hardware.MustNewPCIAddress("0000:07:00.0"),
+						},
+					},
+				),
+			1: hardware.MockNUMANode(0, 14).
+				WithPCIBuses(
+					[]*hardware.PCIBus{
+						{
+							LowAddress:  *hardware.MustNewPCIAddress("0000:80:00.0"),
+							HighAddress: *hardware.MustNewPCIAddress("0000:8f:00.0"),
+						},
+					},
+				),
+		},
+	}, nil
 }

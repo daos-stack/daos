@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,43 +28,85 @@ dfs_test_mount(void **state)
 	if (arg->myrank != 0)
 		return;
 
+	/** connect to DFS without calling dfs_init(), should fail. */
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, EACCES);
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
 	/** create & open a non-posix container */
-	rc = daos_cont_create(arg->pool.poh, &cuuid, NULL, NULL);
+	rc = daos_cont_create_with_label(arg->pool.poh, "non-posix-cont", NULL, &cuuid, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("Created non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Created non-POSIX Container\n");
 	uuid_unparse(cuuid, str);
 	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_rc_equal(rc, 0);
-
 	/** try to mount DFS on it, should fail. */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, EINVAL);
-
+	/** try to connect DFS, should fail. */
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "non-posix-cont", O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, EINVAL);
+	/** close and destroy non posix container */
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+
+	/** Connect to non existing container - should succeed as container will be created  */
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+	/** try to open the container and mount it, should succeed */
+	rc = daos_cont_open(arg->pool.poh, "cont0", DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with an invalid label */
 	rc = dfs_cont_create_with_label(arg->pool.poh, "invalid:-/label", NULL, &cuuid, NULL, NULL);
 	assert_int_equal(rc, EINVAL);
 
-	/** create a DFS container with a valid label */
-	rc = dfs_cont_create_with_label(arg->pool.poh, "label1", NULL, &cuuid, NULL, NULL);
+	/** create a DFS container with a valid label and set uuid */
+	rc = dfs_cont_create_with_label(arg->pool.poh, "cont1", NULL, &cuuid, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** open with label */
-	rc = daos_cont_open(arg->pool.poh, "label1", DAOS_COO_RW, &coh, NULL, NULL);
+	rc = daos_cont_open(arg->pool.poh, "cont1", DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	/** mount */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(rc, 0);
+	/** try to disconnect instead of mount - should fail */
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, EINVAL);
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	/** destroy with uuid */
+
+	/** Connect and disconnect to DFS container */
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont1", O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+	/** try to umount instead of disconnect - should fail */
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	/** destroy the containers */
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 0, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with a valid label, no uuid out */
@@ -81,15 +123,13 @@ dfs_test_mount(void **state)
 	uuid_unparse(cuuid, str);
 	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_rc_equal(rc, 0);
-
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
-
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 }
@@ -582,6 +622,7 @@ struct dfs_test_thread_arg {
 	int			thread_idx;
 	pthread_barrier_t	*barrier;
 	char			*name;
+	char			*pool;
 	daos_size_t		total_size;
 	daos_size_t		stride;
 };
@@ -612,10 +653,8 @@ dfs_test_read_thread(void *arg)
 	sgl.sg_iovs = &iov;
 
 	pthread_barrier_wait(targ->barrier);
-	rc = dfs_open(dfs_mt, NULL, targ->name, S_IFREG, O_RDONLY, 0, 0, NULL,
-		      &obj);
-	print_message("dfs_test_read_thread %d, dfs_open rc %d.\n",
-		      targ->thread_idx, rc);
+	rc = dfs_open(dfs_mt, NULL, targ->name, S_IFREG, O_RDONLY, 0, 0, NULL, &obj);
+	print_message("dfs_test_read_thread %d, dfs_open rc %d.\n", targ->thread_idx, rc);
 	assert_int_equal(rc, 0);
 
 	off = targ->thread_idx * targ->stride;
@@ -654,7 +693,7 @@ dfs_test_read_shared_file(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	sprintf(name, "MTA_file_%d\n", arg->myrank);
+	sprintf(name, "MTA_file_%d", arg->myrank);
 	rc = dfs_test_file_gen(name, chunk_size, file_size);
 	assert_int_equal(rc, 0);
 
@@ -773,6 +812,10 @@ dfs_test_lookupx(void **state)
 	assert_int_equal(*((int *)vals_out[2]), 5);
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
+
+	for (i = 0; i < 3; i++)
+		D_FREE(vals_out[i]);
+	D_FREE(val_sizes);
 }
 
 static void
@@ -864,8 +907,7 @@ dfs_test_mkdir_thread(void *arg)
 
 	pthread_barrier_wait(targ->barrier);
 	rc = dfs_mkdir(dfs_mt, NULL, targ->name, S_IFDIR, OC_S1);
-	print_message("dfs_test_read_thread %d, dfs_mkdir rc %d.\n",
-		      targ->thread_idx, rc);
+	print_message("dfs_test_mkdir_thread %d, dfs_mkdir rc %d.\n", targ->thread_idx, rc);
 	dfs_test_rc[targ->thread_idx] = rc;
 	pthread_exit(NULL);
 }
@@ -881,7 +923,7 @@ dfs_test_mt_mkdir(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	sprintf(name, "MTA_dir_%d\n", arg->myrank);
+	sprintf(name, "MTA_dir_%d", arg->myrank);
 
 	/* usr barrier to all threads start at the same time and start
 	 * concurrent test.
@@ -1037,6 +1079,121 @@ dfs_test_compat(void **state)
 	assert_int_equal(rc, EINVAL);
 }
 
+static void
+dfs_test_handles(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_t			*dfs_l, *dfs_g;
+	d_iov_t			ghdl = { NULL, 0, 0 };
+	dfs_obj_t		*file;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
+	/** create and connect to DFS container */
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/** create a file with "local" handle */
+	rc = dfs_open(dfs_l, NULL, "testfile", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0,
+		      NULL, &file);
+	assert_int_equal(rc, 0);
+	dfs_release(file);
+
+	rc = dfs_local2global_all(dfs_l, &ghdl);
+	assert_int_equal(rc, 0);
+
+	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
+	ghdl.iov_len = ghdl.iov_buf_len;
+
+	rc = dfs_local2global_all(dfs_l, &ghdl);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_global2local_all(O_RDWR, ghdl, &dfs_g);
+	assert_int_equal(rc, 0);
+
+	/** open the file with "global" handle */
+	rc = dfs_open(dfs_g, NULL, "testfile", S_IFREG | S_IWUSR | S_IRUSR, O_RDWR, 0, 0, NULL,
+		      &file);
+	assert_int_equal(rc, 0);
+	dfs_release(file);
+
+	rc = dfs_disconnect(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = dfs_disconnect(dfs_g);
+	assert_int_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+	D_FREE(ghdl.iov_buf);
+}
+
+static void *
+dfs_test_connect_thread(void *arg)
+{
+	struct dfs_test_thread_arg	*targ = arg;
+	dfs_t				*dfs;
+	int				rc;
+
+	pthread_barrier_wait(targ->barrier);
+	printf("Thread %d connecting to pool %s cont %s\n", targ->thread_idx, targ->pool,
+	       targ->name);
+	dfs_init();
+	rc = dfs_connect(targ->pool, NULL, targ->name, O_CREAT | O_RDWR, NULL, &dfs);
+	dfs_test_rc[targ->thread_idx] = rc;
+	if (rc) {
+		printf("Thread %d failed to connect %d\n", targ->thread_idx, rc);
+		pthread_exit(NULL);
+	}
+
+	rc = dfs_disconnect(dfs);
+	dfs_test_rc[targ->thread_idx] = rc;
+	if (rc) {
+		printf("Thread %d failed to disconnect %d\n", targ->thread_idx, rc);
+		pthread_exit(NULL);
+	}
+	dfs_fini();
+	pthread_exit(NULL);
+}
+
+static void
+dfs_test_mt_connect(void **state)
+{
+	test_arg_t		*arg = *state;
+	char			name[16];
+	pthread_barrier_t	barrier;
+	int			i;
+	int			rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	sprintf(name, "MTA_cont_%d", arg->myrank);
+
+	pthread_barrier_init(&barrier, NULL, dfs_test_thread_nr + 1);
+	for (i = 0; i < dfs_test_thread_nr; i++) {
+		dfs_test_targ[i].thread_idx = i;
+		dfs_test_targ[i].name = name;
+		dfs_test_targ[i].barrier = &barrier;
+		dfs_test_targ[i].pool = arg->pool.pool_str;
+		rc = pthread_create(&dfs_test_tid[i], NULL, dfs_test_connect_thread,
+				    &dfs_test_targ[i]);
+		assert_int_equal(rc, 0);
+	}
+	pthread_barrier_wait(&barrier);
+	for (i = 0; i < dfs_test_thread_nr; i++)
+		rc = pthread_join(dfs_test_tid[i], NULL);
+
+	for (i = 0; i < dfs_test_thread_nr; i++)
+		assert_int_equal(dfs_test_rc[i], 0);
+
+	rc = daos_cont_destroy(arg->pool.poh, name, 0, NULL);
+	assert_rc_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1062,6 +1219,10 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_rename, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST12: DFS API compat",
 	  dfs_test_compat, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
+	  dfs_test_handles, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
+	  dfs_test_mt_connect, async_disable, test_case_teardown},
 };
 
 static int
@@ -1105,8 +1266,7 @@ dfs_teardown(void **state)
 		uuid_unparse(co_uuid, str);
 		rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 		assert_rc_equal(rc, 0);
-		print_message("Destroyed DFS Container "DF_UUIDF"\n",
-			      DP_UUID(co_uuid));
+		print_message("Destroyed DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1119,8 +1279,7 @@ run_dfs_unit_test(int rank, int size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit",
-					 dfs_unit_tests, dfs_setup,
+	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
 					 dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
