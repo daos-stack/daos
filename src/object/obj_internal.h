@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -350,6 +350,7 @@ struct shard_auxi_args {
 struct shard_rw_args {
 	struct shard_auxi_args	 auxi;
 	daos_obj_rw_t		*api_args;
+	d_sg_list_t		*sgls_dup;
 	struct dtx_id		 dti;
 	uint64_t		 dkey_hash;
 	crt_bulk_t		*bulks;

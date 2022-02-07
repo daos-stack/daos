@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,26 +29,27 @@ type StorageControlService struct {
 // Setup performs storage discovery and validates existence of configured devices.
 func (scs *StorageControlService) Setup() {
 	if _, err := scs.ScmScan(storage.ScmScanRequest{}); err != nil {
-		scs.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
+		scs.log.Debugf("%s", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
-	var cfgBdevs []string
-
+	bdevAddrs := &storage.BdevDeviceList{}
 	for _, storageCfg := range scs.instanceStorage {
 		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
 			if tierCfg.Class != storage.ClassNvme {
 				// don't scan if any tier is using emulated NVMe
 				return
 			}
-			cfgBdevs = append(cfgBdevs, tierCfg.Bdev.DeviceList...)
+			if err := bdevAddrs.Add(tierCfg.Bdev.DeviceList.Addresses()...); err != nil {
+				scs.log.Debugf("%s", errors.Wrap(err, "Failed to add bdev addresses"))
+			}
 		}
 	}
 
 	nvmeScanResp, err := scs.NvmeScan(storage.BdevScanRequest{
-		DeviceList: cfgBdevs,
+		DeviceList: bdevAddrs,
 	})
 	if err != nil {
-		scs.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
+		scs.log.Debugf("%s", errors.Wrap(err, "Warning, NVMe Scan"))
 		return
 	}
 

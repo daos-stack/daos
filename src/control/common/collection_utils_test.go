@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,6 +41,42 @@ func TestCommon_NewStringSet(t *testing.T) {
 				}
 			}
 			AssertEqual(t, len(tc.expStrings), len(result), "wrong number of strings")
+		})
+	}
+}
+
+func TestCommon_StringSet_AddUnique(t *testing.T) {
+	for name, tc := range map[string]struct {
+		set    StringSet
+		in     []string
+		expStr string
+		expErr error
+	}{
+		"one dupe": {
+			set:    NewStringSet("one"),
+			in:     []string{"one"},
+			expErr: errors.New("duplicate strings: one"),
+		},
+		"two dupes": {
+			set:    NewStringSet("two", "one"),
+			in:     []string{"one", "two"},
+			expErr: errors.New("duplicate strings: one, two"),
+		},
+		"no dupes": {
+			set:    NewStringSet("two"),
+			in:     []string{"one"},
+			expStr: "one, two",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotErr := tc.set.AddUnique(tc.in...)
+
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expStr, tc.set.String(), "wrong string")
 		})
 	}
 }

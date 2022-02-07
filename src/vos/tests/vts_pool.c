@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,7 @@
 
 #include <vos_layout.h>
 #include <daos_srv/vos.h>
+#include <vos_internal.h>
 
 struct vp_test_args {
 	char			**fname;
@@ -98,6 +99,46 @@ pool_ref_count_test(void **state)
 	ret = vos_pool_destroy(arg->fname[0], uuid);
 	assert_rc_equal(ret, -DER_BUSY);
 	ret = vos_pool_close(arg->poh[num - 1]);
+	assert_rc_equal(ret, 0);
+	ret = vos_pool_destroy(arg->fname[0], uuid);
+	assert_rc_equal(ret, 0);
+}
+
+static void
+pool_policy_update(void **state)
+{
+	int			ret = 0;
+	uuid_t			uuid;
+	struct vp_test_args	*arg = *state;
+	struct policy_desc_t	policy_desc;
+	struct vos_pool		*vp;
+
+	uuid_generate(uuid);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+
+	ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[0]);
+	assert_rc_equal(ret, 0);
+
+	policy_desc.policy = DAOS_MEDIA_POLICY_WRITE_INTENSIVITY;
+	policy_desc.params[0] = 123;
+	policy_desc.params[1] = 246;
+	policy_desc.params[2] = 667;
+	policy_desc.params[3] = 993;
+
+	ret = vos_pool_ctl(arg->poh[0], VOS_PO_CTL_SET_POLICY, &policy_desc);
+	assert_rc_equal(ret, 0);
+
+	vp = vos_hdl2pool(arg->poh[0]);
+	if (vp == NULL)
+		fail_msg("Cannot get vos_pool from hdl");
+
+	assert_int_equal(vp->vp_policy_desc.policy, policy_desc.policy);
+	assert_int_equal(vp->vp_policy_desc.params[0], policy_desc.params[0]);
+	assert_int_equal(vp->vp_policy_desc.params[1], policy_desc.params[1]);
+	assert_int_equal(vp->vp_policy_desc.params[2], policy_desc.params[2]);
+	assert_int_equal(vp->vp_policy_desc.params[3], policy_desc.params[3]);
+
+	ret = vos_pool_close(arg->poh[0]);
 	assert_rc_equal(ret, 0);
 	ret = vos_pool_destroy(arg->fname[0], uuid);
 	assert_rc_equal(ret, 0);
@@ -503,6 +544,9 @@ static const struct CMUnitTest pool_tests[] = {
 		pool_create_open_close, pool_unit_teardown},
 	{ "VOS11: Pool exclusive open", pool_open_excl_test,
 		pool_file_setup, pool_file_destroy},
+	{ "VOS12: Pool policy update", pool_policy_update,
+		 pool_file_setup, pool_file_destroy},
+
 };
 
 

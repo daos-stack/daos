@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +47,7 @@ public class DaosFile {
 
   private int mode;
 
-  private DaosObjectType objectType;
+  private DaosObjectClass objectType;
 
   private int chunkSize;
 
@@ -145,7 +145,7 @@ public class DaosFile {
    * @throws IOException
    * {@link DaosIOException}
    */
-  public void createNewFile(int mode, DaosObjectType objectType, int chunkSize, boolean createParent)
+  public void createNewFile(int mode, DaosObjectClass objectType, int chunkSize, boolean createParent)
           throws IOException {
     if (objId != 0) {
       throw new IOException("file existed already");
