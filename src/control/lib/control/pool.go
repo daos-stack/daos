@@ -1005,6 +1005,10 @@ func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64
 		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
 		for _, nvmeController := range hostStorage.NvmeDevices {
 			for _, smdDevice := range nvmeController.SmdDevices {
+				if ! smdDevice.NvmeState.IsNormal() {
+					continue
+				}
+
 				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
 			}
 		}

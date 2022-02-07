@@ -163,6 +163,10 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	for _, ctl := range resp.GetCtrlrs() {
 		for _, dev := range ctl.GetSmdDevices() {
+			if dev.GetDevState() != "NORMAL" {
+				continue
+			}
+
 			targetCount := uint64(len(dev.GetTgtIds()))
 			clusterSmdCount := dev.GetAvailBytes() / dev.GetClusterSize()
 			clusterTargetCount := clusterSmdCount / targetCount
