@@ -71,7 +71,7 @@ func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepare
 // Format attempts to initialize NVMe devices for use by DAOS.
 // Note that this is a no-op for non-NVMe devices.
 func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	if len(req.Properties.DeviceList) == 0 {
+	if req.Properties.DeviceList.Len() == 0 {
 		return nil, errors.New("empty DeviceList in FormatRequest")
 	}
 
