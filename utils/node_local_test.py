@@ -1350,7 +1350,6 @@ def run_daos_cmd(conf,
 
 def create_cont(conf,
                 pool=None,
-                cont=None,
                 ctype=None,
                 label=None,
                 path=None,
@@ -2442,9 +2441,8 @@ class posix_tests():
 
         # Create a new container within it using UNS
         uns_path = join(dfuse.dir, 'ep0')
-        uns_container = str(uuid.uuid4())
         print('Inserting entry point')
-        create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
+        uns_container = create_cont(conf, pool=pool, path=uns_path)
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
 
@@ -2469,11 +2467,9 @@ class posix_tests():
         uns_path = join(dfuse.dir, pool, container, 'ep0', 'ep')
         second_path = join(dfuse.dir, pool, uns_container)
 
-        uns_container_2 = str(uuid.uuid4())
-
         # Make a link within the new container.
         print('Inserting entry point')
-        create_cont(conf, pool=pool, cont=uns_container_2, path=uns_path)
+        uns_container_2 = create_cont(conf, pool=pool, path=uns_path)
 
         # List the root container again.
         print(os.listdir(join(dfuse.dir, pool, container)))
@@ -2550,9 +2546,8 @@ class posix_tests():
 
         # Create a new container within it using UNS
         uns_path = join(dfuse.dir, 'ep1')
-        uns_container = str(uuid.uuid4())
         print('Inserting entry point')
-        create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
+        uns_container = create_cont(conf, pool=pool, path=uns_path)
 
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
