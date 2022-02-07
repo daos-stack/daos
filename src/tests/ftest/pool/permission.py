@@ -31,26 +31,15 @@ class Permission(TestWithServers):
         :avocado: tags=all,daily_regression,
         :avocado: tags=pool,permission,connect_permission
         """
-        # parameter used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
 
         # parameter used for pool connect
         permissions = self.params.get("perm", '/run/createtests/permissions/*')
-
-        if createmode == 511 and permissions == 0:
-            expected_result = RESULT_PASS
-        elif createmode in [146, 511] and permissions == 1:
-            expected_result = RESULT_PASS
-        elif createmode in [292, 511] and permissions == 2:
-            expected_result = RESULT_PASS
-        else:
-            expected_result = RESULT_FAIL
+        expected_result = self.params.get("exp_result", '/run/createtests/permissions/*')
 
         # initialize a python pool object then create the underlying
         # daos storage
         self.add_pool(create=False)
         self.test_log.debug("Pool initialization successful")
-        self.pool.mode.value = createmode
         self.pool.create()
         self.test_log.debug("Pool Creation successful")
 
@@ -80,24 +69,16 @@ class Permission(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=pool,permission,file_modification
         """
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-
-        if createmode in [146, 511]:
-            permissions = 1
-            expected_result = RESULT_PASS
-        elif createmode == 292:
-            permissions = 2
-            expected_result = RESULT_PASS
+        # parameter used for pool connect
+        permissions = self.params.get("perm", '/run/createtests/permissions/*')
+        expected_result = self.params.get("exp_result", '/run/createtests/permissions/*')
 
         # initialize a python pool object then create the underlying
         # daos storage
         self.add_pool(create=False)
         self.test_log.debug("Pool initialization successful")
-        self.pool.mode.value = createmode
         self.pool.create()
         self.test_log.debug("Pool Creation successful")
-
         try:
             self.pool.connect(1 << permissions)
             self.test_log.debug("Pool Connect successful")
