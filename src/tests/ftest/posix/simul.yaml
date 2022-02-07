@@ -15,3 +15,5 @@ dfuse:
 container:
     type: POSIX
     control_method: daos
+mpi_list:
+    - /usr/lib64/openmpi/bin/simul/openmpi
