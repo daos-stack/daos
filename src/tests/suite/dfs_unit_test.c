@@ -1193,39 +1193,6 @@ dfs_test_mt_connect(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
-static const struct CMUnitTest dfs_unit_tests[] = {
-	{ "DFS_UNIT_TEST1: DFS mount / umount",
-	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST2: DFS container modes",
-	  dfs_test_modes, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST3: DFS lookup / lookup_rel",
-	  dfs_test_lookup, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST4: Simple Symlinks",
-	  dfs_test_syml, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW",
-	  dfs_test_syml_follow, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST6: multi-threads read shared file",
-	  dfs_test_read_shared_file, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST7: DFS lookupx",
-	  dfs_test_lookupx, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST8: DFS IO sync error code",
-	  dfs_test_io_error_code, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST9: DFS IO async error code",
-	  dfs_test_io_error_code, async_enable, test_case_teardown},
-	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
-	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST11: Simple rename",
-	  dfs_test_rename, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST12: DFS API compat",
-	  dfs_test_compat, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
-	  dfs_test_handles, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
-	  dfs_test_mt_connect, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST15: DFS chown",
-	  dfs_test_chown, async_disable, test_case_teardown},
-};
-
 static void
 dfs_test_chown(void **state)
 {
@@ -1313,6 +1280,39 @@ dfs_test_chown(void **state)
 	rc = dfs_release(sym);
 	assert_int_equal(rc, 0);
 }
+
+static const struct CMUnitTest dfs_unit_tests[] = {
+	{ "DFS_UNIT_TEST1: DFS mount / umount",
+	  dfs_test_mount, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST2: DFS container modes",
+	  dfs_test_modes, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST3: DFS lookup / lookup_rel",
+	  dfs_test_lookup, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST4: Simple Symlinks",
+	  dfs_test_syml, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST5: Symlinks with / without O_NOFOLLOW",
+	  dfs_test_syml_follow, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST6: multi-threads read shared file",
+	  dfs_test_read_shared_file, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST7: DFS lookupx",
+	  dfs_test_lookupx, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST8: DFS IO sync error code",
+	  dfs_test_io_error_code, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST9: DFS IO async error code",
+	  dfs_test_io_error_code, async_enable, test_case_teardown},
+	{ "DFS_UNIT_TEST10: multi-threads mkdir same dir",
+	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST11: Simple rename",
+	  dfs_test_rename, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST12: DFS API compat",
+	  dfs_test_compat, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST13: DFS l2g/g2l_all",
+	  dfs_test_handles, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
+	  dfs_test_mt_connect, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST15: DFS chown",
+	  dfs_test_chown, async_disable, test_case_teardown},
+};
 
 static int
 dfs_setup(void **state)
