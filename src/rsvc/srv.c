@@ -1371,9 +1371,7 @@ ds_rsvc_get_md_cap(void)
 	v = getenv(DAOS_MD_CAP_ENV); /* in MB */
 	if (v == NULL)
 		return size_default;
-	// FIXME replace atoi to avoid buffer overlflow exploit
-	// https://wiki.sei.cmu.edu/confluence/display/c/ERR34-C.+Detect+errors+when+converting+a+string+to+a+number
-	n = atoi(v);
+	n = atoi(v);    /* FIXME DAOS-9846 */
 	if (n < size_default >> 20) {
 		D_ERROR("metadata capacity too low; using %zu MB\n",
 			size_default >> 20);

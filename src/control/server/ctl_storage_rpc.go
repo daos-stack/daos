@@ -159,45 +159,18 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 	return newScanScmResp(c.getScmUsage(ssr))
 }
 
-// Return the number of target managing a given NVME controleur
-func (c *ControlService) getTargetCount(pciAddr string) (int, error) {
-	for _, engineCfg := range c.srvCfg.Engines {
-		targetCount := engineCfg.TargetCount
-		for _, tierCfg := range engineCfg.Storage.Tiers {
-			if tierCfg.IsBdev() {
-				for index := range tierCfg.Bdev.DeviceList {
-					if pciAddr == tierCfg.Bdev.DeviceList[index] {
-						msg := "NVME controler %s is used by %d targets"
-						c.log.Debugf(msg, pciAddr, targetCount)
-						return targetCount, nil
-					}
-				}
-			}
-		}
-	}
-
-	return 0, errors.Errorf("unknown PCI address %s", pciAddr)
-}
-
 // Adjust the NVME available size to its real usable size.
-func (c *ControlService) adjustNvmeSize(resp* ctlpb.ScanNvmeResp) {
+func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	for _, ctl := range resp.GetCtrlrs() {
-		pciAddr := ctl.GetPciAddr()
-		targetCount, err := c.getTargetCount(pciAddr)
-		if err != nil {
-			c.log.Errorf("Skipping NVME controleur %s: %s",
-				ctl.GetPciAddr(), err.Error())
-			continue
-		}
-
 		for _, dev := range ctl.GetSmdDevices() {
+			targetCount := uint64(len(dev.GetTgtIds()))
 			clusterSmdCount := dev.GetAvailBytes() / dev.GetClusterSize()
-			clusterTargetCount := clusterSmdCount / uint64(targetCount)
-			availBytes := clusterTargetCount * uint64(targetCount)
+			clusterTargetCount := clusterSmdCount / targetCount
+			availBytes := clusterTargetCount * targetCount
 			availBytes *= dev.GetClusterSize()
 			c.log.Infof("removing %s (%d B) storage from SMD device %s (%s)",
-				humanize.Bytes(dev.GetAvailBytes() - availBytes),
-				dev.GetAvailBytes() - availBytes,
+				humanize.Bytes(dev.GetAvailBytes()-availBytes),
+				dev.GetAvailBytes()-availBytes,
 				dev.GetUuid(), ctl.GetPciAddr())
 			dev.AvailBytes = availBytes
 		}
@@ -207,13 +180,15 @@ func (c *ControlService) adjustNvmeSize(resp* ctlpb.ScanNvmeResp) {
 // return the size of the ram disk file used for managing SCM metadata
 func (c *ControlService) getMetadataCapacity(mountPoint string) (uint64, error) {
 	var engineCfg *engine.Config
-	loop:
+loop:
 	for index := range(c.srvCfg.Engines) {
 		for _, tierCfg := range c.srvCfg.Engines[index].Storage.Tiers {
-			if tierCfg.IsSCM() && tierCfg.Scm.MountPoint == mountPoint {
-				engineCfg = c.srvCfg.Engines[index]
-				break loop
+			if ! tierCfg.IsSCM() || tierCfg.Scm.MountPoint != mountPoint {
+				continue
 			}
+
+			engineCfg = c.srvCfg.Engines[index]
+			break loop
 		}
 	}
 
@@ -241,7 +216,7 @@ func (c *ControlService) getMetadataCapacity(mountPoint string) (uint64, error) 
 }
 
 // Adjust the SCM available size to the real usable size.
-func (c *ControlService) adjustScmSize(resp* ctlpb.ScanScmResp) {
+func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 	const mdExt4Bytes uint64 = 1 << 20 // 1MiB (i.e 1048576B) min needed 36864B
 	for _, scmNamespace := range resp.GetNamespaces() {
 		mdBytes := mdExt4Bytes
@@ -278,14 +253,18 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	if err != nil {
 		return nil, err
 	}
-	c.adjustNvmeSize(respNvme)
+	if req.Nvme.GetMeta() {
+		c.adjustNvmeSize(respNvme)
+	}
 	resp.Nvme = respNvme
 
 	respScm, err := c.scanScm(ctx, req.Scm)
 	if err != nil {
 		return nil, err
 	}
-	c.adjustScmSize(respScm)
+	if req.Scm.GetUsage() {
+		c.adjustScmSize(respScm)
+	}
 	resp.Scm = respScm
 
 	c.log.Debug("responding to StorageScan RPC")
