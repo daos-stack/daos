@@ -1998,7 +1998,7 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 			return -DER_INVAL;
 		}
 		if (daos_is_akey_uint64(oid) &&
-		    iods[i].iod_name.iov_len > sizeof(uint64_t))
+		    iods[i].iod_name.iov_len != sizeof(uint64_t))
 			return -DER_INVAL;
 		for (j = 0; j < iods[i].iod_nr; j++) {
 			if (iods[i].iod_recxs != NULL && (!spec_shard &&
@@ -2141,11 +2141,11 @@ obj_key_valid(daos_obj_id_t oid, daos_key_t *key, bool check_dkey)
 {
 	if (check_dkey) {
 		if (daos_is_dkey_uint64(oid) &&
-		    key->iov_len > sizeof(uint64_t))
+		    key->iov_len != sizeof(uint64_t))
 			return false;
 	} else {
 		if (daos_is_akey_uint64(oid) &&
-		    key->iov_len > sizeof(uint64_t))
+		    key->iov_len != sizeof(uint64_t))
 			return false;
 	}
 
