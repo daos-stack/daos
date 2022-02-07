@@ -346,6 +346,7 @@ type (
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
 		HugePageCount      int
+		HugeNodes          string
 		CleanHugePagesOnly bool
 		CleanHugePagesPID  uint64
 		PCIAllowList       string
