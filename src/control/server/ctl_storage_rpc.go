@@ -186,7 +186,7 @@ func (c *ControlService) getMetadataCapacity(mountPoint string) (uint64, error) 
 loop:
 	for index := range c.srvCfg.Engines {
 		for _, tierCfg := range c.srvCfg.Engines[index].Storage.Tiers {
-			if ! tierCfg.IsSCM() || tierCfg.Scm.MountPoint != mountPoint {
+			if !tierCfg.IsSCM() || tierCfg.Scm.MountPoint != mountPoint {
 				continue
 			}
 
