@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -40,6 +42,12 @@ func defCmpOpts() []cmp.Option {
 		// ignore these fields on most tests, as they are intentionally not stable
 		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
 		cmp.AllowUnexported(hardware.PCIAddressSet{}),
+		cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+			if x == nil && y == nil {
+				return true
+			}
+			return x.Equals(y)
+		}),
 	}
 }
 
@@ -160,6 +168,12 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 func TestBackend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 
+	mockScanReq := func() storage.BdevScanRequest {
+		return storage.BdevScanRequest{
+			DeviceList: &storage.BdevDeviceList{},
+		}
+	}
+
 	for name, tc := range map[string]struct {
 		req     storage.BdevScanRequest
 		mec     spdk.MockEnvCfg
@@ -168,20 +182,21 @@ func TestBackend_Scan(t *testing.T) {
 		expErr  error
 	}{
 		"binding scan fail": {
+			req: mockScanReq(),
 			mnc: spdk.MockNvmeCfg{
 				DiscoverErr: errors.New("spdk says no"),
 			},
 			expErr: errors.New("spdk says no"),
 		},
 		"empty results from binding": {
-			req:     storage.BdevScanRequest{},
+			req:     mockScanReq(),
 			expResp: &storage.BdevScanResponse{},
 		},
 		"binding scan success": {
 			mnc: spdk.MockNvmeCfg{
 				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
 			},
-			req: storage.BdevScanRequest{},
+			req: mockScanReq(),
 			expResp: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
 			},
@@ -191,7 +206,16 @@ func TestBackend_Scan(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			b := backendWithMockBinding(log, tc.mec, tc.mnc)
+			mei := &spdk.MockEnvImpl{Cfg: tc.mec}
+			sr, _ := mockScriptRunner(t, log, nil)
+			b := &spdkBackend{
+				log: log,
+				binding: &spdkWrapper{
+					Env:  mei,
+					Nvme: &spdk.MockNvmeImpl{Cfg: tc.mnc},
+				},
+				script: sr,
+			}
 
 			gotResp, gotErr := b.Scan(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -202,6 +226,9 @@ func TestBackend_Scan(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
+			common.AssertEqual(t, 1, len(mei.InitCalls), "unexpected number of spdk init calls")
+			// TODO: re-enable when tanabarr/control-spdk-fini-after-init change
+			//common.AssertEqual(t, 1, len(mei.FiniCalls), "unexpected number of spdk fini calls")
 		})
 	}
 }
@@ -237,7 +264,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.Class("whoops"),
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
@@ -253,7 +280,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:          storage.ClassFile,
-					DeviceList:     []string{filepath.Join(testDir, "daos-bdev")},
+					DeviceList:     storage.MustNewBdevDeviceList(filepath.Join(testDir, "daos-bdev")),
 					DeviceFileSize: humanize.MiByte,
 				},
 			},
@@ -273,7 +300,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassKdev,
-					DeviceList: []string{"/dev/sdc", "/dev/sdd"},
+					DeviceList: storage.MustNewBdevDeviceList("/dev/sdc", "/dev/sdd"),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -290,7 +317,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expErr: errors.New("spdk says no"),
@@ -299,7 +326,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expErr: errors.New("empty results from spdk binding format request"),
@@ -313,7 +340,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -341,7 +368,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1, pci2, pci3},
+					DeviceList: storage.MustNewBdevDeviceList(pci1, pci2, pci3),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -378,7 +405,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1, pci2, pci3},
+					DeviceList: storage.MustNewBdevDeviceList(pci1, pci2, pci3),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -414,7 +441,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -452,7 +479,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -480,7 +507,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{vmdAddr},
+					DeviceList: storage.MustNewBdevDeviceList(vmdAddr),
 				},
 				VMDEnabled: true,
 				BdevCache: &storage.BdevScanResponse{
@@ -533,15 +560,18 @@ func TestBackend_Format(t *testing.T) {
 			switch tc.req.Properties.Class {
 			case storage.ClassFile:
 				// verify empty files created for AIO class
-				for _, testFile := range tc.req.Properties.DeviceList {
+				for _, testFile := range tc.req.Properties.DeviceList.Devices() {
 					if _, err := os.Stat(testFile); err != nil {
 						t.Fatal(err)
 					}
 				}
 			case storage.ClassNvme:
-				if diff := cmp.Diff(tc.expInitOpts, mei.CallOpts, defCmpOpts()...); diff != "" {
+				if diff := cmp.Diff(tc.expInitOpts, mei.InitCalls, defCmpOpts()...); diff != "" {
 					t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 				}
+				// TODO: re-enable when tanabarr/control-spdk-fini-after-init change
+				//common.AssertEqual(t, 1, len(mei.FiniCalls),
+				//	"unexpected number of spdk fini calls")
 			}
 		})
 	}
@@ -562,7 +592,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -573,7 +603,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -586,7 +616,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -598,7 +628,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -613,7 +643,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{vmdAddr},
+						DeviceList: storage.MustNewBdevDeviceList(vmdAddr),
 					},
 				},
 				BdevCache: &storage.BdevScanResponse{
@@ -625,7 +655,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 				TierProps: []storage.BdevTierProperties{
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{vmdBackingAddr1, vmdBackingAddr2},
+						DeviceList: storage.MustNewBdevDeviceList(vmdBackingAddr1, vmdBackingAddr2),
 					},
 				},
 				BdevCache: &storage.BdevScanResponse{
@@ -736,7 +766,7 @@ type testWalkInput struct {
 	expErr error
 }
 
-func TestBackend_cleanHugePagesFn(t *testing.T) {
+func TestBackend_hugePageWalkFn(t *testing.T) {
 	testDir := "/wherever"
 
 	for name, tc := range map[string]struct {
@@ -745,6 +775,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 		testInputs []*testWalkInput
 		removeErr  error
 		expRemoved []string
+		expCount   uint
 	}{
 		"ignore subdirectory": {
 			prefix: "prefix1",
@@ -814,6 +845,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 				},
 			},
 			expRemoved: []string{filepath.Join(testDir, "prefix1_foo")},
+			expCount:   1,
 		},
 		"uid matching": {
 			prefix: "prefix1",
@@ -829,6 +861,7 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 				},
 			},
 			expRemoved: []string{filepath.Join(testDir, "prefix1_bar")},
+			expCount:   1,
 		},
 		"remove fails": {
 			prefix: "prefix1",
@@ -853,7 +886,8 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 				return tc.removeErr
 			}
 
-			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUID, removeFn)
+			var count uint = 0
+			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUID, removeFn, &count)
 			for _, ti := range tc.testInputs {
 				gotErr := testFn(ti.path, ti.info, ti.err)
 				common.CmpErr(t, ti.expErr, gotErr)
@@ -861,13 +895,14 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 			if diff := cmp.Diff(tc.expRemoved, removedFiles); diff != "" {
 				t.Fatalf("unexpected remove result (-want, +got):\n%s\n", diff)
 			}
+			common.AssertEqual(t, tc.expCount, count, "unexpected remove count")
 		})
 	}
 }
 
 func TestBackend_Prepare(t *testing.T) {
 	const (
-		testNrHugePages       = 42
+		testNrHugePages       = 8192
 		nonexistentTargetUser = "nonexistentTargetUser"
 		username              = "bob"
 	)
@@ -887,6 +922,8 @@ func TestBackend_Prepare(t *testing.T) {
 	testPCIAllowList := mockAddrList(t, 1, 2, 3).String()
 	testPCIBlockList := mockAddrList(t, 4, 3).String()
 
+	usr, _ := user.Current()
+
 	for name, tc := range map[string]struct {
 		reset          bool
 		req            storage.BdevPrepareRequest
@@ -895,15 +932,17 @@ func TestBackend_Prepare(t *testing.T) {
 		userLookupErr  error
 		vmdDetectRet   *hardware.PCIAddressSet
 		vmdDetectErr   error
+		hpRemCount     uint
 		hpCleanErr     error
 		expScriptCalls *[]scriptCall
 		expErr         error
+		expResp        *storage.BdevPrepareResponse
+		expHpCleanCall string
 	}{
 		"unknown target user": {
 			req: storage.BdevPrepareRequest{
-				TargetUser:            username,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
+				TargetUser: username,
+				EnableVMD:  false,
 			},
 			userLookupErr: errors.New("unknown user"),
 			expErr:        errors.New("lookup on local host: unknown user"),
@@ -911,9 +950,8 @@ func TestBackend_Prepare(t *testing.T) {
 		"prepare reset; defaults": {
 			reset: true,
 			req: storage.BdevPrepareRequest{
-				TargetUser:            username,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
+				TargetUser: username,
+				EnableVMD:  false,
 			},
 			expScriptCalls: &[]scriptCall{
 				{
@@ -927,9 +965,8 @@ func TestBackend_Prepare(t *testing.T) {
 		"prepare reset fails": {
 			reset: true,
 			req: storage.BdevPrepareRequest{
-				TargetUser:            username,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
+				TargetUser: username,
+				EnableVMD:  false,
 			},
 			mbc: &MockBackendConfig{
 				ResetErr: errors.New("reset failed"),
@@ -938,16 +975,14 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         -1,
-				TargetUser:            username,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
+				TargetUser: username,
+				EnableVMD:  false,
 			},
 			expScriptCalls: &[]scriptCall{
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, 1024),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 				},
@@ -955,12 +990,11 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; user-specified values": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				PCIAllowList:          testPCIAllowList,
-				DisableVFIO:           true,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				PCIAllowList:  testPCIAllowList,
+				DisableVFIO:   true,
+				EnableVMD:     false,
 			},
 			expScriptCalls: &[]scriptCall{
 				{
@@ -976,11 +1010,10 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; blocklist": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				PCIBlockList:          testPCIBlockList,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				PCIBlockList:  testPCIBlockList,
+				EnableVMD:     false,
 			},
 			expScriptCalls: &[]scriptCall{
 				{
@@ -995,12 +1028,11 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; blocklist allowlist": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				PCIBlockList:          testPCIBlockList,
-				PCIAllowList:          testPCIAllowList,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				PCIBlockList:  testPCIBlockList,
+				PCIAllowList:  testPCIAllowList,
+				EnableVMD:     false,
 			},
 			expScriptCalls: &[]scriptCall{
 				{
@@ -1016,9 +1048,8 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; fails": {
 			req: storage.BdevPrepareRequest{
-				TargetUser:            username,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
+				TargetUser: username,
+				EnableVMD:  false,
 			},
 			mbc: &MockBackendConfig{
 				PrepareErr: errors.New("prepare failed"),
@@ -1027,10 +1058,9 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				DisableCleanHugePages: true,
-				EnableVMD:             true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				EnableVMD:     true,
 			},
 			vmdDetectRet: mockAddrList(t, 1, 2),
 			expScriptCalls: &[]scriptCall{
@@ -1051,13 +1081,15 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
+			expResp: &storage.BdevPrepareResponse{
+				VMDPrepared: true,
+			},
 		},
 		"prepare setup; vmd enabled; vmd detect failed": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				DisableCleanHugePages: true,
-				EnableVMD:             true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				EnableVMD:     true,
 			},
 			vmdDetectRet: mockAddrList(t, 1, 2),
 			vmdDetectErr: errors.New("vmd detect failed"),
@@ -1074,10 +1106,9 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled; no vmd devices": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				DisableCleanHugePages: true,
-				EnableVMD:             true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				EnableVMD:     true,
 			},
 			vmdDetectRet: mockAddrList(t),
 			expScriptCalls: &[]scriptCall{
@@ -1092,11 +1123,10 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled; vmd device allowed": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				PCIAllowList:          testPCIAllowList,
-				DisableCleanHugePages: true,
-				EnableVMD:             true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				PCIAllowList:  testPCIAllowList,
+				EnableVMD:     true,
 			},
 			vmdDetectRet: mockAddrList(t, 3, 4),
 			expScriptCalls: &[]scriptCall{
@@ -1117,14 +1147,16 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
+			expResp: &storage.BdevPrepareResponse{
+				VMDPrepared: true,
+			},
 		},
 		"prepare setup; vmd enabled; vmd device blocked": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				PCIBlockList:          testPCIBlockList,
-				DisableCleanHugePages: true,
-				EnableVMD:             true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				PCIBlockList:  testPCIBlockList,
+				EnableVMD:     true,
 			},
 			vmdDetectRet: mockAddrList(t, 3, 5),
 			expScriptCalls: &[]scriptCall{
@@ -1145,14 +1177,16 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
+			expResp: &storage.BdevPrepareResponse{
+				VMDPrepared: true,
+			},
 		},
 		"prepare setup; vmd enabled; vmd devices all blocked": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				PCIBlockList:          testPCIBlockList,
-				DisableCleanHugePages: true,
-				EnableVMD:             true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				PCIBlockList:  testPCIBlockList,
+				EnableVMD:     true,
 			},
 			vmdDetectRet: mockAddrList(t, 3, 4),
 			expScriptCalls: &[]scriptCall{
@@ -1168,12 +1202,11 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled; vmd devices allowed and blocked": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				PCIAllowList:          testPCIAllowList,
-				PCIBlockList:          testPCIBlockList,
-				DisableCleanHugePages: true,
-				EnableVMD:             true,
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				PCIAllowList:  testPCIAllowList,
+				PCIBlockList:  testPCIBlockList,
+				EnableVMD:     true,
 			},
 			vmdDetectRet: mockAddrList(t, 3, 2),
 			expScriptCalls: &[]scriptCall{
@@ -1195,34 +1228,34 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 				},
 			},
-		},
-		"prepare setup; huge page clean enabled": {
-			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				PCIAllowList:          testPCIAllowList,
-				PCIBlockList:          testPCIBlockList,
-				DisableCleanHugePages: false,
-			},
-			expScriptCalls: &[]scriptCall{
-				{
-					Env: []string{
-						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
-					},
-				},
+			expResp: &storage.BdevPrepareResponse{
+				VMDPrepared: true,
 			},
 		},
-		"prepare setup; huge page clean enabled; clean fail": {
+		"prepare setup; huge page clean only": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount:         testNrHugePages,
-				TargetUser:            username,
-				PCIAllowList:          testPCIAllowList,
-				PCIBlockList:          testPCIBlockList,
-				DisableCleanHugePages: false,
+				HugePageCount:      testNrHugePages,
+				CleanHugePagesOnly: true,
+				CleanHugePagesPID:  654321,
+				TargetUser:         username,
+				PCIAllowList:       testPCIAllowList,
+				PCIBlockList:       testPCIBlockList,
+			},
+			hpRemCount:     555,
+			expScriptCalls: &[]scriptCall{},
+			expResp: &storage.BdevPrepareResponse{
+				NrHugePagesRemoved: 555,
+			},
+			expHpCleanCall: strings.Join([]string{
+				hugePageDir, fmt.Sprintf("%s_pid%dmap", hugePagePrefix, 654321), usr.Uid,
+			}, ","),
+		},
+		"prepare setup; huge page clean fail": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount: testNrHugePages,
+				TargetUser:    username,
+				PCIAllowList:  testPCIAllowList,
+				PCIBlockList:  testPCIBlockList,
 			},
 			hpCleanErr: errors.New("clean failed"),
 			expScriptCalls: &[]scriptCall{
@@ -1247,7 +1280,10 @@ func TestBackend_Prepare(t *testing.T) {
 			b := newBackend(log, sss)
 
 			if tc.userLookupRet == nil {
-				tc.userLookupRet, _ = user.Current()
+				tc.userLookupRet = usr
+			}
+			if tc.expResp == nil {
+				tc.expResp = &storage.BdevPrepareResponse{}
 			}
 			mockUserLookup := func(string) (*user.User, error) {
 				return tc.userLookupRet, tc.userLookupErr
@@ -1255,25 +1291,47 @@ func TestBackend_Prepare(t *testing.T) {
 			mockVmdDetect := func() (*hardware.PCIAddressSet, error) {
 				return tc.vmdDetectRet, tc.vmdDetectErr
 			}
-			mockHpClean := func(string, string, string) error {
-				return tc.hpCleanErr
+			var hpCleanCall string
+			mockHpClean := func(a, b, c string) (uint, error) {
+				hpCleanCall = strings.Join([]string{a, b, c}, ",")
+				return tc.hpRemCount, tc.hpCleanErr
 			}
 
 			var gotErr error
 			if tc.reset {
 				gotErr = b.Reset(tc.req)
 			} else {
-				_, gotErr = b.prepare(tc.req, mockUserLookup, mockVmdDetect, mockHpClean)
+				if tc.expHpCleanCall == "" {
+					tc.expHpCleanCall = strings.Join([]string{
+						hugePageDir, hugePagePrefix, tc.userLookupRet.Uid,
+					}, ",")
+				}
+				var gotResp *storage.BdevPrepareResponse
+				gotResp, gotErr = b.prepare(tc.req, mockUserLookup, mockVmdDetect, mockHpClean)
+				if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+					t.Fatalf("\nunexpected prepare response (-want, +got):\n%s\n", diff)
+				}
 			}
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expScriptCalls, calls); diff != "" {
-				t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
+			if len(*tc.expScriptCalls) != len(*calls) {
+				t.Fatalf("\nunmatched number of calls (-want, +got):\n%s\n",
+					cmp.Diff(tc.expScriptCalls, calls))
 			}
+			for i, expected := range *tc.expScriptCalls {
+				// env list doesn't need to be ordered
+				sort.Strings(expected.Env)
+				actual := (*calls)[i]
+				sort.Strings(actual.Env)
 
+				if diff := cmp.Diff(expected, actual); diff != "" {
+					t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
+				}
+			}
+			common.AssertEqual(t, tc.expHpCleanCall, hpCleanCall, "unexpected clean hugepages call")
 		})
 	}
 }

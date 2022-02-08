@@ -497,7 +497,7 @@ var propHdlrs = propHdlrMap{
 const (
 	maxNameLen     = 20 // arbitrary; came from C code
 	maxValueLen    = C.DAOS_PROP_LABEL_MAX_LEN
-	labelNotSetStr = "container_label_not_set"
+	labelNotSetStr = C.DAOS_PROP_CO_LABEL_DEFAULT
 )
 
 type entryHdlr func(*propHdlr, *C.struct_daos_prop_entry, string) error
