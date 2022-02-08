@@ -167,6 +167,12 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	D_RWLOCK_WRLOCK(cb_args->rwlock);
 
+	if (*cb_args->first)
+	{
+		*api_args->nr_kds	= 0;
+		*cb_args->first		= false;
+	}
+
 	kds_ptr		= &api_args->kds[*api_args->nr_kds];
 	sgl_keys_ptr	= &api_args->sgl_keys[*api_args->nr_kds];
 	if (nr_kds > 0 && api_args->pipeline.num_aggr_filters == 0)
@@ -210,11 +216,6 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		D_GOTO(unlock, rc);
 	}
 
-	if (*cb_args->first)
-	{
-		*api_args->nr_kds	= 0;
-		*cb_args->first		= false;
-	}
 	*api_args->nr_kds	+= pro->pro_nr_kds;
 
 	/**

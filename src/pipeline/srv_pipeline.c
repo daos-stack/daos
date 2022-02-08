@@ -151,6 +151,7 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	rc = vos_iterate(&param, type, true, anchors, enum_pack_cb, NULL,
 			 &enum_arg, NULL);
 	D_DEBUG(DB_IO, "enum type %d rc "DF_RC"\n", type, DP_RC(rc));
+
 	if (rc < 0)
 	{
 		return rc;
@@ -164,10 +165,61 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	return 1;
 }
 
-static void
-pipeline_compile(daos_pipeline_t *pipeline)
+int pipeline_aggregations(struct pipeline_compiled_t *pipe,
+			  struct filter_part_run_t *args, d_iov_t *dkey,
+			  d_sg_list_t *akeys, d_sg_list_t *sgl_agg)
 {
-	return;
+	uint32_t 	i;
+	int		rc = 0;
+
+	args->dkey	= dkey;
+	args->akeys	= akeys;
+
+	for (i = 0; i < pipe->num_aggr_filters; i++)
+	{
+		args->part_idx	= 0;
+		args->parts	= pipe->filters[i].parts;
+		args->iov_aggr	= sgl_agg[i].sg_iovs;
+
+		rc = args->parts[0].filter_func(args);
+		if (rc != 0)
+		{
+			D_GOTO(exit, rc);
+		}
+	}
+
+exit:
+	return rc;
+}
+
+int pipeline_filters(struct pipeline_compiled_t *pipe,
+		     struct filter_part_run_t *args, d_iov_t *dkey,
+		     d_sg_list_t *akeys)
+{
+	uint32_t 	i;
+	int		rc = 0;
+
+	args->dkey	= dkey;
+	args->akeys	= akeys;
+
+	for (i = 0; i < pipe->num_filters; i++)
+	{
+		args->part_idx	= 0;
+		args->parts	= pipe->filters[i].parts;
+
+		rc = args->parts[0].filter_func(args);
+		if (rc != 0)
+		{
+			D_GOTO(exit, rc);
+		}
+		if (args->log_out == false)
+		{
+			D_GOTO(exit, rc = 1);
+		}
+	}
+
+exit:
+	return rc;
 }
 
 // TODO: This code still assumes dkey!=NULL. The code for dkey=NULL has to be
@@ -187,6 +239,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	d_sg_list_t			*sgl_recx_iter;
 	uint32_t			sgl_recx_idx;
 	struct vos_iter_anchors		anchors;
+	struct pipeline_compiled_t	pipeline_compiled = { 0 };
+	struct filter_part_run_t	pipe_run_args = { 0 };
 
 
 	rc = d_pipeline_check(&pipeline);
@@ -215,9 +269,59 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 	pipeline_aggregations_init(&pipeline, sgl_agg);
 
+	/** -- init pipe_run_args data struct */
+
+	pipe_run_args.nr_iods			= *nr_iods;
+	pipe_run_args.iods			= iods;
+
+	D_ALLOC(pipe_run_args.iov_extra.iov_buf, sizeof(double));
+	if (pipe_run_args.iov_extra.iov_buf == NULL)
+	{
+		D_GOTO(exit, rc = -DER_NOMEM);
+	}
+
+	pipe_run_args.iov_extra.iov_buf_len	= sizeof(double);
+	pipe_run_args.iov_extra.iov_len		= 0;
+
 	/** -- "compile" pipeline */
 
-	pipeline_compile(&pipeline);
+	rc = pipeline_compile(&pipeline, &pipeline_compiled);
+	if (rc != 0)
+	{
+		D_GOTO(exit, rc);	/** compilation failed. Bad pipeline? */
+	}
+
+	// TODO: Delete me
+	/*{
+		uint32_t i,j;
+
+		printf("\t**num_filters=%u\n",pipeline_compiled.num_filters);
+		fflush(stdout);
+		for (i = 0; i < pipeline_compiled.num_filters; i++)
+		{
+			printf("\t\tfilter=%u, num_parts=%u\n", i, pipeline_compiled.filters[i].num_parts);
+			fflush(stdout);
+		
+			for (j = 0; j < pipeline_compiled.filters[i].num_parts; j++)
+			{
+				printf("\t\t\tpart=%u ", j);
+				fflush(stdout);
+				printf("num_operands=%u ", pipeline_compiled.filters[i].parts[j].num_operands);
+				fflush(stdout);
+				printf("iov=%p ", pipeline_compiled.filters[i].parts[j].iov);
+				fflush(stdout);
+				printf("data_offset=%lu ", pipeline_compiled.filters[i].parts[j].data_offset);
+				fflush(stdout);
+				printf("data_len=%lu ", pipeline_compiled.filters[i].parts[j].data_len);
+				fflush(stdout);
+				printf("filter_func=%p\n", pipeline_compiled.filters[i].parts[j].filter_func);
+				fflush(stdout);
+			}
+		}
+
+		printf("\t\tnum_aggr_filters=%u\n",pipeline_compiled.num_aggr_filters);
+		fflush(stdout);
+	}*/
 
 	/**
 	 *  -- Iterating over dkeys and doing filtering and aggregation. The
@@ -244,9 +348,10 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		rc = pipeline_fetch_record(vos_coh, oid, &anchors, epr, iods,
 					   *nr_iods, &d_key_iter,
 					   sgl_recx_iter);
+
 		if (rc < 0)
 		{
-			D_GOTO(exit, rc);
+			D_GOTO(exit, rc); /** error */
 		}
 		if (rc == 1)
 		{
@@ -255,8 +360,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 		/** -- doing filtering... */
 
-		rc = pipeline_filters(&pipeline, &d_key_iter, nr_iods, iods,
-				      sgl_recx_iter);
+		rc = pipeline_filters(&pipeline_compiled, &pipe_run_args,
+				      &d_key_iter, sgl_recx_iter);
 		if (rc < 0)
 		{
 			D_GOTO(exit, rc); /** error */
@@ -272,8 +377,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 		/** -- aggregations */
 
-		rc = pipeline_aggregations(&pipeline, &d_key_iter, nr_iods,
-					   iods, sgl_recx_iter, sgl_agg);
+		rc = pipeline_aggregations(&pipeline_compiled, &pipe_run_args,
+					   &d_key_iter, sgl_recx_iter, sgl_agg);
 		if (rc < 0)
 		{
 			D_GOTO(exit, rc);
@@ -326,10 +431,19 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	}
 	/* else: we leave *nr_kds at 0 */
 
-	*nr_recx = sgl_recx_idx == 0 ? 1 : sgl_recx_idx;
+	*nr_recx  = *nr_iods;
+	*nr_recx *= sgl_recx_idx == 0 ? 1 : sgl_recx_idx;
 
 	rc = 0;
+
 exit:
+	pipeline_compile_free(&pipeline_compiled);
+
+	if (pipe_run_args.iov_extra.iov_buf != NULL)
+	{
+		D_FREE(pipe_run_args.iov_extra.iov_buf);
+	}
+
 	return rc;
 }
 

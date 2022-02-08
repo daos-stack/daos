@@ -9,6 +9,47 @@
 #include "pipeline_internal.h"
 
 
+static bool
+pipeline_part_chk_type(const char *part_type, size_t part_type_s, bool is_aggr)
+{
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_DKEY", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_AKEY", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_CONST", part_type_s))
+	{
+		return true;
+	}
+	if (is_aggr == true &&
+		(!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s)))
+	{
+		return true;
+	}
+	if (is_aggr == false &&
+		(!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s)))
+	{
+		return true;
+	}
+	return false;
+}
+
 static uint32_t
 pipeline_part_nops(const char *part_type, size_t part_type_s)
 {
@@ -121,6 +162,12 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 {
 	size_t i;
 
+	// TODO: Check that only function 'IN' has array of constants
+	// TODO: Check that functions' operands always have the same type
+	// TODO: Check that functions 'like', 'null', and 'notnull' don't have
+	//       functions as parameters
+	// TODO: Check that arithmetic functions only support number types
+
 	/** -- Check 0: Check that pipeline is not NULL. */
 
 	if (pipeline == NULL)
@@ -162,22 +209,30 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 		uint32_t num_parts = 0;
 		uint32_t num_operands;
 		bool res;
+		bool is_aggr;
 
 		if (i < pipeline->num_filters)
 		{
 			ftr = pipeline->filters[i];
+			is_aggr = false;
 		}
 		else
 		{
 			ftr = pipeline->aggr_filters[i-pipeline->num_filters];
+			is_aggr = true;
 		}
 		if (ftr->num_parts)
 		{
 			num_parts = 1;
 		}
 
+		/** -- Checks 2 and 3 */
+
 		/**
 		 * -- Check 2: Check that all parts have a correct
+		 *             type.
+		 *
+		 * -- Check 3: Check that all parts have a correct
 		 *             number of operands and also that the
 		 *             number of total parts is correct.
 		 */
@@ -185,6 +240,17 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 		for (p = 0; p < ftr->num_parts; p++)
 		{
 			daos_filter_part_t *part = ftr->parts[p];
+
+			/** 2 */
+			res = pipeline_part_chk_type((char *) part->part_type.iov_buf,
+						     part->part_type.iov_len,
+						     is_aggr);
+			if (res == false)
+			{
+				return -DER_NOSYS;
+			}
+
+			/** 3 */
 			num_operands = pipeline_part_nops((char *) part->part_type.iov_buf,
 							  part->part_type.iov_len);
 
@@ -194,13 +260,14 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 			}
 			num_parts += part->num_operands;
 		}
+		/** 3 */
 		if (num_parts != ftr->num_parts)
 		{
 			return -DER_INVAL;
 		}
 
 		/**
-		 * -- Check 3: Check that all parts have the right
+		 * -- Check 4: Check that all parts have the right
 		 *             type of operands.
 		 */
 

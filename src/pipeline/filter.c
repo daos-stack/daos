@@ -7,672 +7,117 @@
 #define D_LOGFAC	DD_FAC(pipeline)
 
 #include <math.h>
+#include <string.h>
 #include "pipeline_internal.h"
+#include <daos/common.h>
 
+#define NTYPES 8
+#define TOTALFUNCS 110
 
-static void
-pipeline_filter_get_data(daos_filter_part_t *part, d_iov_t *dkey,
-			 uint32_t nr_iods, daos_iod_t *iods, d_sg_list_t *akeys,
-			 uint32_t const_idx, d_iov_t **data_item)
-{
-	uint32_t i;
-
-	*data_item = NULL;
-	if (!strncmp((char *) part->part_type.iov_buf, "DAOS_FILTER_DKEY",
-		     part->part_type.iov_len))
-	{
-		*data_item = dkey;
-	}
-	else if (!strncmp((char *) part->part_type.iov_buf, "DAOS_FILTER_AKEY",
-			  part->part_type.iov_len))
-	{
-		for (i = 0; i < nr_iods; i++)
-		{
-			if (!strncmp((char *) part->akey.iov_buf,
-				     (char *) iods[i].iod_name.iov_buf,
-				              iods[i].iod_name.iov_len))
-			{
-				*data_item = akeys[i].sg_iovs;
-				break;
-			}
-		}
-	}
-	else if (!strncmp((char *) part->part_type.iov_buf, "DAOS_FILTER_CONST",
-			  part->part_type.iov_len) &&
-		const_idx < part->num_constants)
-	{
-		*data_item = &(part->constant[const_idx]);
-	}
-}
-
-static int
-pipeline_filter_like(d_iov_t *left, d_iov_t *right)
-{
-	char *left_val, *right_val;
-	size_t left_data_size, right_data_size;
-	size_t left_pos, right_pos, right_anchor;
-	uint8_t right_anchor_set;
-	uint8_t scaping;
-
-	left_val		= (char *) left->iov_buf;
-	right_val		= (char *) right->iov_buf;
-	left_data_size		= left->iov_len;
-	right_data_size		= right->iov_len;
-	left_pos 		= 0;
-	right_pos		= 0;
-	right_anchor		= 0;
-	right_anchor_set	= 0;
-	scaping			= 0;
-
-	while (left_pos < left_data_size && right_pos < right_data_size)
-	{
-		if (right_val[right_pos] == '\\') {
-			scaping = 1;
-			right_pos++;
-			if (right_pos == right_data_size)
-			{
-				return 1; /** We should never reach this. */
-			}
-		}
-		if (right_val[right_pos] == '%' && scaping == 0)
-		{
-			right_anchor_set = 1;
-			right_anchor = ++right_pos;
-			if (right_pos == right_data_size)
-			{
-				return 0; /** '%' is at the end. Pass. */
-			}
-		}
-		if ((right_val[right_pos] == '_' && scaping == 0) ||
-		     left_val[left_pos] == right_val[right_pos])
-		{
-			left_pos++;
-			right_pos++;
-		}
-		else if (!right_anchor_set)
-		{
-			return 1; /** Mismatch and no wildcard. No pass. */
-		}
-		else
-		{
-			right_pos = right_anchor;
-			left_pos++;
-		}
-		scaping = 0;
-	}
-	if (left_pos == left_data_size && right_pos == right_data_size)
-	{
-		return 0; /** Function pass. */
-	}
-	return 1; /** No pass. */
-}
-
-static int
-pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right,
-		    size_t offset_left, size_t size_left,
-		    size_t offset_right, size_t size_right,
-		    const char *data_type, size_t data_type_s)
-{
-	size_t cmp_size;
-	char *left_s, *right_s;
-
-	left_s  = (char *) d_left->iov_buf;
-	right_s = (char *) d_right->iov_buf;
-	left_s  = &left_s[offset_left];
-	right_s = &right_s[offset_right];
-	cmp_size = (size_left <= size_right) ? size_left : size_right;
-
-	/** Typed comparison */
-
-	if (!strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER1", data_type_s))
-	{
-		signed char *left_i, *right_i;
-		left_i  = (signed char *) left_s;
-		right_i = (signed char *) right_s;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER2", data_type_s))
-	{
-		short int *left_i, *right_i;
-		left_i  = (short int *) left_s;
-		right_i = (short int *) right_s;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER4", data_type_s))
-	{
-		int *left_i, *right_i;
-		left_i  = (int *) left_s;
-		right_i = (int *) right_s;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER8", data_type_s))
-	{
-		long long int *left_i, *right_i;
-		left_i  = (long long int *) left_s;
-		right_i = (long long int *) right_s;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_REAL4", data_type_s))
-	{
-		float *left_f, *right_f;
-		left_f  = (float *) left_s;
-		right_f = (float *) right_s;
-		if      (*left_f < *right_f)  return -1;
-		else if (*left_f == *right_f) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_REAL8", data_type_s))
-	{
-		double *left_f, *right_f;
-		left_f  = (double *) left_s;
-		right_f = (double *) right_s;
-		if      (*left_f < *right_f)  return -1;
-		else if (*left_f == *right_f) return 0;
-		else                          return 1;
-	}
-	else if (!strncmp(data_type, "DAOS_FILTER_TYPE_STRING", data_type_s))
-	{
-		return strcmp(left_s, right_s);
-	}
-
-	/** -- Raw cmp byte by byte */
-
-	return memcmp(left_s, right_s, cmp_size);
-}
-
-static int
-pipeline_filter_func(daos_filter_t *filter, d_iov_t *dkey, uint32_t nr_iods,
-		     daos_iod_t *iods, d_sg_list_t *akeys, uint32_t *part_idx)
-{
-	uint32_t		i;
-	uint32_t		comparisons = 1;
-	int			rc;
-	daos_filter_part_t	*part;
-	daos_filter_part_t	*left;
-	daos_filter_part_t	*right;
-	d_iov_t			*d_left;
-	d_iov_t			*d_right;
-
-	part = filter->parts[*part_idx];
-	*part_idx += 1;
-	left = filter->parts[*part_idx];
-	*part_idx += 1;
-	right = filter->parts[*part_idx];
-
-	/** -- Check if we have multiple constants to check */
-
-	if (!strncmp((char *) right->part_type.iov_buf, "DAOS_FILTER_CONST",
-		     right->part_type.iov_len) &&
-	    right->num_constants > 1)
-	{
-		comparisons = right->num_constants;
-	}
-
-	pipeline_filter_get_data(left, dkey, nr_iods, iods, akeys, 0, &d_left);
-	for (i = 0; i < comparisons; i++)
-	{
-		pipeline_filter_get_data(right, dkey, nr_iods, iods, akeys,
-					 i, &d_right);
-
-		if (d_left == NULL || d_right == NULL)
-		{
-			return -DER_INVAL;
-		}
-		if (strncmp((char *) left->data_type.iov_buf,
-			    (char *) right->data_type.iov_buf,
-			    left->data_type.iov_len))
-		{
-			return -DER_INVAL;
-		}
-		if (!strncmp((char *) part->part_type.iov_buf,
-			     "DAOS_FILTER_FUNC_LIKE",
-			     part->part_type.iov_len))
-		{
-			/** filter 'LIKE' only works for strings */
-			if (strncmp((char *) left->data_type.iov_buf,
-				    "DAOS_FILTER_TYPE_STRING",
-				    left->data_type.iov_len) ||
-			    strncmp((char *) right->data_type.iov_buf,
-				    "DAOS_FILTER_TYPE_STRING",
-				    right->data_type.iov_len))
-			{
-				return -DER_INVAL;
-			}
-			rc = pipeline_filter_like(d_left, d_right);
-		}
-		else
-		{
-			rc = pipeline_filter_cmp(d_left, d_right,
-						 left->data_offset,
-						 left->data_len,
-						 right->data_offset,
-						 right->data_len,
-						 (char *) left->data_type.iov_buf,
-						 left->data_type.iov_len);
-		}
-
-		if (!strncmp((char *) part->part_type.iov_buf,
-			     "DAOS_FILTER_FUNC_EQ",
-			     part->part_type.iov_len) ||
-		    !strncmp((char *) part->part_type.iov_buf,
-			     "DAOS_FILTER_FUNC_IN",
-			     part->part_type.iov_len) ||
-		    !strncmp((char *) part->part_type.iov_buf,
-			     "DAOS_FILTER_FUNC_LIKE",
-			     part->part_type.iov_len))
-		{
-			if (rc == 0) return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_NE",
-				  part->part_type.iov_len))
-		{
-			if (rc != 0) return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_LT",
-				  part->part_type.iov_len))
-		{
-			if (rc < 0)  return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_LE",
-				  part->part_type.iov_len))
-		{
-			if (rc <= 0) return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_GE",
-				  part->part_type.iov_len))
-		{
-			if (rc >= 0) return 0;
-		}
-		else if (!strncmp((char *) part->part_type.iov_buf,
-				  "DAOS_FILTER_FUNC_GT",
-				  part->part_type.iov_len))
-		{
-			if (rc > 0)  return 0;
-		}
-	}
-
-	return 1; /** Filter does not pass. */
-}
-
-static int
-pipeline_filter_isnull(daos_filter_t *filter, d_iov_t *dkey, uint32_t nr_iods,
-		       daos_iod_t *iods, d_sg_list_t *akeys, uint32_t *part_idx)
-{
-	daos_filter_part_t	*part;
-	d_iov_t			*data;
-	char			*part_type;
-	size_t			part_type_s;
-
-	*part_idx += 1;
-	part = filter->parts[*part_idx];
-
-	part_type   = (char *) part->part_type.iov_buf;
-	part_type_s = part->part_type.iov_len;
-
-	if (!strncmp(part_type, "DAOS_FILTER_DKEY", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_CONST", part_type_s))
-	{
-		return 1; /**
-			   *  dkeys or constants can't be null in this context
-			   */
-	}
-
-	pipeline_filter_get_data(part, dkey, nr_iods, iods, akeys, 0, &data);
-
-	return data == NULL ? 0 : 1;
-}
-
-static int
-pipeline_filter(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
-		daos_iod_t *iods, d_sg_list_t *akeys, uint32_t *part_idx)
-{
-	char *part_type = (char *) filter->parts[*part_idx]->part_type.iov_buf;
-	size_t part_type_s = filter->parts[*part_idx]->part_type.iov_len;
-
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))
-	{
-		return pipeline_filter_func(filter, dkey, *nr_iods, iods, akeys,
-					    part_idx);
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s))
-	{
-		*part_idx += 1;
-		return pipeline_filter_isnull(filter, dkey, *nr_iods, iods,
-					      akeys, part_idx);
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s))
-	{
-		int rc;
-		*part_idx += 1;
-		if ((rc = pipeline_filter_isnull(filter, dkey, *nr_iods, iods,
-						 akeys, part_idx)) < 0)
-		{
-			return rc; /** error */
-		}
-		return 1 - rc;
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s))
-	{
-		int rc;
-		*part_idx += 1;
-		if ((rc = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc; /** error */
-		}
-		return 1 - rc; /** NOT */
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s))
-	{
-		int rc_l, rc_r;
-		*part_idx += 1;
-		if ((rc_l = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc_l; /** error */
-		}
-		*part_idx += 1;
-		if ((rc_r = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc_r; /** error */
-		}
-		return (rc_l == 0 && rc_r == 0) ? 0 : 1; /** AND */
-	}
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s))
-	{
-		int rc_l, rc_r;
-		*part_idx += 1;
-		if ((rc_l = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc_l; /** error */
-		}
-		*part_idx += 1;
-		if ((rc_r = pipeline_filter(filter, dkey, nr_iods, iods, akeys,
-				     part_idx)) < 0)
-		{
-			return rc_r; /** error */
-		}
-		return (rc_l == 0 || rc_r == 0) ? 0 : 1; /** OR */
-	}
-
-	return -DER_NOSYS; /** Unsupported function. */
-}
-
-int
-pipeline_filters(daos_pipeline_t *pipeline, d_iov_t *dkey, uint32_t *nr_iods,
-		 daos_iod_t *iods, d_sg_list_t *akeys)
-{
-	int		rc;
-	uint32_t	part_idx;
-	uint32_t 	i;
-
-	if (pipeline->num_filters == 0)
-	{
-		return 0; /** No filters means all records pass */
-	}
-
-	for (i = 0; i < pipeline->num_filters; i++)
-	{
-		part_idx = 0;
-		if ((rc = pipeline_filter(pipeline->filters[i], dkey, nr_iods,
-					  iods, akeys, &part_idx)))
-		{
-			return rc; /** error, or filter does not pass */
-		}
-	}
-
-	return 0;
-}
-
-static int
-read_iov_as_double(char *data, size_t offset, char *type, size_t type_s,
-		   double *result)
-{
-	char *data_ = &data[offset];
-
-	if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER1", type_s))
-	{
-		signed char *val = (signed char *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER2", type_s))
-	{
-		short int *val = (short int *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER4", type_s))
-	{
-		int *val = (int *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER8", type_s))
-	{
-		long long int *val = (long long int *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_REAL4", type_s))
-	{
-		float *val = (float *) data_;
-		*result = (double) *val;
-	}
-	else if (!strncmp(type, "DAOS_FILTER_TYPE_REAL8", type_s))
-	{
-		double *val = (double *) data_;
-		*result = *val;
-	}
-	else
-	{
-		return -DER_INVAL;
-	}
-	return 0;
-}
-
-static int
-pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
-		     daos_iod_t *iods, d_sg_list_t *akeys, uint32_t *part_idx,
-		     double *total)
-{
-	int			rc;
-	daos_filter_part_t	*part = filter->parts[*part_idx];
-	char			*part_type = (char *) part->part_type.iov_buf;
-	size_t			part_type_s = part->part_type.iov_len;
-	double			total_rec;
-
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
-	{
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_rec)))
-		{
-			return rc; /** error */
-		}
-		*total += total_rec;
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s))
-	{
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_rec)))
-		{
-			return rc; /** error */
-		}
-		if (total_rec > *total)
-		{
-			*total = total_rec;
-		}
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s))
-	{
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_rec)))
-		{
-			return rc; /** error */
-		}
-		if (total_rec < *total)
-		{
-			*total = total_rec;
-		}
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_DKEY", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_AKEY", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_CONST", part_type_s))
-	{
-		d_iov_t *data;
-
-		pipeline_filter_get_data(part, dkey, *nr_iods, iods, akeys, 0,
-					 &data);
-		if ((rc = read_iov_as_double((char *) data->iov_buf,
-					     part->data_offset,
-					     (char  *) part->data_type.iov_buf,
-					     part->data_type.iov_len,
-					     total)))
-		{
-			return rc; /** error */
-		}
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s))
-	{
-		double total_left_rec, total_right_rec;
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_left_rec)))
-		{
-			return rc; /** error */
-		}
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_right_rec)))
-		{
-			return rc; /** error */
-		}
-		*total += total_left_rec + total_right_rec; /** ADD */
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s))
-	{
-		double total_left_rec, total_right_rec;
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_left_rec)))
-		{
-			return rc; /** error */
-		}
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_right_rec)))
-		{
-			return rc; /** error */
-		}
-		*total += total_left_rec - total_right_rec; /** SUB */
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s))
-	{
-		double total_left_rec, total_right_rec;
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_left_rec)))
-		{
-			return rc; /** error */
-		}
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_right_rec)))
-		{
-			return rc; /** error */
-		}
-		*total += total_left_rec * total_right_rec; /** MUL */
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s))
-	{
-		double total_left_rec, total_right_rec;
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_left_rec)))
-		{
-			return rc; /** error */
-		}
-		*part_idx += 1;
-		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
-					       akeys, part_idx,
-					       &total_right_rec)))
-		{
-			return rc; /** error */
-		}
-		if (total_right_rec == 0.0)
-		{
-			return -DER_DIV_BY_ZERO;
-		}
-
-		*total += total_left_rec / total_right_rec; /** DIV */
-	}
-	else
-	{
-		return -DER_NOSYS; /** Unsupported function. */
-	}
-
-	return 0;
-}
-
-int
-pipeline_aggregations(daos_pipeline_t *pipeline, d_iov_t *dkey,
-		      uint32_t *nr_iods, daos_iod_t *iods, d_sg_list_t *akeys,
-		      d_sg_list_t *sgl_agg)
-{
-	int		rc;
-	uint32_t	i;
-	uint32_t	part_idx;
-
-	if (pipeline->num_aggr_filters == 0)
-	{
-		return 0; /** No filters means no aggregation */
-	}
-	for (i = 0; i < pipeline->num_aggr_filters; i++)
-	{
-		part_idx = 0;
-		if ((rc = pipeline_aggregation(
-				       pipeline->aggr_filters[i], dkey, nr_iods,
-				       iods, akeys, &part_idx,
-				       (double *) sgl_agg[i].sg_iovs->iov_buf
-					      )) < 0)
-		{
-			return rc; /** error */
-		}
-	}
-
-	return 0;
-}
+static filter_func_t *filter_func_ptrs[TOTALFUNCS] = { filter_func_eq_i1,
+						       filter_func_eq_i2,
+						       filter_func_eq_i4,
+						       filter_func_eq_i8,
+						       filter_func_eq_r4,
+						       filter_func_eq_r8,
+						       filter_func_eq_st,
+						       filter_func_eq_raw,
+						       filter_func_in_i1,
+						       filter_func_in_i2,
+						       filter_func_in_i4,
+						       filter_func_in_i8,
+						       filter_func_in_r4,
+						       filter_func_in_r8,
+						       filter_func_in_st,
+						       filter_func_in_raw,
+						       filter_func_ne_i1,
+						       filter_func_ne_i2,
+						       filter_func_ne_i4,
+						       filter_func_ne_i8,
+						       filter_func_ne_r4,
+						       filter_func_ne_r8,
+						       filter_func_ne_st,
+						       filter_func_ne_raw,
+						       filter_func_lt_i1,
+						       filter_func_lt_i2,
+						       filter_func_lt_i4,
+						       filter_func_lt_i8,
+						       filter_func_lt_r4,
+						       filter_func_lt_r8,
+						       filter_func_lt_st,
+						       filter_func_lt_raw,
+						       filter_func_le_i1,
+						       filter_func_le_i2,
+						       filter_func_le_i4,
+						       filter_func_le_i8,
+						       filter_func_le_r4,
+						       filter_func_le_r8,
+						       filter_func_le_st,
+						       filter_func_le_raw,
+						       filter_func_ge_i1,
+						       filter_func_ge_i2,
+						       filter_func_ge_i4,
+						       filter_func_ge_i8,
+						       filter_func_ge_r4,
+						       filter_func_ge_r8,
+						       filter_func_ge_st,
+						       filter_func_ge_raw,
+						       filter_func_gt_i1,
+						       filter_func_gt_i2,
+						       filter_func_gt_i4,
+						       filter_func_gt_i8,
+						       filter_func_gt_r4,
+						       filter_func_gt_r8,
+						       filter_func_gt_st,
+						       filter_func_gt_raw,
+						       filter_func_add_i1,
+						       filter_func_add_i2,
+						       filter_func_add_i4,
+						       filter_func_add_i8,
+						       filter_func_add_r4,
+						       filter_func_add_r8,
+						       filter_func_sub_i1,
+						       filter_func_sub_i2,
+						       filter_func_sub_i4,
+						       filter_func_sub_i8,
+						       filter_func_sub_r4,
+						       filter_func_sub_r8,
+						       filter_func_mul_i1,
+						       filter_func_mul_i2,
+						       filter_func_mul_i4,
+						       filter_func_mul_i8,
+						       filter_func_mul_r4,
+						       filter_func_mul_r8,
+						       filter_func_div_i1,
+						       filter_func_div_i2,
+						       filter_func_div_i4,
+						       filter_func_div_i8,
+						       filter_func_div_r4,
+						       filter_func_div_r8,
+						       aggr_func_sum_i1,
+						       aggr_func_sum_i2,
+						       aggr_func_sum_i4,
+						       aggr_func_sum_i8,
+						       aggr_func_sum_r4,
+						       aggr_func_sum_r8,
+						       aggr_func_max_i1,
+						       aggr_func_max_i2,
+						       aggr_func_max_i4,
+						       aggr_func_max_i8,
+						       aggr_func_max_r4,
+						       aggr_func_max_r8,
+						       aggr_func_min_i1,
+						       aggr_func_min_i2,
+						       aggr_func_min_i4,
+						       aggr_func_min_i8,
+						       aggr_func_min_r4,
+						       aggr_func_min_r8,
+						       filter_func_like_st,
+						       filter_func_isnull_raw,
+						       filter_func_isnotnull_raw,
+						       filter_func_not,
+						       filter_func_and,
+						       filter_func_or };
 
 void
 pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total,
@@ -725,3 +170,409 @@ pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
 		}
 	}
 }
+
+static uint32_t
+calc_type_idx(char *type, size_t type_len)
+{
+	if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER1", type_len))
+	{
+		return 0;
+	}
+	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER2", type_len))
+	{
+		return 1;
+	}
+	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER4", type_len))
+	{
+		return 2;
+	}
+	else if (!strncmp(type, "DAOS_FILTER_TYPE_INTEGER8", type_len))
+	{
+		return 3;
+	}
+	else if (!strncmp(type, "DAOS_FILTER_TYPE_REAL4", type_len))
+	{
+		return 4;
+	}
+	else if (!strncmp(type, "DAOS_FILTER_TYPE_REAL8", type_len))
+	{
+		return 5;
+	}
+	else if (!strncmp(type, "DAOS_FILTER_TYPE_STRING", type_len))
+	{
+		return 6;
+	}
+	else
+	{
+		return 7;
+	}
+}
+
+static uint32_t
+calc_base_idx(daos_filter_part_t **parts, uint32_t idx)
+{
+	char		*part_type;
+	size_t		part_type_s;
+
+	part_type   = (char *) parts[idx]->part_type.iov_buf;
+	part_type_s = parts[idx]->part_type.iov_len;
+
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s))
+	{
+		return 0;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s))
+	{
+		return NTYPES;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s))
+	{
+		return NTYPES * 2;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s))
+	{
+		return NTYPES * 3;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s))
+	{
+		return NTYPES * 4;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s))
+	{
+		return NTYPES * 5;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s))
+	{
+		return NTYPES * 6;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s))
+	{
+		return NTYPES * 7;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s))
+	{
+		return (NTYPES * 7) + (NTYPES - 2);
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 2);
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 3);
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 4);
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 5);
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 6);
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 7);
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 7) + 1;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 7) + 2;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 7) + 3;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s))
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 7) + 4;
+	}
+	else /* if (!strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)) */
+	{
+		return (NTYPES * 7) + ((NTYPES - 2) * 7) + 5;
+	}
+}
+
+static uint32_t
+calc_num_operands(daos_filter_part_t **parts, uint32_t idx)
+{
+	daos_filter_part_t	*child_part;
+	char			*part_type;
+	size_t			part_type_s;
+	uint32_t		nops = 0;
+
+	part_type   = (char *) parts[idx]->part_type.iov_buf;
+	part_type_s = parts[idx]->part_type.iov_len;
+
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)  ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))
+	{
+		nops = 2;
+		if (!strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s))
+		{
+			child_part = parts[idx + 2];
+
+			if (!strncmp((char *) child_part->part_type.iov_buf,
+				     "DAOS_FILTER_CONST",
+				     child_part->part_type.iov_len))
+			{
+				nops += child_part->num_constants - 1;
+			}
+		}
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s)    ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s)       ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s)       ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s)       ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s)       ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
+	{
+		nops = 1;
+	}
+
+	return nops;
+}
+
+static int
+compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
+	       uint32_t *part_idx, uint32_t *comp_part_idx,
+	       char **type, size_t *type_len)
+{
+	uint32_t			nops;
+	uint32_t			func_idx;
+	uint32_t			i;
+	char				*part_type;
+	size_t				part_type_s;
+	size_t				comp_size;
+	struct filter_part_compiled_t	*comp_part;
+	int				rc;
+	uint32_t			idx;
+
+
+	part_type   = (char *) filter->parts[*part_idx]->part_type.iov_buf;
+	part_type_s = filter->parts[*part_idx]->part_type.iov_len;
+
+	comp_part   = &comp_filter->parts[*comp_part_idx];
+	*comp_part  = (struct filter_part_compiled_t) { 0 };
+
+	if (part_type_s < strlen("DAOS_FILTER_FUNC"))
+	{
+		comp_size = part_type_s;
+	}
+	else
+	{
+		comp_size = strlen("DAOS_FILTER_FUNC");
+	}
+
+	if (strncmp(part_type, "DAOS_FILTER_FUNC", comp_size)) /** != FUNC */
+	{
+		comp_part->data_offset = filter->parts[*part_idx]->data_offset;
+		comp_part->data_len = filter->parts[*part_idx]->data_len;
+		*type = (char *) filter->parts[*part_idx]->data_type.iov_buf;
+		*type_len = filter->parts[*part_idx]->data_type.iov_len;
+
+		if (!strncmp(part_type, "DAOS_FILTER_AKEY", part_type_s))
+		{
+			comp_part->iov = &filter->parts[*part_idx]->akey;
+			comp_part->filter_func = getdata_func_akey;
+		}
+		else if (!strncmp(part_type, "DAOS_FILTER_CONST", part_type_s))
+		{
+			comp_part->iov = &filter->parts[*part_idx]->constant[0];
+			comp_part->filter_func = getdata_func_const;
+
+			for (i = 1;
+			     i < filter->parts[*part_idx]->num_constants;
+			     i++)
+			{
+				*comp_part_idx += 1;
+				comp_part = &comp_filter->parts[*comp_part_idx];
+				*comp_part =
+					(struct filter_part_compiled_t) { 0 };
+				comp_part->iov =
+					&filter->parts[*part_idx]->constant[i];
+				comp_part->filter_func = getdata_func_const;
+			}
+		}
+		else if (!strncmp(part_type, "DAOS_FILTER_DKEY", part_type_s))
+		{
+			comp_part->filter_func = getdata_func_dkey;
+		}
+		D_GOTO(exit, rc = 0);
+	}
+
+	nops = calc_num_operands(filter->parts, *part_idx);
+	comp_part->num_operands = nops;
+
+	/** recursive calls for function parameters */
+	idx	= *part_idx;
+	for (i = 0; i < nops; i++)
+	{
+		*comp_part_idx	+= 1;
+		*part_idx	+= 1;
+		rc = compile_filter(filter, comp_filter, part_idx,
+				    comp_part_idx, type, type_len);
+		if (rc != 0)
+		{
+			D_GOTO(exit, rc);
+		}
+	}
+
+	func_idx  = calc_base_idx(filter->parts, idx);
+
+	if (func_idx < (NTYPES * 7) + ((NTYPES - 2) * 7))
+	{
+		func_idx += calc_type_idx(*type, *type_len);
+	}
+
+	comp_part->filter_func = filter_func_ptrs[func_idx];
+
+exit:
+	return rc;
+}
+
+static int
+compile_filters(daos_filter_t **ftrs, uint32_t nftrs,
+		struct filter_compiled_t *c_ftrs)
+{
+	uint32_t		part_idx;
+	uint32_t		comp_part_idx;
+	uint32_t		comp_num_parts;
+	uint32_t 		i, j;
+	int			rc = 0;
+	daos_filter_part_t	*part;
+	char			*type;
+	size_t			type_len;
+
+	for (i = 0; i < nftrs; i++)
+	{
+		comp_num_parts = ftrs[i]->num_parts;
+		for (j = 0; j < ftrs[i]->num_parts; j++)
+		{
+			part = ftrs[i]->parts[j];
+
+			if (!strncmp((char *) part->part_type.iov_buf,
+				     "DAOS_FILTER_CONST",
+				     part->part_type.iov_len))
+			{
+				comp_num_parts += part->num_constants - 1;
+			}
+		}
+
+		D_ALLOC_ARRAY(c_ftrs[i].parts, comp_num_parts);
+		if (c_ftrs[i].parts == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+		c_ftrs[i].num_parts = comp_num_parts;
+
+		part_idx	= 0;
+		comp_part_idx	= 0;
+		type		= NULL;
+		type_len	= 0;
+		rc = compile_filter(ftrs[i], &c_ftrs[i], &part_idx,
+				    &comp_part_idx, &type, &type_len);
+		if (rc != 0)
+		{
+			D_GOTO(exit, rc);
+		}
+	}
+exit:
+	return rc;
+}
+
+int
+pipeline_compile(daos_pipeline_t *pipe, struct pipeline_compiled_t *comp_pipe)
+{
+	int rc = 0;
+
+	comp_pipe->num_filters		= 0;
+	comp_pipe->filters		= NULL;
+	comp_pipe->num_aggr_filters	= 0;
+	comp_pipe->aggr_filters		= NULL;
+
+	if (pipe->num_filters > 0)
+	{
+		D_ALLOC_ARRAY(comp_pipe->filters, pipe->num_filters);
+		if (comp_pipe->filters == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+		comp_pipe->num_filters = pipe->num_filters;
+
+		rc = compile_filters(pipe->filters, pipe->num_filters,
+				     comp_pipe->filters);
+		if (rc != 0)
+		{
+			D_GOTO(exit, rc);
+		}
+	}
+	if (pipe->num_aggr_filters > 0)
+	{
+		D_ALLOC_ARRAY(comp_pipe->aggr_filters, pipe->num_aggr_filters);
+		if (comp_pipe->aggr_filters == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+		comp_pipe->num_aggr_filters = pipe->num_aggr_filters;
+
+		rc = compile_filters(pipe->aggr_filters, pipe->num_aggr_filters,
+				     comp_pipe->aggr_filters);
+		if (rc != 0)
+		{
+			D_GOTO(exit, rc);
+		}
+	}
+exit:
+	return rc;
+}
+
+void
+pipeline_compile_free(struct pipeline_compiled_t *comp_pipe)
+{
+	uint32_t i;
+
+	if (comp_pipe->num_filters > 0)
+	{
+		for (i = 0; i < comp_pipe->num_filters; i++)
+		{
+			if (comp_pipe->filters[i].num_parts > 0)
+			{
+				D_FREE(comp_pipe->filters[i].parts);
+			}
+		}
+		D_FREE(comp_pipe->filters);
+	}
+	if (comp_pipe->num_aggr_filters > 0)
+	{
+		for (i = 0; i < comp_pipe->num_aggr_filters; i++)
+		{
+			if (comp_pipe->aggr_filters[i].num_parts > 0)
+			{
+				D_FREE(comp_pipe->aggr_filters[i].parts);
+			}
+		}
+		D_FREE(comp_pipe->aggr_filters);
+	}
+}
+

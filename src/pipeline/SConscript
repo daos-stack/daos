@@ -26,7 +26,8 @@ def scons():
     senv = denv.Clone()
     srv = daos_build.library(senv, 'pipeline',
                              common_tgts + ['srv_pipeline.c', 'srv_mod.c',
-                                            'filter.c'],
+                                            'filter.c', 'filter_funcs.c',
+                                            'aggr_funcs.c', 'getdata_funcs.c'],
                              install_off="../..")
     senv.Install('$PREFIX/lib64/daos_srv', srv)
 

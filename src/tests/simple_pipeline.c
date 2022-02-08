@@ -31,7 +31,7 @@ do {						\
 
 /** DB info */
 #define NR_IODS		4
-#define STRING_LEN	10
+#define STRING_MAX_LEN	10
 
 static char	*fields[NR_IODS]	= {"Owner", "Species", "Sex", "Age"};
 int 		nr_aggr			= 0;
@@ -47,38 +47,38 @@ insert_example_records(void)
 	daos_iod_t	iods[NR_IODS];
 	uint32_t	i, j;
 
-	char	*name[]		= {"Slim\0\0\0\0\0\0",
-				   "Buffy\0\0\0\0\0",
-				   "Claws\0\0\0\0\0",
-				   "Whistler\0\0",
-				   "Chirpy\0\0\0\0",
-				   "Browser\0\0\0",
-				   "Fang\0\0\0\0\0\0",
-				   "Fluffy\0\0\0\0"};
-	char	*owner[]	= {"Benny\0\0\0\0\0",
-				   "Harold\0\0\0\0",
-				   "GWen\0\0\0\0\0\0",
-				   "Gwen\0\0\0\0\0\0",
-				   "Gwen\0\0\0\0\0\0",
-				   "Diane\0\0\0\0\0",
-				   "Benny\0\0\0\0\0",
-				   "Harold\0\0\0\0"};
-	char	*species[]	= {"snake\0\0\0\0\0",
-				   "dog\0\0\0\0\0\0\0",
-				   "cat\0\0\0\0\0\0\0",
-				   "bird\0\0\0\0\0\0",
-				   "bird\0\0\0\0\0\0",
-				   "dog\0\0\0\0\0\0\0",
-				   "dog\0\0\0\0\0\0\0",
-				   "cat\0\0\0\0\0\0\0"};
-	char	*sex[]		= {"m\0\0\0\0\0\0\0\0\0",
-				   "f\0\0\0\0\0\0\0\0\0",
-				   "m\0\0\0\0\0\0\0\0\0",
-				   "m\0\0\0\0\0\0\0\0\0",
-				   "f\0\0\0\0\0\0\0\0\0",
-				   "m\0\0\0\0\0\0\0\0\0",
-				   "m\0\0\0\0\0\0\0\0\0",
-				   "f\0\0\0\0\0\0\0\0\0"};
+	char	*name[]		= {"Slim",
+				   "Buffy",
+				   "Claws",
+				   "Whistler",
+				   "Chirpy",
+				   "Browser",
+				   "Fang",
+				   "Fluffy"};
+	char	*owner[]	= {"Benny",
+				   "Harold",
+				   "GWen",
+				   "Gwen",
+				   "Gwen",
+				   "Diane",
+				   "Benny",
+				   "Harold"};
+	char	*species[]	= {"snake",
+				   "dog",
+				   "cat",
+				   "bird",
+				   "bird",
+				   "dog",
+				   "dog",
+				   "cat"};
+	char	*sex[]		= {"m",
+				   "f",
+				   "m",
+				   "m",
+				   "f",
+				   "m",
+				   "m",
+				   "f"};
 	int	age[]		= {1, 10, 4, 2, 3, 2, 7, 9};
 
 	void	*data[NR_IODS];
@@ -91,26 +91,26 @@ insert_example_records(void)
 	printf("records:\n");
 	for (i = 0; i < 8; i++) { /** records */
 		printf("\tname(dkey)=%s%*c", name[i],
-					     (int) (STRING_LEN-strlen(name[i])),
+					     (int) (STRING_MAX_LEN-strlen(name[i])),
 					     ' ');
 		/** set dkey for record */
-		d_iov_set(&dkey, name[i], STRING_LEN);
+		d_iov_set(&dkey, name[i], strlen(name[i]));
 
 		for (j = 0; j < NR_IODS-1; j++) { /** str fields */
 			char **strdata = (char **) data[j];
 			printf("%s(akey)=%s%*c", fields[j], strdata[i],
-					  (int) (STRING_LEN-strlen(strdata[i])),
+					  (int) (STRING_MAX_LEN-strlen(strdata[i])),
 					  ' ');
 			/** akeys */
 			sgls[j].sg_nr		= 1;
 			sgls[j].sg_nr_out	= 0;
 			sgls[j].sg_iovs		= &iovs[j];
-			d_iov_set(&iovs[j], strdata[i], STRING_LEN);
+			d_iov_set(&iovs[j], strdata[i], strlen(strdata[i]));
 
 			d_iov_set(&iods[j].iod_name, (void *)fields[j],
 					strlen(fields[j]));
 			iods[j].iod_nr		= 1;
-			iods[j].iod_size	= STRING_LEN;
+			iods[j].iod_size	= strlen(strdata[i]);
 			iods[j].iod_recxs	= NULL;
 			iods[j].iod_type	= DAOS_IOD_SINGLE;
 		}
@@ -148,6 +148,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	char			*str_type, *pipe_cond_type;
 	size_t			str_type_s, pipe_cond_type_s;
 	char			*constant, *akey;
+	size_t			constant_s, akey_s;
 	daos_filter_t		*comp_eq;
 	int			rc;
 
@@ -160,16 +161,17 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	akey_ftype   = (char *) malloc(akey_ftype_s);
 	strncpy(akey_ftype, "DAOS_FILTER_AKEY", akey_ftype_s);
 
-	akey         = (char *) malloc(STRING_LEN);
-	strcpy(akey, "Owner");
+	akey_s       = strlen("Owner");
+	akey         = (char *) malloc(akey_s);
+	strncpy(akey, "Owner", akey_s);
 
 	const_ftype_s = strlen("DAOS_FILTER_CONST");
 	const_ftype   = (char *) malloc(const_ftype_s);
 	strncpy(const_ftype, "DAOS_FILTER_CONST", const_ftype_s);
 
-	constant      = (char *) malloc(STRING_LEN);
-	bzero((void *) constant, STRING_LEN);
-	strcpy(constant, "Benny");
+	constant_s    = strlen("Benny");
+	constant      = (char *) malloc(constant_s);
+	strncpy(constant, "Benny", constant_s);
 
 	eqfunc_ftype_s = strlen("DAOS_FILTER_FUNC_EQ");
 	eqfunc_ftype   = (char *) malloc(eqfunc_ftype_s);
@@ -185,9 +187,9 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	d_iov_set(&akey_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey_ft->data_type, str_type, str_type_s);
 	akey_ft->num_operands = 0;
-	d_iov_set(&(akey_ft->akey), akey, STRING_LEN);
+	d_iov_set(&(akey_ft->akey), akey, akey_s);
 	akey_ft->data_offset  = 0;
-	akey_ft->data_len     = STRING_LEN;
+	akey_ft->data_len     = STRING_MAX_LEN;
 
 	/** constant for filter */
 	const_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
@@ -196,9 +198,9 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	const_ft->num_operands    = 0;
 	const_ft->num_constants   = 1;
 	const_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
-	d_iov_set(const_ft->constant, constant, STRING_LEN);
+	d_iov_set(const_ft->constant, constant, constant_s);
 	const_ft->data_offset     = 0;
-	const_ft->data_len        = STRING_LEN;
+	const_ft->data_len        = constant_s;
 
 	/** function for filter */
 	eqfunc_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
@@ -245,6 +247,7 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	char			*str_type, *pipe_cond_type;
 	size_t			str_type_s, pipe_cond_type_s;
 	char			*constant1, *akey1, *constant2, *akey2;
+	size_t			constant1_s, akey1_s, constant2_s, akey2_s;
 	daos_filter_t		*comp_and;
 	int			rc;
 
@@ -253,10 +256,12 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	akey_ftype   = (char *) malloc(akey_ftype_s);
 	strncpy(akey_ftype, "DAOS_FILTER_AKEY", akey_ftype_s);
 
-	akey1      = (char *) malloc(STRING_LEN);
-	akey2      = (char *) malloc(STRING_LEN);
-	strcpy(akey1, "Owner");
-	strcpy(akey2, "Species");
+	akey1_s    = strlen("Owner");
+	akey2_s    = strlen("Species");
+	akey1      = (char *) malloc(akey1_s);
+	akey2      = (char *) malloc(akey2_s);
+	strncpy(akey1, "Owner", akey1_s);
+	strncpy(akey2, "Species", akey2_s);
 
 	str_type_s  = strlen("DAOS_FILTER_TYPE_STRING");
 	str_type    = (char *) malloc(str_type_s);
@@ -266,12 +271,12 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	const_ftype   = (char *) malloc(const_ftype_s);
 	strncpy(const_ftype, "DAOS_FILTER_CONST", const_ftype_s);
 
-	constant1    = (char *) malloc(STRING_LEN);
-	constant2    = (char *) malloc(STRING_LEN);
-	bzero((void *) constant1, STRING_LEN);
-	bzero((void *) constant2, STRING_LEN);
-	strcpy(constant1, "Benny");
-	strcpy(constant2, "dog");
+	constant1_s  = strlen("Benny");
+	constant2_s  = strlen("dog");
+	constant1    = (char *) malloc(constant1_s);
+	constant2    = (char *) malloc(constant2_s);
+	strncpy(constant1, "Benny", constant1_s);
+	strncpy(constant2, "dog", constant2_s);
 
 	eqfunc_ftype_s = strlen("DAOS_FILTER_FUNC_EQ");
 	eqfunc_ftype   = (char *) malloc(eqfunc_ftype_s);
@@ -291,18 +296,18 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	d_iov_set(&akey1_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey1_ft->data_type, str_type, str_type_s);
 	akey1_ft->num_operands = 0;
-	d_iov_set(&(akey1_ft->akey), akey1, STRING_LEN);
+	d_iov_set(&(akey1_ft->akey), akey1, akey1_s);
 	akey1_ft->data_offset  = 0;
-	akey1_ft->data_len     = STRING_LEN;
+	akey1_ft->data_len     = STRING_MAX_LEN;
 
 	/** akey2 for filter */
 	akey2_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
 	d_iov_set(&akey2_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey2_ft->data_type, str_type, str_type_s);
 	akey2_ft->num_operands = 0;
-	d_iov_set(&(akey2_ft->akey), akey2, STRING_LEN);
+	d_iov_set(&(akey2_ft->akey), akey2, akey2_s);
 	akey2_ft->data_offset  = 0;
-	akey2_ft->data_len     = STRING_LEN;
+	akey2_ft->data_len     = STRING_MAX_LEN;
 
 	/** constant1 for filter */
 	const1_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
@@ -311,9 +316,9 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	const1_ft->num_operands    = 0;
 	const1_ft->num_constants   = 1;
 	const1_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
-	d_iov_set(const1_ft->constant, constant1, STRING_LEN);
+	d_iov_set(const1_ft->constant, constant1, constant1_s);
 	const1_ft->data_offset     = 0;
-	const1_ft->data_len        = STRING_LEN;
+	const1_ft->data_len        = constant1_s;
 
 	/** constant2 for filter */
 	const2_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
@@ -322,9 +327,9 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	const2_ft->num_operands    = 0;
 	const2_ft->num_constants   = 1;
 	const2_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
-	d_iov_set(const2_ft->constant, constant2, STRING_LEN);
+	d_iov_set(const2_ft->constant, constant2, constant2_s);
 	const2_ft->data_offset     = 0;
-	const2_ft->data_len        = STRING_LEN;
+	const2_ft->data_len        = constant2_s;
 
 	/** function1 for filter (=) */
 	eqfunc1_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
@@ -398,6 +403,7 @@ build_pipeline_three(daos_pipeline_t *pipeline)
 	char			*pipe_cond_type, *pipe_aggr_type;
 	size_t			pipe_cond_type_s, pipe_aggr_type_s;
 	char			*constant, *akey1, *akey2;
+	size_t			constant_s, akey1_s, akey2_s;
 	daos_filter_t		*comp_eq, *aggr_sum;
 	int			rc;
 
@@ -405,10 +411,12 @@ build_pipeline_three(daos_pipeline_t *pipeline)
 	akey_ftype_s = strlen("DAOS_FILTER_AKEY");
 	akey_ftype   = (char *) malloc(akey_ftype_s);
 	strncpy(akey_ftype, "DAOS_FILTER_AKEY", akey_ftype_s);
-	akey1      = (char *) malloc(STRING_LEN);
-	akey2      = (char *) malloc(STRING_LEN);
-	strcpy(akey1, "Owner");
-	strcpy(akey2, "Age");
+	akey1_s    = strlen("Owner");
+	akey2_s    = strlen("Age");
+	akey1      = (char *) malloc(akey1_s);
+	akey2      = (char *) malloc(akey2_s);
+	strncpy(akey1, "Owner", akey1_s);
+	strncpy(akey2, "Age", akey2_s);
 
 	str_type_s  = strlen("DAOS_FILTER_TYPE_STRING");
 	str_type    = (char *) malloc(str_type_s);
@@ -420,9 +428,9 @@ build_pipeline_three(daos_pipeline_t *pipeline)
 	const_ftype_s = strlen("DAOS_FILTER_CONST");
 	const_ftype   = (char *) malloc(const_ftype_s);
 	strncpy(const_ftype, "DAOS_FILTER_CONST", const_ftype_s);
-	constant    = (char *) malloc(STRING_LEN);
-	bzero((void *) constant, STRING_LEN);
-	strcpy(constant, "Benny");
+	constant_s  = strlen("Benny");
+	constant    = (char *) malloc(constant_s);
+	strncpy(constant, "Benny", constant_s);
 
 	eqfunc_ftype_s = strlen("DAOS_FILTER_FUNC_EQ");
 	eqfunc_ftype   = (char *) malloc(eqfunc_ftype_s);
@@ -443,18 +451,18 @@ build_pipeline_three(daos_pipeline_t *pipeline)
 	d_iov_set(&akey1_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey1_ft->data_type, str_type, str_type_s);
 	akey1_ft->num_operands = 0;
-	d_iov_set(&(akey1_ft->akey), akey1, STRING_LEN);
+	d_iov_set(&(akey1_ft->akey), akey1, akey1_s);
 	akey1_ft->data_offset  = 0;
-	akey1_ft->data_len     = STRING_LEN;
+	akey1_ft->data_len     = STRING_MAX_LEN;
 
 	/** akey2 for filter */
 	akey2_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
 	d_iov_set(&akey2_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey2_ft->data_type, int_type, int_type_s);
 	akey2_ft->num_operands = 0;
-	d_iov_set(&(akey2_ft->akey), akey2, STRING_LEN);
+	d_iov_set(&(akey2_ft->akey), akey2, akey2_s);
 	akey2_ft->data_offset  = 0;
-	akey2_ft->data_len     = 4;
+	akey2_ft->data_len     = sizeof(int);
 
 	/** constant for filter */
 	const_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
@@ -463,9 +471,9 @@ build_pipeline_three(daos_pipeline_t *pipeline)
 	const_ft->num_operands    = 0;
 	const_ft->num_constants   = 1;
 	const_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
-	d_iov_set(const_ft->constant, constant, STRING_LEN);
+	d_iov_set(const_ft->constant, constant, constant_s);
 	const_ft->data_offset     = 0;
-	const_ft->data_len        = STRING_LEN;
+	const_ft->data_len        = constant_s;
 
 	/** function1 for filter (=) */
 	eqfunc_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
@@ -556,26 +564,26 @@ run_pipeline(daos_pipeline_t *pipeline)
 	kds		= malloc(sizeof(daos_key_desc_t)*nr_kds);
 	sgl_keys	= malloc(sizeof(d_sg_list_t)*nr_kds);
 	iovs_keys	= malloc(sizeof(d_iov_t)*nr_kds);
-	buf_keys	= malloc(nr_kds*STRING_LEN);
+	buf_keys	= malloc(nr_kds*STRING_MAX_LEN);
 	for (i = 0; i < nr_kds; i++) {
 		sgl_keys[i].sg_nr	= 1;
 		sgl_keys[i].sg_nr_out	= 0;
 		sgl_keys[i].sg_iovs	= &iovs_keys[i];
-		d_iov_set(&iovs_keys[i], &(buf_keys[i*STRING_LEN]), STRING_LEN);
-	}	
+		d_iov_set(&iovs_keys[i], &(buf_keys[i*STRING_MAX_LEN]), STRING_MAX_LEN);
+	}
 
 	/** sgl_recx: to store the retrieved data for the akeys of each dkey */
 	sgl_recx	= malloc(sizeof(d_sg_list_t)*nr_kds*nr_iods);
 	iovs_recx	= malloc(sizeof(d_iov_t)*nr_kds*nr_iods);
-	buf_recx	= malloc(nr_kds*nr_iods*STRING_LEN);
+	buf_recx	= malloc(nr_kds*nr_iods*STRING_MAX_LEN);
 	for (i = 0; i < nr_kds; i++) {
 		for (j = 0; j < nr_iods; j++) {
 			l = i*nr_iods+j;
 			sgl_recx[l].sg_nr	= 1;
 			sgl_recx[l].sg_nr_out	= 0;
 			sgl_recx[l].sg_iovs	= &iovs_recx[l];
-			d_iov_set(&iovs_recx[l], &(buf_recx[l*STRING_LEN]),
-							STRING_LEN);
+			d_iov_set(&iovs_recx[l], &(buf_recx[l*STRING_MAX_LEN]),
+							STRING_MAX_LEN);
 		}
 	}
 	sgl_aggr	= malloc(sizeof(d_sg_list_t)*nr_aggr);
@@ -604,23 +612,26 @@ run_pipeline(daos_pipeline_t *pipeline)
 		/** process nr_kds fetched records */
 		for (i = 0; i < nr_kds; i++) {
 			char *dkey = (char *) sgl_keys[i].sg_iovs->iov_buf;
-			printf("\tname(dkey)=%s%*c", dkey,
-					(int)(STRING_LEN-strlen(dkey)), ' ');
+			size_t dkey_s = sgl_keys[i].sg_iovs->iov_len;
+			printf("\tname(dkey)=%.*s%*c", (int) dkey_s, dkey,
+					(int)(STRING_MAX_LEN-dkey_s), ' ');
 			for (j = 0; j < nr_iods-1; j++) {
 				char *akey;
+				size_t akey_s;
 				l = i*nr_iods+j;
 				akey = (char *) sgl_recx[l].sg_iovs->iov_buf;
-				printf("%.*s(akey)=%s%*c",
-					 (int)    iods[j].iod_name.iov_buf_len,
+				akey_s = sgl_recx[l].sg_iovs->iov_len;
+				printf("%.*s(akey)=%.*s%*c",
+					 (int)    iods[j].iod_name.iov_len,
 					 (char *) iods[j].iod_name.iov_buf,
-					 akey,
-					 (int)(STRING_LEN-strlen(akey)), ' ');
+					 (int) akey_s, akey,
+					 (int)(STRING_MAX_LEN-akey_s), ' ');
 			}
 			int *akey;
 			l = i*nr_iods+(nr_iods-1);
 			akey = (int *) sgl_recx[l].sg_iovs->iov_buf;
 			printf("%.*s(akey)=%d\n",
-				 (int)    iods[nr_iods-1].iod_name.iov_buf_len,
+				 (int)    iods[nr_iods-1].iod_name.iov_len,
 				 (char *) iods[nr_iods-1].iod_name.iov_buf,
 				 *akey);
 		}
@@ -632,16 +643,16 @@ run_pipeline(daos_pipeline_t *pipeline)
 	}
 	printf("\n");
 
-	free(kds);
+	/*free(kds);
 	free(sgl_keys);
-	free(iovs_keys);
+	free(iovs_keys);  <<-- PETA
 	free(buf_keys);
-	free(sgl_recx);
+	free(sgl_recx);  <<-- PETA
 	free(iovs_recx);
 	free(buf_recx);
 	free(sgl_aggr);
 	free(iovs_aggr);
-	free(buf_aggr);
+	free(buf_aggr);*/
 }
 
 int
