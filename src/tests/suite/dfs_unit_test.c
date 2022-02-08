@@ -1242,6 +1242,17 @@ dfs_test_chown(void **state)
 	assert_int_equal(stbuf.st_uid, 0);
 	assert_int_equal(stbuf.st_gid, 0);
 
+	/** set uid to 3, gid to 4 - using dfs_osetattr */
+	stbuf.st_uid = 3;
+	stbuf.st_gid = 4;
+	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+
 	/** set uid to 1, gid to 2 */
 	rc = dfs_chown(dfs_mt, NULL, filename, 1, 2, 0);
 	assert_int_equal(rc, 0);

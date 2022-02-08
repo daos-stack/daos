@@ -4301,8 +4301,6 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	if (!exists)
 		D_GOTO(out, rc = ENOENT);
 
-	printf("CHMOD Entry %s val size = %zu\n", name, entry.value_len);
-	printf("CHMOD Entry val = %s\n", entry.value);
 	/** resolve symlink */
 	if (S_ISLNK(entry.mode)) {
 		D_ASSERT(entry.value);
@@ -4498,9 +4496,9 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	daos_key_t		dkey;
 	daos_handle_t		oh;
 	d_sg_list_t		sgl;
-	d_iov_t			sg_iovs[3];
+	d_iov_t			sg_iovs[5];
 	daos_iod_t		iod;
-	daos_recx_t		recx[3];
+	daos_recx_t		recx[5];
 	bool			set_size = false;
 	int			i = 0;
 	size_t			len;
@@ -4549,7 +4547,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	iod.iod_size	= 1;
 
 	if (flags & DFS_SET_ATTR_MODE) {
-		/** set akey as the mode attr name */
 		d_iov_set(&sg_iovs[i], &stbuf->st_mode, sizeof(mode_t));
 		recx[i].rx_idx = MODE_IDX;
 		recx[i].rx_nr = sizeof(mode_t);
@@ -4571,6 +4568,22 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_nr = sizeof(time_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_MTIME;
+		rstat.st_mtim = stbuf->st_mtim;
+	}
+	if (flags & DFS_SET_ATTR_UID) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_uid, sizeof(uid_t));
+		recx[i].rx_idx = UID_IDX;
+		recx[i].rx_nr = sizeof(uid_t);
+		i++;
+		flags &= ~DFS_SET_ATTR_UID;
+		rstat.st_mtim = stbuf->st_mtim;
+	}
+	if (flags & DFS_SET_ATTR_GID) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_gid, sizeof(gid_t));
+		recx[i].rx_idx = GID_IDX;
+		recx[i].rx_nr = sizeof(gid_t);
+		i++;
+		flags &= ~DFS_SET_ATTR_GID;
 		rstat.st_mtim = stbuf->st_mtim;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
@@ -4612,7 +4625,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 out_stat:
 	*stbuf = rstat;
-
 out_obj:
 	daos_obj_close(oh, NULL);
 	return rc;

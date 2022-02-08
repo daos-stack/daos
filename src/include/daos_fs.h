@@ -850,8 +850,12 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 #define DFS_SET_ATTR_ATIME	(1 << 1)
 /** Option to set the modify time on an entry */
 #define DFS_SET_ATTR_MTIME	(1 << 2)
+/** Option to set uid of object */
+#define DFS_SET_ATTR_UID	(1 << 3)
+/** Option to set gid of object */
+#define DFS_SET_ATTR_GID	(1 << 4)
 /** Option to set size of a file */
-#define DFS_SET_ATTR_SIZE	(1 << 3)
+#define DFS_SET_ATTR_SIZE	(1 << 5)
 
 /**
  * set stat attributes for a file and fetch new values.  If the object is a
