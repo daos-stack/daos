@@ -29,6 +29,12 @@ var update = flag.Bool("update", false, "update .golden files")
 
 var defConfigCmpOpts = []cmp.Option{
 	cmpopts.SortSlices(func(a, b string) bool { return a < b }),
+	cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+		if x == nil && y == nil {
+			return true
+		}
+		return x.Equals(y)
+	}),
 }
 
 func TestConfig_MergeEnvVars(t *testing.T) {
@@ -325,13 +331,12 @@ func TestConfig_BdevValidation(t *testing.T) {
 			expErr: errors.New("no storage class"),
 		},
 		"nvme class; no devices": {
-			// output config path should be empty and the empty tier removed
 			cfg: baseValidConfig().
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme"),
 				),
-			expEmptyCfgPath: true,
+			expErr: errors.New("valid PCI addresses"),
 		},
 		"nvme class; good pci addresses": {
 			cfg: baseValidConfig().
@@ -357,7 +362,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 						WithStorageClass("nvme").
 						WithBdevDeviceList(common.MockPCIAddr(1), "0000:00:00"),
 				),
-			expErr: errors.New("unexpected pci address"),
+			expErr: errors.New("valid PCI addresses"),
 		},
 		"kdev class; no devices": {
 			cfg: baseValidConfig().

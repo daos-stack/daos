@@ -220,11 +220,11 @@ oid_allocator_mult_hdls(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	while (i < NUM_OIDS) {
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW,
 				       &poh1, NULL, NULL);
 		assert_rc_equal(rc, 0);
 
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW,
 				       &poh2, NULL, NULL);
 		assert_rc_equal(rc, 0);
 
