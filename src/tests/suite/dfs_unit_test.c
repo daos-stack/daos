@@ -77,7 +77,6 @@ dfs_test_mount(void **state)
 	/** create a DFS container with a valid label and set uuid */
 	rc = dfs_cont_create_with_label(arg->pool.poh, "cont1", NULL, &cuuid, NULL, NULL);
 	assert_int_equal(rc, 0);
-	uuid_unparse(cuuid, str);
 	/** open with label */
 	rc = daos_cont_open(arg->pool.poh, "cont1", DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
@@ -105,7 +104,7 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 
 	/** destroy the containers */
-	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, "cont1", 0, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
 	assert_rc_equal(rc, 0);

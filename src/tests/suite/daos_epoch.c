@@ -351,7 +351,6 @@ test_snapshots(void **argp)
 	/* Reopen container, verify number of snapshots */
 	print_message("Container (re)open nsnapshots=%d lsnapshot="DF_X64"\n", (snap_count-1),
 		      snaps[snap_count-1]);
-	uuid_unparse(co_uuid, uuid_str);
 	MUST(cont_open(arg, uuid_str, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
 	assert_int_equal(arg->co_info.ci_nsnapshots, (snap_count-1));
 	assert_int_equal(cinfo.ci_lsnapshot, snaps[snap_count-1]);
