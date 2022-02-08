@@ -147,13 +147,13 @@ class DestroyTests(TestWithServers):
         if exception_detected:
             self.log.info("Check pool data still exists after a failed pool destroy")
             self.assertTrue(
-                check_pool_files(hosts=hosts, uuid=valid_uuid),
+                check_pool_files(log=self.log, hosts=hosts, uuid=valid_uuid),
                 "Pool data was not detected on servers after "
                 "failing to destroy a pool {}".format(case))
         else:
             self.log.info("Check pool data does not exist after the pool destroy")
             self.assertFalse(
-                check_pool_files(hosts=hosts, uuid=valid_uuid),
+                check_pool_files(log=self.log, hosts=hosts, uuid=valid_uuid),
                 "Pool data was detected on servers after destroying a pool {}".format(
                     case))
 
