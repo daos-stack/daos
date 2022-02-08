@@ -1,10 +1,9 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import distro
 from avocado.core.exceptions import TestFail
 from dfuse_test_base import DfuseTestBase
 from env_modules import load_mpi
