@@ -714,7 +714,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	if (crt_is_service() || !crt_na_type_is_ucx(provider)) {
+	if (crt_is_service()) {
 		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
 		if (rc != 0) {
 			D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);

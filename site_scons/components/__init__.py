@@ -174,16 +174,16 @@ def define_mercury(reqs):
         GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
 	True)
 
-    reqs.define("UCX", libs=['ucp'])
+    reqs.define("ucx", libs=['ucp'])
 
-    if reqs.check_component('UCX'):
-        UCX = '-DNA_USE_UCX=ON ' \
+    if reqs.check_component('ucx'):
+        ucx = '-DNA_USE_UCX=ON ' \
         '-DUCX_INCLUDE_DIR=/usr/include '\
         '-DUCP_LIBRARY=/usr/lib64/libucp.so '\
         '-DUCS_LIBRARY=/usr/lib64/libucs.so '\
         '-DUCT_LIBRARY=/usr/lib64/libuct.so '
     else:
-        UCX = ""
+        ucx = ""
 
     reqs.define('mercury',
                 retriever=retriever,
@@ -198,7 +198,7 @@ def define_mercury(reqs):
                           + MERCURY_DEBUG +
                           '-DBUILD_TESTING=OFF '
                           '-DNA_USE_OFI=ON '
-			  + UCX +
+			  + ucx +
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON ../mercury ' +
                           check(reqs, 'ofi',
@@ -207,7 +207,7 @@ def define_mercury(reqs):
                           'make $JOBS_OPT', 'make install'],
                 libs=['mercury', 'na', 'mercury_util'],
                 pkgconfig='mercury',
-                requires=[atomic, 'boost', 'ofi'] + libs,
+                requires=['ucx', atomic, 'boost', 'ofi'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 patch_rpath=['lib'])

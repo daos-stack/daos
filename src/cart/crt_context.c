@@ -221,7 +221,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
-	if (crt_is_service() || !crt_na_type_is_ucx(provider)) {
+	if (crt_is_service()) {
 		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
 				     ctx->cc_self_uri, &uri_len);
 		if (rc != 0) {
