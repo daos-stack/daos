@@ -488,7 +488,7 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 		Properties: storage.BdevTierProperties{
 			Class:      storage.ClassNvme,
-			DeviceList: []string{"foo"},
+			DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 		},
 	})
 	if err != nil {
