@@ -265,7 +265,7 @@ class DestroyTests(TestWithServers):
             hosts=hostlist_servers,
             case="with an invalid UUID {}".format(
                 self.pool.pool.get_uuid_str()),
-            exception_expected=True)
+            exception_expected=True, valid_uuid=valid_uuid)
 
         # Restore the valid uuid to allow tearDown() to pass
         self.log.info("Restoring the pool's valid uuid: %s", valid_uuid)
