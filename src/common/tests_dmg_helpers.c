@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -689,7 +689,12 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			D_ERROR("unable to extract tgtids from JSON\n");
 			return -DER_INVAL;
 		}
-		tgts_len = json_object_array_length(targets);
+
+		if (targets != NULL)
+			tgts_len = json_object_array_length(targets);
+		else
+			tgts_len = 0;
+
 		for (j = 0; j < tgts_len; j++) {
 			target = json_object_array_get_idx(targets, j);
 			devices[*disks].tgtidx[j] = atoi(

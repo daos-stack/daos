@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -262,8 +262,6 @@ func TestStartOptions(t *testing.T) {
 					security.CertificateConfig{},
 				),
 				cmpopts.SortSlices(func(a, b string) bool { return a < b }),
-				cmpopts.IgnoreFields(engine.Config{}, "GetNetDevCls", "ValidateProvider",
-					"GetIfaceNumaNode"),
 			}
 			if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts...); diff != "" {
 				t.Fatalf("(-want +got):\n%s", diff)

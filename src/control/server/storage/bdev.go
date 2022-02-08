@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -363,7 +363,7 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList  []string
+		DeviceList  *BdevDeviceList
 		VMDEnabled  bool
 		BypassCache bool
 	}
@@ -377,7 +377,7 @@ type (
 	// BdevTierProperties contains basic configuration properties of a bdev tier.
 	BdevTierProperties struct {
 		Class          Class
-		DeviceList     []string
+		DeviceList     *BdevDeviceList
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		Tier           int
 	}

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,7 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -112,7 +111,7 @@ func (cfg *Server) WithModules(mList string) *Server {
 func (cfg *Server) WithFabricProvider(provider string) *Server {
 	cfg.Fabric.Provider = provider
 	for _, engine := range cfg.Engines {
-		engine.Fabric.Update(cfg.Fabric)
+		engine.Fabric.Provider = cfg.Fabric.Provider
 	}
 	return cfg
 }
@@ -314,10 +313,6 @@ func (cfg *Server) Load() error {
 	// propagate top-level settings to server configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
-		cfg.Engines[i].
-			WithValidateProvider(netdetect.ValidateProviderConfig).
-			WithGetIfaceNumaNode(netdetect.GetIfaceNumaNode).
-			WithGetNetDevCls(netdetect.GetDeviceClass)
 	}
 
 	return nil
@@ -434,7 +429,7 @@ func (cfg *Server) Validate(ctx context.Context, log logging.Logger) (err error)
 			// devices to maintain backward compatible behavior.
 			bc := ec.LegacyStorage.BdevClass
 			switch {
-			case bc == storage.ClassNvme && len(ec.LegacyStorage.BdevConfig.DeviceList) == 0:
+			case bc == storage.ClassNvme && ec.LegacyStorage.BdevConfig.DeviceList.Len() == 0:
 				log.Debugf("legacy storage config conversion skipped for class %s with empty bdev_list",
 					storage.ClassNvme)
 			case bc == storage.ClassNone:
@@ -445,7 +440,7 @@ func (cfg *Server) Validate(ctx context.Context, log logging.Logger) (err error)
 					storage.NewTierConfig().
 						WithStorageClass(ec.LegacyStorage.BdevClass.String()).
 						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
-						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
+						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList.Devices()...).
 						WithBdevFileSize(ec.LegacyStorage.FileSize).
 						WithBdevBusidRange(ec.LegacyStorage.BdevConfig.BusidRange.String()),
 				)
@@ -578,14 +573,14 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 
 		var bdevCount int
 		for _, bdevConf := range engine.Storage.Tiers.BdevConfigs() {
-			for _, dev := range bdevConf.Bdev.DeviceList {
+			for _, dev := range bdevConf.Bdev.DeviceList.Devices() {
 				if seenIn, exists := seenBdevSet[dev]; exists {
 					log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
 					return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
 				}
 				seenBdevSet[dev] = idx
 			}
-			bdevCount += len(bdevConf.Bdev.DeviceList)
+			bdevCount += bdevConf.Bdev.DeviceList.Len()
 		}
 		if seenBdevCount != -1 && bdevCount != seenBdevCount {
 			return FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
@@ -605,27 +600,4 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	}
 
 	return nil
-}
-
-// CheckFabric ensures engines in configuration have compatible network device class and returns
-// fabric network device class for the configuration.
-func (cfg *Server) CheckFabric(ctx context.Context, log logging.Logger) (uint32, error) {
-	var netDevClass uint32
-	for index, engine := range cfg.Engines {
-		ndc, err := engine.GetNetDevCls(engine.Fabric.Interface)
-		if err != nil {
-			return 0, errors.Wrapf(err, "unable to detect device class for %q",
-				engine.Fabric.Interface)
-		}
-		if index == 0 {
-			netDevClass = ndc
-			continue
-		}
-		if ndc != netDevClass {
-			return 0, FaultConfigInvalidNetDevClass(index, netDevClass,
-				ndc, engine.Fabric.Interface)
-		}
-	}
-
-	return netDevClass, nil
 }
