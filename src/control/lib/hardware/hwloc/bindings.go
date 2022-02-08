@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,30 @@ package hwloc
 /*
 #cgo LDFLAGS: -lhwloc
 #include <hwloc.h>
+
+struct bridge_downstream {
+	unsigned short domain;
+	unsigned char secondary_bus;
+	unsigned char subordinate_bus;
+};
+
+struct bridge_downstream node_get_bridge_downstream(hwloc_obj_t node)
+{
+	struct bridge_downstream result;
+	result.domain = node->attr->bridge.downstream.pci.domain;
+	result.secondary_bus = node->attr->bridge.downstream.pci.secondary_bus;
+	result.subordinate_bus = node->attr->bridge.downstream.pci.subordinate_bus;
+	return result;
+}
+
+int node_get_bridge_type(hwloc_obj_t node)
+{
+	if (node->attr == NULL) {
+		return -1;
+	}
+
+	return node->attr->bridge.upstream_type;
+}
 
 int node_get_osdev_type(hwloc_obj_t node)
 {
@@ -70,7 +94,7 @@ hwloc_obj_t node_get_child(hwloc_obj_t node, int idx)
 #else
 int topo_setFlags(hwloc_topology_t topology)
 {
-	return hwloc_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
+	return hwloc_topology_set_flags(topology, HWLOC_TOPOLOGY_FLAG_WHOLE_IO);
 }
 
 int node_get_arity(hwloc_obj_t node)
@@ -102,6 +126,8 @@ import (
 	"unsafe"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 type api struct {
@@ -193,12 +219,16 @@ func (t *topology) getNumObjByType(objType int) uint {
 
 const (
 	objTypeOSDevice  = C.HWLOC_OBJ_OS_DEVICE
+	objTypeBridge    = C.HWLOC_OBJ_BRIDGE
 	objTypePCIDevice = C.HWLOC_OBJ_PCI_DEVICE
 	objTypeNUMANode  = C.HWLOC_OBJ_NUMANODE
 	objTypeCore      = C.HWLOC_OBJ_CORE
 
 	osDevTypeNetwork     = C.HWLOC_OBJ_OSDEV_NETWORK
 	osDevTypeOpenFabrics = C.HWLOC_OBJ_OSDEV_OPENFABRICS
+
+	bridgeTypeHost = C.HWLOC_OBJ_BRIDGE_HOST
+	bridgeTypePCI  = C.HWLOC_OBJ_BRIDGE_PCI
 )
 
 type rawTopology interface {
@@ -214,7 +244,19 @@ type object struct {
 func (o *object) name() string {
 	objName := C.GoString(o.cObj.name)
 	if objName == "" {
-		objName = fmt.Sprintf("%s %d", o.objTypeString(), o.osIndex())
+		var id string
+		switch o.objType() {
+		case objTypeBridge:
+			lo, hi, err := o.busRange()
+			if err != nil {
+				id = "(unknown range)"
+				break
+			}
+			id = fmt.Sprintf("%04x:[%02x-%02x]", lo.Domain, lo.Bus, hi.Bus)
+		default:
+			id = fmt.Sprintf("%d", o.osIndex())
+		}
+		objName = fmt.Sprintf("%s %s", o.objTypeString(), id)
 	}
 	return objName
 }
@@ -295,10 +337,41 @@ func (o *object) objTypeString() string {
 		return "core"
 	case objTypePCIDevice:
 		return "PCI device"
+	case objTypeBridge:
+		return "bridge"
 	case objTypeOSDevice:
 		return "OS device"
 	}
-	return "unknown object type"
+	return fmt.Sprintf("unknown object type %d (0x%x)", o.objType(), o.objType())
+}
+
+func (o *object) busRange() (*hardware.PCIAddress, *hardware.PCIAddress, error) {
+	if o.objType() != objTypeBridge {
+		return nil, nil, errors.Errorf("device %q is not a Bridge", o.name())
+	}
+	downstream := C.node_get_bridge_downstream(o.cObj)
+
+	lo, err := hardware.NewPCIAddress(fmt.Sprintf("%04x:%02x:0.0", downstream.domain, downstream.secondary_bus))
+	if err != nil {
+		return nil, nil, err
+	}
+	hi, err := hardware.NewPCIAddress(fmt.Sprintf("%04x:%02x:0.0", downstream.domain, downstream.subordinate_bus))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return lo, hi, nil
+}
+
+func (o *object) bridgeType() (int, error) {
+	if o.objType() != objTypeBridge {
+		return 0, errors.Errorf("device %q is not a Bridge", o.name())
+	}
+	bridgeType := C.node_get_bridge_type(o.cObj)
+	if bridgeType < 0 {
+		return 0, errors.Errorf("device %q attrs are nil", o.name())
+	}
+	return int(bridgeType), nil
 }
 
 func (o *object) osDevType() (int, error) {
@@ -312,16 +385,29 @@ func (o *object) osDevType() (int, error) {
 	return int(devType), nil
 }
 
-func (o *object) pciAddr() (string, error) {
-	if o.objType() != objTypePCIDevice {
-		return "", errors.Errorf("device %q is not a PCI Device", o.name())
+func (o *object) pciAddr() (*hardware.PCIAddress, error) {
+	switch o.objType() {
+	case objTypePCIDevice, objTypeBridge:
+	default:
+		return nil, errors.Errorf("device %q is not a PCI Device", o.name())
 	}
 	pciDevAttr := C.node_get_pcidev_attr(o.cObj)
 	if pciDevAttr == nil {
-		return "", errors.Errorf("device %q attrs are nil", o.name())
+		return nil, errors.Errorf("device %q attrs are nil", o.name())
 	}
-	return fmt.Sprintf("%04x:%02x:%02x.%01x", pciDevAttr.domain, pciDevAttr.bus,
-		pciDevAttr.dev, pciDevAttr._func), nil
+	return hardware.NewPCIAddress(fmt.Sprintf("%04x:%02x:%02x.%01x", pciDevAttr.domain, pciDevAttr.bus,
+		pciDevAttr.dev, pciDevAttr._func))
+}
+
+func (o *object) linkSpeed() (float64, error) {
+	if o.objType() != objTypePCIDevice {
+		return 0, errors.Errorf("device %q is not a PCI Device", o.name())
+	}
+	pciDevAttr := C.node_get_pcidev_attr(o.cObj)
+	if pciDevAttr == nil {
+		return 0, errors.Errorf("device %q attrs are nil", o.name())
+	}
+	return float64(pciDevAttr.linkspeed), nil
 }
 
 func newObject(topo rawTopology, cObj C.hwloc_obj_t) *object {

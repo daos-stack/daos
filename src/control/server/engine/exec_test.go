@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -96,7 +96,7 @@ func TestRunnerContextExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
+	cfg := MockConfig().
 		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
 	cfg.Index = 9
 
@@ -116,7 +116,6 @@ func TestRunnerContextExit(t *testing.T) {
 }
 
 func TestRunnerNormalExit(t *testing.T) {
-	var numaNode uint = 1
 	var bypass bool = false
 	createFakeBinary(t)
 
@@ -134,20 +133,20 @@ func TestRunnerNormalExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
+	cfg := MockConfig().
 		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",
 			"OFI_INTERFACE", allowedUserEnv).
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
-		WithPinnedNumaNode(&numaNode).
+		WithPinnedNumaNode(1).
 		WithBypassHealthChk(&bypass).
 		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30).
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmMountPoint("/foo/bar"),
 		)
 	runner := NewRunner(log, cfg)

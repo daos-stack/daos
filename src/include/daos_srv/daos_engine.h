@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,10 +43,10 @@ extern const char	*dss_socket_dir;
 extern int		 dss_nvme_shm_id;
 
 /** NVMe mem_size for SPDK memory allocation when using primary mode (in MB) */
-extern int		 dss_nvme_mem_size;
+extern unsigned int	dss_nvme_mem_size;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation (in MB) */
-extern int		 dss_nvme_hugepage_size;
+extern unsigned int	 dss_nvme_hugepage_size;
 
 /** I/O Engine instance index */
 extern unsigned int	 dss_instance_idx;
@@ -137,6 +137,7 @@ void dss_unregister_key(struct dss_module_key *key);
 /* Opaque xstream configuration data */
 struct dss_xstream;
 
+int  dss_xstream_set_affinity(struct dss_xstream *dxs);
 bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
 daos_epoch_t dss_get_start_epoch(void);
@@ -153,7 +154,8 @@ struct dss_module_info {
 	/* the cart context id */
 	int			dmi_ctx_id;
 	uint32_t		dmi_dtx_batched_started:1;
-	d_list_t		dmi_dtx_batched_cont_list;
+	d_list_t		dmi_dtx_batched_cont_open_list;
+	d_list_t		dmi_dtx_batched_cont_close_list;
 	d_list_t		dmi_dtx_batched_pool_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
@@ -498,6 +500,7 @@ int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
 int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
+int __attribute__((weak)) dss_offload_exec(int (*func)(void *), void *arg);
 
 /*
  * If server wants to create ULTs periodically, it should call this special
@@ -735,6 +738,7 @@ struct dss_enum_arg {
 			int			kds_len;
 			d_sg_list_t	       *sgl;
 			d_iov_t			csum_iov;
+			uint32_t		ec_cell_sz;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */

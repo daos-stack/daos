@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,6 +97,9 @@ smd_db_unlock(void)
 void
 smd_fini(void)
 {
+	if (!smd_db_ready())
+		return;
+
 	smd_db = NULL;
 }
 

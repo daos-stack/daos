@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -357,6 +357,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
+	pool->sp_policy_desc.policy =
+			DAOS_MEDIA_POLICY_IO_SIZE; /* default tiering policy */
 
 	/** set up ds_pool metrics */
 	rc = ds_pool_metrics_start(pool);
@@ -1362,19 +1364,50 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+static int
+update_vos_prop_on_targets(void *in)
+{
+	struct ds_pool			*pool = (struct ds_pool *)in;
+	struct ds_pool_child		*child = NULL;
+	struct policy_desc_t		policy_desc = {0};
+	int				ret = 0;
+
+	child = ds_pool_child_lookup(pool->sp_uuid);
+	if (child == NULL)
+		return -DER_NONEXIST;	/* no child created yet? */
+
+	policy_desc = pool->sp_policy_desc;
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
+	ds_pool_child_put(child);
+
+	return ret;
+}
+
 int
 ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 {
+	int ret;
+
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
+
+	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
+				   &pool->sp_policy_desc)) {
+		D_ERROR("Failed to parse policy string: %s\n",
+			iv_prop->pip_policy_str);
+		return -DER_MISMATCH;
+	}
+	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+
 	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
 		iv_prop->pip_scrub_sched);
 	pool->sp_scrub_sched = iv_prop->pip_scrub_sched;
 	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
 	pool->sp_scrub_cred = iv_prop->pip_scrub_cred;
 	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
-	return 0;
+
+	return ret;
 }
 
 /**

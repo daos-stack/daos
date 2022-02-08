@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,13 +81,21 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before current commit.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
-				   NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid, NULL, NULL, NULL, NULL);
 
 		/* Skip this DTX since it has been committed or aggregated. */
-		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
-		    rc == -DER_NONEXIST)
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
 			goto next;
+
+		/* Remote ones are all ready, but local is not, then abort such DTX.
+		 * If related RPC sponsor is still alive, related RPC will be resent.
+		 */
+		if (unlikely(rc == DTX_ST_INITED)) {
+			rc = dtx_abort(cont, &dre->dre_dte, dre->dre_epoch);
+			D_DEBUG(DB_TRACE, "As new leader for DTX "DF_DTI", abort it (1): "DF_RC"\n",
+				DP_DTI(&dre->dre_dte.dte_xid), DP_RC(rc));
+			goto next;
+		}
 
 		/* If we failed to check the status, then assume that it is
 		 * not committed, then commit it (again), that is harmless.
@@ -103,7 +111,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j, true);
+		rc = dtx_commit(cont, dtes, dcks, j);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -307,16 +315,14 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 * committed or aborted the DTX during we handling other
 		 * DTXs. So double check the status before next action.
 		 */
-		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid,
-				   NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid, NULL, NULL, NULL, NULL);
 
-		/* Skip this DTX that it may has been committed or aborted. */
-		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
-		    rc == -DER_NONEXIST)
-			D_GOTO(out, rc = DSHR_COMMITTED);
+		/* Skip the DTX that may has been committed or aborted. */
+		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE || rc == -DER_NONEXIST)
+			D_GOTO(out, rc = DSHR_IGNORE);
 
 		/* Skip this DTX if failed to get the status. */
-		if (rc != DTX_ST_PREPARED) {
+		if (rc != DTX_ST_PREPARED && rc != DTX_ST_INITED) {
 			D_WARN("Not sure about whether the DTX "DF_DTI
 			       " can be abort or not: %d, skip it.\n",
 			       DP_DTI(&dte->dte_xid), rc);
@@ -338,9 +344,8 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 */
 		rc = dtx_abort(cont, dte, epoch);
 
-		D_DEBUG(DB_TRACE,
-			"As the new leader for TX "DF_DTI", abort it: "
-			DF_RC"\n", DP_DTI(&dte->dte_xid), DP_RC(rc));
+		D_DEBUG(DB_TRACE, "As new leader for DTX "DF_DTI", abort it (2): "DF_RC"\n",
+			DP_DTI(&dte->dte_xid), DP_RC(rc));
 
 		if (rc < 0) {
 			if (err != NULL)
@@ -349,7 +354,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 			return DSHR_ABORT_FAILED;
 		}
 
-		return DSHR_ABORTED;
+		return DSHR_IGNORE;
 	default:
 		D_WARN("Not sure about whether the DTX "DF_DTI
 		       " can be committed or not: %d, skip it.\n",
@@ -390,7 +395,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		D_GOTO(out, err = -DER_NOMEM);
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
-		if (cont->sc_closing)
+		if (!dtx_cont_opened(cont))
 			goto out;
 
 		if (dre->dre_dte.dte_mbs->dm_dte_flags & DTE_LEADER)
@@ -419,8 +424,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			d_list_del(&dre->dre_link);
 			d_list_add_tail(&dre->dre_link, &drh->drh_list);
 			continue;
-		case DSHR_COMMITTED:
-		case DSHR_ABORTED:
+		case DSHR_IGNORE:
 		case DSHR_ABORT_FAILED:
 		case DSHR_CORRUPT:
 		default:
@@ -453,7 +457,7 @@ out:
 				       dre_link)) != NULL)
 		dtx_dre_release(drh, dre);
 
-	if (err >= 0 && !cont->sc_closing)
+	if (err >= 0 && dtx_cont_opened(cont))
 		/* Drain old committable DTX to help subsequent rebuild. */
 		err = dtx_obj_sync(cont, NULL, dra->epoch);
 
@@ -577,17 +581,28 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		resynced = true;
 	}
-	if (resynced || /* Someone just did the DTX resync*/
-	    cont->sc_closing) {
+	if (resynced /* Someone just did the DTX resync*/ || !dtx_cont_opened(cont)) {
 		ABT_mutex_unlock(cont->sc_mutex);
 		goto out;
 	}
 
 	crt_group_rank(NULL, &myrank);
-	if (myrank == daos_fail_value_get() &&
-	    DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
+	if (myrank == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
+		uint64_t	hint = 0;
+
 		dss_set_start_epoch();
 		vos_dtx_cache_reset(cont->sc_hdl);
+
+		while (1) {
+			rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
+			if (rc > 0)
+				break;
+
+			/* Simplify failure handling just for test. */
+			D_ASSERT(rc == 0);
+
+			ABT_thread_yield();
+		}
 	}
 
 	cont->sc_dtx_resyncing = 1;

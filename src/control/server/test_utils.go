@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -159,11 +159,11 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 // newTestEngine returns an EngineInstance configured for testing.
 func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, engineCfg ...*engine.Config) *EngineInstance {
 	if len(engineCfg) == 0 {
-		engineCfg = append(engineCfg, engine.NewConfig().
+		engineCfg = append(engineCfg, engine.MockConfig().
 			WithTargetCount(1).
 			WithStorage(
 				storage.NewTierConfig().
-					WithBdevClass("nvme").
+					WithStorageClass("nvme").
 					WithBdevDeviceList("foo", "bar"),
 			),
 		)

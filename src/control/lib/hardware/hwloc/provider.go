@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -116,11 +116,8 @@ func checkVersion(api *api) error {
 	return nil
 }
 
-func (p *Provider) getNUMANodes(topo *topology) (map[uint]*hardware.NUMANode, error) {
-	coresByNode := p.getCoreCountsPerNodeSet(topo)
-	pciDevsByNode := p.getPCIDevsPerNUMANode(topo)
-
-	nodes := make(map[uint]*hardware.NUMANode)
+func (p *Provider) getNUMANodes(topo *topology) (hardware.NodeMap, error) {
+	nodes := make(hardware.NodeMap)
 
 	prevNode := (*object)(nil)
 	for {
@@ -130,18 +127,9 @@ func (p *Provider) getNUMANodes(topo *topology) (map[uint]*hardware.NUMANode, er
 		}
 		prevNode = numaObj
 
-		nodeStr := numaObj.nodeSet().String()
-
 		id := numaObj.osIndex()
 		newNode := &hardware.NUMANode{
-			ID:       id,
-			NumCores: coresByNode[nodeStr],
-		}
-
-		if devs, exists := pciDevsByNode[id]; exists {
-			newNode.Devices = devs
-		} else {
-			newNode.Devices = make(hardware.PCIDevices)
+			ID: id,
 		}
 
 		nodes[id] = newNode
@@ -149,39 +137,108 @@ func (p *Provider) getNUMANodes(topo *topology) (map[uint]*hardware.NUMANode, er
 
 	if len(nodes) == 0 {
 		// If hwloc didn't detect any NUMA nodes, create a virtual NUMA node 0
-		totalCores := uint(0)
-		for _, numCores := range coresByNode {
-			totalCores += numCores
-		}
 		nodes[0] = &hardware.NUMANode{
-			ID:       0,
-			NumCores: totalCores,
-			Devices:  pciDevsByNode[0],
+			ID: 0,
 		}
+	}
+
+	if err := p.getCoresPerNodeSet(topo, nodes); err != nil {
+		return nil, err
+	}
+	if err := p.getPCIBridgesPerNUMANode(topo, nodes); err != nil {
+		return nil, err
+	}
+	if err := p.getPCIDevsPerNUMANode(topo, nodes); err != nil {
+		return nil, err
 	}
 
 	return nodes, nil
 }
 
-func (p *Provider) getCoreCountsPerNodeSet(topo *topology) map[string]uint {
+func (p *Provider) getCoresPerNodeSet(topo *topology, nodes hardware.NodeMap) error {
+	if topo == nil || nodes == nil {
+		return errors.New("nil topology or nodes")
+	}
+
 	prevCore := (*object)(nil)
-	coresPerNode := make(map[string]uint)
 	for {
 		coreObj, err := topo.getNextObjByType(objTypeCore, prevCore)
 		if err != nil {
 			break
 		}
 
-		coresPerNode[coreObj.nodeSet().String()]++
+		numaID := p.getDeviceNUMANodeID(coreObj, topo)
+		for _, node := range nodes {
+			if numaID != node.ID {
+				continue
+			}
+			node.AddCore(hardware.CPUCore{
+				ID: coreObj.logicalIndex(),
+			})
+		}
 
 		prevCore = coreObj
 	}
 
-	return coresPerNode
+	return nil
 }
 
-func (p *Provider) getPCIDevsPerNUMANode(topo *topology) map[uint]hardware.PCIDevices {
-	pciPerNUMA := make(map[uint]hardware.PCIDevices)
+func (p *Provider) getPCIBridgesPerNUMANode(topo *topology, nodes hardware.NodeMap) error {
+	if topo == nil || nodes == nil {
+		return errors.New("nil topology or nodes")
+	}
+
+	var bus *hardware.PCIBus
+	prev := (*object)(nil)
+	for {
+		bridge, err := topo.getNextObjByType(objTypeBridge, prev)
+		if err != nil {
+			// end of the list
+			break
+		}
+		prev = bridge
+
+		bridgeType, err := bridge.bridgeType()
+		if err != nil {
+			return err
+		}
+
+		lo, hi, err := bridge.busRange()
+		if err != nil {
+			return err
+		}
+
+		bus = &hardware.PCIBus{
+			LowAddress:  *lo,
+			HighAddress: *hi,
+		}
+
+		numaID := p.getDeviceNUMANodeID(bridge, topo)
+		switch bridgeType {
+		case bridgeTypeHost:
+			for _, node := range nodes {
+				if node.ID != numaID {
+					continue
+				}
+				node.AddPCIBus(bus)
+			}
+		case bridgeTypePCI:
+			if bus == nil {
+				return errors.New("unexpected PCI bridge before host bridge")
+			}
+			// TODO: Add secondary buses, if relevant.
+		default:
+			return errors.Errorf("unexpected bridge type %d", bridgeType)
+		}
+	}
+
+	return nil
+}
+
+func (p *Provider) getPCIDevsPerNUMANode(topo *topology, nodes hardware.NodeMap) error {
+	if topo == nil || nodes == nil {
+		return errors.New("nil topology or nodes")
+	}
 
 	prev := (*object)(nil)
 	for {
@@ -194,42 +251,45 @@ func (p *Provider) getPCIDevsPerNUMANode(topo *topology) map[uint]hardware.PCIDe
 
 		osDevType, err := osDev.osDevType()
 		if err != nil {
-			// shouldn't be possible
-			p.log.Error(err.Error())
-			continue
+			return err
 		}
 
+		var addr *hardware.PCIAddress
+		var linkSpeed float64
 		switch osDevType {
 		case osDevTypeNetwork, osDevTypeOpenFabrics:
-			addr := "none"
 			if pciDev, err := osDev.getAncestorByType(objTypePCIDevice); err == nil {
 				addr, err = pciDev.pciAddr()
 				if err != nil {
-					// shouldn't be possible
-					p.log.Error(err.Error())
+					return err
+				}
+				linkSpeed, err = pciDev.linkSpeed()
+				if err != nil {
+					return err
 				}
 			} else {
 				// unexpected - network devices should be on the PCI bus
 				p.log.Error(err.Error())
-
 			}
+		default:
+			continue
+		}
 
-			numaID := p.getDeviceNUMANodeID(osDev, topo)
-
-			if _, exists := pciPerNUMA[numaID]; !exists {
-				pciPerNUMA[numaID] = make(hardware.PCIDevices)
+		numaID := p.getDeviceNUMANodeID(osDev, topo)
+		for _, node := range nodes {
+			if node.ID != numaID {
+				continue
 			}
-
-			pciPerNUMA[numaID].Add(&hardware.Device{
-				Name:         osDev.name(),
-				Type:         osDevTypeToHardwareDevType(osDevType),
-				PCIAddr:      addr,
-				NUMAAffinity: numaID,
+			node.AddDevice(&hardware.PCIDevice{
+				Name:      osDev.name(),
+				Type:      osDevTypeToHardwareDevType(osDevType),
+				PCIAddr:   *addr,
+				LinkSpeed: linkSpeed,
 			})
 		}
 	}
 
-	return pciPerNUMA
+	return nil
 }
 
 func (p *Provider) getDeviceNUMANodeID(dev *object, topo *topology) uint {
@@ -261,7 +321,7 @@ func (p *Provider) getDeviceNUMANodeID(dev *object, topo *topology) uint {
 		}
 	}
 
-	p.log.Debugf("Unable to determine NUMA socket ID. Using NUMA 0")
+	p.log.Debugf("Unable to determine NUMA socket ID for device %q, using NUMA 0", dev.name())
 	return 0
 
 }

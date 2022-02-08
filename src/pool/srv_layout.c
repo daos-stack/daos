@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +26,9 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
+RDB_STRING_KEY(ds_pool_prop_, policy);
+
+/** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
 RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
 RDB_STRING_KEY(ds_pool_attr_, user);
@@ -38,7 +41,7 @@ RDB_STRING_KEY(ds_pool_prop_, scrub_thresh);
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_PO_LABEL,
-		.dpe_str	= "pool_label_not_set",
+		.dpe_str	= DAOS_PROP_PO_LABEL_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SPACE_RB,
 		.dpe_val	= 0,
@@ -63,8 +66,10 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val_ptr	= NULL,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_EC_CELL_SZ,
-		/* TODO: change it to DAOS_EC_CELL_DEF in a separate patch */
-		.dpe_val	= DAOS_EC_CELL_MAX,
+		.dpe_val	= DAOS_EC_CELL_DEF,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_POLICY,
+		.dpe_str	= "type=io_size",
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_SCHED,
 		.dpe_val	= DAOS_SCRUB_SCHED_OFF,
@@ -98,7 +103,6 @@ ds_pool_prop_default_init(void)
 		if (entry->dpe_val_ptr == NULL)
 			return -DER_NOMEM;
 	}
-
 	return 0;
 }
 

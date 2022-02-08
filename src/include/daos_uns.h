@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -122,6 +122,12 @@ struct duns_attr_t {
 #define DUNS_MAX_XATTR_LEN	170
 
 #define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
+/**
+ * Lustre specific foreign LOV/LMV format (container type will be encoded in
+ * lfm_flag field and extra slashes will be added when needed by foreign_symlink
+ * Lustre code)
+ */
+#define DUNS_LUSTRE_XATTR_FMT		"%36s/%36s"
 
 /**
  * Create a special directory (POSIX) or file (HDF5) depending on the container type, and create a

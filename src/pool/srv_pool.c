@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -234,6 +234,13 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_EC_CELL_SZ:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_POLICY:
+			D_FREE(entry_def->dpe_str);
+			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
+				  DAOS_PROP_POLICYSTR_MAX_LEN);
+			if (entry_def->dpe_str == NULL)
+				return -DER_NOMEM;
+			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
 				struct daos_acl *acl = entry->dpe_val_ptr;
@@ -354,6 +361,18 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			d_iov_set(&value, &entry->dpe_val,
 				     sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_ec_cell_sz,
+					   &value);
+			break;
+		case DAOS_PROP_PO_POLICY:
+			if (entry->dpe_str == NULL ||
+			    strlen(entry->dpe_str) == 0) {
+				entry = daos_prop_entry_get(&pool_prop_default,
+							    entry->dpe_type);
+				D_ASSERT(entry != NULL);
+			}
+			d_iov_set(&value, entry->dpe_str,
+				     strlen(entry->dpe_str));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_policy,
 					   &value);
 			break;
 		case DAOS_PROP_PO_SVC_LIST:
@@ -605,10 +624,25 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
+	struct daos_prop_entry *lbl_ent;
+	struct daos_prop_entry *def_lbl_ent;
 	struct pool_create_in  *in;
 	struct pool_create_out *out;
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
+
+	/* Check for default label property supplied */
+	def_lbl_ent = daos_prop_entry_get(&pool_prop_default,
+					  DAOS_PROP_PO_LABEL);
+	D_ASSERT(def_lbl_ent != NULL);
+	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_PO_LABEL);
+	if (lbl_ent != NULL) {
+		if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str, DAOS_PROP_LABEL_MAX_LEN) == 0) {
+			D_ERROR(DF_UUID": label is the same as default label\n",
+				DP_UUID(pool_uuid));
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
 
 	D_ASSERTF(ntargets == target_addrs->rl_nr, "ntargets=%u num=%u\n",
 		  ntargets, target_addrs->rl_nr);
@@ -1691,6 +1725,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		nr++;
 	if (bits & DAOS_PO_QUERY_PROP_EC_CELL_SZ)
 		nr++;
+	if (bits & DAOS_PO_QUERY_PROP_POLICY)
+		nr++;
 	if (bits & DAOS_PO_QUERY_PROP_SCRUB_SCHED)
 		nr++;
 	if (bits & DAOS_PO_QUERY_PROP_SCRUB_FREQ)
@@ -1835,6 +1871,25 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		}
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_LIST;
 		prop->dpp_entries[idx].dpe_val_ptr = svc_list;
+		idx++;
+	}
+	if (bits & DAOS_PO_QUERY_PROP_POLICY) {
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_policy,
+				   &value);
+		if (rc != 0)
+			return rc;
+		if (value.iov_len > DAOS_PROP_POLICYSTR_MAX_LEN) {
+			D_ERROR("bad policy string length %zu (> %d).\n",
+				value.iov_len, DAOS_PROP_POLICYSTR_MAX_LEN);
+			return -DER_IO;
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
+		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+			  value.iov_len);
+		if (prop->dpp_entries[idx].dpe_str == NULL)
+			return -DER_NOMEM;
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_SCRUB_SCHED) {
@@ -2908,6 +2963,18 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 						DF_U64".\n", entry->dpe_type,
 						entry->dpe_val,
 						iv_entry->dpe_val);
+					rc = -DER_IO;
+					}
+				break;
+			case DAOS_PROP_PO_POLICY:
+				D_ASSERT(strnlen(entry->dpe_str,
+						 DAOS_PROP_POLICYSTR_MAX_LEN) <=
+					 DAOS_PROP_POLICYSTR_MAX_LEN);
+				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
+					    DAOS_PROP_POLICYSTR_MAX_LEN) != 0) {
+					D_ERROR("mismatch %s - %s.\n",
+						entry->dpe_str,
+						iv_entry->dpe_str);
 					rc = -DER_IO;
 				}
 				break;
@@ -4497,7 +4564,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool				updated;
 	int				rc;
 	char				*env;
-	uint64_t			delay = 0;
+	uint64_t			delay = 2;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, &target_list,
 					  list, hint, &updated, map_version,
@@ -4689,7 +4756,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 
 	/* Schedule an extension rebuild for those targets */
 	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, &tgts,
-				 RB_OP_EXTEND, 0);
+				 RB_OP_EXTEND, 2);
 	if (rc != 0) {
 		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_lock, rc);
@@ -5696,7 +5763,7 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc != 0)
 		goto out;
 
-	oca = daos_oclass_attr_find(oid->id_pub, NULL, NULL);
+	oca = daos_oclass_attr_find(oid->id_pub, NULL);
 	leader_idx = pl_select_leader(oid->id_pub, oid->id_shard / daos_oclass_grp_size(oca),
 				      layout->ol_grp_size, NIL_BITMAP, mbs, tgt_id,
 				      pl_obj_get_shard, layout);

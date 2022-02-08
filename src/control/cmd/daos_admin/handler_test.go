@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -488,7 +488,7 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 		Properties: storage.BdevTierProperties{
 			Class:      storage.ClassNvme,
-			DeviceList: []string{"foo"},
+			DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 		},
 	})
 	if err != nil {

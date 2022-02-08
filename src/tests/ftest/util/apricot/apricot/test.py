@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -686,8 +686,11 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_agents:
             self.start_agents(force=force_agent_start)
 
+        self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
+
         # If there's no server started, then there's no server log to write to.
-        if self.setup_start_servers:
+        if (self.setup_start_servers and self.setup_start_agents and
+            not self.skip_add_log_msg):
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
@@ -743,7 +746,7 @@ class TestWithServers(TestWithoutServers):
 
             for manager in self.agent_managers:
                 cart_ctl.group_name.value = manager.get_config_value("name")
-                # cart_ctl.run()
+                cart_ctl.run()
         else:
             self.log.info(
                 "Unable to write message to the server log: %d servers groups "
@@ -843,6 +846,7 @@ class TestWithServers(TestWithoutServers):
                 "Starting server: group=%s, hosts=%s, config=%s",
                 manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
+            manager.manager.job.update_pattern("normal", len(manager.hosts))
             try:
                 manager.manager.run()
             except CommandFailure as error:
@@ -1590,7 +1594,8 @@ class TestWithServers(TestWithoutServers):
         """
         pool = TestPool(
             context=self.context, dmg_command=self.get_dmg_command(index),
-            label_generator=self.label_generator)
+            label_generator=self.label_generator,
+            crt_timeout=self.server_managers[index].get_config_value("crt_timeout"))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)

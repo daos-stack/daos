@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -433,8 +433,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov,
 		sc_m_pool_corr_inc(ctx);
 		rc = sc_mark_corrupt(ctx);
 		if (bio_iov2media(biov) == DAOS_MEDIA_NVME) {
-			bio_log_csum_err(ctx->sc_dmi->dmi_nvme_ctxt,
-					 ctx->sc_dmi->dmi_tgt_id);
+			bio_log_csum_err(ctx->sc_dmi->dmi_nvme_ctxt);
 		}
 		if (rc != 0)
 			D_ERROR("Error trying to mark corrupt: "DF_RC"\n",

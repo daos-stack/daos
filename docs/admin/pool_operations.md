@@ -73,11 +73,16 @@ with redundancy enabled by default (pool service replicas on ranks 1-3).
 If no redundancy is desired, use --nsvc=1 in order to specify that only
 a single pool service replica should be created.
 
-The -t option allows to define the ration between SCM and NVMe SSD space.
-The default value is 6% which means that the space provided after --size
+The -t option allows defining the ratio between SCM and NVMe SSD space.
+The default value is 6%, which means the space provided after --size
 will be distributed as follows:
 - 6% is allocated on SCM (i.e., 3GB in the example above)
 - 94% is allocated on NVMe SSD (i.e., 47GB in the example above)
+
+Note that it is difficult to determine the usable space by the user and
+currently we cannot provide the precise value. The usable space depends not only
+on pool size, but also on number of targets, target size, object class,
+redundancy factor, etc.
 
 ### Listing Pools
 
@@ -102,7 +107,7 @@ with the following information for each pool:
   the pool was originally configured with (total).
 
 The --verbose option provides more detailed information including the
-number of service replicate, the full UUIDs and space distribution
+number of service replicas, the full UUIDs and space distribution
 between SCM and NVMe for each pool:
 
 ```bash
@@ -330,7 +335,7 @@ The ACL file format is detailed in [here](https://daos-stack.github.io/overview/
 To view a pool's ACL:
 
 ```bash
-$ dmg pool get-acl --acl-file <path> <pool_label>
+$ dmg pool get-acl --outfile=<path> <pool_label>
 ```
 
 The output is in the same string format used in the ACL file during creation,

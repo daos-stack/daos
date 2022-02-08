@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,53 +34,49 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 			hwlocXMLFile: filepath.Join(testdataDir, "boro-84.xml"),
 			expResult: &hardware.Topology{
 				NUMANodes: map[uint]*hardware.NUMANode{
-					0: {
-						ID:       0,
-						NumCores: 24,
-						Devices: hardware.PCIDevices{
-							"0000:18:00.0": {
+					0: hardware.MockNUMANode(0, 24).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								hardware.NewPCIBus(0, 0, 2),
+								hardware.NewPCIBus(0, 0x17, 0x18),
+								hardware.NewPCIBus(0, 0x3a, 0x3e),
+							},
+						).
+						WithDevices(
+							[]*hardware.PCIDevice{
 								{
 									Name:    "ib0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:18:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 								},
 								{
 									Name:    "hfi1_0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: "0000:18:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 								},
-							},
-							"0000:3d:00.0": {
 								{
 									Name:    "eth0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:3d:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.0"),
 								},
 								{
 									Name:    "i40iw1",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: "0000:3d:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.0"),
 								},
-							},
-							"0000:3d:00.1": {
 								{
 									Name:    "eth1",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:3d:00.1",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
 								{
 									Name:    "i40iw0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: "0000:3d:00.1",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
 							},
-						},
-					},
-					1: {
-						ID:       1,
-						NumCores: 24,
-						Devices:  hardware.PCIDevices{},
-					},
+						),
+					1: hardware.MockNUMANode(1, 24, 24),
 				},
 			},
 		},
@@ -88,68 +84,69 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 			hwlocXMLFile: filepath.Join(testdataDir, "wolf-133.xml"),
 			expResult: &hardware.Topology{
 				NUMANodes: map[uint]*hardware.NUMANode{
-					0: {
-						ID:       0,
-						NumCores: 24,
-						Devices: hardware.PCIDevices{
-							"0000:18:00.0": {
+					0: hardware.MockNUMANode(0, 24).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								hardware.NewPCIBus(0, 0, 2),
+								hardware.NewPCIBus(0, 0x17, 0x18),
+								hardware.NewPCIBus(0, 0x3a, 0x3e),
+								hardware.NewPCIBus(0, 0x5d, 0x5f),
+							},
+						).
+						WithDevices(
+							[]*hardware.PCIDevice{
 								{
 									Name:    "ib0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:18:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 								},
 								{
 									Name:    "hfi1_0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: "0000:18:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 								},
-							},
-							"0000:3d:00.0": {
 								{
 									Name:    "eth0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:3d:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.0"),
 								},
 								{
 									Name:    "i40iw1",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: "0000:3d:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.0"),
 								},
-							},
-							"0000:3d:00.1": {
 								{
 									Name:    "eth1",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:3d:00.1",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
 								{
 									Name:    "i40iw0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: "0000:3d:00.1",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
 							},
-						},
-					},
-					1: {
-						ID:       1,
-						NumCores: 24,
-						Devices: hardware.PCIDevices{
-							"0000:af:00.0": {
+						),
+					1: hardware.MockNUMANode(1, 24, 24).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								hardware.NewPCIBus(0, 0xae, 0xaf),
+							},
+						).
+						WithDevices(
+							[]*hardware.PCIDevice{
 								{
-									Name:         "ib1",
-									Type:         hardware.DeviceTypeNetInterface,
-									PCIAddr:      "0000:af:00.0",
-									NUMAAffinity: 1,
+									Name:    "ib1",
+									Type:    hardware.DeviceTypeNetInterface,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:af:00.0"),
 								},
 								{
-									Name:         "hfi1_1",
-									Type:         hardware.DeviceTypeOFIDomain,
-									PCIAddr:      "0000:af:00.0",
-									NUMAAffinity: 1,
+									Name:    "hfi1_1",
+									Type:    hardware.DeviceTypeOFIDomain,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:af:00.0"),
 								},
 							},
-						},
-					},
+						),
 				},
 			},
 		},
@@ -157,16 +154,13 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 			hwlocXMLFile: filepath.Join(testdataDir, "gcp_topology.xml"),
 			expResult: &hardware.Topology{
 				NUMANodes: map[uint]*hardware.NUMANode{
-					0: {
-						ID:       0,
-						NumCores: 8,
-						Devices:  hardware.PCIDevices{},
-					},
-					1: {
-						ID:       1,
-						NumCores: 8,
-						Devices:  hardware.PCIDevices{},
-					},
+					0: hardware.MockNUMANode(0, 8).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								hardware.NewPCIBus(0, 0, 0),
+							},
+						),
+					1: hardware.MockNUMANode(1, 8, 8),
 				},
 			},
 		},
@@ -174,62 +168,61 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 			hwlocXMLFile: filepath.Join(testdataDir, "multiport_hfi_topology.xml"),
 			expResult: &hardware.Topology{
 				NUMANodes: map[uint]*hardware.NUMANode{
-					0: {
-						ID:       0,
-						NumCores: 8,
-						Devices: hardware.PCIDevices{
-							"0000:02:00.0": {
+					0: hardware.MockNUMANode(0, 8).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								hardware.NewPCIBus(0, 0, 7),
+							},
+						).
+						WithDevices(
+							[]*hardware.PCIDevice{
 								{
 									Name:    "ib0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:02:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:02:00.0"),
 								},
 								{
 									Name:    "enp2s0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:02:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:02:00.0"),
 								},
 								{
 									Name:    "mlx4_0",
 									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: "0000:02:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:02:00.0"),
 								},
-							},
-							"0000:06:00.0": {
 								{
 									Name:    "enp6s0",
 									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:06:00.0",
+									PCIAddr: *hardware.MustNewPCIAddress("0000:06:00.0"),
 								},
 							},
-						},
-					},
-					1: {
-						ID:       1,
-						NumCores: 8,
-						Devices: hardware.PCIDevices{
-							"0000:83:00.0": {
+						),
+					1: hardware.MockNUMANode(1, 8, 8).
+						WithPCIBuses(
+							[]*hardware.PCIBus{
+								hardware.NewPCIBus(0, 0x80, 0x84),
+							},
+						).
+						WithDevices(
+							[]*hardware.PCIDevice{
 								{
-									Name:         "ib1",
-									Type:         hardware.DeviceTypeNetInterface,
-									PCIAddr:      "0000:83:00.0",
-									NUMAAffinity: 1,
+									Name:    "ib1",
+									Type:    hardware.DeviceTypeNetInterface,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:83:00.0"),
 								},
 								{
-									Name:         "ib2",
-									Type:         hardware.DeviceTypeNetInterface,
-									PCIAddr:      "0000:83:00.0",
-									NUMAAffinity: 1,
+									Name:    "ib2",
+									Type:    hardware.DeviceTypeNetInterface,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:83:00.0"),
 								},
 								{
-									Name:         "mlx4_1",
-									Type:         hardware.DeviceTypeOFIDomain,
-									PCIAddr:      "0000:83:00.0",
-									NUMAAffinity: 1,
+									Name:    "mlx4_1",
+									Type:    hardware.DeviceTypeOFIDomain,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:83:00.0"),
 								},
 							},
-						},
-					},
+						),
 				},
 			},
 		},
@@ -237,24 +230,30 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 			hwlocXMLFile: filepath.Join(testdataDir, "no-numa-nodes.xml"),
 			expResult: &hardware.Topology{
 				NUMANodes: map[uint]*hardware.NUMANode{
-					0: {
-						ID:       0,
-						NumCores: 4,
-						Devices: hardware.PCIDevices{
-							"0000:18:00.0": {
-								{
-									Name:    "ib0",
-									Type:    hardware.DeviceTypeNetInterface,
-									PCIAddr: "0000:18:00.0",
+					0: func() *hardware.NUMANode {
+						node := hardware.MockNUMANode(0, 4).
+							WithPCIBuses(
+								[]*hardware.PCIBus{
+									hardware.NewPCIBus(0, 0, 3),
+									hardware.NewPCIBus(0, 0x17, 0x18),
 								},
-								{
-									Name:    "hfi1_0",
-									Type:    hardware.DeviceTypeOFIDomain,
-									PCIAddr: "0000:18:00.0",
+							).
+							WithDevices(
+								[]*hardware.PCIDevice{
+									{
+										Name:    "ib0",
+										Type:    hardware.DeviceTypeNetInterface,
+										PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
+									},
+									{
+										Name:    "hfi1_0",
+										Type:    hardware.DeviceTypeOFIDomain,
+										PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
+									},
 								},
-							},
-						},
-					},
+							)
+						return node
+					}(),
 				},
 			},
 		},

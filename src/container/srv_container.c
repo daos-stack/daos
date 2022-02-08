@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -741,6 +741,21 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
+	/* Determine if non-default label property supplied */
+	def_lbl_ent = daos_prop_entry_get(&cont_prop_default,
+					  DAOS_PROP_CO_LABEL);
+	D_ASSERT(def_lbl_ent != NULL);
+	lbl_ent = daos_prop_entry_get(in->cci_prop, DAOS_PROP_CO_LABEL);
+	if (lbl_ent != NULL) {
+		if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str, DAOS_PROP_LABEL_MAX_LEN) == 0) {
+			D_ERROR(DF_CONT": label is the same as default label\n",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid,
+					in->cci_op.ci_uuid));
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+		lbl = lbl_ent->dpe_str;
+	}
+
 	/* duplicate the default properties, overwrite it with cont create
 	 * parameter (write to rdb below).
 	 */
@@ -758,17 +773,6 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
-	}
-
-	/* Determine if non-default label property supplied */
-	def_lbl_ent = daos_prop_entry_get(&cont_prop_default,
-					  DAOS_PROP_CO_LABEL);
-	D_ASSERT(def_lbl_ent != NULL);
-	lbl_ent = daos_prop_entry_get(prop_dup, DAOS_PROP_CO_LABEL);
-	D_ASSERT(lbl_ent != NULL);
-	if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
-		    DAOS_PROP_LABEL_MAX_LEN)) {
-		lbl = lbl_ent->dpe_str;
 	}
 
 	/* Check if a container with this UUID and label already exists */

@@ -123,13 +123,27 @@ multiple *targets* to optimize concurrency. To avoid contention, each
 target has its private storage, its own pool of service threads, and its
 dedicated network context that can be directly addressed over the fabric
 independently of the other targets hosted on the same storage node.
-The SCM modules are typically configured in *AppDirect interleaved* mode.
-They are thus presented to the operating system as a single PMEM namespace
-per socket (in `fsdax` mode). When *N* targets per engine are configured,
-each target is using *1/N* of the capacity of the `fsdax` SCM capacity
-of that socket, independently of the other targets.
-Each target is also using a fraction of the NVMe capacity of the NVMe
-drives that are attached to this socket.
+
+* The SCM modules are configured in *AppDirect interleaved* mode.
+  They are thus presented to the operating system as a single PMem
+  namespace per socket (in `fsdax` mode).
+
+!!! note
+    When mounting the PMem devices with the `dax` option,
+    the following warning will be logged in dmesg:
+    `EXT4-fs (pmem0): DAX enabled. Warning: EXPERIMENTAL, use at your own risk`
+    This warning can be safely ignored: It is issued because
+    DAX does not yet support the `reflink` filesystem feature,
+    but DAOS does not use this feature.
+
+* When *N* targets per engine are configured,
+  each target is using *1/N* of the capacity of the `fsdax` SCM capacity
+  of that socket, independently of the other targets.
+
+* Each target is also using a fraction of the NVMe capacity of the NVMe
+  drives that are attached to this socket. For example, in an engine
+  with 4 NVMe disks and 16 targets, each target will manage 1/4 of
+  a single NVMe disk.
 
 A target does not implement any internal data protection mechanism
 against storage media failure. As a result, a target is a single point
@@ -152,8 +166,8 @@ that are served by this engine.
 
 Applications, users, and administrators can interact with a DAOS system
 through two different client APIs. The management API offers the ability
-to administrate a DAOS system. It is intended to be integrated with
-different vendor-specific storage management or open-source
+to administer a DAOS system and is intended for integration with
+vendor-specific storage management and open-source
 orchestration frameworks. The `dmg` CLI tool is built over the DAOS management
 API. On the other hand, the DAOS library (`libdaos`) implements the
 DAOS storage model. It is primarily targeted at application and I/O
