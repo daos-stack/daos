@@ -1,14 +1,17 @@
 # have Release Engineering added as a reviewer to any PR that updates
 # a component sha1 to ensure that corresponding package build is done
-utils/build.config @daos-stack/release-engineering
+#utils/build.config @daos-stack/release-engineering
 # or updates packaging in any way
-utils/rpms @daos-stack/release-engineering
+#utils/rpms @daos-stack/release-engineering
 
 # any PR that touches Go files should get a review from go-owners
-*.go @daos-stack/go-owners
+#*.go @daos-stack/go-owners
 
 # any PR that touches VOS files should get a review from VOS
-src/vos/* src/common/btree*.* @daos-stack/VOS
+#src/vos/ @daos-stack/vos
+
+# any PR that touches btree files should get a review from VOS
+#src/common/btree*.* @daos-stack/vos
 
 # Jenkinsfile changes should be reviewed by Release Engineering
-Jenkinsfile @daos-stack/release-engineering
+#Jenkinsfile @daos-stack/release-engineering
