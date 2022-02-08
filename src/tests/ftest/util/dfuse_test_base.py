@@ -30,7 +30,7 @@ class DfuseTestBase(TestWithServers):
         # using localhost as client if client list is empty
         if self.hostlist_clients is None:
             self.hostlist_clients = agu.include_local_host(None)
-        self.dfuse_cores = self.params.get('dfuse_cores', self.dfuse.namespace, None)
+        self.dfuse_cores = self.params.get('cores', self.dfuse.namespace, None)
 
     def stop_job_managers(self):
         """Stop the test job manager followed by dfuse.
