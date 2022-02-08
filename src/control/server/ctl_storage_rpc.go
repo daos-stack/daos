@@ -7,7 +7,7 @@
 package server
 
 /*
-#include "daos_srv/rsvc.h"
+#include "daos_srv/control.h"
 */
 import "C"
 

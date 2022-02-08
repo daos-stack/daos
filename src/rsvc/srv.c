@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
+#include <daos_srv/control.h>
 #include "rpc.h"
 
 static struct ds_rsvc_class *rsvc_classes[DS_RSVC_CLASS_COUNT];
