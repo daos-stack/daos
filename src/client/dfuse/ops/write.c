@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,12 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 		DFUSE_REPLY_WRITE(ev, ev->de_req, ev->de_len);
 	else
 		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
+	D_FREE(ev->de_iov.iov_buf);
+}
+
+static void
+dfuse_cb_write_free(struct dfuse_event *ev)
+{
 	D_FREE(ev->de_iov.iov_buf);
 }
 
@@ -61,7 +67,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 
 	ev->de_req = req;
 	ev->de_len = len;
-	ev->de_complete_cb = dfuse_cb_write_complete;
 
 	ev->de_sgl.sg_nr = 1;
 	d_iov_set(&ev->de_iov, ibuf.buf[0].mem, len);
@@ -87,10 +92,18 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (len + position > oh->doh_ie->ie_stat.st_size)
 		oh->doh_ie->ie_stat.st_size = len + position;
 
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl,
-		       position, &ev->de_ev);
-	if (rc != 0)
-		D_GOTO(err, rc);
+	if (oh->doh_ie->ie_dfs->dfc_wb_cache) {
+		ev->de_complete_cb = dfuse_cb_write_free;
+		rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
+		if (rc != 0)
+			D_GOTO(err, rc);
+		DFUSE_REPLY_WRITE(oh, req, len);
+	} else {
+		ev->de_complete_cb = dfuse_cb_write_complete;
+		rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
+		if (rc != 0)
+			D_GOTO(err, rc);
+	}
 
 	/* Send a message to the async thread to wake it up and poll for events
 	 */

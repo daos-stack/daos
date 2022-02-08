@@ -83,8 +83,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	}
 
 	if (readahead) {
-		if (!fs_handle->dpi_info->di_wb_cache)
-			buff_len += READAHEAD_SIZE;
+		buff_len += READAHEAD_SIZE;
 	} else {
 		if (!skip_read) {
 			rc = daos_event_init(&ev->de_ev,

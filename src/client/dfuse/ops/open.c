@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,10 +31,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
-	 * enabled so the kernel can do read-modify-write
+	 * enabled so the kernel can do read-modify-write.  It's not clear
+	 * if this is still needed.
 	 */
-	if (ie->ie_dfs->dfc_data_caching &&
-		fs_handle->dpi_info->di_wb_cache &&
+	if (ie->ie_dfs->dfc_data_caching && ie->ie_dfs->dfc_wb_cache &&
 		(fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_INFO(ie, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;

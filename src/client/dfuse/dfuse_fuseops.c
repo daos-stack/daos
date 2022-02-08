@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,9 +82,6 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
 	conn->time_gran = 1000000000;
-
-	if (fs_handle->dpi_info->di_wb_cache)
-		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
 	dfuse_show_flags(fs_handle, conn->want);
 

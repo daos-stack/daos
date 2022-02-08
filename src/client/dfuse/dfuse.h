@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -208,6 +208,7 @@ struct dfuse_cont {
 	double			dfc_dentry_dir_timeout;
 	double			dfc_ndentry_timeout;
 	bool			dfc_data_caching;
+	bool			dfc_wb_cache;
 	bool			dfc_direct_io_disable;
 	pthread_mutex_t		dfs_read_mutex;
 };

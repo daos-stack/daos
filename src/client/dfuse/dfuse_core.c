@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -540,7 +540,7 @@ err:
 	return rc;
 }
 
-#define ATTR_COUNT 6
+#define ATTR_COUNT 7
 
 char const *const
 cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
@@ -548,7 +548,9 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 			       "dfuse-dentry-dir-time",
 			       "dfuse-ndentry-time",
 			       "dfuse-data-cache",
-			       "dfuse-direct-io-disable"};
+			       "dfuse-direct-io-disable",
+			       "dfuse-data-wb-cache",
+};
 
 #define ATTR_TIME_INDEX		0
 #define ATTR_DENTRY_INDEX	1
@@ -556,6 +558,7 @@ cont_attr_names[ATTR_COUNT] = {"dfuse-attr-time",
 #define ATTR_NDENTRY_INDEX	3
 #define ATTR_DATA_CACHE_INDEX	4
 #define ATTR_DIRECT_IO_DISABLE_INDEX	5
+#define ATTR_DATA_CACHE_WB_INDEX 6
 
 /* Attribute values are of the form "120M", so the buffer does not need to be
  * large.
@@ -639,6 +642,22 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 			}
 			continue;
 		}
+		if (i == ATTR_DATA_CACHE_WB_INDEX) {
+			if (strncmp(buff_addrs[i], "on", sizes[i]) == 0) {
+				dfc->dfc_wb_cache = true;
+			} else if (strncmp(buff_addrs[i], "off",
+				   sizes[i]) == 0) {
+				have_cache_off = true;
+				dfc->dfc_wb_cache = false;
+			} else {
+				DFUSE_TRA_WARNING(dfc,
+						  "Failed to parse '%s' for '%s'",
+						  buff_addrs[i],
+						  cont_attr_names[i]);
+				dfc->dfc_wb_cache = false;
+			}
+			continue;
+		}
 		if (i == ATTR_DIRECT_IO_DISABLE_INDEX) {
 			if (strncmp(buff_addrs[i], "on", sizes[i]) == 0) {
 				have_dio = true;
@@ -718,6 +737,7 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 	dfc->dfc_dentry_dir_timeout = 5;
 	dfc->dfc_ndentry_timeout = 1;
 	dfc->dfc_data_caching = true;
+	dfc->dfc_wb_cache = true;
 	dfc->dfc_direct_io_disable = false;
 }
 
