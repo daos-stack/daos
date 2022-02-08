@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -538,7 +538,7 @@ sgl_process_nop_cb(uint8_t *buf, size_t len, void *args)
 }
 
 static int
-calc_csum_recx_with_map(struct daos_csummer *obj, size_t csum_nr,
+calc_csum_recx_with_map(struct daos_csummer *obj, size_t *csum_nr,
 			daos_recx_t *recx,
 			struct dcs_csum_info *csum_info,
 			daos_iom_t *map, size_t rec_len,
@@ -555,11 +555,13 @@ calc_csum_recx_with_map(struct daos_csummer *obj, size_t csum_nr,
 	uint64_t		 prev_idx = recx->rx_idx;
 	struct daos_csum_range	 maps_in_chunk;
 	daos_size_t		 consumed_bytes = 0;
+	uint32_t		 csums_calculated = 0;
 
-	C_TRACE("recx: "DF_RECX", map: "DF_IOM"\n",
-		DP_RECX(*recx), DP_IOM(map));
+	C_TRACE("recx: "DF_RECX", map: "DF_IOM"\n", DP_RECX(*recx), DP_IOM(map));
 
-	for (i = 0; i < csum_nr; i++) {
+	for (i = 0; i < *csum_nr; i++) {
+		bool csum_calculated = false;
+
 		buf = ci_idx2csum(csum_info, i);
 		daos_csummer_set_buffer(obj, buf, csum_info->cs_len);
 		daos_csummer_reset(obj);
@@ -586,6 +588,7 @@ calc_csum_recx_with_map(struct daos_csummer *obj, size_t csum_nr,
 			bytes_for_csum = mapped_chunk.dcr_nr * rec_len;
 			rc = daos_sgl_processor(sgl, false, idx, bytes_for_csum,
 						checksum_sgl_cb, obj);
+			csum_calculated = true;
 			consumed_bytes += bytes_for_csum;
 			if (rc != 0) {
 				D_ERROR("daos_sgl_processor error: "DF_RC"\n",
@@ -595,7 +598,10 @@ calc_csum_recx_with_map(struct daos_csummer *obj, size_t csum_nr,
 			prev_idx = mapped_chunk.dcr_hi + 1;
 		}
 
-		daos_csummer_finish(obj);
+		if (csum_calculated) {
+			csums_calculated++;
+			daos_csummer_finish(obj);
+		}
 	}
 
 	if (consumed_bytes < recx->rx_nr * rec_len) {
@@ -606,6 +612,7 @@ calc_csum_recx_with_map(struct daos_csummer *obj, size_t csum_nr,
 		consumed_bytes += bytes_to_skip;
 	}
 
+	*csum_nr = csums_calculated;
 	D_ASSERTF(consumed_bytes == recx->rx_nr * rec_len,
 		"consumed_bytes(%lu) == recx->rx_nr * rec_len(%lu)",
 		  consumed_bytes, recx->rx_nr * rec_len);
@@ -627,12 +634,15 @@ calc_csum_recx(struct daos_csummer *obj, d_sg_list_t *sgl, size_t rec_len,
 		return 0;
 
 	rec_chunksize = daos_csummer_get_rec_chunksize(obj, rec_len);
-	for (i = 0; i < nr; i++) { /** for each extent/checksum info */
+	for (i = 0; i < nr; i++) { /* for each extent/checksum info */
 		csum_nr = daos_recx_calc_chunks(recxs[i], rec_len,
 						rec_chunksize);
 
 		if (map != NULL)
-			rc = calc_csum_recx_with_map(obj, csum_nr, &recxs[i],
+			/* With a map, actual csums calculated may not be csum_nr so pass by ref
+			 * so it can be updated.
+			 */
+			rc = calc_csum_recx_with_map(obj, &csum_nr, &recxs[i],
 						     &csums[i], map, rec_len,
 						     sgl, rec_chunksize, &idx);
 		else
@@ -949,9 +959,10 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 				&new_iod_csums->ic_data[i],
 				&iod_csum->ic_data[i]);
 		if (!match) {
-			D_ERROR("Data corruption found. "
+			D_ERROR("Data corruption found for recx: "DF_RECX". "
 				"Calculated "DF_CI" != "
 				"received "DF_CI"\n",
+				DP_RECX(iod->iod_recxs[i]),
 				DP_CI(new_iod_csums->ic_data[i]),
 				DP_CI(iod_csum->ic_data[i]));
 			D_GOTO(done, rc = -DER_CSUM);
