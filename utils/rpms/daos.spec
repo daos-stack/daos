@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       19%{?relval}%{?dist}
+Release:       20%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -444,7 +444,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
-%{_libdir}/libdfs_internal.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
@@ -531,7 +530,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Feb 02 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-20
+* Wed Feb 08 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-20
 - Remove direct MPI dependency from most of tests
 
 * Wed Jan 19 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-19
