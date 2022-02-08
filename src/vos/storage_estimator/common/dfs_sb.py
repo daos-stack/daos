@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -271,7 +271,7 @@ class VOS_SIZE(BASE_CLASS):
 
 class FREE_DFS_SB(BASE_CLASS):
     def __init__(self):
-        super().__init__('libdfs_internal.so')
+        super().__init__('libdfs.so')
 
     def dfs_free_sb_layout(self, data_pointer):
         self._lib.dfs_free_sb_layout(data_pointer)

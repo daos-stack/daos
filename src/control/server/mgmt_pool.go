@@ -591,7 +591,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 			resp.Status = int32(drpc.DaosSuccess)
 		}
 		if err := svc.sysdb.RemovePoolService(uuid); err != nil {
-			return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
+			// In rare cases, there may be a race between pool cleanup handlers.
+			// As we know the service entry existed when we started this handler,
+			// if the attempt to remove it now fails because it doesn't exist,
+			// then there's nothing else to do.
+			if !system.IsPoolNotFound(err) {
+				return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
+			}
 		}
 	default:
 		svc.log.Errorf("PoolDestroy dRPC call failed: %s", ds)

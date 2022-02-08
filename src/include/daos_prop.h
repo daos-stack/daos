@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -367,6 +367,10 @@ struct daos_prop_entry {
 #define DAOS_PROP_LABEL_MAX_LEN		(127)
 /** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
 #define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
+
+/** default values for unset labels */
+#define DAOS_PROP_CO_LABEL_DEFAULT "container_label_not_set"
+#define DAOS_PROP_PO_LABEL_DEFAULT "pool_label_not_set"
 
 /**
  * Check if DAOS (pool or container property) label string is valid.

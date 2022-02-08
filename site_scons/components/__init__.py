@@ -332,24 +332,21 @@ def define_components(reqs):
 
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX"'                \
-                          ' --disable-tests --disable-unit-tests '             \
-                          ' --disable-apps --without-vhost '                   \
-                          ' --without-crypto --without-pmdk --without-rbd '    \
-                          ' --with-rdma --without-iscsi-initiator '            \
-                          ' --without-isal --without-vtune --with-shared',
+                commands=['./configure --prefix="$SPDK_PREFIX" --disable-tests '                  \
+                          '--disable-unit-tests --disable-apps --without-vhost --without-crypto ' \
+                          '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '   \
+                          '--without-isal --without-vtune --with-shared',
                           'make CONFIG_ARCH={} $JOBS_OPT'.format(spdk_arch),
                           'make install',
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/include/dpdk"',
-                          'cp -r -P dpdk/build/include/* '                     \
-                          '"$SPDK_PREFIX/include/dpdk"',
+                          'cp -r -P dpdk/build/include/* "$SPDK_PREFIX/include/dpdk"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"',
-                          'cp build/examples/lsvmd "$SPDK_PREFIX/bin"',
-                          'cp build/examples/nvme_manage "$SPDK_PREFIX/bin"',
-                          'cp build/examples/identify "$SPDK_PREFIX/bin"',
-                          'cp build/examples/perf "$SPDK_PREFIX/bin"'],
+                          'cp build/examples/lsvmd "$SPDK_PREFIX/bin/spdk_nvme_lsvmd"',
+                          'cp build/examples/nvme_manage "$SPDK_PREFIX/bin/spdk_nvme_manage"',
+                          'cp build/examples/identify "$SPDK_PREFIX/bin/spdk_nvme_identify"',
+                          'cp build/examples/perf "$SPDK_PREFIX/bin/spdk_nvme_perf"'],
                 headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
                 extra_include_path=['/usr/include/dpdk',
                                     '$SPDK_PREFIX/include/dpdk',
