@@ -4430,7 +4430,8 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 		D_ASSERT(entry.value);
 		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
 		if (rc) {
-			D_ERROR("Failed to lookup symlink %s\n", entry.value);
+			D_DEBUG(DB_TRACE, "Failed to lookup symlink '%s': %d (%s)\n",
+				entry.value, rc, strerror(rc));
 			D_FREE(entry.value);
 			return rc;
 		}
