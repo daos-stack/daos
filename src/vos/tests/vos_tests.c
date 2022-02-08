@@ -21,7 +21,6 @@
 #include <getopt.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
-#include <linux/limits.h>
 
 static void
 print_usage()
