@@ -40,6 +40,7 @@ enum crt_na_type {
 	CRT_NA_OFI_PSM2		= 4,
 	CRT_NA_OFI_TCP_RXM	= 5,
 	CRT_NA_OFI_CXI		= 6,
+	CRT_NA_OFI_LAST         = CRT_NA_OFI_CXI,
 	CRT_NA_UCX_RC		= 7,
 	CRT_NA_UCX_UD		= 8,
 	CRT_NA_UCX_RC_UD	= 9,
@@ -74,7 +75,7 @@ static inline bool
 crt_na_type_is_ofi(int na_type)
 {
 	return (na_type >= CRT_NA_OFI_SOCKETS) &&
-	       (na_type <= CRT_NA_OFI_CXI);
+	       (na_type <= CRT_NA_OFI_LAST);
 }
 
 struct crt_na_dict {
