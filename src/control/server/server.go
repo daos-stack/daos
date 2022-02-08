@@ -50,6 +50,9 @@ func processConfig(ctx context.Context, log *logging.LeveledLogger, cfg *config.
 		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
+		if err := ec.ValidateFabric(ctx, log, fis); err != nil {
+			return nil, err
+		}
 
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
 			return nil, err

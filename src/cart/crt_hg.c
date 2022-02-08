@@ -150,7 +150,7 @@ crt_prov_str_to_na_type(const char *prov_str)
 {
 	int i;
 
-	for (i = 0; i < CRT_NA_OFI_COUNT; i++) {
+	for (i = 0; i < CRT_NA_COUNT; i++) {
 		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
@@ -714,12 +714,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	if (crt_is_service() || (provider != CRT_NA_UCX_RC &&
-		provider != CRT_NA_UCX_UD && provider != CRT_NA_UCX_RC_UD &&
-		provider != CRT_NA_UCX_RC_O && provider != CRT_NA_UCX_UD_O &&
-		provider != CRT_NA_UCX_RC_UD_O &&
-		provider != CRT_NA_UCX_RC_X && provider != CRT_NA_UCX_UD_X &&
-		provider != CRT_NA_UCX_RC_UD_X && provider != CRT_NA_UCX_DC_X)) {
+	if (crt_is_service() || !crt_na_type_is_ucx(provider)) {
 		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
 		if (rc != 0) {
 			D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);

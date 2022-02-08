@@ -52,7 +52,7 @@ enum crt_na_type {
 	CRT_NA_UCX_DC_X         = 16,
 
 	/* Note: This entry should be the last valid one in enum */
-	CRT_NA_OFI_COUNT,
+	CRT_NA_COUNT,
 	CRT_NA_UNKNOWN = -1,
 };
 
@@ -63,10 +63,18 @@ int
 crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr);
 
 static inline bool
+crt_na_type_is_ucx(int na_type)
+{
+
+	return (na_type >= CRT_NA_UCX_RC) &&
+	       (na_type < CRT_NA_COUNT);
+}
+
+static inline bool
 crt_na_type_is_ofi(int na_type)
 {
 	return (na_type >= CRT_NA_OFI_SOCKETS) &&
-	       (na_type < CRT_NA_OFI_COUNT);
+	       (na_type <= CRT_NA_OFI_CXI);
 }
 
 struct crt_na_dict {
