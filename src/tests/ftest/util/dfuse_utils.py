@@ -119,31 +119,26 @@ class Dfuse(DfuseCommand):
         command = "test -d {0} -a ! -L {0}".format(self.mount_dir.value)
         retcodes = pcmd(nodes, command, expect_rc=None)
         for retcode, hosts in list(retcodes.items()):
-            for host in hosts:
-                if retcode == 0:
-                    check_mounted.add(host)
-                else:
-                    command = "grep 'dfuse {}' /proc/mounts" .format(self.mount_dir.value)
-                    retcodes = pcmd([host], command, expect_rc=None)
-                    for ret_code, host_names in list(retcodes.items()):
-                        for node in host_names:
-                            if ret_code == 0:
-                                check_mounted.add(node)
-                            else:
-                                state["nodirectory"].add(node)
+            if retcode == 0:
+                check_mounted.add(hosts)
+            else:
+                command = "grep 'dfuse {}' /proc/mounts" .format(self.mount_dir.value)
+                retcodes = pcmd(hosts, command, expect_rc=None)
+                for ret_code, host_names in list(retcodes.items()):
+                    if ret_code == 0:
+                        check_mounted.add(host_names)
+                    else:
+                        state["nodirectory"].add(host_names)
 
         if check_mounted:
-            # Detect which hosts with mount point directories have it mounted as
-            # a fuseblk device
-            command = "stat -c %T -f {0} | grep -v fuseblk".format(
-                self.mount_dir.value)
+            # Detect which hosts with mount point directories have it mounted as a fuseblk device
+            command = "stat -c %T -f {0} | grep -v fuseblk".format(self.mount_dir.value)
             retcodes = pcmd(check_mounted, command, expect_rc=None)
             for retcode, hosts in list(retcodes.items()):
-                for host in hosts:
-                    if retcode == 1:
-                        state["mounted"].add(host)
-                    else:
-                        state["unmounted"].add(host)
+                if retcode == 1:
+                    state["mounted"].add(hosts)
+                else:
+                    state["unmounted"].add(hosts)
 
         return state
 

@@ -189,11 +189,13 @@ func parseCmdTags(in interface{}, tagFilter string, joiner joinFn, seenRefs refM
 			continue
 		}
 
-		nested, err := parseCmdTags(fVal.Interface(), tagFilter, joiner, seenRefs)
-		if err != nil {
-			return nil, err
+		if fVal.CanInterface() {
+			nested, err := parseCmdTags(fVal.Interface(), tagFilter, joiner, seenRefs)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, nested...)
 		}
-		out = append(out, nested...)
 	}
 
 	return

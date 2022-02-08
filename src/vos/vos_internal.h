@@ -255,7 +255,7 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_reindex_cmt_dtx:1;
+				vc_cmt_dtx_indexed:1;
 	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
 };
@@ -424,6 +424,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  * \param epoch		[IN]	Epoch of update
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
+ * \param retry		[IN]	Whether need to retry if hit non-committed DTX entry.
  *
  * \return	positive value	If available to outside.
  *		zero		If unavailable to outside.
@@ -437,7 +438,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  */
 int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
-			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type, bool retry);
 
 /**
  * Get local entry DTX state. Only used by VOS aggregation.
@@ -1295,6 +1296,12 @@ vos_offload_exec(int (*func)(void *), void *arg)
 		return dss_offload_exec(func, arg);
 	else
 		return func(arg);
+}
+
+static inline bool
+umoff_is_null(umem_off_t umoff)
+{
+	return umoff == UMOFF_NULL;
 }
 
 /* vos_csum_recalc.c */

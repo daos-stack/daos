@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1182,7 +1182,7 @@ class SubprocessManager():
         return data
 
     def update_expected_states(self, ranks, state):
-        """Update the expected state of the specified job rank.
+        """Update the expected state of the specified job rank(s).
 
         Args:
             ranks (object): job ranks to update. Can be a single rank (int),
@@ -1202,6 +1202,22 @@ class SubprocessManager():
                     rank, self._expected_states[rank]["host"],
                     self._expected_states[rank]["state"], state)
                 self._expected_states[rank]["state"] = state
+
+    def get_expected_states(self, ranks=None):
+        """Get the expected state of the specified job rank(s).
+
+        Args:
+            ranks (object, optional): job ranks to update. Can be a single rank (int),
+                multiple ranks (list), or all the ranks (None). Default is None.
+
+        Returns:
+            dict: states for the specified rank(s).
+        """
+        if ranks is None:
+            ranks = list(self._expected_states.keys())
+        elif not isinstance(ranks, (list, tuple)):
+            ranks = [ranks]
+        return {rank: self._expected_states[rank]["state"] for rank in ranks}
 
     def verify_expected_states(self, set_expected=False, show_logs=True):
         """Verify that the expected job process states match the current states.
