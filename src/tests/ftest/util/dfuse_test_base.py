@@ -22,6 +22,7 @@ class DfuseTestBase(TestWithServers):
         """Initialize a TestWithServers object."""
         super().__init__(*args, **kwargs)
         self.dfuse = None
+        self.dfuse_cores = None
 
     def setUp(self):
         """Setup Test Case"""
@@ -29,6 +30,7 @@ class DfuseTestBase(TestWithServers):
         # using localhost as client if client list is empty
         if self.hostlist_clients is None:
             self.hostlist_clients = agu.include_local_host(None)
+        self.dfuse_cores = self.params.get('dfuse_cores', self.dfuse.namespace, None)
 
     def stop_job_managers(self):
         """Stop the test job manager followed by dfuse.
@@ -44,7 +46,7 @@ class DfuseTestBase(TestWithServers):
             error_list.append("Error stopping dfuse: {}".format(error))
         return error_list
 
-    def start_dfuse(self, hosts, pool=None, container=None, mount_dir=None, bind_cores=None):
+    def start_dfuse(self, hosts, pool=None, container=None, mount_dir=None):
         """Create a DfuseCommand object and use it to start Dfuse.
 
         Args:
@@ -67,7 +69,7 @@ class DfuseTestBase(TestWithServers):
 
         try:
             # Start dfuse
-            self.dfuse.run(bind_cores=bind_cores)
+            self.dfuse.run(bind_cores=self.dfuse_cores)
         except CommandFailure as error:
             self.log.error(
                 "Dfuse command %s failed on hosts %s", str(self.dfuse),

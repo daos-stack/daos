@@ -122,16 +122,15 @@ class Dfuse(DfuseCommand):
             for host in hosts:
                 if retcode == 0:
                     check_mounted.add(host)
-                    continue
-
-                command = "grep 'dfuse {}' /proc/mounts" .format(self.mount_dir.value)
-                retcodes = pcmd([host], command, expect_rc=None)
-                for ret_code, host_names in list(retcodes.items()):
-                    for node in host_names:
-                        if ret_code == 0:
-                            check_mounted.add(node)
-                        else:
-                            state["nodirectory"].add(node)
+                else:
+                    command = "grep 'dfuse {}' /proc/mounts" .format(self.mount_dir.value)
+                    retcodes = pcmd([host], command, expect_rc=None)
+                    for ret_code, host_names in list(retcodes.items()):
+                        for node in host_names:
+                            if ret_code == 0:
+                                check_mounted.add(node)
+                            else:
+                                state["nodirectory"].add(node)
 
         if check_mounted:
             # Detect which hosts with mount point directories have it mounted as
@@ -260,6 +259,7 @@ class Dfuse(DfuseCommand):
         Args:
             check (bool): Check if dfuse mounted properly after
                 mount is executed.
+            bind_cores (str): List of CPU cores to pass to taskset
         Raises:
             CommandFailure: In case dfuse run command fails
 
