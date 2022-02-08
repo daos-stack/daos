@@ -42,7 +42,7 @@ daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 int
 daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
                   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
-__attribute__ ((weak,alias ("daos_pool_connect2")) );
+		  __attribute__ ((weak,alias ("daos_pool_connect2")) );
 #define daos_pool_connect daos_pool_connect2
 
 int
