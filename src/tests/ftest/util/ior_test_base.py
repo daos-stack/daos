@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -59,8 +59,12 @@ class IorTestBase(DfuseTestBase):
         # Get the pool params and create a pool
         self.add_pool(connect=False)
 
-    def create_cont(self):
+    def create_cont(self, chunk_size=None, properties=None):
         """Create a TestContainer object to be used to create container.
+
+        Args:
+            chunk_size (str, optional): container chunk size. Defaults to None.
+            properties (str, optional): additional properties to append. Defaults to None.
 
         """
         # Get container params
@@ -71,6 +75,19 @@ class IorTestBase(DfuseTestBase):
         # update container oclass
         if self.ior_cmd.dfs_oclass:
             self.container.oclass.update(self.ior_cmd.dfs_oclass.value)
+
+        # update container chunk size
+        if chunk_size:
+            self.container.chunk_size.update(chunk_size)
+
+        # append container properties
+        if properties:
+            current_properties = self.container.properties.value
+            if current_properties:
+                new_properties = current_properties + "," + properties
+            else:
+                new_properties = properties
+            self.container.properties.update(new_properties)
 
         # create container
         self.container.create()
@@ -92,7 +109,7 @@ class IorTestBase(DfuseTestBase):
         if pool.dmg:
             pool.set_query_data()
 
-    def run_ior_with_pool(self, intercept=None, test_file_suffix="",
+    def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
                           test_file="daos:/testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
@@ -105,7 +122,9 @@ class IorTestBase(DfuseTestBase):
 
         Args:
             intercept (str, optional): path to the interception library. Shall
-                    be used only for POSIX through DFUSE. Defaults to None.
+                be used only for POSIX through DFUSE. Defaults to None.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to True.
             test_file_suffix (str, optional): suffix to add to the end of the
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
@@ -156,7 +175,8 @@ class IorTestBase(DfuseTestBase):
         job_manager.timeout = timeout
         try:
             out = self.run_ior(job_manager, self.processes,
-                               intercept, plugin_path=plugin_path,
+                               intercept=intercept,
+                               display_space=display_space, plugin_path=plugin_path,
                                fail_on_warning=fail_on_warning,
                                out_queue=out_queue, env=env)
         finally:
@@ -201,7 +221,7 @@ class IorTestBase(DfuseTestBase):
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
         else:
-            self.fail("Unsupported IOR API")
+            self.fail("Unsupported IOR API: {}".format(self.ior_cmd.api.value))
 
         if custom_ior_cmd:
             self.job_manager = Mpirun(custom_ior_cmd, self.subprocess, "mpich")
@@ -251,8 +271,9 @@ class IorTestBase(DfuseTestBase):
             env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env['LD_PRELOAD'] = intercept
-            env['D_LOG_MASK'] = 'INFO'
-            if env.get('D_IL_REPORT', None) is None:
+            if 'D_LOG_MASK' not in env:
+                env['D_LOG_MASK'] = 'INFO'
+            if 'D_IL_REPORT' not in env:
                 env['D_IL_REPORT'] = '1'
 
             #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
@@ -302,6 +323,8 @@ class IorTestBase(DfuseTestBase):
         finally:
             if not self.subprocess and display_space:
                 self.display_pool_space(pool)
+
+        return None
 
     def stop_ior(self):
         """Stop IOR process.
