@@ -1369,8 +1369,15 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
 			 * physical entry, in addition to re-assigning address.
+			 * Because of ent_in is truncated, the dst buf len
+			 * should always be big enough.
 			 */
-			phy_ent->pe_csum_info = ent_in->ei_csum;
+			D_ASSERT(phy_ent->pe_csum_info.cs_buf_len >=
+				 ent_in->ei_csum.cs_buf_len);
+			phy_ent->pe_csum_info.cs_nr = ent_in->ei_csum.cs_nr;
+			memcpy(phy_ent->pe_csum_info.cs_csum,
+			       ent_in->ei_csum.cs_csum,
+			       ent_in->ei_csum.cs_buf_len);
 		}
 	}
 
@@ -1653,6 +1660,8 @@ flush_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 
 	if (!need_flush(ih, agg_param, last))
 		return 0;
+
+	D_DEBUG(DB_TRACE, "Flush to merge to window "DF_EXT"\n", DP_EXT(&mw->mw_ext));
 
 	/* Prepare the new segments to be inserted */
 	rc = prepare_segments(mw);
@@ -2007,7 +2016,7 @@ join_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 			return rc;
 		}
 	} else {
-		/* Can't be the first logcial entry */
+		/* Can't be the first logical entry */
 		D_ASSERT(phy_ext.ex_lo != lgc_ext.ex_lo);
 	}
 
@@ -2507,6 +2516,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	struct agg_data		*ad;
 	int			 rc;
 
+	D_DEBUG(DB_TRACE, "epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi);
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
