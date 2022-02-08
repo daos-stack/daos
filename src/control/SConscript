@@ -230,6 +230,7 @@ def scons():
     senv = denv.Clone()
     denv = senv
     prereqs.require(denv, 'spdk')
+    prereqs.require(denv, 'argobots', header_only=True)
 
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
 
@@ -237,7 +238,6 @@ def scons():
 
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
-    prereqs.require(senv, 'argobots', header_only=True)
     daos_build.add_rpaths(denv, "..", True, True)
 
     cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
