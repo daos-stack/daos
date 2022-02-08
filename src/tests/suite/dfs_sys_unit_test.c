@@ -857,7 +857,7 @@ dfs_sys_teardown(void **state)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 	if (arg->myrank == 0) {
 		char str[37];
 
@@ -867,7 +867,7 @@ dfs_sys_teardown(void **state)
 		print_message("Destroyed DFS Container "DF_UUIDF"\n",
 			      DP_UUID(co_uuid));
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 
 	return test_teardown(state);
 }
@@ -877,10 +877,10 @@ run_dfs_sys_unit_test(int rank, int size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Sys_Unit",
 					 dfs_sys_unit_tests, dfs_sys_setup,
 					 dfs_sys_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 	return rc;
 }

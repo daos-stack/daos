@@ -59,7 +59,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		d_rank_list_dup(&outpool->svc, ipool->svc);
 		outpool->slave = 1;
 		if (arg->multi_rank)
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier();
 		return 0;
 	}
 
@@ -114,23 +114,19 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 out:
 	/** broadcast pool create result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(&rc, 1, PAR_INT, 0);
 		/** broadcast pool UUID and svc addresses */
 		if (!rc) {
-			MPI_Bcast(outpool->pool_uuid, 16,
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(outpool->pool_uuid, 16, PAR_CHAR, 0);
 			uuid_unparse(outpool->pool_uuid, outpool->pool_str);
 
 			/* TODO: Should we even be broadcasting this now? */
 			if (outpool->svc == NULL)
 				return rc;
-			MPI_Bcast(&outpool->svc->rl_nr,
-				  sizeof(outpool->svc->rl_nr),
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
-			MPI_Bcast(outpool->svc->rl_ranks,
-				  sizeof(outpool->svc->rl_ranks[0]) *
-					 outpool->svc->rl_nr,
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(&outpool->svc->rl_nr, sizeof(outpool->svc->rl_nr), PAR_CHAR, 0);
+			par_bcast(outpool->svc->rl_ranks,
+				  sizeof(outpool->svc->rl_ranks[0]) * outpool->svc->rl_nr,
+				  PAR_CHAR, 0);
 		}
 	}
 	return rc;
@@ -149,7 +145,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 		       sizeof(pool->pool_info));
 		arg->pool.poh = pool->poh;
 		if (arg->multi_rank)
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier();
 		return 0;
 	}
 
@@ -192,12 +188,10 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 	/** broadcast pool connect result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(&rc, 1, PAR_INT, 0);
 		if (!rc) {
 			/** broadcast pool info */
-			MPI_Bcast(&arg->pool.pool_info,
-				  sizeof(arg->pool.pool_info),
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(&arg->pool.pool_info, sizeof(arg->pool.pool_info), PAR_CHAR, 0);
 			/** l2g and g2l the pool handle */
 			handle_share(&arg->pool.poh, HANDLE_POOL,
 				     arg->myrank, arg->pool.poh, 0);
@@ -236,11 +230,10 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 	}
 	/** broadcast container create result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(&rc, 1, PAR_INT, 0);
 		/** broadcast container UUID */
 		if (!rc) {
-			MPI_Bcast(arg->co_uuid, 16,
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(arg->co_uuid, 16, PAR_CHAR, 0);
 			uuid_unparse(arg->co_uuid, arg->co_str);
 		}
 	}
@@ -275,7 +268,7 @@ test_setup_cont_open(void **state)
 	}
 	/** broadcast container open result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(&rc, 1, PAR_INT, 0);
 		/** l2g and g2l the container handle */
 		if (!rc)
 			handle_share(&arg->coh, HANDLE_CO,
@@ -336,8 +329,8 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		*state = arg;
 		memset(arg, 0, sizeof(*arg));
 
-		MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
-		MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
+		par_rank(&arg->myrank);
+		par_size(&arg->rank_size);
 		arg->multi_rank = multi_rank;
 		arg->pool.pool_size = pool_size;
 		arg->setup_state = -1;
@@ -483,8 +476,7 @@ test_teardown_cont_hdl(test_arg_t *arg)
 
 	rc = daos_cont_close(arg->coh, NULL);
 	if (arg->multi_rank) {
-		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-			      MPI_COMM_WORLD);
+		par_allreduce(&rc, &rc_reduce, 1, PAR_INT, PAR_MIN);
 		rc = rc_reduce;
 	}
 	arg->coh = DAOS_HDL_INVAL;
@@ -514,7 +506,7 @@ test_teardown_cont(test_arg_t *arg)
 		break;
 	}
 	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(&rc, 1, PAR_INT, 0);
 	if (rc)
 		print_message("failed to destroy container "DF_UUIDF
 			      ": %d\n", DP_UUID(arg->co_uuid), rc);
@@ -540,7 +532,7 @@ test_teardown(void **state)
 	}
 
 	if (arg->multi_rank)
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier();
 
 	if (daos_handle_is_valid(arg->coh)) {
 		rc = test_teardown_cont_hdl(arg);
@@ -571,12 +563,12 @@ test_teardown(void **state)
 				rc = daos_pool_disconnect(arg->pool.poh, NULL);
 		}
 		if (arg->multi_rank)
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier();
 		if (arg->myrank == 0)
 			rc = pool_destroy_safe(arg, NULL);
 
 		if (arg->multi_rank)
-			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			par_bcast(&rc, 1, PAR_INT, 0);
 		if (rc) {
 			print_message("failed to destroy pool "DF_UUIDF
 				      " rc: %d\n",
@@ -670,8 +662,8 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 		arg->hce = crt_hlc_get();
 	}
 
-	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_bcast(&runable, 1, PAR_INT, 0);
+	par_barrier();
 	return runable == 1;
 }
 

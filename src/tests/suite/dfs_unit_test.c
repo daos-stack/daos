@@ -404,11 +404,11 @@ dfs_test_syml(void **state)
 	assert_int_equal(rc, 0);
 
 syml_stat:
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, strlen(val));
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 }
 
 static void
@@ -691,7 +691,7 @@ dfs_test_read_shared_file(void **state)
 	int			i;
 	int			rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 
 	sprintf(name, "MTA_file_%d", arg->myrank);
 	rc = dfs_test_file_gen(name, chunk_size, file_size);
@@ -719,7 +719,7 @@ dfs_test_read_shared_file(void **state)
 	}
 
 	dfs_test_rm(name);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 }
 
 static void
@@ -921,7 +921,7 @@ dfs_test_mt_mkdir(void **state)
 	int			i, one_success;
 	int			rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 
 	sprintf(name, "MTA_dir_%d", arg->myrank);
 
@@ -965,7 +965,7 @@ dfs_test_mt_mkdir(void **state)
 	assert_int_equal(one_success, 1);
 
 	dfs_test_rm(name);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 }
 
 static void
@@ -1168,7 +1168,7 @@ dfs_test_mt_connect(void **state)
 	int			i;
 	int			rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 
 	sprintf(name, "MTA_cont_%d", arg->myrank);
 
@@ -1191,7 +1191,7 @@ dfs_test_mt_connect(void **state)
 
 	rc = daos_cont_destroy(arg->pool.poh, name, 0, NULL);
 	assert_rc_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
@@ -1259,7 +1259,7 @@ dfs_teardown(void **state)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 	if (arg->myrank == 0) {
 		char str[37];
 
@@ -1268,7 +1268,7 @@ dfs_teardown(void **state)
 		assert_rc_equal(rc, 0);
 		print_message("Destroyed DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 
 	return test_teardown(state);
 }
@@ -1278,9 +1278,9 @@ run_dfs_unit_test(int rank, int size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
 					 dfs_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 	return rc;
 }

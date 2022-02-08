@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -391,6 +391,6 @@ run_daos_epoch_test(int rank, int size)
 		rc = cmocka_run_group_tests_name("DAOS_Epoch",
 						 epoch_tests, setup,
 						 test_teardown);
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	par_bcast(&rc, 1, PAR_INT, 0);
 	return rc;
 }

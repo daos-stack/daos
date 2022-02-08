@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -110,6 +110,7 @@ class DaosCoreBase(TestWithServers):
         num_clients = self.get_test_param("num_clients")
         if num_clients is None:
             num_clients = self.params.get("num_clients", '/run/daos_tests/*')
+
         scm_size = self.params.get("scm_size", '/run/pool/*')
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
         args = self.get_test_param("args", "")

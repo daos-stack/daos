@@ -2674,7 +2674,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int i;
 
 	if (rank != 0) {
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier();
 		return 0;
 	}
 
@@ -2700,6 +2700,6 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 					test_teardown);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 	return rc;
 }
