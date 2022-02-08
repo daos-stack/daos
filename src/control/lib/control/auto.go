@@ -606,7 +606,7 @@ func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCf
 					WithScmDeviceList(sd.numaPMems[nn][0]),
 			)
 		}
-		if len(sd.numaSSDs) > 0 {
+		if len(sd.numaSSDs) > 0 && len(sd.numaSSDs[nn]) > 0 {
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass(storage.ClassNvme.String()).
