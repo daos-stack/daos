@@ -38,9 +38,7 @@ class Permission(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.add_pool(create=False)
-        self.test_log.debug("Pool initialization successful")
-        self.pool.create()
+        self.add_pool()
         self.test_log.debug("Pool Creation successful")
 
         try:
