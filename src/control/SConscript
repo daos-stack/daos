@@ -195,6 +195,7 @@ def scons():
     gosrc = Dir('.').srcnode().abspath
 
     prereqs.require(denv, 'ofi', 'hwloc')
+    prereqs.require(denv, 'argobots', header_only=True)
     old_cgold = denv["ENV"].get("CGO_LDFLAGS", "")
     # Sets CGO_LDFLAGS for rpath options
     daos_build.add_rpaths(denv, "..", True, True)
@@ -230,7 +231,6 @@ def scons():
     senv = denv.Clone()
     denv = senv
     prereqs.require(denv, 'spdk')
-    prereqs.require(denv, 'argobots', header_only=True)
 
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
 
