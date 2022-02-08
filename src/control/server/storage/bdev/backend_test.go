@@ -41,6 +41,12 @@ func defCmpOpts() []cmp.Option {
 		// ignore these fields on most tests, as they are intentionally not stable
 		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
 		cmp.AllowUnexported(hardware.PCIAddressSet{}),
+		cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+			if x == nil && y == nil {
+				return true
+			}
+			return x.Equals(y)
+		}),
 	}
 }
 
@@ -161,6 +167,12 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 func TestBackend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 
+	mockScanReq := func() storage.BdevScanRequest {
+		return storage.BdevScanRequest{
+			DeviceList: &storage.BdevDeviceList{},
+		}
+	}
+
 	for name, tc := range map[string]struct {
 		req     storage.BdevScanRequest
 		mec     spdk.MockEnvCfg
@@ -169,20 +181,21 @@ func TestBackend_Scan(t *testing.T) {
 		expErr  error
 	}{
 		"binding scan fail": {
+			req: mockScanReq(),
 			mnc: spdk.MockNvmeCfg{
 				DiscoverErr: errors.New("spdk says no"),
 			},
 			expErr: errors.New("spdk says no"),
 		},
 		"empty results from binding": {
-			req:     storage.BdevScanRequest{},
+			req:     mockScanReq(),
 			expResp: &storage.BdevScanResponse{},
 		},
 		"binding scan success": {
 			mnc: spdk.MockNvmeCfg{
 				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
 			},
-			req: storage.BdevScanRequest{},
+			req: mockScanReq(),
 			expResp: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
 			},
@@ -238,7 +251,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.Class("whoops"),
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
@@ -254,7 +267,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:          storage.ClassFile,
-					DeviceList:     []string{filepath.Join(testDir, "daos-bdev")},
+					DeviceList:     storage.MustNewBdevDeviceList(filepath.Join(testDir, "daos-bdev")),
 					DeviceFileSize: humanize.MiByte,
 				},
 			},
@@ -274,7 +287,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassKdev,
-					DeviceList: []string{"/dev/sdc", "/dev/sdd"},
+					DeviceList: storage.MustNewBdevDeviceList("/dev/sdc", "/dev/sdd"),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -291,7 +304,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expErr: errors.New("spdk says no"),
@@ -300,7 +313,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expErr: errors.New("empty results from spdk binding format request"),
@@ -314,7 +327,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -342,7 +355,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1, pci2, pci3},
+					DeviceList: storage.MustNewBdevDeviceList(pci1, pci2, pci3),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -379,7 +392,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1, pci2, pci3},
+					DeviceList: storage.MustNewBdevDeviceList(pci1, pci2, pci3),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -415,7 +428,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -453,7 +466,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -481,7 +494,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{vmdAddr},
+					DeviceList: storage.MustNewBdevDeviceList(vmdAddr),
 				},
 				VMDEnabled: true,
 				BdevCache: &storage.BdevScanResponse{
@@ -534,7 +547,7 @@ func TestBackend_Format(t *testing.T) {
 			switch tc.req.Properties.Class {
 			case storage.ClassFile:
 				// verify empty files created for AIO class
-				for _, testFile := range tc.req.Properties.DeviceList {
+				for _, testFile := range tc.req.Properties.DeviceList.Devices() {
 					if _, err := os.Stat(testFile); err != nil {
 						t.Fatal(err)
 					}
@@ -563,7 +576,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -574,7 +587,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -587,7 +600,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -599,7 +612,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -614,7 +627,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{vmdAddr},
+						DeviceList: storage.MustNewBdevDeviceList(vmdAddr),
 					},
 				},
 				BdevCache: &storage.BdevScanResponse{
@@ -626,7 +639,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 				TierProps: []storage.BdevTierProperties{
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{vmdBackingAddr1, vmdBackingAddr2},
+						DeviceList: storage.MustNewBdevDeviceList(vmdBackingAddr1, vmdBackingAddr2),
 					},
 				},
 				BdevCache: &storage.BdevScanResponse{
