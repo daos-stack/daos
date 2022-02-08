@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -16,7 +16,7 @@ class EcodMdtest(MdtestBase):
     :avocado: recursive
     """
 
-    def test_mdtest_large(self):
+    def test_ec_mdtest_smoke(self):
         """Jira ID: DAOS-2494.
 
         Test Description:
@@ -27,7 +27,7 @@ class EcodMdtest(MdtestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_smoke,mdtest
-        :avocado: tags=ec_mdtest
+        :avocado: tags=ec_mdtest_smoke
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
         self.mdtest_cmd.flags.update(mdtest_flags)

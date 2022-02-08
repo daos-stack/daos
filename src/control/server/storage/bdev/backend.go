@@ -290,11 +290,11 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
-	needDevs, err := hardware.NewPCIAddressSet(req.DeviceList...)
-	if err != nil {
-		return nil, err
+	if req.DeviceList == nil {
+		return nil, errors.New("nil device list in bdev scan request")
 	}
 
+	needDevs := &req.DeviceList.PCIAddressSet
 	spdkOpts := &spdk.EnvOptions{
 		PCIAllowList: needDevs,
 		EnableVMD:    req.VMDEnabled,
@@ -390,7 +390,7 @@ func (sb *spdkBackend) formatAioFile(req *storage.BdevFormatRequest) (*storage.B
 		DeviceResponses: make(storage.BdevDeviceFormatResponses),
 	}
 
-	for _, path := range req.Properties.DeviceList {
+	for _, path := range req.Properties.DeviceList.Devices() {
 		devResp := new(storage.BdevDeviceFormatResponse)
 		resp.DeviceResponses[path] = devResp
 		if err := createEmptyFile(sb.log, path, req.Properties.DeviceFileSize); err != nil {
@@ -413,7 +413,7 @@ func (sb *spdkBackend) formatKdev(req *storage.BdevFormatRequest) (*storage.Bdev
 		DeviceResponses: make(storage.BdevDeviceFormatResponses),
 	}
 
-	for _, device := range req.Properties.DeviceList {
+	for _, device := range req.Properties.DeviceList.Devices() {
 		resp.DeviceResponses[device] = new(storage.BdevDeviceFormatResponse)
 		sb.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Properties.Class, device)
 	}
@@ -422,10 +422,7 @@ func (sb *spdkBackend) formatKdev(req *storage.BdevFormatRequest) (*storage.Bdev
 }
 
 func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	needDevs, err := hardware.NewPCIAddressSet(req.Properties.DeviceList...)
-	if err != nil {
-		return nil, err
-	}
+	needDevs := &req.Properties.DeviceList.PCIAddressSet
 
 	if needDevs.IsEmpty() {
 		sb.log.Debug("skip nvme format as bdev device list is empty")
@@ -494,16 +491,13 @@ func (sb *spdkBackend) writeNvmeConfig(req storage.BdevWriteConfigRequest, confW
 				continue
 			}
 
-			bdevs, err := hardware.NewPCIAddressSet(props.DeviceList...)
-			if err != nil {
-				return errors.Wrapf(err, "storage tier %d", props.Tier)
-			}
+			bdevs := &props.DeviceList.PCIAddressSet
 
 			dl, err := substituteVMDAddresses(sb.log, bdevs, req.BdevCache)
 			if err != nil {
 				return errors.Wrapf(err, "storage tier %d", props.Tier)
 			}
-			props.DeviceList = dl.Strings()
+			props.DeviceList = &storage.BdevDeviceList{PCIAddressSet: *dl}
 			tps = append(tps, props)
 		}
 		req.TierProps = tps
