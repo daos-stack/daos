@@ -4,7 +4,6 @@ hosts:
   test_clients:
     - client-C
 # Test typically takes around 15 minutes, set timeout for 30.
-timeout: 7200
 timeout: 1800
 server_config:
   name: daos_server

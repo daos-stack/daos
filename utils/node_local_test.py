@@ -437,7 +437,7 @@ class DaosPool():
         return self.id()
 
     def fetch_containers(self):
-        """Query the server and return a list of pool objects"""
+        """Query the server and return a list of container objects"""
         rc = run_daos_cmd(self._server.conf, ['container', 'list', self.uuid], use_json=True)
 
         data = rc.json

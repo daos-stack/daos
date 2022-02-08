@@ -11,7 +11,7 @@ import general_utils
 from dfuse_test_base import DfuseTestBase
 from command_utils import CommandFailure
 
-class BuildDaos(DfuseTestBase):
+class DaosBuild(DfuseTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
     """Build DAOS over dfuse
 
@@ -22,7 +22,7 @@ class BuildDaos(DfuseTestBase):
         """Jira ID: DAOS-8937.
 
         Test Description:
-            This tests builds DAOS on a dfuse filesystem.
+            This test builds DAOS on a dfuse filesystem.
         Use cases:
             Create Pool
             Create Posix container
@@ -61,8 +61,8 @@ class BuildDaos(DfuseTestBase):
                 'scons-3 -C {} --jobs 50 build --build-deps=yes'.format(build_dir)]
         for cmd in cmds:
             try:
-                # Set a timeout of 90 minutes, the whole test will timeout after 120.
-                ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=5400)
+                # Set a timeout of 1500 seconds, the whole test will timeout after 1800
+                ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=1500)
                 if 0 in ret_code:
                     continue
                 print(ret_code)

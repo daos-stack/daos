@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -269,9 +269,10 @@ class Dfuse(DfuseCommand):
             raise CommandFailure(
                 "Dfuse missing environment variables for D_LOG_FILE")
 
+        if 'D_LOG_MASK' not in self.env:
+            self.env['D_LOG_MASK'] = 'INFO'
         # self.env['DD_MASK'] = 'all'
         # self.env['DD_SUBSYS'] = 'all'
-        self.env['D_LOG_MASK'] = 'INFO'
 
         # create dfuse dir if does not exist
         self.create_mount_point()
