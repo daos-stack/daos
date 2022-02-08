@@ -207,7 +207,7 @@ def define_mercury(reqs):
                           'make $JOBS_OPT', 'make install'],
                 libs=['mercury', 'na', 'mercury_util'],
                 pkgconfig='mercury',
-                requires=['ucx', atomic, 'boost', 'ofi'] + libs,
+                requires=[atomic, 'boost', 'ofi'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 patch_rpath=['lib'])
