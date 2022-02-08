@@ -182,6 +182,7 @@ def define_mercury(reqs):
         '-DUCP_LIBRARY=/usr/lib64/libucp.so '\
         '-DUCS_LIBRARY=/usr/lib64/libucs.so '\
         '-DUCT_LIBRARY=/usr/lib64/libuct.so '
+        libs.append('ucx')
     else:
         ucx = ""
 
