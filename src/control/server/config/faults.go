@@ -191,6 +191,16 @@ func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
 	)
 }
 
+// FaultConfigInsufficientHugePages creates a fault for the scenario where the
+// number of configured huge pages is less than required.
+func FaultConfigInsufficientHugePages(min, req int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigInsufficientHugePages,
+		fmt.Sprintf("insufficient huge pages configured for the number of targets (%d < %d)", req, min),
+		"update the 'nr_hugepages' parameter or remove it for automatic configuration",
+	)
+}
+
 func serverConfigFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "serverconfig",
