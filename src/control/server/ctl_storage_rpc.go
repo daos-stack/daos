@@ -184,7 +184,7 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 func (c *ControlService) getMetadataCapacity(mountPoint string) (uint64, error) {
 	var engineCfg *engine.Config
 loop:
-	for index := range(c.srvCfg.Engines) {
+	for index := range c.srvCfg.Engines {
 		for _, tierCfg := range c.srvCfg.Engines[index].Storage.Tiers {
 			if ! tierCfg.IsSCM() || tierCfg.Scm.MountPoint != mountPoint {
 				continue
