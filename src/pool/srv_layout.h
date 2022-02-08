@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,6 +59,7 @@ extern d_iov_t ds_pool_prop_redun_fac;		/* pool redundancy factor */
 extern d_iov_t ds_pool_prop_ec_pda;		/* uint32_t */
 extern d_iov_t ds_pool_prop_rp_pda;		/* uint32_t */
 extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
+extern d_iov_t ds_pool_prop_policy;		/* tiering policy uint32_t */
 
 /*
  * Pool handle KVS (RDB_KVS_GENERIC)

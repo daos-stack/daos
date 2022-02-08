@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -193,6 +193,17 @@ func TestControl_PoolProperties(t *testing.T) {
 		"rp_pda-invalid": {
 			name:   "rp_pda",
 			value:  "-1",
+			expErr: errors.New("invalid"),
+		},
+		"policy-valid": {
+			name:    "policy",
+			value:   "type=io_size",
+			expStr:  "policy:type=io_size",
+			expJson: []byte(`{"name":"policy","description":"Tier placement policy","value":"type=io_size"}`),
+		},
+		"policy-invalid": {
+			name:   "policy",
+			value:  "deadd00d",
 			expErr: errors.New("invalid"),
 		},
 	} {

@@ -82,8 +82,13 @@ class DaosPool():
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
+
+        if self.uuid is None:
+            raise DaosApiError("Pool uuid is None.")
+        uuid_str = self.get_uuid_str()
+
         if cb_func is None:
-            ret = func(self.uuid, self.group, c_flags,
+            ret = func(bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
                        ctypes.byref(self.handle), ctypes.byref(c_info), None)
 
             if ret != 0:
@@ -93,7 +98,7 @@ class DaosPool():
             self.connected = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, c_flags,
+            params = [bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
@@ -643,7 +648,7 @@ class DaosObj():
         Args:
             txn (int): the transaction from which keys will be deleted
             dkeys (list): the keys to be deleted, None will be passed as NULL
-            cb_func (object, optional): callback function. Defaults to None.
+            cb_func (CallbackHandler, optional): Callback function. Defaults to None.
 
         Raises:
             DaosApiError: if there is an error deleting the keys.
@@ -697,7 +702,7 @@ class DaosObj():
             txn (int): the transaction from which keys will be deleted.
             dkey (str): the parent dkey from which the akeys will be deleted
             akeys (list): a list of akeys (strings) which are to be deleted
-            cb_func ([type], optional): callback function. Defaults to None.
+            cb_func (CallbackHandler, optional): callback function. Defaults to None.
 
         Raises:
             DaosApiError: if there is an error deleting the akeys.
@@ -1300,8 +1305,7 @@ class IORequest():
             # set in the kds (key descriptors) object to get the individual
             # keys.
             dkeys.extend(
-                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds,
-                buf=buf))
+                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds, buf=buf))
 
         return dkeys
 
@@ -1471,7 +1475,7 @@ class DaosContainer():
         # Create DaosProperty for checksum
         # 1. Layout Type.
         # 2. Enable checksum,
-        # 3. Server Verfiy
+        # 3. Server Verify
         # 4. Chunk Size Allocation.
         if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 and (self.cont_input_values.enable_chksum is False)):
@@ -1479,7 +1483,7 @@ class DaosContainer():
             num_prop = 1
         elif ((self.cont_input_values.type.decode("UTF-8") == "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
-            # Obly checksum enabled.
+            # Only checksum enabled.
             num_prop = 3
         elif ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
@@ -1489,7 +1493,7 @@ class DaosContainer():
         if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 or (self.cont_input_values.enable_chksum is True)):
             self.cont_prop = daos_cref.DaosProperty(num_prop)
-        # idx index is used to increment the dpp_entried array
+        # idx index is used to increment the dpp_entries array
         # value. If layer_type is None and checksum is enabled
         # the index will vary. [eg: layer is none, checksum
         # dpp_entries will start with idx=0. If layer is not
@@ -1663,8 +1667,22 @@ class DaosContainer():
                                             self))
             thread.start()
 
-    def query(self, coh=None, cb_func=None):
-        """Query container information."""
+    def query(self, coh=None, cont_prop=None, cb_func=None):
+        """Query container information.
+
+        Args:
+            coh (ctypes.c_uint64, optional): Container handle. Defaults to None.
+            cont_prop (daos_cref.DaosProperty, optional): Empty data structure that
+                stores the property values. The values are set during create(). The
+                configuration of the data structure depends on the property values set.
+                See create() for more details. Defaults to None.
+            cb_func (CallbackHandler, None): Callback function. Defaults to None.
+
+        Returns:
+            daos_cref.ContInfo: Container info that stores UUID, snapshots, redundancy
+                factor, etc.
+
+        """
         # allow caller to override the handle
         if coh is not None:
             self.coh = coh
@@ -1672,10 +1690,14 @@ class DaosContainer():
         func = self.context.get_function('query-cont')
 
         if cb_func is None:
-            ret = func(self.coh, ctypes.byref(self.info), None, None)
+            if cont_prop:
+                ret = func(
+                    self.coh, ctypes.byref(self.info), ctypes.byref(cont_prop), None)
+            else:
+                ret = func(self.coh, ctypes.byref(self.info), None, None)
             if ret != 0:
-                raise DaosApiError("Container query returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError(
+                    "Container query returned non-zero. RC: {0}".format(ret))
             return self.info
 
         event = daos_cref.DaosEvent()
@@ -2279,7 +2301,7 @@ class DaosContext():
             'close-obj':       self.libdaos.daos_obj_close,
             'close-tx':        self.libdaos.daos_tx_close,
             'commit-tx':       self.libdaos.daos_tx_commit,
-            'connect-pool':    self.libdaos.daos_pool_connect,
+            'connect-pool':    self.libdaos.daos_pool_connect2,
             'convert-cglobal': self.libdaos.daos_cont_global2local,
             'convert-clocal':  self.libdaos.daos_cont_local2global,
             'convert-pglobal': self.libdaos.daos_pool_global2local,

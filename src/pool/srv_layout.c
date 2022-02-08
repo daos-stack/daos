@@ -26,6 +26,9 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
+RDB_STRING_KEY(ds_pool_prop_, policy);
+
+/** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
 RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
 RDB_STRING_KEY(ds_pool_prop_, redun_fac);
@@ -37,7 +40,7 @@ RDB_STRING_KEY(ds_pool_attr_, user);
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_PO_LABEL,
-		.dpe_str	= "pool_label_not_set",
+		.dpe_str	= DAOS_PROP_PO_LABEL_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SPACE_RB,
 		.dpe_val	= 0,
@@ -73,6 +76,9 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_PO_RP_PDA,
 		.dpe_val	= DAOS_PROP_PO_RP_PDA_DEFAULT,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_POLICY,
+		.dpe_str	= "type=io_size",
 	}
 };
 
@@ -94,7 +100,6 @@ ds_pool_prop_default_init(void)
 		if (entry->dpe_val_ptr == NULL)
 			return -DER_NOMEM;
 	}
-
 	return 0;
 }
 

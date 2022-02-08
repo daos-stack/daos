@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -85,6 +85,10 @@ enum daos_pool_props {
 	 * of replicated object.
 	 */
 	DAOS_PROP_PO_RP_PDA,
+	/**
+	 * Media selection policy
+	 */
+	DAOS_PROP_PO_POLICY,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -423,6 +427,10 @@ struct daos_prop_entry {
 /** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
 #define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
 
+/** default values for unset labels */
+#define DAOS_PROP_CO_LABEL_DEFAULT "container_label_not_set"
+#define DAOS_PROP_PO_LABEL_DEFAULT "pool_label_not_set"
+
 /**
  * Check if DAOS (pool or container property) label string is valid.
  * DAOS labels must consist only of alphanumeric characters, colon ':',
@@ -490,6 +498,9 @@ daos_label_is_valid(const char *label)
 
 	return true;
 }
+
+/** max length of the policy string */
+#define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
 
 /** daos properties, for pool or container */
 typedef struct {

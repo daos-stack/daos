@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -632,8 +633,10 @@ func (c *FabricScannerConfig) Validate() error {
 // FabricScanner is a type that scans the system for fabric interfaces.
 type FabricScanner struct {
 	log      logging.Logger
+	mutex    sync.Mutex
 	config   *FabricScannerConfig
 	builders []FabricInterfaceSetBuilder
+	topo     *Topology
 }
 
 // NewFabricScanner creates a new FabricScanner with the given configuration.
@@ -653,9 +656,13 @@ func (s *FabricScanner) init(ctx context.Context) error {
 		return errors.Wrap(err, "invalid FabricScannerConfig")
 	}
 
-	topo, err := s.config.TopologyProvider.GetTopology(ctx)
-	if err != nil {
-		return err
+	topo := s.topo
+	if topo == nil {
+		var err error
+		topo, err = s.config.TopologyProvider.GetTopology(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	s.builders = defaultFabricInterfaceSetBuilders(s.log,
@@ -664,8 +671,6 @@ func (s *FabricScanner) init(ctx context.Context) error {
 			FabricInterfaceProviders: s.config.FabricInterfaceProviders,
 			NetDevClassProvider:      s.config.NetDevClassProvider,
 		})
-
-	s.log.Debugf("initialized FabricScanner")
 	return nil
 }
 
@@ -674,6 +679,9 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 	if s == nil {
 		return nil, errors.New("FabricScanner is nil")
 	}
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	if !s.isInitialized() {
 		if err := s.init(ctx); err != nil {
@@ -696,4 +704,21 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 
 func (s *FabricScanner) isInitialized() bool {
 	return len(s.builders) > 0
+}
+
+// CacheTopology caches a specific HW topology for use with the fabric scan.
+func (s *FabricScanner) CacheTopology(t *Topology) error {
+	if s == nil {
+		return errors.New("FabricScanner is nil")
+	}
+
+	if t == nil {
+		return errors.New("Topology is nil")
+	}
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.topo = t
+	return nil
 }

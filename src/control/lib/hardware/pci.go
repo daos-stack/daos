@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -202,6 +202,11 @@ func MustNewPCIAddress(addr string) *PCIAddress {
 // PCIAddressSet represents a unique set of PCI addresses.
 type PCIAddressSet struct {
 	addrMap map[string]*PCIAddress
+}
+
+// Equals compares two PCIAddressSets for equality.
+func (pas *PCIAddressSet) Equals(other *PCIAddressSet) bool {
+	return pas.Difference(other).Len() == 0
 }
 
 // Contains returns true if provided address is already in set.

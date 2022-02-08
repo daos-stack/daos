@@ -395,7 +395,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		D_GOTO(out, err = -DER_NOMEM);
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
-		if (cont->sc_closing)
+		if (!dtx_cont_opened(cont))
 			goto out;
 
 		if (dre->dre_dte.dte_mbs->dm_dte_flags & DTE_LEADER)
@@ -457,7 +457,7 @@ out:
 				       dre_link)) != NULL)
 		dtx_dre_release(drh, dre);
 
-	if (err >= 0 && !cont->sc_closing)
+	if (err >= 0 && dtx_cont_opened(cont))
 		/* Drain old committable DTX to help subsequent rebuild. */
 		err = dtx_obj_sync(cont, NULL, dra->epoch);
 
@@ -581,17 +581,28 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		resynced = true;
 	}
-	if (resynced || /* Someone just did the DTX resync*/
-	    cont->sc_closing) {
+	if (resynced /* Someone just did the DTX resync*/ || !dtx_cont_opened(cont)) {
 		ABT_mutex_unlock(cont->sc_mutex);
 		goto out;
 	}
 
 	crt_group_rank(NULL, &myrank);
-	if (myrank == daos_fail_value_get() &&
-	    DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
+	if (myrank == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
+		uint64_t	hint = 0;
+
 		dss_set_start_epoch();
 		vos_dtx_cache_reset(cont->sc_hdl);
+
+		while (1) {
+			rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
+			if (rc > 0)
+				break;
+
+			/* Simplify failure handling just for test. */
+			D_ASSERT(rc == 0);
+
+			ABT_thread_yield();
+		}
 	}
 
 	cont->sc_dtx_resyncing = 1;

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,7 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
+#include <daos_srv/policy.h>
 
 /*
  * Pool object
@@ -32,7 +33,7 @@ struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;	/* pool UUID */
 	ABT_rwlock		sp_lock;
-	struct pool_map	       *sp_map;
+	struct pool_map		*sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
@@ -42,10 +43,11 @@ struct ds_pool {
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
 	crt_group_t	       *sp_group;
+	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
-	struct ds_iv_ns	       *sp_iv_ns;
+	struct ds_iv_ns		*sp_iv_ns;
 
 	/* structure related to EC aggregate epoch query */
 	d_list_t		sp_ec_ephs_list;

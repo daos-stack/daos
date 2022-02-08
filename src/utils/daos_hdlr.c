@@ -108,9 +108,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 	/* Open OIT */
 	rc = daos_oit_open(ap->cont, ap->epc, &oit, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream,
-			"open of container's OIT failed: "DF_RC"\n",
-			DP_RC(rc));
+		DH_PERROR_DER(ap, rc, "open of container's OIT failed");
 		goto out_snap;
 	}
 
@@ -122,9 +120,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 		oids_nr = OID_ARR_SIZE;
 		rc = daos_oit_list(oit, oids, &oids_nr, &anchor, NULL);
 		if (rc != 0) {
-			fprintf(ap->errstream,
-				"object IDs enumeration failed: "DF_RC"\n",
-				DP_RC(rc));
+			DH_PERROR_DER(ap, rc, "object IDs enumeration failed");
 			D_GOTO(out_close, rc);
 		}
 
@@ -146,9 +142,8 @@ cont_check_hdlr(struct cmd_args_s *ap)
 			}
 
 			if (rc < 0) {
-				fprintf(ap->errstream,
-					"check object "DF_OID" failed: "
-					DF_RC"\n", DP_OID(oids[i]), DP_RC(rc));
+				DH_PERROR_DER(ap, rc,
+					"check object "DF_OID" failed", DP_OID(oids[i]));
 				D_GOTO(out_close, rc);
 			}
 		}
@@ -1294,15 +1289,13 @@ dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers, size_t **_sizes)
 	size_t	i;
 
 	if (names != NULL) {
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < n; i++)
 			D_FREE(names[i]);
-		}
 		D_FREE(*_names);
 	}
 	if (buffers != NULL) {
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < n; i++)
 			D_FREE(buffers[i]);
-		}
 		D_FREE(*_buffers);
 	}
 	D_FREE(*_sizes);
@@ -1451,8 +1444,8 @@ dm_copy_usr_attrs(struct cmd_args_s *ap, daos_handle_t src_coh, daos_handle_t ds
 	if (num_attrs == 0)
 		D_GOTO(out, rc = 0);
 
-	rc = daos_cont_set_attr(dst_coh, num_attrs, (char const * const*) names,
-				(void const * const*) buffers, sizes, NULL);
+	rc = daos_cont_set_attr(dst_coh, num_attrs, (char const * const*)names,
+				(void const * const*)buffers, sizes, NULL);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "Failed to set user attributes");
 		D_GOTO(out, rc);
@@ -1685,8 +1678,8 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 	}
 	(*daos_cont_deserialize_attrs)(preserve_props, &num_attrs, &names, &buffers, &sizes);
 	if (num_attrs > 0) {
-		rc = daos_cont_set_attr(ca->dst_coh, num_attrs, (const char * const*) names,
-					(const void * const*) buffers, sizes, NULL);
+		rc = daos_cont_set_attr(ca->dst_coh, num_attrs, (const char * const*)names,
+					(const void * const*)buffers, sizes, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to set user attributes");
 			D_GOTO(out, rc);
@@ -1778,7 +1771,6 @@ dm_connect(struct cmd_args_s *ap,
 				DH_PERROR_DER(ap, rc, "Failed to serialize metadata");
 				D_GOTO(out, rc);
 			}
-
 		}
 		/* if DAOS -> DAOS copy container properties from src to dst */
 		if (dst_file_dfs->type == DAOS) {
