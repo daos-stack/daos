@@ -8,7 +8,7 @@ import os
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from general_utils import get_default_config_file
+from general_utils import get_default_config_file, check_pool_files
 from dmg_utils import get_dmg_command
 
 
@@ -103,7 +103,7 @@ class DestroyTests(TestWithServers):
             "Pool data not detected on servers before destroy")
 
     def validate_pool_destroy(self, hosts, case, exception_expected=False,
-                              new_dmg=None):
+                              new_dmg=None, valid_uuid=None):
         """Validate a pool destroy.
 
         Args:
@@ -112,9 +112,13 @@ class DestroyTests(TestWithServers):
             exception_expected (bool, optional): is an exception expected to be
                 raised when destroying the pool. Defaults to False.
             new_dmg (DmgCommand): Used to test wrong daos_control.yaml. Defaults to None.
+            valid_uuid (str): UUID used to search the pool file. This parameter is used
+                when we try to destroy with invalid UUID, then checks if the pool file
+                with the original UUID still exists. Defaults to None.
         """
         exception_detected = False
-        saved_uuid = self.pool.uuid
+        if valid_uuid is None:
+            valid_uuid = self.pool.uuid
         self.log.info("Attempting to destroy pool %s", case)
 
         if new_dmg:
@@ -139,20 +143,17 @@ class DestroyTests(TestWithServers):
             self.log.error(
                 "Exception did not occur - destroying pool %s", case)
 
-        # Restore the valid UUID.
-        self.pool.uuid = saved_uuid
-
         # If we failed to destroy the pool, check if we still have the pool files.
         if exception_detected:
             self.log.info("Check pool data still exists after a failed pool destroy")
             self.assertTrue(
-                self.pool.check_files(hosts),
+                check_pool_files(hosts=hosts, uuid=valid_uuid),
                 "Pool data was not detected on servers after "
                 "failing to destroy a pool {}".format(case))
         else:
             self.log.info("Check pool data does not exist after the pool destroy")
             self.assertFalse(
-                self.pool.check_files(hosts),
+                check_pool_files(hosts=hosts, uuid=valid_uuid),
                 "Pool data was detected on servers after destroying a pool {}".format(
                     case))
 
