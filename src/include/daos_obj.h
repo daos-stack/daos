@@ -6,8 +6,6 @@
 #ifndef __DAOS_OBJ_H__
 #define __DAOS_OBJ_H__
 
-#define daos_obj_generate_oid daos_obj_generate_oid2
-
 #if defined(__cplusplus)
 extern "C" {
 #endif

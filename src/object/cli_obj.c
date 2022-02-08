@@ -6004,6 +6004,12 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 }
 
 int
+daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
+		       enum daos_otype_t type, daos_oclass_id_t cid,
+		       daos_oclass_hints_t hints, uint32_t args)
+		       __attribute__ ((weak, alias("daos_obj_generate_oid")));
+
+int
 daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 			    daos_obj_id_t *oid, enum daos_otype_t type,
 			    daos_oclass_id_t cid, daos_oclass_hints_t hints,
