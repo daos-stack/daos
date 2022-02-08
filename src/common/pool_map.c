@@ -1360,6 +1360,10 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	}
 	D_ASSERT(addr - (void *)dst_tree <= size);
 	D_DEBUG(DB_TRACE, "Merged all components\n");
+
+	/* Update the total target number for the root */
+	dst_tree->do_target_nr = cntr.cc_targets;
+
 	/* At this point, I only have valid children pointers for the last
 	 * layer domains, and need to build target pointers for all layers.
 	 */
