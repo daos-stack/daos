@@ -321,9 +321,9 @@ rdb_raft_load_snapshot(struct rdb *db)
 	 */
 	rc = rdb_raft_load_replicas(db->d_lc, db->d_lc_record.dlr_base, &replicas);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to load replicas in snapshot "DF_U64" (term="DF_U64": "DF_RC
-			"\n", DP_DB(db), db->d_lc_record.dlr_base, db->d_lc_record.dlr_base_term,
-			DP_RC(rc));
+		D_ERROR(DF_DB": failed to load replicas in snapshot "DF_U64" (term="DF_U64"): "
+			DF_RC"\n", DP_DB(db), db->d_lc_record.dlr_base,
+			db->d_lc_record.dlr_base_term, DP_RC(rc));
 		goto out;
 	}
 
@@ -334,7 +334,7 @@ rdb_raft_load_snapshot(struct rdb *db)
 			rc = 0;
 			goto out_replicas;
 		}
-		D_ERROR(DF_DB": failed to load snapshot "DF_U64" (term="DF_U64": "DF_RC"\n",
+		D_ERROR(DF_DB": failed to load snapshot "DF_U64" (term="DF_U64"): "DF_RC"\n",
 			DP_DB(db), db->d_lc_record.dlr_base, db->d_lc_record.dlr_base_term,
 			DP_RC(rc));
 		rc = rdb_raft_rc(rc);
@@ -357,6 +357,7 @@ out:
 	return rc;
 }
 
+/* Unload the current snapshot. */
 static void
 rdb_raft_unload_snapshot(struct rdb *db)
 {
@@ -1049,6 +1050,9 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 	void	       *result;
 	int		rc;
 
+	D_DEBUG(DB_MD, DF_DB": cfg entry "DF_U64": term=%ld type=%s rank=%u\n", DP_DB(db), index,
+		entry->term, rdb_raft_entry_type_str(entry->type), rank);
+
 	rc = rdb_raft_load_replicas(db->d_lc, index, &replicas);
 	if (rc != 0)
 		goto out;
@@ -1294,7 +1298,8 @@ static raft_node_id_t
 rdb_raft_cb_log_get_node_id(raft_server_t *raft, void *arg, raft_entry_t *entry,
 			    raft_index_t index)
 {
-	D_ASSERTF(raft_entry_is_cfg_change(entry), "index=%ld type=%d\n", index, entry->type);
+	D_ASSERTF(raft_entry_is_cfg_change(entry), "index=%ld type=%s\n", index,
+		  rdb_raft_entry_type_str(entry->type));
 	return rdb_raft_cfg_entry_rank(entry);
 }
 
@@ -1306,9 +1311,15 @@ rdb_raft_cb_notify_membership_event(raft_server_t *raft, void *udata, raft_node_
 
 	switch (type) {
 	case RAFT_MEMBERSHIP_ADD:
+		/*
+		 * When loading a snapshot, we create the rdb_raft_node object
+		 * based on our snapshot content before asking raft to create
+		 * the raft_node_t object, because there is no entry for the
+		 * current callback to work with.
+		 */
 		if (rdb_node != NULL)
 			break;
-		D_ASSERT(rdb_node == NULL && entry != NULL);
+		D_ASSERT(entry != NULL);
 		rdb_node = calloc(1, sizeof(*rdb_node));
 		/*
 		 * Since we may be called from raft_offer_log or raft_pop_log,
@@ -1325,7 +1336,8 @@ rdb_raft_cb_notify_membership_event(raft_server_t *raft, void *udata, raft_node_
 		free(rdb_node);
 		break;
 	default:
-		D_ASSERTF(false, "invalid raft membership event type %d\n", type);
+		D_ASSERTF(false, "invalid raft membership event type %s\n",
+			  rdb_raft_entry_type_str(type));
 	}
 }
 
