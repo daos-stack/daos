@@ -38,7 +38,7 @@ class DaosBuild(DfuseTestBase):
         scons = 'scons-3'
         dist = distro.linux_distribution()
         if dist[0] == 'CentOS Linux' and dist[1] == '7':
-            self.SkipTest('Newer software distribution needed')
+            self.skipTest('Newer software distribution needed')
         if dist[0] == 'openSUSE Leap':
             scons = 'scons'
 
