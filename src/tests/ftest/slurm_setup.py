@@ -14,19 +14,8 @@ import socket
 import sys
 from ClusterShell.NodeSet import NodeSet
 from util.general_utils import pcmd, run_task
-from avocado.utils.distro import detect
 
-
-distro_info = detect()
 SLURM_CONF = "/etc/slurm/slurm.conf"
-PACKAGE_VERSION = None
-if "suse" in distro_info.name.lower():
-    distro = "suse.lp{}{}".format(distro_info.version, distro_info.release)
-elif "centos" in distro_info.name.lower() and distro_info.version == "7":
-    distro = "el7"
-    PACKAGE_VERSION = "18.08.8-1.{}.x86_64".format(distro)
-elif "centos" in distro_info.name.lower() and distro_info.version == "8":
-    distro = "el8"
 
 PACKAGE_LIST = ["slurm", "slurm-example-configs",
                 "slurm-slurmctld", "slurm-slurmd"]
@@ -75,7 +64,14 @@ def update_config_cmdlist(args):
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         sys.exit(1)
-    if distro in ["el8", "suse.lp153"]:
+    # grep SLURM_CONF to determine format of the the file
+    command = r"grep SlurmctldHost {}".format(SLURM_CONF)
+    task = run_task(all_nodes, command)
+    # Create a dictionary of hosts for each unique return code
+    results = {code: hosts for code, hosts in task.iter_retcodes()}
+    # Determine if the command completed successfully across all the hosts
+    status = len(results) == 1 and 0 in results
+    if status:
         cmd_list = [
             "sed -i -e 's/SlurmctldHost=linux0/SlurmctldHost={}/g' {}".format(
                 args.control, SLURM_CONF),
@@ -161,8 +157,6 @@ def configuring_packages(args, action):
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     cmd_list = []
     for package in PACKAGE_LIST:
-        if PACKAGE_VERSION:
-            package = package + "-" + PACKAGE_VERSION
         logging.info("%s %s on %s", action, package, all_nodes)
         cmd_list.append("dnf {} -y ".format(action) + package)
     return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
