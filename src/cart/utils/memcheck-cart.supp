@@ -198,7 +198,7 @@
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr16
+   Memcheck:Addr17
    ...
    fun:main.createWriteStream.*
 }
@@ -278,7 +278,7 @@
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
-   fun:hg_dlog_mkcount32
+   fun:hg_dlog_mkcount321
    ...
    fun:NA_Initialize_opt
    ...
