@@ -266,8 +266,6 @@ class Dfuse(DfuseCommand):
 
         if 'D_LOG_MASK' not in self.env:
             self.env['D_LOG_MASK'] = 'INFO'
-        # self.env['DD_MASK'] = 'all'
-        # self.env['DD_SUBSYS'] = 'all'
 
         # create dfuse dir if does not exist
         self.create_mount_point()

@@ -79,7 +79,7 @@ class DaosBuild(DfuseTestBase):
                 ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=1500)
                 if 0 in ret_code:
                     continue
-                print(ret_code)
+                self.log.info(ret_code)
                 raise CommandFailure("Error running '{}'".format(cmd))
             except CommandFailure as error:
                 self.log.error("BuildDaos Test Failed: %s", str(error))
