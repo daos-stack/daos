@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +14,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -24,35 +25,7 @@ type StorageControlService struct {
 	log             logging.Logger
 	storage         *storage.Provider
 	instanceStorage map[uint32]*storage.Config
-}
-
-// Setup performs storage discovery and validates existence of configured devices.
-func (scs *StorageControlService) Setup() {
-	if _, err := scs.ScmScan(storage.ScmScanRequest{}); err != nil {
-		scs.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
-	}
-
-	var cfgBdevs []string
-
-	for _, storageCfg := range scs.instanceStorage {
-		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
-			if tierCfg.Class != storage.ClassNvme {
-				// don't scan if any tier is using emulated NVMe
-				return
-			}
-			cfgBdevs = append(cfgBdevs, tierCfg.Bdev.DeviceList...)
-		}
-	}
-
-	nvmeScanResp, err := scs.NvmeScan(storage.BdevScanRequest{
-		DeviceList: cfgBdevs,
-	})
-	if err != nil {
-		scs.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
-		return
-	}
-
-	scs.storage.SetBdevCache(*nvmeScanResp)
+	getHugePageInfo common.GetHugePageInfoFn
 }
 
 // GetScmState performs required initialization and returns current state
@@ -83,6 +56,7 @@ func (scs *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*
 
 // NvmeScan scans locally attached SSDs.
 func (scs *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
+	scs.log.Debugf("calling bdev provider scan: %+v", req)
 	return scs.storage.ScanBdevs(req)
 }
 
@@ -92,7 +66,7 @@ func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
 	return scs
 }
 
-func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider) *StorageControlService {
+func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider, hpiFn common.GetHugePageInfoFn) *StorageControlService {
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, c := range ecs {
 		instanceStorage[uint32(i)] = &c.Storage
@@ -102,6 +76,7 @@ func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storag
 		log:             l,
 		storage:         sp,
 		instanceStorage: instanceStorage,
+		getHugePageInfo: hpiFn,
 	}
 }
 
@@ -111,6 +86,7 @@ func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *
 		storage.DefaultProvider(log, 0, &storage.Config{
 			Tiers: nil,
 		}),
+		common.GetHugePageInfo,
 	)
 }
 
@@ -121,6 +97,9 @@ func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Confi
 		storage.MockProvider(log, 0, &storage.Config{
 			Tiers: nil,
 		}, sys, scm, bdev),
+		func() (*common.HugePageInfo, error) {
+			return nil, nil
+		},
 	)
 }
 
@@ -217,8 +196,8 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 // controller claimed by another process. Only update info for controllers
 // assigned to I/O Engines.
 func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
-	var ctrlrs storage.NvmeControllers
 	instances := cs.harness.Instances()
+	ctrlrs := storage.NvmeControllers{}
 
 	for _, ei := range instances {
 		if !ei.HasBlockDevices() {
@@ -230,7 +209,7 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 			return nil, err
 		}
 
-		// If the is not running or we aren't interested in temporal
+		// If the engine is not running or we aren't interested in temporal
 		// statistics for the bdev devices then continue to next.
 		if !ei.IsReady() || !statsReq {
 			for _, tsr := range tsrs {

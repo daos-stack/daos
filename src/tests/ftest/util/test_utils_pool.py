@@ -9,7 +9,7 @@ from time import sleep, time
 import ctypes
 import json
 
-from test_utils_base import TestDaosApiBase
+from test_utils_base import TestDaosApiBase, LabelGenerator
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
@@ -24,7 +24,7 @@ class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None):
+                 label_generator=None, crt_timeout=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -42,8 +42,10 @@ class TestPool(TestDaosApiBase):
                 There's a link between label_generator and label. If the label
                 is used as it is, i.e., not None, label_generator must be
                 provided in order to call create(). Defaults to None.
+            crt_timeout (str, optional): value to use for the CRT_TIMEOUT when running pydaos
+                commands. Defaults to None.
         """
-        super().__init__("/run/pool/*", cb_handler)
+        super().__init__("/run/pool/*", cb_handler, crt_timeout)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -101,16 +103,15 @@ class TestPool(TestDaosApiBase):
 
         # Autosize any size/scm_size/nvme_size parameters
         # pylint: disable=too-many-boolean-expressions
-        if ((self.size.value is not None and str(self.size.value).endswith("%"))
-                or (self.scm_size.value is not None
-                    and str(self.scm_size.value).endswith("%"))
+        if ((self.scm_size.value is not None
+             and str(self.scm_size.value).endswith("%"))
                 or (self.nvme_size.value is not None
                     and str(self.nvme_size.value).endswith("%"))):
             index = self.server_index.value
             try:
                 params = test.server_managers[index].autosize_pool_params(
-                    size=self.size.value,
-                    tier_ratio=self.tier_ratio.value,
+                    size=None,
+                    tier_ratio=None,
                     scm_size=self.scm_size.value,
                     nvme_size=self.nvme_size.value,
                     min_targets=self.min_targets.value,
@@ -411,6 +412,7 @@ class TestPool(TestDaosApiBase):
         """
         if self.pool:
             self.connect()
+            self.log.info("Querying pool %s", self.identifier)
             self._call_method(self.pool.pool_query, {})
             self.info = self.pool.pool_info
 
@@ -939,32 +941,3 @@ class TestPool(TestDaosApiBase):
                 pool=self.identifier, acl_file=self.acl_file.value)
         else:
             self.log.error("self.acl_file isn't defined!")
-
-
-class LabelGenerator():
-    # pylint: disable=too-few-public-methods
-    """Generates label used for pool."""
-
-    def __init__(self, value=1):
-        """Constructor.
-
-        Args:
-            value (int): Number that's attached after the base_label.
-        """
-        self.value = value
-
-    def get_label(self, base_label):
-        """Create a label by adding number after the given base_label.
-
-        Args:
-            base_label (str): Label prefix. Don't include space.
-
-        Returns:
-            str: Created label.
-
-        """
-        label = base_label
-        if label is not None:
-            label = "_".join([base_label, str(self.value)])
-            self.value += 1
-        return label

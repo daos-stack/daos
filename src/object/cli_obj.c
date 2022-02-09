@@ -23,7 +23,7 @@
 
 #define CLI_OBJ_IO_PARMS	8
 
-#define OBJ_TGT_INLINE_NR	10
+#define OBJ_TGT_INLINE_NR	9
 #define OBJ_INLINE_BTIMAP	4
 
 struct obj_req_tgts {
@@ -97,6 +97,7 @@ struct obj_auxi_args {
 	/* 64-bits alignment, bitmap for retry next replicas. */
 	uint8_t				 retry_bitmap[OBJ_INLINE_BTIMAP];
 	struct obj_req_tgts		 req_tgts;
+	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
 	uint32_t			 initial_shard;
@@ -3922,6 +3923,90 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 	}
 }
 
+/**
+ * User possibly provides sgl with iov_len < iov_buf_len, this may cause some troubles for internal
+ * handling, such as crt_bulk_create/daos_iov_left() always use iov_buf_len.
+ * For that case, we duplicate the sgls and make its iov_buf_len = iov_len.
+ */
+static int
+obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
+{
+	daos_iod_t	*iod;
+	d_sg_list_t	*sgls_dup, *sgls;
+	d_sg_list_t	*sg, *sg_dup;
+	d_iov_t		*iov, *iov_dup;
+	bool		 dup = false;
+	uint32_t	 i, j;
+	int		 rc = 0;
+
+	sgls = args->sgls;
+	if (obj_auxi->rw_args.sgls_dup != NULL || sgls == NULL)
+		return 0;
+
+	for (i = 0; i < args->nr; i++) {
+		sg = &sgls[i];
+		iod = &args->iods[i];
+		for (j = 0; j < sg->sg_nr; j++) {
+			iov = &sg->sg_iovs[j];
+			if (iov->iov_len > iov->iov_buf_len ||
+			    (iov->iov_len == 0 && iod->iod_size != DAOS_REC_ANY)) {
+				D_ERROR("invalid args, iov_len "DF_U64", iov_buf_len "DF_U64"\n",
+					iov->iov_len, iov->iov_buf_len);
+				return -DER_INVAL;
+			} else if (iov->iov_len < iov->iov_buf_len) {
+				dup = true;
+			}
+		}
+	}
+	if (dup == false)
+		return 0;
+
+	D_ALLOC_ARRAY(sgls_dup, args->nr);
+	if (sgls_dup == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < args->nr; i++) {
+		sg_dup = &sgls_dup[i];
+		sg = &sgls[i];
+		rc = d_sgl_init(sg_dup, sg->sg_nr);
+		if (rc)
+			goto failed;
+
+		for (j = 0; j < sg_dup->sg_nr; j++) {
+			iov_dup = &sg_dup->sg_iovs[j];
+			iov = &sg->sg_iovs[j];
+			*iov_dup = *iov;
+			iov_dup->iov_buf_len = iov_dup->iov_len;
+		}
+	}
+	obj_auxi->reasb_req.orr_usgls = sgls;
+	obj_auxi->rw_args.sgls_dup = sgls_dup;
+	args->sgls = sgls_dup;
+	return 0;
+
+failed:
+	if (sgls_dup != NULL) {
+		for (i = 0; i < args->nr; i++)
+			d_sgl_fini(&sgls_dup[i], false);
+		D_FREE(sgls_dup);
+	}
+	return rc;
+}
+
+static void
+obj_update_sgls_free(struct obj_auxi_args *obj_auxi)
+{
+	int	i;
+
+	if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE && obj_auxi->rw_args.sgls_dup != NULL) {
+		for (i = 0; i < obj_auxi->iod_nr; i++)
+			d_sgl_fini(&obj_auxi->rw_args.sgls_dup[i], false);
+		D_FREE(obj_auxi->rw_args.sgls_dup);
+		obj_auxi->rw_args.sgls_dup = NULL;
+		obj_auxi->rw_args.api_args->sgls = obj_auxi->reasb_req.orr_usgls;
+	}
+}
+
 static void
 obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 {
@@ -3936,6 +4021,7 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 	}
 	obj_bulk_fini(obj_auxi);
 	obj_auxi_free_failed_tgt_list(obj_auxi);
+	obj_update_sgls_free(obj_auxi);
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 
 	/* zero it as user might reuse/resched the task, for
@@ -4646,6 +4732,14 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	obj_task_init_common(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
 			     &obj_auxi, obj);
+
+	rc = obj_update_sgls_dup(obj_auxi, args);
+	if (rc) {
+		D_ERROR(DF_OID" obj_update_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
+		obj_comp_cb(task, NULL);
+		goto out_task;
+	}
+
 	rc = obj_rw_req_reassemb(obj, args, NULL, obj_auxi);
 	if (rc) {
 		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
@@ -5748,6 +5842,8 @@ dc_obj_sync(tse_task_t *task)
 		*args->epochs_p = tmp;
 	} else {
 		D_ASSERT(*args->epochs_p != NULL);
+		D_ASSERTF(*args->nr == obj->cob_grp_nr, "Invalid obj sync args %d/%d\n",
+			  *args->nr, obj->cob_grp_nr);
 
 		for (i = 0; i < *args->nr; i++)
 			*args->epochs_p[i] = 0;
@@ -5865,6 +5961,8 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 {
 	daos_ofeat_t	feat = (daos_ofeat_t)in;
 
+	D_WARN("daos_ofeat_t(DAOS_OF_XXX) will be deprecated soon, "
+		"please use enum daos_otype_t(DAOS_OT_XXX) instead!\n");
 	return daos_obj_generate_oid2(coh, oid, daos_obj_feat2type(feat), cid, hints, args);
 }
 
@@ -5895,6 +5993,9 @@ daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
 	int			rc;
+
+	if (!daos_otype_t_is_valid(type))
+		return -DER_INVAL;
 
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);
@@ -5942,6 +6043,9 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
 	int			rc;
+
+	if (!daos_otype_t_is_valid(type))
+		return -DER_INVAL;
 
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);

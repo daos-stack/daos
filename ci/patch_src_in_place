@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -x
 
@@ -34,5 +34,8 @@ then
         $CP --quiet --no-tree --file --show-types --no-summary --ignore "$ignore" --strict "$FILE" --fix-inplace
     done
 fi
+
+# Correct any formatting of go code.
+find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w -e -s {} +
 
 exit $RC

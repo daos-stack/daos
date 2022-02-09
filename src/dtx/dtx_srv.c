@@ -420,9 +420,14 @@ dtx_setup(void)
 	dtx_agg_gen = 1;
 
 	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = dss_ult_create_all(dtx_aggregation_main, NULL, true);
 	if (rc != 0)
-		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("Failed to create DTX aggregation ULT: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
