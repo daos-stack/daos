@@ -195,7 +195,7 @@ class DaosAgentManager(SubprocessManager):
             "D_LOG_MASK": "DEBUG,RPC=ERR",
             "DD_MASK": "mgmt,io,md,epc,rebuild",
             "D_LOG_FILE_APPEND_PID": "1",
-            "COVFILE": "/tmp/test.cov",
+            "COVFILE": "/tmp/test.cov"
         }
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
         self.attachinfo = None
