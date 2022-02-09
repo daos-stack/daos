@@ -27,11 +27,11 @@ can host DAOS pools.
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://daos-stack.github.io/admin/pool_operations/#pool-creationdestroy)
+[`dmg pool create`](https://docs.daos.io/v1.2/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/1.2/utils/config/daos_server.yml)
 then the values supplied to `dmg pool create` should be
 a maximum of the SCM/NVMe free space divided by the number of ranks per host.
 
@@ -248,12 +248,12 @@ removed and storage wiped.
 System commands will be handled by the DAOS Server listening at the access point
 address specified as the first entry in the DMG config file "hostlist" parameter.
 See
-[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/release/1.2/utils/config/daos_control.yml)
 for details.
 
 The "access point" address should be the same as that specified in the server
 config file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/1.2/utils/config/daos_server.yml)
 specified when starting `daos_server` instances.
 
 !!! warning

@@ -1,4 +1,5 @@
 # Introduction
+
 Arguably, one of the worst things a data storage system can do is to return
  incorrect data without the requester knowing. While each component in the
  system (network layer, storage devices) may offer protection against silent
@@ -15,7 +16,9 @@ good checksum with the requested data to the DAOS Client, which will calculate
 checksums on the data received and verify.
 
 ## Requirements
+
 ### Key Requirements
+
 There are two key requirements that DAOS will support.
 1. Detect silent data corruption - Corruption will be detected on the
  distribution and attribute keys and records within a DAOS object. At a minimum,
@@ -24,11 +27,12 @@ There are two key requirements that DAOS will support.
  be made to recover the data using data redundancy mechanisms.
 
 ### Supportive/Additional Requirements
+
 Additionally, DAOS will support ...
 1. End to End Data Integrity as a Quality of Service Attribute - Container
  properties are used to enable/disable the use of checksums for data integrity
  as well as define specific attributes of data integrity feature.  See
- https://daos-stack.github.io/user/container/#data-integrity for details on
+ https://docs.daos.io/v1.2/user/container/#data-integrity for details on
  configuring a container with checksums enabled.
 1. Minimize Performance Impact - When there is no data corruption, the End to
  End Data Integrity feature should have minimal performance impacted. If data

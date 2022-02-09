@@ -133,7 +133,7 @@ configure dedup, the following container properties are used:
   the I/O for dedup (default is 4K).
 
 !!! warning
-    Dedup is a feature preview in 1.2 (i.e. master) and has some known
+    Dedup is a feature preview in 1.2 and has some known
     limitations. Aggregation of deduplicated extents isn't supported and the
     checksum tree isn't persistent yet. This means that aggregation is disabled
     for a container with dedplication enabled and duplicated extents won't be
@@ -175,7 +175,7 @@ container through the daos_cont_{list/get/set}_attr() API.
 ## Access Control Lists
 
 Client user and group access for containers is controlled by
-[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v1.2/overview/security/#access-control-lists).
 
 Access-controlled container accesses include:
 
@@ -199,7 +199,7 @@ Access-controlled container accesses include:
 
 
 This is reflected in the set of supported
-[container permissions](https://daos-stack.github.io/overview/security/#permissions).
+[container permissions](https://docs.daos.io/v1.2/overview/security/#permissions).
 
 ### Pool vs. Container Permissions
 
@@ -228,7 +228,7 @@ To create a container with a custom ACL:
 $ daos cont create --pool=<UUID> --acl-file=<path>
 ```
 
-The ACL file format is detailed in the [ACL section](https://daos-stack.github.io/overview/security/#acl-file).
+The ACL file format is detailed in the [ACL section](https://docs.daos.io/v1.2/overview/security/#acl-file).
 
 ### Displaying a Container's ACL
 
@@ -330,7 +330,7 @@ $ daos cont create --pool=<UUID> --user=<owner-user> \
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v1.2/overview/security/#principal).
 
 #### Changing Ownership
 
@@ -349,4 +349,4 @@ $ daos cont set-owner --pool=<UUID> --cont=<UUID> \
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v1.2/overview/security/#principal).

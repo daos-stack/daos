@@ -148,13 +148,13 @@ Access Control List:
 Additionally, a pool's properties may be retrieved using the libdaos API
 daos_pool_query() function. Refer to the file src/include/daos_pool.h
 Doxygen comments and the online documentation available
-[here](https://daos-stack.github.io/html/).
+[here](https://docs.daos.io/v1.2/html/).
 
 
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
-[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v1.2/overview/security/#access-control-lists).
 Most pool-related tasks are performed using the DMG administrative tool, which
 is authenticated by the administrative certificate rather than user-specific
 credentials.
@@ -170,7 +170,7 @@ Access-controlled client pool accesses include:
 * Deleting containers in the pool.
 
 This is reflected in the set of supported
-[pool permissions](https://daos-stack.github.io/overview/security/#permissions).
+[pool permissions](https://docs.daos.io/v1.2/overview/security/#permissions).
 
 A user must be able to connect to the pool in order to access any containers
 inside, regardless of their permissions on those containers.
@@ -189,7 +189,7 @@ To create a pool with a custom ACL:
 $ dmg pool create --size <size> --acl-file <path>
 ```
 
-The ACL file format is detailed in the [here](https://daos-stack.github.io/overview/security/#acl-file).
+The ACL file format is detailed in the [here](https://docs.daos.io/v1.2/overview/security/#acl-file).
 
 ### Displaying a Pool's ACL
 
@@ -451,7 +451,7 @@ $ dmg cont set-owner --pool <UUID> --cont <UUID> --group <owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v1.2/overview/security/#principal).
 
 Because this is an administrative action, it does not require the administrator
 to have any privileges assigned in the container ACL.

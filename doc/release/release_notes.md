@@ -18,7 +18,7 @@ and brings support for the following new features:
 - Apache Spark support
 - Erasure Code (Preview)
 
-Visit the [online documentation](https://daos-stack.github.io/) for more
+Visit the [online documentation](https://docs.daos.io/v1.2/) for more
 information. All DAOS project source code is maintained in the
 [https://github.com/daos-stack/daos](https://github.com/daos-stack/daos) repository.
 Please visit this [link](https://github.com/daos-stack/daos/blob/master/LICENSE)
@@ -26,8 +26,8 @@ for more information on the licenses.
 
 ## Software Installation
 
-Reference the [Software Installation](https://daos-stack.github.io/admin/installation/)
-section of the [DAOS Administration Guide](https://daos-stack.github.io/admin/hardware/)
+Reference the [Software Installation](https://docs.daos.io/v1.2/admin/installation/)
+section of the [DAOS Administration Guide](https://docs.daos.io/v1.2/admin/hardware/)
 for more details.
 
 ## Hardware Support
@@ -113,7 +113,7 @@ with the requested data to the DAOS Client, which will calculate checksums on
 the data received and verify.
 
 
-[More information](https://daos-stack.github.io/overview/data_integrity/)
+[More information](https://docs.daos.io/v1.2/overview/data_integrity/)
 
 ### Per-container ACL
 
@@ -130,9 +130,9 @@ Lists (ACLs). Access-controlled container accesses include:
  - Getting and modifying the container ACL.
  - Modifying the container's owner.
 
-This is reflected in the set of supported [container permissions](https://daos-stack.github.io/overview/security/#permissions).
+This is reflected in the set of supported [container permissions](https://docs.daos.io/v1.2/overview/security/#permissions).
 
-[More information](https://daos-stack.github.io/user/container/#access-control-lists)
+[More information](https://docs.daos.io/v1.2/user/container/#access-control-lists)
 
 ### External Device States (via dmg)
 
@@ -145,7 +145,7 @@ in-memory BIO device list.
  - UNPLUGGED: A device previously used by DAOS is unplugged.
  - NEW: A new device is available for use by DAOS.
 
-[More information](https://daos-stack.github.io/admin/administration/#nvme-ssd-health-monitoring)
+[More information](https://docs.daos.io/v1.2/admin/administration/#nvme-ssd-health-monitoring)
 
 ### User Interface Improvement
 
@@ -160,7 +160,7 @@ until DAOS 2.2 release.
  - Locate a healthy NVMe SSD (for VMD-enabled devices only)
  - Locate an evicted NVMe SSD (for VMD-enabled devices only)
 
-[More information](https://daos-stack.github.io/admin/administration/#nvme-ssd-eviction-and-hotplug)
+[More information](https://docs.daos.io/v1.2/admin/administration/#nvme-ssd-eviction-and-hotplug)
 
 
 ### Replication and Self Healing
@@ -170,7 +170,7 @@ nodes, once one of the node fail, the data on it will be rebuilt on the other
 targets. This reduces the data redundancy that would be impacted by the target
 failure.
 
-[More information]( https://daos-stack.github.io/admin/pool_operations/#target-exclusion-and-self-healing)
+[More information]( https://docs.daos.io/v1.2/admin/pool_operations/#target-exclusion-and-self-healing)
 
 
 ### Offline Reintegration
@@ -207,13 +207,13 @@ and serialize data across DAOS and POSIX file systems. There is support for data
 movement across POSIX, DAOS, and HDF5 containers. There is also support for
 serializing a DAOS container to an HDF5 file and deserializing back to DAOS.
 
-[More information](https://daos-stack.github.io/admin/tiering_uns/#migration-tofrom-a-posix-filesystem)
+[More information](https://docs.daos.io/v1.2/admin/tiering_uns/#migration-tofrom-a-posix-filesystem)
 
 ### Apache Spark
 
 Support for Spark and Hadoop is available in this release.
 
-[More information](https://daos-stack.github.io/user/spark/)
+[More information](https://docs.daos.io/v1.2/user/spark/)
 
 ### Erasure Code (Preview)
 
@@ -244,7 +244,7 @@ extending the storage pool. Main features of DAOS EC include:
 
 ## Document updates
 
-All documents supporting the [https://daos-stack.github.io/](https://daos-stack.github.io/)
+All documents supporting the [https://docs.daos.io/v1.2/](https://docs.daos.io/v1.2/)
 site have been refreshed for this release.
 Design documents in the DAOS Source repository have also been refreshed for this release.
 

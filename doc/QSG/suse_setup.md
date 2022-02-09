@@ -12,7 +12,7 @@ This document covers installation of the DAOS rpms on openSUSE/SLES 15.2 and upd
 This guide will also describe how to use dfuse in order to take advantage of DAOS support for POSIX.  
 For setup instructions on CentOS, refer to the [CentOS setup](../setup/). 
 For more details reference the DAOS administration guide:
-<https://daos-stack.github.io/admin/hardware/>
+<https://docs.daos.io/v1.2/admin/hardware/>
 
 ## Requirements
 
@@ -42,7 +42,7 @@ In addition the server nodes should also have:
 -   one or more NVMe devices
 
 -   IOMMU is enabled
-    <https://daos-stack.github.io/admin/predeployment_check/#enable-iommu-optional>
+    <https://docs.daos.io/v1.2/admin/predeployment_check/#enable-iommu-optional>
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -225,7 +225,7 @@ Server nodes require the following certificate files:
     daos_server user
 
 See
-<https://daos-stack.github.io/admin/deployment/#certificate-configuration>
+<https://docs.daos.io/v1.2/admin/deployment/#certificate-configuration>
 for more informaation.
 
 !!!note

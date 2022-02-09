@@ -25,17 +25,17 @@ information.
 
 ## Documentation
 
-The DAOS documentation is available [online](https://daos-stack.github.io/).
+The DAOS documentation is available [online](https://docs.daos.io/v1.2/).
 
 This includes:
-* [DAOS Architecture Overview](https://daos-stack.github.io/overview/terminology/)
-* [Administration Guide](https://daos-stack.github.io/admin/hardware/) to install, manage
+* [DAOS Architecture Overview](https://docs.daos.io/v1.2/overview/terminology/)
+* [Administration Guide](https://docs.daos.io/v1.2/admin/hardware/) to install, manage
   and monitor a DAOS system.
-* [User Guide](https://daos-stack.github.io/user/container/) documenting the
+* [User Guide](https://docs.daos.io/v1.2/user/container/) documenting the
   DAOS native API, as well as the integration with POSIX, MPI-IO, HDF5, and Spark.
-* [Release Notes](https://daos-stack.github.io/release/release_notes_v1_2/)
+* [Release Notes](https://docs.daos.io/v1.2/release/release_notes/)
   for the 1.2 release.
-* [Developer documentation](https://daos-stack.github.io/dev/development/)
+* [Developer documentation](https://docs.daos.io/v1.2/dev/development/)
   to learn more about DAOS internals and contribute to the development effort.
 
 More information can also be found on the [wiki](https://wiki.hpdd.intel.com/).
