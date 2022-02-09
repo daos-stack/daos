@@ -244,11 +244,7 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 // to only those devices discovered and in device list and confirm that the devices specified in
 // the device list have all been discovered.
 func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.NvmeControllers, vmdEnabled bool) (storage.NvmeControllers, error) {
-	if reqDevs == nil {
-		return nil, errors.New("nil device list in bdev scan request")
-	}
-
-	// if empty device list, return all discovered controllers
+	// if the request does not specify a device filter, return all discovered controllers
 	if reqDevs.IsEmpty() {
 		return discovered, nil
 	}
@@ -298,11 +294,7 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
-	if req.DeviceList == nil {
-		return nil, errors.New("nil device list in bdev scan request")
-	}
-
-	needDevs := &req.DeviceList.PCIAddressSet
+	needDevs := req.DeviceList.PCIAddressSetPtr()
 	spdkOpts := &spdk.EnvOptions{
 		PCIAllowList: needDevs,
 		EnableVMD:    req.VMDEnabled,
@@ -430,7 +422,7 @@ func (sb *spdkBackend) formatKdev(req *storage.BdevFormatRequest) (*storage.Bdev
 }
 
 func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	needDevs := &req.Properties.DeviceList.PCIAddressSet
+	needDevs := req.Properties.DeviceList.PCIAddressSetPtr()
 
 	if needDevs.IsEmpty() {
 		sb.log.Debug("skip nvme format as bdev device list is empty")

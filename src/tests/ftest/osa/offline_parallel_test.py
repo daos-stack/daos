@@ -12,7 +12,8 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
 from command_utils import CommandFailure
-from test_utils_pool import TestPool, LabelGenerator
+from test_utils_pool import TestPool
+from test_utils_base import LabelGenerator
 from apricot import skipForTicket
 import queue
 
