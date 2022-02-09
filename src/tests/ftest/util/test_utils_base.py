@@ -191,3 +191,32 @@ class TestDaosApiBase(ObjectWithParameters):
                 self.log.error(msg)
                 check_status = False
         return check_status
+
+
+class LabelGenerator():
+    # pylint: disable=too-few-public-methods
+    """Generates label used for pools and containers."""
+
+    def __init__(self, value=1):
+        """Constructor.
+
+        Args:
+            value (int): Number that's attached after the base_label.
+        """
+        self.value = value
+
+    def get_label(self, base_label):
+        """Create a label by adding number after the given base_label.
+
+        Args:
+            base_label (str): Label prefix. Don't include space.
+
+        Returns:
+            str: Created label.
+
+        """
+        label = base_label
+        if label is not None:
+            label = "_".join([base_label, str(self.value)])
+            self.value += 1
+        return label

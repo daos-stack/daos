@@ -213,7 +213,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	if err == nil && resp != nil {
+	if err == nil && resp != nil && !req.CleanHugePagesOnly {
 		p.vmdEnabled = resp.VMDPrepared
 	}
 	return resp, err
@@ -223,7 +223,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 // block devices.
 func (p *Provider) HasBlockDevices() bool {
 	for _, cfg := range p.engineStorage.Tiers.BdevConfigs() {
-		if len(cfg.Bdev.DeviceList) > 0 {
+		if cfg.Bdev.DeviceList.Len() > 0 {
 			return true
 		}
 	}
@@ -355,8 +355,9 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		// devices.
 
 		var begin, end uint8
-		if tier.Bdev.BusidRange != nil {
-			log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
+		if tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero() {
+			log.Debugf("received user-specified hotplug bus-id range %q",
+				tier.Bdev.BusidRange)
 			begin = tier.Bdev.BusidRange.LowAddress.Bus
 			end = tier.Bdev.BusidRange.HighAddress.Bus
 		} else {
@@ -426,7 +427,7 @@ func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierSc
 		if cfg.Class != ClassNvme {
 			continue
 		}
-		if len(cfg.Bdev.DeviceList) == 0 {
+		if cfg.Bdev.DeviceList.Len() == 0 {
 			continue
 		}
 
