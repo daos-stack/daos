@@ -125,8 +125,8 @@ scripts of any resource manager or scheduler in use.
 
 DFuse will launch one thread per available core by default, although this can be
 changed by the `--thread-count` option. To change the cores that DFuse runs on
-use kernel level tasksets which will bind DFuse to a subset of cores, this can be
-done via the `tasket` or `numactl` programs or similar, if doing this then DFuse
+use kernel level tasksets which will bind DFuse to a subset of cores. This can be
+done via the `tasket` or `numactl` programs or similar. If doing this then DFuse
 will again launch one thread per available core by default.  Many metadata
 operations will block a thread until completed so if restricting DFuse to a small
 number of cores then overcommiting via the `--thread-count` option is desirable.
