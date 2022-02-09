@@ -24,7 +24,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_degraded_mode
+        :avocado: tags=daos_test,daos_core_test,test_daos_degraded_mode,testlei
         """
         self.run_subtest()
 
@@ -39,7 +39,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_management
+        :avocado: tags=daos_test,daos_core_test,test_daos_management,testlei
         """
         self.run_subtest()
 
@@ -54,7 +54,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_pool
+        :avocado: tags=daos_test,daos_core_test,test_daos_pool,testlei
         """
         self.run_subtest()
 
@@ -69,7 +69,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_container
+        :avocado: tags=daos_test,daos_core_test,test_daos_container,testlei
         """
         self.run_subtest()
 
@@ -84,7 +84,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_epoch
+        :avocado: tags=daos_test,daos_core_test,test_daos_epoch,testlei
         """
         self.run_subtest()
 
@@ -99,7 +99,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_single_rdg_tx
+        :avocado: tags=daos_test,daos_core_test,test_daos_single_rdg_tx,testlei
         """
         self.run_subtest()
 
@@ -114,7 +114,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_distributed_tx
+        :avocado: tags=daos_test,daos_core_test,test_daos_distributed_tx,testlei
         """
         self.run_subtest()
 
@@ -129,7 +129,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_verify_consistency
+        :avocado: tags=daos_test,daos_core_test,test_daos_verify_consistency,testlei
         """
         self.run_subtest()
 
@@ -144,7 +144,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_io
+        :avocado: tags=daos_test,daos_core_test,test_daos_io,testlei
         """
         self.run_subtest()
 
@@ -159,7 +159,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_io
+        :avocado: tags=daos_test,daos_core_test,test_daos_io,testlei
         """
         self.run_subtest()
 
@@ -174,7 +174,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_io
+        :avocado: tags=daos_test,daos_core_test,test_daos_io,testlei
         """
         self.run_subtest()
 
@@ -189,7 +189,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_object_array
+        :avocado: tags=daos_test,daos_core_test,test_daos_object_array,testlei
         """
         self.run_subtest()
 
@@ -204,7 +204,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_array
+        :avocado: tags=daos_test,daos_core_test,test_daos_array,testlei
         """
         self.run_subtest()
 
@@ -219,7 +219,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_kv
+        :avocado: tags=daos_test,daos_core_test,test_daos_kv,testlei
         """
         self.run_subtest()
 
@@ -234,7 +234,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_capability
+        :avocado: tags=daos_test,daos_core_test,test_daos_capability,testlei
         """
         self.run_subtest()
 
@@ -249,7 +249,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_epoch_recovery
+        :avocado: tags=daos_test,daos_core_test,test_daos_epoch_recovery,testlei
         """
         self.run_subtest()
 
@@ -264,7 +264,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_md_replication
+        :avocado: tags=daos_test,daos_core_test,test_daos_md_replication,testlei
         """
         self.run_subtest()
 
@@ -279,7 +279,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_rebuild_simple
+        :avocado: tags=daos_test,daos_core_test,test_daos_rebuild_simple,testlei
         """
         self.run_subtest()
 
@@ -294,7 +294,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_drain_simple
+        :avocado: tags=daos_test,daos_core_test,test_daos_drain_simple,testlei
         """
         self.run_subtest()
 
@@ -309,7 +309,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_extend_simple
+        :avocado: tags=daos_test,daos_core_test,test_daos_extend_simple,testlei
         """
         self.run_subtest()
 
@@ -324,7 +324,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_oid_allocator
+        :avocado: tags=daos_test,daos_core_test,test_daos_oid_allocator,testlei
         """
         self.run_subtest()
 
@@ -339,7 +339,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_checksum
+        :avocado: tags=daos_test,daos_core_test,test_daos_checksum,testlei
         """
         self.run_subtest()
 
@@ -354,7 +354,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_rebuild_ec
+        :avocado: tags=daos_test,daos_core_test,test_daos_rebuild_ec,testlei
         """
         self.run_subtest()
 
@@ -369,7 +369,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_aggregate_ec
+        :avocado: tags=daos_test,daos_core_test,test_daos_aggregate_ec,testlei
         """
         self.run_subtest()
 
@@ -384,7 +384,7 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_degraded_ec
+        :avocado: tags=daos_test,daos_core_test,test_daos_degraded_ec,testlei
         """
         self.run_subtest()
 
@@ -399,6 +399,6 @@ class DaosCoreTest(DaosCoreBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,ib2,medium
-        :avocado: tags=daos_test,daos_core_test,test_daos_dedup
+        :avocado: tags=daos_test,daos_core_test,test_daos_dedup,testlei
         """
         self.run_subtest()
