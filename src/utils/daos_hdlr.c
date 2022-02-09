@@ -68,7 +68,7 @@ struct dm_args {
 
 };
 
-struct fs_copy_num_args {
+struct fs_copy_stats {
 	uint64_t		num_dirs;
 	uint64_t		num_files;
 	uint64_t		num_links;
@@ -1664,7 +1664,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 {
 	int		rc = 0;
 	daos_size_t	len = DFS_MAX_PATH;
-	char		*symlink_value;
+	char		*symlink_value = NULL;
 
 	D_ALLOC(symlink_value, len + 1);
 	if (symlink_value == NULL)
@@ -1726,8 +1726,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		D_GOTO(out_copy_symlink, rc);
 	}
 out_copy_symlink:
-	if (symlink_value)
-		D_FREE(symlink_value);
+	D_FREE(symlink_value);
 	src_file_dfs->offset = 0;
 	dst_file_dfs->offset = 0;
 	return rc;
@@ -1740,7 +1739,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 	    struct stat *src_stat,
 	    const char *src_path,
 	    const char *dst_path,
-	    struct fs_copy_num_args *num)
+	    struct fs_copy_stats *num)
 {
 	DIR			*src_dir = NULL;
 	struct dirent		*entry = NULL;
@@ -1877,7 +1876,7 @@ fs_copy(struct cmd_args_s *ap,
 	struct file_dfs *dst_file_dfs,
 	const char *src_path,
 	const char *dst_path,
-	struct fs_copy_num_args *num)
+	struct fs_copy_stats *num)
 {
 	int		rc = 0;
 	struct stat	src_stat;
@@ -1945,7 +1944,7 @@ fs_copy(struct cmd_args_s *ap,
 		break;
 	default:
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Only files, directories, and symlinks are supported");
+		DH_PERROR_DER(ap, rc, "Only files and directories are supported");
 		D_GOTO(out, rc);
 	}
 
@@ -2824,7 +2823,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	struct file_dfs		dst_file_dfs = {0};
 	struct dm_args		ca = {0};
 	bool			is_posix_copy = true;
-	struct fs_copy_num_args	num = {0};
+	struct fs_copy_stats	num = {0};
 
 	set_dm_args_default(&ca);
 	file_set_defaults_dfs(&src_file_dfs);

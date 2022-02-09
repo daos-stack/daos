@@ -1102,9 +1102,13 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "failed to open %s: (%d)\n",
 			sys_path.name, rc);
+		D_GOTO(out_free_path, rc);
 	}
+
 	if (obj)
 		dfs_release(obj);
+
+out_free_path:
 	sys_path_free(dfs_sys, &sys_path);
 	return rc;
 }
