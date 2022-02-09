@@ -6,6 +6,8 @@
 #define PROTOBUF_C__NO_DEPRECATED
 #endif
 
+#define M_TAG		DM_TAG(TEST)
+
 #include "drpc_test.pb-c.h"
 void   hello__hello__init
                      (Hello__Hello         *message)

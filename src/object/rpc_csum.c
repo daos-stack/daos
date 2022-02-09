@@ -7,6 +7,7 @@
  * DSR: RPC Protocol Serialization Functions
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(CSUM)
 
 #include <daos/rpc.h>
 #include "obj_rpc.h"

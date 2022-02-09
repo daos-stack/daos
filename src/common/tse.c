@@ -14,6 +14,7 @@
  * ready tasks to executed.
  */
 #define D_LOGFAC	DD_FAC(client)
+#define M_TAG		DM_TAG(TSE)
 
 #include <stdint.h>
 #include <pthread.h>

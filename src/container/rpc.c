@@ -7,6 +7,7 @@
  * dc_cont, ds_cont: RPC Protocol Serialization Functions
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include <daos/rpc.h>
 #include "rpc.h"

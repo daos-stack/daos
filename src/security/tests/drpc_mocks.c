@@ -7,6 +7,7 @@
 /**
  * Mocks of dRPC framework functions
  */
+#define M_TAG		DM_TAG(TEST)
 
 #include "drpc_mocks.h"
 

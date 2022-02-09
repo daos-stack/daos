@@ -9,11 +9,12 @@
  * tests/suite/daos_test_common
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
+#include "daos_test.h"
 #include <daos.h>
 #include <daos_prop.h>
 #include <daos_mgmt.h>
-#include "daos_test.h"
 
 /** Server crt group ID */
 const char *server_group;

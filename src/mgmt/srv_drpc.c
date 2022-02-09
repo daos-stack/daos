@@ -8,6 +8,7 @@
  * process incoming dRPC requests for management tasks.
  */
 #define D_LOGFAC	DD_FAC(mgmt)
+#define M_TAG		DM_TAG(MGMT)
 
 #include <signal.h>
 #include <daos_srv/daos_engine.h>

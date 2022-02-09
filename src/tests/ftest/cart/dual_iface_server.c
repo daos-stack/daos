@@ -15,6 +15,8 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <semaphore.h>
+
+#define M_TAG		DM_TAG(TEST)
 #include <cart/api.h>
 #include <cart/types.h>
 #include "crt_utils.h"

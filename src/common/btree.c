@@ -11,6 +11,7 @@
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
 #define D_LOGFAC	DD_FAC(tree)
+#define M_TAG		DM_TAG(LIB)
 
 #include <daos_errno.h>
 #include <daos/btree.h>

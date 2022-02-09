@@ -10,6 +10,7 @@
  * initiator.
  */
 #define D_LOGFAC	DD_FAC(rebuild)
+#define M_TAG		DM_TAG(IV)
 
 #include <daos_srv/pool.h>
 #include <daos/pool_map.h>

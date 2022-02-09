@@ -14,6 +14,9 @@
 
 #include <stdio.h>
 #include <unistd.h>
+
+#define M_TAG		DM_TAG(TEST)
+
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
 

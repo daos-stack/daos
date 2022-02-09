@@ -8,6 +8,10 @@
 #define __DAOS_TESTS_LIB_H__
 
 #include <getopt.h>
+
+#ifndef M_TAG
+#define M_TAG		DM_TAG(TEST)
+#endif
 #include <daos_types.h>
 #include <daos/common.h>
 #include <daos_mgmt.h>

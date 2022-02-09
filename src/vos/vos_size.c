@@ -7,6 +7,7 @@
  * to generate metadata overhead estimates
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(VOS)
 
 #include <stdio.h>
 #include <string.h>

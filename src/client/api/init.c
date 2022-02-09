@@ -7,6 +7,7 @@
  * DAOS Client initialization/shutdown routines
  */
 #define D_LOGFAC	DD_FAC(client)
+#define M_TAG		DM_TAG(CLI)
 
 #include <daos/agent.h>
 #include <daos/common.h>

@@ -7,6 +7,7 @@
  * ds_mgmt: Container Methods
  */
 #define D_LOGFAC	DD_FAC(mgmt)
+#define M_TAG		DM_TAG(MGMT)
 
 #include <daos_srv/container.h>
 #include <daos/rpc.h>

@@ -9,6 +9,7 @@
  * This file implements dbtree classes for different key and value types.
  */
 #define D_LOGFAC	DD_FAC(tree)
+#define M_TAG		DM_TAG(LIB)
 
 #include <string.h>
 #include <daos/btree_class.h>

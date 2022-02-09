@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(st)
+#define M_TAG		DM_TAG(CRT)
 
 #include <pthread.h>
 #include "crt_internal.h"

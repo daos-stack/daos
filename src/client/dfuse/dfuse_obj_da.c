@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define M_TAG		DM_TAG(CLI)
 
 #include <pthread.h>
 #include "dfuse_log.h"

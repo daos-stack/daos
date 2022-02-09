@@ -7,6 +7,7 @@
  * This file is part of cart, it implements the hash table functions.
  */
 #define D_LOGFAC	DD_FAC(mem)
+#define M_TAG		DM_TAG(GURT)
 
 #include <pthread.h>
 #include <gurt/common.h>

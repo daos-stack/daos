@@ -8,6 +8,7 @@
  *
  */
 #define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(RECOV)
 
 #include <daos_srv/pool.h>
 #include <daos/btree_class.h>
@@ -577,7 +578,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		 */
 		void *p;
 
-		D_REALLOC(p, csum_iov_fetch->iov_buf,
+		DM_REALLOC(M_CSUM, p, csum_iov_fetch->iov_buf,
 			  csum_iov_fetch->iov_buf_len, csum_iov_fetch->iov_len);
 		if (p == NULL)
 			return -DER_NOMEM;
@@ -799,7 +800,7 @@ obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
 	D_ASSERT(codec != NULL);
 
 	for (i = 0; i < p && p_bufs[i] == NULL; i++) {
-		D_ALLOC(p_bufs[i], cell_bytes);
+		DM_ALLOC(M_EC, p_bufs[i], cell_bytes);
 		if (p_bufs[i] == NULL)
 			return -DER_NOMEM;
 	}
@@ -920,7 +921,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		size = daos_iods_len(&mrone->mo_iods[i], 1);
-		D_ALLOC(data, size);
+		DM_ALLOC(M_EC, data, size);
 		if (data == NULL)
 			D_GOTO(out, rc =-DER_NOMEM);
 

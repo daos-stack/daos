@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC DD_FAC(il)
+#define D_LOGFAC	DD_FAC(il)
+#define M_TAG		DM_TAG(CLI)
+
 #include "dfuse_common.h"
 #include "intercept.h"
 #include "daos.h"

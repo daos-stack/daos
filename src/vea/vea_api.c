@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(vos)
+#define M_TAG           DM_TAG(VEA)
 
 #include <daos/common.h>
 #include <daos/btree_class.h>

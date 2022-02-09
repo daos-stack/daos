@@ -7,7 +7,8 @@
  * This file is part of the DAOS server. It implements thread-local storage
  * (TLS) for DAOS service threads.
  */
-#define D_LOGFAC       DD_FAC(server)
+#define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(ENG)
 
 #include <pthread.h>
 #include "srv_internal.h"

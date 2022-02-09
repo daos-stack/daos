@@ -5,6 +5,8 @@
  */
 
 #define D_LOGFAC	DD_FAC(csum)
+#define M_TAG		DM_TAG(CSUM)	/* use CSUM tag */
+
 #define C_TRACE(...)	D_DEBUG(DB_CSUM, __VA_ARGS__)
 
 #include <daos/common.h>

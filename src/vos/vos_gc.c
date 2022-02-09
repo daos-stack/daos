@@ -9,6 +9,7 @@
  * vos/vos_gc.c
  */
 #define D_LOGFAC	DD_FAC(vos)
+#define M_TAG		DM_TAG(VOS)
 
 #include <daos/btree.h>
 #include <daos/mem.h>

@@ -7,6 +7,7 @@
  * src/object/obj_verify.c
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(OBJ)
 
 #include <daos/object.h>
 #include <daos/container.h>

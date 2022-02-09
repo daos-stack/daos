@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <gurt/common.h>
 #include <hdf5.h>
+
+#define M_TAG		DM_TAG(CLI)
 #include <daos.h>
 #include <daos_cont.h>
 

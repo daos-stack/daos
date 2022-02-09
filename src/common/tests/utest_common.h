@@ -3,6 +3,8 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define M_TAG		DM_TAG(TEST)
+
 #include <daos/mem.h>
 
 #define UTEST_POOL_NAME_MAX	255

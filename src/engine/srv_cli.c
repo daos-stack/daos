@@ -7,6 +7,7 @@
  * This file includes functions to call client daos API on the server side.
  */
 #define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(ENG)
 
 #include <daos/pool.h>
 #include <daos/container.h>

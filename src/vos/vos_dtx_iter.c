@@ -9,6 +9,7 @@
  * vos/vos_dtx_iter.c
  */
 #define D_LOGFAC	DD_FAC(vos)
+#define M_TAG		DM_TAG(VOS_DTX)
 
 #include "vos_layout.h"
 #include "vos_internal.h"

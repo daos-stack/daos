@@ -11,6 +11,7 @@
  * Author: Jeffrey Olivier <jeffrey.v.olivier@intel.com>
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include <stdarg.h>
 #include "vts_io.h"

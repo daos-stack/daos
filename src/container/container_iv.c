@@ -7,6 +7,7 @@
  * container IV cache
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(IV)	/* use IV tag */
 
 #include <daos_srv/container.h>
 #include "srv_internal.h"

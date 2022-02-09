@@ -11,6 +11,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(ENG)
 
 #include <signal.h>
 #include <abt.h>

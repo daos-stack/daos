@@ -17,6 +17,7 @@
  **/
 
 #define D_LOGFAC	DD_FAC(iv)
+#define M_TAG		DM_TAG(CRT_IV)
 
 #include "crt_internal.h"
 #include "cart/iv.h"

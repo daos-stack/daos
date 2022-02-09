@@ -7,6 +7,7 @@
  * ds_cont: Container Server Storage Layout Definitions
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include <daos_srv/rdb.h>
 #include <daos_srv/security.h>

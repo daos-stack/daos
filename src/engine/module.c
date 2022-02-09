@@ -8,7 +8,8 @@
  * to load server-side code on demand. DAOS modules are effectively dynamic
  * libraries loaded on-the-fly in the DAOS server via dlopen(3).
  */
-#define D_LOGFAC       DD_FAC(server)
+#define D_LOGFAC	DD_FAC(server)
+#define M_TAG		DM_TAG(ENG)
 
 #include <dlfcn.h>
 

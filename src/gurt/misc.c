@@ -8,6 +8,7 @@
  * not belong to other parts.
  */
 #define D_LOGFAC	DD_FAC(misc)
+#define M_TAG		DM_TAG(GURT)
 
 #include <stdarg.h>
 #include <math.h>
@@ -29,61 +30,6 @@ d_rand()
 
 	lrand48_r(&randBuffer, &result);
 	return result;
-}
-
-void
-d_free(void *ptr)
-{
-	free(ptr);
-}
-
-void *
-d_calloc(size_t count, size_t eltsize)
-{
-	return calloc(count, eltsize);
-}
-
-void *
-d_malloc(size_t size)
-{
-	return malloc(size);
-}
-
-void *
-d_realloc(void *ptr, size_t size)
-{
-	return realloc(ptr, size);
-}
-
-char *
-d_strndup(const char *s, size_t n)
-{
-	return strndup(s, n);
-}
-
-int
-d_asprintf(char **strp, const char *fmt, ...)
-{
-	va_list	ap;
-	int	rc;
-
-	va_start(ap, fmt);
-	rc = vasprintf(strp, fmt, ap);
-	va_end(ap);
-
-	return rc;
-}
-
-char *
-d_realpath(const char *path, char *resolved_path)
-{
-	return realpath(path, resolved_path);
-}
-
-void *
-d_aligned_alloc(size_t alignment, size_t size)
-{
-	return aligned_alloc(alignment, size);
 }
 
 int

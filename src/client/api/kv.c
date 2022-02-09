@@ -9,6 +9,7 @@
  * src/client/api/daos_kv.c
  */
 #define D_LOGFAC	DD_FAC(client)
+#define M_TAG		DM_TAG(CLI)
 
 #include <daos/common.h>
 #include <daos/event.h>

@@ -9,6 +9,7 @@
  * common/fail_loc.c to inject failure scenario
  */
 #define D_LOGFAC	DD_FAC(common)
+#define M_TAG		DM_TAG(LIB)
 
 #include <daos/common.h>
 #include <gurt/fault_inject.h>

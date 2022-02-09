@@ -9,7 +9,8 @@
  * ds_mgmt: Management Server Utilities
  */
 
-#define D_LOGFAC DD_FAC(mgmt)
+#define D_LOGFAC	DD_FAC(mgmt)
+#define M_TAG		DM_TAG(MGMT)
 
 #include "srv_internal.h"
 

@@ -3,7 +3,8 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC DD_FAC(csum)
+#define D_LOGFAC	DD_FAC(csum)
+#define M_TAG		DM_TAG(CSUM)
 
 #ifdef HAVE_QAT
 

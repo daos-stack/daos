@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
+#define M_TAG		DM_TAG(BIO)
+
 #include "bio_internal.h"
 
 static int (*bulk_create_fn)(void *ctxt, d_sg_list_t *sgl, unsigned int perm,

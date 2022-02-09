@@ -10,6 +10,8 @@
 #define D_ERRNO_V2
 #endif
 
+#define M_TAG           DM_TAG(TEST)
+
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -239,6 +241,102 @@ void test_d_errdesc(void **state)
 	assert_string_equal(value, "Unknown error code -501001");
 }
 
+static int size_table[] = {
+	8,		16,
+	64,		12,
+	256,		1024,
+	4096,		8192,
+	(1 << 15),	(1 << 20),
+};
+
+struct dm_ptr {
+	int		foo[64];
+};
+
+#define TEST_STR	"/////tmp///"
+
+void test_dm_alloc(void **state)
+{
+	void		**ptrs;
+	int		 i;
+	int		 j;
+	int		 c;
+
+	for (i = 0; i < M_TAG_MAX; i++) {
+		char		*buf;
+		char		*buf2;
+		struct dm_ptr	*ptr;
+
+		for (j = 0; j < ARRAY_SIZE(size_table); j += 2) {
+			DM_ALLOC(i, buf, size_table[j]);
+			assert_non_null(buf);
+			buf[0] = 'a';
+			buf[size_table[j] - 1] = 'b';
+
+			D_REALLOC(buf2, buf, size_table[j], size_table[j + 1]);
+			assert_non_null(buf2);
+			buf2[0] = 'a';
+			buf2[size_table[j + 1] - 1] = 'b';
+			D_FREE(buf2);
+
+			DM_ALIGNED_ALLOC(i, buf, 128, size_table[j]);
+			assert_non_null(buf);
+			buf[0] = 'a';
+			buf[size_table[j] - 1] = 'b';
+
+			D_REALLOC(buf2, buf, size_table[j], size_table[j + 1]);
+			assert_non_null(buf2);
+			buf2[0] = 'a';
+			buf2[size_table[j + 1] - 1] = 'b';
+			D_FREE(buf2);
+
+			DM_ALLOC_PTR(i, ptr);
+			assert_non_null(ptr);
+			ptr->foo[0] = 1;
+			ptr->foo[63] = 2;
+			D_FREE_PTR(ptr);
+
+			DM_ALLOC_ARRAY(i, ptr, 16);
+			assert_non_null(ptr);
+			ptr[0].foo[1] = 1;
+			ptr[0].foo[63] = 2;
+			ptr[15].foo[1] = 1;
+			ptr[15].foo[63] = 2;
+			D_FREE(ptr);
+		}
+
+		D_STRNDUP_S(buf, TEST_STR);
+		assert_non_null(buf);
+		D_FREE(buf);
+
+		D_REALPATH(buf, TEST_STR);
+		assert_non_null(buf);
+		D_FREE(buf);
+
+		D_ASPRINTF(buf, "%s", TEST_STR);
+		assert_non_null(buf);
+		D_FREE(buf);
+	}
+
+	D_ALLOC_ARRAY(ptrs, 4096);
+	assert_non_null(ptrs);
+	for (c = i = 0; i < M_TAG_MAX; i++) {
+		for (j = 0; j < ARRAY_SIZE(size_table); j++) {
+			DM_ALLOC(i, ptrs[c], size_table[j]);
+			c++;
+		}
+	}
+	dm_mem_dump_log();
+	for (c = i = 0; i < M_TAG_MAX; i++) {
+		for (j = 0; j < ARRAY_SIZE(size_table); j++) {
+			D_FREE(ptrs[c]);
+			c++;
+		}
+	}
+	dm_mem_dump_log();
+	D_FREE(ptrs);
+}
+
 static int
 init_tests(void **state)
 {
@@ -265,7 +363,7 @@ static int
 fini_tests(void **state)
 {
 	rmdir(__root);
-	free(__root);
+	D_FREE(__root);
 	d_log_fini();
 
 	return 0;
@@ -2124,6 +2222,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_time),
 		cmocka_unit_test(test_d_errstr),
 		cmocka_unit_test(test_d_errdesc),
+		cmocka_unit_test(test_dm_alloc),
 		cmocka_unit_test(test_gurt_list),
 		cmocka_unit_test(test_gurt_hlist),
 		cmocka_unit_test(test_gurt_circular_list),

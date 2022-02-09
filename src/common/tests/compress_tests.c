@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC        DD_FAC(tests)
+#define M_TAG           DM_TAG(TEST)
+
 #include <string.h>
 #include <stdarg.h>
 #include <stddef.h>

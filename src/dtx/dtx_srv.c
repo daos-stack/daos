@@ -7,6 +7,7 @@
  * dtx: DTX rpc service
  */
 #define D_LOGFAC	DD_FAC(dtx)
+#define M_TAG		DM_TAG(DTX)
 
 #include <daos/rpc.h>
 #include <daos/btree_class.h>

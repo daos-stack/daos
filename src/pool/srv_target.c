@@ -23,6 +23,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(pool)
+#define M_TAG		DM_TAG(POOL)
 
 #include <daos_srv/pool.h>
 

@@ -9,6 +9,7 @@
  * src/common/pool_map.c
  */
 #define D_LOGFAC	DD_FAC(common)
+#define M_TAG		DM_TAG(LIB)
 
 #include <daos/pool_map.h>
 #include "fault_domain.h"

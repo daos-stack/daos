@@ -9,7 +9,8 @@
  *
  * Author: Jeff Olivier <jeffrey.v.olivier@intel.com>
  */
-#define D_LOGFAC DD_FAC(vos)
+#define D_LOGFAC	DD_FAC(vos)
+#define M_TAG		DM_TAG(VOS_TS)
 
 #include "vos_internal.h"
 

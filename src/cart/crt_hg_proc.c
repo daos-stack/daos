@@ -8,6 +8,7 @@
  * parameter serialization/de-serialization routines (proc functions).
  */
 #define D_LOGFAC	DD_FAC(hg)
+#define M_TAG		DM_TAG(CRT)
 
 #include "crt_internal.h"
 

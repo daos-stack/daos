@@ -6,6 +6,8 @@
 #define PROTOBUF_C__NO_DEPRECATED
 #endif
 
+#define M_TAG		DM_TAG(SEC)
+
 #include "auth.pb-c.h"
 void   auth__token__init
                      (Auth__Token         *message)

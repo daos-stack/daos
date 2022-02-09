@@ -13,6 +13,8 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#define M_TAG		DM_TAG(TEST)
+
 #include "drpc_mocks.h"
 #include <daos/tests_lib.h>
 #include <daos_types.h>

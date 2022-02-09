@@ -11,7 +11,8 @@
  * will run the dRPC listener.
  */
 
-#define D_LOGFAC		DD_FAC(drpc)
+#define D_LOGFAC	DD_FAC(drpc)
+#define M_TAG		DM_TAG(ENG)
 
 #include <abt.h>
 #include <stddef.h>

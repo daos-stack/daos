@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC DD_FAC(pool)
+#define D_LOGFAC	DD_FAC(pool)
+#define M_TAG		DM_TAG(POOL)
 
 #include "srv_internal.h"
 #include <abt.h>

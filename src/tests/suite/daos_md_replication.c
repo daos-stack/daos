@@ -7,6 +7,7 @@
  * DAOS Metadata Replication Tests
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include <daos/pool.h>
 #include "daos_test.h"

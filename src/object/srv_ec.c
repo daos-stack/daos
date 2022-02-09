@@ -9,6 +9,7 @@
  * src/object/srv_ec.c
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(EC)
 
 #include <stddef.h>
 #include <stdio.h>

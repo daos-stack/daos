@@ -12,6 +12,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(rdb)
+#define M_TAG		DM_TAG(RDB)
 
 #include <daos_srv/rdb.h>
 

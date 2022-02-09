@@ -8,6 +8,7 @@
  * functions that need to be shared by both client and server modules.
  */
 #define D_LOGFAC	DD_FAC(common)
+#define M_TAG		DM_TAG(LIB)
 
 #include <daos/common.h>
 #include <daos_api.h>

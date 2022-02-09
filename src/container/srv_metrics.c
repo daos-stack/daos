@@ -9,6 +9,7 @@
  * This is part of daos_server. This file manages the container-related metrics.
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include "srv_internal.h"
 #include <gurt/telemetry_producer.h>

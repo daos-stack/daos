@@ -8,6 +8,7 @@
  * not belong to other parts.
  */
 #define D_LOGFAC	DD_FAC(common)
+#define M_TAG		DM_TAG(PROP)
 
 #include <daos/common.h>
 #include <daos/cipher.h>

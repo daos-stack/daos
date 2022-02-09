@@ -14,6 +14,8 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
+
+#define M_TAG		DM_TAG(TEST)
 #include "crt_utils.h"
 
 static bool pre_forward_called;

@@ -8,6 +8,7 @@
  * function implementation.
  */
 #define D_LOGFAC	DD_FAC(grp)
+#define M_TAG		DM_TAG(CRT)
 
 #include "crt_internal.h"
 

@@ -9,6 +9,7 @@
  * vos/tests/vts_dtx.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include <daos/common.h>
 #include <daos_srv/dtx_srv.h>

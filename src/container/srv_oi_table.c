@@ -7,6 +7,7 @@
  * Enumerate all object IDs and store them as KVs in a special object
  */
 #define D_LOGFAC	DD_FAC(container)
+#define M_TAG		DM_TAG(CONT)
 
 #include <daos_srv/pool.h>
 #include <daos/btree_class.h>

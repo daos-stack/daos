@@ -10,6 +10,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(mgmt)
+#define M_TAG		DM_TAG(MGMT)
 
 #include <daos/mgmt.h>
 #include <daos/event.h>

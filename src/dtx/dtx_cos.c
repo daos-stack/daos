@@ -9,6 +9,7 @@
  * dtx/dtx_cos.c
  */
 #define D_LOGFAC	DD_FAC(dtx)
+#define M_TAG		DM_TAG(DTX)
 
 #include <daos/btree.h>
 #include <daos_srv/vos.h>

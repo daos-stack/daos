@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define M_TAG		DM_TAG(LIB)
 /*
  * daos_acl: This file contains functions related to working with the principals
  * from Access Control Lists.

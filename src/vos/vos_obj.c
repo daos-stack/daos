@@ -9,6 +9,7 @@
  * vos/vos_obj.c
  */
 #define D_LOGFAC	DD_FAC(vos)
+#define M_TAG		DM_TAG(VOS)
 
 #include <daos/common.h>
 #include <daos/checksum.h>
@@ -456,11 +457,11 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
-		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
+		DM_ALLOC_ARRAY(M_VOS_DTX, daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 
-		D_ALLOC_ARRAY(dces, dth->dth_dti_cos_count);
+		DM_ALLOC_ARRAY(M_VOS_DTX, dces, dth->dth_dti_cos_count);
 		if (dces == NULL)
 			D_GOTO(reset, rc = -DER_NOMEM);
 

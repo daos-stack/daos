@@ -9,6 +9,7 @@
  * This file contains the object server remote object api.
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(IO)
 
 #include <uuid/uuid.h>
 

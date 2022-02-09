@@ -9,6 +9,7 @@
  * src/common/tests/other.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG           DM_TAG(TEST)
 
 #include <getopt.h>
 #include <daos/common.h>

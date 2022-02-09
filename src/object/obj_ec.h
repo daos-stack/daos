@@ -7,6 +7,10 @@
 #ifndef __OBJ_EC_H__
 #define __OBJ_EC_H__
 
+#ifndef M_TAG
+#define M_TAG		DM_TAG(EC)
+#endif
+
 #include <daos_types.h>
 #include <daos/object.h>
 #include <daos_obj.h>

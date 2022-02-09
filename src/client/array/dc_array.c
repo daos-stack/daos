@@ -9,6 +9,7 @@
  * src/array/dc_array.c
  */
 #define D_LOGFAC	DD_FAC(array)
+#define M_TAG		DM_TAG(CLI)
 
 #include <daos/event.h>
 #include <daos/object.h>

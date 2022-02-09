@@ -5,6 +5,7 @@
  */
 
 #define D_LOGFAC	DD_FAC(csum)
+#define M_TAG		DM_TAG(CSUM)
 
 #include <stddef.h>
 #include <string.h>

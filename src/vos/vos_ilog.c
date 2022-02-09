@@ -9,6 +9,7 @@
  * vos/vos_ilog.c
  */
 #define D_LOGFAC	DD_FAC(vos)
+#define M_TAG		DM_TAG(VOS)
 
 #include "vos_internal.h"
 

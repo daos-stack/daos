@@ -9,6 +9,7 @@
  * vos/tests/vts_aggregate.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include "vts_io.h"
 #include <vos_internal.h>

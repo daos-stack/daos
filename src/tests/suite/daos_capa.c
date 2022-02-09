@@ -9,6 +9,7 @@
  * tests/suite/daos_capa.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include <daos/checksum.h>
 #include "daos_test.h"

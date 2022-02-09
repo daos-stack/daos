@@ -7,6 +7,7 @@
  * object shard operations.
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(OBJ)
 
 #include <daos/container.h>
 #include <daos/mgmt.h>
@@ -320,7 +321,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 			if (sgls[i].sg_nr <= IOV_INLINE) {
 				shard_sgl.sg_iovs = iovs_inline;
 			} else {
-				D_ALLOC_ARRAY(iovs_alloc, sgls[i].sg_nr);
+				DM_ALLOC_ARRAY(M_IO_ARG, iovs_alloc, sgls[i].sg_nr);
 				if (iovs_alloc == NULL) {
 					rc = -DER_NOMEM;
 					break;
@@ -415,7 +416,7 @@ iom_recx_merge(daos_iom_t *dst, daos_recx_t *recx, bool iom_realloc)
 		 "iom_nr_out %d, iom_nr %d\n", dst->iom_nr_out, dst->iom_nr);
 	if (iom_realloc && dst->iom_nr_out == dst->iom_nr) {
 		iom_nr = dst->iom_nr + 32;
-		D_REALLOC_ARRAY(tmpr, dst->iom_recxs, dst->iom_nr, iom_nr);
+		DM_REALLOC_ARRAY(M_IO_ARG, tmpr, dst->iom_recxs, dst->iom_nr, iom_nr);
 		if (tmpr == NULL)
 			return -DER_NOMEM;
 		dst->iom_recxs = tmpr;
@@ -507,7 +508,7 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 	if (dst->iom_recxs == NULL) {
 		iom_nr = src->iom_nr * reasb_req->orr_tgt_nr;
 		iom_nr = roundup(iom_nr, 8);
-		D_ALLOC_ARRAY(dst->iom_recxs, iom_nr);
+		DM_ALLOC_ARRAY(M_IO_ARG, dst->iom_recxs, iom_nr);
 		if (dst->iom_recxs == NULL) {
 			D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
 			return -DER_NOMEM;

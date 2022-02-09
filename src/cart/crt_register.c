@@ -8,6 +8,7 @@
  * internal handling.
  */
 #define D_LOGFAC	DD_FAC(rpc)
+#define M_TAG		DM_TAG(CRT)
 
 #include <semaphore.h>
 #include "crt_internal.h"

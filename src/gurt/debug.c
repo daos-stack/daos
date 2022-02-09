@@ -12,6 +12,9 @@
 
 #include <gurt/common.h>
 
+extern int dm_init(void);
+extern void dm_fini(void);
+
 static pthread_mutex_t d_log_lock = PTHREAD_MUTEX_INITIALIZER;
 static int d_log_refcount;
 
@@ -517,6 +520,10 @@ d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 	if (d_log_refcount > 1) /* Already initialized */
 		D_GOTO(out, 0);
 
+	rc = dm_init();
+	if (rc)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	/* Load priority error from environment variable (DD_STDERR)
 	 * A Priority error will be output to stderr by the debug system.
 	 */
@@ -581,6 +588,7 @@ void d_log_fini(void)
 	if (d_log_refcount == 0) {
 		cleanup_dbg_namebit();
 		d_log_close();
+		dm_fini();
 	}
 
 	D_MUTEX_UNLOCK(&d_log_lock);

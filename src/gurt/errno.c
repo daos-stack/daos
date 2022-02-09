@@ -6,6 +6,8 @@
 /**
  * This file is part of GURT.
  */
+#define M_TAG		DM_TAG(GURT)
+
 #include <string.h>
 
 #include <daos_errno.h>

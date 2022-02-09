@@ -8,6 +8,7 @@
  * line utility.
  */
 #define D_LOGFAC	DD_FAC(ctl)
+#define M_TAG		DM_TAG(UTIL)
 
 #include <stdio.h>
 #include <pthread.h>

@@ -27,6 +27,8 @@
 #include <assert.h>
 #include <sys/stat.h>
 #include <errno.h>
+
+#define M_TAG		DM_TAG(TEST)
 #include "iv_common.h"
 
 static crt_context_t	g_crt_ctx;

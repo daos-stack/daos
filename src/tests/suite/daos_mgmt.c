@@ -7,6 +7,8 @@
  * This file is part of daos, basic testing for the management API
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
+
 #include "daos_test.h"
 
 #include <stdlib.h>

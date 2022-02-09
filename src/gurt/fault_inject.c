@@ -7,7 +7,9 @@
  * This file is part of gurt, it implements the fault injection feature.
  */
 
-#define D_LOGFAC     DD_FAC(fi)
+#define D_LOGFAC	DD_FAC(fi)
+#define M_TAG		DM_TAG(GURT)
+
 /** max length of argument string in the yaml config file */
 #define FI_CONFIG_ARG_STR_MAX_LEN 4096
 

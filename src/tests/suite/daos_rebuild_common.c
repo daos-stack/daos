@@ -11,6 +11,7 @@
  *
  */
 #define D_LOGFAC	DD_FAC(tests)
+#define M_TAG		DM_TAG(TEST)
 
 #include "daos_iotest.h"
 #include "dfs_test.h"

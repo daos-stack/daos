@@ -8,7 +8,8 @@
  *
  * This file contains RAS helpers for rebuild events.
  */
-#define D_LOGFAC       DD_FAC(rebuild)
+#define D_LOGFAC	DD_FAC(rebuild)
+#define M_TAG		DM_TAG(RECOV)
 
 #include <daos_srv/daos_engine.h>
 

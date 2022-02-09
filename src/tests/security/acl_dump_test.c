@@ -12,6 +12,9 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+
+#define M_TAG		DM_TAG(TEST)
+
 #include <daos_security.h>
 #include <daos_errno.h>
 #include <gurt/common.h>

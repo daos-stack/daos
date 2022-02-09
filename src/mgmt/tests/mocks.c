@@ -7,6 +7,7 @@
 /**
  * Mocks for DAOS mgmt unit tests
  */
+#define M_TAG		DM_TAG(TEST)
 
 #include "../svc.pb-c.h"
 #include "../srv_internal.h"

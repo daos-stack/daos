@@ -10,6 +10,7 @@
  * the object during rebuild.
  */
 #define D_LOGFAC	DD_FAC(rebuild)
+#define M_TAG		DM_TAG(RECOV)
 
 #include <daos_srv/pool.h>
 

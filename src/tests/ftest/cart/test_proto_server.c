@@ -5,6 +5,7 @@
  */
 #include <semaphore.h>
 
+#define M_TAG		DM_TAG(TEST)
 #include "crt_utils.h"
 #include "test_proto_common.h"
 

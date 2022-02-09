@@ -7,6 +7,7 @@
  * dc_pool/ds_pool: RPC Protocol Serialization Functions
  */
 #define D_LOGFAC	DD_FAC(pool)
+#define M_TAG		DM_TAG(POOL)
 
 #include <daos/rpc.h>
 #include <daos/pool.h>

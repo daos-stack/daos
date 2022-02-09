@@ -6,6 +6,8 @@
 /**
  * This file is part of CaRT. Hybrid Logical Clock (HLC) implementation.
  */
+#define M_TAG		DM_TAG(CRT)
+
 #include "crt_internal.h"
 #include <gurt/common.h>	/* for NSEC_PER_SEC */
 #include <gurt/atomic.h>

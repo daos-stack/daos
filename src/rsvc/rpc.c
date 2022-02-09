@@ -7,6 +7,7 @@
  * ds_rsvc: RPC Protocol Serialization Functions
  */
 #define D_LOGFAC	DD_FAC(rsvc)
+#define M_TAG		DM_TAG(RSVC)
 
 #include <daos/rpc.h>
 #include "rpc.h"

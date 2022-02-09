@@ -10,6 +10,10 @@
 #ifndef __RPC_TEST_COMMON_H__
 #define __RPC_TEST_COMMON_H__
 
+#ifndef M_TAG
+#define M_TAG		DM_TAG(TEST)
+#endif
+
 #include <semaphore.h>
 #include <cart/api.h>
 #include <cart/types.h>

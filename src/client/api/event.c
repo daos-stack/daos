@@ -12,6 +12,7 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 #define D_LOGFAC	DD_FAC(client)
+#define M_TAG		DM_TAG(CLI)
 
 #include "client_internal.h"
 #include <daos/rpc.h>

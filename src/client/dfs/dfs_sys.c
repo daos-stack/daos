@@ -9,6 +9,9 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <linux/xattr.h>
+
+#define M_TAG		DM_TAG(CLI)
+
 #include <daos/common.h>
 #include <daos/event.h>
 

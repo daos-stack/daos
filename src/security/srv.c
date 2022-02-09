@@ -11,6 +11,7 @@
  * implements Security Framework Server API.
  */
 #define D_LOGFAC	DD_FAC(security)
+#define M_TAG		DM_TAG(SEC)
 
 #include <daos/rpc.h>
 #include <daos_srv/daos_engine.h>

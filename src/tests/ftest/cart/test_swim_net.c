@@ -11,6 +11,8 @@
 #include <errno.h>
 #include <assert.h>
 #include <pthread.h>
+
+#define M_TAG		DM_TAG(TEST)
 #include <cart/api.h>
 #include <cart/types.h>
 #include <gurt/common.h>

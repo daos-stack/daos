@@ -10,6 +10,7 @@
  * related to object.
  */
 #define D_LOGFAC	DD_FAC(object)
+#define M_TAG		DM_TAG(IO)
 
 #include <uuid/uuid.h>
 
@@ -922,7 +923,7 @@ obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
 	struct daos_recx_ep		 recx_ep;
 
 	if (recov_lists == NULL) {
-		D_ALLOC_ARRAY(recov_lists, iod_nr);
+		DM_ALLOC_ARRAY(M_EC, recov_lists, iod_nr);
 		if (recov_lists == NULL)
 			return -DER_NOMEM;
 		*recov_lists_ptr = recov_lists;
@@ -1243,7 +1244,7 @@ daos_iod_recx_dup(daos_iod_t *iods, uint32_t iod_nr, daos_iod_t **iods_dup_ptr)
 	daos_iod_t	*src, *dst;
 	uint32_t	 i;
 
-	D_ALLOC_ARRAY(iods_dup, iod_nr);
+	DM_ALLOC_ARRAY(M_IO_ARG, iods_dup, iod_nr);
 	if (iods_dup == NULL)
 		return -DER_NOMEM;
 
@@ -1254,7 +1255,7 @@ daos_iod_recx_dup(daos_iod_t *iods, uint32_t iod_nr, daos_iod_t **iods_dup_ptr)
 		if (src->iod_nr == 0 || src->iod_recxs == NULL)
 			continue;
 
-		D_ALLOC_ARRAY(dst->iod_recxs, dst->iod_nr);
+		DM_ALLOC_ARRAY(M_IO_ARG, dst->iod_recxs, dst->iod_nr);
 		if (dst->iod_recxs == NULL) {
 			daos_iod_recx_free(iods_dup, iod_nr);
 			return -DER_NOMEM;

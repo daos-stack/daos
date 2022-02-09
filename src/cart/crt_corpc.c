@@ -7,6 +7,7 @@
  * This file is part of CaRT. It implements the main collective RPC routines.
  */
 #define D_LOGFAC	DD_FAC(corpc)
+#define M_TAG		DM_TAG(CRT_RPC)
 
 #include "crt_internal.h"
 
@@ -225,7 +226,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_ERROR("bad zero seg_num.\n");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
-	D_ALLOC_ARRAY(iovs, seg_num);
+	DM_ALLOC_ARRAY(M_CRT, iovs, seg_num);
 	if (iovs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

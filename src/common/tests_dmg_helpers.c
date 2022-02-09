@@ -10,6 +10,8 @@
 #include <json-c/json.h>
 #include <stdlib.h>
 
+#define M_TAG           DM_TAG(TEST)
+
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
@@ -23,7 +25,7 @@ cmd_free_args(char **args, int argcount)
 	for (i = 0; i < argcount; i++)
 		D_FREE(args[i]);
 
-	D_FREE(args);
+	free(args);
 }
 
 static char **
