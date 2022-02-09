@@ -51,13 +51,13 @@ class DaosBuild(DfuseTestBase):
                                     attr='dfuse-data-cache', val='off')
 
         daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-attr-time', val='30s')
+                                    attr='dfuse-attr-time', val='120s')
 
         daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-dentry-time', val='30s')
+                                    attr='dfuse-dentry-time', val='120s')
 
         daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-ndentry-time', val='30s')
+                                    attr='dfuse-ndentry-time', val='120s')
 
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
