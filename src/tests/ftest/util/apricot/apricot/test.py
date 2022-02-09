@@ -1278,7 +1278,7 @@ class TestWithServers(TestWithoutServers):
 
         # dump engines ULT stacks upon test failure
         # XXX check of Avocado test status during teardown is presently useless
-        # and about same behaviour has been implemented by adding both fail()
+        # and about same behavior has been implemented by adding both fail()
         # error() method above, to overload the methods of Avocado base Test
         # class (see Avocado issue #5217 and associated PR-5224)
         if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
