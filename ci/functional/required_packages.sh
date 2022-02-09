@@ -25,7 +25,6 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
           fio patchutils ior           \
           romio-tests                  \
           testmpio                     \
-          meson python3-pyelftools     \
           python$pyver-mpi4py-tests    \
           hdf5-mpich-tests             \
           hdf5-$openmpi-tests          \
