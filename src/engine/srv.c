@@ -579,6 +579,8 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	dx->dx_progress	= ABT_THREAD_NULL;
 #ifdef ULT_MMAP_STACK
 	D_INIT_LIST_HEAD(&dx->stack_free_list);
+	dx->alloced_stacks = 0;
+	dx->free_stacks = 0;
 #endif
 
 	return dx;
@@ -602,8 +604,8 @@ dss_xstream_free(struct dss_xstream *dx)
 	while ((mmap_stack_desc = d_list_pop_entry(&dx->stack_free_list,
 						   mmap_stack_desc_t,
 						   stack_list)) != NULL) {
-		D_INFO("Draining a mmap()'ed stack, alloced="DF_U64", free="DF_U64"\n",
-		       dx->alloced_stacks, dx->free_stacks);
+		D_INFO("Draining a mmap()'ed stack, dx=%p, alloced="DF_U64", free="DF_U64"\n",
+		       dx, dx->alloced_stacks, dx->free_stacks);
 		munmap(mmap_stack_desc->stack, mmap_stack_desc->stack_size);
 		--dx->alloced_stacks;
 		--dx->free_stacks;

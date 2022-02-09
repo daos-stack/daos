@@ -29,7 +29,7 @@ ABT_key stack_key;
 
 /* per-engine max number of mmap()'ed ULTs stacks, to be based on
  * vm.max_map_count minus an estimate of the non-stacks
- * mmap()'ed regions required (where malloc() itselfs will use mmap() when
+ * mmap()'ed regions required (where malloc() itself will use mmap() when
  * allocating chunks of size > M_MMAP_THRESHOLD, and there is a M_MMAP_MAX
  * maximum for such number of chunks, both can be updated dynamically using
  * mallopt() !!...) for engine operations (including pre-reqs ...).
@@ -70,9 +70,9 @@ void free_stack(void *arg)
 		int rc;
 
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd munmap()'ed, alloced="DF_U64", free="
+			"%p mmap()'ed stack of size %zd munmap()'ed, dx=%p, alloced="DF_U64", free="
 			DF_U64"\n", desc->stack, desc->stack_size,
-			dx->alloced_stacks, dx->free_stacks);
+			dx, dx->alloced_stacks, dx->free_stacks);
 		rc = munmap(desc->stack, desc->stack_size);
 		/* XXX
 		 * should we re-queue it on free list instead to leak it ?
@@ -82,9 +82,9 @@ void free_stack(void *arg)
 				desc->stack, desc->stack_size, strerror(errno));
 	} else {
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd on free list, alloced="DF_U64",free="
+			"%p mmap()'ed stack of size %zd on free list, dx=%p, alloced="DF_U64",free="
 			DF_U64"\n", desc->stack, desc->stack_size,
-			dx->alloced_stacks, dx->free_stacks);
+			dx, dx->alloced_stacks, dx->free_stacks);
 	}
 }
 
@@ -163,8 +163,8 @@ int mmap_stack_thread_create(struct dss_xstream *dx, ABT_pool pool,
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd from free list, alloced="DF_U64", free="
-			DF_U64"\n", stack, stack_size, dx->alloced_stacks,
+			"%p mmap()'ed stack of size %zd from free list, dx=%p, alloced="DF_U64", free="
+			DF_U64"\n", stack, stack_size, dx, dx->alloced_stacks,
 			dx->free_stacks);
 	} else {
 		D_ASSERT(dx->free_stacks == 0);
@@ -207,8 +207,8 @@ mmap_alloc:
 		mmap_stack_desc->dx = dx;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd allocated, alloced="DF_U64", free="
-			DF_U64"\n", stack, stack_size, dx->alloced_stacks,
+			"%p mmap()'ed stack of size %zd allocated, dx=%p, alloced="DF_U64", free="
+			DF_U64"\n", stack, stack_size, dx, dx->alloced_stacks,
 			dx->free_stacks);
 	}
 
@@ -303,8 +303,8 @@ int mmap_stack_thread_create_on_xstream(struct dss_xstream *dx,
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd from free list, alloced="DF_U64", free="
-			DF_U64"\n", stack, stack_size, dx->alloced_stacks,
+			"%p mmap()'ed stack of size %zd from free list, dx=%p, alloced="DF_U64", free="
+			DF_U64"\n", stack, stack_size, dx, dx->alloced_stacks,
 			dx->free_stacks);
 	} else {
 		D_ASSERT(dx->free_stacks == 0);
@@ -347,8 +347,8 @@ mmap_alloc:
 		mmap_stack_desc->stack_size = stack_size;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd has been allocated, alloced="DF_U64", free="
-			DF_U64"\n", stack, stack_size, dx->alloced_stacks,
+			"%p mmap()'ed stack of size %zd has been allocated, dx=%p, alloced="DF_U64", free="
+			DF_U64"\n", stack, stack_size, dx, dx->alloced_stacks,
 			dx->free_stacks);
 	}
 
