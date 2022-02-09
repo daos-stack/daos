@@ -1672,7 +1672,7 @@ rdb_raft_step_up(struct rdb *db, uint64_t term)
 	msg_entry_response_t	mresponse;
 	int			rc;
 
-	D_WARN(DF_DB": became leader of term "DF_U64"\n", DP_DB(db), term);
+	D_NOTE(DF_DB": became leader of term "DF_U64"\n", DP_DB(db), term);
 	/* Commit an empty entry for an up-to-date last committed index. */
 	mentry.term = raft_get_current_term(db->d_raft);
 	mentry.id = 0; /* unused */
@@ -1694,7 +1694,7 @@ rdb_raft_step_up(struct rdb *db, uint64_t term)
 static void
 rdb_raft_step_down(struct rdb *db, uint64_t term)
 {
-	D_WARN(DF_DB": no longer leader of term "DF_U64"\n", DP_DB(db), term);
+	D_NOTE(DF_DB": no longer leader of term "DF_U64"\n", DP_DB(db), term);
 	db->d_debut = 0;
 	rdb_raft_queue_event(db, RDB_RAFT_STEP_DOWN, term);
 }
