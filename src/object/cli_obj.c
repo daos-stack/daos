@@ -1998,8 +1998,11 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 			return -DER_INVAL;
 		}
 		if (daos_is_akey_uint64(oid) &&
-		    iods[i].iod_name.iov_len != sizeof(uint64_t))
+		    iods[i].iod_name.iov_len != sizeof(uint64_t)) {
+			D_ERROR("Invalid akye len, expected: %lu, got: "DF_U64"\n",
+				sizeof(uint64_t), iods[i].iod_name.iov_len);
 			return -DER_INVAL;
+		}
 		for (j = 0; j < iods[i].iod_nr; j++) {
 			if (iods[i].iod_recxs != NULL && (!spec_shard &&
 			   (iods[i].iod_recxs[j].rx_idx & PARITY_INDICATOR)
