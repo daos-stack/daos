@@ -157,7 +157,6 @@ but Rocky Linux support is targeted for a future DAOS release.
 
 Links to Rocky Linux Release Notes:
 
-* [Rocky Linux 8.4](https://docs.rockylinux.org/release_notes/8.4/)
 * [Rocky Linux 8.5](https://docs.rockylinux.org/release_notes/8.5/)
 
 ### openSUSE Leap 15

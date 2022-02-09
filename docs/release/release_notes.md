@@ -184,6 +184,6 @@ information. All DAOS project source code is maintained in the
 Please visit this [link](https://github.com/daos-stack/daos/blob/master/LICENSE)
 for more information on the licenses.
 
-Refer to the [Software Installation](https://docs.daos.io/v2.0/admin/installation/)
+Refer to the [System Deployment](https://docs.daos.io/v2.0/admin/deployment/)
 section of the [DAOS Administration Guide](https://docs.daos.io/v2.0/admin/hardware/)
 for installation details.

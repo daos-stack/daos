@@ -134,7 +134,7 @@ benchmarks.
 
 ### ior
 
-IOR (<https://github.com/hpc/ior>) with the following backends:
+[IOR](https://github.com/hpc/ior) with the following backends:
 
 -   The IOR APIs POSIX, MPIIO and HDF5 can be used with DAOS POSIX containers
     that are accessed over dfuse. This works without or with the I/O
@@ -165,8 +165,9 @@ work with include:
 - block size (-b)
 - segment size (-s)
 
-For more use cases, the IO-500 workloads are a good starting point to measure
-performance on a system: https://github.com/IO500/io500
+For more use cases, the [IO-500 workloads](https://github.com/IO500/io500)
+are a good starting point to measure
+performance on a system:
 
 ### mdtest
 
@@ -471,13 +472,13 @@ restarted to gain visibility to these changes. For additional information,
 please refer to the [System Deployment: Agent Startup][6] documentation
 section.
 
-[1]: </src/cart> (Collective and RPC Transport)
-[2]: </docs/admin/installation.md#distribution-packages> (DAOS distribution packages)
-[3]: </docs/admin/installation.md#building-daos--dependencies> (DAOS build documentation)
-[4]: </docs/admin/deployment.md#server-startup> (DAOS server startup documentation)
+[1]: <https://github.com/daos-stack/daos/tree/release/2.0/src/cart> (Collective and RPC Transport)
+[2]: <https://docs.daos.io/v2.0/admin/installation/#distribution-packages> (DAOS distribution packages)
+[3]: <https://docs.daos.io/v2.0/admin/installation/#building-daos--dependencies> (DAOS build documentation)
+[4]: <https://docs.daos.io/v2.0/admin/deployment/#server-startup> (DAOS server startup documentation)
 [5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
-[6]: </docs/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
-[7]: <https://daos-stack.github.io/user/posix/#dfuse>
-[8]: </docs/user/mpi-io.md>
-[9]: </docs/user/hdf5.md>
+[6]: <https://docs.daos.io/v2.0/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
+[7]: <https://docs.daos.io/v2.0/user/posix/#dfuse>
+[8]: <https://docs.daos.io/v2.0/user/mpi-io/>
+[9]: <https://docs.daos.io/v2.0/user/hdf5/>
 [10]: <https://github.com/hpc/ior/blob/main/README_DAOS>
