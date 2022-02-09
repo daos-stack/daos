@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,8 +40,7 @@ dma_alloc_chunk(unsigned int cnt)
 	}
 
 	if (bio_spdk_inited) {
-		chunk->bdc_ptr = spdk_dma_malloc_socket(bytes, BIO_DMA_PAGE_SZ, NULL,
-							bio_numa_node);
+		chunk->bdc_ptr = spdk_dma_malloc(bytes, BIO_DMA_PAGE_SZ, NULL);
 	} else {
 		rc = posix_memalign(&chunk->bdc_ptr, BIO_DMA_PAGE_SZ, bytes);
 		if (rc)

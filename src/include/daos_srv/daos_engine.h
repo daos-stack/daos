@@ -39,7 +39,10 @@ extern const char	*dss_nvme_conf;
 /** Socket Directory */
 extern const char	*dss_socket_dir;
 
-/** NVMe mem_size for SPDK memory allocation (in MB) */
+/** NVMe shm_id for enabling SPDK multi-process mode */
+extern int		 dss_nvme_shm_id;
+
+/** NVMe mem_size for SPDK memory allocation when using primary mode (in MB) */
 extern unsigned int	dss_nvme_mem_size;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation (in MB) */

@@ -120,7 +120,7 @@ message DevReplaceResp {
 	reserved 3;
 	int32 status = 1; // DAOS error code
 	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	string dev_state = 4; // NVMe device state
+	string ev_state = 4; // NVMe device state
 }
 
 message DevIdentifyReq {

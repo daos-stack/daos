@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,31 +15,21 @@ import (
 	"github.com/pkg/errors"
 )
 
-type GetHugePageInfoFn func() (*HugePageInfo, error)
+type GetHugePageInfoFn func() (*hugePageInfo, error)
 
-const (
-	// MinTargetHugePageSize is the minimum amount of hugepage space that
-	// can be requested for each target.
-	MinTargetHugePageSize = 1 << 30 // 1GiB
-	// ExtraHugePages is the number of extra hugepages to request beyond
-	// the minimum required, often one or two are not reported as available.
-	ExtraHugePages = 2
-)
-
-// HugePageInfo contains information about system hugepages.
-type HugePageInfo struct {
-	Total      int `json:"total"`
-	Free       int `json:"free"`
-	Reserved   int `json:"reserved"`
-	Surplus    int `json:"surplus"`
-	PageSizeKb int `json:"page_size_kb"`
+type hugePageInfo struct {
+	Total      int
+	Free       int
+	Reserved   int
+	Surplus    int
+	PageSizeKb int
 }
 
-func (hpi *HugePageInfo) TotalMB() int {
+func (hpi *hugePageInfo) TotalMB() int {
 	return (hpi.Total * hpi.PageSizeKb) / 1024
 }
 
-func (hpi *HugePageInfo) FreeMB() int {
+func (hpi *hugePageInfo) FreeMB() int {
 	return (hpi.Free * hpi.PageSizeKb) / 1024
 }
 
@@ -51,8 +41,8 @@ func parseInt(a string, i *int) {
 	*i = v
 }
 
-func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
-	hpi := new(HugePageInfo)
+func parseHugePageInfo(input io.Reader) (*hugePageInfo, error) {
+	hpi := new(hugePageInfo)
 
 	scn := bufio.NewScanner(input)
 	for scn.Scan() {
@@ -89,9 +79,7 @@ func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
 	return hpi, scn.Err()
 }
 
-// GetHugePageInfo reads /proc/meminfo and returns information about
-// system hugepages.
-func GetHugePageInfo() (*HugePageInfo, error) {
+func GetHugePageInfo() (*hugePageInfo, error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return nil, err
@@ -99,20 +87,4 @@ func GetHugePageInfo() (*HugePageInfo, error) {
 	defer f.Close()
 
 	return parseHugePageInfo(f)
-}
-
-// CalcMinHugePages returns the minimum number of hugepages that should be
-// requested for the given number of targets.
-func CalcMinHugePages(hugePageSizeKb int, numTargets int) (int, error) {
-	if numTargets < 1 {
-		return 0, errors.New("numTargets must be >= 1")
-	}
-
-	hugepageSizeBytes := hugePageSizeKb << 10 // KiB to B
-	if hugepageSizeBytes == 0 {
-		return 0, errors.New("invalid system hugepage size")
-	}
-	minHugePageBytes := MinTargetHugePageSize * numTargets
-
-	return minHugePageBytes / hugepageSizeBytes, nil
 }

@@ -345,22 +345,19 @@ type (
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
-		HugePageCount      int
-		HugeNodes          string
-		CleanHugePagesOnly bool
-		CleanHugePagesPID  uint64
-		PCIAllowList       string
-		PCIBlockList       string
-		TargetUser         string
-		Reset_             bool
-		DisableVFIO        bool
-		EnableVMD          bool
+		HugePageCount         int
+		DisableCleanHugePages bool
+		PCIAllowList          string
+		PCIBlockList          string
+		TargetUser            string
+		Reset_                bool
+		DisableVFIO           bool
+		EnableVMD             bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		NrHugePagesRemoved uint
-		VMDPrepared        bool
+		VMDPrepared bool
 	}
 
 	// BdevScanRequest defines the parameters for a Scan operation.

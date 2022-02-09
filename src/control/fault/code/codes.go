@@ -118,7 +118,7 @@ const (
 	ServerPoolInvalidRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugePageMem
+	ServerInsufficientFreeHugePages
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
@@ -154,7 +154,6 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
-	ServerConfigInsufficientHugePages
 )
 
 // SPDK library bindings codes

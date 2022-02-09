@@ -1039,7 +1039,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			// results of the start-up bdev scan from the control service storage
 			// provider into the engine's storage provider. The control service and
 			// each of the engines have distinct storage provider instances so cached
-			// cached results have to be explicitly shared so results are available when
+			// cached results have to be explicitly shared so cache is available when
 			// engines are up.
 
 			for idx, ec := range engineCfgs {
@@ -1052,7 +1052,6 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 						},
 					}
 				}
-
 				// replace harness instance with mock I/O Engine
 				// to enable mocking of harness instance drpc channel
 				sp := storage.MockProvider(log, idx, &ec.Storage,
@@ -1598,17 +1597,11 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			instances := cs.harness.Instances()
 			common.AssertEqual(t, len(tc.sMounts), len(instances), name)
 
-			// Mimic control service start-up and engine creation where cache is shared
-			// to the engines from the base control service storage provider.
-			nvmeScanResp, err := cs.NvmeScan(storage.BdevScanRequest{})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// runs discovery for nvme & scm
+			cs.Setup()
 
 			for i, e := range instances {
 				ei := e.(*EngineInstance)
-				ei.storage.SetBdevCache(*nvmeScanResp)
-
 				root := filepath.Dir(tc.sMounts[i])
 				if tc.scmMounted {
 					root = tc.sMounts[i]

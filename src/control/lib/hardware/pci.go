@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -464,15 +464,6 @@ func (b *PCIBus) String() string {
 	}
 	haf := b.HighAddress.FieldStrings()
 	return fmt.Sprintf("%s:[%s-%s]", laf["Domain"], laf["Bus"], haf["Bus"])
-}
-
-// IsZero if PCI bus contains no valid addresses.
-func (b *PCIBus) IsZero() bool {
-	if b == nil {
-		return true
-	}
-
-	return b.LowAddress.IsZero() && b.HighAddress.IsZero()
 }
 
 func (d *PCIDevice) String() string {

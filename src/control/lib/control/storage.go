@@ -31,13 +31,6 @@ var storageHashOpts = hashstructure.HashOptions{
 	SlicesAsSets: true,
 }
 
-// HugePageInfo is a cut-down version of the hugepage information
-// retrieved from the storage scan. For the purposes of the storage
-// scan, we only care about the system hugepage size.
-type HugePageInfo struct {
-	PageSizeKb int `json:"page_size_kb"`
-}
-
 // HostStorage describes a host storage configuration which
 // may apply to one or more hosts.
 type HostStorage struct {
@@ -64,10 +57,6 @@ type HostStorage struct {
 	// RebootRequired indicates that a host reboot is necessary in order
 	// to achieve some goal (SCM prep, etc.)
 	RebootRequired bool `json:"reboot_required"`
-
-	// HugePageInfo contains information about the host's
-	// hugepages.
-	HugePageInfo *HugePageInfo `json:"huge_page_info"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -213,10 +202,6 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		if err := ssp.addHostError(hr.Addr, errors.New(pbErrMsg)); err != nil {
 			return err
 		}
-	}
-
-	if err := convert.Types(pbResp.GetHugePageInfo(), &hs.HugePageInfo); err != nil {
-		return err
 	}
 
 	if ssp.HostStorage == nil {

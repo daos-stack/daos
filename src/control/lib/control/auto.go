@@ -113,7 +113,7 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	cfg, err := genConfig(req.Log, defaultEngineCfg, req.AccessPoints, nd, sd, ccs)
+	cfg, err := genConfig(ctx, req.Log, defaultEngineCfg, req.AccessPoints, nd, sd, ccs)
 	if err != nil {
 		return nil, err
 	}
@@ -388,9 +388,8 @@ func mapSSDs(ssds storage.NvmeControllers) numaSSDsMap {
 }
 
 type storageDetails struct {
-	hugePageSize int
-	numaPMems    numaPMemsMap
-	numaSSDs     numaSSDsMap
+	numaPMems numaPMemsMap
+	numaSSDs  numaSSDsMap
 }
 
 // validate checks sufficient PMem devices and SSD NUMA groups exist for the
@@ -443,9 +442,8 @@ func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount i
 	}
 
 	sd := &storageDetails{
-		numaPMems:    mapPMems(storageSet.HostStorage.ScmNamespaces),
-		numaSSDs:     mapSSDs(storageSet.HostStorage.NvmeDevices),
-		hugePageSize: storageSet.HostStorage.HugePageInfo.PageSizeKb,
+		numaPMems: mapPMems(storageSet.HostStorage.ScmNamespaces),
+		numaSSDs:  mapSSDs(storageSet.HostStorage.NvmeDevices),
 	}
 	if err := sd.validate(req.Log, engineCount, req.MinNrSSDs); err != nil {
 		return nil, err
@@ -557,7 +555,7 @@ func defaultEngineCfg(idx int) *engine.Config {
 
 // genConfig generates server config file from details of network, storage and CPU hardware after
 // performing some basic sanity checks.
-func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
+func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
 	}
@@ -627,22 +625,23 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		engines = append(engines, engineCfg)
 	}
 
-	numTargets := 0
-	for _, e := range engines {
-		numTargets += e.TargetCount
-	}
-
-	reqHugePages, err := common.CalcMinHugePages(sd.hugePageSize, numTargets)
+	// determine a reasonable amount of hugepages to use
+	hugepage_info, err := common.GetHugePageInfo()
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to calculate minimum hugepages")
+		return nil, errors.New("unable to read system hugepage info")
 	}
+	hugepage_size := hugepage_info.PageSizeKb >> 10
+	if hugepage_size == 0 {
+		return nil, errors.New("unable to read system hugepage size")
+	}
+	nr_hugepages := (minDMABuffer * nrTgts) / hugepage_size
 
 	cfg := config.DefaultServer().
 		WithAccessPoints(accessPoints...).
 		WithFabricProvider(engines[0].Fabric.Provider).
 		WithEngines(engines...).
 		WithControlLogFile(defaultControlLogFile).
-		WithNrHugePages(reqHugePages)
+		WithNrHugePages(nr_hugepages)
 
-	return cfg, cfg.Validate(log, sd.hugePageSize, nil)
+	return cfg, cfg.Validate(ctx, log)
 }

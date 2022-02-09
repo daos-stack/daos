@@ -21,18 +21,9 @@ message StorageScanReq {
 	ScanScmReq scm = 2;
 }
 
-message HugePageInfo {
-	uint64 total = 1;
-	uint64 free = 2;
-	uint64 reserved = 3;
-	uint64 surplus = 4;
-	uint32 page_size_kb = 5;
-}
-
 message StorageScanResp {
 	ScanNvmeResp nvme = 1;
 	ScanScmResp scm = 2;
-	HugePageInfo huge_page_info = 3;
 }
 
 message StorageFormatReq {

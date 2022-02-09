@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -44,7 +43,7 @@ type (
 	removeFn     func(string) error
 	userLookupFn func(string) (*user.User, error)
 	vmdDetectFn  func() (*hardware.PCIAddressSet, error)
-	hpCleanFn    func(string, string, string) (uint, error)
+	hpCleanFn    func(string, string, string) error
 	writeConfFn  func(logging.Logger, *storage.BdevWriteConfigRequest) error
 	restoreFn    func()
 )
@@ -115,7 +114,7 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 
 // hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
 // name begins with prefix and owner has uid equal to tgtUID.
-func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn, count *uint) filepath.WalkFunc {
+func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn) filepath.WalkFunc {
 	return func(path string, info os.FileInfo, err error) error {
 		switch {
 		case err != nil:
@@ -142,17 +141,17 @@ func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn, count
 		if err := remove(path); err != nil {
 			return err
 		}
-		*count++
 
 		return nil
 	}
 }
 
-// cleanHugePages removes hugepage files with pathPrefix that are owned by the user with username
-// tgtUsr by processing directory tree with filepath.WalkFunc returned from hugePageWalkFunc.
-func cleanHugePages(hugePageDir, prefix, tgtUID string) (count uint, _ error) {
-	return count, filepath.Walk(hugePageDir,
-		hugePageWalkFunc(hugePageDir, prefix, tgtUID, os.Remove, &count))
+// cleanHugePages removes hugepage files with pathPrefix that are owned by the
+// user with username tgtUsr by processing directory tree with filepath.WalkFunc
+// returned from hugePageWalkFunc.
+func cleanHugePages(hugePageDir, prefix, tgtUID string) error {
+	return filepath.Walk(hugePageDir,
+		hugePageWalkFunc(hugePageDir, prefix, tgtUID, os.Remove))
 }
 
 // prepare receives function pointers for external interfaces.
@@ -161,33 +160,26 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 
 	usr, err := userLookup(req.TargetUser)
 	if err != nil {
-		return resp, errors.Wrapf(err, "lookup on local host")
+		return nil, errors.Wrapf(err, "lookup on local host")
 	}
 
-	// Remove hugepages matching file name beginning with prefix and owned by the target user.
-	hpPrefix := hugePagePrefix
-	if req.CleanHugePagesPID != 0 {
-		// If a pid is supplied then include in the prefix.
-		hpPrefix = fmt.Sprintf("%s_pid%dmap", hpPrefix, req.CleanHugePagesPID)
-	}
-	nrRemoved, err := hpClean(hugePageDir, hpPrefix, usr.Uid)
-	if err != nil {
-		return resp, errors.Wrapf(err, "clean spdk hugepages")
-	}
-	resp.NrHugePagesRemoved = nrRemoved
-	if req.CleanHugePagesOnly {
-		return resp, nil
+	if !req.DisableCleanHugePages {
+		// remove hugepages matching /dev/hugepages/spdk* owned by target user
+		err := hpClean(hugePageDir, hugePagePrefix, usr.Uid)
+		if err != nil {
+			return nil, errors.Wrapf(err, "clean spdk hugepages")
+		}
 	}
 
-	// If VMD has been explicitly enabled and there are VMD enabled NVMe devices on the host,
-	// attempt to prepare them first.
+	// If VMD has been explicitly enabled and there are VMD enabled
+	// NVMe devices on the host, attempt to prepare them first.
 	vmdReq, err := getVMDPrepReq(sb.log, &req, vmdDetect)
 	if err != nil {
-		return resp, errors.Wrapf(err, "create vmd request")
+		return nil, err
 	}
 	if vmdReq != nil {
 		if err := sb.script.Prepare(vmdReq); err != nil {
-			return resp, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
+			return nil, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 		}
 		resp.VMDPrepared = true
 	}

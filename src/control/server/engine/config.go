@@ -7,6 +7,7 @@
 package engine
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -169,43 +170,42 @@ func NewConfig() *Config {
 	}
 }
 
-// setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) (err error) {
-	var fi *hardware.FabricInterface
-	if fis != nil {
-		fi, err = fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
-		if err != nil {
-			return
-		}
+// ValidateFabric validates the fabric configuration against actual fabric devices and NUMA config.
+func (c *Config) ValidateFabric(ctx context.Context, log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+	fi, err := fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
+	if err != nil {
+		return err
 	}
 
+	return errors.Wrap(c.setAffinity(ctx, log, fi), "setting numa affinity for engine")
+}
+
+// setAffinity ensures engine NUMA locality is assigned and valid.
+func (c *Config) setAffinity(ctx context.Context, log logging.Logger, fi *hardware.FabricInterface) error {
+	ifaceNumaNode := fi.NUMANode
+
 	if c.PinnedNumaNode != nil {
+		// validate that numa node is correct for the given device
+		if ifaceNumaNode != *c.PinnedNumaNode {
+			log.Errorf("misconfiguration: network interface %s is on NUMA "+
+				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
+				ifaceNumaNode, *c.PinnedNumaNode)
+		}
 		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
 		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
 
-		// validate that numa node is correct for the given device
-		if fi != nil && fi.NUMANode != *c.PinnedNumaNode {
-			log.Errorf("misconfiguration: network interface %s is on NUMA "+
-				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
-				fi.NUMANode, *c.PinnedNumaNode)
-		}
-
-		return
-	}
-
-	if fi == nil {
-		return errors.New("pinned_numa_node unset in config and fabric info not provided")
+		return nil
 	}
 
 	// set engine numa node index to that of selected fabric interface
-	c.Fabric.NumaNodeIndex = fi.NUMANode
-	c.Storage.NumaNodeIndex = fi.NUMANode
+	c.Fabric.NumaNodeIndex = ifaceNumaNode
+	c.Storage.NumaNodeIndex = ifaceNumaNode
 
-	return
+	return nil
 }
 
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
@@ -218,7 +218,7 @@ func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) 
 		return errors.Wrap(err, "validate engine log masks")
 	}
 
-	return errors.Wrap(c.setAffinity(log, fis), "setting numa affinity for engine")
+	return nil
 }
 
 // CmdLineArgs returns a slice of command line arguments to be

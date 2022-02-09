@@ -213,7 +213,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	if err == nil && resp != nil && !req.CleanHugePagesOnly {
+	if err == nil && resp != nil {
 		p.vmdEnabled = resp.VMDPrepared
 	}
 	return resp, err
@@ -355,9 +355,8 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		// devices.
 
 		var begin, end uint8
-		if tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero() {
-			log.Debugf("received user-specified hotplug bus-id range %q",
-				tier.Bdev.BusidRange)
+		if tier.Bdev.BusidRange != nil {
+			log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
 			begin = tier.Bdev.BusidRange.LowAddress.Bus
 			end = tier.Bdev.BusidRange.HighAddress.Bus
 		} else {
