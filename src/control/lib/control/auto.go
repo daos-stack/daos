@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -113,7 +113,7 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	cfg, err := genConfig(ctx, req.Log, defaultEngineCfg, req.AccessPoints, nd, sd, ccs)
+	cfg, err := genConfig(req.Log, defaultEngineCfg, req.AccessPoints, nd, sd, ccs)
 	if err != nil {
 		return nil, err
 	}
@@ -388,8 +388,9 @@ func mapSSDs(ssds storage.NvmeControllers) numaSSDsMap {
 }
 
 type storageDetails struct {
-	numaPMems numaPMemsMap
-	numaSSDs  numaSSDsMap
+	hugePageSize int
+	numaPMems    numaPMemsMap
+	numaSSDs     numaSSDsMap
 }
 
 // validate checks sufficient PMem devices and SSD NUMA groups exist for the
@@ -442,8 +443,9 @@ func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount i
 	}
 
 	sd := &storageDetails{
-		numaPMems: mapPMems(storageSet.HostStorage.ScmNamespaces),
-		numaSSDs:  mapSSDs(storageSet.HostStorage.NvmeDevices),
+		numaPMems:    mapPMems(storageSet.HostStorage.ScmNamespaces),
+		numaSSDs:     mapSSDs(storageSet.HostStorage.NvmeDevices),
+		hugePageSize: storageSet.HostStorage.HugePageInfo.PageSizeKb,
 	}
 	if err := sd.validate(req.Log, engineCount, req.MinNrSSDs); err != nil {
 		return nil, err
@@ -555,7 +557,7 @@ func defaultEngineCfg(idx int) *engine.Config {
 
 // genConfig generates server config file from details of network, storage and CPU hardware after
 // performing some basic sanity checks.
-func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
+func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
 	}
@@ -606,7 +608,7 @@ func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCf
 					WithScmDeviceList(sd.numaPMems[nn][0]),
 			)
 		}
-		if len(sd.numaSSDs) > 0 {
+		if len(sd.numaSSDs) > 0 && len(sd.numaSSDs[nn]) > 0 {
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass(storage.ClassNvme.String()).
@@ -625,23 +627,22 @@ func genConfig(ctx context.Context, log logging.Logger, newEngineCfg newEngineCf
 		engines = append(engines, engineCfg)
 	}
 
-	// determine a reasonable amount of hugepages to use
-	hugepage_info, err := common.GetHugePageInfo()
+	numTargets := 0
+	for _, e := range engines {
+		numTargets += e.TargetCount
+	}
+
+	reqHugePages, err := common.CalcMinHugePages(sd.hugePageSize, numTargets)
 	if err != nil {
-		return nil, errors.New("unable to read system hugepage info")
+		return nil, errors.Wrap(err, "unable to calculate minimum hugepages")
 	}
-	hugepage_size := hugepage_info.PageSizeKb >> 10
-	if hugepage_size == 0 {
-		return nil, errors.New("unable to read system hugepage size")
-	}
-	nr_hugepages := (minDMABuffer * nrTgts) / hugepage_size
 
 	cfg := config.DefaultServer().
 		WithAccessPoints(accessPoints...).
 		WithFabricProvider(engines[0].Fabric.Provider).
 		WithEngines(engines...).
 		WithControlLogFile(defaultControlLogFile).
-		WithNrHugePages(nr_hugepages)
+		WithNrHugePages(reqHugePages)
 
-	return cfg, cfg.Validate(ctx, log)
+	return cfg, cfg.Validate(log, sd.hugePageSize, nil)
 }

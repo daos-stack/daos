@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -188,6 +188,16 @@ func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
 		fmt.Sprintf("ensure that the 'fault_cb' path is under the parent directory %q, "+
 			"not a symbolic link, does not have the setuid bit set, and does not have "+
 			"write permissions for non-owners", requiredDir),
+	)
+}
+
+// FaultConfigInsufficientHugePages creates a fault for the scenario where the
+// number of configured huge pages is less than required.
+func FaultConfigInsufficientHugePages(min, req int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigInsufficientHugePages,
+		fmt.Sprintf("insufficient huge pages configured for the number of targets (%d < %d)", req, min),
+		"update the 'nr_hugepages' parameter or remove it for automatic configuration",
 	)
 }
 

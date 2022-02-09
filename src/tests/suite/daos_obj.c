@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1408,6 +1408,7 @@ static int
 iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 {
 	daos_anchor_t	anchor;
+	daos_anchor_t	anchor_des;
 	int		key_nr;
 	int		i;
 	uint32_t	number;
@@ -1415,6 +1416,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 	/** Enumerate all mixed NVMe and SCM records */
 	key_nr = 0;
 	memset(&anchor, 0, sizeof(anchor));
+	memset(&anchor_des, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_epoch_range_t	eprs[5];
 		daos_recx_t		recxs[5];
@@ -1428,6 +1430,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 
 		for (i = 0; i < (number - 1); i++) {
 			assert_true(size == iod_size);
+			assert_true(recxs[i].rx_idx < recxs[i+1].rx_idx);
 			/* Print a subset of enumerated records */
 			if ((i + key_nr) % ENUM_PRINT != 0)
 				continue;
@@ -1440,8 +1443,17 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 				      i + key_nr, (int)size,
 				      (int)recxs[i].rx_nr,
 				      (int)recxs[i].rx_idx);
-
 		}
+
+		number = 5;
+		enumerate_rec(DAOS_TX_NONE, dkey, akey, &size,
+			      &number, recxs, eprs, &anchor_des, false, req);
+		if (number == 0)
+			continue;
+		for (i = 0; i < (number - 1); i++) {
+			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
+		}
+
 		key_nr += number;
 	}
 
@@ -2203,8 +2215,21 @@ next_step:
 	assert_rc_equal(rc, 0);
 
 	/** fetch */
-	iod.iod_size	= DAOS_REC_ANY;
+	print_message("fetch with zero iov_len\n");
+	iod.iod_size	= 1;
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= tmp_len * 1;
+	iod.iod_nr	= 1;
+	sg_iov[0].iov_len = 0;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
+	assert_rc_equal(rc, 0);
+
 	print_message("reading data back with less buffer ...\n");
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= tmp_len;
+	iod.iod_nr	= 3;
+	iod.iod_size	= DAOS_REC_ANY;
 	buf_out = step == 1 ? stack_buf_out : bulk_buf_out;
 	memset(buf_out, 0, buf_len);
 	tmp_len = buf_len / 2;
@@ -3402,8 +3427,10 @@ io_obj_key_query(void **state)
 	assert_rc_equal(rc, 0);
 
 	dkey_val = 10;
+	val_iov.iov_buf_len += 1024;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
+	d_iov_set(&val_iov, &update_var, sizeof(update_var));
 
 	recx.rx_idx = 50;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);

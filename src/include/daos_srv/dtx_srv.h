@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -231,9 +231,13 @@ int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg);
 
-int dtx_batched_commit_register(struct ds_cont_child *cont);
+int dtx_cont_open(struct ds_cont_child *cont);
 
-void dtx_batched_commit_deregister(struct ds_cont_child *cont);
+void dtx_cont_close(struct ds_cont_child *cont);
+
+int dtx_cont_register(struct ds_cont_child *cont);
+
+void dtx_cont_deregister(struct ds_cont_child *cont);
 
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);

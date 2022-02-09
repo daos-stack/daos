@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -104,7 +104,7 @@ ilog_is_same_tx(struct ilog_context *lctx, const struct ilog_id *id, bool *same)
 }
 
 static int
-ilog_status_get(struct ilog_context *lctx, const struct ilog_id *id, uint32_t intent)
+ilog_status_get(struct ilog_context *lctx, const struct ilog_id *id, uint32_t intent, bool retry)
 {
 	struct ilog_desc_cbs	*cbs = &lctx->ic_cbs;
 	int			 rc;
@@ -115,7 +115,7 @@ ilog_status_get(struct ilog_context *lctx, const struct ilog_id *id, uint32_t in
 	if (!cbs->dc_log_status_cb)
 		return ILOG_COMMITTED;
 
-	rc = cbs->dc_log_status_cb(&lctx->ic_umm, id->id_tx_id, id->id_epoch, intent,
+	rc = cbs->dc_log_status_cb(&lctx->ic_umm, id->id_tx_id, id->id_epoch, intent, retry,
 				   cbs->dc_log_status_args);
 
 	if ((intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH)
@@ -769,7 +769,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 
 	if (id_out->id_epoch <= epr->epr_hi &&
 	    id_out->id_epoch >= epr->epr_lo) {
-		visibility = ilog_status_get(lctx, id_out, DAOS_INTENT_UPDATE);
+		visibility = ilog_status_get(lctx, id_out, DAOS_INTENT_UPDATE, true);
 		if (visibility < 0)
 			return visibility;
 	}
@@ -896,7 +896,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 
 	if (root->lr_tree.it_embedded && root->lr_id.id_epoch <= epr->epr_hi
 	    && root->lr_id.id_epoch >= epr->epr_lo) {
-		visibility = ilog_status_get(lctx, &root->lr_id, DAOS_INTENT_UPDATE);
+		visibility = ilog_status_get(lctx, &root->lr_id, DAOS_INTENT_UPDATE, true);
 		if (visibility < 0) {
 			rc = visibility;
 			goto done;
@@ -1099,7 +1099,9 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 		    (entry.ie_status == ILOG_COMMITTED ||
 		     entry.ie_status == ILOG_REMOVED))
 			continue;
-		status = ilog_status_get(lctx, &entry.ie_id, intent);
+		status = ilog_status_get(lctx, &entry.ie_id, intent,
+					 (intent == DAOS_INTENT_UPDATE ||
+					  intent == DAOS_INTENT_PUNCH) ? false : true);
 		if (status < 0) {
 			priv->ip_rc = status;
 			return;
@@ -1235,7 +1237,9 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 
 	for (i = 0; i < cache.ac_nr; i++) {
 		id = &cache.ac_entries[i];
-		status = ilog_status_get(lctx, id, intent);
+		status = ilog_status_get(lctx, id, intent,
+					 (intent == DAOS_INTENT_UPDATE ||
+					  intent == DAOS_INTENT_PUNCH) ? false : true);
 		if (status != -DER_INPROGRESS && status < 0)
 			D_GOTO(fail, rc = status);
 		set_entry(entries, i, status);

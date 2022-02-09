@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -374,6 +374,7 @@ class DmgCommand(DmgCommandBase):
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
                     tier_ratio=None, properties=None, label=None, nranks=None):
+        # pylint: disable=too-many-arguments
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -442,8 +443,7 @@ class DmgCommand(DmgCommandBase):
         # },
         # "error": null,
         # "status": 0
-        output = self._get_json_result(("pool", "create"),
-                                       json_err=True, **kwargs)
+        output = self._get_json_result(("pool", "create"), json_err=True, **kwargs)
         if output["error"] is not None:
             self.log.error(output["error"])
             if self.exit_status_exception:
@@ -453,10 +453,8 @@ class DmgCommand(DmgCommandBase):
             return data
 
         data["uuid"] = output["response"]["uuid"]
-        data["svc"] = ",".join(
-            [str(svc) for svc in output["response"]["svc_reps"]])
-        data["ranks"] = ",".join(
-            [str(r) for r in output["response"]["tgt_ranks"]])
+        data["svc"] = ",".join([str(svc) for svc in output["response"]["svc_reps"]])
+        data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
 

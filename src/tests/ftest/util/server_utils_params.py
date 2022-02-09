@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -79,7 +79,9 @@ class DaosServerYamlParameters(YamlParameters):
         #       base location to place the sockets in.
         #
         #   - nr_hugepages: <int>, e.g. 4096
-        #       Number of hugepages to allocate for use by NVMe SSDs
+        #       Number of hugepages to allocate for use with SPDK and NVMe SSDs.
+        #       This value is only used for optional override and will be
+        #       automatically calculated if unset.
         #
         #   - control_log_mask: <str>, e.g. DEBUG
         #       Force specific debug mask for daos_server (control plane).
@@ -108,6 +110,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
+        # Auto-calculate if unset or set to zero
         self.nr_hugepages = BasicParameter(None, 0)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
@@ -156,9 +159,9 @@ class DaosServerYamlParameters(YamlParameters):
         for engine_params in self.engine_params:
             engine_params.get_params(test)
 
-        if self.using_nvme and self.nr_hugepages.value == 0:
-            self.log.debug("Setting hugepages when bdev class is 'nvme'")
-            self.nr_hugepages.update(4096, "nr_hugepages")
+        if self.nr_hugepages.value == 0 and not self.using_nvme:
+            self.log.debug("Disabling hugepages when bdev class is not 'nvme'")
+            self.nr_hugepages.update(-1, "nr_hugepages")
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.

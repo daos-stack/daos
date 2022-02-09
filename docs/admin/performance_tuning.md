@@ -235,7 +235,7 @@ The `-R` option is used to define the operation to be performanced:
 - `P` for `punch` (i.e. truncate) operation
 - `p` to display the performance result for the previous operation.
 
-For instance, -R "U;p F;P" means update the keys, print the update rate/bandwidth,
+For instance, -R "U;p F;p" means update the keys, print the update rate/bandwidth,
 fetch the keys and then print the fetch rate/bandwidth. The number of
 object/dkey/akey/value can be passed via respectively the -o, -d, -a and -n
 options. The value size is specified via the -s parameter (e.g. -s 4K for 4K
@@ -249,7 +249,7 @@ $ cd /mnt/daos0
 $ df .
 Filesystem      1K-blocks  Used  Available Use% Mounted on
 /dev/pmem0     4185374720 49152 4118216704   1% /mnt/daos0
-$ taskset -c 1 vos_perf -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
+$ taskset -c 1 vos_perf -D . -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
 Test :
         VOS (storage only)
 Pool :
@@ -305,7 +305,7 @@ $ cd /mnt/daos1/
 $ df .
 Filesystem      1K-blocks   Used  Available Use% Mounted on
 /dev/pmem1     4185374720 262144 4118003712   1% /mnt/daos1
-$ taskset -c 36 vos_perf -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
+$ taskset -c 36 vos_perf -D . -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
 Test :
         VOS (storage only)
 Pool :
@@ -351,7 +351,7 @@ Bandwidth can be tested by using a larger record size (i.e. -s option). For
 instance:
 
 ```
-$ taskset -c 36 vos_perf -f ./vos -P 100G -d 40000 -a 1 -n 1 -s 1M -z -R "U;p F;p"
+$ taskset -c 36 vos_perf -D . -P 100G -d 40000 -a 1 -n 1 -s 1M -z -R "U;p F;p"
 Test :
         VOS (storage only)
 Pool :
