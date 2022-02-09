@@ -1836,7 +1836,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 			break;
 		default:
 			rc = -DER_INVAL;
-			DH_PERROR_DER(ap, rc, "Only files and directories are supported");
+			DH_PERROR_DER(ap, rc,
+				      "Only files, directories, and symlinks are supported");
 		}
 		D_FREE(next_src_path);
 		D_FREE(next_dst_path);
@@ -1897,7 +1898,11 @@ fs_copy(struct cmd_args_s *ap,
 	 * copy INTO the directory instead of TO it.
 	 */
 	rc = file_lstat(ap, dst_file_dfs, dst_path, &dst_stat);
-	if (rc == 0) {
+	if (rc != 0 && rc != ENOENT) {
+		rc = daos_errno2der(rc);
+		DH_PERROR_DER(ap, rc, "Failed to stat %s", dst_path);
+		D_GOTO(out, rc);
+	} else if (rc == 0) {
 		if (S_ISDIR(dst_stat.st_mode)) {
 			copy_into_dst = true;
 		} else if S_ISDIR(src_stat.st_mode) {
@@ -1939,7 +1944,7 @@ fs_copy(struct cmd_args_s *ap,
 		break;
 	default:
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Only files and directories are supported");
+		DH_PERROR_DER(ap, rc, "Only files, directories, and symlinks are supported");
 		D_GOTO(out, rc);
 	}
 
