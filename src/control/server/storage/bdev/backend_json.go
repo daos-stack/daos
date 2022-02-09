@@ -219,7 +219,7 @@ func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubs
 			f = getAioKdevCreateMethod
 		}
 
-		for index, dev := range tier.DeviceList {
+		for index, dev := range tier.DeviceList.Devices() {
 			name := fmt.Sprintf("%s_%d_%d", req.Hostname, index, tier.Tier)
 			sscs = append(sscs, f(name, dev))
 		}
