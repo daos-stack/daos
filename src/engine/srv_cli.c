@@ -26,7 +26,7 @@
  * TODO:
  * Client APIs may need to acquire some global pthread lock, that could block
  * the whole xstream unexpectedly, we need to revise the client APIs to make
- * sure the global phtread locks are not used when they are called on server.
+ * sure the global pthread locks are not used when they are called on server.
  */
 static void
 dsc_progress(void *arg)
