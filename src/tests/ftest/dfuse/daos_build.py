@@ -19,6 +19,13 @@ class DaosBuild(DfuseTestBase):
     :avocado: recursive
     """
 
+    def setUp(self):
+        """Set up for test case."""
+        super().setUp()
+        dist = distro.linux_distribution()
+        if dist[0] == 'CentOS Linux' and dist[1] == '7':
+            self.skipTest('Newer software distribution needed')
+
     def test_daos_build(self):
         """Jira ID: DAOS-8937.
 
@@ -37,8 +44,6 @@ class DaosBuild(DfuseTestBase):
 
         scons = 'scons-3'
         dist = distro.linux_distribution()
-        if dist[0] == 'CentOS Linux' and dist[1] == '7':
-            self.skipTest('Newer software distribution needed')
         if dist[0] == 'openSUSE Leap':
             scons = 'scons'
 
