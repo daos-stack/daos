@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,8 +21,9 @@ type MockEnvCfg struct {
 // MockEnvImpl is a mock implementation of the Env interface.
 type MockEnvImpl struct {
 	sync.RWMutex
-	Cfg      MockEnvCfg
-	CallOpts []*EnvOptions
+	Cfg       MockEnvCfg
+	InitCalls []*EnvOptions
+	FiniCalls []*EnvOptions
 }
 
 // InitSPDKEnv initializes the SPDK environment.
@@ -32,7 +33,7 @@ func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	}
 
 	e.Lock()
-	e.CallOpts = append(e.CallOpts, opts)
+	e.InitCalls = append(e.InitCalls, opts)
 	e.Unlock()
 
 	return e.Cfg.InitErr
@@ -40,6 +41,11 @@ func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 
 // FiniSPDKEnv finalizes the SPDK environment.
 func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
+	log.Debugf("mock spdk fini go opts: %+v", opts)
+
+	e.Lock()
+	e.FiniCalls = append(e.FiniCalls, opts)
+	e.Unlock()
 }
 
 // MockNvmeCfg controls the behavior of the MockNvmeImpl.
