@@ -132,7 +132,7 @@ Links to CentOS Linux 8 Release Notes:
 * [CentOS 8.4.2105](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS8.2105)
 * [CentOS 8.5.2111](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS8.2111)
 
-CentOS Linux 8 will reach End Of Life (EOL) on December 31st, 2021.
+CentOS Linux 8 has reached End Of Life (EOL) on December 31st, 2021.
 The DAOS engineering team intends to support Rocky Linux in a future DAOS release.
 DAOS servers running CentOS 8 can then be migrated to either Rocky Linux or RHEL.
 
@@ -175,6 +175,9 @@ DAOS Version 2.0 is supported on SLES 15 SP3.
 Links to SLES 15 Release Notes:
 
 * [SLES 15 SP3](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP3/)
+
+Refer to the [SLES Life Cycle](https://www.suse.com/lifecycle/)
+description on the SUSE support website for information on SLES support phases.
 
 ### Unsupported Linux Distributions
 
@@ -239,7 +242,13 @@ On InfiniBand fabrics with the `verbs` provider, DAOS requires that the
 [Mellanox OFED (MLNX\_OFED)](https://www.mellanox.com/products/infiniband-drivers/linux/mlnx_ofed)
 software stack is installed on the DAOS servers and DAOS clients.
 DAOS Version 2.0 has been validated with MLNX\_OFED Version 5.3 and
-Version 5.4.
+Version 5.4. Validation of MLNX\_OFED Version 5.5 is in progress.
+
+Links to MLNX\_OFED Release Notes:
+
+* [MLNX\_OFED 5.3-1](https://docs.nvidia.com/networking/display/MLNXOFEDv531050/Release+Notes)
+* [MLNX\_OFED 5.4-1](https://docs.nvidia.com/networking/display/MLNXOFEDv541030/Release+Notes)
+* [MLNX\_OFED 5.5-1](https://docs.nvidia.com/networking/display/MLNXOFEDv551032/Release+Notes)
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of MLNX\_OFED, and that the InfiniBand adapters are
@@ -269,7 +278,7 @@ DAOS scaling targets
 (these are order of magnitude figures that indicate what the DAOS architecture
 should support - see below for the scales at which DAOS 2.0 has been validated):
 
-* DAOS client nodes in a DAOS system:   10<sup>6</sup> (hundreds of thousands)
+* DAOS client nodes in a DAOS system:   10<sup>5</sup> (hundreds of thousands)
 * DAOS servers in a DAOS system:        10<sup>3</sup> (thousands)
 * DAOS engines per DAOS server:         10<sup>0</sup> (less than ten)
 * DAOS targets per DAOS engine:         10<sup>1</sup> (tens)
