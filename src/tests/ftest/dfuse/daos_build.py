@@ -6,6 +6,7 @@
 """
 
 import os
+import distro
 import general_utils
 
 from dfuse_test_base import DfuseTestBase
@@ -33,6 +34,14 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild
         """
+
+        scons = 'scons-3'
+        dist = distro.linux_distribution()
+        if dist[0] == 'CentOS Linux' and dist[1] == '7':
+            raise SkipTest('Newer software distribution needed')
+        elif dist[0] == 'openSUSE Leap':
+            scons = 'scons'
+
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
         self.add_container(self.pool)
@@ -58,7 +67,7 @@ class DaosBuild(DfuseTestBase):
         cmds = ['git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
-                'scons-3 -C {} --jobs 50 build --build-deps=yes'.format(build_dir)]
+                '{} -C {} --jobs 50 build --build-deps=yes'.format(scons, build_dir)]
         for cmd in cmds:
             try:
                 # Set a timeout of 1500 seconds, the whole test will timeout after 1800
