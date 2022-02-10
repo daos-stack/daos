@@ -198,9 +198,9 @@
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr17
+   Memcheck:Addr16
    ...
-   fun:main.createWriteStream.*
+   fun:main.createWriteStreamXX.*
 }
 {
    <insert_a_suppression_name_here>
