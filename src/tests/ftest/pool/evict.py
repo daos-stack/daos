@@ -4,11 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import uuid
-
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
-from test_utils_container import TestContainer
 
 
 class EvictTests(TestWithServers):
@@ -25,11 +22,15 @@ class EvictTests(TestWithServers):
         self.start_servers_once = False
 
     def connected_pool(self, hostlist, targets=None):
-        """Create and connect to a pool.
+        """Create a pool, check the pool file in /mnt/daos, and connect.
 
         Args:
-            hostlist (list): list of daos server nodes
-            targets (list): List of targets for pool create. Defaults to None.
+            hostlist (list): Hosts where pool is created.
+            targets (list): List of server ranks to create the pool. Defaults to None.
+
+        Returns:
+            TestPool: Created pool.
+
         """
         pool = self.get_pool(create=False)
 
@@ -52,174 +53,160 @@ class EvictTests(TestWithServers):
         # Return connected pool
         return pool
 
-    def evict_bad_param(self, test_param):
-        """Connect to pool, connect and try to evict with a bad param.
+    def get_host_list(self, ranks):
+        """Get the hostnames from the rank numbers.
+
+        The ordering of the ranks and the hostnames may not align, so use the get_host()
+        method to find the mapping.
 
         Args:
-            test_param (str): invalid UUID
+            ranks (list): List of server ranks.
 
         Returns:
-            TestPool (bool)
+            list: Hostnames.
 
         """
-        # setup pool and connect
-        self.pool = self.connected_pool(self.hostlist_servers)
+        host_list = []
 
-        self.log.info(
-            "Pool UUID: %s\n Pool handle: %s\n",
-            self.pool.uuid, self.pool.pool.handle.value,)
+        for rank in ranks:
+            host_list.append(self.server_managers[0].get_host(rank=rank))
 
-        original_uuid = self.pool.uuid
+        return host_list
 
-        if test_param == "invalid_uuid":
-            # Attempt to evict pool with invalid UUID
-            bogus_uuid = self.pool.uuid
-            # in case uuid4() generates pool.uuid
-            while bogus_uuid == self.pool.uuid:
-                bogus_uuid = str(uuid.uuid4())
+    def verify_pool_evict(self, pool):
+        """Evict and verify that it succeeded. If not, fail the test.
 
-            # Set the bogus UUID to the pool.
-            self.pool.uuid = bogus_uuid
+        Args:
+            pool (TestPool): Pool to evict.
+        """
+        try:
+            pool.dmg.exit_status_exception = False
+            pool.evict()
+        finally:
+            pool.dmg.exit_status_exception = True
 
-            self.log.info(
-                "Evicting pool with Invalid Pool UUID: %s", self.pool.uuid)
-        else:
-            self.fail("Invalid yaml parameters - check \"params\" values")
-
-        # Make it not fail at CommandFailure and call.
-        self.pool.dmg.exit_status_exception = False
-        self.pool.use_label = False
-        self.pool.evict()
-
-        # Restore the original UUID.
-        self.pool.uuid = original_uuid
-
-        result = self.pool.dmg.result
-        if result.exit_status != 0:
-            self.log.info("Expected exception - invalid param %s\n %s\n",
-                          test_param, str(result))
-
-        # if here then pool-evict did not raise an exception as expected
-        # restore the valid server group name and check if valid pool
-        # still exists
-        self.log.info(
-            "Command exception did not occur"
-            " - evict from pool with %s", test_param)
-
-        if self.pool.check_files(self.hostlist_servers):
-            self.log.error("Valid pool files were not detected on server after"
-                           " a pool evict with %s failed to raise an "
-                           "exception", test_param)
-        self.log.error("Test did not raise an exception with when "
-                       "evicting a pool with bad param: %s", test_param)
-        return False
+        if pool.dmg.result.exit_status != 0:
+            self.fail("Pool evict failed!")
 
     def test_evict(self):
         """
-        Test evicting a client from a pool.
-
-        Test creates 2 pools on 4 target (pool_tgt [0,1,2,3])
-        and 1 pool on 2 targets (pool_tgt_ut [0,1]).  The pools are connected
-        to and a container with data is created on all 3.
-        The evict is done on connection to the pool with 2 targets.
-        The handle is removed.
-        The test verifies that the other two pools were not affected
-        by the evict
+        Test Steps:
+        1. Create 2 pools on 4 server ranks; rank 0 to 3.
+        2. Create another pool on 2 ranks; rank 0 and 1.
+        3. After creating each pool, create a container and write objects.
+        4. Verify that the pool file exists in /mnt/daos.
+        5. Verify that the third pool's file doesn't exist on the two hosts that this
+        pool wasn't created on.
+        6. Evict the third pool on rank 0 and 1.
+        7. Verify that the pool file still exists in /mnt/daos for all three pools. i.e.,
+        verify that the evict didn't cause the ill effect to the pool file.
+        8. For all pools, call pool_query() over API. The first two pools should
+        succeed. The last pool should fail because it was evicted.
+        9. For the first two pools, check the UUID obtained from the pool_query() in
+        the previous step and verify that the evict on the third pool didn't have ill
+        effect.
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool,pool_evict,pool_evict_basic
+        :avocado: tags=pool
+        :avocado: tags=pool_evict,pool_evict_basic
         :avocado: tags=DAOS_5610
         """
         # Do not use self.pool. It will cause -1002 error when disconnecting.
-        pool = []
-        container = []
-        # non_pool_servers = []
+        pools = []
+        containers = []
 
-        # Target list is configured so that the pools are across all servers
-        # except the pool under test is created on half of the servers
-        pool_tgt = list(range(len(self.hostlist_servers)))
-        pool_tgt_ut = list(range(int(len(self.hostlist_servers)/2)))
-        tlist = [pool_tgt, pool_tgt, pool_tgt_ut]
-        pool_servers = [self.hostlist_servers[:len(tgt)] for tgt in tlist]
-        non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
+        # four_ranks stores the four ranks we have.
+        four_ranks = [0, 1, 2, 3]
+        # two_ranks_with is the two ranks that we'll create the third pool on.
+        two_ranks_with = [0, 1]
+        # two_ranks_without is the two ranks that we will not create a pool.
+        two_ranks_without = [2, 3]
 
-        # Create Connected TestPool
-        for count, target_list in enumerate(tlist):
-            pool.append(self.connected_pool(pool_servers[count], target_list))
-            if len(non_pool_servers[count]) > 0:
-                self.assertFalse(
-                    pool[count].check_files(non_pool_servers[count]),
-                    "Pool # {} data detected on non pool servers {} ".format(
-                        count+1, non_pool_servers[count]))
+        # four_hosts is the list of hosts that maps to the four_ranks. e.g.,
+        # rank 0: wolf-1
+        # rank 1: wolf-4
+        # rank 2: wolf-3
+        # rank 3: wolf-2
+        # then four_hosts would be ["wolf-1", "wolf-4", "wolf-3", "wolf-2"]. (Order
+        # doesn't matter.)
+        four_hosts = self.get_host_list(ranks=four_ranks)
+        # Same idea as four_hosts. i.e., ["wolf-1", "wolf-4"] in above example.
+        two_hosts_with = self.get_host_list(ranks=two_ranks_with)
+        two_hosts_without = self.get_host_list(ranks=two_ranks_without)
 
-            self.log.info(
-                "Pool # %s is connected with handle %s", count + 1,
-                pool[-1].pool.handle.value)
+        # Step 1 to 4.
+        # Pool 1: Create a pool over the four hosts, check the pool file, and connect.
+        pools.append(self.connected_pool(hostlist=four_hosts, targets=four_ranks))
+        # Create a container and write data to it.
+        containers.append(self.get_container(pool=pools[-1]))
+        containers[-1].write_objects()
 
-            container.append(TestContainer(pool[-1]))
-            container[count].get_params(self)
-            container[count].create()
-            container[count].write_objects(target_list[-1])
+        # Pool 2: Same as pool 1. Repeat.
+        pools.append(self.connected_pool(hostlist=four_hosts, targets=four_ranks))
+        containers.append(self.get_container(pool=pools[-1]))
+        containers[-1].write_objects()
 
-        try:
-            pool[-1].dmg.exit_status_exception = False
-            pool[-1].evict()
-        finally:
-            pool[-1].dmg.exit_status_exception = True
+        # Create a pool over the two hosts, check the pool file, and connect.
+        pools.append(self.connected_pool(
+            hostlist=two_hosts_with, targets=two_ranks_with))
+        # Create a container and write data to it.
+        containers.append(self.get_container(pool=pools[-1]))
+        containers[-1].write_objects()
 
-        if pool[-1].dmg.result.exit_status != 0:
-            self.fail("Pool evict failed!")
+        # Step 5. Verify that the third pool's file doesn't exist on the two hosts that
+        # this pool wasn't created on.
+        if pools[-1].check_files(two_hosts_without):
+            self.fail("Pool # 2 with UUID {} exists".format(pools[-1].uuid))
+        else:
+            self.log.info("Pool # 2 with UUID %s does not exist", pools[-1].uuid)
 
-        for count in range(len(tlist)):
-            # Check that all pool files still exist
-            if pool[count].check_files(pool_servers[count]):
+        # 6. Evict the third pool.
+        self.verify_pool_evict(pool=pools[-1])
+
+        # 7. Verify that the pool file still exists in /mnt/daos for all three pools.
+        for index, pool in enumerate(pools):
+            # Get the hostnames to search the pool file.
+            if index in (0, 1):
+                hosts = four_hosts
+                failure_expected = False
+            else:
+                hosts = two_hosts_with
+                failure_expected = True
+
+            if pool.check_files(hosts):
                 self.log.info(
-                    "Pool # %s with UUID %s still exists", count+1, pool[count].uuid)
+                    "Pool # %d with UUID %s still exists", index, pool.uuid)
             else:
                 self.fail(
-                    "Pool # {} with UUID {} does not exists".format(
-                        count+1, pool[count].uuid))
+                    "Pool # {} with UUID {} does not exist".format(index, pool.uuid))
 
-            # Verify connection to pools with pool_query; pool that was evicted
-            # should fail the pool query because the handle was removed
+            # 8. Verify connection to pools with pool_query(); pool that was evicted
+            # should fail because the handle was removed.
             try:
-                # Call daos api directly to avoid connecting to pool
-                pool_info = pool[count].pool.pool_query()
+                # Call daos api directly to avoid connecting to pool.
+                pool_info = pool.pool.pool_query()
             except DaosApiError as error:
-                # expected error for evicted pool
-                if count == len(tlist) - 1 and "-1002" in str(error):
+                # Expected error for evicted pool.
+                if failure_expected and "-1002" in str(error):
                     self.log.info(
-                        "Pool # %s was unable to query pool info due to "
+                        "Pool # %d was unable to query pool info due to "
                         "expected invalid handle error (-1002):\n\t%s",
-                        count+1, error)
+                        index, error)
                 # unexpected error from pool_query
                 else:
                     self.fail(
-                        "Pool # {} failed pool query: {}".format(
-                            count+1, error))
+                        "Pool # {} failed pool query: {}".format(index, error))
 
                 pool_info = None
-            # Check that UUID of valid pools still exists
+
+            # 9. Check that we were able to obtain the UUID of the non-evicted pools.
             if pool_info:
-                if c_uuid_to_str(pool_info.pi_uuid) == pool[count].uuid:
+                if c_uuid_to_str(pool_info.pi_uuid) == pool.uuid:
                     self.log.info(
-                        "Pool # %s UUID matches pool_info.pi_uuid %s",
-                        count+1, pool[count].uuid)
+                        "Pool # %d UUID matches pool_info.pi_uuid %s", index, pool.uuid)
                 else:
                     self.fail(
-                        "Pool # {} UUID does not matches pool_info.pi_uuid:  "
+                        "Pool # {} UUID does not match pool_info.pi_uuid: "
                         "{} != {}".format(
-                            count+1, pool[count].uuid, c_uuid_to_str(
-                                pool_info.pi_uuid)))
-
-    def test_evict_bad_uuid(self):
-        """
-        Test evicting a pool using an invalid uuid.
-
-        :avocado: tags=all,pool,pr,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=pool_evict,pool_evict_bad_uuid,DAOS_5610
-        """
-        test_param = self.params.get("uuid", '/run/badparams/*')
-        self.assertTrue(self.evict_bad_param(test_param))
+                            index, pool.uuid, c_uuid_to_str(pool_info.pi_uuid)))
