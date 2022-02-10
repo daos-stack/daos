@@ -112,10 +112,13 @@ func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 	)
 }
 
-func FaultInsufficientFreeHugePages(free, requested int) *fault.Fault {
+func FaultInsufficientFreeHugePageMem(engineIndex, required, available, pagesReq, pagesAvail int) *fault.Fault {
 	return serverFault(
-		code.ServerInsufficientFreeHugePages,
-		fmt.Sprintf("requested %d hugepages; got %d", requested, free),
+		code.ServerInsufficientFreeHugePageMem,
+		fmt.Sprintf("insufficient amount of hugepage memory allocated for engine %d: "+
+			"want %s (%d hugepages), got %s (%d hugepages)", engineIndex,
+			humanize.IBytes(uint64(humanize.MiByte*required)), pagesReq,
+			humanize.IBytes(uint64(humanize.MiByte*available)), pagesAvail),
 		"reboot the system or manually clear /dev/hugepages as appropriate",
 	)
 }
