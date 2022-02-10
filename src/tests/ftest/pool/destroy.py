@@ -147,13 +147,13 @@ class DestroyTests(TestWithServers):
         if exception_detected:
             self.log.info("Check pool data still exists after a failed pool destroy")
             self.assertTrue(
-                check_pool_files(log=self.log, hosts=hosts, uuid=valid_uuid),
+                check_pool_files(log=self.log, hosts=hosts, uuid=valid_uuid.lower()),
                 "Pool data was not detected on servers after "
                 "failing to destroy a pool {}".format(case))
         else:
             self.log.info("Check pool data does not exist after the pool destroy")
             self.assertFalse(
-                check_pool_files(log=self.log, hosts=hosts, uuid=valid_uuid),
+                check_pool_files(log=self.log, hosts=hosts, uuid=valid_uuid.lower()),
                 "Pool data was detected on servers after destroying a pool {}".format(
                     case))
 
@@ -166,7 +166,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool,destroy,destroy_single
+        :avocado: tags=pool
+        :avocado: tags=destroy,destroy_single
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -179,7 +180,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool,destroy,destroy_multi
+        :avocado: tags=pool
+        :avocado: tags=destroy,destroy_multi
         """
         hostlist_servers = self.hostlist_servers[:2]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -195,7 +197,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,destroy,destroy_single_loop
+        :avocado: tags=pool
+        :avocado: tags=destroy,destroy_single_loop
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -219,7 +222,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,destroy,destroy_multi_loop
+        :avocado: tags=pool
+        :avocado: tags=destroy,destroy_multi_loop
         """
         hostlist_servers = self.hostlist_servers[:6]
 
@@ -243,7 +247,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,destroy,destroy_invalid_uuid
+        :avocado: tags=pool
+        :avocado: tags=destroy,destroy_invalid_uuid
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -277,7 +282,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,destroy,destroy_invalid_label
+        :avocado: tags=pool
+        :avocado: tags=destroy,destroy_invalid_label
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -336,7 +342,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool,destroy,destroy_wrong_group
+        :avocado: tags=pool
+        :avocado: tags=destroy,destroy_wrong_group
         """
         server_group_a = self.server_group + "_a"
         server_group_b = self.server_group + "_b"
@@ -408,7 +415,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool,destroy,destroy_connected
+        :avocado: tags=pool
+        :avocado: tags=destroy,destroy_connected
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -457,7 +465,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool,destroy,force_destroy_connected
+        :avocado: tags=pool
+        :avocado: tags=destroy,force_destroy_connected
         """
         hostlist_servers = self.hostlist_servers[:1]
 
