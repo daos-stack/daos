@@ -41,10 +41,11 @@
 
 #define VPOOL_SIZE	VPOOL_2G
 
-#define VPOOL_NAME	"/mnt/daos/vpool"
 #define	VP_OPS 10
 
-extern int gc;
+#define STORAGE_PATH_LEN 96
+extern char	vos_path[STORAGE_PATH_LEN+1];
+extern int	gc;
 
 enum vts_ops_type {
 	CREAT,
