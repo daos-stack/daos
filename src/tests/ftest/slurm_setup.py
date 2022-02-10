@@ -68,7 +68,7 @@ def update_config_cmdlist(args):
     command = r"grep SlurmctldHost {}".format(SLURM_CONF)
     task = run_task(all_nodes, command)
     # Create a dictionary of hosts for each unique return code
-    results = {code: hosts for code, hosts in task.iter_retcodes()}
+    results = dict(task.iter_retcodes())
     # Determine if the command completed successfully across all the hosts
     status = len(results) == 1 and 0 in results
     if status:
