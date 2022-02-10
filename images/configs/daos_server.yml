@@ -5,13 +5,13 @@ provider: ofi+tcp;ofi_rxm
 disable_vfio: true
 crt_timeout: 300
 nr_hugepages: 4096
-control_log_file: /var/daos/daos_server.log
+control_log_file: /var/daos/server.log
 
 engines:
 -
    targets: 8
    nr_xs_helpers: 0
-   first_core: 1
+   first_core: 0
    bypass_health_chk: true
    fabric_iface: eth0
    fabric_iface_port: 31316
@@ -20,6 +20,8 @@ engines:
 
    env_vars:
       - FI_OFI_RXM_DEF_TCP_WAIT_OBJ=pollfd
+      - DTX_AGG_THD_CNT=16777216
+      - DTX_AGG_THD_AGE=700
 
    storage:
    -

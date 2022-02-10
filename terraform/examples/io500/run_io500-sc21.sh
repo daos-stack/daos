@@ -144,7 +144,7 @@ mount_dfuse() {
       "mkdir -p '${IO500_RESULTS_DFUSE_DIR}'"
 
     clush --hostfile=hosts_clients --dsh \
-      "dfuse --pool='${DAOS_POOL_LABEL}' --container='${DAOS_CONT_LABEL}' --mountpoint='${IO500_RESULTS_DFUSE_DIR}'"
+      "dfuse -S --pool='${DAOS_POOL_LABEL}' --container='${DAOS_CONT_LABEL}' --mountpoint='${IO500_RESULTS_DFUSE_DIR}'"
 
     sleep 10
 
@@ -159,7 +159,7 @@ io500_prepare() {
   source /opt/intel/oneapi/setvars.sh
 
   export PATH=$PATH:${IO500_DIR}/bin
-  export LD_LIBRARY_PATH=/usr/local/mpifileutils/install/lib64/
+  export LD_LIBRARY_PATH=/usr/local/mpifileutils/install/lib64/:$LD_LIBRARY_PATH
 
   log "Prepare config file 'temp.ini' for IO500"
 

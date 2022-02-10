@@ -223,6 +223,17 @@ install_daos() {
   fi
 }
 
+downgrade_libfabric() {
+  if [[ ${DAOS_VERSION%%.*} == "2" ]]; then
+    log "Downgrading libfabric to v1.12 - see https://daosio.atlassian.net/browse/DAOS-9883"
+    wget https://packages.daos.io/v1.2/CentOS7/packages/x86_64/libfabric-1.12.0-1.el7.x86_64.rpm
+    rpm -i --force ./libfabric-1.12.0-1.el7.x86_64.rpm
+    rpm --erase --nodeps  libfabric-1.14.0
+    echo "exclude=libfabric" >> /etc/yum.repos.d/daos.repo
+    rm -f ./libfabric-1.12.0-1.el7.x86_64.rpm
+  fi
+}
+
 install_additional_pkgs() {
   yum install -y clustershell curl git jq patch pdsh rsync wget
 }
@@ -234,8 +245,9 @@ main() {
   verify_version
   add_repo
   install_epel
-  install_daos
   install_additional_pkgs
+  install_daos
+  downgrade_libfabric
   printf "\n%s\n\n" "DONE! DAOS v${DAOS_VERSION} installed"
 }
 
