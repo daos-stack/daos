@@ -213,7 +213,7 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_GET_PROP);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RO, &ap->pool, NULL, NULL);
+	rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RO, &ap->pool, NULL, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF": %s (%d)\n",
 			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
@@ -267,7 +267,7 @@ pool_set_attr_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+	rc = daos_pool_connect(ap->pool_str, ap->sysname,
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
@@ -317,7 +317,7 @@ pool_del_attr_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+	rc = daos_pool_connect(ap->pool_str, ap->sysname,
 			       DAOS_PC_RW, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
@@ -366,7 +366,7 @@ pool_get_attr_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+	rc = daos_pool_connect(ap->pool_str, ap->sysname,
 			       DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
@@ -443,7 +443,7 @@ pool_list_attrs_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_LIST_ATTRS);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+	rc = daos_pool_connect(ap->pool_str, ap->sysname,
 			       DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
@@ -526,7 +526,7 @@ pool_list_containers_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_LIST_CONTAINERS);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+	rc = daos_pool_connect(ap->pool_str, ap->sysname,
 			       DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
@@ -615,7 +615,7 @@ pool_query_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_QUERY);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+	rc = daos_pool_connect(ap->pool_str, ap->sysname,
 			       DAOS_PC_RO, &ap->pool,
 			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {

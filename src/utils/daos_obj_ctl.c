@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -403,10 +403,12 @@ static int
 ctx_init(struct credit_context *tsc)
 {
 	int	rc;
+	char	pool_str[37];
 
 	tsc->tsc_init = CTL_INIT_MODULE;
 
-	rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL,
+	uuid_unparse((unsigned char *)(tsc->tsc_pool_uuid), pool_str);
+	rc = daos_pool_connect(pool_str, NULL,
 			       DAOS_PC_RW, &tsc->tsc_poh,
 			       NULL /* info */, NULL /* ev */);
 

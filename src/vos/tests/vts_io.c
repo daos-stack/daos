@@ -16,6 +16,7 @@
 #include <daos_api.h>
 #include <daos/checksum.h>
 #include "vts_array.h"
+#include <linux/limits.h>
 
 #define NO_FLAGS	    (0)
 
@@ -197,8 +198,8 @@ test_args_init(struct io_test_args *args,
 		args->dkey = NULL;
 		args->dkey_size = sizeof(uint64_t);
 	}
-	snprintf(args->fname, VTS_BUF_SIZE, "/mnt/daos/vpool.test_%x",
-		 init_ofeats);
+	snprintf(args->fname, VTS_BUF_SIZE, "%s/vpool.test_%x",
+		 vos_path, init_ofeats);
 
 
 }

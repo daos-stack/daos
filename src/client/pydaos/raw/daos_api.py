@@ -82,8 +82,13 @@ class DaosPool():
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
+
+        if self.uuid is None:
+            raise DaosApiError("Pool uuid is None.")
+        uuid_str = self.get_uuid_str()
+
         if cb_func is None:
-            ret = func(self.uuid, self.group, c_flags,
+            ret = func(bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
                        ctypes.byref(self.handle), ctypes.byref(c_info), None)
 
             if ret != 0:
@@ -93,7 +98,7 @@ class DaosPool():
             self.connected = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, c_flags,
+            params = [bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
@@ -2290,7 +2295,7 @@ class DaosContext():
             'close-obj':       self.libdaos.daos_obj_close,
             'close-tx':        self.libdaos.daos_tx_close,
             'commit-tx':       self.libdaos.daos_tx_commit,
-            'connect-pool':    self.libdaos.daos_pool_connect,
+            'connect-pool':    self.libdaos.daos_pool_connect2,
             'convert-cglobal': self.libdaos.daos_cont_global2local,
             'convert-clocal':  self.libdaos.daos_cont_local2global,
             'convert-pglobal': self.libdaos.daos_pool_global2local,

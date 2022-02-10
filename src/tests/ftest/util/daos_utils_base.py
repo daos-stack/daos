@@ -275,6 +275,14 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --acl-file=PATH
                 #           input file containing ACL
                 self.acl_file = FormattedParameter("--acl-file={}", None)
+<<<<<<< HEAD
+=======
+                #    -c, --cont=<UUID>
+                #           container UUID (optional)
+                self.cont = FormattedParameter("--cont={}")
+                #     -l, --label=<container label>
+                self.label = FormattedParameter("--label={}")
+>>>>>>> master
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create-snap command."""
