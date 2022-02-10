@@ -15,3 +15,7 @@
 
 # Jenkinsfile changes should be reviewed by Release Engineering
 #Jenkinsfile @daos-stack/release-engineering
+
+# any PR that touches client API or high level client code
+src/client @daos-stack/client-api-watcher
+include/daos_* @daos-stack/client-api-watcher
