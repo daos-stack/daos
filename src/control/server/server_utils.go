@@ -198,9 +198,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	} else if srv.cfg.NrHugepages == -1 {
 		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: -1 in config")
 		return nil
-	} else if len(srv.cfg.Engines) > 0 && srv.cfg.NrHugepages == 0 {
-		srv.log.Debugf("skip nvme prepare as scm-only cfg and nr_hugepages unset in config")
-		return nil
 	}
 
 	prepReq := storage.BdevPrepareRequest{
@@ -236,16 +233,19 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
 			prepReq.HugePageCount, numaNodes)
-	} else if len(srv.cfg.Engines) == 0 && srv.cfg.NrHugepages == 0 {
-		// If nr_hugepages is unset and no engines in config, set minimum needed for
-		// scanning and set number of hugepages for engines to zero for discovery mode.
-		prepReq.HugePageCount = scanMinHugePageCount
-		srv.cfg.NrHugepages = 0
 	} else {
-		// If nr_hugepages has been set manually but no bdevs in config then allocate on
-		// numa node 0 (for example if a bigger number of hugepages are required in
-		// discovery mode for an unusually large number of SSDs).
-		prepReq.HugePageCount = srv.cfg.NrHugepages
+		if srv.cfg.NrHugepages == 0 {
+			// If nr_hugepages is unset then set minimum needed for scanning in prepare
+			// request.
+			prepReq.HugePageCount = scanMinHugePageCount
+		} else {
+			// If nr_hugepages has been set manually but no bdevs in config then
+			// allocate on numa node 0 (for example if a bigger number of hugepages are
+			// required in discovery mode for an unusually large number of SSDs).
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		}
+
+		srv.log.Debugf("allocating %d hugepages on numa node 0", prepReq.HugePageCount)
 	}
 
 	// Run prepare to bind devices to user-space driver and allocate hugepages.
