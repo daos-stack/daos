@@ -13,13 +13,15 @@ from avocado import skip
 from dfuse_test_base import DfuseTestBase
 from command_utils import CommandFailure
 
-def skip_on_centos7(func):
+def skip_on_centos7():
     """Decorator to allow selective skipping of test"""
     dist = distro.linux_distribution()
     if dist[0] == 'CentOS Linux' and dist[1] == '7':
         return skip('Newer software distribution needed')
-    def _do(*args, **kwargs):
-        return func(*args, **kwargs)
+    def _do(func):
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+        return wrapper
     return _do
 
 class DaosBuild(DfuseTestBase):
