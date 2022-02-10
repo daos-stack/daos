@@ -5842,6 +5842,8 @@ dc_obj_sync(tse_task_t *task)
 		*args->epochs_p = tmp;
 	} else {
 		D_ASSERT(*args->epochs_p != NULL);
+		D_ASSERTF(*args->nr == obj->cob_grp_nr, "Invalid obj sync args %d/%d\n",
+			  *args->nr, obj->cob_grp_nr);
 
 		for (i = 0; i < *args->nr; i++)
 			*args->epochs_p[i] = 0;

@@ -1,7 +1,6 @@
 hosts:
   test_servers:
     - server-A
-    - server-B
 timeout: 135 # 1.5 times of measured time.
 server_config:
   name: daos_server
