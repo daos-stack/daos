@@ -2,65 +2,79 @@
 #
 # Install IO500 SC21
 #
-# This script assumes that
+# This script assumes
+#
 #   1. The intel-oneapi-mpi and intel-oneapi-mpi-devel
 #      packages from https://yum.repos.intel.com/oneapi have already been
 #      installed
+#      See install_intel-oneapi.sh in the same directory as this script.
+#
 #   2. mpifileutils has already been installed.
-#      To install mpifileutils see mfu_install.sh in the same directory as this
-#      script.
+#      See install_mpifileutils.sh in the same directory as this script.
 #
 
 set -e
 trap 'echo "An unexpected error occurred. Exiting."' ERR
 
-IO500_VERSION_TAG="io500-sc21"
+export IO500_VERSION_TAG="io500-sc21"
 
-# Set environment variable defaults if not already set
-# This allows for the variables to be set to different values externally.
-# Variable names chosen to match instructions at
+# The following variable names match the instructions at
 # https://daosio.atlassian.net/wiki/spaces/DC/pages/11055792129/IO-500+SC21
-: "${MY_DAOS_INSTALL_PATH:=/usr}"
-: "${MY_MFU_INSTALL_PATH:=/usr/local/mpifileutils/install}"
-: "${MY_MFU_SOURCE_PATH:=/usr/local/mpifileutils/src}"
-: "${MY_MFU_BUILD_PATH:=/usr/local/mpifileutils/build}"
-: "${MY_IO500_PATH:=/usr/local/${IO500_VERSION_TAG}}"
-
-# Environment variables must be exported in order to compile IO500
-export MY_DAOS_INSTALL_PATH
-export MY_MFU_INSTALL_PATH
-export MY_MFU_SOURCE_PATH
-export MY_MFU_BUILD_PATH
-export MY_IO500_PATH
-
+export MY_DAOS_INSTALL_PATH="${MY_DAOS_INSTALL_PATH:-/usr}"
+export MY_MFU_INSTALL_PATH="${MY_MFU_INSTALL_PATH:-/usr/local/mpifileutils/install}"
+export MY_MFU_SOURCE_PATH="${MY_MFU_SOURCE_PATH:-/usr/local/mpifileutils/src}"
+export MY_MFU_BUILD_PATH="${MY_MFU_BUILD_PATH:-/usr/local/mpifileutils/build}"
+export MY_IO500_PATH="${MY_IO500_PATH:-/usr/local/${IO500_VERSION_TAG}}"
 
 log() {
-  local msg="|  $1  |"
-  line=$(printf "${msg}" | sed 's/./-/g')
-  # FIX: Can't use tput when running this script with pdsh
-  #tput setaf 14 # set Cyan color
-  printf -- "\n${line}\n${msg}\n${line}\n"
-  #tput sgr0 # reset color
+  msg="$1"
+  print_lines="$2"
+  # shellcheck disable=SC2155,SC2183
+  local line=$(printf "%80s" | tr " " "-")
+  if [[ -t 1 ]]; then tput setaf 14; fi
+  if [[ "${print_lines}" == 1 ]]; then
+    printf -- "\n%s\n %-78s \n%s\n" "${line}" "${msg}" "${line}"
+  else
+    printf -- "\n%s\n\n" "${msg}"
+  fi
+  if [[ -t 1 ]]; then tput sgr0; fi
 }
 
-log "Installing IO500 ${IO500_VERSION_TAG}"
+log_section() {
+  log "$1" "1"
+}
+
+# Exit if Intel OneAPI is not installed
+if [[ ! -d /opt/intel/oneapi ]]; then
+  log "ERROR: Intel OneAPI not found in /opt/intel/oneapi. Exiting."
+  exit 1
+fi
+
+# Exit if mpifileutils is not installed
+if [[ ! -d "${MY_MFU_INSTALL_PATH}" ]]; then
+  log "ERROR: mpifileutils not found in ${MY_MFU_INSTALL_PATH}. Exiting."
+  exit 1
+fi
+
+log_section "Installing IO500 ${IO500_VERSION_TAG}"
 
 # Load Intel MPI
 export I_MPI_OFI_LIBRARY_INTERNAL=0
 export I_MPI_OFI_PROVIDER="tcp;ofi_rxm"
+
+# shellcheck disable=SC1091
 source /opt/intel/oneapi/setvars.sh
 
 export LD_LIBRARY_PATH="${MY_MFU_INSTALL_PATH}/lib":$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH="${MY_MFU_INSTALL_PATH}/lib64":$LD_LIBRARY_PATH
 export PATH="${MY_MFU_INSTALL_PATH}/bin":$PATH
 
-IO500_INSTALL_PATH=$(dirname $MY_IO500_PATH)
+IO500_INSTALL_PATH="$(dirname "${MY_IO500_PATH}")"
 mkdir -p "${IO500_INSTALL_PATH}"
 cd "${IO500_INSTALL_PATH}"
 
 log "Cloning https://github.com/IO500/io500 repo. Tag ${IO500_VERSION_TAG}"
-if [[ -d "${MY_IO500_PATH}" ]]
-then
+if [[ -d "${MY_IO500_PATH}" ]]; then
   rm -rf "${MY_IO500_PATH}"
 fi
 
@@ -76,7 +90,7 @@ git checkout -b "${IO500_VERSION_TAG}-daos"
 log "Patching ${MY_IO500_PATH}/prepare.sh"
 cd "${MY_IO500_PATH}"
 # Attempt to always ensure the patch applies successfully
-cp prepare.sh prepare.sh.$(date "+%Y-%m-%d_%H%M%S")
+cp prepare.sh "prepare.sh.$(date "+%Y-%m-%d_%H%M%S")"
 git checkout prepare.sh
 cat > io500_prepare.patch <<'EOF'
 diff --git a/prepare.sh b/prepare.sh
@@ -114,7 +128,6 @@ EOF
 
 git apply io500_prepare.patch
 
-
 # Update the Makefile with correct paths
 # The Makefile needs to be updated to use the install location of DAOS and MFU.
 log "Update ${MY_IO500_PATH}/Makefile with correct paths"
@@ -144,10 +157,10 @@ git apply io500_Makefile.patch
 
 # Run prepare.sh
 log "Running ${MY_IO500_PATH}/prepare.sh"
-${MY_IO500_PATH}/prepare.sh
+"${MY_IO500_PATH}/prepare.sh"
 
-# Download example config
-cd ${MY_IO500_PATH}
+log "Downloading example config from https://raw.githubusercontent.com/mchaarawi/io500/main/config-full-sc21.ini"
+cd "${MY_IO500_PATH}"
 wget https://raw.githubusercontent.com/mchaarawi/io500/main/config-full-sc21.ini
 
-printf "\nIO500 ${IO500_VERSION_TAG} installation complete!\n\n"
+log "IO500 ${IO500_VERSION_TAG} installation complete!"

@@ -16,4 +16,4 @@ machine_type = "n2-highmem-16" # 10x physical cores, using 8x targets
 
 # the image must be built before (see build folder)
 os_project = "<my_project_id>"
-os_family = "daos_client"
+os_family = "daos-client-hpc-centos-7"

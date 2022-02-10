@@ -1,29 +1,79 @@
-# Setup
+# IO500 Example
 
-## Deployment
+This example leverages another example `terraform/examples/full_cluster_setup`
+to provision a DAOS cluster and configure the clients so that an IO500 benchmark
+may be run.
 
-1. From your PC:
-    1. Configure variables to your needs in [configure.sh](configure.sh) script
-    2. Run [start.sh](start.sh) script to deploy DAOS on GCP from your PC
-    3. SSH to first DAOS client
-2. From first DAOS client:
-    1. Run [run_io500-sc21.sh](run_io500-sc21.sh) to finish DAOS environment configuration and benchmark it with IO500
-        - you can run this script multiple times to do several IO500 benchmarks
-3. From your PC:
-    1. Run [stop.sh](stop.sh) to destroy DAOS environment on GCP
+The default configuration is a very small DAOS cluster consisiting of 1 DAOS
+server and 1 DAOS client.
 
-## Scripts definition
+Different configurations can be used to deploy larger DAOS clusters.
+See Configuration below.
+
+## Dependencies
+
+If this is the first time you are running this example in your GCP project, there
+are some things you will need to do.
+
+Refer to the [images/README.md](../../../images/README.md) for instructions.
+
+After you have followed those instructions you will be ready to run this example.
+
+## Running the example
+
+The example is intended to be run from a Linux system that has access to GCP.
+
+### Deploying the DAOS Cluster
+
+Run start.sh
+
+```bash
+cd terraform/examples/io500
+./start.sh
+```
+
+This will use the default configuration [terraform/examples/io500/config/config.sh](config/config.sh) to run Terraform and deploy the instances.
+
+When the `start.sh` script finishes it will provide further instructions for
+logging into the first daos-client instance and running the IO500 benchmark.
+
+### Shutting Down the DAOS Cluster
+
+To destroy the DAOS instances run the `stop.sh` script.
+
+```bash
+cd terraform/examples/io500
+./stop.sh
+```
+
+## Configuration
+
+By default the `start.sh` script sources the
+[./config/config.sh](config/config.sh) configuration file.
+
+The [config/config.sh](config/config.sh) file contains environment
+variables that control how Terraform will deploy the DAOS cluster.
+
+You can run `start.sh` with `-c <config_file>` to use different configurations
+in the [/terraform/examples/io500/config](/terraform/examples/io500/config) directory.
+
+It is recommended that you use the configuration files in the [terraform/examples/io500/configs](/terraform/examples/io500/config) since those have been tested to work.
+
+Changing the values in the config files or using your own configuration may result
+in errors that prevent the example from working.
+
+## Scripts
 
 ### Configuration
 
-- [configure.sh](configure.sh)
+- [terraform/examples/io500/configs](configs/)
 
-  This file contains environment variables and is sourced by the other scripts listed below.
+  All files in this directory are sourced by other scripts.
 
-  You can make changes to this file in order to customize the machine types,
-  number of disks, IO500 stonewall time, etc.
+  The `config*.sh` files contain environment variables that drive the behavior
+  of Terraform and other scripts.
 
-### Scripts that are run by a user
+### Executable scripts
 
 - [start.sh](start.sh)
 
@@ -50,27 +100,10 @@
 
 ### Supporting Scripts
 
-These are not intended to be directly run by a user. They are called by other
-scripts.
+All other scripts are not intended to be directly run by a user.
 
-- [install_mpifileutils.sh](install_mpifileutils.sh)
+These are called by other scripts and used for
+- building custom images with the IO500
+- configuring instances
+- cleaning DAOS storage before each IO500 run
 
-  Installs a patched version of mpifileutils that allows IO500 to work with
-  DAOS.
-
-  Run by the `run_io500-sc21.sh` if mpifileutils is not already installed.
-  Run on the DAOS client instances by the `run_io500-sc21.sh` if
-  the patched version of mpifileutils is not already installed.
-
-  Required to be run before running `install_io500-sc21.sh`
-
-- [install_io500-sc21.sh](install_io500-sc21.sh)
-
-  Installs IO500 SC21 on the DAOS client nodes.
-
-  Run on the DAOS client instances by the `run_io500-sc21.sh` if
-  IO500 SC21 is not already installed.
-
-
-- [clean.sh](clean.sh)
-  lean DAOS environment to run another IO500 benchmark on the same environment and reconfigure DAOS server configuration

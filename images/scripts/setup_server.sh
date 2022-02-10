@@ -13,12 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# TODO: Move this setup to terraform
 
 readonly yaml_path="/etc/daos"
 readonly meta_path="/usr/share/daos/gcp_metadata.sh"
 readonly systemd_file="/usr/lib/systemd/system/daos_server.service"
 
-echo "Setting up DAOS server version ${DAOS_VERSION}"
+echo "Setting up DAOS server"
 
 # Template config files have been copied by packer to /tmp/daos_configs
 cp -f /tmp/configs/* ${yaml_path}
@@ -43,6 +44,3 @@ sed -i "/^ExecStart.*/a ExecStartPre=${meta_path}" ${systemd_file}
 
 # enable daos_server in systemd (will be started automatically at boot time)
 systemctl enable daos_server
-
-# TODO:
-# - somehow enable certificates

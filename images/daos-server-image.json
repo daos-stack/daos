@@ -1,11 +1,11 @@
 {
     "variables": {
-        "DAOS_VERSION": "2.0.0"
+      "daos_version": "{{env `DAOS_VERSION`}}"
     },
     "builders": [
     {
       "type": "googlecompute",
-      "name": "daos-server-centos7",
+      "name": "daos-server-centos-7",
       "account_file": "{{user `account_file`}}",
       "project_id": "{{user `project_id`}}",
       "source_image_project_id": [
@@ -17,7 +17,7 @@
       "machine_type": "n1-standard-16",
       "disk_size": "20",
       "ssh_username": "packer",
-      "zone": "us-central1-f",
+      "zone": "{{user `zone`}}",
       "scopes": [
         "https://www.googleapis.com/auth/cloud-platform"
       ],
@@ -30,18 +30,21 @@
     {
       "type": "shell",
       "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
-      "script": "./scripts/tune.sh"
-    },
-    {
-      "type": "shell",
-      "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
-      "environment_vars": "DAOS_VERSION={{user `DAOS_VERSION`}}",
-      "script": "./scripts/install-server.sh"
+      "environment_vars": [
+        "DAOS_REPO_BASE_URL={{user `daos_repo_base_url`}}",
+        "DAOS_VERSION={{user `daos_version`}}",
+        "DAOS_INSTALL_TYPE=server"
+      ],
+      "pause_before": "5s",
+      "scripts": [
+        "./scripts/tune.sh",
+        "./scripts/install_daos.sh"
+      ]
     },
     {
       "type": "file",
       "source": "./configs",
-      "destination": "/tmp"
+      "destination": "/tmp/"
     },
     {
       "type": "file",
@@ -51,8 +54,10 @@
     {
       "type": "shell",
       "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
-      "environment_vars": "DAOS_VERSION={{user `DAOS_VERSION`}}",
-      "script": "./scripts/setup-server.sh"
+      "environment_vars": [
+        "DAOS_VERSION={{user `daos_version`}}"
+      ],
+      "script": "./scripts/setup_server.sh"
     }
   ]
 }

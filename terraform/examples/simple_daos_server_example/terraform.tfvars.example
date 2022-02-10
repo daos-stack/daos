@@ -17,7 +17,7 @@ machine_type = "n2-custom-20-131072" # 10x physical cores, using 8x targets
 
 # the image must be built before (see build folder)
 os_project = "<my_project_id>"
-os_family = "daos_server"
+os_family = "daos-server-centos-7"
 
 
 

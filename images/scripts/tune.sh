@@ -47,7 +47,7 @@ driver=$(ethtool -i $NIC | grep driver | cut -d':' -f2 | xargs)
 if [[ "$driver" == "virtio_net" ]]; then
   nr_cpus=$(lscpu -p | grep -v '^#' | sort -t, -k 2,4 -u | wc -l)
   hw_queues=$(ethtool -l ${NIC} | grep -A4 maximums | tail -n 1 | cut -d':' -f2)
-  queues=$(( $nr_cpus > $hw_queues ? $hw_queues : $nr_cpus))
+  queues=$(( nr_cpus > hw_queues ? hw_queues : nr_cpus))
   ethtool -L $NIC combined $queues
 fi
 

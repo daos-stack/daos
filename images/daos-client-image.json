@@ -1,7 +1,7 @@
 {
-    "variables": {
-        "DAOS_VERSION": "2.0.0"
-    },
+  "variables": {
+    "daos_version": "{{env `DAOS_VERSION`}}"
+  },
     "builders": [
     {
       "type": "googlecompute",
@@ -17,7 +17,7 @@
       "machine_type": "n1-standard-16",
       "disk_size": "20",
       "ssh_username": "packer",
-      "zone": "us-central1-f",
+      "zone": "{{user `zone`}}",
       "scopes": [
         "https://www.googleapis.com/auth/cloud-platform"
       ],
@@ -29,14 +29,17 @@
   "provisioners": [
     {
       "type": "shell",
+      "environment_vars": [
+        "DAOS_REPO_BASE_URL={{user `daos_repo_base_url`}}",
+        "DAOS_VERSION={{user `daos_version`}}",
+        "DAOS_INSTALL_TYPE=client"
+      ],
       "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
-      "script": "./scripts/tune.sh"
-    },
-    {
-      "type": "shell",
-      "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
-      "environment_vars": "DAOS_VERSION={{user `DAOS_VERSION`}}",
-      "script": "./scripts/install-client.sh"
+      "pause_before": "5s",
+      "scripts": [
+        "./scripts/tune.sh",
+        "./scripts/install_daos.sh"
+      ]
     }
   ]
 }

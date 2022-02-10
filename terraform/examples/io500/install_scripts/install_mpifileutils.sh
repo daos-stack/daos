@@ -10,13 +10,11 @@
 set -e
 trap 'echo "An unexpected error occurred. Exiting."' ERR
 
-# Set environment variable defaults if not already set
-: "${IO500_INSTALL_ROOT_DIR:=/usr/local}"
-: "${TOOLS_DIR=${IO500_INSTALL_ROOT_DIR}/tools}"
-: "${DAOS_INSTALL_PATH:=/usr}"
+INSTALL_ROOT_DIR="${INSTALL_ROOT_DIR:-/usr/local}"
+DAOS_INSTALL_PATH="${DAOS_INSTALL_PATH:-/usr}"
+TOOLS_DIR="${TOOLS_DIR:-${INSTALL_ROOT_DIR}/tools}"
 
-# MPI File Utils directories
-MFU_ROOT_DIR="${IO500_INSTALL_ROOT_DIR}/mpifileutils"
+MFU_ROOT_DIR="${INSTALL_ROOT_DIR}/mpifileutils"
 MFU_DEPS_DIR="${MFU_ROOT_DIR}/deps"
 MFU_SRC_DIR="${MFU_ROOT_DIR}/src"
 MFU_BUILD_DIR="${MFU_ROOT_DIR}/build"
@@ -24,60 +22,72 @@ MFU_INSTALL_DIR="${MFU_ROOT_DIR}/install"
 
 CMAKE_VERSION="3.22.1"
 
-
 log() {
-  local msg="|  $1  |"
-  line=$(printf "${msg}" | sed 's/./-/g')
-  # FIX: Can't use tput when running this script with pdsh
-  #tput setaf 14 # set Cyan color
-  printf -- "\n${line}\n${msg}\n${line}\n"
-  #tput sgr0 # reset color
+  msg="$1"
+  print_lines="$2"
+  # shellcheck disable=SC2155,SC2183
+  local line=$(printf "%80s" | tr " " "-")
+  if [[ -t 1 ]]; then tput setaf 14; fi
+  if [[ "${print_lines}" == 1 ]]; then
+    printf -- "\n%s\n %-78s \n%s\n" "${line}" "${msg}" "${line}"
+  else
+    printf -- "\n%s\n\n" "${msg}"
+  fi
+  if [[ -t 1 ]]; then tput sgr0; fi
 }
 
+log_section() {
+  log "$1" "1"
+}
 
-log "Installing mpifileutils"
+check_dependencies() {
 
-# Exit if Intel OneAPI is not installed
-if [ ! -d /opt/intel/oneapi ];then
-  printf "\nERROR: Intel OneAPI not found in /opt/intel/oneapi. Exiting."
-  exit 1
+  # Check for
+  if yum grouplist "Development Tools" installed | grep -A1 "Installed Groups:" | tail -n +2 | grep -q "Development Tools"; then
+    printf "\n%s\n" "ERROR: Development Tools not installed. Exiting."
+    exit 1
+  fi
+
+  # Exit if Intel OneAPI is not installed
+  if [[ ! -d /opt/intel/oneapi ]]; then
+    printf "\n%s\n" "ERROR: Intel OneAPI not found in /opt/intel/oneapi. Exiting."
+    exit 1
+  fi
+
+
+}
+
+# Install specific version of cmake needed for mpifileutils
+if [ ! -f "${TOOLS_DIR}/bin/cmake" ]; then
+  mkdir -p "${TOOLS_DIR}"
+  cd "${TOOLS_DIR}"
+  log_section "Installing cmake v${CMAKE_VERSION}"
+  log "Downloading https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-Linux-x86_64.sh"
+  wget "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-Linux-x86_64.sh"
+  chmod +x "cmake-${CMAKE_VERSION}-Linux-x86_64.sh"
+  ./cmake-${CMAKE_VERSION}-Linux-x86_64.sh --skip-license
+  rm -f cmake-${CMAKE_VERSION}-Linux-x86_64.sh
 fi
-
-# Install packages needed to build mpifileutils and run IO500
-log "Installing Development Tools"
-yum group install -y "Development Tools"
-
-log "Installing additional packages"
-yum -y install bzip2-devel libarchive-devel openssl-devel git clustershell jq
-
-mkdir -p "${IO500_INSTALL_ROOT_DIR}"
-mkdir -p "${TOOLS_DIR}"
-cd "${TOOLS_DIR}"
-
-# Install cmake
-if [ ! -f "${TOOLS_DIR}/bin/cmake" ];then
-log "Installing cmake v${CMAKE_VERSION}"
-log "Downloading https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-Linux-x86_64.sh"
-wget "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-Linux-x86_64.sh"
-chmod +x cmake-${CMAKE_VERSION}-Linux-x86_64.sh
-./cmake-${CMAKE_VERSION}-Linux-x86_64.sh --skip-license
-rm -f cmake-${CMAKE_VERSION}-Linux-x86_64.sh
-fi
-
-cd "${IO500_INSTALL_ROOT_DIR}"
 
 # Update PATH
 PATH="${TOOLS_DIR}/bin:${PATH}"
 
-# Load Intel MPI
-export I_MPI_OFI_LIBRARY_INTERNAL=0
-export I_MPI_OFI_PROVIDER="tcp;ofi_rxm"
-source /opt/intel/oneapi/setvars.sh
+log_section "Installing mpifileutils dependencies"
 
 # Create mpifileutils directories
 mkdir -p "${MFU_DEPS_DIR}"
 mkdir -p "${MFU_BUILD_DIR}"
 mkdir -p "${MFU_INSTALL_DIR}"
+
+mkdir -p "${INSTALL_ROOT_DIR}"
+cd "${INSTALL_ROOT_DIR}"
+
+# Load Intel MPI
+export I_MPI_OFI_LIBRARY_INTERNAL=0
+export I_MPI_OFI_PROVIDER="tcp;ofi_rxm"
+
+# shellcheck disable=SC1091
+source /opt/intel/oneapi/setvars.sh
 
 #
 # Build mpifileutils dependencies
@@ -143,7 +153,7 @@ rm -f dtcmp-1.1.0.tar.gz
 #
 # Build MFU from mchaarawi fork
 #
-log "Building mpifileutils from https://github.com/mchaarawi/mpifileutils"
+log_section "Building mpifileutils from https://github.com/mchaarawi/mpifileutils"
 cd "${MFU_ROOT_DIR}"
 rm -rf "${MFU_SRC_DIR}"
 mkdir -p "${MFU_SRC_DIR}"
@@ -162,9 +172,9 @@ CFLAGS="-I${MY_DAOS_INSTALL_PATH}/include" \
 LDFLAGS="-L${MY_DAOS_INSTALL_PATH}/lib64/ -luuid -ldaos -ldfs -ldaos_common -lgurt -lpthread" \
 cmake "${MY_MFU_SOURCE_PATH}" \
   -DENABLE_XATTRS=OFF \
-  -DWITH_DTCMP_PREFIX=${MY_MFU_INSTALL_PATH} \
-  -DWITH_LibCircle_PREFIX=${MY_MFU_INSTALL_PATH} \
-  -DCMAKE_INSTALL_PREFIX=${MY_MFU_INSTALL_PATH} &&
+  -DWITH_DTCMP_PREFIX="${MY_MFU_INSTALL_PATH}" \
+  -DWITH_LibCircle_PREFIX="${MY_MFU_INSTALL_PATH}" \
+  -DCMAKE_INSTALL_PREFIX="${MY_MFU_INSTALL_PATH}" &&
 make -j8 install
 
-printf "\nmpifileutils installation complete!\n\n"
+log "mpifileutils installation complete!"

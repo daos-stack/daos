@@ -18,4 +18,10 @@ steps:
   - build
   - -var
   - project_id=${_PROJECT_ID}
+  - -var
+  - zone=${_ZONE}
+  - -var
+  - daos_version=${_DAOS_VERSION}
+  - -var
+  - daos_repo_base_url=${_DAOS_REPO_BASE_URL}
   - daos-server-image.json
