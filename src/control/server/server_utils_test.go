@@ -282,6 +282,42 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(scmEngine(0), scmEngine(1))
 			},
 		},
+		"no bdevs configured; nr_hugepages unset": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(0).
+					WithEngines(scmEngine(0), scmEngine(1))
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					Reset_:     true,
+					TargetUser: username,
+				},
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					HugePageCount: scanMinHugePageCount,
+					TargetUser:    username,
+				},
+			},
+		},
+		"no bdevs configured; nr_hugepages set": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(1024).
+					WithEngines(scmEngine(0), scmEngine(1))
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					Reset_:     true,
+					TargetUser: username,
+				},
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					HugePageCount: 1024,
+					TargetUser:    username,
+				},
+			},
+		},
 		"nvme prep succeeds; 2 engines both numa 0; hugepage alloc only on numa 0": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
