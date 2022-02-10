@@ -7,11 +7,12 @@
 # any PR that touches Go files should get a review from go-owners
 #*.go @daos-stack/go-owners
 
-# any PR that touches VOS files should get a review from VOS
-#src/vos/ @daos-stack/vos
-
-# any PR that touches btree files should get a review from VOS
-#src/common/btree*.* @daos-stack/vos
+# Notify vos-watcher of files touched affecting VOS
+src/vos/ @daos-stack/vos-watcher
+src/common/btree*.* @daos-stack/vos-watcher
+src/include/daos/btree*.* @daos-stack/vos-watcher
+src/include/daos_srv/vos*.* @daos-stack/vos-watcher
+src/include/daos_srv/evtree.h @daos-stack/vos-watcher
 
 # Jenkinsfile changes should be reviewed by Release Engineering
 #Jenkinsfile @daos-stack/release-engineering
