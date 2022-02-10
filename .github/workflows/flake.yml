@@ -1,0 +1,26 @@
+name: Flake
+
+on:
+  pull_request:
+    paths:
+      - '**/*.py'
+
+jobs:
+  flake8-lint:
+    runs-on: ubuntu-latest
+    name: Lint
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@v2
+      - name: Set up Python environment
+        uses: actions/setup-python@v1
+        with:
+          python-version: "3.8"
+      - name: Add parser
+        run: echo -n "::add-matcher::ci/daos-flake-matcher.json"
+      - name: flake8 Lint
+        uses: py-actions/flake8@v2
+        with:
+          ignore: "F401,E302,E303,E261,W503,E126,F841,E231,E265,W605"
+          exclude: "src/control/vendor,src/client/pydaos/raw"
+          max-line-length: "100"
