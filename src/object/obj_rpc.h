@@ -634,4 +634,10 @@ obj_is_enum_opc(uint32_t opc)
 		opc == DAOS_OBJ_AKEY_RPC_ENUMERATE ||
 		opc == DAOS_OBJ_RECX_RPC_ENUMERATE);
 }
+
+static inline bool
+obj_is_fetch_opc(uint32_t opc)
+{
+	return opc == DAOS_OBJ_RPC_FETCH;
+}
 #endif /* __DAOS_OBJ_RPC_H__ */
