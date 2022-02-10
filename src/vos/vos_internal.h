@@ -1272,4 +1272,31 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 int
 vos_pool_settings_init(void);
 
+static inline struct dcs_csum_info *
+vos_csum_at(struct dcs_iod_csums *iod_csums, unsigned int idx)
+{
+	/** is enabled and has csums (might not for punch) */
+	if (iod_csums != NULL && iod_csums[idx].ic_nr > 0)
+		return iod_csums[idx].ic_data;
+	return NULL;
+}
+
+static inline struct dcs_csum_info *
+recx_csum_at(struct dcs_csum_info *csums, unsigned int idx, daos_iod_t *iod)
+{
+	if (csums != NULL && csum_iod_is_supported(iod))
+		return &csums[idx];
+	return NULL;
+}
+
+static inline daos_size_t
+recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
+	      daos_size_t rsize)
+{
+	if (!ci_is_valid(csum) || rsize == 0)
+		return 0;
+	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
+			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
+}
+
 #endif /* __VOS_INTERNAL_H__ */
