@@ -6,7 +6,7 @@
 The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.  This document includes
 instructions for CentOS. For setup instructions on OpenSuse, refer to the [OpenSuse setup](../suse_setup/). 
 For more details reference the DAOS administration guide:
-<https://daos-stack.github.io/admin/hardware/>
+<https://docs.daos.io/v1.2/admin/hardware/>
 
 ## Requirements
 
@@ -31,7 +31,7 @@ In addition the server nodes should also have:
 -   IOMMU is enabled:
 
 
-    <https://daos-stack.github.io/admin/predeployment_check/#enable-iommu-optional>
+    <https://docs.daos.io/v1.2/admin/predeployment_check/#enable-iommu-optional>
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -216,7 +216,7 @@ Server nodes require the following certificate files:
     daos_server user
 
 See
-<https://daos-stack.github.io/admin/deployment/#certificate-configuration>
+<https://docs.daos.io/v1.2/admin/deployment/#certificate-configuration>
 for more information.
 
 !!!note

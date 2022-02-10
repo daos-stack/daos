@@ -1,6 +1,6 @@
 # Software Installation
 
-Please check the [support matrix](https://daos-stack.github.io/release/support_matrix)
+Please check the [support matrix](https://docs.daos.io/v1.2/release/support_matrix/)
 to select the appropriate software combination.
 
 ## Distribution Packages
@@ -110,7 +110,7 @@ $ scons --config=force install
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
-[DAOS for Development](https://daos-stack.github.io/dev/development/#building-daos-for-development)
+[DAOS for Development](https://docs.daos.io/v1.2/dev/development/#building-daos-for-development)
 section.
 
 Otherwise, the missing dependencies can be built automatically by invoking scons
