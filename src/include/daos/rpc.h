@@ -150,7 +150,7 @@ daos_rpc_register(struct crt_proto_format *proto_fmt, uint32_t cli_count,
 {
 	uint32_t i;
 
-	/* TODO: mod_in is unused */
+	/* TODO: mod_id is unused */
 
 	if (proto_fmt == NULL)
 		return 0;

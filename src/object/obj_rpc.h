@@ -63,9 +63,9 @@
 	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
 		ds_obj_punch_handler, NULL, "akey_punch")		\
-	X(DAOS_OBJ_RPC_QUERY_KEY,					\
-		0, &CQF_obj_query_key,					\
-		ds_obj_query_key_handler, NULL, "key_query")		\
+	X(DAOS_OBJ_RPC_QUERY_KEY_0,					\
+		0, &CQF_obj_query_key_0,				\
+		ds_obj_query_key_handler_0, NULL, "key_query")		\
 	X(DAOS_OBJ_RPC_SYNC,						\
 		0, &CQF_obj_sync,					\
 		ds_obj_sync_handler, NULL, "obj_sync")			\
@@ -94,16 +94,24 @@
 		0, &CQF_obj_cpd,					\
 		ds_obj_cpd_handler, NULL, "compound")
 
+#define OBJ_PROTO_CLI_RPC_LIST_MOD					\
+	X(DAOS_OBJ_RPC_QUERY_KEY_1,					\
+		0, &CQF_obj_query_key_1,				\
+		ds_obj_query_key_handler_1, NULL, "key_query")
+
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e, f) a,
 enum obj_rpc_opc {
 	OBJ_PROTO_CLI_RPC_LIST
+	OBJ_PROTO_CLI_RPC_LIST_MOD
 	OBJ_PROTO_CLI_COUNT,
 	OBJ_PROTO_CLI_LAST = OBJ_PROTO_CLI_COUNT - 1,
 };
 #undef X
 
-extern struct crt_proto_format obj_proto_fmt;
+extern struct crt_proto_format obj_proto_fmt_0;
+extern struct crt_proto_format obj_proto_fmt_1;
+extern int dc_obj_proto_version;
 
 /* Helper function to convert opc to name */
 static inline char *
@@ -112,6 +120,7 @@ obj_opc_to_str(crt_opcode_t opc)
 	switch (opc) {
 #define X(a, b, c, d, e, f) case a: return f;
 		OBJ_PROTO_CLI_RPC_LIST
+		OBJ_PROTO_CLI_RPC_LIST_MOD
 #undef X
 	}
 	return "unknown";
@@ -284,7 +293,22 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((daos_key_t)		(okqi_dkey)		CRT_VAR) \
 	((daos_key_t)		(okqi_akey)		CRT_VAR)
 
-#define DAOS_OSEQ_OBJ_QUERY_KEY	/* output fields */		 \
+#define DAOS_OSEQ_OBJ_QUERY_KEY_0	/* output fields */	 \
+	((int32_t)		(okqo_ret)		CRT_VAR) \
+	((uint32_t)		(okqo_map_version)	CRT_VAR) \
+	((uint64_t)		(okqo_epoch)		CRT_VAR) \
+	((uint32_t)		(okqo_flags)		CRT_VAR) \
+	((uint32_t)		(okqo_pad32_1)		CRT_VAR) \
+	((daos_key_t)		(okqo_dkey)		CRT_VAR) \
+	((daos_key_t)		(okqo_akey)		CRT_VAR) \
+	/* recx for visible extent */				 \
+	((daos_recx_t)		(okqo_recx)		CRT_VAR) \
+	/* recx for EC parity space */				 \
+	((daos_recx_t)		(okqo_recx_parity)	CRT_VAR) \
+	/* recx for punched EC extents */			 \
+	((daos_recx_t)		(okqo_recx_punched)	CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_QUERY_KEY_1	/* output fields */	 \
 	((int32_t)		(okqo_ret)		CRT_VAR) \
 	((uint32_t)		(okqo_map_version)	CRT_VAR) \
 	((uint64_t)		(okqo_epoch)		CRT_VAR) \
@@ -301,7 +325,8 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	/* epoch for max write */				 \
 	((uint64_t)		(okqo_max_epoch)	CRT_VAR)
 
-CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
+CRT_RPC_DECLARE(obj_query_key_0, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY_0)
+CRT_RPC_DECLARE(obj_query_key_1, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY_1)
 
 #define DAOS_ISEQ_OBJ_SYNC /* input fields */			 \
 	((uuid_t)		(osi_co_hdl)		CRT_VAR) \
@@ -569,7 +594,7 @@ obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_REQ_CREATE_TIMEOUT))
 		return -DER_TIMEDOUT;
 
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, DAOS_OBJ_VERSION);
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, dc_obj_proto_version);
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_IO, tgt_ep->ep_tag);
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);

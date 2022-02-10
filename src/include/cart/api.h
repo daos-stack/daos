@@ -1931,7 +1931,9 @@ crt_proto_register(struct crt_proto_format *cpf);
 int
 crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
-
+int
+crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+			 crt_proto_query_cb_t cb, void *arg, crt_context_t ctx);
 /**
  * Set self rank.
  *

@@ -573,8 +573,8 @@ out:
 }
 
 int
-crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
-		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg)
+crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+		    crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
 {
 	crt_rpc_t			*rpc_req;
 	crt_context_t			 crt_ctx;
@@ -591,10 +591,14 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 	if (cb == NULL)
 		D_WARN("crt_proto_query() is not useful when cb is NULL.\n");
 
-	crt_ctx = crt_context_lookup(0);
-	if (crt_ctx == NULL) {
-		D_ERROR("crt_context 0 doesn't exist.\n");
-		return -DER_INVAL;
+	if (ctx == NULL) {
+		crt_ctx = crt_context_lookup(0);
+		if (crt_ctx == NULL) {
+			D_ERROR("crt_context 0 doesn't exist.\n");
+			return -DER_INVAL;
+		}
+	} else {
+		crt_ctx = ctx;
 	}
 
 	rc = crt_req_create(crt_ctx, tgt_ep, CRT_OPC_PROTO_QUERY, &rpc_req);
@@ -642,6 +646,20 @@ out:
 	}
 
 	return rc;
+}
+
+int
+crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
+		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg)
+{
+	return crt_proto_query_int(tgt_ep, base_opc, ver, count, cb, arg, NULL);
+}
+
+int
+crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+			 crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
+{
+	return crt_proto_query_int(tgt_ep, base_opc, ver, count, cb, arg, ctx);
 }
 
 /* local operation, query if base_opc with version number ver is registered. */

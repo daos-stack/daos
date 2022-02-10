@@ -2809,7 +2809,8 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 				    (void *)&fe->iods[0].iod_name);
 		break;
 	}
-	case DAOS_OBJ_RPC_QUERY_KEY: {
+	case DAOS_OBJ_RPC_QUERY_KEY_0:
+	case DAOS_OBJ_RPC_QUERY_KEY_1: {
 		daos_obj_query_key_t	*qu = dc_task_get_args(task);
 		daos_key_t		*dkey;
 		uint32_t		 nr;

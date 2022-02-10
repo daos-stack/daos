@@ -172,6 +172,7 @@ struct dss_module pool_module =  {
 	.sm_name	= "pool",
 	.sm_mod_id	= DAOS_POOL_MODULE,
 	.sm_ver		= DAOS_POOL_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
 	.sm_setup	= setup,
