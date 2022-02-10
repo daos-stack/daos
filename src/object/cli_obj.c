@@ -3456,9 +3456,8 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 
 	if (ret) {
 		if (ret == -DER_NONEXIST && obj_is_fetch_opc(obj_auxi->opc)) {
-			/** Fetch should never return -DER_NONEXIST unless it's
-			 * a conditional operation.  Otherwise, it always
-			 * returns 0.
+			/** Conditional fetch returns -DER_NONEXIST if the key doesn't exist. We
+			 *  do not want to try another replica in this case.
 			 */
 			D_DEBUG(DB_IO, "Fetch returned -DER_NONEXIST, no retry on conditional\n");
 			iter_arg->retry = false;
@@ -3466,8 +3465,7 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 			   !obj_is_modification_opc(obj_auxi->opc) &&
 			   !obj_auxi->is_ec_obj && !obj_auxi->spec_shard &&
 			   !obj_auxi->spec_group && !obj_auxi->to_leader &&
-			   ret != -DER_TX_RESTART &&
-			   !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
+			   ret != -DER_TX_RESTART && !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
 			int new_tgt;
 
 			/* Check if there are other replicas available to

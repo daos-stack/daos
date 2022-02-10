@@ -34,7 +34,7 @@ theme:
         - search.highlight
 
 extra:
-    homepage: http://daos.io
+    homepage: https://docs.daos.io/
     version:
         provider: mike
 
@@ -84,7 +84,6 @@ nav:
         - 'Performance Tuning': 'admin/performance_tuning.md'
         - 'Troubleshooting': 'admin/troubleshooting.md'
         - 'Environment Variables': 'admin/env_variables.md'
-        - 'Management (DMG) Tool Reference': 'QSG/dmg_tool.md'
     - Test and Benchmarking:
         - 'Run DAOS Autotest': 'testing/autotest.md'
         - 'Run CaRT Self_test': 'testing/cartselftest.md'
@@ -102,9 +101,8 @@ nav:
         - 'Spark and Hadoop': 'user/spark.md'
         - 'Data Mover': 'user/datamover.md'
         - 'Native Programming Interface': 'user/interface.md'
-        - 'DAOS Tool Reference': 'QSG/daos_tool.md'
     - Releases:
-        - 'Release Notes v2.2': 'release/release_notes_v2_2.md'
+        - 'Release Notes v2.2': 'release/release_notes.md'
         - 'Support Matrix': 'release/support_matrix.md'
         - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Developer Zone:
