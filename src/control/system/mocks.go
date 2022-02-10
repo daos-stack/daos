@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,7 +32,7 @@ func mockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
 func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
 	addr := mockControlAddr(t, idx)
 	m := NewMember(Rank(idx), common.MockUUID(int32(idx)),
-		addr.String(), addr, state)
+		[]string{addr.String()}, addr, state)
 	m.FabricContexts = idx
 	if len(info) > 0 {
 		m.Info = info[0]

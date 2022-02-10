@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -555,7 +555,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 }
 
 func testMemberWithFaultDomain(rank Rank, fd *FaultDomain) *Member {
-	return NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+	return NewMember(rank, uuid.New().String(), []string{"dontcare"}, &net.TCPAddr{},
 		MemberStateJoined).WithFaultDomain(fd)
 }
 
@@ -830,15 +830,15 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			),
 			expGroupMap: &GroupMap{
 				Version: 11,
-				RankURIs: map[Rank]string{
-					0:  mockControlAddr(t, 0).String(),
-					2:  mockControlAddr(t, 2).String(),
-					3:  mockControlAddr(t, 3).String(),
-					4:  mockControlAddr(t, 4).String(),
-					5:  mockControlAddr(t, 5).String(),
-					6:  mockControlAddr(t, 6).String(),
-					9:  mockControlAddr(t, 9).String(),
-					10: mockControlAddr(t, 10).String(),
+				RankURIs: map[Rank]URIs{
+					0:  {Primary: mockControlAddr(t, 0).String()},
+					2:  {Primary: mockControlAddr(t, 2).String()},
+					3:  {Primary: mockControlAddr(t, 3).String()},
+					4:  {Primary: mockControlAddr(t, 4).String()},
+					5:  {Primary: mockControlAddr(t, 5).String()},
+					6:  {Primary: mockControlAddr(t, 6).String()},
+					9:  {Primary: mockControlAddr(t, 9).String()},
+					10: {Primary: mockControlAddr(t, 10).String()},
 				},
 			},
 		},
@@ -846,21 +846,21 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			members: membersWithStates(MemberStateJoined, MemberStateJoined),
 			expGroupMap: &GroupMap{
 				Version: 2,
-				RankURIs: map[Rank]string{
-					0: mockControlAddr(t, 0).String(),
-					1: mockControlAddr(t, 1).String(),
+				RankURIs: map[Rank]URIs{
+					0: {Primary: mockControlAddr(t, 0).String()},
+					1: {Primary: mockControlAddr(t, 1).String()},
 				},
 				MSRanks: []Rank{1},
 			},
 		},
 		"unset fabric URI skipped": {
 			members: append([]*Member{
-				NewMember(2, common.MockUUID(2), "", mockControlAddr(t, 2), MemberStateJoined),
+				NewMember(2, common.MockUUID(2), []string{}, mockControlAddr(t, 2), MemberStateJoined),
 			}, membersWithStates(MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,
-				RankURIs: map[Rank]string{
-					0: mockControlAddr(t, 0).String(),
+				RankURIs: map[Rank]URIs{
+					0: {Primary: mockControlAddr(t, 0).String()},
 				},
 			},
 		},

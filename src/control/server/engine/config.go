@@ -7,6 +7,8 @@
 package engine
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -17,18 +19,106 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-const maxHelperStreamCount = 2
+const (
+	maxHelperStreamCount = 2
+
+	// MultiProviderSeparator delineates between providers in a multi-provider config.
+	MultiProviderSeparator = " "
+)
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
 	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
 	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
-	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
+	InterfacePort   string `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT"`
 	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 	DisableSRX      bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
+}
+
+// GetPrimaryProvider parses the primary provider from the Provider string.
+func (fc *FabricConfig) GetPrimaryProvider() (string, error) {
+	providers, err := fc.GetProviders()
+	if err != nil {
+		return "", err
+	}
+
+	return providers[0], nil
+}
+
+// GetProviders parses the Provider string to one or more providers.
+func (fc *FabricConfig) GetProviders() ([]string, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	providers := splitMultiProviderStr(fc.Provider)
+	if len(providers) == 0 {
+		return nil, errors.New("provider not set")
+	}
+
+	return providers, nil
+}
+
+func splitMultiProviderStr(str string) []string {
+	strs := strings.Split(str, MultiProviderSeparator)
+	result := make([]string, 0)
+	for _, s := range strs {
+		trimmed := strings.TrimSpace(s)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+
+	return result
+}
+
+// GetPrimaryInterface parses the primary fabric interface from the Interface string.
+func (fc *FabricConfig) GetPrimaryInterface() (string, error) {
+	interfaces, err := fc.GetInterfaces()
+	if err != nil {
+		return "", err
+	}
+
+	return interfaces[0], nil
+}
+
+// GetInterfaces parses the Interface string into one or more interfaces.
+func (fc *FabricConfig) GetInterfaces() ([]string, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	interfaces := splitMultiProviderStr(fc.Interface)
+	if len(interfaces) == 0 {
+		return nil, errors.New("fabric_iface not set")
+	}
+
+	return interfaces, nil
+}
+
+// GetInterfacePorts parses the InterfacePort string to one or more ports.
+func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	portStrs := splitMultiProviderStr(fc.InterfacePort)
+	if len(portStrs) == 0 {
+		return nil, errors.New("fabric_iface_port not set")
+	}
+
+	ports := make([]int, 0)
+	for _, str := range portStrs {
+		intPort, err := strconv.Atoi(str)
+		if err != nil {
+			return nil, err
+		}
+		ports = append(ports, intPort)
+	}
+	return ports, nil
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -39,7 +129,7 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.Interface == "" {
 		fc.Interface = other.Interface
 	}
-	if fc.InterfacePort == 0 {
+	if fc.InterfacePort == "" {
 		fc.InterfacePort = other.InterfacePort
 	}
 	if fc.CrtCtxShareAddr == 0 {
@@ -52,18 +142,32 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	switch {
-	case fc.Provider == "":
-		return errors.New("provider not set")
-	case fc.Interface == "":
-		return errors.New("fabric_iface not set")
-	case fc.InterfacePort == 0:
-		return errors.New("fabric_iface_port not set")
-	case fc.InterfacePort < 0:
-		return errors.New("fabric_iface_port cannot be negative")
-	default:
-		return nil
+	prov, err := fc.GetProviders()
+	if err != nil {
+		return err
 	}
+
+	interfaces, err := fc.GetInterfaces()
+	if err != nil {
+		return err
+	}
+
+	ports, err := fc.GetInterfacePorts()
+	if err != nil {
+		return err
+	}
+
+	for _, p := range ports {
+		if p < 0 {
+			return errors.New("fabric_iface_port cannot be negative")
+		}
+	}
+
+	if len(prov) != len(interfaces) || len(prov) != len(ports) {
+		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
+	}
+
+	return nil
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
@@ -170,12 +274,22 @@ func NewConfig() *Config {
 }
 
 // setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) (err error) {
+func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+	iface, err := c.Fabric.GetPrimaryInterface()
+	if err != nil {
+		return err
+	}
+
 	var fi *hardware.FabricInterface
 	if fis != nil {
-		fi, err = fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
+		provider, err := c.Fabric.GetPrimaryProvider()
 		if err != nil {
-			return
+			return err
+		}
+
+		fi, err = fis.GetInterfaceOnOSDevice(iface, provider)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -186,11 +300,11 @@ func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSe
 		// validate that numa node is correct for the given device
 		if fi != nil && fi.NUMANode != *c.PinnedNumaNode {
 			log.Errorf("misconfiguration: network interface %s is on NUMA "+
-				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
+				"node %d but engine is pinned to NUMA node %d", iface,
 				fi.NUMANode, *c.PinnedNumaNode)
 		}
 
-		return
+		return nil
 	}
 
 	if fi == nil {
@@ -201,7 +315,7 @@ func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSe
 	c.Fabric.NumaNodeIndex = fi.NUMANode
 	c.Storage.NumaNodeIndex = fi.NUMANode
 
-	return
+	return nil
 }
 
 // Validate ensures that the configuration meets minimum standards.
@@ -368,7 +482,7 @@ func (c *Config) WithFabricInterface(iface string) *Config {
 
 // WithFabricInterfacePort sets the numeric interface port to be used by this instance.
 func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
-	c.Fabric.InterfacePort = ifacePort
+	c.Fabric.InterfacePort = fmt.Sprintf("%d", ifacePort)
 	return c
 }
 

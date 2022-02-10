@@ -37,7 +37,12 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 	}
 
 	if cmd.FabricProvider == "" {
-		cmd.FabricProvider = cmd.config.Fabric.Provider
+		prov, err := cmd.config.Fabric.GetPrimaryProvider()
+		if err != nil {
+			return err
+		}
+
+		cmd.FabricProvider = prov
 	}
 
 	hf := fabricInterfaceSetToHostFabric(results, cmd.FabricProvider)

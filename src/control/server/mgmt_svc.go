@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,7 +28,7 @@ type mgmtSvc struct {
 	sysdb             *system.Database
 	rpcClient         control.UnaryInvoker
 	events            *events.PubSub
-	clientNetworkHint *mgmtpb.ClientNetHint
+	clientNetworkHint []*mgmtpb.ClientNetHint
 	joinReqs          joinReqChan
 	groupUpdateReqs   chan bool
 	lastMapVer        uint32
@@ -42,7 +42,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c co
 		sysdb:             s,
 		rpcClient:         c,
 		events:            p,
-		clientNetworkHint: new(mgmtpb.ClientNetHint),
+		clientNetworkHint: []*mgmtpb.ClientNetHint{new(mgmtpb.ClientNetHint)},
 		joinReqs:          make(joinReqChan),
 		groupUpdateReqs:   make(chan bool),
 	}

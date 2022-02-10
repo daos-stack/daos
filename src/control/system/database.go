@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -104,10 +104,16 @@ type (
 		SystemName string
 	}
 
+	// URIs represents the set of URIs for a rank.
+	URIs struct {
+		Primary   string
+		Secondary []string
+	}
+
 	// GroupMap represents a version of the system membership map.
 	GroupMap struct {
 		Version  uint32
-		RankURIs map[Rank]string
+		RankURIs map[Rank]URIs
 		MSRanks  []Rank
 	}
 )
@@ -493,7 +499,7 @@ func (db *Database) IncMapVer() error {
 func newGroupMap(version uint32) *GroupMap {
 	return &GroupMap{
 		Version:  version,
-		RankURIs: make(map[Rank]string),
+		RankURIs: make(map[Rank]URIs),
 	}
 }
 
@@ -516,11 +522,16 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 		}
 		// Quick sanity-check: Don't include members that somehow have
 		// a nil rank or fabric URI, either.
-		if srv.Rank.Equals(NilRank) || srv.FabricURI == "" {
-			db.log.Errorf("member has invalid rank (%d) or URI (%s)", srv.Rank, srv.FabricURI)
+		if srv.Rank.Equals(NilRank) || srv.PrimaryFabricURI == "" {
+			db.log.Errorf("member has invalid rank (%d) or URIs (%s)", srv.Rank,
+				srv.PrimaryFabricURI)
 			continue
 		}
-		gm.RankURIs[srv.Rank] = srv.FabricURI
+
+		gm.RankURIs[srv.Rank] = URIs{
+			Primary:   srv.PrimaryFabricURI,
+			Secondary: srv.SecondaryFabricURIs,
+		}
 		if db.isReplica(srv.Addr) {
 			gm.MSRanks = append(gm.MSRanks, srv.Rank)
 		}

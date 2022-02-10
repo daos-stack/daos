@@ -122,11 +122,31 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
 	if !cfg.HasEnvVar("OFI_DOMAIN") {
-		fi, err := fis.GetInterfaceOnOSDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
+		interfaces, err := cfg.Fabric.GetInterfaces()
 		if err != nil {
-			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
+			return err
 		}
-		domain := fi.Name
+
+		providers, err := cfg.Fabric.GetProviders()
+		if err != nil {
+			return err
+		}
+
+		if len(providers) != len(interfaces) {
+			return errors.New("number of providers not equal to number of interfaces")
+		}
+
+		domains := []string{}
+
+		for i, p := range providers {
+			fi, err := fis.GetInterfaceOnOSDevice(interfaces[i], p)
+			if err != nil {
+				return errors.Wrapf(err, "unable to determine device domain for %s", interfaces[i])
+			}
+			domains = append(domains, fi.Name)
+		}
+
+		domain := strings.Join(domains, engine.MultiProviderSeparator)
 		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
 		envVar := "OFI_DOMAIN=" + domain
 		cfg.WithEnvVars(envVar)
@@ -135,22 +155,29 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 	return nil
 }
 
-func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
-	var netDevClass hardware.NetDevClass
+func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) ([]hardware.NetDevClass, error) {
+	netDevClass := []hardware.NetDevClass{}
 	for index, engine := range cfg.Engines {
-		fi, err := fis.GetInterface(engine.Fabric.Interface)
+		cfgIfaces, err := engine.Fabric.GetInterfaces()
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 
-		ndc := fi.DeviceClass
-		if index == 0 {
-			netDevClass = ndc
-			continue
-		}
-		if ndc != netDevClass {
-			return 0, config.FaultConfigInvalidNetDevClass(index, netDevClass,
-				ndc, engine.Fabric.Interface)
+		for i, cfgIface := range cfgIfaces {
+			fi, err := fis.GetInterface(cfgIface)
+			if err != nil {
+				return nil, err
+			}
+
+			ndc := fi.DeviceClass
+			if index == 0 {
+				netDevClass = append(netDevClass, ndc)
+				continue
+			}
+			if ndc != netDevClass[i] {
+				return nil, config.FaultConfigInvalidNetDevClass(index, netDevClass[i],
+					ndc, engine.Fabric.Interface)
+			}
 		}
 	}
 	return netDevClass, nil
