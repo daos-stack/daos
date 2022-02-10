@@ -106,24 +106,36 @@ func TestBuild_CheckCompatibility(t *testing.T) {
 		},
 		"general: server/agent minor delta too large": {
 			a:      testComponent(t, "server", "1.0.0"),
-			b:      testComponent(t, "agent", "1.3.0"),
+			b:      testComponent(t, "agent", "1.1.0"),
 			expErr: errors.New("incompatible components"),
-		},
-		"general: server/agent minor delta acceptable": {
-			a: testComponent(t, "server", "1.0.0"),
-			b: testComponent(t, "agent", "1.2.0"),
 		},
 		"custom: specific version not backwards compatible": {
 			a: testComponent(t, "server", "1.1.1"),
 			b: testComponent(t, "agent", "1.1.0"),
 			customRule: &build.InteropRule{
-				CheckFn: func(self, other *build.VersionedComponent) bool {
+				Check: func(self, other *build.VersionedComponent) bool {
 					v := build.MustNewVersion("1.1.1")
 					return self.Version.Equals(v) &&
 						!other.Version.LessThan(self.Version)
 				},
 			},
 			expErr: errors.New("incompatible components"),
+		},
+		"custom: except specific component versions from standard interop rules": {
+			a: testComponent(t, "server", "1.1.1"),
+			b: testComponent(t, "agent", "2.0.0"),
+			// Shows an example of a custom rule that can be used to override
+			// the default interop rules.
+			customRule: &build.InteropRule{
+				Self:          build.ComponentServer,
+				Other:         build.ComponentAgent,
+				StopOnSuccess: true,
+				Check: func(self, other *build.VersionedComponent) bool {
+					v1_1_1 := build.MustNewVersion("1.1.1")
+					v2_0_0 := build.MustNewVersion("2.0.0")
+					return self.Version.Equals(v1_1_1) && other.Version.Equals(v2_0_0)
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
