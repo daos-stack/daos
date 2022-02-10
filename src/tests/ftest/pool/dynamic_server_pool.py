@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -104,13 +104,10 @@ class DynamicServerPool(TestWithServers):
         """
         # Create a pool on rank0.
         self.create_pool_with_ranks(ranks=[0], tl_update=True)
-        # Create a pool across the 2 servers.
-        self.create_pool_with_ranks(ranks=[0, 1])
         # Verify UUIDs by calling dmg pool list.
         self.verify_uuids()
 
-        # Verify that the UUID-named directory is created, or not created, at
-        # each host for the two pools.
+        # Verify that the UUID-named directory is created, or not created, at each host.
         self.check_pool_location(self.hostlist_servers, self.uuid_to_ranks)
 
         # Start an additional server.
@@ -120,18 +117,16 @@ class DynamicServerPool(TestWithServers):
 
         # Create a pool on the newly added server and verify the UUIDs with dmg
         # pool list.
-        self.create_pool_with_ranks(ranks=[2], tl_update=True)
+        self.create_pool_with_ranks(ranks=[1], tl_update=True)
         self.verify_uuids()
         # Verify that the UUID-named directory is created at each host including
         # the new host.
         self.check_pool_location(
             self.hostlist_servers + extra_servers, self.uuid_to_ranks)
 
-        # Create a new pool across all three servers and verify the UUIDs with
-        # dmg pool list.
-        self.create_pool_with_ranks(ranks=[0, 1, 2])
+        # Create a new pool across both servers and verify the UUIDs with dmg pool list.
+        self.create_pool_with_ranks(ranks=[0, 1])
         self.verify_uuids()
-        # Verify that the UUID-named directory is created at each host for all
-        # pools.
+        # Verify that the UUID-named directory is created at each host for all pools.
         self.check_pool_location(
             self.hostlist_servers + extra_servers, self.uuid_to_ranks)
