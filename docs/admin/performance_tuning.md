@@ -265,7 +265,7 @@ restarted to gain visibility to these changes. For additional information,
 please refer to the [System Deployment: Agent Startup][6] documentation
 section.
 
-[1]: <https://github.com/daos-stack/daos/tree/master/src/cart> (Collective and RPC Transport)
+[1]: <https://github.com/daos-stack/daos/tree/release/1.2/src/cart> (Collective and RPC Transport)
 [2]: <https://github.com/daos-stack/daos/tree/release/1.2/doc/admin/installation.md#distribution-packages> (DAOS distribution packages)
 [3]: <https://github.com/daos-stack/daos/tree/release/1.2/doc/admin/installation.md#building-daos--dependencies> (DAOS build documentation)
 [4]: <https://github.com/daos-stack/daos/tree/release/1.2/doc/admin/deployment.md#server-startup> (DAOS server startup documentation)

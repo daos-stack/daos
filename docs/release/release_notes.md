@@ -21,7 +21,7 @@ and brings support for the following new features:
 Visit the [online documentation](https://docs.daos.io/v1.2/) for more
 information. All DAOS project source code is maintained in the
 [https://github.com/daos-stack/daos](https://github.com/daos-stack/daos) repository.
-Please visit this [link](https://github.com/daos-stack/daos/blob/master/LICENSE)
+Please visit this [link](https://github.com/daos-stack/daos/blob/release/1.2/LICENSE)
 for more information on the licenses.
 
 ## Software Installation
@@ -183,7 +183,7 @@ checked through dmg pool query, similar as rebuild. During reintegration, all
 old data on the reintegrated target will be erased. Once the target is
 reintegrated, it operates the same as normal active targets.
 
-[More information](https://github.com/daos-stack/daos/blob/master/src/bio/README.md)
+[More information](https://github.com/daos-stack/daos/blob/release/1.2/src/bio/README.md)
 
 
 ### HDF5 DAOS VOL Connector

@@ -34,7 +34,7 @@ plugins:
     - mike:
         version_selector: true
 
-docs_dir: ./doc
+docs_dir: ./docs
 
 markdown_extensions:
     - admonition
@@ -91,10 +91,10 @@ nav:
         - 'Run dbench': 'QSG/dbench.md'
         - 'Datamover test': 'QSG/datamover.md'
     - Releases:
-        - 'Release Notes v1.2': 'release/release_notes_v1_2.md'
-        - 'Support Matrix v1.2': 'release/support_matrix_v1_2.md'
+        - 'Release Notes v1.2': 'release/release_notes.md'
+        - 'Support Matrix v1.2': 'release/support_matrix.md'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
-        - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/release/v1.2/src/README.md'
-        - 'DAOS API Documentation': 'html/index.html'
+        - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/release/1.2/src/README.md'
+        - 'DAOS API Documentation': 'doxygen/html/index.html'
