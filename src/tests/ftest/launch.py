@@ -2229,7 +2229,7 @@ def main():
     parser.add_argument(
         "-re", "--repeat",
         action="store",
-        default=100,
+        default=3,
         type=int,
         help="number of times to repeat test execution")
     parser.add_argument(
