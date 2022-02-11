@@ -1769,10 +1769,10 @@ def install_debuginfos():
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
         cmds.append(
-            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args +
-            ["daos-client-" + rpm_version,
-             "daos-server-" + rpm_version,
-             "daos-tests-" + rpm_version])
+            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
+            + ["daos-client-" + rpm_version,
+               "daos-server-" + rpm_version,
+               "daos-tests-" + rpm_version])
     else:
         # We're not using the yum API to install packages
         # See the comments below.

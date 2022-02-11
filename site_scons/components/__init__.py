@@ -211,7 +211,6 @@ def define_mercury(reqs):
                 patch_rpath=['lib'])
 
 
-
 def define_common(reqs):
     """common system component definitions"""
     reqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
@@ -261,7 +260,6 @@ def define_ompi(reqs):
                 package='hwloc-devel')
     reqs.define('ompi', pkgconfig='ompi', package='ompi-devel')
     reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
-
 
 def define_components(reqs):
     """Define all of the components"""

@@ -927,7 +927,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 src_path=tmp_path,
                 pool=uuid_from_obj(dst_pool))
 
-
     def set_ior_params(self, param_type, path, pool=None, cont=None,
                        path_suffix=None, flags=None, display=True):
         """Set the ior params.
@@ -1202,7 +1201,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Set the tool to use
         self.set_tool(tool)
 
-
         if create_dataset:
             # create initial datasets
             if not pool:
@@ -1255,7 +1253,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 "DAOS", "/", pool, cont2)
         else:
             self.fail("Invalid tool: {}".format(tool))
-
 
         # move data from daos to posix FS and vice versa
         if tool in ['FS_COPY', 'DCP']:

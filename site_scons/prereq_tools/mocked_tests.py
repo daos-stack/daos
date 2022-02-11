@@ -186,7 +186,6 @@ def _create_source_files(unit_tests):
     global_teardowns = '\n'.join('int %s(void **state);' % gt
                                  for gt in unit_tests.global_teardowns)
 
-
     test_source = """
 // Auto generated file to run the cmocka tests
 

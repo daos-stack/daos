@@ -28,6 +28,8 @@ jobs:
       - name: flake8 Lint
         uses: py-actions/flake8@v2
         with:
-          ignore: "F841,E,W504,W503"
+          # W503 and W504 are related as they conflict.  W504 is the preferred style, however we
+          # have more code that matches W503 so accept either at this point.
+          ignore: "F841,W503,W504,E2,E302,E402"
           exclude: "src/control/vendor,src/client/pydaos/raw"
           max-line-length: "100"
