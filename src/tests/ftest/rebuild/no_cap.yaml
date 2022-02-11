@@ -10,7 +10,7 @@ timeout: 180
 server_config:
   engines_per_host: 2
   name: daos_server
-   env_vars:
+  env_vars:
     - CRT_TIMEOUT=10
   servers:
     0:
