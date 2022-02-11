@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -132,7 +132,7 @@ class NvmeFragmentation(TestWithServers):
         not to fail with NO ENOM SPAC.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=nvme,ib2,nvme_fragmentation
         """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
