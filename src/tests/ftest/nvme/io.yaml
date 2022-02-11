@@ -19,13 +19,12 @@ server_config:
   scm_class: dcpm
   scm_list: ["/dev/pmem0"]
 pool:
- name: daos_server
- prop_name: reclaim
- prop_value: disabled
  ior_sequence_pool_qty: 11
  pool_0: #[6G, 200G, 1M, 16G, 1]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 6%
    nvme_size: 20%
    stripesize: 1048576
@@ -34,6 +33,8 @@ pool:
  pool_1: #[1G, 9G, 4k, 1G, 1]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 1%
    nvme_size: 10%
    stripesize: 4096
@@ -42,6 +43,8 @@ pool:
  pool_2: #[10G, 9G, 2k, 1G, 1]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 10%
    nvme_size: 10%
    stripesize: 2048
@@ -50,6 +53,8 @@ pool:
  pool_3: #[3G, 9G, 8B, 10M, 1]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 4%
    nvme_size: 10%
    stripesize: 8
@@ -58,6 +63,8 @@ pool:
  pool_4: #[4G, 9G, 24B, 24M, 1]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 5%
    nvme_size: 10%
    stripesize: 24
@@ -66,6 +73,8 @@ pool:
  pool_5: #[1G, 9G, 2056, 4M, 1]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 2%
    nvme_size: 10%
    stripesize: 2056
@@ -74,6 +83,8 @@ pool:
  pool_6: #[6G, 300G, 128M, 32G, 1]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 5%
    nvme_size: 50%
    stripesize: 134217728
@@ -82,6 +93,8 @@ pool:
  pool_7: #[10G, 60G, 32B, 42M, 1]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 10%
    nvme_size: 20%
    stripesize: 32
@@ -90,6 +103,8 @@ pool:
  pool_8: #[58G, 900G, 2k, 1G, 2]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 30%
    nvme_size: 60%
    stripesize: 2048
@@ -98,6 +113,8 @@ pool:
  pool_9: #[58G, 900G, 8B, 10M, 2]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 30%
    nvme_size: 60%
    stripesize: 8
@@ -106,6 +123,8 @@ pool:
  pool_10: #[58G, 900G, 32M, 22G, 5]
    name: daos_server
    control_method: dmg
+   prop_name: reclaim
+   prop_value: disabled
    scm_size: 30%
    nvme_size: 60%
    stripesize: 33554432
