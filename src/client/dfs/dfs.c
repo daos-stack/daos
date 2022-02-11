@@ -6,6 +6,8 @@
 
 #define D_LOGFAC	DD_FAC(dfs)
 
+Test client api watchers
+
 #include <fcntl.h>
 #include <math.h>
 #include <sys/stat.h>
