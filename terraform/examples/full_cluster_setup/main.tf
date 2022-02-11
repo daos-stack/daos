@@ -10,6 +10,7 @@ module "daos_server" {
   subnetwork_project = var.subnetwork_project
   region             = var.region
   zone               = var.zone
+  labels             = var.server_labels
 
   number_of_instances = var.server_number_of_instances
   daos_disk_count     = var.server_daos_disk_count
@@ -33,6 +34,7 @@ module "daos_client" {
   subnetwork_project = var.subnetwork_project
   region             = var.region
   zone               = var.zone
+  labels             = var.client_labels
 
   number_of_instances = var.client_number_of_instances
 

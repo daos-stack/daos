@@ -4,6 +4,9 @@ subnetwork = "<my_VPC_subnetwork>"
 subnetwork_project = "<my_project_id>"
 region = "europe-west4"
 zone = "europe-west4-a"
+labels = {
+  example="daos_client_mig"
+}
 
 number_of_instances = 2
 

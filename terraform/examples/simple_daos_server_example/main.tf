@@ -26,6 +26,7 @@ module "daos_server" {
   subnetwork_project = var.subnetwork_project
   region             = var.region
   zone               = var.zone
+  labels             = var.labels
 
   number_of_instances = var.number_of_instances
   daos_disk_count     = var.daos_disk_count

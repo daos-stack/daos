@@ -16,6 +16,9 @@ server_mig_name            = "daos-server"
 server_machine_type        = "n2-highmem-32"
 server_os_project          = ""
 server_os_family           = "daos-server-centos-7"
+server_labels = {
+  example = "full_cluster_setup"
+}
 # Client
 client_number_of_instances = 1
 client_instance_base_name  = "daos-client"
@@ -26,3 +29,6 @@ client_mig_name            = "daos-client"
 client_machine_type        = "c2-standard-16"
 client_os_project          = ""
 client_os_family           = "daos-client-hpc-centos-7"
+client_labels = {
+  example = "full_cluster_setup"
+}

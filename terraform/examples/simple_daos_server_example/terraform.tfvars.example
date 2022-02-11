@@ -1,9 +1,12 @@
-project_id="<my_project_id>"
+project_id = "<my_project_id>"
 network = "<my_VPC_network>"
 subnetwork = "<my_VPC_subnetwork>"
 subnetwork_project = "<my_project_id>"
 region = "europe-west4"
 zone = "europe-west4-a"
+labels = {
+  example="simple_daos_server_example"
+}
 
 number_of_instances = 4 # Allow 3-way replication with extra spare for rebuild
 daos_disk_count = 16

@@ -26,6 +26,7 @@ resource "google_compute_instance_template" "daos_sig_template" {
   tags           = ["daos-client"]
   project        = var.project_id
   region         = var.region
+  labels         = var.labels
 
   disk {
     source_image = data.google_compute_image.os_image.self_link

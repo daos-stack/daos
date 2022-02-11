@@ -39,6 +39,7 @@ The resources/services/activations/deletions that this module will create/trigge
 | <a name="input_daos_disk_type"></a> [daos\_disk\_type](#input\_daos\_disk\_type) | Daos disk type to use. For now only suported one is local-ssd | `string` | `"local-ssd"` | no |
 | <a name="input_daos_service_account_scopes"></a> [daos\_service\_account\_scopes](#input\_daos\_service\_account\_scopes) | Scopes for the DAOS server service account | `list(string)` | <pre>[<br>  "userinfo-email",<br>  "compute-ro",<br>  "storage-ro"<br>]</pre> | no |
 | <a name="input_instance_base_name"></a> [instance\_base\_name](#input\_instance\_base\_name) | MIG instance base names to use | `string` | `"daos-server"` | no |
+| <a name="input_labels"></a> [labels](#input\_labels) | Set of key/value label pairs to assign to daos-server instances | `any` | n/a | no |
 | <a name="input_machine_type"></a> [machine\_type](#input\_machine\_type) | GCP machine type. ie. e2-medium | `string` | `"n2-custom-20-131072"` | no |
 | <a name="input_mig_name"></a> [mig\_name](#input\_mig\_name) | MIG name | `string` | `"daos-server"` | no |
 | <a name="input_network"></a> [network](#input\_network) | GCP network to use | `string` | n/a | yes |

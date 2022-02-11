@@ -29,6 +29,12 @@ variable "zone" {
   default     = null
 }
 
+variable "labels" {
+  description = "Set of key/value label pairs to assign to daos-client instances"
+  type        = any
+  default     = {}
+}
+
 variable "os_family" {
   description = "OS GCP image family"
   default     = null
