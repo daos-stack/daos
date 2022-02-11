@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -150,8 +150,6 @@ class DcpCommand(MfuCommandBase):
         self.bufsize = FormattedParameter("--bufsize {}")
         # work size per task in bytes (default 64MB)
         self.chunksize = FormattedParameter("--chunksize {}")
-        # DAOS prefix for unified namespace path
-        self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # DAOS API in {DFS, DAOS} (default uses DFS for POSIX containers)
         self.daos_api = FormattedParameter("--daos-api {}")
         # read source list from file
@@ -197,8 +195,6 @@ class DsyncCommand(MfuCommandBase):
         self.bufsize = FormattedParameter("--blocksize {}")
         # work size per task in bytes (default 4MB)
         self.chunksize = FormattedParameter("--chunksize {}")
-        # DAOS prefix for unified namespace path
-        self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # DAOS API in {DFS, DAOS} (default uses DFS for POSIX containers)
         self.daos_api = FormattedParameter("--daos-api {}")
         # read and compare file contents rather than compare size and mtime

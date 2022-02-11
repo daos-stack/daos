@@ -1579,6 +1579,10 @@ class DaosContainer():
         if con_uuid is not None:
             conversion.c_uuid(con_uuid, self.uuid)
 
+        if self.uuid is None:
+            raise DaosApiError("Container uuid is None.")
+        uuid_str = self.get_uuid_str()
+
         c_force = ctypes.c_uint(force)
 
         func = self.context.get_function('destroy-cont')
@@ -1586,14 +1590,14 @@ class DaosContainer():
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.poh, self.uuid, c_force, None)
+            ret = func(self.poh, bytes(uuid_str, encoding='utf-8'), c_force, None)
             if ret != 0:
                 raise DaosApiError("Container destroy returned non-zero. "
                                    "RC: {0}".format(ret))
             self.attached = 0
         else:
             event = daos_cref.DaosEvent()
-            params = [self.poh, self.uuid, c_force, event]
+            params = [self.poh, bytes(uuid_str, encoding='utf-8'), c_force, event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
@@ -1616,21 +1620,25 @@ class DaosContainer():
         if flags is not None:
             c_flags = ctypes.c_uint(flags)
 
+        if self.uuid is None:
+            raise DaosApiError("Container uuid is None.")
+        uuid_str = self.get_uuid_str()
+
         func = self.context.get_function('open-cont')
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
-                       ctypes.byref(self.info), None)
+            ret = func(self.poh, bytes(uuid_str, encoding='utf-8'), c_flags,
+                       ctypes.byref(self.coh), ctypes.byref(self.info), None)
             if ret != 0:
                 raise DaosApiError("Container open returned non-zero. RC: {0}"
                                    .format(ret))
             self.opened = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
-                      ctypes.byref(self.info), event]
+            params = [self.poh, bytes(uuid_str, encoding='utf-8'), c_flags,
+                      ctypes.byref(self.coh), ctypes.byref(self.info), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
