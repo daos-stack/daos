@@ -189,6 +189,17 @@ pipeline {
                 }
             }
         }
+        stage('Check PR') {
+            when { changeRequest() }
+            steps {
+                sh cachedCommitPragma('Required-githooks', 'false')
+            }
+            post {
+                unsuccessful {
+                    echo "PR did not get committed with required git hooks"
+                }
+            }
+        }
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
