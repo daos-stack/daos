@@ -67,7 +67,6 @@ dnf -y install \
     python36-PyYAML \
     python36-scons \
     sg3_utils \
-    sudo \
     valgrind-devel \
     yasm
 dnf clean all
