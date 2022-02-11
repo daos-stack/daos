@@ -300,6 +300,12 @@ struct obj_pool_metrics {
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
+	/* inflight RDMA */
+	int			ot_bulk_inflight;
+	/* inflight DMA */
+	int			ot_dma_inflight;
+	int			ot_ioc;
+	bool			ot_io_watchdog;
 
 	/** Measure per-operation latency in us (type = gauge) */
 	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
