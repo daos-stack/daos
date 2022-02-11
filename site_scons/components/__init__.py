@@ -284,7 +284,6 @@ def define_components(reqs):
                           'make $JOBS_OPT', 'make install'],
                 libs=['isal_crypto'])
 
-
     retriever = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
     pmdk_build = ['make all "BUILD_RPMEM=n" "NDCTL_ENABLE=n" '
@@ -341,9 +340,9 @@ def define_components(reqs):
 
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX" --disable-tests '                  \
-                          '--disable-unit-tests --disable-apps --without-vhost --without-crypto ' \
-                          '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '   \
+                commands=['./configure --prefix="$SPDK_PREFIX" --disable-tests '
+                          '--disable-unit-tests --disable-apps --without-vhost --without-crypto '
+                          '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '
                           '--without-isal --without-vtune --with-shared',
                           'make CONFIG_ARCH={} $JOBS_OPT'.format(spdk_arch),
                           'make install',
@@ -372,5 +371,6 @@ def define_components(reqs):
                           'make install'],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
+
 
 __all__ = ['define_components']

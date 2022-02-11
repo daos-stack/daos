@@ -144,13 +144,13 @@ class DaosObjectQuery(TestWithServers):
             actual_group_rows += 1
         if expected_replica_rows != actual_replica_rows:
             errors.append(
-                "Unexpected replica row count! Class = {}; Expected = {}; "\
+                "Unexpected replica row count! Class = {}; Expected = {}; "
                 "Actual = {}".format(
                     class_name, expected_replica_rows, actual_replica_rows))
         # Also verify the number of group rows; rows that start with "grp".
         if expected_group_num != actual_group_rows:
             errors.append(
-                "Unexpected group row count! Class = {}; Expected = {}; "\
+                "Unexpected group row count! Class = {}; Expected = {}; "
                 "Actual = {}".format(
                     class_name, expected_group_num, actual_group_rows))
 

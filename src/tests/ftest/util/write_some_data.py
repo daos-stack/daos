@@ -43,5 +43,6 @@ def write_some_data():
         print("value is {0}".format(rdata1))
         raise DaosIOFailed
 
+
 if __name__ == "__main__":
     write_some_data()

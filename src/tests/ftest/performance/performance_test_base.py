@@ -96,6 +96,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         """
         old_get_default_env = cmd.get_default_env
         performance_env = self.performance_env
+
         def new_get_default_env(self, *args, **kwargs): # pylint: disable=unused-argument
             env = old_get_default_env(*args, **kwargs)
             for key, val in performance_env.items():

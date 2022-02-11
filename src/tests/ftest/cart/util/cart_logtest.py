@@ -690,7 +690,7 @@ class rpc_reporting():
                     row.append('')
             table.append(row)
             if counts['ALLOCATED'] != counts['DEALLOCATED']:
-                errors.append("ERROR: Opcode {}: Alloc'd Total = {}, Dealloc'd Total = {}". \
+                errors.append("ERROR: Opcode {}: Alloc'd Total = {}, Dealloc'd Total = {}".
                               format(op, counts['ALLOCATED'], counts['DEALLOCATED']))
 
         if HAVE_TABULATE:
