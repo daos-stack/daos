@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -104,7 +104,7 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 
 	/** destroy the containers */
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, "cont1", 0, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
 	assert_rc_equal(rc, 0);
@@ -1035,6 +1035,7 @@ dfs_test_compat(void **state)
 	daos_handle_t	coh;
 	dfs_t		*dfs;
 	int		rc;
+	char		uuid_str[37];
 
 	uuid_generate(uuid1);
 	uuid_clear(uuid2);
@@ -1046,7 +1047,8 @@ dfs_test_compat(void **state)
 	rc = dfs_cont_create(arg->pool.poh, uuid1, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
-	rc = daos_cont_open(arg->pool.poh, uuid1, DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(uuid1, uuid_str);
+	rc = daos_cont_open(arg->pool.poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
@@ -1054,7 +1056,7 @@ dfs_test_compat(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid1, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, uuid_str, 1, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
 
@@ -1062,7 +1064,8 @@ dfs_test_compat(void **state)
 	rc = dfs_cont_create(arg->pool.poh, &uuid2, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
-	rc = daos_cont_open(arg->pool.poh, uuid2, DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(uuid2, uuid_str);
+	rc = daos_cont_open(arg->pool.poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
@@ -1070,7 +1073,7 @@ dfs_test_compat(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid2, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, uuid_str, 1, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
 
