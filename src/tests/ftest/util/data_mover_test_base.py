@@ -607,10 +607,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                             self.log.info("Expected:\n%s\nBut got:\n%s",
                                 data[:100] + "...",
                                 actual_idx + "...")
-                            self.log.info(
-                                "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
-                                    str(obj.c_oid.hi), str(obj.c_oid.lo),
-                                    dkey, akey)
+                            self.log.info("For:\nobj: %s.%s\ndkey: %s\nakey: %s",
+                                          str(obj.c_oid.hi), str(obj.c_oid.lo),
+                                          dkey, akey)
                             self.fail("Array verification failed.")
 
             obj.close()

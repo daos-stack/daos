@@ -5,7 +5,7 @@
       "severity": "error",
       "pattern": [
         {
-          "regexp": "^([^:]+):(\\d+):(\\d+):\\s+(F\\d+\\s+.+)$",
+          "regexp": "^([^:]+):(\\d+):(\\d+):\\s+(.\\d+\\s+.+)$",
           "file": 1,
           "line": 2,
           "column": 3,

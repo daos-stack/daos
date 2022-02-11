@@ -30,6 +30,6 @@ jobs:
         with:
           # W503 and W504 are related as they conflict.  W504 is the preferred style, however we
           # have more code that matches W503 so accept either at this point.
-          ignore: "F841,W503,W504,E2,E302,E402"
+          ignore: "F841,W503,W504,E12,E2,E302,E402"
           exclude: "src/control/vendor,src/client/pydaos/raw"
           max-line-length: "100"
