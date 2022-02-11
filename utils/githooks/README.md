@@ -10,5 +10,9 @@ utils/githooks/<hook>.d/<num>-<name> files.
 To use the pre-commit hook here, do the following locally
 
 ```
-ln -s ../../utils/githooks/pre-commit .git/hooks/pre-commit
+for d in utils/githooks/*.d; do
+    h=${d%.d};
+    h=${h##*/}; echo $h; done
+    ln -s ../../utils/githooks/$h .git/hooks/$h
+done
 ```
