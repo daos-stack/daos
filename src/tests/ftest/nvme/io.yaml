@@ -19,11 +19,98 @@ server_config:
   scm_class: dcpm
   scm_list: ["/dev/pmem0"]
 pool:
- mode: 511
  name: daos_server
  prop_name: reclaim
  prop_value: disabled
- control_method: dmg
+ ior_sequence_pool_qty: 11
+ pool_0: #[6G, 200G, 1M, 16G, 1]
+   name: daos_server
+   control_method: dmg
+   scm_size: 6%
+   nvme_size: 20%
+   stripesize: 1048576
+   blocksize: 17179869184
+   clientslots: 1
+ pool_1: #[1G, 9G, 4k, 1G, 1]
+   name: daos_server
+   control_method: dmg
+   scm_size: 1%
+   nvme_size: 10%
+   stripesize: 4096
+   blocksize: 1073741824
+   clientslots: 1
+ pool_2: #[10G, 9G, 2k, 1G, 1]
+   name: daos_server
+   control_method: dmg
+   scm_size: 10%
+   nvme_size: 10%
+   stripesize: 2048
+   blocksize: 1073741824
+   clientslots: 1
+ pool_3: #[3G, 9G, 8B, 10M, 1]
+   name: daos_server
+   control_method: dmg
+   scm_size: 4%
+   nvme_size: 10%
+   stripesize: 8
+   blocksize: 10485760
+   clientslots: 1
+ pool_4: #[4G, 9G, 24B, 24M, 1]
+   name: daos_server
+   control_method: dmg
+   scm_size: 5%
+   nvme_size: 10%
+   stripesize: 24
+   blocksize: 25165824
+   clientslots: 1
+ pool_5: #[1G, 9G, 2056, 4M, 1]
+   name: daos_server
+   control_method: dmg
+   scm_size: 2%
+   nvme_size: 10%
+   stripesize: 2056
+   blocksize: 4227136
+   clientslots: 1
+ pool_6: #[6G, 300G, 128M, 32G, 1]
+   name: daos_server
+   control_method: dmg
+   scm_size: 5%
+   nvme_size: 50%
+   stripesize: 134217728
+   blocksize: 34359738368
+   clientslots: 1
+ pool_7: #[10G, 60G, 32B, 42M, 1]
+   name: daos_server
+   control_method: dmg
+   scm_size: 10%
+   nvme_size: 20%
+   stripesize: 32
+   blocksize: 44040192
+   clientslots: 1
+ pool_8: #[58G, 900G, 2k, 1G, 2]
+   name: daos_server
+   control_method: dmg
+   scm_size: 30%
+   nvme_size: 60%
+   stripesize: 2048
+   blocksize: 1073741824
+   clientslots: 2
+ pool_9: #[58G, 900G, 8B, 10M, 2]
+   name: daos_server
+   control_method: dmg
+   scm_size: 30%
+   nvme_size: 60%
+   stripesize: 8
+   blocksize: 10485760
+   clientslots: 2
+ pool_10: #[58G, 900G, 32M, 22G, 5]
+   name: daos_server
+   control_method: dmg
+   scm_size: 30%
+   nvme_size: 60%
+   stripesize: 33554432
+   blocksize: 23622320128
+   clientslots: 5
 ior:
  flags: "-w -r -k -vv"
  repetitions: 1
@@ -39,16 +126,3 @@ ior:
   - "RP_4GX"
   - "RP_4G1"
  dfs_destroy: False
- ior_sequence:
-#   - [scmsize, nvmesize, stripesize, blocksize, clientslots]
-    - [6000000000, 214748364800, 1048576, 17179869184, 1]        #[6G, 200G, 1M, 16G, 1]
-    - [1000000000, 9000000000, 4096, 1073741824, 1]              #[1G, 9G, 4k, 1G, 1]
-    - [10000000000, 9000000000, 2048, 1073741824, 1]             #[10G, 9G, 2k, 1G, 1]
-    - [3000000000, 9000000000, 8, 10485760, 1]                   #[3G, 9G, 8B, 10M, 1]
-    - [4000000000, 9000000000, 24, 25165824, 1]                  #[4G, 9G, 24B, 24M, 1]
-    - [1000000000, 9000000000, 2056, 4227136, 1]                 #[1G, 9G, 2056, 4M, 1]
-    - [6000000000, 322122547200, 134217728, 34359738368, 1]      #[6G, 300G, 128M, 32G, 1]
-    - [10000000000, 64424509440, 32, 44040192, 1]                #[10G, 60G, 32B, 42M, 1]
-    - [62277025792, 1000204886016, 2048, 1073741824, 2]          #[58G, 900G, 2k, 1G, 2]
-    - [62277025792, 1000204886016, 8, 10485760, 2]               #[58G, 900G, 8B, 10M, 2]
-    - [62277025792, 1000204886016, 33554432, 23622320128, 5]     #[58G, 900G, 32M, 22G, 5]

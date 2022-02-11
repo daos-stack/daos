@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,23 +34,18 @@ class NvmeIo(IorTestBase):
         """
 
         # Test params
-        tests = self.params.get("ior_sequence", '/run/ior/*')
         object_type = self.params.get("object_type", '/run/ior/*')
+        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
 
-        # Loop for every IOR object type
+        # Loop for every object type
         for obj_type in object_type:
-            for ior_param in tests:
-                # There is an issue with 8 bytes transfer size Hence, skip
-                # tests case with 8 bytes Transfer size.
-                if ior_param[2] == 8:
-                    self.log.warning("Skip test because of DAOS-7021")
-                    continue
-
-                # Create and connect to a pool
-                self.add_pool(create=False)
-                self.pool.scm_size.update(ior_param[0])
-                self.pool.nvme_size.update(ior_param[1])
-                self.pool.create()
+            # Loop for every pool size
+            for index in range(ior_seq_pool_qty):
+                # Create and connect to a pool with namespace
+                self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
+                stripesize = self.params.get("stripesize", "/run/pool/pool_{}/*".format(index))
+                blocksize = self.params.get("blocksize", "/run/pool/pool_{}/*".format(index))
+                clientslots = self.params.get("clientslots", "/run/pool/pool_{}/*".format(index))
 
                 # Disable aggregation
                 self.pool.set_property()
@@ -60,14 +55,14 @@ class NvmeIo(IorTestBase):
                 size_before_ior = self.pool.info
 
                 # Run ior with the parameters specified for this pass
-                self.ior_cmd.transfer_size.update(ior_param[2])
-                self.ior_cmd.block_size.update(ior_param[3])
+                self.ior_cmd.transfer_size.update(stripesize)
+                self.ior_cmd.block_size.update(blocksize)
                 self.ior_cmd.dfs_oclass.update(obj_type)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.run_ior(self.get_ior_job_manager_command(), ior_param[4])
+                self.run_ior(self.get_ior_job_manager_command(), clientslots)
 
                 # Verify IOR consumed the expected amount from the pool
-                self.verify_pool_size(size_before_ior, ior_param[4])
+                self.verify_pool_size(size_before_ior, clientslots)
 
                 errors = self.destroy_pools(self.pool)
                 if errors:
