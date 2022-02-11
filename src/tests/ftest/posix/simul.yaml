@@ -16,4 +16,4 @@ container:
     type: POSIX
     control_method: daos
 mpi_list:
-    - openmpi
+    - mpi/openmpi-x86_64
