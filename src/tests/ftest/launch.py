@@ -1943,7 +1943,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             except IOError as error:
                 print("Error writing {}: {}".format(stack_trace_file, error))
                 return_status = False
-            except RuntimeError:
+            except RuntimeError as error:
                 print("Error creating {}: {}".format(stack_trace_file, error))
                 return_status = False
         else:

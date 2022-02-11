@@ -21,6 +21,6 @@ jobs:
       - name: flake8 Lint
         uses: py-actions/flake8@v2
         with:
-          ignore: "E302"
+          ignore: "F841"
           exclude: "src/control/vendor,src/client/pydaos/raw"
           max-line-length: "100"

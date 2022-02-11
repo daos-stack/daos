@@ -22,11 +22,10 @@
 """Defines common components used by HPDD projects"""
 
 import sys
-import os
 import platform
 import distro
 from prereq_tools import GitRepoRetriever
-from prereq_tools import WebRetriever
+# from prereq_tools import WebRetriever
 from prereq_tools import ProgramBinary
 
 SCONS_EXE = sys.argv[0]

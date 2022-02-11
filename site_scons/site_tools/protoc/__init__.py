@@ -21,7 +21,6 @@
 # -*- coding: utf-8 -*-
 
 import SCons.Builder
-from SCons.Script import Dir
 import os
 
 
@@ -69,7 +68,8 @@ def _detect(env):
             protoc_gen_go_found = True
 
     try:
-        import grpc_tools.protoc # pylint: disable=unused-import
+        # pylint: disable=unused-import
+        import grpc_tools.protoc # noqa: F401
         grpc_tools_found = True
     except ImportError:
         grpc_tools_found = False
