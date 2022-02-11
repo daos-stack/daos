@@ -479,10 +479,6 @@ pipeline {
                     }
                 }
                 stage('Build on CentOS 7 Bullseye') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
