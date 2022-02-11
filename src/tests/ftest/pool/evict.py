@@ -66,12 +66,7 @@ class EvictTests(TestWithServers):
             list: Hostnames.
 
         """
-        host_list = []
-
-        for rank in ranks:
-            host_list.append(self.server_managers[0].get_host(rank=rank))
-
-        return host_list
+        return [self.server_managers[0].get_host(rank=rank) for rank in ranks]
 
     def verify_pool_evict(self, pool):
         """Evict and verify that it succeeded. If not, fail the test.
@@ -91,13 +86,13 @@ class EvictTests(TestWithServers):
     def test_evict(self):
         """
         Test Steps:
-        1. Create 2 pools on 4 server ranks; rank 0 to 3.
-        2. Create another pool on 2 ranks; rank 0 and 1.
+        1. Create 2 pools on all server ranks.
+        2. Create another pool on half of the ranks.
         3. After creating each pool, create a container and write objects.
         4. Verify that the pool file exists in /mnt/daos.
-        5. Verify that the third pool's file doesn't exist on the two hosts that this
-        pool wasn't created on.
-        6. Evict the third pool on rank 0 and 1.
+        5. Verify that the third pool's file doesn't exist on the half of the hosts that
+        this pool wasn't created on.
+        6. Evict the third pool on the half of the ranks.
         7. Verify that the pool file still exists in /mnt/daos for all three pools. i.e.,
         verify that the evict didn't cause the ill effect to the pool file.
         8. For all pools, call pool_query() over API. The first two pools should
@@ -108,55 +103,52 @@ class EvictTests(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=pool_evict,pool_evict_basic
-        :avocado: tags=DAOS_5610
+        :avocado: tags=pool,pool_evict
+        :avocado: tags=pool_evict_basic
         """
         # Do not use self.pool. It will cause -1002 error when disconnecting.
         pools = []
         containers = []
 
-        # four_ranks stores the four ranks we have.
-        four_ranks = [0, 1, 2, 3]
-        # two_ranks_with is the two ranks that we'll create the third pool on.
-        two_ranks_with = [0, 1]
-        # two_ranks_without is the two ranks that we will not create a pool.
-        two_ranks_without = [2, 3]
+        host_count = len(self.hostlist_servers)
+        all_ranks = list(range(host_count))
+        first_half_count = int(host_count / 2)
+        # half_ranks_with is the half of the all ranks that we'll create the third pool
+        # on.
+        half_ranks_with = [rank for rank in range(first_half_count)]
+        # half_ranks_without is the half of the all ranks that we will not create a pool.
+        half_ranks_without = [rank for rank in range(first_half_count, host_count)]
 
-        # four_hosts is the list of hosts that maps to the four_ranks. e.g.,
+        # all_hosts is the list of hosts that maps to the all_ranks. e.g.,
         # rank 0: wolf-1
         # rank 1: wolf-4
         # rank 2: wolf-3
         # rank 3: wolf-2
-        # then four_hosts would be ["wolf-1", "wolf-4", "wolf-3", "wolf-2"]. (Order
+        # then all_hosts would be ["wolf-1", "wolf-4", "wolf-3", "wolf-2"]. (Order
         # doesn't matter.)
-        four_hosts = self.get_host_list(ranks=four_ranks)
-        # Same idea as four_hosts. i.e., ["wolf-1", "wolf-4"] in above example.
-        two_hosts_with = self.get_host_list(ranks=two_ranks_with)
-        two_hosts_without = self.get_host_list(ranks=two_ranks_without)
+        all_hosts = self.get_host_list(ranks=all_ranks)
+        # Same idea as all_hosts. i.e., ["wolf-1", "wolf-4"] in above example.
+        half_hosts_with = self.get_host_list(ranks=half_ranks_with)
+        half_hosts_without = self.get_host_list(ranks=half_ranks_without)
 
-        # Step 1 to 4.
-        # Pool 1: Create a pool over the four hosts, check the pool file, and connect.
-        pools.append(self.connected_pool(hostlist=four_hosts, targets=four_ranks))
-        # Create a container and write data to it.
-        containers.append(self.get_container(pool=pools[-1]))
-        containers[-1].write_objects()
+        # Step 1 to 4. Create two pools, container, and write data.
+        for _ in range(2):
+            # Create a pool over all of the hosts, check the pool file, and connect.
+            pools.append(self.connected_pool(hostlist=all_hosts, targets=all_ranks))
+            # Create a container and write data to it.
+            containers.append(self.get_container(pool=pools[-1]))
+            containers[-1].write_objects()
 
-        # Pool 2: Same as pool 1. Repeat.
-        pools.append(self.connected_pool(hostlist=four_hosts, targets=four_ranks))
-        containers.append(self.get_container(pool=pools[-1]))
-        containers[-1].write_objects()
-
-        # Create a pool over the two hosts, check the pool file, and connect.
+        # Create a pool over the half of the hosts, check the pool file, and connect.
         pools.append(self.connected_pool(
-            hostlist=two_hosts_with, targets=two_ranks_with))
+            hostlist=half_hosts_with, targets=half_ranks_with))
         # Create a container and write data to it.
         containers.append(self.get_container(pool=pools[-1]))
         containers[-1].write_objects()
 
-        # Step 5. Verify that the third pool's file doesn't exist on the two hosts that
-        # this pool wasn't created on.
-        if pools[-1].check_files(two_hosts_without):
+        # Step 5. Verify that the third pool's file doesn't exist on the half of the
+        # hosts that this pool wasn't created on.
+        if pools[-1].check_files(half_hosts_without):
             self.fail("Pool # 2 with UUID {} exists".format(pools[-1].uuid))
         else:
             self.log.info("Pool # 2 with UUID %s does not exist", pools[-1].uuid)
@@ -168,10 +160,10 @@ class EvictTests(TestWithServers):
         for index, pool in enumerate(pools):
             # Get the hostnames to search the pool file.
             if index in (0, 1):
-                hosts = four_hosts
+                hosts = all_hosts
                 failure_expected = False
             else:
-                hosts = two_hosts_with
+                hosts = half_hosts_with
                 failure_expected = True
 
             if pool.check_files(hosts):
