@@ -30,23 +30,6 @@
 #include "obj_internal.h"
 #define OBJ_IO_IODS	4
 
-// struct obj_io_context {
-// 	struct ds_cont_hdl	*ioc_coh;
-// 	struct ds_cont_child	*ioc_coc;
-// 	struct bio_desc		*ioc_biod;
-// 	daos_handle_t		 ioc_ioh;
-// 	daos_handle_t		 ioc_vos_coh;
-// 	uint32_t		 ioc_map_ver;
-// 	bool			 ioc_zc_fetch;
-// 	bool			 ioc_began;
-// 	int			 ioc_status;
-// 	/* for returning record size */
-// 	uint32_t		 ioc_nrs[OBJ_IO_IODS];
-// 	uint64_t		 ioc_sizes[OBJ_IO_IODS];
-// 	uint64_t		 ioc_data_sizes[OBJ_IO_IODS];
-// };
-
-
 static int
 obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
@@ -138,6 +121,7 @@ obj_rw_complete(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (!daos_handle_is_inval(ioh)) {
 		bool update = obj_rpc_is_update(rpc);
 		int rc;
+
 		if (ioc->ioc_zc_fetch) {
 			/* complete the ioh after reply */
 			ioc->ioc_status = status;
@@ -205,7 +189,7 @@ obj_rw_reply(struct obj_io_context *ioc, crt_rpc_t *rpc, int status,
 		D_FREE(orwo->orw_iod_sizes.ca_arrays);
 		orwo->orw_iod_sizes.ca_count = 0;
 	}
- 
+
 	if (orwo->orw_nrs.ca_arrays != NULL &&
 	    orwo->orw_nrs.ca_arrays != (void *)&ioc->ioc_nrs[0]) {
 		D_FREE(orwo->orw_nrs.ca_arrays);
@@ -215,10 +199,10 @@ obj_rw_reply(struct obj_io_context *ioc, crt_rpc_t *rpc, int status,
 	    orwo->orw_data_sizes.ca_arrays != (void *)&ioc->ioc_data_sizes[0]) {
 		D_FREE(orwo->orw_data_sizes.ca_arrays);
 		orwo->orw_data_sizes.ca_count = 0;
- 	}
+	}
 	if (orwo->orw_iod_csums.ca_arrays != NULL) {
-			D_FREE(orwo->orw_iod_csums.ca_arrays);
-			orwo->orw_iod_csums.ca_count = 0;
+		D_FREE(orwo->orw_iod_csums.ca_arrays);
+		orwo->orw_iod_csums.ca_count = 0;
 	}
 }
 
@@ -656,8 +640,7 @@ obj_set_reply_nrs(struct obj_io_context *ioc, crt_rpc_t *rpc,
 			D_FREE(nrs);
 			return -DER_NOMEM;
 		}
-	} 
-	else {
+	} else {
 		nrs = (void *)&ioc->ioc_nrs[0];
 		data_sizes = (void *)&ioc->ioc_data_sizes[0];
 	}
@@ -667,7 +650,7 @@ obj_set_reply_nrs(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	orwo->orw_data_sizes.ca_arrays = data_sizes;
 	orwo->orw_data_sizes.ca_count = nrs_count;
 
-	
+
 	for (i = 0; i < nrs_count; i++) {
 		struct bio_sglist	*bsgl;
 		d_sg_list_t		*sgl;
@@ -1613,7 +1596,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				rc = dss_sleep(3100);
 		}
 	} else if (orw->orw_sgls.ca_arrays != NULL) {
-		rc = bio_iod_copy(biod , ioc->ioc_zc_fetch,
+		rc = bio_iod_copy(biod, ioc->ioc_zc_fetch,
 				  orw->orw_sgls.ca_arrays, orw->orw_nr);
 	}
 
@@ -1670,6 +1653,7 @@ post:
 		ioc->ioc_biod = biod;
 	} else {
 		int err = bio_iod_post(biod, 0);
+
 		rc = rc ? : err;
 
 	}
