@@ -10,5 +10,17 @@ utils/rpms @release-engineering
 # any PR that touches VOS files should get a review from VOS
 src/vos/* src/common/btree*.* @VOS
 
-# Jenkinsfile changes should be reviewed by Brian
-Jenkinsfile @brianjmurrell
+# Jenkinsfile changes should be reviewed by Release Engineering
+Jenkinsfile @daos-stack/build-and-release-watchers
+
+# any PR that touches client API or high level client code
+src/client @daos-stack/client-api-watchers
+src/include/daos_*.* @daos-stack/client-api-watchers
+
+# doc-watchers: files affecting documentation (docs, doxygen, etc.)
+mkdocs.yml @daos-stack/doc-watchers
+Doxyfile @daos-stack/doc-watchers
+docs/ @daos-stack/doc-watchers
+src/include/*.h @daos-stack/doc-watchers
+*.md @daos-stack/doc-watchers
+
