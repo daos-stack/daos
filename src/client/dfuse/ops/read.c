@@ -86,11 +86,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	bool				readahead = false;
 	struct dfuse_event		*ev = NULL;
 
-	if (ino != oh->doh_ie->ie_stat.st_ino) {
-		DFUSE_TRA_ERROR(oh, "Inconsistent inode number %lu %lu", ino,
-				oh->doh_ie->ie_stat.st_ino);
-		D_GOTO(err, rc = EIO);
-	}
+	D_ASSERT(ino == oh->doh_ie->ie_stat.st_ino);
 
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
@@ -154,7 +150,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	ev->de_complete_cb = dfuse_cb_read_complete;
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
-	if (rc != -DER_SUCCESS) {
+	if (rc != 0) {
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 		D_FREE(buff);
 		D_FREE(ev);
