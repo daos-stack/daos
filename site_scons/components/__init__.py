@@ -196,7 +196,7 @@ def define_mercury(reqs):
                           + MERCURY_DEBUG +
                           '-DBUILD_TESTING=OFF '
                           '-DNA_USE_OFI=ON '
-			  + ucx +
+                          + ucx +
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON ../mercury ' +
                           check(reqs, 'ofi',
