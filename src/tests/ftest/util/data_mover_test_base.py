@@ -179,7 +179,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             shared_path_strs = self._get_posix_test_path_string(path=self.posix_shared_test_paths)
             command = "rm -rf {}".format(shared_path_strs)
             try:
-	        # only call rm on one client since this is cleaning up shared dir
+                # only call rm on one client since this is cleaning up shared dir
                 self._execute_command(command, hosts=self.hostlist_clients[0:1])
             except CommandFailure as error:
                 error_list.append(
@@ -241,7 +241,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             create (bool): Whether to create the directory.
                 Defaults to True.
             mount_dir (bool): Whether or not posix directory will be manually
-	        mounted in tmpfs.
+                mounted in tmpfs.
             parent (str, optional): The parent directory to create the
                 path in. Defaults to self.parent, which has a default of self.tmp.
 

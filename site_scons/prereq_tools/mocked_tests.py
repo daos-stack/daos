@@ -211,14 +211,14 @@ static struct CMUnitTest generated_unit_tests[] = %s;
 
 struct _cmocka_tests *
 generated_cmocka_tests() {
-	static struct _cmocka_tests cmocka_tests;
+        static struct _cmocka_tests cmocka_tests;
 
-	cmocka_tests.group_name = "Unit Tests";
-	cmocka_tests.tests = generated_unit_tests;
-	cmocka_tests.number_of_tests = sizeof(generated_unit_tests) /
-	                                     sizeof(generated_unit_tests[0]);
+        cmocka_tests.group_name = "Unit Tests";
+        cmocka_tests.tests = generated_unit_tests;
+        cmocka_tests.number_of_tests = sizeof(generated_unit_tests) /
+                                             sizeof(generated_unit_tests[0]);
 
-	return &cmocka_tests;
+        return &cmocka_tests;
 }
 
 int (*global_setup_functions[])(void **state) = {%s};

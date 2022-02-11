@@ -169,9 +169,7 @@ def define_mercury(reqs):
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
     else:
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
-    retriever = \
-        GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
-                         True)
+    retriever = GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True)
     reqs.define('mercury',
                 retriever=retriever,
                 commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -324,7 +324,7 @@ class FsCopy():
         self.log.info("Starting daos filesystem copy")
 
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
-	    preserve_props=self.preserve_props)
+                                             preserve_props=self.preserve_props)
 
 class ContClone():
     """Class defining an object of type ContClone.

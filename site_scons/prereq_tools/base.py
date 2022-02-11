@@ -402,7 +402,7 @@ build with random upstream changes.
             self.commit_sha = passed_commit_sha
             self.checkout_commit(subdir)
 
-	# reset patched diff
+        # reset patched diff
         command = ['cd %s && git reset --hard HEAD' % (subdir)]
         if not RUNNER.run_commands(command):
             raise DownloadFailure(self.url, subdir)
