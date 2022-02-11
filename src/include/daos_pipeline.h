@@ -258,22 +258,24 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *					returned. Optional when \dkey passed.
  *					[out]: All returned dkeys.
  *
- * \param[out]		sgl_recx	[in]: Preallocated array of 
+ * \param[out]		sgl_recx	[in]: Preallocated array of
  *					(\nr_kds * \nr_iods) sgls storing all
  *					the records to be returned. When doing
- *					aggregation (i.e., when no returned
- *					records are required), or when \dkey is
- *					passed, this array must be of size at
- *					least \nr_iods. For the aggregation
- *					case, even when no returned records are
- *					required, one record (if there is at
- *					least one, of course) is returned.
+ *					aggregations, or when \dkey is passed,
+ *					only one record (output size will be
+ *					1 x \nr_iods) at most is returned (no
+ *					matther the size of \nr_kds).
  *					[out]: All returned records.
  *
  * \param[out]		sgl_agg		[in]: Optional preallocated array for
  *					aggregated values (number of values has
  *					to match the number of aggregation
  *					filters defined in the pipeline object).
+ *					All aggregated values are returned as
+ *					doubles, no matter the numeric type of
+ *					the being aggregated. This means that
+ *					each buffer here should be at least 8
+ *					bytes.
  *					[out]: All returned aggregated values.
  *
  * \param[in]		ev		Completion event. It is optional.

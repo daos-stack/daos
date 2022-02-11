@@ -6,6 +6,7 @@
 
 #define D_LOGFAC	DD_FAC(pipeline)
 
+#include <daos/common.h>
 #include "pipeline_internal.h"
 
 
@@ -280,4 +281,27 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 	}
 
 	return 0;
+}
+
+void
+pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total,
+			      d_sg_list_t *sgl_agg)
+{
+	uint32_t		i;
+	double			*buf;
+	char			*part_type;
+	size_t			part_type_s;
+
+	D_ASSERT(total > 0.0);
+
+	for (i = 0; i < pipeline->num_aggr_filters; i++)
+	{
+		part_type = (char *) pipeline->aggr_filters[i]->parts[0]->part_type.iov_buf;
+		part_type_s = pipeline->aggr_filters[i]->parts[0]->part_type.iov_len;
+		if (!strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
+		{
+			buf = (double *) sgl_agg[i].sg_iovs->iov_buf;
+			*buf = *buf / total;
+		}
+	}
 }

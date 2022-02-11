@@ -472,16 +472,6 @@ crt_proc_daos_pipeline_sgls_t(crt_proc_t proc, crt_proc_op_t proc_op,
 		i++;
 		for (k = 0; k < sg_nr; k++)
 		{
-			/*rc = crt_proc_d_iov_t(proc, proc_op, &sg_iovs[k]);
-			if (unlikely(rc))
-			{
-				if (DECODING(proc_op))
-				{
-					D_GOTO(exit_free, rc);
-				}
-				D_GOTO(exit, rc);
-			}*/
-
 			rc = crt_proc_uint64_t(proc, proc_op, &sg_iovs[k].iov_buf_len);
 			if (unlikely(rc))
 			{

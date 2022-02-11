@@ -67,8 +67,9 @@ obj_opc_to_str(crt_opcode_t opc)
 	((d_sg_list_t)		(pro_sgl_recx)		CRT_ARRAY)	\
 	((d_sg_list_t)		(pro_sgl_agg)		CRT_ARRAY)	\
 	((uint64_t)		(pro_epoch)		CRT_VAR)	\
-	((uint32_t)		(pro_nr_kds)		CRT_VAR)	\
-	((int32_t)		(pro_ret)		CRT_VAR)
+	((int32_t)		(pro_ret)		CRT_VAR)	\
+	((uint32_t)		(pro_pad32)		CRT_VAR)
+
 
 CRT_RPC_DECLARE(pipeline_run, DAOS_ISEQ_PIPELINE_RUN, DAOS_OSEQ_PIPELINE_RUN)
 

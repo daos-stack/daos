@@ -120,27 +120,6 @@ static filter_func_t *filter_func_ptrs[TOTALFUNCS] = { filter_func_eq_i1,
 						       filter_func_or };
 
 void
-pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total,
-			      d_sg_list_t *sgl_agg)
-{
-	uint32_t		i;
-	double			*buf;
-	char			*part_type;
-	size_t			part_type_s;
-
-	for (i = 0; i < pipeline->num_aggr_filters; i++)
-	{
-		part_type = (char *) pipeline->aggr_filters[i]->parts[0]->part_type.iov_buf;
-		part_type_s = pipeline->aggr_filters[i]->parts[0]->part_type.iov_len;
-		if (!strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
-		{
-			buf = (double *) sgl_agg[i].sg_iovs->iov_buf;
-			*buf = *buf / total;
-		}
-	}
-}
-
-void
 pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
 {
 	uint32_t		i;
@@ -444,7 +423,6 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 	{
 		func_idx += calc_type_idx(*type, *type_len);
 	}
-
 	comp_part->filter_func = filter_func_ptrs[func_idx];
 
 exit:

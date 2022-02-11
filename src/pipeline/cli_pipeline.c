@@ -18,6 +18,7 @@
 #include <daos/event.h>
 #include <daos/mgmt.h>
 #include <math.h>
+#include "pipeline_internal.h"
 #include "pipeline_rpc.h"
 
 
@@ -28,6 +29,7 @@ struct pipeline_auxi_args {
 	tse_task_t		*api_task;           // FOR IO RETRY
 	pthread_rwlock_t	*cb_rwlock;
 	bool			*cb_first;
+	uint32_t		*total_aggr_shards;
 	d_list_t		shard_task_head;
 };
 
@@ -56,11 +58,16 @@ struct pipeline_run_cb_args {
 	uint32_t		shard_nr_kds;
 	bool			*first;
 	pthread_rwlock_t	*rwlock;
+	uint32_t		*total_aggr_shards;
 };
 
 struct pipeline_comp_cb_args {
-	bool			*shard_cb_first;
-	pthread_rwlock_t	*rwlock;
+	bool				*shard_cb_first;
+	pthread_rwlock_t		*rwlock;
+	daos_pipeline_run_t		*api_args;
+	struct daos_oclass_attr		*oca;
+	uint32_t			total_shards;
+	uint32_t			*total_aggr_shards;
 };
 
 int dc_pipeline_check(daos_pipeline_t *pipeline)
@@ -68,21 +75,65 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 	return d_pipeline_check(pipeline);
 }
 
+static void
+anchor_check_eof(daos_anchor_t *anchor, struct daos_oclass_attr *oca,
+		 uint32_t total_shards)
+{
+	int i;
+
+	if (anchor->da_sub_anchors == 0)
+	{
+		return;
+	}
+
+	for (i = 0; i < total_shards; i++)
+	{
+		daos_anchor_t *sub_anchor =
+			&((daos_anchor_t *) anchor->da_sub_anchors)[i];
+		if (!daos_anchor_is_eof(sub_anchor))
+		{
+			break;
+		}
+	}
+
+	if (i == total_shards) /** all sub_anchors are eof */
+	{
+		void *ptr = (void *) anchor->da_sub_anchors;
+
+		daos_anchor_set_eof(anchor);
+		D_FREE(ptr);
+		anchor->da_sub_anchors = 0;
+	}
+}
+
 static int
 pipeline_comp_cb(tse_task_t *task, void *data)
 {
 	struct pipeline_comp_cb_args	*cb_args;
+	daos_pipeline_run_t		*api_args;
 
-	cb_args = (struct pipeline_comp_cb_args *) data;
+	cb_args  = (struct pipeline_comp_cb_args *) data;
+	api_args = cb_args->api_args;
 	if (task->dt_result != 0)
 	{
 		D_DEBUG(DB_IO, "pipeline_comp_db task=%p result=%d\n",
 			task, task->dt_result);
 	}
 
+	anchor_check_eof(api_args->anchor, cb_args->oca, cb_args->total_shards);
+
+	if (*cb_args->total_aggr_shards > 0)
+	{
+		pipeline_aggregations_fixavgs(
+					   &api_args->pipeline,
+					   (double) *cb_args->total_aggr_shards,
+					   api_args->sgl_agg);
+	}
+
 	D_RWLOCK_DESTROY(cb_args->rwlock);
 	D_FREE(cb_args->rwlock);
 	D_FREE(cb_args->shard_cb_first);
+	D_FREE(cb_args->total_aggr_shards);
 
 	return 0;
 }
@@ -99,11 +150,10 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	int				rc = 0;
 	crt_rpc_t			*rpc;
 	uint32_t			nr_iods;
-	uint32_t			nr_kds;
 	uint32_t			shard_nr_kds;
-	uint32_t			nr_recx;
 	uint32_t			shard_nr_recx;
 	uint32_t			nr_agg;
+	uint32_t			i;
 	daos_key_desc_t			*kds_ptr;
 	d_sg_list_t			*sgl_keys_ptr;
 	d_sg_list_t			*sgl_recx_ptr;
@@ -128,22 +178,11 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	rc		= pro->pro_ret; // get status
 
 	nr_iods 	= cb_args->nr_iods;
-	nr_kds		= cb_args->nr_kds;
 	shard_nr_kds	= cb_args->shard_nr_kds;
-	nr_recx		= nr_iods;
-	if (nr_kds != 0)
-	{
-		nr_recx		*= nr_kds;
-	}
-	shard_nr_recx	= nr_iods;
-	if (shard_nr_kds != 0)
-	{
-		shard_nr_recx	*= shard_nr_kds;
-	}
+	shard_nr_recx	= nr_iods*shard_nr_kds;
 	nr_agg		= api_args->pipeline.num_aggr_filters;
 
-	D_ASSERT(pro->pro_nr_kds <= shard_nr_kds);
-	D_ASSERT(pro->pro_nr_kds == pro->pro_kds.ca_count);
+	D_ASSERT(pro->pro_kds.ca_count <= shard_nr_kds);
 	D_ASSERT(pro->pro_sgl_recx.ca_count <= shard_nr_recx);
 	D_ASSERT(pro->pro_sgl_agg.ca_count == nr_agg);
 
@@ -167,56 +206,114 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	D_RWLOCK_WRLOCK(cb_args->rwlock);
 
-	if (*cb_args->first)
+	if (*cb_args->first == true)
 	{
-		*api_args->nr_kds	= 0;
-		*cb_args->first		= false;
+		*api_args->nr_kds = 0;
 	}
 
-	kds_ptr		= &api_args->kds[*api_args->nr_kds];
-	sgl_keys_ptr	= &api_args->sgl_keys[*api_args->nr_kds];
-	if (nr_kds > 0 && api_args->pipeline.num_aggr_filters == 0)
+	if (pro->pro_kds.ca_count > 0)
 	{
-		out_nr_recx	= (*api_args->nr_kds) * nr_iods;
-		sgl_recx_ptr	= &api_args->sgl_recx[out_nr_recx];
-	}
-	else
-	{
-		sgl_recx_ptr	= api_args->sgl_recx; /** only one record */
-	}
+		if (nr_agg == 0)
+		{
+			kds_ptr		= &api_args->kds[*api_args->nr_kds];
+			sgl_keys_ptr	= &api_args->sgl_keys[*api_args->nr_kds];
+		}
+		else
+		{
+			kds_ptr		= api_args->kds;
+			sgl_keys_ptr	= api_args->sgl_keys; /** only one record */
+		}
 
-	if (pro->pro_nr_kds > 0)
-	{
 		memcpy((void *) kds_ptr, (void *) pro->pro_kds.ca_arrays,
-		       sizeof(*kds_ptr) * (pro->pro_nr_kds));
+		       sizeof(*kds_ptr) * (pro->pro_kds.ca_count));
 
 		rc = daos_sgls_copy_data_out(sgl_keys_ptr,
 					     shard_nr_kds,
 					     pro->pro_sgl_keys.ca_arrays,
-					     pro->pro_nr_kds);
+					     pro->pro_kds.ca_count);
 		if (rc != 0)
 		{
 			D_GOTO(unlock, rc);
 		}
 	}
-	rc = daos_sgls_copy_data_out(sgl_recx_ptr,
-				     shard_nr_recx,
-				     pro->pro_sgl_recx.ca_arrays,
-				     pro->pro_sgl_recx.ca_count);
-	if (rc != 0)
-	{
-		D_GOTO(unlock, rc);
-	}
-	rc = daos_sgls_copy_data_out(api_args->sgl_agg,
-				     nr_agg,
-				     pro->pro_sgl_agg.ca_arrays,
-				     pro->pro_sgl_agg.ca_count);
-	if (rc != 0)
-	{
-		D_GOTO(unlock, rc);
-	}
 
-	*api_args->nr_kds	+= pro->pro_nr_kds;
+	if (pro->pro_sgl_recx.ca_count > 0)
+	{
+		if (nr_agg == 0)
+		{
+			out_nr_recx	= (*api_args->nr_kds) * nr_iods;
+			sgl_recx_ptr	= &api_args->sgl_recx[out_nr_recx];
+		}
+		else
+		{
+			sgl_recx_ptr	= api_args->sgl_recx; /** only one record */
+		}
+
+		rc = daos_sgls_copy_data_out(sgl_recx_ptr,
+					     shard_nr_recx,
+					     pro->pro_sgl_recx.ca_arrays,
+					     pro->pro_sgl_recx.ca_count);
+		if (rc != 0)
+		{
+			D_GOTO(unlock, rc);
+		}
+	}
+	for (i = 0; i < nr_agg; i++)
+	{
+		daos_filter_t *aggr_filter = api_args->pipeline.aggr_filters[i];
+		daos_filter_part_t *part   = aggr_filter->parts[0];
+		double *src, *dst;
+		size_t lenght_part_type;
+
+		dst = (double *) api_args->sgl_agg[i].sg_iovs->iov_buf;
+		src = (double *) pro->pro_sgl_agg.ca_arrays[i].sg_iovs->iov_buf;
+
+		if (*cb_args->first == true)
+		{
+			*dst = *src;
+			continue;
+		}
+
+		// TODO: right now, all functions' names are same lenght.
+		//       change this in the future if the lenght changes
+		lenght_part_type = 20;
+
+		if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_SUM",
+			     lenght_part_type))
+		{
+			*dst += *src;
+		}
+		else if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_MIN",
+				  lenght_part_type))
+		{
+			if (*src < *dst)
+			{
+				*dst = *src;
+			}
+		}
+		else if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_MAX",
+				  lenght_part_type))
+		{
+			if (*src > *dst)
+			{
+				*dst = *src;
+			}
+		}
+		else if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_AVG",
+				  lenght_part_type))
+		{
+			*dst += *src;
+		}
+	}
+	if (nr_agg == 0)
+	{
+		*api_args->nr_kds += pro->pro_kds.ca_count;
+	}
+	else if (pro->pro_kds.ca_count == 1)
+	{
+		*api_args->nr_kds = 1;
+		*cb_args->total_aggr_shards += 1;
+	}
 
 	/**
 	 * TODO: nr_iods and iods are left as they are for now. Once pipeline
@@ -232,6 +329,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	sub_anchors[cb_args->shard] = pro->pro_anchor;
 
 unlock:
+	*cb_args->first = false;
 	D_RWLOCK_UNLOCK(cb_args->rwlock);
 out:
 	crt_req_decref(rpc);
@@ -288,7 +386,7 @@ shard_pipeline_run_task(tse_task_t *task)
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 	crt_ctx	= daos_task2ctx(task);
-	opcode	= DAOS_RPC_OPCODE(args->pipeline_auxi->opc, //DAOS_PIPELINE_RPC_RUN,
+	opcode	= DAOS_RPC_OPCODE(args->pipeline_auxi->opc,
 				  DAOS_PIPELINE_MODULE,
 				  DAOS_PIPELINE_VERSION);
 
@@ -337,15 +435,16 @@ shard_pipeline_run_task(tse_task_t *task)
 	/** -- register call back function for this particular shard task */
 
 	crt_req_addref(req);
-	cb_args.shard		= args->pra_shard;
-	cb_args.rpc		= req;
-	cb_args.map_ver		= &args->pra_map_ver;
-	cb_args.api_args	= args->pra_api_args;
-	cb_args.nr_iods	= nr_iods;
-	cb_args.nr_kds		= nr_kds;
-	cb_args.shard_nr_kds	= shard_nr_kds;
-	cb_args.rwlock		= args->pipeline_auxi->cb_rwlock;
-	cb_args.first		= args->pipeline_auxi->cb_first;
+	cb_args.shard             = args->pra_shard;
+	cb_args.rpc               = req;
+	cb_args.map_ver           = &args->pra_map_ver;
+	cb_args.api_args          = args->pra_api_args;
+	cb_args.nr_iods           = nr_iods;
+	cb_args.nr_kds            = nr_kds;
+	cb_args.shard_nr_kds      = shard_nr_kds;
+	cb_args.rwlock            = args->pipeline_auxi->cb_rwlock;
+	cb_args.first             = args->pipeline_auxi->cb_first;
+	cb_args.total_aggr_shards = args->pipeline_auxi->total_aggr_shards;
 
 	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args,
 				       sizeof(cb_args));
@@ -533,19 +632,20 @@ out:
 static void
 pipeline_create_auxi(tse_task_t *api_task, uint32_t map_ver,
 		     struct daos_obj_md *obj_md, pthread_rwlock_t *cb_rwlock,
-		     bool *shard_cb_first,
+		     bool *shard_cb_first, uint32_t *total_aggr_shards,
 		     struct pipeline_auxi_args **pipeline_auxi)
 {
 	struct pipeline_auxi_args	*p_auxi;
 	d_list_t			*head = NULL;
 
 	p_auxi = tse_task_stack_push(api_task, sizeof(*p_auxi));
-	p_auxi->opc		= DAOS_PIPELINE_RPC_RUN;
-	p_auxi->map_ver_req	= map_ver;
-	p_auxi->omd_id		= obj_md->omd_id;
-	p_auxi->api_task	= api_task;
-	p_auxi->cb_rwlock	= cb_rwlock;
-	p_auxi->cb_first	= shard_cb_first;
+	p_auxi->opc			= DAOS_PIPELINE_RPC_RUN;
+	p_auxi->map_ver_req		= map_ver;
+	p_auxi->omd_id			= obj_md->omd_id;
+	p_auxi->api_task		= api_task;
+	p_auxi->cb_rwlock		= cb_rwlock;
+	p_auxi->cb_first		= shard_cb_first;
+	p_auxi->total_aggr_shards	= total_aggr_shards;
 	head = &p_auxi->shard_task_head;
 	D_INIT_LIST_HEAD(head);
 
@@ -591,6 +691,8 @@ dc_pipeline_run(tse_task_t *api_task)
 	}
 	obj_md.omd_ver = dc_pool_get_version(pool);
 
+	/** get layout */
+
 	rc = pipeline_create_layout(coh, pool, &obj_md, &layout);
 	dc_pool_put(pool);
 	if (rc != 0)
@@ -604,43 +706,7 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_GOTO(out, rc);
 	}
 
-	/** Pipelines are read only for now, no transactions needed.
-	  * Ignoring api_args->th for now... */
-
-	if (map_ver == 0)
-	{
-		map_ver = layout->ol_ver;
-	}
-
-	D_ALLOC(comp_cb_args.rwlock, sizeof(pthread_rwlock_t));
-	D_ALLOC(comp_cb_args.shard_cb_first, sizeof(bool));
-	if (comp_cb_args.rwlock == NULL || comp_cb_args.shard_cb_first == NULL)
-	{
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-	rc = D_RWLOCK_INIT(comp_cb_args.rwlock, NULL);
-	if (rc != 0)
-	{
-		D_GOTO(out, rc);
-	}
-	*comp_cb_args.shard_cb_first = true;
-
-	pipeline_create_auxi(api_task, map_ver, &obj_md, comp_cb_args.rwlock,
-			     comp_cb_args.shard_cb_first, &pipeline_auxi);
-
-	/** -- Register completion call back function for full operation */
-
-	rc = tse_task_register_comp_cb(api_task, pipeline_comp_cb,
-				       comp_cb_args.rwlock,
-				       sizeof(comp_cb_args));
-	if (rc != 0)
-	{
-		D_ERROR("task %p, register_comp_cb "DF_RC"\n", api_task, DP_RC(rc));
-		tse_task_stack_pop(api_task, sizeof(struct pipeline_auxi_args));
-		D_GOTO(out, rc);
-	}
-
-	/** -- Allocate sub anchors if needed */
+	/** object class and number of replicas */
 
 	oca = daos_oclass_attr_find(obj_md.omd_id, &priv);
 	if (oca == NULL)
@@ -659,6 +725,54 @@ dc_pipeline_run(tse_task_t *api_task)
 		/* groups x data_cells_in_each_group */
 		total_shards = layout->ol_grp_nr * oca->u.ec.e_k;
 	}
+
+	/** Pipelines are read only for now, no transactions needed.
+	  * Ignoring api_args->th for now... */
+
+	if (map_ver == 0)
+	{
+		map_ver = layout->ol_ver;
+	}
+
+	D_ALLOC(comp_cb_args.rwlock, sizeof(*comp_cb_args.rwlock));
+	D_ALLOC(comp_cb_args.shard_cb_first,
+		sizeof(*comp_cb_args.shard_cb_first));
+	D_ALLOC(comp_cb_args.total_aggr_shards,
+		sizeof(*comp_cb_args.total_aggr_shards));
+	if (comp_cb_args.rwlock == NULL || comp_cb_args.shard_cb_first == NULL
+		|| comp_cb_args.total_aggr_shards == NULL)
+	{
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	rc = D_RWLOCK_INIT(comp_cb_args.rwlock, NULL);
+	if (rc != 0)
+	{
+		D_GOTO(out, rc);
+	}
+	*comp_cb_args.shard_cb_first	= true;
+	comp_cb_args.api_args		= api_args;
+	comp_cb_args.oca		= oca;
+	comp_cb_args.total_shards	= total_shards;
+	*comp_cb_args.total_aggr_shards = 0;
+
+	pipeline_create_auxi(api_task, map_ver, &obj_md, comp_cb_args.rwlock,
+			     comp_cb_args.shard_cb_first,
+			     comp_cb_args.total_aggr_shards, &pipeline_auxi);
+
+	/** -- Register completion call back function for full operation */
+
+	rc = tse_task_register_comp_cb(api_task, pipeline_comp_cb,
+				       &comp_cb_args,
+				       sizeof(comp_cb_args));
+	if (rc != 0)
+	{
+		D_ERROR("task %p, register_comp_cb "DF_RC"\n", api_task, DP_RC(rc));
+		tse_task_stack_pop(api_task, sizeof(struct pipeline_auxi_args));
+		D_GOTO(out, rc);
+	}
+
+	/** -- Allocate sub anchors if needed */
+
 
 	if (api_args->anchor->da_sub_anchors == 0)
 	{
@@ -760,291 +874,3 @@ out:
 
 	return rc;
 }
-
-
-#if 0
-int
-dc_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
-		daos_handle_t th, uint64_t flags, daos_key_t *dkey,
-		uint32_t *nr_iods, daos_iod_t *iods, daos_anchor_t *anchor,
-		uint32_t *nr_kds, daos_key_desc_t *kds, d_sg_list_t *sgl_keys,
-		d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg, daos_event_t *ev)
-{
-	uint32_t		i, j, k, l;
-	int			rc;
-	uint32_t		nr_kds_iter, nr_kds_pass;
-	uint32_t		nr_kds_param, nr_iods_param;
-	daos_key_desc_t		*kds_iter		= NULL;
-	d_iov_t			*sg_iovs_keys_iter	= NULL;
-	d_sg_list_t		*sgl_keys_iter		= NULL;
-	d_iov_t			*sg_iovs_recx_iter	= NULL;
-	d_sg_list_t		*sgl_recx_iter		= NULL;
-
-	if ((rc = dc_pipeline_check(&pipeline)) < 0)
-	{
-		return rc; /** Bad pipeline */
-	}
-	if (pipeline.version != 1)
-	{
-		return -DER_MISMATCH; /** wrong version */
-	}
-	if (daos_anchor_is_eof(anchor))
-	{
-		return 0; /** no more rows */
-	}
-	if (*nr_iods == 0)
-	{
-		return 0; /** nothing to return */
-	}
-	nr_iods_param = *nr_iods;
-
-	if (*nr_kds == 0 && pipeline.num_aggr_filters == 0)
-	{
-		return 0; /** nothing to return */
-	}
-	else if (*nr_kds == 0)
-	{
-		nr_kds_param = 64; /**
-				    * -- Full aggregation. We fetch at most 64
-				    *    records at a time.
-				    */
-	}
-	else
-	{
-		nr_kds_param  = *nr_kds;
-	}
-
-	/** -- memory allocation for temporary buffers */
-
-	kds_iter = (daos_key_desc_t *)
-			calloc(nr_kds_param, sizeof(daos_key_desc_t));
-
-	sg_iovs_keys_iter = (d_iov_t *) calloc(nr_kds_param, sizeof(d_iov_t));
-
-	sgl_keys_iter = (d_sg_list_t *)
-			calloc(nr_kds_param, sizeof(d_sg_list_t));
-
-	sg_iovs_recx_iter = (d_iov_t *)
-			calloc(nr_iods_param*nr_kds_param, sizeof(d_iov_t));
-
-	sgl_recx_iter = (d_sg_list_t *)
-			calloc(nr_iods_param*nr_kds_param, sizeof(d_sg_list_t));
-
-	if (kds_iter == NULL || sg_iovs_keys_iter == NULL ||
-		sgl_keys_iter == NULL || sgl_recx_iter == NULL)
-	{
-		rc = -DER_NOMEM;
-		goto exit;
-	}
-	for (i = 0; i < nr_kds_param; i++)
-	{
-		void *buf;
-
-		sgl_keys_iter[i].sg_nr		= sgl_keys[i].sg_nr;
-		sgl_keys_iter[i].sg_nr_out	= sgl_keys[i].sg_nr_out;
-		sgl_keys_iter[i].sg_iovs	= &sg_iovs_keys_iter[i];
-
-		buf = malloc(sgl_keys[i].sg_iovs->iov_buf_len);
-		if (buf == NULL)
-		{
-			rc = -DER_NOMEM;
-			goto exit;
-		}
-
-		d_iov_set(&sg_iovs_keys_iter[i], buf,
-			  sgl_keys[i].sg_iovs->iov_buf_len);
-
-		for (j = 0; j < nr_iods_param; j++)
-		{
-			l = i*nr_iods_param+j;
-			sgl_recx_iter[l].sg_nr     = sgl_recx[l].sg_nr;
-			sgl_recx_iter[l].sg_nr_out = sgl_recx[l].sg_nr_out;
-			sgl_recx_iter[l].sg_iovs   = &sg_iovs_recx_iter[l];
-
-			buf = malloc(sgl_recx[l].sg_iovs->iov_buf_len);
-			if (buf == NULL)
-			{
-				rc = -DER_NOMEM;
-				goto exit;
-			}
-
-			d_iov_set(&sg_iovs_recx_iter[l], buf,
-				  sgl_recx[l].sg_iovs->iov_buf_len);
-		}
-	}
-
-	/**
-	 * -- Init all aggregation counters.
-	 */
-	pipeline_aggregations_init(&pipeline, sgl_agg);
-
-	/**
-	 * -- Iterating over dkeys and doing filtering and aggregation. The
-	 *    variable nr_kds_pass stores the number of dkeys in total that
-	 *    pass the filter. Since we want to return at most nr_kds_param, we
-	 *    try to fetch (nr_kds_param - nr_kds_pass) in each iteration.
-	 */
-
-	nr_kds_pass = 0;
-	while (!daos_anchor_is_eof(anchor))
-	{
-		if (pipeline.num_aggr_filters == 0)
-		{
-			nr_kds_iter = nr_kds_param - nr_kds_pass;
-			if (nr_kds_iter == 0) /** all asked records read */
-				break;
-		}
-		else /** for aggr, we read all (nr_kds_param at a time) */
-		{
-			nr_kds_iter = nr_kds_param;
-		}
-		if ((rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr_kds_iter,
-					kds_iter, sgl_keys_iter, anchor, NULL)))
-		{
-			goto exit;
-		}
-		if (nr_kds_iter == 0)
-			continue; /** no more records? */
-
-		/** -- Fetching the akey data for each dkey */
-
-		for (i = 0; i < nr_kds_iter; i++)
-		{
-			if ((rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0,
-						sgl_keys_iter[i].sg_iovs,
-						nr_iods_param, iods,
-						&sgl_recx_iter[i*nr_iods_param],
-						NULL, NULL)))
-			{
-				goto exit;
-			}
-
-			/** -- Doing filtering ... */
-
-			if ((rc = pipeline_filters(
-					       &pipeline,
-					       sgl_keys_iter[i].sg_iovs,
-					       &nr_iods_param, iods,
-					       &sgl_recx_iter[i*nr_iods_param]
-						)) < 0)
-			{
-				goto exit; /** error */
-			}
-			if (rc == 1) /** Filters don't pass */
-			{
-				continue;
-			}
-
-			/** -- dkey+akeys pass filters */
-
-			nr_kds_pass++;
-
-			/** -- Aggregations */
-
-			if ((rc = pipeline_aggregations(
-						&pipeline,
-						sgl_keys_iter[i].sg_iovs,
-						&nr_iods_param, iods,
-						&sgl_recx_iter[i*nr_iods_param],
-						sgl_agg)) < 0)
-			{
-				goto exit; /** error */
-			}
-	
-			/**
-			 * -- Returning matching records. We don't need to
-			 *    return all matching records if aggregation is
-			 *    being performed: at most one is returned.
-			 */
-
-			if (*nr_kds == 0 ||
-			     (nr_kds_pass > 1 && pipeline.num_aggr_filters > 0))
-			{
-				continue; /** not returning (any/more) rcx */
-			}
-
-			memcpy((void *) &kds[nr_kds_pass-1],
-			       (void *) &kds_iter[i],
-			       sizeof(daos_key_desc_t));
-
-			sgl_keys[nr_kds_pass-1].sg_nr = sgl_keys_iter[i].sg_nr;
-			sgl_keys[nr_kds_pass-1].sg_nr_out =
-						     sgl_keys_iter[i].sg_nr_out;
-			memcpy(sgl_keys[nr_kds_pass-1].sg_iovs->iov_buf,
-			       sgl_keys_iter[i].sg_iovs->iov_buf,
-			       sgl_keys_iter[i].sg_iovs->iov_buf_len);
-
-			for (j = 0; j < nr_iods_param; j++)
-			{
-				l = i*nr_iods_param+j;
-				k = (nr_kds_pass-1)*nr_iods_param+j;
-				sgl_recx[k].sg_nr = sgl_recx_iter[l].sg_nr;
-				sgl_recx[k].sg_nr_out =
-						     sgl_recx_iter[l].sg_nr_out;
-				memcpy(sgl_recx[k].sg_iovs->iov_buf,
-				       sgl_recx_iter[l].sg_iovs->iov_buf,
-				       sgl_recx_iter[l].sg_iovs->iov_buf_len);
-			}
-		}
-	}
-	/** -- fixing averages: during aggregation, we don't know how many
-	 *     records will pass the filters*/
-
-	pipeline_aggregations_fixavgs(&pipeline, (double) nr_kds_pass, sgl_agg);
-
-	/* -- umber of records returned */
-
-	if (*nr_kds != 0 && pipeline.num_aggr_filters == 0)
-	{
-		*nr_kds = nr_kds_pass; /** returning passing rcx */
-	}
-	else if (*nr_kds != 0 && pipeline.num_aggr_filters > 0)
-	{
-		*nr_kds = 1; /** in aggregation, we return only one record */
-	} /** else, we leave it at 0 */
-
-	rc = 0;
-exit:
-
-	/** -- Freeing allocated memory for temporary buffers */
-
-	for (i = 0; i < nr_kds_param; i++)
-	{
-		if (sg_iovs_keys_iter && sg_iovs_keys_iter[i].iov_buf)
-		{
-			free(sg_iovs_keys_iter[i].iov_buf);
-		}
-		for (j = 0; j < nr_iods_param; j++)
-		{
-			l = i*nr_iods_param+j;
-			if (sg_iovs_recx_iter && sg_iovs_recx_iter[l].iov_buf)
-			{
-				free(sg_iovs_recx_iter[l].iov_buf);
-			}
-		}
-	}
-	if (kds_iter)
-	{
-		free(kds_iter);
-	}
-	if (sg_iovs_keys_iter)
-	{
-		free(sg_iovs_keys_iter);
-	}
-	if (sgl_keys_iter)
-	{
-		free(sgl_keys_iter);
-	}
-	if (sg_iovs_recx_iter)
-	{
-		free(sg_iovs_recx_iter);
-	}
-	if (sgl_recx_iter)
-	{
-		free(sgl_recx_iter);
-	}
-
-	return rc;
-}
-#endif
-
