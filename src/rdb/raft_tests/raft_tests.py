@@ -71,5 +71,6 @@ def main():
         print("Raft Tests had {} failures".format(failures))
     sys.exit(failures)
 
+
 if __name__ == "__main__":
     main()

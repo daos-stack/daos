@@ -129,6 +129,7 @@ class RegionCounter():
                                                       end_time - start_time,
                                                       data)
 
+
 # Use a global variable here so show_line can remember previously reported
 # error lines.
 shown_logs = set()
@@ -734,6 +735,7 @@ def run():
             print('Memory leaks, ignoring')
     if log_iter.file_corrupt:
         sys.exit(1)
+
 
 if __name__ == '__main__':
     run()
