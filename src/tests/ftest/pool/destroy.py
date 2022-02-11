@@ -166,8 +166,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=destroy,destroy_single
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_single
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -180,8 +180,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=destroy,destroy_multi
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_multi
         """
         hostlist_servers = self.hostlist_servers[:2]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -197,8 +197,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=destroy,destroy_single_loop
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_single_loop
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -222,8 +222,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=destroy,destroy_multi_loop
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_multi_loop
         """
         hostlist_servers = self.hostlist_servers[:6]
 
@@ -247,8 +247,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=destroy,destroy_invalid_uuid
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_invalid_uuid
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -282,8 +282,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=destroy,destroy_invalid_label
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_invalid_label
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -342,8 +342,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=destroy,destroy_wrong_group
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_wrong_group
         """
         server_group_a = self.server_group + "_a"
         server_group_b = self.server_group + "_b"
@@ -415,8 +415,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=destroy,destroy_connected
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_connected
         """
         hostlist_servers = self.hostlist_servers[:1]
 
@@ -465,8 +465,8 @@ class DestroyTests(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=destroy,force_destroy_connected
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_force_destroy_connected
         """
         hostlist_servers = self.hostlist_servers[:1]
 
