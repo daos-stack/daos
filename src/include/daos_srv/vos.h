@@ -14,6 +14,8 @@
 #ifndef __VOS_API_H__
 #define __VOS_API_H__
 
+Change something
+
 #include <daos/common.h>
 #include <daos_types.h>
 #include <daos/placement.h>
