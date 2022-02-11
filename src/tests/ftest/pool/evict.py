@@ -115,9 +115,9 @@ class EvictTests(TestWithServers):
         first_half_count = int(host_count / 2)
         # half_ranks_with is the half of the all ranks that we'll create the third pool
         # on.
-        half_ranks_with = [rank for rank in range(first_half_count)]
+        half_ranks_with = list(range(first_half_count))
         # half_ranks_without is the half of the all ranks that we will not create a pool.
-        half_ranks_without = [rank for rank in range(first_half_count, host_count)]
+        half_ranks_without = list(range(first_half_count, host_count))
 
         # all_hosts is the list of hosts that maps to the all_ranks. e.g.,
         # rank 0: wolf-1
