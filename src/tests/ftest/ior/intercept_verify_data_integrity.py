@@ -1,15 +1,17 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-from ior_test_base import IorTestBase
-from ior_utils import IorCommand
+from dfuse_test_base import DfuseTestBase
+from ior_utils import IorCommand, run_ior
+from job_manager_utils import Mpirun
+from thread_manager import ThreadManager
 
 
-class IorInterceptVerifyDataIntegrity(IorTestBase):
+class IorInterceptVerifyDataIntegrity(DfuseTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with mix of dfuse and
        interception library on a multi server and multi client
@@ -17,6 +19,21 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a IorTestBase object."""
+        super().__init__(*args, **kwargs)
+        self.processes = None
+
+    def setUp(self):
+        """Set up each test case."""
+        # obtain separate logs
+        self.update_log_file_names()
+        # Start the servers and agents
+        super().setUp()
+
+        # Get the parameters for IOR
+        self.processes = self.params.get("np", '/run/ior/*')
 
     def test_ior_intercept_verify_data(self):
         """Jira ID: DAOS-3502.
@@ -41,17 +58,63 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
         self.add_pool()
         self.add_container(self.pool)
 
-        intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-        results = dict()
-        client_count = len(self.hostlist_clients)
-        w_clients = self.hostlist_clients[0:client_count - 1]
-        wo_clients = [self.hostlist_clients[-1]]
+        # Start dfuse for POSIX api. This is specific to interception library test requirements.
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
-        self.run_ior_threads_il(
-            results=results, intercept=intercept, with_clients=w_clients,
-            without_clients=wo_clients)
+        # Setup the thread manager
+        thread_manager = ThreadManager(run_ior, self.timeout - 30)
+        ior_clients_intercept = {
+            self.hostlist_clients[0:-1]: os.path.join(self.prefix, 'lib64', 'libioil.so'),
+            [self.hostlist_clients[-1]]: None,
+        }
+        self.job_manager = []
+        for index, clients in enumerate(ior_clients_intercept):
+            # Add a job manager for each ior command
+            self.job_manager.append(Mpirun(None, False, mpitype="mpich"))
+            self.job_manager[-1].timeout = self.timeout - 35
+            self.job_manager[-1].tmpdir_base.update(self.test_dir, "tmpdir_base")
 
-        IorCommand.log_metrics(
-            self.log, "5 clients - with interception library", results[1])
-        IorCommand.log_metrics(
-            self.log, "1 client - without interception library", results[2])
+            # Create a unique ior test file for each thread
+            test_file_items = ["testfile", str(index)]
+            if ior_clients_intercept[clients]:
+                test_file_items.append("intercept")
+            test_file = os.path.join(self.dfuse.mount_dir.value, "_".join(test_file_items))
+
+            # Define the paramaters that will be used to run an ior command in this thread
+            thread_manager.add(
+                test=self,
+                manager=self.job_manager[-1],
+                log=self.client_log,
+                hosts=clients,
+                path=self.workdir,
+                slots=self.hostfile_clients_slots,
+                group=self.server_group,
+                pool=self.pool,
+                container=self.container,
+                processes=(self.processes // len(self.hostlist_clients)) * len(clients),
+                intercept=ior_clients_intercept[clients],
+                ior_params={"test_file": test_file})
+            self.log.info(
+                "Created thread %s for %s with intercept: %s",
+                index, clients, str(ior_clients_intercept[clients]))
+
+        # Launch the IOR threads
+        self.log.info("Launching %d IOR threads", thread_manager.qty)
+        results = thread_manager.run()
+
+        # Stop dfuse
+        self.stop_dfuse()
+
+        # Check the ior thread results
+        failed_thread_count = thread_manager.check(results)
+        if failed_thread_count > 0:
+            msg = "{} FAILED IOR Thread(s)".format(failed_thread_count)
+            self.d_log.error(msg)
+            self.fail(msg)
+
+        for index, clients in enumerate(ior_clients_intercept):
+            intercept_lib = "without" if ior_clients_intercept[clients] is None else "with"
+            IorCommand.log_metrics(
+                self.log, "{} clients {} interception library".format(len(clients), intercept_lib),
+                results[index]
+            )
