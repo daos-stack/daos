@@ -91,7 +91,7 @@ if [ -d "/mnt/daos" ]; then
             echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
         fi
         COMP="UTEST_control"
-        run_test src/control/run_go_tests.sh
+        # run_test src/control/run_go_tests.sh
         COMP="UTEST_common"
         run_test src/common/tests/btree.sh perf -s 20000
         run_test src/common/tests/btree.sh perf direct -s 20000

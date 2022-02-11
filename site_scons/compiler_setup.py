@@ -58,6 +58,8 @@ def base_setup(env, prereqs=None):
             env.AppendUnique(CCFLAGS=['-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
+    if build_type == 'lcov':
+        env.AppendUnique(CCFLAGS=['-fprofile-arcs', '-ftest-coverage'])
     else:
         if build_type == 'release':
             env.AppendUnique(CPPDEFINES='DAOS_BUILD_RELEASE')

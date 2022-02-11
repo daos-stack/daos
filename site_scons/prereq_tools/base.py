@@ -776,7 +776,7 @@ class PreReqComponent():
     def _setup_build_type(self):
         """set build type"""
         self.add_opts(EnumVariable('BUILD_TYPE', "Set the build type",
-                                   'release', ['dev', 'debug', 'release'],
+                                   'release', ['dev', 'debug', 'release', 'lcov'],
                                    ignorecase=1))
         self.add_opts(EnumVariable('TARGET_TYPE', "Set the prerequisite type",
                                    'default',

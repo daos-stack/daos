@@ -32,6 +32,7 @@ dnf --nodocs install \
     ipmctl \
     java-1.8.0-openjdk \
     json-c-devel \
+    lcov \
     libaio-devel \
     libcmocka-devel \
     libevent-devel \
