@@ -68,7 +68,7 @@ def _detect(env):
             protoc_gen_go_found = True
 
     try:
-        # pylint: disable=unused-import
+        # pylint: disable=unused-import,import-outside-toplevel
         import grpc_tools.protoc # noqa: F401
         grpc_tools_found = True
     except ImportError:

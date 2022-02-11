@@ -870,7 +870,7 @@ class DaosServer():
                             pool['uuid'],
                             pool.get('label', None))
             pools.append(pobj)
-            if pobj.label is 'NLT':
+            if pobj.label == 'NLT':
                 self.test_pool = pobj
         return pools
 
