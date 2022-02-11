@@ -57,6 +57,14 @@ def update_config_cmdlist(args):
 
     """
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
+    cmd_list = [
+        "sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(
+            SLURM_CONF),
+        "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
+            args.user, SLURM_CONF),
+        "sed -i -e 's/NodeName/#NodeName/g' {}".format(
+            SLURM_CONF),
+        ]
     if not args.sudo:
         sudo = ""
     else:
@@ -64,35 +72,21 @@ def update_config_cmdlist(args):
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         sys.exit(1)
+    match = False
     # grep SLURM_CONF to determine format of the the file
-    command = r"grep SlurmctldHost {}".format(SLURM_CONF)
-    task = run_task(all_nodes, command)
-    # Create a dictionary of hosts for each unique return code
-    results = dict(task.iter_retcodes())
-    # Determine if the command completed successfully across all the hosts
-    status = len(results) == 1 and 0 in results
-    if status:
-        cmd_list = [
-            "sed -i -e 's/SlurmctldHost=linux0/SlurmctldHost={}/g' {}".format(
-                args.control, SLURM_CONF),
-            "sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(
-                SLURM_CONF),
-            "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
-                args.user, SLURM_CONF),
-            "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-                SLURM_CONF),
-            ]
-    else:
-        cmd_list = [
-            "sed -i -e 's/ControlMachine=linux0/ControlMachine={}/g' {}".format(
-                args.control, SLURM_CONF),
-            "sed -i -e 's/ClusterName=linux/ClusterName=ci_cluster/g' {}".format(
-                SLURM_CONF),
-            "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
-                args.user, SLURM_CONF),
-            "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-                SLURM_CONF),
-            ]
+    for ctl_host in ["SlurmctldHost", "ControlMachine"]:
+        if match:
+            break
+        command = r"grep {} {}".format(ctl_host, SLURM_CONF)
+        task = run_task(all_nodes, command)
+        results = dict(task.iter_retcodes())
+        if len(results) == 1 and 0 in results:
+            ctl_str = "sed -i -e 's/{0}=linux0/{0}={1}/g' {2}".format(
+                ctl_host, args.control, SLURM_CONF)
+            cmd_list.insert(0, ctl_str)
+            match = True
+    if not match:
+        sys.exit(1)
 
     # This info needs to be gathered from every node that can run a slurm job
     command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
