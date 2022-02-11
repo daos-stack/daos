@@ -58,8 +58,9 @@ from SCons.Errors import UserError
 from prereq_tools import mocked_tests
 import subprocess #nosec
 try:
-    from subprocess import DEVNULL #nosec
+    from subprocess import DEVNULL # nosec
 except ImportError:
+    # pylint: disable=consider-using-with
     DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
@@ -309,12 +310,12 @@ def default_libpath():
         print('No dpkg-architecture found in path.')
         return []
     try:
-        pipe = subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
-                                stdout=subprocess.PIPE, stderr=DEVNULL)
-        (stdo, _) = pipe.communicate()
-        if pipe.returncode == 0:
-            archpath = stdo.decode().strip()
-            return ['lib/' + archpath]
+        with subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
+                              stdout=subprocess.PIPE, stderr=DEVNULL) as pipe:
+            (stdo, _) = pipe.communicate()
+            if pipe.returncode == 0:
+                archpath = stdo.decode().strip()
+                return ['lib/' + archpath]
     except Exception:
         print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
     return []
@@ -481,10 +482,10 @@ class WebRetriever():
                 print('Would unpack gzipped tar file: %s' % basename)
                 return
             try:
-                tfile = tarfile.open(basename, 'r:gz')
-                members = tfile.getnames()
-                prefix = os.path.commonprefix(members)
-                tfile.extractall()
+                with tarfile.open(basename, 'r:gz') as tfile:
+                    members = tfile.getnames()
+                    prefix = os.path.commonprefix(members)
+                    tfile.extractall()
                 if not RUNNER.run_commands(['mv %s %s' % (prefix, subdir)]):
                     raise ExtractionError(subdir)
             except (IOError, tarfile.TarError) as io_error:
