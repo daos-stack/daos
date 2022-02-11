@@ -18,5 +18,5 @@ src/include/daos_srv/evtree.h @daos-stack/vos-watchers
 Jenkinsfile @daos-stack/build-and-release-watchers
 
 # any PR that touches client API or high level client code
-src/client @daos-stack/client-api-watchers
-src/include/daos_*.* @daos-stack/client-api-watchers
+src/client/ @daos-stack/client-api-watchers
+src/include/daos*.* @daos-stack/client-api-watchers
