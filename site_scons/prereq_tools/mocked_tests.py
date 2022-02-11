@@ -54,6 +54,7 @@ class TestFunction():
         """
         return '"%s"' % self.name
 
+
 UnitTests = namedtuple('UnitTests',
                        ['sources',
                         'test_functions',

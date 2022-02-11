@@ -36,6 +36,7 @@ class GoProtocCompilerNotFound(ToolProtocWarning):
 class PythonGRPCCompilerNotFound(ToolProtocWarning):
     pass
 
+
 SCons.Warnings.enableWarningClass(ToolProtocWarning)
 
 def _detect(env):
@@ -95,6 +96,7 @@ def run_python(_source, _target, env, _for_signature):
     actions.append('$PYTHON_COM')
     return actions
 
+
 _grpc_python_builder = SCons.Builder.Builder(
     generator=run_python,
     suffix='$PYTHON_SUFFIX',
@@ -108,6 +110,7 @@ def run_go(_source, _target, env, _for_signature):
     actions.append(mkdir_str)
     actions.append('$GO_COM')
     return actions
+
 
 _grpc_go_builder = SCons.Builder.Builder(
     generator=run_go,

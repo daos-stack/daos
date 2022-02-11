@@ -407,7 +407,7 @@ class LogTest():
                         show = False
                     elif show and server_shutdown and \
                          (line.get_msg().endswith(
-                             "DER_SHUTDOWN(-2017): 'Service should shut down'") or \
+                             "DER_SHUTDOWN(-2017): 'Service should shut down'") or
                           line.get_msg().endswith(
                               "DER_NOTLEADER(-2008): 'Not service leader'")):
                         show = False
