@@ -478,7 +478,7 @@ section.
 [4]: </docs/admin/deployment.md#server-startup> (DAOS server startup documentation)
 [5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
 [6]: </docs/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
-[7]: <https://daos-stack.github.io/user/posix/#dfuse>
+[7]: <https://docs.daos.io/v2.2/user/posix/#dfuse>
 [8]: </docs/user/mpi-io.md>
 [9]: </docs/user/hdf5.md>
 [10]: <https://github.com/hpc/ior/blob/main/README_DAOS>
