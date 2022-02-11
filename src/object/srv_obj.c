@@ -119,9 +119,10 @@ obj_rw_complete(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	struct obj_rw_in	*orwi = crt_req_get(rpc);
 
 	if (!daos_handle_is_inval(ioh)) {
-		bool update = obj_rpc_is_update(rpc);
+		bool update;
 		int rc;
-
+	    
+		update = obj_rpc_is_update(rpc);
 		if (ioc->ioc_zc_fetch) {
 			/* complete the ioh after reply */
 			ioc->ioc_status = status;
@@ -185,18 +186,18 @@ obj_rw_reply(struct obj_io_context *ioc, crt_rpc_t *rpc, int status,
 		return;
 
 	if (orwo->orw_iod_sizes.ca_arrays != NULL &&
-	    orwo->orw_iod_sizes.ca_arrays != (void *)&ioc->ioc_sizes[0]) {
+		orwo->orw_iod_sizes.ca_arrays != (void *)&ioc->ioc_sizes[0]) {
 		D_FREE(orwo->orw_iod_sizes.ca_arrays);
 		orwo->orw_iod_sizes.ca_count = 0;
 	}
 
 	if (orwo->orw_nrs.ca_arrays != NULL &&
-	    orwo->orw_nrs.ca_arrays != (void *)&ioc->ioc_nrs[0]) {
+		orwo->orw_nrs.ca_arrays != (void *)&ioc->ioc_nrs[0]) {
 		D_FREE(orwo->orw_nrs.ca_arrays);
 		orwo->orw_nrs.ca_count = 0;
 	}
 	if (orwo->orw_data_sizes.ca_arrays != NULL &&
-	    orwo->orw_data_sizes.ca_arrays != (void *)&ioc->ioc_data_sizes[0]) {
+		orwo->orw_data_sizes.ca_arrays != (void *)&ioc->ioc_data_sizes[0]) {
 		D_FREE(orwo->orw_data_sizes.ca_arrays);
 		orwo->orw_data_sizes.ca_count = 0;
 	}
@@ -1652,8 +1653,9 @@ post:
 		 */
 		ioc->ioc_biod = biod;
 	} else {
-		int err = bio_iod_post(biod, 0);
-
+		int err = 0;
+		
+		err = bio_iod_post(biod, 0);
 		rc = rc ? : err;
 
 	}
