@@ -107,6 +107,7 @@ func TestServer_checkVersion(t *testing.T) {
 		selfVersion  string
 		otherVersion string
 		ctx          context.Context
+		nonSysMsg    bool
 		expErr       error
 	}{
 		"unknown self version": {
@@ -123,15 +124,24 @@ func TestServer_checkVersion(t *testing.T) {
 			ctx:          newTestAuthCtx(context.TODO(), "agent"),
 			expErr:       errors.New("not compatible"),
 		},
-		"insecure versioned component defaults to server (must be patch-compatible)": {
+		"unknown secure component rejected": {
 			selfVersion:  "2.4.0",
-			otherVersion: "2.2.0",
+			otherVersion: "2.4.0",
+			ctx:          newTestAuthCtx(context.TODO(), "3v1l"),
 			expErr:       errors.New("not compatible"),
 		},
-		"secure versioned component gets more leeway": {
+		"insecure versioned component defaults to server": {
 			selfVersion:  "2.4.0",
-			otherVersion: "2.2.0",
+			otherVersion: "2.4.1",
+		},
+		"secure versioned component": {
+			selfVersion:  "2.4.0",
+			otherVersion: "2.4.0",
 			ctx:          newTestAuthCtx(context.TODO(), "agent"),
+		},
+		"non-sys msg bypasses version checks": {
+			selfVersion: "2.4.0",
+			nonSysMsg:   true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -143,11 +153,18 @@ func TestServer_checkVersion(t *testing.T) {
 				Component: "server",
 				Version:   build.MustNewVersion(tc.selfVersion),
 			}
-			req := &checkVerReq{
-				Sys: build.DefaultSystemName,
-			}
-			if tc.otherVersion != "" {
-				req.Sys += "-" + tc.otherVersion
+
+			var req interface{}
+			if tc.nonSysMsg {
+				req = struct{}{}
+			} else {
+				verReq := &checkVerReq{
+					Sys: build.DefaultSystemName,
+				}
+				if tc.otherVersion != "" {
+					verReq.Sys += "-" + tc.otherVersion
+				}
+				req = verReq
 			}
 
 			gotErr := checkVersion(ctx, selfComp, req)
