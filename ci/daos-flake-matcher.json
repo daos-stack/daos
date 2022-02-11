@@ -1,15 +1,17 @@
 {
-    "problemMatcher": [
+  "problemMatcher": [
+    {
+      "owner": "flake8-error",
+      "severity": "error",
+      "pattern": [
         {
-            "owner": "daos-flake",
-            "pattern": [
-                {
-                    "regexp": "\\./(.+\\.py):(\\d+):\\s+\\a+\\d+\\s+(.+)$",
-                    "file": 1,
-                    "line": 2,
-                    "message": 3,
-                }
-            ]
+          "regexp": "^([^:]+):(\\d+):(\\d+):\\s+(F\\d+\\s+.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "message": 4
         }
-    ]
+      ]
+    }
+  ]
 }
