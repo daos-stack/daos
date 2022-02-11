@@ -512,6 +512,76 @@ pipeline {
                         }
                     }
                 }
+##DH++
+                stage('Build on CentOS 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.centos.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                qb: quickBuild()) +
+                                                " -t ${sanitized_JOB_NAME}-centos8 " +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quickBuildDeps('centos8') + '"' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallelBuild(),
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
+                                   scons_args: sconsFaultsArgs()
+                    }
+                    post {
+                        unsuccessful {
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos8-gcc
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos8-gcc',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+                stage('Build on CentOS 8 Bullseye') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.centos.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                qb: quickBuild()) +
+                                " -t ${sanitized_JOB_NAME}-centos8 " +
+                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                ' --build-arg QUICKBUILD_DEPS="' +
+                                quickBuildDeps('centos8') + '"' +
+                                ' --build-arg REPOS="' + prRepos() + '"'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: parallelBuild(),
+                                   stash_files: 'ci/test_files_to_stash.txt',
+                                   scons_exe: 'scons-3',
+                                   scons_args: sconsFaultsArgs()
+                    }
+                    post {
+                        unsuccessful {
+                            sh """if [ -f config.log ]; then
+                                      mv config.log config.log-centos8-covc
+                                  fi"""
+                            archiveArtifacts artifacts: 'config.log-centos8-covc',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+
+##
                 stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
