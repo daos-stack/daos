@@ -78,9 +78,6 @@ extern struct dss_module_key vos_module_key;
 #define VOS_POOL_HHASH_BITS 10 /* Up to 1024 pools */
 #define VOS_CONT_HHASH_BITS 20 /* Up to 1048576 containers */
 
-// #define VOS_BLK_SHIFT		12	/* 4k */
-// #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
-
 extern unsigned int VOS_BLK_SHIFT;
 extern unsigned int VOS_BLK_SZ;
 
