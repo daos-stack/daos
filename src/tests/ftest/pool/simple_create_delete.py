@@ -24,8 +24,8 @@ class SimpleCreateDeleteTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=pool
-        :avocado: tags=smoke,simple_create
+        :avocado: tags=pool,smoke
+        :avocado: tags=simple_create
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
