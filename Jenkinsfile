@@ -512,7 +512,6 @@ pipeline {
                         }
                     }
                 }
-##DH++
                 stage('Build on CentOS 8') {
                     when {
                         beforeAgent true
@@ -580,8 +579,6 @@ pipeline {
                         }
                     }
                 }
-
-##
                 stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
