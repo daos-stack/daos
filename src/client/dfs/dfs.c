@@ -1181,10 +1181,12 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 
 		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, sym->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
-		if (rc) {
+		if (rc == EEXIST) {
 			D_FREE(sym->value);
-			D_ERROR("Inserting entry %s failed (rc = %d)\n",
-				sym->name, rc);
+		} else if (rc != 0) {
+			D_FREE(sym->value);
+			D_ERROR("Inserting entry '%s' failed: %d (%s)\n",
+				sym->name, rc, strerror(rc));
 		}
 		return rc;
 	}
