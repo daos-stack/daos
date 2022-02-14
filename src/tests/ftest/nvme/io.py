@@ -35,7 +35,7 @@ class NvmeIo(IorTestBase):
 
         # Test params
         object_type = self.params.get("object_type", '/run/ior/*')
-        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
+        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/ior/*')
 
         # Loop for every IOR object type
         for obj_type in object_type:

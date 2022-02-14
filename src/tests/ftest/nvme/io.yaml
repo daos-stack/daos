@@ -19,7 +19,6 @@ server_config:
   scm_class: dcpm
   scm_list: ["/dev/pmem0"]
 pool: &pool
- ior_sequence_pool_qty: 11
  name: daos_server
  control_method: dmg
  prop_name: reclaim
@@ -102,6 +101,7 @@ pool_10: #[58G, 900G, 32M, 22G, 5]
  blocksize: 23622320128
  clientslots: 5
 ior:
+ ior_sequence_pool_qty: 11
  flags: "-w -r -k -vv"
  repetitions: 1
  test_file: /testFile
