@@ -1,13 +1,12 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 from command_utils_base import CommandFailure
-from daos_utils import DaosCommand
 from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
 from ior_test_base import IorTestBase
@@ -110,7 +109,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dfuse_hosts = self.agent_managers[0].hosts
 
         # initialize daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd = self.get_daos_command()
 
         # Get the processes for each explicitly
         # This is needed because both IorTestBase and MdtestBase
@@ -672,9 +671,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """Set the params for dcp.
         This is a wrapper for DcpCommand.set_params.
 
-        When both src_type and dst_type are DAOS_UNS, a prefix will
-        only work for either the src or the dst, but not both.
-
         Args:
             src_type (str): how to interpret the src params.
                 Must be in PARAM_TYPES.
@@ -719,7 +715,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         src_path=src_cont.path.value)
                 else:
                     self.dcp_cmd.set_params(
-                        daos_prefix=src_cont.path.value,
                         src_path=src_cont.path.value + src_path)
 
         # Set the destination params
@@ -736,7 +731,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         dst_path=dst_cont.path.value)
                 else:
                     self.dcp_cmd.set_params(
-                        daos_prefix=dst_cont.path.value,
                         dst_path=dst_cont.path.value + dst_path)
 
     def _set_dsync_params(self,
@@ -746,9 +740,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                           dst_pool=None, dst_cont=None):
         """Set the params for dsync.
         This is a wrapper for DsyncCommand.set_params.
-
-        When both src_type and dst_type are DAOS_UNS, a prefix will
-        only work for either the src or the dst, but not both.
 
         Args:
             src_type (str): how to interpret the src params.
@@ -784,7 +775,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         src_path=src_cont.path.value)
                 else:
                     self.dsync_cmd.set_params(
-                        daos_prefix=src_cont.path.value,
                         src_path=src_cont.path.value + src_path)
 
         # Set the destination params
@@ -801,7 +791,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         dst_path=dst_cont.path.value)
                 else:
                     self.dsync_cmd.set_params(
-                        daos_prefix=dst_cont.path.value,
                         dst_path=dst_cont.path.value + dst_path)
 
     def _set_fs_copy_params(self,
@@ -810,9 +799,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                             dst_type=None, dst_path=None,
                             dst_pool=None, dst_cont=None):
         """Set the params for fs copy.
-
-        daos fs copy does not support a "prefix" on UNS paths,
-        so the param type for DAOS_UNS must have the path "/".
 
         Args:
             src_type (str): how to interpret the src params.
@@ -857,7 +843,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 if src_path == "/":
                     path = str(src_cont.path)
                 else:
-                    self.fail("daos fs copy does not support a prefix")
+                    path = str(src_cont.path) + src_path
             self.fs_copy_cmd.set_fs_copy_params(
                 src=path)
 
@@ -874,7 +860,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 if dst_path == "/":
                     path = str(dst_cont.path)
                 else:
-                    self.fail("daos fs copy does not support a prefix")
+                    path = str(dst_cont.path) + dst_path
             self.fs_copy_cmd.set_fs_copy_params(
                 dst=path)
 
