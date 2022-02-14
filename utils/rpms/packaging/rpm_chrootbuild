@@ -17,6 +17,7 @@ config_opts['module_setup_commands'] = [
   ('enable', 'javapackages-tools:201801'),
   ('disable',  'go-toolset')
 ]
+config_opts['dnf_builddep_opts'] = ['--nobest']
 EOF
 fi
 

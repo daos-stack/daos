@@ -98,9 +98,10 @@ chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
 chown -R jenkins.jenkins /localhome/jenkins/
 echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
 
-# pin the release
-# shellcheck disable=SC2154
-echo "$release" > /etc/dnf/vars/releasever
+# remove any defined releasever
+# any deviation from the default releasever for a distro should be
+# handled on a per-test-run, or even per-dnf command basis
+rm -f  /etc/yum/vars/releasever
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
