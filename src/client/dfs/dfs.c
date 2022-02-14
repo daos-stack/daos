@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -579,7 +579,6 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 			D_ERROR("Failed to insert entry '%s', "DF_RC"\n", name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
-
 	return 0;
 }
 
@@ -1086,10 +1085,12 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->value_len = value_len;
 		rc = insert_entry(parent->oh, DAOS_TX_NONE, sym->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
-		if (rc) {
+		if (rc == EEXIST) {
 			D_FREE(sym->value);
-			D_ERROR("Inserting entry %s failed (rc = %d)\n",
-				sym->name, rc);
+		} else if (rc != 0) {
+			D_FREE(sym->value);
+			D_ERROR("Inserting entry '%s' failed: %d (%s)\n",
+				sym->name, rc, strerror(rc));
 		}
 		return rc;
 	}
