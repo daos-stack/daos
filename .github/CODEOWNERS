@@ -25,6 +25,6 @@ src/include/daos_*.* @daos-stack/client-api-watchers
 mkdocs.yml @daos-stack/doc-watchers
 Doxyfile @daos-stack/doc-watchers
 docs/ @daos-stack/doc-watchers
-src/include/ @daos-stack/doc-watchers
+src/include/*.h @daos-stack/doc-watchers
 *.md @daos-stack/doc-watchers
 
