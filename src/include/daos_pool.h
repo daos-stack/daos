@@ -101,13 +101,13 @@ struct daos_rebuild_status {
 	uint32_t		rs_seconds;
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
+	/* keep it for not breaking binary compatibility before daos 2.1 */
+	int32_t			rs_done;
+
 	/**
 	 * rebuild state, DRS_COMPLETED is valid only if @rs_version is non-zero
 	 */
 	int32_t			rs_state;
-
-	/* padding of rebuild status */
-	int32_t			rs_padding32;
 
 	/* Failure on which rank */
 	int32_t			rs_fail_rank;
