@@ -10,6 +10,8 @@ timeout: 180
 server_config:
   engines_per_host: 2
   name: daos_server
+# reduce cart timeout to make IV update return timeout
+# quickly to ease test (DAOS-9626)
   env_vars:
     - CRT_TIMEOUT=10
   servers:
