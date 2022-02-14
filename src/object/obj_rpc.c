@@ -1038,19 +1038,18 @@ CRT_RPC_DEFINE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 },
 
 static struct crt_proto_rpc_format obj_proto_rpc_fmt_0[] = {
-	OBJ_PROTO_CLI_RPC_LIST
+	OBJ_PROTO_CLI_RPC_LIST(0)
 };
 
 static struct crt_proto_rpc_format obj_proto_rpc_fmt_1[] = {
-	OBJ_PROTO_CLI_RPC_LIST
-	OBJ_PROTO_CLI_RPC_LIST_MOD
+	OBJ_PROTO_CLI_RPC_LIST(1)
 };
 
 #undef X
 
 struct crt_proto_format obj_proto_fmt_0 = {
 	.cpf_name  = "daos-object",
-	.cpf_ver   = DAOS_OBJ_VERSION,
+	.cpf_ver   = DAOS_OBJ_VERSION - 1,
 	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt_0),
 	.cpf_prf   = obj_proto_rpc_fmt_0,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_OBJ_MODULE, 0)
@@ -1058,7 +1057,7 @@ struct crt_proto_format obj_proto_fmt_0 = {
 
 struct crt_proto_format obj_proto_fmt_1 = {
 	.cpf_name  = "daos-object",
-	.cpf_ver   = DAOS_OBJ_VERSION + 1,
+	.cpf_ver   = DAOS_OBJ_VERSION,
 	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt_1),
 	.cpf_prf   = obj_proto_rpc_fmt_1,
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_OBJ_MODULE, 0)
@@ -1089,8 +1088,7 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_ret = status;
 		break;
-	case DAOS_OBJ_RPC_QUERY_KEY_0:
-	case DAOS_OBJ_RPC_QUERY_KEY_1:
+	case DAOS_OBJ_RPC_QUERY_KEY:
 		((struct obj_query_key_0_out *)reply)->okqo_ret = status;
 		break;
 	case DAOS_OBJ_RPC_SYNC:
@@ -1132,8 +1130,7 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_ret;
-	case DAOS_OBJ_RPC_QUERY_KEY_0:
-	case DAOS_OBJ_RPC_QUERY_KEY_1:
+	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_0_out *)reply)->okqo_ret;
 	case DAOS_OBJ_RPC_SYNC:
 		return ((struct obj_sync_out *)reply)->oso_ret;
@@ -1175,8 +1172,7 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_map_version = map_version;
 		break;
-	case DAOS_OBJ_RPC_QUERY_KEY_0:
-	case DAOS_OBJ_RPC_QUERY_KEY_1:
+	case DAOS_OBJ_RPC_QUERY_KEY:
 		((struct obj_query_key_0_out *)reply)->okqo_map_version =
 			map_version;
 		break;
@@ -1219,8 +1215,7 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_map_version;
-	case DAOS_OBJ_RPC_QUERY_KEY_0:
-	case DAOS_OBJ_RPC_QUERY_KEY_1:
+	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_0_out *)reply)->okqo_map_version;
 	case DAOS_OBJ_RPC_SYNC:
 		return ((struct obj_sync_out *)reply)->oso_map_version;

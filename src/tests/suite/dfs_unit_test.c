@@ -1242,7 +1242,7 @@ dfs_test_mtime(void **state)
 	rc = dfs_stat(dfs_mt, NULL, f, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 64);
-	check_ts(prev_ts, stbuf.st_mtim);
+	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
@@ -1262,7 +1262,7 @@ dfs_test_mtime(void **state)
 	rc = dfs_ostat(dfs_mt, file, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);
-	check_ts(prev_ts, stbuf.st_mtim);
+	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 
 	rc = dfs_release(file);
 	assert_int_equal(rc, 0);

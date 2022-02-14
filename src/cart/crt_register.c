@@ -542,6 +542,7 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 	struct proto_query_t		*proto_query = cb_info->cci_arg;
 	struct crt_proto_query_cb_info	 user_cb_info = {};
 
+	user_cb_info.pq_arg = proto_query->pq_user_arg;
 	if (cb_info->cci_rc != 0) {
 		D_ERROR("rpc (opc: %#x failed, rc: %d.\n", rpc_req->cr_opc,
 			cb_info->cci_rc);
@@ -554,7 +555,6 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 	rpc_req_output = crt_reply_get(rpc_req);
 	user_cb_info.pq_rc = rpc_req_output->pq_rc;
 	user_cb_info.pq_ver = rpc_req_output->pq_ver;
-	user_cb_info.pq_arg = proto_query->pq_user_arg;
 
 out:
 	if (user_cb_info.pq_rc == 0) {

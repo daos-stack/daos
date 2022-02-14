@@ -2288,11 +2288,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d.\n",
 		tgt_ep.ep_rank, tgt_ep.ep_tag);
 
-	if (dc_obj_proto_version == DAOS_OBJ_VERSION)
-		rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_QUERY_KEY_0, &req);
-	else
-		rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_QUERY_KEY_1, &req);
-
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_QUERY_KEY, &req);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

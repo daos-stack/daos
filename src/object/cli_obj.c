@@ -2328,8 +2328,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		break;
 	}
 
-	case DAOS_OBJ_RPC_QUERY_KEY_0:
-	case DAOS_OBJ_RPC_QUERY_KEY_1: {
+	case DAOS_OBJ_RPC_QUERY_KEY: {
 		daos_obj_query_key_t	*q_args = args;
 
 		obj = obj_hdl2ptr(q_args->oh);
@@ -2667,8 +2666,7 @@ obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
 		return &obj_auxi->l_args.la_auxi;
 	case DAOS_OBJ_RPC_SYNC:
 		return &obj_auxi->s_args.sa_auxi;
-	case DAOS_OBJ_RPC_QUERY_KEY_0:
-	case DAOS_OBJ_RPC_QUERY_KEY_1:
+	case DAOS_OBJ_RPC_QUERY_KEY:
 		/*
 		 * called from obj_comp_cb_internal() and
 		 * checked in obj_shard_comp_cb() correctly
@@ -4197,8 +4195,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_RPC_PUNCH_AKEYS:
 			D_ASSERT(daos_handle_is_inval(obj_auxi->th));
 			break;
-		case DAOS_OBJ_RPC_QUERY_KEY_0:
-		case DAOS_OBJ_RPC_QUERY_KEY_1:
+		case DAOS_OBJ_RPC_QUERY_KEY:
 		case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 		case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -5636,18 +5633,12 @@ dc_obj_query_key(tse_task_t *api_task)
 	struct dtx_epoch	epoch;
 	struct dtx_id		dti;
 	int			i = 0;
-	int			opc;
 	int			rc;
 
 	D_ASSERTF(api_args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
 
-	if (dc_obj_proto_version == DAOS_OBJ_VERSION)
-		opc = DAOS_OBJ_RPC_QUERY_KEY_0;
-	else
-		opc = DAOS_OBJ_RPC_QUERY_KEY_1;
-
-	rc = obj_req_valid(api_task, api_args, opc, &epoch, &map_ver, &obj);
+	rc = obj_req_valid(api_task, api_args, DAOS_OBJ_RPC_QUERY_KEY, &epoch, &map_ver, &obj);
 	if (rc)
 		D_GOTO(out_task, rc);
 
@@ -5662,7 +5653,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		daos_dti_gen(&dti, true /* zero */);
 	}
 
-	rc = obj_task_init(api_task, opc, map_ver, api_args->th, &obj_auxi, obj);
+	rc = obj_task_init(api_task, DAOS_OBJ_RPC_QUERY_KEY, map_ver, api_args->th, &obj_auxi, obj);
 	if (rc != 0) {
 		obj_decref(obj);
 		D_GOTO(out_task, rc);

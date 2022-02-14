@@ -31,11 +31,21 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 7
+#define DAOS_OBJ_VERSION 8
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
-#define OBJ_PROTO_CLI_RPC_LIST						\
+
+#define QUERY_KEY_0							\
+	X(DAOS_OBJ_RPC_QUERY_KEY,					\
+		0, &CQF_obj_query_key,					\
+		ds_obj_query_key_handler_0, NULL, "key_query")
+#define QUERY_KEY_1							\
+	X(DAOS_OBJ_RPC_QUERY_KEY,					\
+		0, &CQF_obj_query_key,					\
+		ds_obj_query_key_handler_1, NULL, "key_query")
+
+#define OBJ_PROTO_CLI_RPC_LIST(ver)					\
 	X(DAOS_OBJ_RPC_UPDATE,						\
 		0, &CQF_obj_rw,						\
 		ds_obj_rw_handler, NULL, "update")			\
@@ -63,9 +73,10 @@
 	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
 		0, &CQF_obj_punch,					\
 		ds_obj_punch_handler, NULL, "akey_punch")		\
-	X(DAOS_OBJ_RPC_QUERY_KEY_0,					\
-		0, &CQF_obj_query_key_0,				\
-		ds_obj_query_key_handler_0, NULL, "key_query")		\
+	X(DAOS_OBJ_RPC_QUERY_KEY,					\
+	  0, ver == 0 ? &CQF_obj_query_key_0 : &CQF_obj_query_key_1,	\
+	  ver == 0 ? ds_obj_query_key_handler_0 :			\
+	  ds_obj_query_key_handler_1, NULL, "key_query")		\
 	X(DAOS_OBJ_RPC_SYNC,						\
 		0, &CQF_obj_sync,					\
 		ds_obj_sync_handler, NULL, "obj_sync")			\
@@ -94,16 +105,10 @@
 		0, &CQF_obj_cpd,					\
 		ds_obj_cpd_handler, NULL, "compound")
 
-#define OBJ_PROTO_CLI_RPC_LIST_MOD					\
-	X(DAOS_OBJ_RPC_QUERY_KEY_1,					\
-		0, &CQF_obj_query_key_1,				\
-		ds_obj_query_key_handler_1, NULL, "key_query")
-
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e, f) a,
 enum obj_rpc_opc {
-	OBJ_PROTO_CLI_RPC_LIST
-	OBJ_PROTO_CLI_RPC_LIST_MOD
+	OBJ_PROTO_CLI_RPC_LIST(1)
 	OBJ_PROTO_CLI_COUNT,
 	OBJ_PROTO_CLI_LAST = OBJ_PROTO_CLI_COUNT - 1,
 };
@@ -119,8 +124,7 @@ obj_opc_to_str(crt_opcode_t opc)
 {
 	switch (opc) {
 #define X(a, b, c, d, e, f) case a: return f;
-		OBJ_PROTO_CLI_RPC_LIST
-		OBJ_PROTO_CLI_RPC_LIST_MOD
+		OBJ_PROTO_CLI_RPC_LIST(1)
 #undef X
 	}
 	return "unknown";
@@ -594,7 +598,8 @@ obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_REQ_CREATE_TIMEOUT))
 		return -DER_TIMEDOUT;
 
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, dc_obj_proto_version);
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE,
+				 dc_obj_proto_version ? dc_obj_proto_version : DAOS_OBJ_VERSION);
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_IO, tgt_ep->ep_tag);
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
