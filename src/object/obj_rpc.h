@@ -622,6 +622,12 @@ obj_is_modification_opc(uint32_t opc)
 }
 
 static inline bool
+obj_is_fetch_opc(uint32_t opc)
+{
+	return opc == DAOS_OBJ_RPC_FETCH;
+}
+
+static inline bool
 obj_is_ec_agg_opc(uint32_t opc)
 {
 	return opc == DAOS_OBJ_RPC_EC_AGGREGATE ||
