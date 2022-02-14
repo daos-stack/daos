@@ -1680,7 +1680,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		}
 	} else if (src_file_dfs->type == DAOS) {
 		rc = dfs_sys_readlink(src_file_dfs->dfs_sys, src_path, symlink_value,
-				      &(daos_size_t)len);
+				      (daos_size_t*)&len);
 		if (rc != 0) {
 			rc = daos_errno2der(rc);
 			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on dfs_sys_readlink('%s')",
