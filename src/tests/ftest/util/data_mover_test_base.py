@@ -179,7 +179,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             shared_path_strs = self._get_posix_test_path_string(path=self.posix_shared_test_paths)
             command = "rm -rf {}".format(shared_path_strs)
             try:
-	        # only call rm on one client since this is cleaning up shared dir
+                # only call rm on one client since this is cleaning up shared dir
                 self._execute_command(command, hosts=self.hostlist_clients[0:1])
             except CommandFailure as error:
                 error_list.append(
@@ -241,7 +241,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             create (bool): Whether to create the directory.
                 Defaults to True.
             mount_dir (bool): Whether or not posix directory will be manually
-	        mounted in tmpfs.
+                mounted in tmpfs.
             parent (str, optional): The parent directory to create the
                 path in. Defaults to self.parent, which has a default of self.tmp.
 
@@ -607,10 +607,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                             self.log.info("Expected:\n%s\nBut got:\n%s",
                                 data[:100] + "...",
                                 actual_idx + "...")
-                            self.log.info(
-                                "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
-                                    str(obj.c_oid.hi), str(obj.c_oid.lo),
-                                    dkey, akey)
+                            self.log.info("For:\nobj: %s.%s\ndkey: %s\nakey: %s",
+                                          str(obj.c_oid.hi), str(obj.c_oid.lo),
+                                          dkey, akey)
                             self.fail("Array verification failed.")
 
             obj.close()
@@ -927,7 +926,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 src_path=tmp_path,
                 pool=uuid_from_obj(dst_pool))
 
-
     def set_ior_params(self, param_type, path, pool=None, cont=None,
                        path_suffix=None, flags=None, display=True):
         """Set the ior params.
@@ -1202,7 +1200,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Set the tool to use
         self.set_tool(tool)
 
-
         if create_dataset:
             # create initial datasets
             if not pool:
@@ -1255,7 +1252,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 "DAOS", "/", pool, cont2)
         else:
             self.fail("Invalid tool: {}".format(tool))
-
 
         # move data from daos to posix FS and vice versa
         if tool in ['FS_COPY', 'DCP']:
