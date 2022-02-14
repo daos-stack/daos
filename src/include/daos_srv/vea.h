@@ -20,9 +20,6 @@
 #include <daos/mem.h>
 #include <daos/btree.h>
 
-/* Maximum age, indicating a non-active free extent */
-#define VEA_EXT_AGE_MAX		0
-
 /* Common free extent structure for both SCM & in-memory index */
 struct vea_free_extent {
 	uint64_t	vfe_blk_off;	/* Block offset of the extent */
