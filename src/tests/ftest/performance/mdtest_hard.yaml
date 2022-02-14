@@ -9,7 +9,7 @@ hosts:
     - client-E
     - client-F
     - client-G
-timeout: 240
+timeout: 300
 server_config:
     name: daos_server
     control_log_mask: INFO
@@ -47,44 +47,29 @@ pool:
 container:
   type: POSIX
   control_method: daos
-ior: &ior_base
+mdtest: &mdtest_base
   client_processes:
     ppn: 8
-  write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
-  read_flags: "-r -R -C -e -g -G 27 -k -Q 1 -v"
-  transfer_size: '47008'
-  block_size: '47008'
-  segment_count: 10000000
-  sw_deadline: 30
-  sw_wearout: 1
-  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
-ior_dfs_sx:
-  <<: *ior_base
-  api: DFS
-  dfs_oclass: SX
-  dfs_chunk: 470080
-  transfer_size: 47008
-ior_dfs_ec_16p2gx:
-  <<: *ior_base
-  api: DFS
-  dfs_oclass: EC_16P2GX
-  dfs_chunk: 7521280 # 16 * 47008
-  transfer_size: 47008
-ior_dfuse_sx:
-  <<: *ior_base
-  api: POSIX
-  dfs_oclass: SX # dfs params are translated to container params
-  dfs_chunk: 470080
-  transfer_size: 47008
-ior_dfuse_ec_16p2gx:
-  <<: *ior_base
-  api: POSIX
-  dfs_oclass: EC_16P2GX # dfs params are translated to container params
-  dfs_chunk: 7521280 # 16 * 47008
-  transfer_size: 47008
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"
-  disable_caching: True
+  test_dir: "/"
+  manager: "MPICH"
+  flags: "-C -T -r -F -P -G 27 -N 1 -Y -v -t -X -E"
+  api: "DFS"
+  read_bytes: 3901
+  write_bytes: 3901
+  num_of_files_dirs: 100000000
+  stonewall_timer: 30
+  stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  dfs_destroy: False
+mdtest_dfs_s1:
+  <<: *mdtest_base
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
+  dfs_chunk: 1MiB
+mdtest_dfs_ec_16p2g1:
+  <<: *mdtest_base
+  dfs_oclass: EC_16P2G1
+  dfs_dir_oclass: RP_3GX
+  dfs_chunk: 16MiB
 performance:
   env:
     - D_LOG_MASK=ERR
