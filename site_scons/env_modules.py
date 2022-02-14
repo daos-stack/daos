@@ -69,9 +69,12 @@ class _env_module(): # pylint: disable=invalid-name
 
             return ns['_mlstatus'], stderr.decode()
 
-        exec(stdout.decode()) # nosec
+        # Should not get to this point.
+        assert False
 
-        return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
+        # exec(stdout.decode()) # nosec
+
+        # return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
         # pylint: enable=exec-used
 
     def _init_mpi_module(self):
