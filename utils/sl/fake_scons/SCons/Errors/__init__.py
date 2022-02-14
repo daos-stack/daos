@@ -25,6 +25,7 @@ class StopError(Exception):
 class InternalError(Exception):
     """Fake InternalError"""
 
+
 ARGUMENTS = {}
 
 __all__ = ['StopError',

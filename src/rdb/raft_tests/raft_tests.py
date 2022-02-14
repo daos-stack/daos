@@ -8,7 +8,7 @@ Run the raft tests using make -C DIR tests, where DIR is the path to the raft
 Makefile. Check the output for the number of "not ok" occurrences and return
 this number as the return code.
 '''
-import subprocess #nosec
+import subprocess # nosec
 import sys
 import os
 import json
@@ -70,6 +70,7 @@ def main():
     else:
         print("Raft Tests had {} failures".format(failures))
     sys.exit(failures)
+
 
 if __name__ == "__main__":
     main()

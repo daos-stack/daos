@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -67,7 +67,7 @@ class IorInterceptMessages(IorTestBase):
 
         # Intercept
         match_intercept_results = []
-        intercept_pattern = "^\[libioil\] Intercepting write*"
+        intercept_pattern = "^\[libioil\] Intercepting write*"  # noqa: W605
         compiled_ip = re.compile(intercept_pattern)
         expected_total_intercepts = self.processes * int(env['D_IL_REPORT'])
 
