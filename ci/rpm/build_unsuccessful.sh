@@ -25,7 +25,7 @@ if [ -d /var/cache/pbuilder/ ]; then
     exit 0
 fi
 
-mockroot="/var/lib/mock/${CHROOT_NAME}"
+mockroot="/var/lib/mock/$CHROOT_NAME"
 cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
 
 if srpms="$(ls _topdir/SRPMS/*)"; then
