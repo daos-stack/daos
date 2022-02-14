@@ -75,8 +75,6 @@ def update_config_cmdlist(args):
     match = False
     # grep SLURM_CONF to determine format of the the file
     for ctl_host in ["SlurmctldHost", "ControlMachine"]:
-        if match:
-            break
         command = r"grep {} {}".format(ctl_host, SLURM_CONF)
         task = run_task(all_nodes, command)
         results = dict(task.iter_retcodes())
@@ -85,7 +83,9 @@ def update_config_cmdlist(args):
                 ctl_host, args.control, SLURM_CONF)
             cmd_list.insert(0, ctl_str)
             match = True
+            break
     if not match:
+        logging.error("% could not be updated. Check conf file format", SLURM_CONF)
         sys.exit(1)
 
     # This info needs to be gathered from every node that can run a slurm job
