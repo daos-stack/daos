@@ -2922,6 +2922,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 			case DAOS_PROP_PO_SELF_HEAL:
 			case DAOS_PROP_PO_RECLAIM:
 			case DAOS_PROP_PO_EC_CELL_SZ:
+			case DAOS_PROP_PO_REDUN_FAC:
 			case DAOS_PROP_PO_EC_PDA:
 			case DAOS_PROP_PO_RP_PDA:
 				if (entry->dpe_val != iv_entry->dpe_val) {

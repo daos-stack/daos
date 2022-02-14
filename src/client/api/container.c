@@ -79,7 +79,7 @@ daos_cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 	int			rf, rc = 0;
 
 	*merged_prop = NULL;
-	/* redunc factor specifed, no need inherit from pool */
+	/* redunc factor specified, no need inherit from pool */
 	entry = daos_prop_entry_get(cont_prop, DAOS_PROP_CO_REDUN_FAC);
 	if (entry)
 		return 0;
