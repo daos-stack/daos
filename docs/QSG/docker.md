@@ -13,7 +13,7 @@ At this time only emulated hardware storage is supported by this Docker platform
 - NVMe disks are emulated with a file device.
 
 !!!warning
-Virtual Docker networking is still in development. The following are known issues:
+DAOS support of virtual networking is still in development. The following are known issues:
 - [bridge](https://docs.docker.com/network/bridge/) 
 - loopback
 	- Workaround - use one physical network interface for the [host](https://docs.docker.com/network/host/) used by the Docker containers network.
@@ -37,91 +37,59 @@ Virtual Docker networking is still in development. The following are known issue
 ### Hardware and software configuration used in this QSG
 - Server Board: Wolf Pass
 - CPU: Cascade Lake (2)
-- OS: Ubuntu 20.0.4LTE. freshly Installed
+- OS: Ubuntu 20.0.4LTE. fresh Install
 - Memory: 192GB 
-- PMEM:(12)x16GB
+- PMEM:(12)x16GB (not required for this QSG)
 
 ## Configuring Hugepages
 Additional information in Hugepages is located in the administration portion of this guide <need link> and at (kernel.org)[https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt]
 	
 ### Determining Huge pages
-The number of huge pages allocated could be checked with the following command: 
-- Ubuntu- ```$ sysctl vm.nr_hugepages```
-
 The default size of a huge page, the number of available huge pages, etc. could be found with the following command: 
 - Ubuntu- ```$ cat /proc/meminfo | grep -e "^Huge" ```
+If the pages are not enabled, you will see something like this:
+```
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+```
 
-@@@ Not even sure what this means-The platform was tested and validated with the [rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) and [centos:centos8](https://hub.docker.com/_/centos) official docker images.  However other RHEL-like distributions should be supported.
-
-@@@ Is this a warning about rocky and huge pages or daos with hugepages on rocky or??? 
-!!! warning
-    Some distributions are not yet well supported such as [rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux): issue with the management of hugepages with the [spdk](https://spdk.io/) library.
+#### Note: 
+Most Linux docker distributions should support hugepages. However only the following have been validated
+- [rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) 
+- [centos:centos8](https://hub.docker.com/_/centos) official docker images.
+The following Linux docker distributions are known not to support hugepages at this time:
+- [rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux)
 
 ### Configuring HugePages
 If hugepages have not been enabled, we will need to do so now to avoid memory fragmentation. To configure 2Mb hugepages use the following command:
-- ubuntu ```$ sysctl vm.nr_hugepages=4096```
+```bash
+sysctl vm.nr_hugepages=4096
+reboot
+```
 
 ## Building Docker Images
 The three images `daos-server`, `daos-admin` and `daos-client` could be built directly from GitHub
 or from a local tree in the same way as for the `daos-base` image.
 
+First you will need to install dockerand docker compose, for eaxample
+```
+sudo apt install docker
+sudo apt install docker-compose
+....
+
 Following command could be used to build directly the three images from GitHub:
 
-@@@ as far as can determine the tag doesnt exist	
 ```bash
-$ for image in daos-server daos-admin daos-client ; do \
-	docker build --tag "$image:rocky8.4" \
-		"https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/$image/el8"; \
-  done
+docker build --tag "$image:rocky8.4" \ "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/$image/el8"
 ```
-@@@Need to add in the ethernet flag above to specify Ethernet adapter `DAOS_IFACE_NAME`
-Note:- `DAOS_IFACE_NAME`: Fabric network interface used by the DAOS engine (default "eth0")
-
 For additional docker, file arguments see <link>
 	
 ## Running the DAOS Containers
-
-### Via Docker Commands  @@section below needs simplification to one path, but as I can’t get this to run yet, I need guidance or a working docker image tag
-
-Once the images are created, the containers could be directly started with docker with the following
-commands:
-
-```bash
-$ export DAOS_IFACE_IP=x.x.x.x
-$ docker run --detach --privileged --name=daos-server --hostname=daos-server \
-	--add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
-	--add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
-	--volume=/dev/hugepages:/dev/hugepages  --tmpfs=/run --network=host \
-	daos-server:rocky8.4
-$ docker run --detach --privileged --name=daos-agent --hostname=daos-agent \
-	--add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
-	--add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
-	--tmpfs=/run --network=host daos-agent:rocky8.4
-$ docker run --detach --privileged --name=daos-client --hostname=daos-client \
-	--add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
-	--add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
-	--tmpfs=/run --network=host daos-client:rocky8.4
-```
-
-The value of the `DAOS_IFACE_IP` shall be replaced with the one of the network interfaces which was
-provided when the images have been built.
-
-Once started, the DAOS server waits for the administrator to format the system.
-This can be done using the following command:
-
-```bash
-$ docker exec daos-admin dmg -i storage format
-```
-
-Upon successful completion of the format, the storage engine is started, and pools
-can be created using the daos admin tool.  For more advanced configurations and usage refer to the
-section [DAOS Tour](https://docs.daos.io/QSG/tour/).
-
-
-### Via docker-compose
-
-From a local tree, a more straightforward way to start the containers could be done with
-`docker-compose` and the following commands:
+From a local tree, a simple way to start the containers is done with a `docker-compose` commands:
 
 ```bash
 $ docker-compose --file utils/docker/vcluster/docker-compose.yml -- up --detach
