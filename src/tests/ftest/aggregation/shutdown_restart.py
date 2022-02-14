@@ -1,7 +1,6 @@
 #!/usr/bin/python
 """
    (C) Copyright 2020-2021 Intel Corporation.
-
    SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
@@ -13,7 +12,6 @@ from dmg_utils import check_system_query_status
 class IoAggregation(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Verify Aggregation across system shutdown.
-
     :avocado: recursive
     """
     def get_nvme_free_space(self):
@@ -25,10 +23,8 @@ class IoAggregation(IorTestBase):
 
     def test_ioaggregation(self):
         """Jira ID: DAOS-3752.
-
         Test Description:
             Verify Aggregation across system shutdown.
-
         Use Cases:
             Create Pool.
             Create Container.
@@ -45,10 +41,9 @@ class IoAggregation(IorTestBase):
             If current free space is equal to free space after first
             ior write, then pass otherwise fail the test after waiting
             for 4 attempts.
-
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=daosio,io_aggregation,tx
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=daosio,ioaggregation,tx
         """
         # update ior signature option
         self.ior_cmd.signature.update("123")
@@ -61,9 +56,9 @@ class IoAggregation(IorTestBase):
         # create snapshot
         self.container.create_snap()
 
-        # write to same ior file again
+        # write to same ior file again, expect warning
         self.ior_cmd.signature.update("456")
-        self.run_ior_with_pool(create_cont=False)
+        self.run_ior_with_pool(create_cont=False, fail_on_warning=False)
 
         # capture free space after second ior write
         free_space_before_snap_destroy = self.get_nvme_free_space()
