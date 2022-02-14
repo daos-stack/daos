@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-# Install OS updates and packages as required for building DAOS on CentOS 8 and
+# Install OS updates and packages as required for building DAOS on EL 8 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
 
 # This script use used by docker but can be invoked from elsewhere, in order to run it
