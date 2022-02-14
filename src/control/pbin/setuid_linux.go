@@ -2,6 +2,7 @@
 // (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
+//go:build linux
 // +build linux
 
 package pbin
