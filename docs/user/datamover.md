@@ -32,7 +32,7 @@ More documentation and uses cases for these tools can be found
 [here](https://github.com/hpc/mpifileutils/blob/master/DAOS-Support.md).
 
 Build instructions for these tools can be found
-[here](https://mpifileutils.readthedocs.io/en/latest/build.html#build-everything-directly-with-daos-support).
+[here](https://mpifileutils.readthedocs.io/en/latest/build.html#daos-support).
 
 ## DAOS Tools Usage
 

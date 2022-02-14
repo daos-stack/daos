@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -342,7 +342,7 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 	} while (0)
 /** Get the leftover space in an iov of sgl */
 #define daos_iov_left(sgl, iov_idx, iov_off)				\
-	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+	((sgl)->sg_iovs[iov_idx].iov_buf_len - (iov_off))
 /** get remaining space in an iov, assuming that iov_len is used and
  * iov_buf_len is total in buf
  */

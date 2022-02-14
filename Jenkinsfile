@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019-2021 Intel Corporation
+/* Copyright (C) 2019-2022 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -587,10 +587,11 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
+                                         referenceJobName: 'daos-stack/daos/release%252F2.0',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: false,
+                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          name: "NLT server leaks",
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
@@ -906,6 +907,8 @@ pipeline {
                     }
                     post {
                         always {
+                            discoverGitReferenceBuild referenceJob: 'daos-stack/daos/release%252F2.0',
+                                                      scm: 'daos-stack/daos'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: true,

@@ -19,7 +19,7 @@ timeouts:
     test_daos_verify_consistency: 105
     test_daos_io: 290
     test_daos_ec_io: 450
-    test_daos_ec_obj: 500
+    test_daos_ec_obj: 600
     test_daos_object_array: 105
     test_daos_array: 106
     test_daos_kv: 105
@@ -30,9 +30,9 @@ timeouts:
     test_daos_drain_simple: 500
     test_daos_oid_allocator: 320
     test_daos_checksum: 500
-    test_daos_rebuild_ec: 1800
+    test_daos_rebuild_ec: 3600
     test_daos_aggregate_ec: 200
-    test_daos_degraded_ec: 1800
+    test_daos_degraded_ec: 1900
     test_daos_dedup: 220
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.

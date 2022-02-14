@@ -54,7 +54,7 @@ errors are documented in the table below.
 
 When an operation fails, DAOS returns a negative DER error.
 For a full list of errors, please check
-<https://github.com/daos-stack/daos/blob/master/src/include/daos_errno.h>
+<https://github.com/daos-stack/daos/blob/release/2.0/src/include/daos_errno.h>
 (`DER_ERR_GURT_BASE` is equal to 1000, and `DER_ERR_DAOS_BASE` is equal
 to 2000).
 
@@ -70,7 +70,7 @@ server operations:
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
 |Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
+|[Privileged Helper](https://docs.daos.io/v2.0/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
@@ -106,7 +106,7 @@ DEBUG-level logging will be sent to the specified file.
 ## Debugging System
 
 DAOS uses the debug system defined in
-[CaRT](https://github.com/daos-stack/daos/tree/master/src/cart),
+[CaRT](https://github.com/daos-stack/daos/tree/release/2.0/src/cart),
 specifically the GURT library.
 Both server and client default log is `stdout`, unless
 otherwise set by `D_LOG_FILE` environment variable (client) or
@@ -416,7 +416,7 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 
 ## Bug Report
 
-Bugs should be reported through our issue tracker[^1] with a test case
+Bugs should be reported through our [issue tracker](http://jira.daos.io/) with a test case
 to reproduce the issue (when applicable) and debug logs.
 
 After creating a ticket, logs should be gathered from the locations
@@ -425,5 +425,3 @@ attached to the ticket.
 
 To avoid problems with attaching large files, please attach the logs
 in a compressed container format, such as .zip or .tar.bz2.
-
-[^1]: http://jira.daos.io

@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.1.0~rc4-3%{?dist}
-%global libfabric_version 1.14.0~rc3-2
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       2.0.0
-Release:       4%{?relval}%{?dist}
+Version:       2.0.1
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -270,12 +270,12 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %description firmware
 This is the package needed to manage server storage firmware on DAOS servers.
 
-%package daos_serialize
+%package serialize
 Summary: DAOS serialization library that uses HDF5
 BuildRequires: hdf5-devel
 Requires: hdf5
 
-%description daos_serialize
+%description serialize
 This is the package needed to use the DAOS serialization and deserialization
 tools, as well as the preserve option for the filesystem copy tool.
 
@@ -510,13 +510,25 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
-%files daos_serialize
+%files serialize
 %{_libdir}/libdaos_serialize.so
 
 %files tests
 # No files in a meta-package
 
 %changelog
+* Thu Jan 27 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.1-2
+- Fix issue in backward compatibility code.
+
+* Sat Jan 22 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.1-1
+- Version bump to 2.0.1
+
+* Wed Jan 19 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-6
+- Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
+* Wed Jan 12 2022 Phillip Henderson <phillip.henderson@intel.com> 2.0.0-5
+- Fix name of daos serialize package
+
 * Tue Dec 28 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.0.0-4
 - Update mercury to v2.1.0~rc4-3 to pick a fix for DAOS-9325 high cpu usage
 

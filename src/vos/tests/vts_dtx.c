@@ -66,6 +66,9 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_for_migration = 0;
 	dth->dth_ignore_uncommitted = 0;
 	dth->dth_prepared = 0;
+	dth->dth_verified = 0;
+	dth->dth_aborted = 0;
+	dth->dth_already = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;
@@ -122,6 +125,7 @@ vts_dtx_end(struct dtx_handle *dth)
 	}
 
 	vos_dtx_rsrvd_fini(dth);
+	vos_dtx_detach(dth);
 	D_FREE(dth->dth_dte.dte_mbs);
 	D_FREE_PTR(dth);
 }

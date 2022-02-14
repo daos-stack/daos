@@ -121,7 +121,7 @@ class DmvrPosixSymlinks(DataMoverTestBase):
             diff_src = src_posix_path
 
         # DAOS -> DAOS
-        dst_daos_dir = self.new_daos_test_path(False)
+        dst_daos_dir = self.new_daos_test_path(create=False)
         self.run_datamover(
             test_desc + " (DAOS->DAOS)",
             "DAOS", src_daos_dir, pool, cont,
@@ -129,7 +129,7 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         self.run_diff(diff_src, cont.path.value + dst_daos_dir, do_deref)
 
         # DAOS -> POSIX
-        dst_posix_path = self.new_posix_test_path(False)
+        dst_posix_path = self.new_posix_test_path(create=False)
         self.run_datamover(
             test_desc + " (DAOS->POSIX)",
             "DAOS", src_daos_dir, pool, cont,
@@ -137,7 +137,7 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         self.run_diff(diff_src, dst_posix_path)
 
         # POSIX -> DAOS
-        dst_daos_dir = self.new_daos_test_path(False)
+        dst_daos_dir = self.new_daos_test_path(create=False)
         self.run_datamover(
             test_desc + " (POSIX->DAOS)",
             "POSIX", src_posix_path, None, None,

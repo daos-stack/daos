@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2021 Intel Corporation
+# Copyright (C) 2018-2022 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of centOS 7 based
@@ -97,6 +97,7 @@ RUN dnf -y install deltarpm && \
     dnf -y upgrade && \
     dnf -y install \
         boost-python36-devel \
+        bzip2 \
         clang-analyzer \
         cmake \
         CUnit-devel \
