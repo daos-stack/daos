@@ -479,6 +479,10 @@ pipeline {
                     }
                 }
                 stage('Build on CentOS 7 Bullseye') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
@@ -1026,8 +1030,8 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish coverage_stashes: ['centos7-covc-unit-cov'],
-                                            coverage_healthy: [methodCoverage: 0,
-                                                               conditionalCoverage: 0,
+                                            coverage_healthy: [methodCoverage: 35,
+                                                               conditionalCoverage: 22,
                                                                statementCoverage: 0],
                                             ignore_failure: true
                     }
