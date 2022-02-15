@@ -626,7 +626,7 @@ A DAOS system can be shut down and restarted to perform maintenance and/or
 reboot hosts. Pool data and state will be maintained, providing that no changes are
 made to the rank's metadata stored on persistent memory.
 
-Storage reformats can also be performed after a system shutdown. Pools
+Storage reformat can also be performed after system shutdown. Pools will be
 will be removed and storage wiped.
 
 System commands will be handled by a DAOS Server acting as an access point and
@@ -719,10 +719,10 @@ operate and listen on the management network.
 
 !!! warning
     All engines monitor each other and pro-actively exclude unresponsive
-    members. It is critical to stop a DAOS system with dmg in properly in
+    members. It is critical to properly stop a DAOS system as with dmg in
     the case of planned maintenance on all or a majority of the DAOS
     storage nodes. An abrupt reboot of the storage nodes might result
-    In massive exclusion, that will take time to recover.
+    in massive exclusion that will take time to recover.
 
 The force option can be passed for cases when a clean shutdown is not working.
 Monitoring is not disabled in this case, and spurious exclusion might happen,
@@ -811,7 +811,7 @@ formatted again by running `dmg storage format`.
     The `/dev/pmemX` devices will remain mounted,
     and the PMem configuration will not be reset to Memory Mode.
     To completely unconfigure the SCM, it is advisable to run
-    `daos_server storage prepare --SCM-only --reset` which will
+    `daos_server storage prepare --scm-only --reset` which will
     completely reset the PMem. A reboot will be required to finalize
     the change of the PMem allocation goals.
 
@@ -826,7 +826,7 @@ To add a new server to an existing DAOS system, one should install:
 
 The daos\_control.yml file should also be updated to include the new DAOS server.
 
-Then start the daos\_server via the systemd command and format the new server via
+Then starts the daos\_server via the systemd command and format the new server via
 dmg as follows:
 
 ```
