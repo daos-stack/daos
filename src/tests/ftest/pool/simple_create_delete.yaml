@@ -6,7 +6,7 @@ server_config:
 pool:
  control_method: dmg
  mode: 511
- scm_size: 1073741824
+ scm_size: 1G
 tests:
  uids: !mux
   validuid:
@@ -26,12 +26,3 @@ tests:
    gid:
     - 0
     - PASS
- setnames: !mux
-  validsetname:
-   setname:
-    - daos_server
-    - PASS
-  badsetname:
-   setname:
-    - complete_rubbish
-    - FAIL

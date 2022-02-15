@@ -1,4 +1,4 @@
-# (C) Copyright 2019-2021 Intel Corporation.
+# (C) Copyright 2019-2022 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -6,7 +6,6 @@
 PyDAOS Module allowing global access to the DAOS containers and objects.
 """
 
-import sys
 import atexit
 # pylint: disable=relative-beyond-top-level
 from . import pydaos_shim
@@ -87,6 +86,6 @@ def _cleanup():
     DaosClient.cleanup()
 
 
-from .pydaos_core import *
+from .pydaos_core import * # noqa: F403
 
-__all__ = ["pydaos_core"]
+__all__ = ["pydaos_core"] # noqa: F405

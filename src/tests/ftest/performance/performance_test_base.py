@@ -10,7 +10,7 @@ import types
 
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-#from mdtest_utils import MdtestMetrics
+from mdtest_utils import MdtestMetrics
 from general_utils import get_subprocess_stdout
 from ior_utils import IorMetrics
 from command_utils_base import EnvironmentVariables
@@ -96,6 +96,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         """
         old_get_default_env = cmd.get_default_env
         performance_env = self.performance_env
+
         def new_get_default_env(self, *args, **kwargs): # pylint: disable=unused-argument
             env = old_get_default_env(*args, **kwargs)
             for key, val in performance_env.items():
@@ -405,5 +406,90 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             # Wait for rebuild if we stopped a rank
             if stop_rank_read_s:
                 self.pool.wait_for_rebuild(False)
+
+        self._log_daos_metrics()
+
+    def run_performance_mdtest(self, namespace=None, stop_delay=None):
+        """Run an MDTest performance test.
+
+        Args:
+            namespace (str, optional): namespace for MDTest parameters in the yaml.
+                Defaults to None, which uses default MDTest namespace.
+            stop_delay (float, optional): fraction of stonewall time after which to stop a
+                rank. Must be between 0 and 1. Defaults to None.
+
+        """
+        if stop_delay is not None and (stop_delay < 0 or stop_delay > 1):
+            self.fail("stop_delay must be between 0 and 1")
+
+        if namespace is not None:
+            self.mdtest_cmd.namespace = namespace
+            self.mdtest_cmd.get_params(self)
+            self.set_processes_ppn(namespace)
+
+        # Performance with POSIX/DFUSE is tricky because we can't just set
+        # dfs_dir_oclass and dfs_oclass. This needs more work before running non-DFS.
+        if self.mdtest_cmd.api.value != 'DFS':
+            self.fail("Only DFS API supported")
+
+        stop_rank_s = (stop_delay or 0) * (self.mdtest_cmd.stonewall_timer.value or 0)
+
+        self._log_performance_params("mdtest")
+
+        self.verify_oclass_server_count(self.mdtest_cmd.dfs_oclass.value)
+        self.verify_oclass_server_count(self.mdtest_cmd.dfs_dir_oclass.value)
+
+        # Set the container redundancy factor to match the oclass used
+        cont_rf = min([
+            oclass_utils.extract_redundancy_factor(self.mdtest_cmd.dfs_oclass.value),
+            oclass_utils.extract_redundancy_factor(self.mdtest_cmd.dfs_dir_oclass.value)])
+
+        # Create pool and container upfront so rank stop timing is more accurate
+        self.add_pool(connect=False)
+        self.add_container(self.pool, create=False)
+        properties = "rf:{}".format(cont_rf)
+        current_properties = self.container.properties.value
+        if current_properties:
+            new_properties = current_properties + "," + properties
+        else:
+            new_properties = properties
+        self.container.properties.update(new_properties)
+        self.container.create()
+
+        # Never let execute_mdtest automatically destroy the container
+        self.mdtest_cmd.dfs_destroy.update(False)
+
+        # Always run as a subprocess so we can stop ranks during IO
+        self.subprocess = True
+
+        self.log.info("Running MDTEST")
+        self.execute_mdtest()
+        if stop_rank_s:
+            time.sleep(stop_rank_s)
+            self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])
+        mdtest_returncode = self.job_manager.process.wait()
+        try:
+            if mdtest_returncode != 0:
+                self.fail("mdtest failed")
+            mdtest_output = get_subprocess_stdout(self.job_manager.process)
+            mdtest_metrics = MdtestMetrics(mdtest_output)
+            if not mdtest_metrics:
+                self.fail("Failed to get mdtest metrics")
+            self.log_performance([
+                "create_ops: {}".format(mdtest_metrics.rates.file_creation.max),
+                "stat_ops: {}".format(mdtest_metrics.rates.file_stat.max),
+                "read_ops: {}".format(mdtest_metrics.rates.file_read.max),
+                "remove_ops: {}".format(mdtest_metrics.rates.file_removal.max)
+            ])
+        finally:
+            # Try this even if MDTest failed because it could give us useful info
+            self.verify_system_status()
+
+        # Manually stop dfuse after mdtest completes
+        self.stop_dfuse()
+
+        # Wait for rebuild if we stopped a rank
+        if stop_rank_s:
+            self.pool.wait_for_rebuild(False)
 
         self._log_daos_metrics()
