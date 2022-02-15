@@ -43,9 +43,9 @@ class NvmeIo(IorTestBase):
             for index in range(ior_seq_pool_qty):
                 # Create and connect to a pool with namespace
                 self.add_pool(namespace="/run/pool_{}/*".format(index))
-                stripesize = self.params.get("stripesize", "/run/pool/pool_{}/*".format(index))
-                blocksize = self.params.get("blocksize", "/run/pool/pool_{}/*".format(index))
-                clientslots = self.params.get("clientslots", "/run/pool/pool_{}/*".format(index))
+                stripesize = self.params.get("stripesize", "/run/pool_{}/*".format(index))
+                blocksize = self.params.get("blocksize", "/run/pool_{}/*".format(index))
+                clientslots = self.params.get("clientslots", "/run/pool_{}/*".format(index))
 
                 # Disable aggregation
                 self.pool.set_property()
