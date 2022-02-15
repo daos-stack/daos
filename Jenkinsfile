@@ -1030,9 +1030,12 @@ pipeline {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
                         cloverReportPublish coverage_stashes: ['centos7-covc-unit-cov'],
-                                            coverage_healthy: [methodCoverage: 35,
-                                                               conditionalCoverage: 22,
+                                            coverage_healthy: [methodCoverage: 70,
+                                                               conditionalCoverage: 70,
                                                                statementCoverage: 0],
+                                            coverage_unhealthy: [methodCoverage: 40,
+                                                                 conditionalCoverage: 40,
+                                                                 statementCoverage: 0],
                                             ignore_failure: true
                     }
                 } // stage('Bullseye Report')
