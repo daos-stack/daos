@@ -51,10 +51,10 @@ severity, message, description, and cause.
 | pool\_rebuild\_started| INFO\_ONLY| NOTICE   | Pool rebuild started.| Indicates a pool rebuild has started. The event data field contains a pool map version and pool operation identifier. | When a pool rank becomes unavailable, a rebuild will be triggered.   |
 | pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. The event data field includes the pool map version and pool operation identifier.  | N/A|
 | pool\_rebuild\_failed| INFO\_ONLY| ERROR| Pool rebuild failed: <rc\>.| Indicates a pool rebuild has failed. The event data field includes the pool map version and pool operation identifier. <rc\> provides a string representation of DER code.| N/A                          |
-| pool\_replicas\_updated| STATE\_CHANGE| NOTICE| List of pool service replica ranks has been updated.| Indicates a pool service replica list has changed. The event contains the new service replica list in a custom payload. | When a pool service replica rank becomes unavailable, a new rank is selected to replace it (if available). |
-| pool\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine starts with pool data in local storage with s an incompatible layout version. |
-| container\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine starts with container data in local storage with s an incompatible layout version.|
-| rdb\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>]] OR incompatible DB UUID: <uuid\> | Indicates the given RDB's layout version does not match any of the versions supported by the currently running DAOS software, or the given RDB's UUID does not match the expected UUID (usually because the RDB belongs to a pool created by a pre-2.0 DAOS version).| DAOS engine starts with RDB data in local storage with s an incompatible layout version.|
+| pool\_replicas\_updated| STATE\_CHANGE| NOTICE| List of pool service replica ranks has been updated.| Indicates a pool service replica list has changed. The event contains the new service replica list in a custom payload. | When a pool service replica rank becomes unavailable a new rank is selected to replace it (if available). |
+| pool\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with pool data in local storage that has an incompatible layout version. |
+| container\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with container data in local storage that has an incompatible layout version.|
+| rdb\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>]] OR incompatible DB UUID: <uuid\> | Indicates the given RDB's layout version does not match any of the versions supported by the currently running DAOS software, or the given RDB's UUID does not match the expected UUID (usually because the RDB belongs to a pool created by a pre-2.0 DAOS version).| DAOS engine is started with rdb data in local storage that has an incompatible layout version.|
 | swim\_rank\_alive| STATE\_CHANGE| NOTICE| TBD| The SWIM protocol has detected the specified rank is responsive.| A remote DAOS engine has become responsive.|
 | swim\_rank\_dead| STATE\_CHANGE| NOTICE| SWIM rank marked as dead.| The SWIM protocol has detected the specified rank is unresponsive.| A remote DAOS engine has become unresponsive.|
 | system\_start\_failed| INFO\_ONLY| ERROR| System startup failed, <errors\>| Indicates that a user-initiated controlled startup failed. <errors\> shows which ranks failed.| Ranks failed to start.|
@@ -67,15 +67,15 @@ Engine logging is initially configured by setting the `log_file` and `log_mask`
 parameters in the server config file. Logging is described in detail in the
 [`Debugging System`](https://daos-stack.github.io/admin/troubleshooting/#debugging-system) section.
 
-Engine log levels can be changed dynamically (at runtime) by setting log
-Masks for a set of facilities to a given level.
-The changed settings will be applied to all running DAOS I/O Engines present in the configured
+Engine log levels can be changed dynamically (at runtime) by setting log masks
+for a set of facilities to a given level.
+Settings will be applied to all running DAOS I/O Engines present in the configured
 dmg hostlist using the command `dmg server set-logmasks [<masks>]`.
 The command accepts 0-1 positional arguments.
-If no args are passed, the log masks for each running engine will be reset
-to the value of engine "log\_mask" parameter in the server config file (asset
+If no args are passed, then the log masks for each running engine will be reset
+to the value of engine "log\_mask" parameter in the server config file (as set
 at the time of daos\_server startup).
-If a single arg is passed, this will be used as the log masks setting.
+If a single arg is passed, then this will be used as the log masks setting.
 
 Example usage:
 ```
