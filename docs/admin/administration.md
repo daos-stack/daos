@@ -191,7 +191,7 @@ metrics from the local host only.
 `daos_metrics` displays the metrics in a human-readable tree format or CSV
 format (`--csv`).
 
-Each DAOS engine maintains its metrics.
+Each DAOS engine maintains its own metrics.
 The `--srv_idx` parameter can be used to specify which engine to query, if there
 are multiple engines configured per server.
 The default is to query the first engine on the server (index 0).
@@ -271,7 +271,7 @@ then the values supplied to `dmg pool create` should be
 a maximum of the SCM/NVMe free space divided by the number of ranks per host.
 
 For example, if 2.0 TB SCM and 10.0 TB NVMe free space is reported by
-`dmg storage query usage` and the server configuration file used to start the 
+`dmg storage query usage` and the server configuration file used to start the
 system specifies 2 I/O processes (2 "server" sections), the maximum pool size
 that can be specified is approximately `dmg pool create -s 1T -n 5T` (may need to
 specify slightly below the maximum to take account of negligible metadata
@@ -424,7 +424,7 @@ data can either be queried by device UUID (device-health command) or by VOS targ
 along with the server rank (target-health command). The same device health information
 is displayed with both command options. Additionally, vendor-specific SMART stats are
 displayed, currently for Intel devices only. Note: A reasonable timed workload > 60 min
-must be running for the SMART stats to register (Raw values are 65535). Media wear percentage
+must be ran for the SMART stats to register (Raw values are 65535). Media wear percentage
 can be calculated by dividing by 1024 to find the percentage of the maximum rated cycles.
 ```bash
 $ dmg -l boro-11 storage query device-health --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
@@ -569,7 +569,7 @@ boro-11
 ```
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
-be for testing or accidental device eviction.
+be for testing or to recover from accidental device eviction.
 
 #### Identification
 
