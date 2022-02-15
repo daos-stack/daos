@@ -95,6 +95,9 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		}
 		break;
 	case VOS_ITER_SINGLE:
+	{
+		void *ptr;
+
 		D_ASSERT(pipe_arg->copy_data_cb != NULL);
 
 		if (pipe_arg->akey_idx < 0)
@@ -105,6 +108,20 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		sgls	= pipe_arg->sgl_recx;
 		iov	= sgls[pipe_arg->akey_idx].sg_iovs;
 
+		iov->iov_len = 0;
+
+		if (entry->ie_rsize > iov->iov_buf_len)
+		{
+			D_REALLOC(ptr, iov->iov_buf,
+				  iov->iov_buf_len, entry->ie_rsize);
+			if (ptr == NULL)
+			{
+				return -DER_NOMEM;
+			}
+			iov->iov_buf     = ptr;
+			iov->iov_buf_len = entry->ie_rsize;
+		}
+
 		rc = pipe_arg->copy_data_cb(ih, entry, iov);
 		if (rc == 0)
 		{
@@ -113,6 +130,7 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		}
 
 		break;
+	}
 	default:
 		D_ASSERTF(false, "unknown/unsupported type %d\n", type);
 		return -DER_INVAL;
@@ -228,20 +246,25 @@ static int
 ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		daos_pipeline_t pipeline, daos_epoch_range_t epr, uint64_t flags,
 		daos_key_t *dkey, uint32_t *nr_iods, daos_iod_t *iods,
-		daos_anchor_t *anchor, uint32_t *nr_kds, daos_key_desc_t **kds,
-		d_sg_list_t *sgl_keys, uint32_t *nr_recx, d_sg_list_t *sgl_recx,
-		d_sg_list_t *sgl_agg)
+		daos_anchor_t *anchor, uint32_t nr_kds, uint32_t *nr_kds_out,
+		daos_key_desc_t **kds, d_sg_list_t **sgl_keys,
+		uint32_t *nr_recx, d_sg_list_t **sgl_recx, d_sg_list_t *sgl_agg)
 {
 	int				rc;
 	uint32_t			nr_kds_pass;
 	d_iov_t				d_key_iter;
 	daos_key_desc_t			*kds_;
+	uint32_t			kds_alloc		= 0;
+	d_sg_list_t			*sgl_keys_		= NULL;
+	uint32_t			sgl_keys_alloc		= 0;
+	d_sg_list_t			*sgl_recx_		= NULL;
+	uint32_t			sgl_recx_alloc		= 0;
 	d_iov_t				*d_key_ptr;
 	d_sg_list_t			*sgl_recx_iter		= NULL;
 	d_iov_t				*sgl_recx_iter_iovs	= NULL;
 	uint32_t			i;
 	uint32_t			j			= 0;
-	uint32_t			sr_idx;
+	uint32_t			sr_idx			= 0;
 	struct vos_iter_anchors		anchors			= { 0 };
 	struct pipeline_compiled_t	pipeline_compiled	= { 0 };
 	struct filter_part_run_t	pipe_run_args		= { 0 };
@@ -264,7 +287,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	{
 		D_GOTO(exit, rc = 0);	/** nothing to return */
 	}
-	if (*nr_kds == 0 && pipeline.num_aggr_filters == 0)
+	if (nr_kds == 0 && pipeline.num_aggr_filters == 0)
 	{
 		D_GOTO(exit, rc = 0);	/** nothing to return */
 	}
@@ -325,13 +348,12 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	 */
 
 	nr_kds_pass		= 0;
-	sr_idx			= 0;
 	anchors.ia_dkey		= *anchor;
 
 	while (!daos_anchor_is_eof(&anchors.ia_dkey))
 	{
 		if (pipeline.num_aggr_filters == 0 &&
-			nr_kds_pass == *nr_kds)
+			nr_kds_pass == nr_kds)
 		{
 			break; /** all records read */
 		}
@@ -383,54 +405,98 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		 *     most one is returned.
 		 */
 
-		if (*nr_kds == 0 ||
-					(*nr_kds > 0 &&
-					 pipeline.num_aggr_filters > 0 &&
-					 nr_kds_pass > 1))
+		if (nr_kds == 0 ||
+				(nr_kds > 0 &&
+				pipeline.num_aggr_filters > 0 &&
+				nr_kds_pass > 1))
 		{
 			continue;
 		}
 
-		/** saving record info */
+		/**
+		 * saving record info
+		 */
 
 		/** dkey */
 		D_REALLOC_ARRAY(kds_, *kds, nr_kds_pass-1, nr_kds_pass);
-		d_key_ptr = sgl_keys[nr_kds_pass-1].sg_iovs;
-		D_ALLOC(d_key_ptr->iov_buf, d_key_ptr->iov_len);
-		if (kds_ == NULL || d_key_ptr->iov_buf == NULL)
+		if (kds_ == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+		kds_alloc++;
+		*kds = kds_;
+
+		D_REALLOC_ARRAY(sgl_keys_, *sgl_keys,
+				nr_kds_pass-1, nr_kds_pass);
+		if (sgl_keys_ == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+		sgl_keys_alloc++;
+		*sgl_keys = sgl_keys_;
+
+		D_ALLOC(d_key_ptr, sizeof(*d_key_ptr));
+		sgl_keys_[nr_kds_pass-1].sg_iovs = d_key_ptr;
+		if (d_key_ptr == NULL)
 		{
 			D_GOTO(exit, rc = -DER_NOMEM);
 		}
 
+		d_key_ptr->iov_buf = NULL;
+		D_ALLOC(d_key_ptr->iov_buf, d_key_iter.iov_buf_len);
+		if (d_key_ptr->iov_buf == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
 		memcpy(d_key_ptr->iov_buf, d_key_iter.iov_buf,
 		       d_key_iter.iov_len);
 		d_key_ptr->iov_len	= d_key_iter.iov_len;
 		d_key_ptr->iov_buf_len	= d_key_iter.iov_buf_len;
 
-		sgl_keys[nr_kds_pass-1].sg_nr_out	= 1;
-		*kds					= kds_;
+		sgl_keys_[nr_kds_pass-1].sg_nr		= 1;
+		sgl_keys_[nr_kds_pass-1].sg_nr_out	= 1;
 		kds_[nr_kds_pass-1].kd_key_len		= d_key_iter.iov_len;
 
 		/** akeys */
+		D_REALLOC_ARRAY(sgl_recx_, *sgl_recx,
+				(nr_kds_pass-1) * (*nr_iods),
+				nr_kds_pass * (*nr_iods));
+		if (sgl_recx_ == NULL)
+		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+		sgl_recx_alloc += *nr_iods;
+		*sgl_recx = sgl_recx_;
+
 		for (i = 0; i < *nr_iods; i++, sr_idx++)
 		{
-			D_ALLOC_ARRAY(sgl_recx[sr_idx].sg_iovs->iov_buf,
-				      sgl_recx[sr_idx].sg_iovs->iov_len);
-			if (sgl_recx[sr_idx].sg_iovs->iov_buf == NULL)
+			sgl_recx_[sr_idx].sg_iovs = NULL;
+			D_ALLOC(sgl_recx_[sr_idx].sg_iovs,
+				sizeof(*sgl_recx_[sr_idx].sg_iovs));
+			if (sgl_recx_[sr_idx].sg_iovs == NULL)
 			{
 				D_GOTO(exit, rc = -DER_NOMEM);
 			}
 
-			memcpy(sgl_recx[sr_idx].sg_iovs->iov_buf,
+			sgl_recx_[sr_idx].sg_iovs->iov_buf = NULL;
+			D_ALLOC(sgl_recx_[sr_idx].sg_iovs->iov_buf,
+				sgl_recx_iter[i].sg_iovs->iov_buf_len);
+			if (sgl_recx_[sr_idx].sg_iovs->iov_buf == NULL)
+			{
+				D_GOTO(exit, rc = -DER_NOMEM);
+			}
+
+			memcpy(sgl_recx_[sr_idx].sg_iovs->iov_buf,
 			       sgl_recx_iter[i].sg_iovs->iov_buf,
 			       sgl_recx_iter[i].sg_iovs->iov_len);
 
-			sgl_recx[sr_idx].sg_iovs->iov_len =
+			sgl_recx_[sr_idx].sg_iovs->iov_buf_len =
+					  sgl_recx_iter[i].sg_iovs->iov_buf_len;
+			sgl_recx_[sr_idx].sg_iovs->iov_len =
 					      sgl_recx_iter[i].sg_iovs->iov_len;
-			sgl_recx[sr_idx].sg_nr_out = sgl_recx_iter[i].sg_nr_out;
-
-			sgl_recx_iter[i].sg_iovs->iov_len = 0;
-			sgl_recx_iter[i].sg_nr_out        = 0;
+			sgl_recx_[sr_idx].sg_nr     = 1;
+			sgl_recx_[sr_idx].sg_nr_out = 1;
+			sgl_recx_iter[i].sg_nr_out = 0; /** to re-utilize */
 		}
 	}
 
@@ -452,20 +518,20 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 	/** -- kds and recx returned */
 
-	if (*nr_kds > 0 && pipeline.num_aggr_filters == 0)
+	if (nr_kds > 0 && pipeline.num_aggr_filters == 0)
 	{
-		*nr_kds  = nr_kds_pass;
-		*nr_recx = (*nr_iods) * nr_kds_pass;
+		*nr_kds_out  = nr_kds_pass;
+		*nr_recx     = (*nr_iods) * nr_kds_pass;
 	}
-	else if (*nr_kds > 0 && pipeline.num_aggr_filters > 0 && nr_kds_pass > 0)
+	else if (nr_kds > 0 && pipeline.num_aggr_filters > 0 && nr_kds_pass > 0)
 	{
-		*nr_kds  = 1;
-		*nr_recx = *nr_iods;
+		*nr_kds_out  = 1;
+		*nr_recx     = *nr_iods;
 	}
 	else
 	{
-		*nr_kds  = 0;
-		*nr_recx = 0;
+		*nr_kds_out  = 0;
+		*nr_recx     = 0;
 	}
 
 	rc = 0;
@@ -489,6 +555,56 @@ exit:
 		D_FREE(sgl_recx_iter);
 	}
 
+	if (rc != 0)
+	{
+		uint32_t limit;
+
+		if (kds_alloc > 0)
+		{
+			D_FREE(*kds);
+		}
+
+		if (sgl_keys_alloc > 0)
+		{
+			for (i = 0; i < sgl_keys_alloc; i++)
+			{
+				if (sgl_keys[0][i].sg_iovs != NULL)
+				{
+					if (sgl_keys[0][i].sg_iovs->iov_buf != NULL)
+					{
+						D_FREE(sgl_keys[0][i].sg_iovs->iov_buf);
+					}
+					D_FREE(sgl_keys[0][i].sg_iovs);
+				}
+			}		
+			D_FREE(*sgl_keys);
+		}
+
+		if (sgl_recx_alloc > 0)
+		{
+			if (sr_idx == sgl_recx_alloc)
+			{
+				limit = sr_idx;
+			}
+			else
+			{
+				limit = sr_idx + 1;
+			}
+			for (i = 0; i < limit; i++)
+			{
+				if (sgl_recx[0][i].sg_iovs != NULL)
+				{
+					if (sgl_recx[0][i].sg_iovs->iov_buf != NULL)
+					{
+						D_FREE(sgl_recx[0][i].sg_iovs->iov_buf);
+					}
+					D_FREE(sgl_recx[0][i].sg_iovs);
+				}
+			}
+			D_FREE(*sgl_recx);
+		}
+	}
+
 	return rc;
 }
 
@@ -499,18 +615,17 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	struct pipeline_run_out		*pro;
 	int				rc;
 	struct ds_cont_hdl		*coh;
-	struct ds_cont_child		*coc = NULL;
+	struct ds_cont_child		*coc		= NULL;
 	daos_handle_t			vos_coh;
 	uint32_t			i;
 	uint32_t			nr_iods;
-	daos_key_desc_t			*kds = NULL;
+	daos_key_desc_t			*kds		= NULL;
 	uint32_t			nr_kds;
-	uint32_t			nr_kds_out;
-	d_sg_list_t			*sgl_keys = NULL;
-	d_sg_list_t			*sgl_recx = NULL;
-	uint32_t			nr_recx;
-	uint32_t			nr_recx_out;
-	d_sg_list_t			*sgl_aggr = NULL;
+	uint32_t			nr_kds_out	= 0;
+	d_sg_list_t			*sgl_keys	= NULL;
+	d_sg_list_t			*sgl_recx	= NULL;
+	uint32_t			nr_recx		= 0;
+	d_sg_list_t			*sgl_aggr	= NULL;
 
 
 	pri	= crt_req_get(rpc);
@@ -532,31 +647,43 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	/** --  */
 
 	nr_iods		= pri->pri_iods.nr;
-	nr_kds		= pri->pri_sgl_keys.nr;
-	sgl_keys	= pri->pri_sgl_keys.sgls;
-	sgl_recx	= pri->pri_sgl_recx.sgls;
-	nr_recx		= pri->pri_sgl_recx.nr;
+	nr_kds		= pri->pri_nr_kds;
 
-	sgl_aggr	= pri->pri_sgl_aggr.sgls;
-	for (i = 0; i < pri->pri_pipe.num_aggr_filters; i++)
+	if (pri->pri_pipe.num_aggr_filters > 0)
 	{
-		D_ALLOC_ARRAY(sgl_aggr[i].sg_iovs->iov_buf,
-			      sgl_aggr[i].sg_iovs->iov_len);
-		if (sgl_aggr[i].sg_iovs->iov_buf == NULL)
+		D_ALLOC_ARRAY(sgl_aggr, pri->pri_pipe.num_aggr_filters);
+		if (sgl_aggr == NULL)
 		{
 			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+		for (i = 0; i < pri->pri_pipe.num_aggr_filters; i++)
+		{
+			D_ALLOC(sgl_aggr[i].sg_iovs,
+				sizeof(*sgl_aggr[i].sg_iovs));
+			if (sgl_aggr[i].sg_iovs == NULL)
+			{
+				D_GOTO(exit, rc = -DER_NOMEM);
+			}
+			sgl_aggr[i].sg_nr     = 1;
+			sgl_aggr[i].sg_nr_out = 1;
+
+			D_ALLOC(sgl_aggr[i].sg_iovs->iov_buf, sizeof(double));
+			if (sgl_aggr[i].sg_iovs->iov_buf == NULL)
+			{
+				D_GOTO(exit, rc = -DER_NOMEM);
+			}
+			sgl_aggr[i].sg_iovs->iov_len     = sizeof(double);
+			sgl_aggr[i].sg_iovs->iov_buf_len = sizeof(double);
 		}
 	}
 
 	/** -- calling pipeline run */
 
-	nr_kds_out  = nr_kds;
-	nr_recx_out = nr_recx;
-
 	rc = ds_pipeline_run(vos_coh, pri->pri_oid, pri->pri_pipe, pri->pri_epr,
 			     pri->pri_flags, &pri->pri_dkey, &nr_iods,
-			     pri->pri_iods.iods, &pri->pri_anchor, &nr_kds_out,
-			     &kds, sgl_keys, &nr_recx_out, sgl_recx, sgl_aggr);
+			     pri->pri_iods.iods, &pri->pri_anchor, nr_kds,
+			     &nr_kds_out, &kds, &sgl_keys, &nr_recx, &sgl_recx,
+			     sgl_aggr);
 
 exit:
 
@@ -579,8 +706,8 @@ exit:
 			pro->pro_kds.ca_arrays		= kds;
 			pro->pro_sgl_keys.ca_arrays	= sgl_keys;
 		}
-		pro->pro_sgl_recx.ca_count	= nr_recx_out;
-		if (nr_recx_out == 0)
+		pro->pro_sgl_recx.ca_count	= nr_recx;
+		if (nr_recx == 0)
 		{
 			pro->pro_sgl_recx.ca_arrays	= NULL;
 		}
@@ -605,13 +732,23 @@ exit:
 
 	/** free memory */
 
-	for (i = 0; i < nr_kds_out; i++)
+	if (nr_kds_out > 0)
 	{
-		D_FREE(sgl_keys[i].sg_iovs->iov_buf);
+		for (i = 0; i < nr_kds_out; i++)
+		{
+			D_FREE(sgl_keys[i].sg_iovs->iov_buf);
+			D_FREE(sgl_keys[i].sg_iovs);
+		}
+		D_FREE(sgl_keys);
+		D_FREE(kds);
 	}
-	for (i = 0; i < nr_recx_out; i++)
+	if (nr_recx > 0)
 	{
-		D_FREE(sgl_recx[i].sg_iovs->iov_buf);
+		for (i = 0; i < nr_recx; i++)
+		{
+			D_FREE(sgl_recx[i].sg_iovs->iov_buf);
+			D_FREE(sgl_recx[i].sg_iovs);
+		}
+		D_FREE(sgl_recx);
 	}
-	D_FREE(kds);
 }

@@ -410,6 +410,7 @@ exit:
 	return rc;
 }
 
+/*
 static int
 crt_proc_daos_pipeline_sgls_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			      daos_pipeline_sgls_t *sgls)
@@ -518,6 +519,7 @@ exit_free:
 exit:
 	return rc;
 }
+*/
 
 CRT_RPC_DEFINE(pipeline_run, DAOS_ISEQ_PIPELINE_RUN, DAOS_OSEQ_PIPELINE_RUN)
 

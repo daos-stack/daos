@@ -258,6 +258,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 			D_GOTO(unlock, rc);
 		}
 	}
+
 	for (i = 0; i < nr_agg; i++)
 	{
 		daos_filter_t *aggr_filter = api_args->pipeline.aggr_filters[i];
@@ -479,12 +480,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	}
 	pri->pri_iods.nr	= nr_iods;
 	pri->pri_iods.iods	= args->pra_api_args->iods;
-	pri->pri_sgl_keys.nr	= shard_nr_kds;
-	pri->pri_sgl_keys.sgls	= args->pra_api_args->sgl_keys;
-	pri->pri_sgl_recx.nr	= shard_nr_kds*nr_iods;
-	pri->pri_sgl_recx.sgls	= args->pra_api_args->sgl_recx;
-	pri->pri_sgl_aggr.nr	= args->pra_api_args->pipeline.num_aggr_filters;
-	pri->pri_sgl_aggr.sgls	= args->pra_api_args->sgl_agg;
+	pri->pri_nr_kds		= shard_nr_kds;
 	da_sub_anchors		= (daos_anchor_t *)
 				     args->pra_api_args->anchor->da_sub_anchors;
 	pri->pri_anchor		= da_sub_anchors[args->pra_shard];

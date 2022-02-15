@@ -42,7 +42,7 @@ obj_opc_to_str(crt_opcode_t opc)
 	return "unknown";
 }
 
-#define DAOS_ISEQ_PIPELINE_RUN	/* input fields */			\
+/*#define DAOS_ISEQ_PIPELINE_RUN	* input fields *			\
 	((daos_pipeline_t)	(pri_pipe)		CRT_VAR)	\
 	((daos_unit_oid_t)	(pri_oid)		CRT_VAR)	\
 	((uuid_t)		(pri_pool_uuid)		CRT_VAR)	\
@@ -57,7 +57,21 @@ obj_opc_to_str(crt_opcode_t opc)
 	((daos_epoch_range_t)	(pri_epr)		CRT_VAR)	\
 	((uint64_t)		(pri_epoch)		CRT_VAR)	\
 	((uint64_t)		(pri_epoch_first)	CRT_VAR)	\
-	((uint64_t)		(pri_flags)		CRT_VAR)
+	((uint64_t)		(pri_flags)		CRT_VAR)*/
+
+#define DAOS_ISEQ_PIPELINE_RUN	/* input fields */			\
+	((daos_pipeline_t)	(pri_pipe)		CRT_VAR)	\
+	((daos_unit_oid_t)	(pri_oid)		CRT_VAR)	\
+	((uuid_t)		(pri_pool_uuid)		CRT_VAR)	\
+	((uuid_t)		(pri_co_hdl)		CRT_VAR)	\
+	((uuid_t)		(pri_co_uuid)		CRT_VAR)	\
+	((daos_key_t)		(pri_dkey)		CRT_VAR)	\
+	((daos_pipeline_iods_t)	(pri_iods)		CRT_VAR)	\
+	((daos_anchor_t)	(pri_anchor)		CRT_RAW)	\
+	((daos_epoch_range_t)	(pri_epr)		CRT_VAR)	\
+	((uint64_t)		(pri_flags)		CRT_VAR)	\
+	((uint32_t)		(pri_nr_kds)		CRT_VAR)	\
+	((uint32_t)		(pri_pad32)		CRT_VAR)
 
 #define DAOS_OSEQ_PIPELINE_RUN	/* output fields */			\
 	((daos_pipeline_iods_t)	(pro_iods)		CRT_VAR)	\
