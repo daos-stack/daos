@@ -1036,7 +1036,9 @@ pipeline {
                                             coverage_unhealthy: [methodCoverage: 40,
                                                                  conditionalCoverage: 40,
                                                                  statementCoverage: 0],
-                                            ignore_failure: true
+                                            coverage_failing: [methodCoverage: 34,
+                                                                 conditionalCoverage: 21,
+                                                                 statementCoverage: 0]
                     }
                 } // stage('Bullseye Report')
             } // parallel
