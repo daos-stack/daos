@@ -8,11 +8,6 @@ set -e
 
 set -x
 
-. utils/sl/setup_local.sh
-
-# sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_admin.sh
-./utils/setup_daos_admin.sh
-
 TMP_DIR=$(mktemp -d)
 
 cp utils/node_local_test.py utils/nlt_server.yaml utils/nlt_agent.yaml .build_vars.json "$TMP_DIR"
