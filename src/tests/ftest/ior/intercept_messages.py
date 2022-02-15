@@ -67,7 +67,7 @@ class IorInterceptMessages(IorTestBase):
 
         # Intercept
         match_intercept_results = []
-        intercept_pattern = "^\[libioil\] Intercepting write*"
+        intercept_pattern = "^\[libioil\] Intercepting write*"  # noqa: W605
         compiled_ip = re.compile(intercept_pattern)
         expected_total_intercepts = self.processes * int(env['D_IL_REPORT'])
 
