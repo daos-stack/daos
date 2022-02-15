@@ -50,6 +50,7 @@ class EnumVariable():
     def __init__(self, *args, **kw):
         pass
 
+
 ARGUMENTS = {}
 
 __all__ = ['PathVariable',

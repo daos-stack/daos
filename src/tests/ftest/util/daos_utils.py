@@ -602,8 +602,8 @@ class DaosCommand(DaosCommandBase):
         # replica 1 1
         data = {}
         vals = re.findall(
-            r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"\
-            r"grp:\s+(\d+)\s+|"\
+            r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"
+            r"grp:\s+(\d+)\s+|"
             r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout_text)
 
         try:
