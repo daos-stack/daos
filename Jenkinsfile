@@ -315,10 +315,8 @@ pipeline {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                  ' --security-opt seccomp=unconfined'
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true' +
-                                  ' --security-opt seccomp=unconfined'
+                            additionalBuildArgs dockerBuildArgs()
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
                     steps {
@@ -352,10 +350,8 @@ pipeline {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                  ' --security-opt seccomp=unconfined'
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true' +
-                                  ' --security-opt seccomp=unconfined'
+                            additionalBuildArgs dockerBuildArgs()
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
                     steps {
@@ -389,10 +385,8 @@ pipeline {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                  ' --security-opt seccomp=unconfined'
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true' +
-                                  ' --security-opt seccomp=unconfined'
+                            additionalBuildArgs dockerBuildArgs()
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
                     steps {
