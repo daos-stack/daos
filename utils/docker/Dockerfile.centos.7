@@ -203,6 +203,10 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     /bin/rm -rf build && go clean -cache && \
     cp -r utils/config/examples /opt/daos; }
 
+USER root:root
+RUN [ "$DAOS_BUILD" != "yes" ] || { . utils/sl/setup_local.sh && ./utils/setup_daos_admin.sh; }
+USER daos_server:daos_server
+
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
