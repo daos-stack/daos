@@ -393,6 +393,7 @@ def Platform():
 def Depends(*_args, **_kw):
     """Fake Depends"""
 
+
 COMMAND_LINE_TARGETS = []
 BUILD_TARGETS = []
 DEFAULT_TARGETS = []
