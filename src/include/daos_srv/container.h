@@ -108,6 +108,16 @@ struct ds_cont_child {
 	 * local VOS.
 	 */
 	uint64_t		*sc_ec_query_agg_eph;
+	/**
+	 * Timestamp of last update, which is used by aggregation to check
+	 * if it needs to aggregate.
+	 */
+	uint64_t		sc_agg_update_timestamp;
+
+	/* Timestamp of last finished aggregation for EC and VOS aggregation */
+	uint64_t		sc_ec_agg_last_done_eph;
+	uint64_t		sc_agg_last_done_eph;
+
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
@@ -130,6 +140,7 @@ struct agg_param {
 	struct sched_request	*ap_req;
 	agg_param_get_eph_t	ap_max_eph_get;
 	agg_param_get_eph_t	ap_start_eph_get;
+	agg_param_get_eph_t	ap_last_done_eph_get;
 	uint32_t		ap_vos_agg:1;
 };
 
@@ -234,4 +245,6 @@ void ds_cont_tgt_ec_eph_query_ult(void *data);
 int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
 			  uint64_t **epoch_p);
 int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
+
+void ds_cont_agg_timestamp_update(struct ds_cont_child *cont);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

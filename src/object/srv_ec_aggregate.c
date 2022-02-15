@@ -2573,6 +2573,8 @@ again:
 			*cont->sc_ec_query_agg_eph = cont->sc_ec_agg_eph;
 	}
 
+	cont->sc_ec_agg_last_done_eph = crt_hlc_get();
+
 	return rc;
 }
 
@@ -2580,6 +2582,28 @@ static uint64_t
 cont_ec_agg_start_eph_get(struct ds_cont_child *cont)
 {
 	return cont->sc_ec_agg_eph;
+}
+
+static uint64_t
+cont_ec_agg_max_eph_get(struct ds_cont_child *cont)
+{
+	uint64_t max_eph = DAOS_EPOCH_MAX;
+
+	if (cont->sc_aggregation_max > 0)
+		max_eph = min(cont->sc_aggregation_max - 1, max_eph);
+
+	if (cont->sc_agg_update_timestamp > 0)
+		max_eph = min(cont->sc_agg_update_timestamp, max_eph);
+	else if (cont->sc_ec_agg_eph > 0)
+		max_eph = min(cont->sc_ec_agg_eph, max_eph);
+
+	return max_eph;
+}
+
+static uint64_t
+cont_ec_last_done_eph_get(struct ds_cont_child *cont)
+{
+	return cont->sc_ec_agg_last_done_eph;
 }
 
 void
@@ -2594,6 +2618,8 @@ ds_obj_ec_aggregate(void *arg)
 		DP_UUID(cont->sc_uuid));
 	param.ap_data = &agg_param;
 	param.ap_start_eph_get = cont_ec_agg_start_eph_get;
+	param.ap_max_eph_get = cont_ec_agg_max_eph_get;
+	param.ap_last_done_eph_get = cont_ec_last_done_eph_get;
 	param.ap_cont = cont;
 	param.ap_req = cont->sc_ec_agg_req;
 	rc = ec_agg_param_init(cont, &param);

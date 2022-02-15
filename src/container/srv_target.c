@@ -276,42 +276,46 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
 
 	D_ASSERT(hlc > (interval * 2));
-	/*
+
+	/**
 	 * Assume 'current hlc - interval' as the highest stable view (all
 	 * transactions under this epoch is either committed or aborted).
 	 */
-	epoch_max = hlc - interval;
-
-	/* Make sure aggregation will not be executed too often, at least every interval */
+	epoch_max = min(hlc - interval, param->ap_max_eph_get(cont));
 	if (epoch_min >= epoch_max) {
-		/* Nothing can be aggregated */
-		*msecs = max(*msecs, crt_hlc2msec(epoch_min - epoch_max));
-		return 0;
-	} else if (epoch_min > epoch_max - interval &&
-		   sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		/*
-		 * When there isn't space pressure, don't aggregate too often,
-		 * otherwise, aggregation will be inefficient because the data
-		 * to be aggregated could be changed by new update very soon.
-		 */
+		D_DEBUG(DB_EPC, "epoch min "DF_X64" >= max "DF_X64"\n", epoch_min, epoch_max);
 		return 0;
 	}
 
-	/* Adjust aggregation top boundary */
-	if (epoch_max >= cont->sc_aggregation_max)
-		epoch_max = cont->sc_aggregation_max - 1;
+	/**
+	 * If it does not need full scan, then let's compare it with last done
+	 * epoch to make sure aggregation will not be executed too often, at
+	 * least not more than every interval.
+	 */
+	if (!(flags & VOS_AGG_FL_FORCE_SCAN)) {
+		uint64_t last_agg_timestamp = param->ap_last_done_eph_get(cont);
 
-	if (param->ap_max_eph_get)
-		epoch_max = min(epoch_max, param->ap_max_eph_get(cont));
-
-	/* Check the min/max epoch again after adjustment */
-	if (epoch_min >= epoch_max) {
-		D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n", epoch_min, epoch_max);
-		return 0;
+		if (last_agg_timestamp >= hlc - interval) {
+			/* yield until interval finishes.*/
+			*msecs = max(*msecs, crt_hlc2msec(last_agg_timestamp - (hlc - interval)));
+			D_DEBUG(DB_EPC, "last "DF_U64" > hlc "DF_U64" sleep "DF_U64"\n",
+				last_agg_timestamp, hlc, *msecs);
+			return 0;
+		} else if (last_agg_timestamp > hlc - 2 * interval &&
+			   sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
+			/*
+			 * When there isn't space pressure, don't aggregate too often,
+			 * otherwise, aggregation will be inefficient because the data
+			 * to be aggregated could be changed by new update very soon.
+			 */
+			D_DEBUG(DB_EPC, "last "DF_U64" > hlc "DF_U64" interval "DF_U64"\n",
+				last_agg_timestamp, hlc, interval);
+			return 0;
+		}
 	}
 
-	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n",
-		hlc, epoch_max, epoch_min, cont->sc_aggregation_max);
+	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64"\n",
+		hlc, epoch_max, epoch_min);
 
 	if (cont->sc_snapshots_nr + 1 < MAX_SNAPSHOT_LOCAL) {
 		snapshots = snapshots_local;
@@ -462,6 +466,7 @@ cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	if (rc == -DER_CSUM)
 		rc = 0;
 
+	cont->sc_agg_last_done_eph = crt_hlc_get();
 	/* Wake up GC ULT */
 	sched_req_wakeup(cont->sc_pool->spc_gc_req);
 	return rc;
@@ -489,10 +494,22 @@ cont_agg_start_eph_get(struct ds_cont_child *cont)
 static uint64_t
 cont_agg_max_epoch_get(struct ds_cont_child *cont)
 {
-	if (unlikely(ec_agg_disabled))
-		return DAOS_EPOCH_MAX;
+	uint64_t epoch_max = DAOS_EPOCH_MAX;
 
-	return cont->sc_ec_agg_eph_boundry;
+	/* Adjust aggregation top boundary */
+	if (cont->sc_aggregation_max > 0)
+		epoch_max = cont->sc_aggregation_max - 1;
+
+	if (unlikely(ec_agg_disabled))
+		return epoch_max;
+
+	return min(epoch_max, cont->sc_ec_agg_eph_boundry);
+}
+
+static uint64_t
+cont_agg_last_done_eph_get(struct ds_cont_child *cont)
+{
+	return cont->sc_agg_last_done_eph;
 }
 
 static void
@@ -505,6 +522,7 @@ cont_agg_ult(void *arg)
 		DP_UUID(cont->sc_uuid));
 	param.ap_max_eph_get = cont_agg_max_epoch_get;
 	param.ap_start_eph_get = cont_agg_start_eph_get;
+	param.ap_last_done_eph_get = cont_agg_last_done_eph_get;
 	param.ap_req = cont->sc_agg_req;
 	param.ap_cont = cont;
 	param.ap_vos_agg = 1;
@@ -2611,3 +2629,11 @@ ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	return rc;
 }
+
+void
+ds_cont_agg_timestamp_update(struct ds_cont_child *cont)
+{
+	cont->sc_agg_update_timestamp = crt_hlc_get();
+}
+
+
