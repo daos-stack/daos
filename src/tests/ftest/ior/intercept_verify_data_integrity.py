@@ -63,12 +63,12 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
 
         # Setup the thread manager
         thread_manager = ThreadManager(run_ior, self.timeout - 30)
-        ior_clients_intercept = {
-            self.hostlist_clients[0:-1]: os.path.join(self.prefix, 'lib64', 'libioil.so'),
-            [self.hostlist_clients[-1]]: None,
-        }
+        index_clients_intercept = [
+            (0, self.hostlist_clients[0:-1], os.path.join(self.prefix, 'lib64', 'libioil.so')),
+            (1, list(self.hostlist_clients[-1]), None),
+        ]
         self.job_manager = []
-        for index, clients in enumerate(ior_clients_intercept):
+        for index, clients, intercept in index_clients_intercept:
             # Add a job manager for each ior command
             self.job_manager.append(Mpirun(None, False, mpitype="mpich"))
             self.job_manager[-1].timeout = self.timeout - 35
@@ -76,11 +76,11 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
 
             # Create a unique ior test file for each thread
             test_file_items = ["testfile", str(index)]
-            if ior_clients_intercept[clients]:
+            if intercept:
                 test_file_items.append("intercept")
             test_file = os.path.join(self.dfuse.mount_dir.value, "_".join(test_file_items))
 
-            # Define the paramaters that will be used to run an ior command in this thread
+            # Define the parameters that will be used to run an ior command in this thread
             thread_manager.add(
                 test=self,
                 manager=self.job_manager[-1],
@@ -92,11 +92,10 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
                 pool=self.pool,
                 container=self.container,
                 processes=(self.processes // len(self.hostlist_clients)) * len(clients),
-                intercept=ior_clients_intercept[clients],
+                intercept=intercept,
                 ior_params={"test_file": test_file})
             self.log.info(
-                "Created thread %s for %s with intercept: %s",
-                index, clients, str(ior_clients_intercept[clients]))
+                "Created thread %s for %s with intercept: %s", index, clients, str(intercept))
 
         # Launch the IOR threads
         self.log.info("Launching %d IOR threads", thread_manager.qty)
@@ -112,9 +111,9 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
             self.d_log.error(msg)
             self.fail(msg)
 
-        for index, clients in enumerate(ior_clients_intercept):
-            intercept_lib = "without" if ior_clients_intercept[clients] is None else "with"
+        for index, clients, intercept in index_clients_intercept:
+            with_intercept = "without" if intercept is None else "with"
             IorCommand.log_metrics(
-                self.log, "{} clients {} interception library".format(len(clients), intercept_lib),
+                self.log, "{} clients {} interception library".format(len(clients), with_intercept),
                 results[index]
             )

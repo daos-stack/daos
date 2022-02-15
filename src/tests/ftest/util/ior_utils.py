@@ -4,14 +4,12 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import re
 import uuid
 import time
 from enum import IntEnum
 
-from command_utils_base import CommandFailure, FormattedParameter
+from command_utils_base import CommandFailure, FormattedParameter, BasicParameter
 from command_utils import ExecutableCommand
 from general_utils import get_subprocess_stdout
 
@@ -19,6 +17,7 @@ from general_utils import get_subprocess_stdout
 def run_ior(test, manager, log, hosts, path, slots, group, pool, container, processes, ppn=None,
             intercept=None, plugin_path=None, dfuse=None, display_space=True, fail_on_warning=False,
             namespace="/run/ior/*", ior_params=None):
+    # pylint: disable=too-many-arguments
     """Run IOR on multiple hosts.
 
     Args:
@@ -58,7 +57,7 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
         for name, value in ior_params.items():
             ior_attr = getattr(ior.command, name, None)
             if ior_attr:
-                if hasattr(ior_attr, "update"):
+                if isinstance(ior_attr, BasicParameter):
                     ior_attr.update(value, ".".join("ior", name))
     return ior.run(
         group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
@@ -471,7 +470,8 @@ class Ior:
         """
         return self.manager.job
 
-    def display_pool_space(self, pool):
+    @staticmethod
+    def display_pool_space(pool):
         """Display the current pool space.
 
         If the TestPool object has a DmgCommand object assigned, also display
@@ -486,6 +486,7 @@ class Ior:
 
     def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
             dfuse=None, display_space=True, fail_on_warning=False):
+        # pylint: disable=too-many-arguments
         """Run ior.
 
         Args:
@@ -511,6 +512,9 @@ class Ior:
             CmdResult: result of the ior command
 
         """
+        result = None
+        error_message = None
+
         self.command.set_daos_params(group, pool, container.uuid)
 
         if intercept:
@@ -536,34 +540,25 @@ class Ior:
 
         self.manager.assign_environment(self.env)
 
-        error_message = None
+        if fail_on_warning and "WARNING" not in self.manager.check_results_list:
+            self.manager.check_results_list.append("WARNING")
+
         try:
             if display_space:
                 self.display_pool_space(pool)
-            out = self.manager.run()
-
-            if self.subprocess:
-                return out
-
-            if fail_on_warning:
-                report_warning = self.fail
-            else:
-                report_warning = self.log.warning
-
-            for line in out.stdout_text.splitlines():
-                if 'WARNING' in line:
-                    report_warning("IOR command issued warnings.")
-            return out
+            result = self.manager.run()
 
         except CommandFailure as error:
             error_message = "IOR Failed: {}".format(error)
 
         finally:
-            if not self.subprocess and display_space:
+            if not self.manager.subprocess and display_space:
                 self.display_pool_space(pool)
 
         if error_message:
             raise CommandFailure(error_message)
+
+        return result
 
     def stop(self, pool=None):
         """Stop the ior command when the job manager was run as a subprocess .
@@ -576,13 +571,14 @@ class Ior:
             CommandFailure: if there is an error stopping the ior subprocess
 
         """
-        error_message = None
-        try:
-            self.manager.stop()
-        except CommandFailure as error:
-            error_message = "IOR Failed: {}".format(error)
-        finally:
-            if pool:
-                self.display_pool_space(pool)
-        if error_message:
-            raise CommandFailure(error_message)
+        if self.manager.subprocess:
+            error_message = None
+            try:
+                self.manager.stop()
+            except CommandFailure as error:
+                error_message = "IOR Failed: {}".format(error)
+            finally:
+                if pool:
+                    self.display_pool_space(pool)
+            if error_message:
+                raise CommandFailure(error_message)
