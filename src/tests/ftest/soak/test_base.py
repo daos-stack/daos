@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2019-2021 Intel Corporation.
+(C) Copyright 2019-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -606,7 +606,7 @@ class SoakTestBase(TestWithServers):
             os.environ["DAOS_TEST_LOG_DIR"], "final", "resv_file")
         try:
             reserved_file_copy(self, final_resv_file, self.pool[0], resv_cont)
-        except CommandFailure as error:
+        except CommandFailure:
             self.soak_errors.append(
                 "<<FAILED: Soak reserved container read failed>>")
 
@@ -621,7 +621,7 @@ class SoakTestBase(TestWithServers):
                     file, self.outputsoakdir, file_name)
                 try:
                     run_command(copy_cmd, timeout=30)
-                except DaosTestError as error:
+                except DaosTestError:
                     self.soak_errors.append(
                         "Reserved data file {} failed to archive".format(file))
                 os.remove(file)
