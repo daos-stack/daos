@@ -630,8 +630,11 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Access points to use by default when starting servers and agents
+        #  - for 1 or 2 servers use 1 access point
+        #  - for 3 or more servers use 3 access points
+        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
         self.access_points = self.params.get(
-            "access_points", "/run/setup/*", self.hostlist_servers[:1])
+            "access_points", "/run/setup/*", self.hostlist_servers[:access_points_qty])
 
         # Display host information
         self.log.info("-" * 100)
