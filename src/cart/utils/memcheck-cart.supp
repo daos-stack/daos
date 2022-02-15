@@ -137,6 +137,31 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   fun:bytes.makeSlice
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:bytes.(*Buffer).*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:bytes.(*Buffer).*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:encoding/json*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:encoding/json*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
    fun:indexbytebody
 }
 {
