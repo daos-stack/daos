@@ -51,6 +51,7 @@ class NLTestNoFunction(NLTestFail):
 class NLTestTimeout(NLTestFail):
     """Used to indicate that an operation timed out"""
 
+
 instance_num = 0
 
 def get_inc_id():
@@ -2989,6 +2990,7 @@ def check_no_file(dfuse):
     except FileNotFoundError:
         pass
 
+
 lp = None
 lt = None
 
@@ -3103,9 +3105,8 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse___fxstat')
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
-        raise Exception('Max log size exceeded, {} > {}'\
-                        .format(sizeof_fmt(fstat.st_size),
-                                sizeof_fmt(conf.max_log_size)))
+        raise Exception('Max log size exceeded, {} > {}'.format(sizeof_fmt(fstat.st_size),
+                                                                sizeof_fmt(conf.max_log_size)))
 
     return lto.fi_location
 
@@ -3318,9 +3319,8 @@ def run_in_fg(server, conf):
     t_dir = join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
-    print('daos container create --type POSIX ' \
-          '{} --path {}/uns-link'.format(
-              pool, t_dir))
+    print('daos container create --type POSIX '
+          '{} --path {}/uns-link'.format(pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
     print('daos cont list {}'.format(pool))
@@ -4357,6 +4357,7 @@ def main():
     if fatal_errors.errors:
         print("Significant errors encountered")
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main()

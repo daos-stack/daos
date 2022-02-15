@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,6 @@
 import os
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-import write_host_file
 
 
 class IorInterceptMultiClient(IorTestBase):
