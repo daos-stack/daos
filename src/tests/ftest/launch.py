@@ -751,7 +751,7 @@ def auto_detect_devices(host_list, device_type, length, device_filter=None):
             "/sbin/lspci -D",
             "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
             "grep -E 'Volume Management Device NVMe RAID Controller'",
-            "sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
+            r"sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
     elif device_type == "NVMe":
         command_list = [
             "/sbin/lspci -D",
