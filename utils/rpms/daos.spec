@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       20%{?relval}%{?dist}
+Release:       21%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -85,7 +85,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.8.1
+BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -530,8 +530,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Feb 08 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-20
+* Tue Feb 15 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.100-21
 - Remove direct MPI dependency from most of tests
+
+* Thu Feb 10 2022 Li Wei <wei.g.li@intel.com> 2.1.100-20
+- Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
 
 * Wed Jan 19 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-19
 - Move libdaos_common.so from daos-client to daos package

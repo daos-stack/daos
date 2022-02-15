@@ -22,11 +22,10 @@
 """Defines common components used by HPDD projects"""
 
 import sys
-import os
 import platform
 import distro
 from prereq_tools import GitRepoRetriever
-from prereq_tools import WebRetriever
+# from prereq_tools import WebRetriever
 from prereq_tools import ProgramBinary
 
 SCONS_EXE = sys.argv[0]
@@ -170,9 +169,7 @@ def define_mercury(reqs):
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
     else:
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
-    retriever = \
-        GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
-	True)
+    retriever = GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True)
 
     reqs.define("ucx", libs=['ucp'])
 
@@ -199,7 +196,7 @@ def define_mercury(reqs):
                           + MERCURY_DEBUG +
                           '-DBUILD_TESTING=OFF '
                           '-DNA_USE_OFI=ON '
-			  + ucx +
+                          + ucx +
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON ../mercury ' +
                           check(reqs, 'ofi',
@@ -212,7 +209,6 @@ def define_mercury(reqs):
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 patch_rpath=['lib'])
-
 
 
 def define_common(reqs):
@@ -265,7 +261,6 @@ def define_ompi(reqs):
     reqs.define('ompi', pkgconfig='ompi', package='ompi-devel')
     reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
 
-
 def define_components(reqs):
     """Define all of the components"""
     define_common(reqs)
@@ -288,7 +283,6 @@ def define_components(reqs):
                           '--libdir=$ISAL_CRYPTO_PREFIX/lib',
                           'make $JOBS_OPT', 'make install'],
                 libs=['isal_crypto'])
-
 
     retriever = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
@@ -346,9 +340,9 @@ def define_components(reqs):
 
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX" --disable-tests '                  \
-                          '--disable-unit-tests --disable-apps --without-vhost --without-crypto ' \
-                          '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '   \
+                commands=['./configure --prefix="$SPDK_PREFIX" --disable-tests '
+                          '--disable-unit-tests --disable-apps --without-vhost --without-crypto '
+                          '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '
                           '--without-isal --without-vtune --with-shared',
                           'make CONFIG_ARCH={} $JOBS_OPT'.format(spdk_arch),
                           'make install',
@@ -377,5 +371,6 @@ def define_components(reqs):
                           'make install'],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
+
 
 __all__ = ['define_components']
