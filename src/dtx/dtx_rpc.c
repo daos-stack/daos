@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,7 +196,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			/* The leader does not have related DTX info, we may miss related DTX abort
 			 * request, let's abort it locally.
 			 */
-			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, DAOS_EPOCH_MAX);
+			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
 			if (rc1 < 0 && rc1 != -DER_NONEXIST && dra->dra_abt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, dra->dra_abt_list);
 			else
@@ -898,6 +898,7 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	d_list_for_each_entry_safe(dsp, tmp, check_list, dsp_link) {
 		int		leader_tgt = PO_COMP_ID_ALL;
 		int		tgt;
+		int		count = 0;
 		bool		drop = false;
 
 		if (!(dsp->dsp_mbs.dm_flags & DMF_CONTAIN_LEADER)) {
@@ -973,8 +974,15 @@ again:
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
-		if (target->ta_comp.co_status != PO_COMP_ST_UPIN)
+		if (target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+			if (unlikely(++count % 10 == 3))
+				D_WARN("Get stale DTX leader %u/%u (st: %x) for "DF_DTI
+				       " %d times, maybe dead loop\n",
+				       target->ta_comp.co_rank, target->ta_comp.co_id,
+				       target->ta_comp.co_status, DP_DTI(&dsp->dsp_xid), count);
+
 			goto again;
+		}
 
 		d_list_for_each_entry(drr, &head, drr_link) {
 			if (drr->drr_rank == target->ta_comp.co_rank &&
@@ -1061,8 +1069,7 @@ next:
 			if (failout)
 				D_GOTO(out, rc = -DER_INPROGRESS);
 			continue;
-		case DSHR_COMMITTED:
-		case DSHR_ABORTED:
+		case DSHR_IGNORE:
 			D_FREE(dsp);
 			continue;
 		case DSHR_ABORT_FAILED:

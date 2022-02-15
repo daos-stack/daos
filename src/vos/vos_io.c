@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@
 #include <daos.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
+#include "vos_policy.h"
 
 /** I/O context */
 struct vos_io_context {
@@ -89,16 +90,6 @@ struct vos_io_context {
 	 */
 	struct daos_recx_ep_list *ic_recx_lists;
 };
-
-static inline daos_size_t
-recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
-	      daos_size_t rsize)
-{
-	if (!ci_is_valid(csum) || rsize == 0)
-		return 0;
-	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
-			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
-}
 
 struct dedup_entry {
 	d_list_t	 de_link;
@@ -510,15 +501,6 @@ vos_ioc2ioh(struct vos_io_context *ioc)
 
 	ioh.cookie = (uint64_t)ioc;
 	return ioh;
-}
-
-static struct dcs_csum_info *
-vos_ioc2csum(struct vos_io_context *ioc)
-{
-	/** is enabled and has csums (might not for punch) */
-	if (ioc->iod_csums != NULL && ioc->iod_csums[ioc->ic_sgl_at].ic_nr > 0)
-		return ioc->iod_csums[ioc->ic_sgl_at].ic_data;
-	return NULL;
 }
 
 static void
@@ -1607,7 +1589,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 
 	tree_rec_bundle2iov(&rbund, &riov);
 
-	struct dcs_csum_info *value_csum = vos_ioc2csum(ioc);
+	struct dcs_csum_info *value_csum = vos_csum_at(ioc->iod_csums, ioc->ic_sgl_at);
 
 	if (value_csum != NULL)
 		rbund.rb_csum	= value_csum;
@@ -1682,8 +1664,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec = NULL;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	struct dcs_csum_info	*iod_csums = vos_ioc2csum(ioc);
-	struct dcs_csum_info	*recx_csum = NULL;
+	struct dcs_csum_info	*iod_csums = vos_csum_at(ioc->iod_csums, ioc->ic_sgl_at);
+	struct dcs_csum_info	*recx_csum;
 	uint32_t		 update_cond = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	int			 flags = SUBTR_CREATE;
@@ -1772,8 +1754,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 			continue;
 		}
 
-		if (iod_csums != NULL && csum_iod_is_supported(iod))
-			recx_csum = &iod_csums[i];
+		recx_csum = recx_csum_at(iod_csums, i, iod);
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
 				      recx_csum, iod->iod_size, ioc,
 				      minor_epc);
@@ -2005,7 +1986,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	struct bio_iov		 biov;
 	uint64_t		 off = 0;
 	int			 rc;
-	struct dcs_csum_info	*value_csum = vos_ioc2csum(ioc);
+	struct dcs_csum_info	*value_csum = vos_csum_at(ioc->iod_csums, ioc->ic_sgl_at);
 
 	/*
 	 * TODO:
@@ -2113,7 +2094,7 @@ done:
 static int
 akey_update_begin(struct vos_io_context *ioc)
 {
-	struct dcs_csum_info	*iod_csums = vos_ioc2csum(ioc);
+	struct dcs_csum_info	*iod_csums = vos_csum_at(ioc->iod_csums, ioc->ic_sgl_at);
 	struct dcs_csum_info	*recx_csum;
 	daos_iod_t *iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int i, rc;
@@ -2130,8 +2111,8 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = vos_media_select(vos_cont2pool(ioc->ic_cont),
-					 iod->iod_type, size);
+		media = vos_policy_media_select(vos_cont2pool(ioc->ic_cont),
+					 iod->iod_type, size, VOS_IOS_GENERIC);
 
 		recx_csum = (iod_csums != NULL) ? &iod_csums[i] : NULL;
 
@@ -2252,13 +2233,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
 
+	umem = vos_ioc2umm(ioc);
+
 	if (err != 0)
 		goto abort;
 
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
-
-	umem = vos_ioc2umm(ioc);
 
 	err = vos_tx_begin(dth, umem);
 	if (err != 0)
@@ -2280,8 +2261,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_GOTO(abort, err = -DER_NOMEM);
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
-					      dth->dth_dti_cos_count,
-					      0, false, NULL, daes, dces);
+					      dth->dth_dti_cos_count, 0, NULL, daes, dces);
 		if (err <= 0)
 			D_FREE(daes);
 	}
@@ -2317,6 +2297,15 @@ abort:
 				  ioc->ic_bound)) {
 			err = -DER_TX_RESTART;
 		}
+	}
+
+	if (err == 0 && ioc->ic_epr.epr_hi > ioc->ic_obj->obj_df->vo_max_write) {
+		if (DAOS_ON_VALGRIND)
+			err = umem_tx_xadd_ptr(umem, &ioc->ic_obj->obj_df->vo_max_write,
+					       sizeof(ioc->ic_obj->obj_df->vo_max_write),
+					       POBJ_XADD_NO_SNAPSHOT);
+		if (err == 0)
+			ioc->ic_obj->obj_df->vo_max_write = ioc->ic_epr.epr_hi;
 	}
 
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,

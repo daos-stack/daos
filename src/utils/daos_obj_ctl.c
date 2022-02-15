@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -361,14 +361,15 @@ cont_init(struct credit_context *tsc)
 {
 	daos_handle_t	coh = DAOS_HDL_INVAL;
 	int		rc;
+	char            uuid_str[37];
 
-	rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL,
+	rc = daos_cont_create(tsc->tsc_poh, &(tsc->tsc_cont_uuid), NULL,
 			      NULL);
 	if (rc != 0)
 		goto out;
 
-	rc = daos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid,
-			    DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(tsc->tsc_cont_uuid, uuid_str);
+	rc = daos_cont_open(tsc->tsc_poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
 
 	tsc->tsc_coh = coh;
 
@@ -403,10 +404,12 @@ static int
 ctx_init(struct credit_context *tsc)
 {
 	int	rc;
+	char	pool_str[37];
 
 	tsc->tsc_init = CTL_INIT_MODULE;
 
-	rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL,
+	uuid_unparse((unsigned char *)(tsc->tsc_pool_uuid), pool_str);
+	rc = daos_pool_connect(pool_str, NULL,
 			       DAOS_PC_RW, &tsc->tsc_poh,
 			       NULL /* info */, NULL /* ev */);
 

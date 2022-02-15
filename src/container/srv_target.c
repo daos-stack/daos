@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -245,7 +245,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	uint64_t		*snapshots = NULL;
 	int			snapshots_nr;
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
-	bool			full_scan = false;
+	uint32_t		flags = 0;
 	int			i, rc = 0;
 
 	/* Check if it's ok to start aggregation in every 2 seconds */
@@ -260,7 +260,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		 * aggregation, let's restart from 0.
 		 */
 		epoch_min = 0;
-		full_scan = true;
+		flags |= VOS_AGG_FL_FORCE_SCAN;
 		D_DEBUG(DB_EPC, "change hlc "DF_X64" > full "DF_X64"\n",
 			change_hlc, param->ap_full_scan_hlc);
 	} else {
@@ -373,7 +373,8 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-		rc = agg_cb(cont, &epoch_range, full_scan, param, msecs);
+		flags |= VOS_AGG_FL_FORCE_MERGE;
+		rc = agg_cb(cont, &epoch_range, flags, param, msecs);
 		if (rc)
 			D_GOTO(free, rc);
 		epoch_range.epr_lo = epoch_range.epr_hi + 1;
@@ -388,7 +389,9 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-	rc = agg_cb(cont, &epoch_range, full_scan, param, msecs);
+	if (dss_xstream_is_busy())
+		flags &= ~VOS_AGG_FL_FORCE_MERGE;
+	rc = agg_cb(cont, &epoch_range, flags, param, msecs);
 out:
 	if (rc == 0 && epoch_min == 0)
 		param->ap_full_scan_hlc = hlc;
@@ -449,11 +452,11 @@ out:
 
 static int
 cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		      bool full_scan, struct agg_param *param, uint64_t *msecs)
+		      uint32_t flags, struct agg_param *param, uint64_t *msecs)
 {
 	int rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, full_scan);
+	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
 
 	/* Suppress csum error and continue on other epoch ranges */
 	if (rc == -DER_CSUM)
@@ -576,83 +579,6 @@ cont_start_agg(struct ds_cont_child *cont)
 	return 0;
 }
 
-/* Per VOS container DTX re-index ULT ***************************************/
-
-void
-ds_cont_dtx_reindex_ult(void *arg)
-{
-	struct ds_cont_child		*cont	= arg;
-	struct dss_module_info		*dmi	= dss_get_module_info();
-	uint64_t			 hint	= 0;
-	int				 rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT": starting DTX reindex ULT on xstream %d\n",
-		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
-
-	while (!cont->sc_dtx_reindex_abort &&
-	       !dss_xstream_exiting(dmi->dmi_xstream)) {
-		rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
-		if (rc < 0) {
-			D_ERROR(DF_UUID": DTX reindex failed: rc = %d\n",
-				DP_UUID(cont->sc_uuid), rc);
-			goto out;
-		}
-
-		if (rc > 0) {
-			D_DEBUG(DF_DSMS, DF_CONT": DTX reindex done\n",
-				DP_CONT(NULL, cont->sc_uuid));
-			goto out;
-		}
-
-		ABT_thread_yield();
-	}
-
-	D_DEBUG(DF_DSMS, DF_CONT": stopping DTX reindex ULT on stream %d\n",
-		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
-
-out:
-	cont->sc_dtx_reindex = 0;
-	ds_cont_child_put(cont);
-}
-
-static int
-cont_start_dtx_reindex_ult(struct ds_cont_child *cont)
-{
-	int rc;
-
-	D_ASSERT(cont != NULL);
-
-	if (cont->sc_dtx_reindex || cont->sc_dtx_reindex_abort)
-		return 0;
-
-	ds_cont_child_get(cont);
-	cont->sc_dtx_reindex = 1;
-	rc = dss_ult_create(ds_cont_dtx_reindex_ult, cont, DSS_XS_SELF,
-			    0, 0, NULL);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": Failed to create DTX reindex ULT: rc %d\n",
-			DP_UUID(cont->sc_uuid), rc);
-		cont->sc_dtx_reindex = 0;
-		ds_cont_child_put(cont);
-	}
-
-	return rc;
-}
-
-static void
-cont_stop_dtx_reindex_ult(struct ds_cont_child *cont)
-{
-	if (!cont->sc_dtx_reindex || cont->sc_open != 0)
-		return;
-
-	cont->sc_dtx_reindex_abort = 1;
-
-	while (cont->sc_dtx_reindex)
-		ABT_thread_yield();
-
-	cont->sc_dtx_reindex_abort = 0;
-}
-
 /* ds_cont_child *******************************************************/
 static inline struct ds_cont_child *
 cont_child_obj(struct daos_llink *llink)
@@ -706,6 +632,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	cont->sc_aggregation_max = 0;
 	cont->sc_snapshots_nr = 0;
 	cont->sc_snapshots = NULL;
+	cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->sc_link);
 
 	*link = &cont->sc_list;
@@ -854,6 +781,8 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		cont_child->sc_stopping = 1;
 		d_list_del_init(&cont_child->sc_link);
 
+		dtx_cont_deregister(cont_child);
+
 		/* cont_stop_agg() may yield */
 		cont_stop_agg(cont_child);
 		ds_cont_child_put(cont_child);
@@ -914,11 +843,17 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
 		rc = cont_start_agg(cont_child);
-		if (!rc) {
-			d_list_add_tail(&cont_child->sc_link,
-					&pool_child->spc_cont_list);
-			ds_cont_child_get(cont_child);
+		if (rc != 0)
+			goto out;
+
+		rc = dtx_cont_register(cont_child);
+		if (rc != 0) {
+			cont_stop_agg(cont_child);
+			goto out;
 		}
+
+		d_list_add_tail(&cont_child->sc_link, &pool_child->spc_cont_list);
+		ds_cont_child_get(cont_child);
 	}
 
 	if (!rc && cont_out != NULL) {
@@ -926,6 +861,7 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		ds_cont_child_get(cont_child);
 	}
 
+out:
 	/* Put the ref from cont_child_lookup() */
 	ds_cont_child_put(cont_child);
 	return rc;
@@ -1519,25 +1455,15 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (hdl->sch_cont->sc_open > 1)
 			goto opened;
 
-		rc = cont_start_dtx_reindex_ult(hdl->sch_cont);
+		rc = dtx_cont_open(hdl->sch_cont);
 		if (rc != 0) {
 			hdl->sch_cont->sc_open--;
-			goto err_cont;
-		}
-
-		rc = dtx_batched_commit_register(hdl->sch_cont);
-		if (rc != 0) {
-			D_ERROR("Failed to register the container "DF_UUID
-				" to the DTX batched commit list: "
-				"rc = "DF_RC"\n", DP_UUID(cont_uuid),
-				DP_RC(rc));
-			hdl->sch_cont->sc_open--;
-			D_GOTO(err_reindex, rc);
+			D_GOTO(err_cont, rc);
 		}
 
 		D_ALLOC_PTR(ddra);
 		if (ddra == NULL)
-			D_GOTO(err_register, rc = -DER_NOMEM);
+			D_GOTO(err_dtx, rc = -DER_NOMEM);
 
 		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool);
 		uuid_copy(ddra->co_uuid, cont_uuid);
@@ -1546,7 +1472,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (rc != 0) {
 			ds_pool_child_put(hdl->sch_cont->sc_pool);
 			D_FREE(ddra);
-			D_GOTO(err_register, rc);
+			D_GOTO(err_dtx, rc);
 		}
 
 		D_ASSERT(hdl->sch_cont != NULL);
@@ -1554,7 +1480,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		rc = ds_cont_csummer_init(hdl->sch_cont);
 
 		if (rc != 0)
-			D_GOTO(err_register, rc);
+			D_GOTO(err_dtx, rc);
 	}
 opened:
 	if (cont_hdl != NULL) {
@@ -1564,13 +1490,11 @@ opened:
 
 	return 0;
 
-err_register:
+err_dtx:
 	D_ASSERT(hdl->sch_cont->sc_open > 0);
 	hdl->sch_cont->sc_open--;
 	if (hdl->sch_cont->sc_open == 0)
-		dtx_batched_commit_deregister(hdl->sch_cont);
-err_reindex:
-	cont_stop_dtx_reindex_ult(hdl->sch_cont);
+		dtx_cont_close(hdl->sch_cont);
 err_cont:
 	if (daos_handle_is_valid(poh)) {
 		int rc_tmp;
@@ -1705,10 +1629,8 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 
 		D_ASSERT(cont_child->sc_open > 0);
 		cont_child->sc_open--;
-		if (cont_child->sc_open == 0) {
-			dtx_batched_commit_deregister(cont_child);
-			cont_stop_dtx_reindex_ult(cont_child);
-		}
+		if (cont_child->sc_open == 0)
+			dtx_cont_close(cont_child);
 	}
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);

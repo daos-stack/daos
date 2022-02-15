@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2021 Intel Corporation
+# Copyright (C) 2018-2022 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of centOS 8 based
@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-ARG BASE_DISTRO=centos:8
+ARG BASE_DISTRO=rockylinux/rockylinux:8
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
@@ -124,12 +124,12 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
     chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-# DPDK/SPDK needs pyelftools now
-# Longer term, we should upload our RPM build of this to the public packaging
-# site and install it by RPM, but for now, we'll just pip install it
+# Install scons from pip to avoid dependency cycle bug.
 USER daos_server:daos_server
-RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user pyelftools
+RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user scons
 USER root:root
+
+ENV PATH=/home/daos/.local/bin:$PATH
 
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS
@@ -183,7 +183,7 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
+    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
       TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
@@ -216,7 +216,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
       BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
     /bin/rm -rf build && go clean -cache && \
     cp -r utils/config/examples /opt/daos; }
@@ -233,7 +233,10 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     { mkdir /home/daos/.m2 && \
     cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
+    mvn clean install -T 1C \
+ -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+ -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
+
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no

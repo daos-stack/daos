@@ -65,7 +65,7 @@ severity, message, description, and cause.
 
 Engine logging is initially configured by setting the `log_file` and `log_mask`
 parameters in the server config file. Logging is described in detail in the
-[`Debugging System`](https://daos-stack.github.io/admin/troubleshooting/#debugging-system)
+[`Debugging System`](https://docs.daos.io/v2.2/admin/troubleshooting/#debugging-system)
 section.
 
 Engine log levels can be changed dynamically (at runtime) by setting log masks
@@ -262,7 +262,7 @@ wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://daos-stack.github.io/admin/pool_operations/#pool-creationdestroy)
+[`dmg pool create`](https://docs.daos.io/v2.2/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file
@@ -512,6 +512,20 @@ will remain evicted until device replacement occurs).
 !!! note
     Full NVMe hot plug capability will be available and supported in DAOS 2.2 release.
     Use is currently intended for testing only and is not supported for production.
+
+- To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
+and bound instead to a user-space driver so that the device can be used with DAOS.
+
+To rebind a SSD on a single host, run the following command (replace SSD PCI address and
+hostname with appropriate values):
+```bash
+$ dmg storage nvme-rebind -a 0000:84:00.0 -l wolf-167
+Command completed successfully
+```
+
+The device will now be bound to a user-space driver (e.g. VFIO) and can be accessed by
+DAOS I/O engine processes (and used in the following `dmg storage replace nvme` command
+as a new device).
 
 - Replace an excluded SSD with a New Device:
 ```bash

@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2021 Intel Corporation
+# Copyright (C) 2018-2022 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of centOS 7 based
@@ -216,7 +216,9 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     { mkdir /home/daos/.m2 && \
     cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
+    mvn clean install -T 1C \
+ -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
+ -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no

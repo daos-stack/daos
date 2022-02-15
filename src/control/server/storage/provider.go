@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -214,7 +213,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	if err == nil && resp != nil {
+	if err == nil && resp != nil && !req.CleanHugePagesOnly {
 		p.vmdEnabled = resp.VMDPrepared
 	}
 	return resp, err
@@ -224,7 +223,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 // block devices.
 func (p *Provider) HasBlockDevices() bool {
 	for _, cfg := range p.engineStorage.Tiers.BdevConfigs() {
-		if len(cfg.Bdev.DeviceList) > 0 {
+		if cfg.Bdev.DeviceList.Len() > 0 {
 			return true
 		}
 	}
@@ -313,7 +312,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 type topologyGetter func(ctx context.Context) (*hardware.Topology, error)
 
 // BdevWriteConfigRequestFromConfig returns a config write request from a storage config.
-func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, getTopo topologyGetter) (BdevWriteConfigRequest, error) {
+func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, vmdEnabled bool, getTopo topologyGetter) (BdevWriteConfigRequest, error) {
 	req := BdevWriteConfigRequest{
 		OwnerUID: os.Geteuid(),
 		OwnerGID: os.Getegid(),
@@ -344,14 +343,23 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		}
 
 		// Populate hotplug bus-ID range limits when processing the first bdev tier.
-		// Applying the range limits hotplug activity of engine to a ssd device set.
 
-		var begin, end uint64
-		inRange := tier.Bdev.BusidRange
+		if vmdEnabled {
+			req.HotplugBusidBegin = 0x00
+			req.HotplugBusidEnd = 0xFF
+			log.Debug("hotplug bus-id filter allows all as vmd is enabled")
+			continue
+		}
 
-		if inRange != "" {
-			log.Debugf("received user-specified hotplug bus-id range %q", inRange)
-			begin, end, err = common.GetRangeLimits(inRange, common.PCIAddrBusBitSize)
+		// Applying the bus-id range limits hotplug activity of engine to a set of ssd
+		// devices.
+
+		var begin, end uint8
+		if tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero() {
+			log.Debugf("received user-specified hotplug bus-id range %q",
+				tier.Bdev.BusidRange)
+			begin = tier.Bdev.BusidRange.LowAddress.Bus
+			end = tier.Bdev.BusidRange.HighAddress.Bus
 		} else {
 			log.Debug("generating hotplug bus-id range based on hardware topology")
 			begin, end, err = getNumaNodeBusidRange(ctx, getTopo, cfg.NumaNodeIndex)
@@ -364,9 +372,11 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		log.Debugf("NUMA %d: hotplug bus-ids %X-%X", cfg.NumaNodeIndex, uint8(begin),
 			uint8(end))
 
-		req.HotplugBusidBegin = uint8(begin)
-		req.HotplugBusidEnd = uint8(end)
+		req.HotplugBusidBegin = begin
+		req.HotplugBusidEnd = end
 	}
+
+	req.VMDEnabled = vmdEnabled
 
 	return req, nil
 }
@@ -374,20 +384,24 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
 func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) error {
-	req, err := BdevWriteConfigRequestFromConfig(ctx, log, p.engineStorage,
-		hwloc.NewProvider(log).GetTopology)
+	p.RLock()
+	vmdEnabled := p.vmdEnabled
+	engineIndex := p.engineIndex
+	engineStorage := p.engineStorage
+	p.RUnlock()
+
+	req, err := BdevWriteConfigRequestFromConfig(ctx, log, engineStorage,
+		vmdEnabled, hwloc.NewProvider(log).GetTopology)
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
 
-	log.Infof("Writing NVMe config file for engine instance %d to %q", p.engineIndex,
+	log.Infof("Writing NVMe config file for engine instance %d to %q", engineIndex,
 		req.ConfigOutputPath)
 
 	p.RLock()
 	defer p.RUnlock()
-
 	req.BdevCache = &p.bdevCache
-	req.VMDEnabled = p.vmdEnabled
 
 	_, err = p.bdev.WriteConfig(req)
 
@@ -413,7 +427,7 @@ func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierSc
 		if cfg.Class != ClassNvme {
 			continue
 		}
-		if len(cfg.Bdev.DeviceList) == 0 {
+		if cfg.Bdev.DeviceList.Len() == 0 {
 			continue
 		}
 

@@ -33,6 +33,7 @@ import errno
 from distutils.spawn import find_executable
 #pylint: enable=import-error
 #pylint: enable=no-name-in-module
+#pylint: disable=consider-using-with
 
 class WrapScript():
     """Create a wrapper for a scons file and maintain a line mapping"""
@@ -230,6 +231,7 @@ def check_script(fname, *args, **kw):
     cmd = pycmd.split() + \
           list(args) + \
           ["--rcfile=%s/%s" % (rc_dir, rc_file),
+           "--unsafe-load-any-extension=y",
            "--msg-template",
            "{C}: %s:{line}: pylint-{symbol}: {msg}" % pylint_path,
            tmp_fname]
@@ -289,6 +291,7 @@ def main():
             check_script(fname, wrap=args.wrap)
 
     os.unlink(pylint3_rc)
+
 
 if __name__ == '__main__':
     main()

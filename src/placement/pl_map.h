@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -121,7 +121,7 @@ void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		       bool spare_avail, d_list_t **current,
 		       d_list_t *remap_list, uint32_t allow_status,
-		       struct failed_shard *f_shard,
+		       uint32_t allow_version, struct failed_shard *f_shard,
 		       struct pl_obj_shard *l_shard, bool *extending);
 
 int
@@ -134,4 +134,6 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 bool
 is_pool_adding(struct pool_domain *dom);
 
+bool
+need_remap_target(struct pool_target *tgt, uint32_t allow_status, uint32_t allow_version);
 #endif /* __PL_MAP_H__ */

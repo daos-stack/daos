@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,6 +28,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+
+#include <daos_pool.h>
+#include <daos_srv/policy.h>
 
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -281,7 +284,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	struct vos_pool		*pool = NULL;
 	int			 rc = 0, enabled = 1;
 
-	if (!path || uuid_is_null(uuid))
+	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
 
 	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64", "
@@ -497,48 +500,19 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	if (rc)
 		return rc;
 
+	if (daos_file_is_dax(path))
+		return -DER_INVAL;
+
 	/**
 	 * NB: no need to explicitly destroy container index table because
 	 * pool file removal will do this for free.
 	 */
-	if (daos_file_is_dax(path)) {
-		int	 fd;
-		int	 len = 2 * (1 << 20UL);
-		void	*addr;
-
-		fd = open(path, O_RDWR);
-		if (fd < 0) {
-			if (errno == ENOENT)
-				D_GOTO(exit, rc = 0);
-
-			D_ERROR("Failed to open %s: %d\n", path, errno);
-			D_GOTO(exit, rc = daos_errno2der(errno));
-		}
-
-		addr = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-		if (addr == MAP_FAILED) {
-			close(fd);
-			D_ERROR("Failed to mmap %s, len:%d: %d\n", path, len,
-				errno);
-			D_GOTO(exit, rc = daos_errno2der(errno));
-		}
-		memset((char *)addr, 0, len);
-
-		rc = munmap(addr, len);
-		if (rc) {
-			close(fd);
-			D_ERROR("Failed to munmap %s: %d\n", path, errno);
-			D_GOTO(exit, rc = daos_errno2der(errno));
-		}
-		close(fd);
-	} else {
-		rc = remove(path);
-		if (rc) {
-			if (errno == ENOENT)
-				D_GOTO(exit, rc = 0);
-			D_ERROR("Failure deleting file from PMEM: %s\n",
-				strerror(errno));
-		}
+	rc = remove(path);
+	if (rc) {
+		if (errno == ENOENT)
+			D_GOTO(exit, rc = 0);
+		D_ERROR("Failure deleting file from PMEM: %s\n",
+			strerror(errno));
 	}
 exit:
 	return rc;
@@ -757,6 +731,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		goto failed;
 	}
 
+	pool->vp_metrics = metrics;
 	if (bio_nvme_configured() && pool_df->pd_nvme_sz != 0) {
 		struct vea_unmap_context	 unmap_ctxt;
 		struct vos_pool_metrics		*vp_metrics = metrics;
@@ -793,6 +768,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
+
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
@@ -996,9 +972,11 @@ vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys)
 }
 
 int
-vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 {
 	struct vos_pool		*pool;
+	int			i;
+	struct policy_desc_t	*p;
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL)
@@ -1009,6 +987,17 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 		return -DER_NOSYS;
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
+		break;
+	case VOS_PO_CTL_SET_POLICY:
+		if (param == NULL)
+			return -DER_INVAL;
+
+		p = param;
+		pool->vp_policy_desc.policy = p->policy;
+
+		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
+			pool->vp_policy_desc.params[i] = p->params[i];
+
 		break;
 	}
 

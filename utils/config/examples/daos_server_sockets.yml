@@ -1,10 +1,10 @@
-# Example configuration file using sockets
+# Example configuration file using TCP sockets
 
 name: daos_server           # sys group daos_server
 access_points: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
-provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
-nr_hugepages: 4096
+provider: ofi+tcp
+nr_hugepages: 16384         # calculated based on number of targets
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1532,6 +1532,8 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	if (mrone->mo_iods[0].iod_type == DAOS_IOD_SINGLE)
 		rc = migrate_fetch_update_single(mrone, oh, cont);
+	else if (obj_shard_is_ec_parity(mrone->mo_oid, &mrone->mo_oca))
+		rc = migrate_fetch_update_parity(mrone, oh, cont);
 	else if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1))
 		rc = migrate_fetch_update_inline(mrone, oh, cont);
 	else

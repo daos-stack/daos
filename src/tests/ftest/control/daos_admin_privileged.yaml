@@ -9,15 +9,12 @@ setup:
   start_servers: False
   start_agents_once: False
   start_servers_once: False
-  agent_manager_class: Orterun
-  server_manager_class: Orterun
 server_config:
   name: daos_server
   port: 10001
   servers:
-    # Uncomment once DAOS-4287 has been closed.
-    # bdev_class: nvme
-    # bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
   transport_config:

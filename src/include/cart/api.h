@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1737,15 +1737,6 @@ crt_register_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg);
  */
 int
 crt_unregister_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg);
-
-typedef void
-(*crt_timeout_cb) (crt_context_t ctx, crt_rpc_t *rpc, void *arg);
-
-int
-crt_register_timeout_cb(crt_timeout_cb cb, void *arg);
-
-typedef void
-(*crt_eviction_cb) (crt_group_t *grp, d_rank_t rank, void *arg);
 
 enum crt_event_source {
 	CRT_EVS_UNKNOWN,
