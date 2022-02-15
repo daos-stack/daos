@@ -746,10 +746,12 @@ def auto_detect_devices(host_list, device_type, length, device_filter=None):
 
     # Find the devices on each host
     if device_type == "VMD":
+        # Exclude the controller revision as this causes heterogeneous clush output
         command_list = [
             "/sbin/lspci -D",
             "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
-            "grep -E 'Volume Management Device NVMe RAID Controller'"]
+            "grep -E 'Volume Management Device NVMe RAID Controller'",
+            "sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
     elif device_type == "NVMe":
         command_list = [
             "/sbin/lspci -D",
