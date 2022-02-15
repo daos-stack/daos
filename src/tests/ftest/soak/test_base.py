@@ -147,7 +147,7 @@ class SoakTestBase(TestWithServers):
             final_resv_file = os.path.join(self.test_dir, "final", "resv_file")
             try:
                 reserved_file_copy(self, final_resv_file, self.pool[0], self.resv_cont)
-            except CommandFailure as error:
+            except CommandFailure:
                 self.soak_errors.append("<<FAILED: Soak reserved container read failed>>")
 
             if not cmp(self.initial_resv_file, final_resv_file):
