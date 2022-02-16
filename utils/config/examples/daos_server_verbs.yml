@@ -7,6 +7,8 @@ provider: ofi+verbs
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
 
+telemetry_port: 9191
+
 ## Transport Credentials Specifying certificates to secure communications
 ##
 #transport_config:
