@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -321,7 +321,7 @@ func (p *Provider) getDeviceNUMANodeID(dev *object, topo *topology) uint {
 		}
 	}
 
-	p.log.Debugf("Unable to determine NUMA socket ID. Using NUMA 0")
+	p.log.Debugf("Unable to determine NUMA socket ID for device %q, using NUMA 0", dev.name())
 	return 0
 
 }

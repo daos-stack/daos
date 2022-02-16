@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -53,11 +53,11 @@ class DmvrPosixSubsets(DataMoverTestBase):
         # Create 1 pool
         pool1 = self.create_pool()
 
-	# create dfuse containers to test copying to dfuse subdirectories
+        # create dfuse containers to test copying to dfuse subdirectories
         dfuse_cont1 = self.create_cont(pool1)
         dfuse_cont2 = self.create_cont(pool1)
         dfuse_cont1_dir = join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
-	# destination directory should be created by program
+        # destination directory should be created by program
         dfuse_cont2_dir = self.new_posix_test_path(create=False,
             parent=join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
         # Create a special container to hold UNS entries

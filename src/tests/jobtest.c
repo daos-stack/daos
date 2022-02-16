@@ -272,7 +272,7 @@ main(int argc, char **argv)
 
 			uuid_unparse(c_uuid, cstr);
 			printf("Opening container %s\n", cstr);
-			rc = daos_cont_open(pool_handles[i][j], c_uuid,
+			rc = daos_cont_open(pool_handles[i][j], cstr,
 						DAOS_COO_RW,
 						&cont_handles[i][j],
 						NULL, NULL);

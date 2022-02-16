@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -122,6 +122,32 @@ struct dss_xstream_data {
 };
 
 static struct dss_xstream_data	xstream_data;
+
+int
+dss_xstream_set_affinity(struct dss_xstream *dxs)
+{
+	int rc;
+
+	/**
+	 * Set cpu affinity
+	 */
+	rc = hwloc_set_cpubind(dss_topo, dxs->dx_cpuset, HWLOC_CPUBIND_THREAD);
+	if (rc) {
+		D_ERROR("failed to set cpu affinity: %d\n", errno);
+		return rc;
+	}
+
+	/**
+	 * Set memory affinity, but fail silently if it does not work since some
+	 * systems return ENOSYS.
+	 */
+	rc = hwloc_set_membind(dss_topo, dxs->dx_cpuset, HWLOC_MEMBIND_BIND,
+			       HWLOC_MEMBIND_THREAD);
+	if (rc)
+		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
+
+	return 0;
+}
 
 bool
 dss_xstream_exiting(struct dss_xstream *dxs)
@@ -323,23 +349,9 @@ dss_srv_handler(void *arg)
 	int				 rc;
 	bool				 signal_caller = true;
 
-	/**
-	 * Set cpu affinity
-	 */
-	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
-	if (rc) {
-		D_ERROR("failed to set cpu affinity: %d\n", errno);
-		goto signal;
-	}
-
-	/**
-	 * Set memory affinity, but fail silently if it does not work since some
-	 * systems return ENOSYS.
-	 */
-	rc = hwloc_set_membind(dss_topo, dx->dx_cpuset, HWLOC_MEMBIND_BIND,
-			       HWLOC_MEMBIND_THREAD);
+	rc = dss_xstream_set_affinity(dx);
 	if (rc)
-		D_DEBUG(DB_TRACE, "failed to set memory affinity: %d\n", errno);
+		goto signal;
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG, dx->dx_xs_id, dx->dx_tgt_id);
@@ -353,7 +365,8 @@ dss_srv_handler(void *arg)
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
-	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_list);
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_open_list);
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_close_list);
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_pool_list);
 
 	(void)pthread_setname_np(pthread_self(), dx->dx_name);
@@ -1231,7 +1244,7 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
-	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id, dss_nvme_mem_size,
+	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
 			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get(),
 			   dss_nvme_bypass_health_check);
 	if (rc != 0)

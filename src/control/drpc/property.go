@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,8 +8,11 @@ package drpc
 import "unsafe"
 
 /*
+#cgo LDFLAGS: -ldaos_common -lgurt -lcart
 #include <daos_prop.h>
 #include <daos_pool.h>
+#include <daos_prop.h>
+#include <daos_srv/policy.h>
 */
 import "C"
 
@@ -36,6 +39,8 @@ const (
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
 	// PoolPropertyECCellSize is the EC Cell size.
 	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
+	// PoolPropertyPolicy is the tiering policy set for a pool
+	PoolPropertyPolicy = C.DAOS_PROP_PO_POLICY
 )
 
 const (
@@ -72,4 +77,25 @@ func LabelIsValid(label string) bool {
 	defer C.free(unsafe.Pointer(cLabel))
 
 	return bool(C.daos_label_is_valid(cLabel))
+}
+
+// PoolPolicy defines a type to be used to represent DAOS pool policies.
+type PoolPolicy uint32
+
+const (
+	// PoolPolicyIoSize sets the pool's policy to io_size
+	PoolPolicyIoSize PoolPolicy = C.DAOS_MEDIA_POLICY_IO_SIZE
+	// PoolPolicyWriteIntensivity sets the pool's policy to write_intensivity
+	PoolPolicyWriteIntensivity PoolPolicy = C.DAOS_MEDIA_POLICY_WRITE_INTENSIVITY
+)
+
+// PoolPolicyIsValid returns a boolean indicating whether or not the
+// pool tiering policy string is valid.
+func PoolPolicyIsValid(polStr string) bool {
+	var polDesc C.struct_policy_desc_t
+
+	cStr := C.CString(polStr)
+	defer C.free(unsafe.Pointer(cStr))
+
+	return bool(C.daos_policy_try_parse(cStr, &polDesc))
 }
