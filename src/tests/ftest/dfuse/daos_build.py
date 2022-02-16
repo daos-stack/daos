@@ -18,6 +18,7 @@ def skip_on_centos7():
     dist = distro.linux_distribution()
     if dist[0] == 'CentOS Linux' and dist[1] == '7':
         return skip('Newer software distribution needed')
+
     def _do(func):
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
