@@ -195,7 +195,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 				return FaultIommuDisabled
 			}
 		}
-	} else if srv.cfg.NrHugepages == -1 {
+	} else if srv.cfg.NrHugepages < 0 {
 		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: -1 in config")
 		return nil
 	}

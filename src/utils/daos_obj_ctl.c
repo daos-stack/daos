@@ -361,14 +361,15 @@ cont_init(struct credit_context *tsc)
 {
 	daos_handle_t	coh = DAOS_HDL_INVAL;
 	int		rc;
+	char            uuid_str[37];
 
-	rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid, NULL,
+	rc = daos_cont_create(tsc->tsc_poh, &(tsc->tsc_cont_uuid), NULL,
 			      NULL);
 	if (rc != 0)
 		goto out;
 
-	rc = daos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid,
-			    DAOS_COO_RW, &coh, NULL, NULL);
+	uuid_unparse(tsc->tsc_cont_uuid, uuid_str);
+	rc = daos_cont_open(tsc->tsc_poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
 
 	tsc->tsc_coh = coh;
 

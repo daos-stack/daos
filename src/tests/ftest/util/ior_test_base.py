@@ -513,7 +513,6 @@ class IorTestBase(DfuseTestBase):
                         results.append(["FAIL", str(self.ior_cmd)])
         return results
 
-
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.
 
