@@ -17,9 +17,11 @@ def scons():
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
     senv.AppendUnique(OBJPREFIX='s_')
 
-    senv['CFLAGS'].remove('-fprofile-arcs')
-    senv['CFLAGS'].remove('-ftest-coverage')
-    senv['CFLAGS'].remove('--coverage')
+    for flag in ['-fprofile-arcs', '-ftest-coverage', '--coverage']:
+        try:
+            senv['CFLAGS'].remove(flag)
+        except ValueError:
+            pass
 
     # Explicitly link RTE & SPDK libs for CGO access
     libs = ['spdk_log', 'spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
