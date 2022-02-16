@@ -58,14 +58,17 @@ Hugetlb:               0 kB
 ```
 
 #### Note: 
-Most Linux docker distributions should support hugepages. However only the following have been validated
+Huge pages are supported by all containerized Linux distributions. However support of huge pages 
+with DAOS and its dependencies re not working for some Linux distribution.only the followingdistributions have
+been validated:
 - [rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) 
 - [centos:centos8](https://hub.docker.com/_/centos) official docker images.
 The following Linux docker distributions are known not to support hugepages at this time:
 - [rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux)
 
 ### Configuring HugePages
-If hugepages have not been enabled, we will need to do so now to avoid memory fragmentation. To configure 2Mb hugepages use the following command:
+If hugepages have not been enabled, we will need to do so now to avoid memory fragmentation. To configure
+2Mb hugepages use the following command:
 ```bash
 sysctl vm.nr_hugepages=4096
 reboot
@@ -75,7 +78,7 @@ reboot
 The three images `daos-server`, `daos-admin` and `daos-client` could be built directly from GitHub
 or from a local tree in the same way as for the `daos-base` image.
 
-First you will need to install dockerand docker compose, for eaxample
+First you will need to install docker and docker compose, for eaxample
 ```
 sudo apt install docker
 sudo apt install docker-compose
