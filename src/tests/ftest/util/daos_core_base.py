@@ -178,7 +178,6 @@ class DaosCoreBase(TestWithServers):
                     "{0} failed with return code={1}.\n".format(
                         job_str, result.result.exit_status))
 
-
     def create_results_xml(self, testname, result, error_message="Test failed to start up"):
         """Create a JUnit result.xml file for the failed command.
 
