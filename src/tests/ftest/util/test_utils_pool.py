@@ -13,8 +13,7 @@ from test_utils_base import TestDaosApiBase, LabelGenerator
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-from general_utils import check_pool_files, DaosTestError, run_command
-from env_modules import load_mpi
+from general_utils import check_pool_files, DaosTestError
 from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand
 
