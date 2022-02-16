@@ -17,7 +17,7 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from command_utils_base import CommandFailure
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd
+from general_utils import pcmd, stop_processes, run_pcmd, module_load
 from write_host_file import write_host_file
 
 
@@ -210,7 +210,7 @@ class JobManager(ExecutableCommand):
 class Orterun(JobManager):
     """A class for the orterun job manager command."""
 
-    def __init__(self, job, subprocess=False):
+    def __init__(self, job, subprocess=False, module_name=None):
         """Create a Orterun object.
 
         Args:
@@ -218,8 +218,12 @@ class Orterun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
+        if not module_name:
+            if not load_mpi("openmpi"):
+                raise CommandFailure("Failed to load openmpi")
+        else:
+            if not module_load(module_name):
+                raise CommandFailure("Failed to load {}".format(module_name))
 
         path = os.path.dirname(find_executable("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
@@ -320,7 +324,7 @@ class Orterun(JobManager):
 class Mpirun(JobManager):
     """A class for the mpirun job manager command."""
 
-    def __init__(self, job, subprocess=False, mpitype="openmpi"):
+    def __init__(self, job, subprocess=False, mpitype="openmpi", module_name=None):
         """Create a Mpirun object.
 
         Args:
@@ -328,8 +332,12 @@ class Mpirun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        if not load_mpi(mpitype):
-            raise CommandFailure("Failed to load {}".format(mpitype))
+        if not module_name:
+            if not load_mpi(mpitype):
+                raise CommandFailure("Failed to load {}".format(mpitype))
+        else:
+            if not module_load(module_name):
+                raise CommandFailure("Failed to load {}".format(module_name))
 
         path = os.path.dirname(find_executable("mpirun"))
         super().__init__("/run/mpirun", "mpirun", job, path, subprocess)

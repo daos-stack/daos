@@ -525,7 +525,7 @@ class SoakTestBase(TestWithServers):
         self.soak_errors = []
         self.check_errors = []
         self.used = []
-        self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
+        self.mpi_module = self.params.get("mpi_module", "/run/*", default=None)
         test_to = self.params.get("test_timeout", test_param + "*")
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get(

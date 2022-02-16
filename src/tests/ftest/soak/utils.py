@@ -915,11 +915,9 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         env["HDF5_VOL_CONNECTOR"] = "daos"
                         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
                         # env["H5_DAOS_BYPASS_DUNS"] = 1
-                    mpirun_cmd = Mpirun(ior_cmd, mpitype="mpich")
+                    mpirun_cmd = Mpirun(ior_cmd, mpitype="mpich", module_name=self.mpi_module)
                     mpirun_cmd.assign_processes(nodesperjob * ppn)
                     mpirun_cmd.assign_environment(env, True)
-                    env_list = mpirun_cmd.env.get_list()
-                    mpirun_cmd.genv.update(env_list)
                     mpirun_cmd.ppn.update(ppn)
                     sbatch_cmds.append(str(mpirun_cmd))
                     sbatch_cmds.append("status=$?")
@@ -1012,11 +1010,10 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             sbatch_cmds.extend(dfuse_start_cmdlist)
                             mdtest_cmd.test_dir.update(
                                 dfuse.mount_dir.value)
-                        mpirun_cmd = Mpirun(mdtest_cmd, mpitype="mpich")
+                        mpirun_cmd = Mpirun(
+                            mdtest_cmd, mpitype="mpich", module_name=self.mpi_module)
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
                         mpirun_cmd.assign_environment(env, True)
-                        env_list = mpirun_cmd.env.get_list()
-                        mpirun_cmd.genv.update(env_list)
                         mpirun_cmd.ppn.update(ppn)
                         sbatch_cmds.append(str(mpirun_cmd))
                         sbatch_cmds.append("status=$?")
