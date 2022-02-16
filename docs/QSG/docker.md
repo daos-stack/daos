@@ -75,7 +75,7 @@ reboot
 The three images `daos-server`, `daos-admin` and `daos-client` could be built directly from GitHub
 or from a local tree in the same way as for the `daos-base` image.
 
-First you will need to install dockerand docker compose, for eaxample
+First you will need to install docker and docker compose, for example on Debian like distribution
 ```
 sudo apt install docker
 sudo apt install docker-compose
