@@ -3459,6 +3459,7 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 			/** Conditional fetch returns -DER_NONEXIST if the key doesn't exist. We
 			 *  do not want to try another replica in this case.
 			 */
+			D_DEBUG(DB_IO, "Fetch returned -DER_NONEXIST, no retry on conditional\n");
 			iter_arg->retry = false;
 		} else if (ret != -DER_REC2BIG && !obj_retry_error(ret) &&
 			   !obj_is_modification_opc(obj_auxi->opc) &&

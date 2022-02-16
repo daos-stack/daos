@@ -93,10 +93,15 @@ server_config_val: !mux
       - "nr_hugepages"
       - 1000000000000000000
       - "FAIL"
-  nr_hugepages_negative_int:
+  nr_hugepages_large_negative_int:
     config_val:
       - "nr_hugepages"
       - -100
+      - "FAIL"
+  nr_hugepages_positive_int:
+    config_val:
+      - "nr_hugepages"
+      - 4096
       - "PASS"
   port_str:
     config_val:
