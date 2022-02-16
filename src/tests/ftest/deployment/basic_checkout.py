@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -39,7 +39,6 @@ class BasicCheckout(IorTestBase, MdtestBase):
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
         ec_obj_class = self.params.get("ec_oclass", '/run/ior/*')
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
-
 
         #run ior
         results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
