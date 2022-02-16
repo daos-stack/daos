@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -81,7 +81,7 @@ class FullPoolContainerCreate(TestWithServers):
                                                                     obj_sz))
                     write_count += 1
                 except DaosTestError as excep:
-                    if not err in repr(excep):
+                    if err not in repr(excep):
                         self.log.error("caught exception while writing "
                                        "object: %s", repr(excep))
                         self.container.close()
