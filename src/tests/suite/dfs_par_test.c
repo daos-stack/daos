@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -370,23 +370,23 @@ dfs_test_ec_short_read(void **state)
 		return;
 
 	/* less than 1 EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 2000);
 
 	/* partial EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 2);
 
 	/* full EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 4);
 
 	/* one full EC stripe + partial EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 6);
 
 	/* 2 full stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 6);
 }
 
@@ -886,7 +886,14 @@ dfs_setup(void **state)
 		else
 			print_message("Running DFS Parallel tests with DTX disabled\n");
 
+		attr.da_props = daos_prop_alloc(1);
+		assert_non_null(attr.da_props);
+		attr.da_props->dpp_entries[0].dpe_type =
+					DAOS_PROP_CO_EC_CELL_SZ;
+		attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+
 		rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+		daos_prop_free(attr.da_props);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}

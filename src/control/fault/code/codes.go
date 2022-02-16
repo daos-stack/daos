@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -118,7 +118,7 @@ const (
 	ServerPoolInvalidRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugePages
+	ServerInsufficientFreeHugePageMem
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
@@ -143,6 +143,9 @@ const (
 	ServerConfigDuplicateScmMount
 	ServerConfigDuplicateScmDeviceList
 	ServerConfigOverlappingBdevDeviceList
+	ServerConfigBdevCountMismatch
+	ServerConfigTargetCountMismatch
+	ServerConfigHelperStreamCountMismatch
 	ServerConfigFaultDomainInvalid
 	ServerConfigFaultCallbackNotFound
 	ServerConfigFaultCallbackInsecure
@@ -151,6 +154,9 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
+	ServerConfigInsufficientHugePages
+	ServerConfigNrHugepagesOutOfRange
+	ServerConfigHugepagesDisabled
 )
 
 // SPDK library bindings codes

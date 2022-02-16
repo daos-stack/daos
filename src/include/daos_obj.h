@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -92,6 +92,7 @@ enum daos_otype_t {
 	/** Byte Array with no metadata (eg DFS/POSIX) */
 	DAOS_OT_ARRAY_BYTE	= 13,
 
+	DAOS_OT_MAX		= 13,
 	/**
 	 * reserved: Multi Dimensional Array
 	 * DAOS_OT_ARRAY_MD	= 64,
@@ -102,6 +103,12 @@ enum daos_otype_t {
 	 * DAOS_OT_BDEV	= 96,
 	 */
 };
+
+static inline bool
+daos_otype_t_is_valid(enum daos_otype_t type)
+{
+	return type <= DAOS_OT_MAX;
+}
 
 static inline enum daos_otype_t
 daos_obj_id2type(daos_obj_id_t oid)
@@ -1139,37 +1146,36 @@ int
 daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
 		       enum daos_otype_t type, daos_oclass_id_t cid,
 		       daos_oclass_hints_t hints, uint32_t args);
-enum {
-	/** DKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_DKEY_UINT64	= (1 << 0),
-	/** DKEY keys not hashed and sorted lexically */
-	DAOS_OF_DKEY_LEXICAL	= (1 << 1),
-	/** AKEY keys not hashed and sorted numerically.   Keys are accepted
-	 *  in client's byte order and DAOS is responsible for correct behavior
-	 */
-	DAOS_OF_AKEY_UINT64	= (1 << 2),
-	/** AKEY keys not hashed and sorted lexically */
-	DAOS_OF_AKEY_LEXICAL	= (1 << 3),
-	/** reserved: 1-level flat KV store */
-	DAOS_OF_KV_FLAT		= (1 << 4),
-	/** reserved: 1D Array with metadata stored in the DAOS object */
-	DAOS_OF_ARRAY		= (1 << 5),
-	/** reserved: Multi Dimensional Array */
-	DAOS_OF_ARRAY_MD	= (1 << 6),
-	/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
-	DAOS_OF_ARRAY_BYTE	= (1 << 7),
-	/**
-	 * benchmark-only feature bit, I/O is a network echo, no data is going
-	 * to be stored/returned
-	 *
-	 * NB: this is the last feature bits.
-	 */
-	DAOS_OF_ECHO		= (1 << 15),
-	/** Mask for convenience (16-bit) */
-	DAOS_OF_MASK		= ((1 << 16) - 1),
-};
+
+/** DKEY keys not hashed and sorted numerically.   Keys are accepted
+ *  in client's byte order and DAOS is responsible for correct behavior
+ */
+#define	DAOS_OF_DKEY_UINT64	((daos_ofeat_t)(1 << 0))
+/** DKEY keys not hashed and sorted lexically */
+#define DAOS_OF_DKEY_LEXICAL	((daos_ofeat_t)(1 << 1))
+/** AKEY keys not hashed and sorted numerically.   Keys are accepted
+ *  in client's byte order and DAOS is responsible for correct behavior
+ */
+#define DAOS_OF_AKEY_UINT64	((daos_ofeat_t)(1 << 2))
+/** AKEY keys not hashed and sorted lexically */
+#define DAOS_OF_AKEY_LEXICAL	((daos_ofeat_t)(1 << 3))
+/** reserved: 1-level flat KV store */
+#define DAOS_OF_KV_FLAT		((daos_ofeat_t)(1 << 4))
+/** reserved: 1D Array with metadata stored in the DAOS object */
+#define DAOS_OF_ARRAY		((daos_ofeat_t)(1 << 5))
+/** reserved: Multi Dimensional Array */
+#define DAOS_OF_ARRAY_MD	((daos_ofeat_t)(1 << 6))
+/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
+#define DAOS_OF_ARRAY_BYTE	((daos_ofeat_t)(1 << 7))
+/**
+ * benchmark-only feature bit, I/O is a network echo, no data is going
+ * to be stored/returned
+ *
+ * NB: this is the last feature bits.
+ */
+#define DAOS_OF_ECHO		((daos_ofeat_t)(1 << 15))
+/** Mask for convenience (16-bit) */
+#define DAOS_OF_MASK		((daos_ofeat_t)((1 << 16) - 1))
 
 #if defined(__cplusplus)
 }

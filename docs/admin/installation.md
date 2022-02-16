@@ -1,12 +1,12 @@
 # Software Installation
 
-Please check the [support matrix](https://daos-stack.github.io/release/support_matrix)
+Please check the [support matrix](https://docs.daos.io/v2.2/release/support_matrix)
 to select the appropriate software combination.
 
 ## Distribution Packages
 
-DAOS packages will be available for CentOS7, CentOS8 and openSUSE Leap 15
-when DAOS 2.0 is released (planned for September 2021).
+DAOS packages will be available when DAOS 2.2 is released (planned for first
+half of 2022).
 
 ## DAOS from Scratch
 
@@ -58,18 +58,18 @@ If all the software dependencies listed previously are already satisfied, then
 type the following command in the top source directory to build the DAOS stack:
 
 ```bash
- scons-3 --config=force install
+$ scons-3 --config=force install
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
-[DAOS for Development](https://daos-stack.github.io/dev/development/#building-daos-for-development)
+[DAOS for Development](https://docs.daos.io/v2.2/dev/development/#building-daos-for-development)
 section.
 
 Otherwise, the missing dependencies can be built automatically by invoking scons
 with the following parameters:
 
 ```bash
- scons-3 --config=force --build-deps=yes install
+$ scons-3 --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under ${daospath}/install.
@@ -88,9 +88,8 @@ files in the installation path. This step is not required if standard locations
 (e.g. /bin, /sbin, /usr/lib, ...) are used.
 
 ```bash
-CPATH=${daospath}/install/include/:$CPATH
-PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
-export CPATH PATH
+$ export CPATH=${daospath}/install/include/:$CPATH
+$ export PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
 ```
 
 If using bash, PATH can be set up for you after a build by sourcing the script

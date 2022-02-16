@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -31,50 +31,50 @@ func TestAgent_FabricInterface_AddProvider(t *testing.T) {
 		"empty": {
 			fi: &FabricInterface{
 				Name:        "test",
-				NetDevClass: netdetect.Ether,
+				NetDevClass: hardware.Ether,
 			},
 			provider: "p1",
 			expFI: &FabricInterface{
 				Name:        "test",
-				NetDevClass: netdetect.Ether,
+				NetDevClass: hardware.Ether,
 				Providers:   []string{"p1"},
 			},
 		},
 		"add": {
 			fi: &FabricInterface{
 				Name:        "test",
-				NetDevClass: netdetect.Ether,
+				NetDevClass: hardware.Ether,
 				Providers:   []string{"p1", "p2"},
 			},
 			provider: "p3",
 			expFI: &FabricInterface{
 				Name:        "test",
-				NetDevClass: netdetect.Ether,
+				NetDevClass: hardware.Ether,
 				Providers:   []string{"p1", "p2", "p3"},
 			},
 		},
 		"empty provider string": {
 			fi: &FabricInterface{
 				Name:        "test",
-				NetDevClass: netdetect.Ether,
+				NetDevClass: hardware.Ether,
 				Providers:   []string{"p1", "p2"},
 			},
 			expFI: &FabricInterface{
 				Name:        "test",
-				NetDevClass: netdetect.Ether,
+				NetDevClass: hardware.Ether,
 				Providers:   []string{"p1", "p2"},
 			},
 		},
 		"duplicate provider string": {
 			fi: &FabricInterface{
 				Name:        "test",
-				NetDevClass: netdetect.Ether,
+				NetDevClass: hardware.Ether,
 				Providers:   []string{"p1", "p2"},
 			},
 			provider: "p1",
 			expFI: &FabricInterface{
 				Name:        "test",
-				NetDevClass: netdetect.Ether,
+				NetDevClass: hardware.Ether,
 				Providers:   []string{"p1", "p2"},
 			},
 		},
@@ -242,7 +242,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 		nf          *NUMAFabric
 		node        int
 		provider    string
-		netDevClass uint32
+		netDevClass hardware.NetDevClass
 		expErr      error
 		expResults  []*FabricInterface
 	}{
@@ -252,7 +252,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 		"empty": {
 			provider:    "ofi+sockets",
 			nf:          newNUMAFabric(nil),
-			netDevClass: netdetect.Loopback,
+			netDevClass: hardware.Loopback,
 			expErr:      errors.New("no suitable fabric interface"),
 		},
 		"no provider": {
@@ -261,21 +261,24 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
 							Name:        "t2",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
 							Name:        "t3",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
 			},
 			node:        0,
-			netDevClass: netdetect.Ether,
+			netDevClass: hardware.Ether,
 			expErr:      errors.New("provider is required"),
 		},
 		"type not found": {
@@ -285,21 +288,51 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
 							Name:        "t2",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
 							Name:        "t3",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
 			},
 			node:        0,
-			netDevClass: netdetect.Infiniband,
+			netDevClass: hardware.Infiniband,
+			expErr:      errors.New("no suitable fabric interface"),
+		},
+		"provider not found": {
+			provider: "ofi+verbs",
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "t1",
+							NetDevClass: hardware.Infiniband,
+							Providers:   []string{"ofi+sockets"},
+						},
+						{
+							Name:        "t2",
+							NetDevClass: hardware.Infiniband,
+							Providers:   []string{"ofi+sockets"},
+						},
+						{
+							Name:        "t3",
+							NetDevClass: hardware.Infiniband,
+							Providers:   []string{"ofi+sockets"},
+						},
+					},
+				},
+			},
+			node:        0,
+			netDevClass: hardware.Infiniband,
 			expErr:      errors.New("no suitable fabric interface"),
 		},
 		"choose first device": {
@@ -309,21 +342,24 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Infiniband,
+							NetDevClass: hardware.Infiniband,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
 			},
 			node:        0,
-			netDevClass: netdetect.Infiniband,
+			netDevClass: hardware.Infiniband,
 			expResults: []*FabricInterface{
 				{
 					Name:        "t1",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
+					Providers:   []string{"ofi+sockets"},
 				},
 				{
 					Name:        "t1",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
+					Providers:   []string{"ofi+sockets"},
 				},
 			},
 		},
@@ -334,29 +370,34 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
 							Name:        "t2",
-							NetDevClass: netdetect.Infiniband,
+							NetDevClass: hardware.Infiniband,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
 			},
 			node:        0,
-			netDevClass: netdetect.Infiniband,
+			netDevClass: hardware.Infiniband,
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
+					Providers:   []string{"ofi+sockets"},
 				},
 				{
 					Name:        "t2",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
+					Providers:   []string{"ofi+sockets"},
 				},
 				{
 					Name:        "t2",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
+					Providers:   []string{"ofi+sockets"},
 				},
 			},
 		},
@@ -367,18 +408,20 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Infiniband,
+							NetDevClass: hardware.Infiniband,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 					1: {},
 				},
 			},
 			node:        1,
-			netDevClass: netdetect.Infiniband,
+			netDevClass: hardware.Infiniband,
 			expResults: []*FabricInterface{
 				{
 					Name:        "t1",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
+					Providers:   []string{"ofi+sockets"},
 				},
 			},
 		},
@@ -389,27 +432,31 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Infiniband,
+							NetDevClass: hardware.Infiniband,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 					1: {
 						{
 							Name:        "t2",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
 			},
 			node:        1,
-			netDevClass: netdetect.Infiniband,
+			netDevClass: hardware.Infiniband,
 			expResults: []*FabricInterface{
 				{
 					Name:        "t1",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
+					Providers:   []string{"ofi+sockets"},
 				},
 				{
 					Name:        "t1",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Infiniband,
+					Providers:   []string{"ofi+sockets"},
 				},
 			},
 		},
@@ -421,26 +468,30 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 						{
 							Name:        "t1",
 							NetDevClass: FabricDevClassManual,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 					1: {
 						{
 							Name:        "t2",
 							NetDevClass: FabricDevClassManual,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
 			},
 			node:        1,
-			netDevClass: netdetect.Infiniband,
+			netDevClass: hardware.Infiniband,
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
 					NetDevClass: FabricDevClassManual,
+					Providers:   []string{"ofi+sockets"},
 				},
 				{
 					Name:        "t2",
 					NetDevClass: FabricDevClassManual,
+					Providers:   []string{"ofi+sockets"},
 				},
 			},
 		},
@@ -451,15 +502,18 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
 							Name:        "t2",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
 							Name:        "t3",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
@@ -468,23 +522,27 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 			node:        0,
-			netDevClass: netdetect.Ether,
+			netDevClass: hardware.Ether,
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+sockets"},
 				},
 				{
 					Name:        "t3",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+sockets"},
 				},
 				{
 					Name:        "t1",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+sockets"},
 				},
 				{
 					Name:        "t2",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+sockets"},
 				},
 			},
 		},
@@ -495,7 +553,8 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Infiniband,
+							NetDevClass: hardware.Infiniband,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
@@ -504,110 +563,94 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 			node:        0,
-			netDevClass: netdetect.Infiniband,
-			expErr:      FabricNotFoundErr(netdetect.Infiniband),
+			netDevClass: hardware.Infiniband,
+			expErr:      FabricNotFoundErr(hardware.Infiniband),
 		},
-		"need domain": {
+		"specific provider": {
 			provider: "ofi+verbs",
 			nf: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 						{
 							Name:        "t2",
 							Domain:      "t2_dom",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets", "ofi+verbs"},
 						},
 					},
 					1: {
 						{
 							Name:        "t3",
 							Domain:      "t3_dom",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
 				},
 			},
 			node:        0,
-			netDevClass: netdetect.Ether,
+			netDevClass: hardware.Ether,
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
 					Domain:      "t2_dom",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+sockets", "ofi+verbs"},
 				},
 				{
 					Name:        "t2",
 					Domain:      "t2_dom",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+sockets", "ofi+verbs"},
 				},
 				{
 					Name:        "t2",
 					Domain:      "t2_dom",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+sockets", "ofi+verbs"},
 				},
 			},
 		},
-		"need domain from other numa": {
+		"specific provider from other numa": {
 			provider: "ofi+verbs",
 			nf: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+sockets"},
 						},
 					},
-					1: { // interface with domain is on other numa node
+					1: {
 						{
 							Name:        "t2",
 							Domain:      "t2_dom",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
+							Providers:   []string{"ofi+verbs"},
 						},
 					},
 				},
 			},
 			node:        0,
-			netDevClass: netdetect.Ether,
+			netDevClass: hardware.Ether,
 			expResults: []*FabricInterface{
 				{
 					Name:        "t2",
 					Domain:      "t2_dom",
-					NetDevClass: netdetect.Ether,
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+verbs"},
 				},
 				{
 					Name:        "t2",
 					Domain:      "t2_dom",
-					NetDevClass: netdetect.Ether,
-				},
-			},
-		},
-		"trim domain when not needed": {
-			provider: "ofi+sockets",
-			nf: &NUMAFabric{
-				numaMap: map[int][]*FabricInterface{
-					0: {
-						{
-							Name:        "t2",
-							Domain:      "t2_dom",
-							NetDevClass: netdetect.Infiniband,
-						},
-					},
-				},
-			},
-			node:        0,
-			netDevClass: netdetect.Infiniband,
-			expResults: []*FabricInterface{
-				{
-					Name:        "t2",
-					NetDevClass: netdetect.Infiniband,
-				},
-				{
-					Name:        "t2",
-					NetDevClass: netdetect.Infiniband,
+					NetDevClass: hardware.Ether,
+					Providers:   []string{"ofi+verbs"},
 				},
 			},
 		},
@@ -656,15 +699,15 @@ func TestAgent_NUMAFabric_Find(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
 						},
 						{
 							Name:        "t2",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
 						},
 						{
 							Name:        "t3",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
 						},
 					},
 				},
@@ -678,15 +721,15 @@ func TestAgent_NUMAFabric_Find(t *testing.T) {
 					0: {
 						{
 							Name:        "t1",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
 						},
 						{
 							Name:        "t2",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
 						},
 						{
 							Name:        "t3",
-							NetDevClass: netdetect.Ether,
+							NetDevClass: hardware.Ether,
 						},
 					},
 				},
@@ -694,7 +737,7 @@ func TestAgent_NUMAFabric_Find(t *testing.T) {
 			name: "t2",
 			expResult: &FabricInterface{
 				Name:        "t2",
-				NetDevClass: netdetect.Ether,
+				NetDevClass: hardware.Ether,
 			},
 		},
 	} {
@@ -711,8 +754,7 @@ func TestAgent_NUMAFabric_Find(t *testing.T) {
 
 func TestAgent_NUMAFabricFromScan(t *testing.T) {
 	for name, tc := range map[string]struct {
-		input               []*netdetect.FabricScan
-		getDevAlias         func(ctx context.Context, devName string) (string, error)
+		input               *hardware.FabricInterfaceSet
 		expResult           map[int][]*FabricInterface
 		possibleDefaultNUMA []int
 	}{
@@ -721,30 +763,35 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 			possibleDefaultNUMA: []int{0},
 		},
 		"include lo": {
-			input: []*netdetect.FabricScan{
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test0",
+			input: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+sockets"),
+					Name:        "test0",
+					OSDevice:    "os_test0",
 					NUMANode:    1,
-					NetDevClass: netdetect.Ether,
+					DeviceClass: hardware.Ether,
 				},
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "lo",
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+sockets"),
+					Name:        "lo",
+					OSDevice:    "lo",
 					NUMANode:    1,
-					NetDevClass: netdetect.Loopback,
+					DeviceClass: hardware.Loopback,
 				},
-			},
+			),
 			expResult: map[int][]*FabricInterface{
 				1: {
+
 					{
-						Name:        "test0",
-						NetDevClass: netdetect.Ether,
+						Name:        "lo",
+						Domain:      "lo",
+						NetDevClass: hardware.Loopback,
 						Providers:   []string{"ofi+sockets"},
 					},
 					{
-						Name:        "lo",
-						NetDevClass: netdetect.Loopback,
+						Name:        "os_test0",
+						Domain:      "test0",
+						NetDevClass: hardware.Ether,
 						Providers:   []string{"ofi+sockets"},
 					},
 				},
@@ -752,133 +799,101 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 			possibleDefaultNUMA: []int{1},
 		},
 		"multiple devices": {
-			input: []*netdetect.FabricScan{
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test0",
+			input: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+sockets"),
+					Name:        "test0",
+					OSDevice:    "os_test0",
 					NUMANode:    1,
-					NetDevClass: netdetect.Ether,
+					DeviceClass: hardware.Ether,
 				},
-				{
-					Provider:    "ofi+verbs",
-					DeviceName:  "test1",
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+verbs"),
+					Name:        "test1",
+					OSDevice:    "os_test1",
 					NUMANode:    0,
-					NetDevClass: netdetect.Infiniband,
+					DeviceClass: hardware.Infiniband,
 				},
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test2",
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+sockets"),
+					Name:        "test2",
+					OSDevice:    "os_test2",
 					NUMANode:    0,
-					NetDevClass: netdetect.Ether,
+					DeviceClass: hardware.Ether,
 				},
-			},
+			),
 			expResult: map[int][]*FabricInterface{
 				0: {
 					{
-						Name:        "test1",
-						NetDevClass: netdetect.Infiniband,
+						Name:        "os_test1",
+						Domain:      "test1",
+						NetDevClass: hardware.Infiniband,
 						Providers:   []string{"ofi+verbs"},
 					},
 					{
-						Name:        "test2",
-						NetDevClass: netdetect.Ether,
+						Name:        "os_test2",
+						Domain:      "test2",
+						NetDevClass: hardware.Ether,
 						Providers:   []string{"ofi+sockets"},
 					},
 				},
 				1: {
 					{
-						Name:        "test0",
-						NetDevClass: netdetect.Ether,
+						Name:        "os_test0",
+						Domain:      "test0",
+						NetDevClass: hardware.Ether,
 						Providers:   []string{"ofi+sockets"},
 					},
 				},
 			},
 			possibleDefaultNUMA: []int{0, 1},
 		},
-		"with device alias": {
-			getDevAlias: func(_ context.Context, dev string) (string, error) {
-				return dev + "_alias", nil
-			},
-			input: []*netdetect.FabricScan{
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test0",
-					NUMANode:    2,
-					NetDevClass: netdetect.Ether,
-				},
-				{
-					Provider:    "ofi+verbs",
-					DeviceName:  "test1",
-					NUMANode:    1,
-					NetDevClass: netdetect.Infiniband,
-				},
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test2",
-					NUMANode:    1,
-					NetDevClass: netdetect.Ether,
-				},
-			},
-			expResult: map[int][]*FabricInterface{
-				1: {
-					{
-						Name:        "test1",
-						NetDevClass: netdetect.Infiniband,
-						Domain:      "test1_alias",
-						Providers:   []string{"ofi+verbs"},
-					},
-					{
-						Name:        "test2",
-						NetDevClass: netdetect.Ether,
-						Domain:      "test2_alias",
-						Providers:   []string{"ofi+sockets"},
-					},
-				},
-				2: {
-					{
-						Name:        "test0",
-						NetDevClass: netdetect.Ether,
-						Domain:      "test0_alias",
-						Providers:   []string{"ofi+sockets"},
-					},
-				},
-			},
-			possibleDefaultNUMA: []int{1, 2},
-		},
 		"multiple providers per device": {
-			input: []*netdetect.FabricScan{
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test0",
+			input: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+sockets", "ofi+tcp"),
+					Name:        "test0",
+					OSDevice:    "os_test0",
 					NUMANode:    1,
-					NetDevClass: netdetect.Ether,
+					DeviceClass: hardware.Ether,
 				},
-				{
-					Provider:    "ofi+verbs",
-					DeviceName:  "test1",
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+verbs"),
+					Name:        "verbs_test1",
+					OSDevice:    "os_test1",
 					NUMANode:    0,
-					NetDevClass: netdetect.Infiniband,
+					DeviceClass: hardware.Infiniband,
 				},
-				{
-					Provider:    "ofi+sockets",
-					DeviceName:  "test1",
+				&hardware.FabricInterface{
+					Providers:   common.NewStringSet("ofi+sockets", "ofi+tcp"),
+					Name:        "test1",
+					OSDevice:    "os_test1",
 					NUMANode:    0,
-					NetDevClass: netdetect.Infiniband,
+					DeviceClass: hardware.Infiniband,
 				},
-			},
+			),
 			expResult: map[int][]*FabricInterface{
 				0: {
+
 					{
-						Name:        "test1",
-						NetDevClass: netdetect.Infiniband,
-						Providers:   []string{"ofi+verbs", "ofi+sockets"},
+						Name:        "os_test1",
+						Domain:      "test1",
+						NetDevClass: hardware.Infiniband,
+						Providers:   []string{"ofi+sockets", "ofi+tcp"},
+					},
+					{
+						Name:        "os_test1",
+						Domain:      "verbs_test1",
+						NetDevClass: hardware.Infiniband,
+						Providers:   []string{"ofi+verbs"},
 					},
 				},
 				1: {
 					{
-						Name:        "test0",
-						NetDevClass: netdetect.Ether,
-						Providers:   []string{"ofi+sockets"},
+						Name:        "os_test0",
+						Domain:      "test0",
+						NetDevClass: hardware.Ether,
+						Providers:   []string{"ofi+sockets", "ofi+tcp"},
 					},
 				},
 			},
@@ -889,7 +904,7 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			result := NUMAFabricFromScan(context.TODO(), log, tc.input, tc.getDevAlias)
+			result := NUMAFabricFromScan(context.TODO(), log, tc.input)
 
 			if diff := cmp.Diff(tc.expResult, result.numaMap); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)

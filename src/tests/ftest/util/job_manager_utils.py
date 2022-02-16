@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -184,6 +184,16 @@ class JobManager(ExecutableCommand):
         # processes running by returning a "R" state.
         return "R" if 1 not in results or len(results) > 1 else None
 
+    def stop(self):
+        """Stop the subprocess command and kill any job processes running on hosts.
+
+        Raises:
+            CommandFailure: if unable to stop
+
+        """
+        super().stop()
+        self.kill()
+
     def kill(self):
         """Forcibly terminate any job processes running on hosts."""
         regex = self.job.command_regex
@@ -236,6 +246,7 @@ class Orterun(JobManager):
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
+        self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -338,8 +349,10 @@ class Mpirun(JobManager):
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
+        self.genv = FormattedParameter("-genv {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
+        self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
         self.mpitype = mpitype
 
     def assign_hosts(self, hosts, path=None, slots=None):
@@ -492,7 +505,7 @@ class Srun(JobManager):
 
 
 class Systemctl(JobManager):
-    # pylint: disable=too-many-public-methods,too-many-public-methods
+    # pylint: disable=too-many-public-methods
     """A class for the systemctl job manager command."""
 
     def __init__(self, job):

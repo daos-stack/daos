@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -104,10 +104,14 @@ class ErasureCodeIor(ServerFillUp):
         self.ec_container = TestContainer(self.pool, daos_command=DaosCommand(self.bin))
         self.ec_container.get_params(self)
         self.ec_container.oclass.update(oclass)
+
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
-        self.ec_container.properties.update("rf:{}".format(ec_object['parity']))
-
+        rf = "rf:{}".format(ec_object['parity'])
+        if self.container.properties.value is None:
+            self.ec_container.properties.update(rf)
+        else:
+            self.ec_container.properties.update("{},{}".format(self.container.properties.value, rf))
         # create container
         self.ec_container.create()
 
@@ -307,7 +311,7 @@ class ErasureCodeSingle(TestWithServers):
                     cont_count += 1
                     if results is not None:
                         results.put("PASS")
-                except (CommandFailure, DaosApiError, DaosTestError) as _error:
+                except (CommandFailure, DaosApiError, DaosTestError):
                     if results is not None:
                         results.put("FAIL")
                     raise
@@ -348,7 +352,7 @@ class ErasureCodeSingle(TestWithServers):
                     cont_count += 1
                     if results is not None:
                         results.put("PASS")
-                except (CommandFailure, DaosApiError, DaosTestError) as _error:
+                except (CommandFailure, DaosApiError, DaosTestError):
                     if results is not None:
                         results.put("FAIL")
                     raise
@@ -497,7 +501,7 @@ class ErasureCodeFio(FioBase):
             self.execute_fio(stop_dfuse=False)
             if results is not None:
                 results.put("PASS")
-        except (CommandFailure, DaosApiError, DaosTestError) as _error:
+        except (CommandFailure, DaosApiError, DaosTestError):
             if results is not None:
                 results.put("FAIL")
                 raise

@@ -43,7 +43,7 @@ pool:
   name: daos_server
   scm_size: 2G
   nvme_size: 28G
-  svcn: 1
+  svcn: 3
   control_method: dmg
   pool_query_timeout: 15
 container:

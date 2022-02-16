@@ -1,0 +1,127 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+  test_clients:
+    - client-F
+    - client-G
+timeout: 700
+server_config:
+  engines_per_host: 2
+  name: daos_server
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+dmg:
+    dmg_sub_command: storage
+    storage:
+      storage_sub_command: scan
+pool_1:
+    control_method: dmg
+    name: daos_server
+    scm_size: 128MiB
+    nvme_size: 16GiB
+pool_2:
+    control_method: dmg
+    name: daos_server
+    scm_size: 10GiB
+    nvme_size: 50GiB
+pool_3:
+    control_method: dmg
+    name: daos_server
+    scm_size: 90%
+    nvme_size: 90%
+container_1:
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
+container_2:
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
+    oclass: RP_2GX
+container_3:
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
+    oclass: EC_2P2GX
+
+pool:
+    mode: 146
+    name: daos_server
+    scm_size: 40%
+    nvme_size: 40%
+    control_method: dmg
+container:
+    type: POSIX
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    control_method: daos
+container_acl:
+    new_user: daos_ci_tester_1@
+    new_group: daos_ci_test_grp_1@
+
+largefilecount:
+  api:
+    - MPIIO
+    - POSIX
+    - HDF5
+    - HDF5-VOL
+    - DFS
+  object_class:
+    - SX
+    - EC_2P1GX
+ior:
+  client_processes:
+      ppn: 30
+  dfs_destroy: False
+  flags: "-v -D 300 -W -w -r -R -F -k"
+  test_file: daos:testFile
+  repetitions: 1
+  signature: 123
+  transfer_size: '1Mib'
+  block_size: '1Mib'
+dfuse:
+  mount_dir: "/tmp/daos_dfuse/"
+  disable_caching: True
+
+mdtest:
+  client_processes:
+    ppn: 30
+  num_of_files_dirs: 100      # creating total of 1M files
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: False
+  manager: "MPICH"
+  flags: "-F -C"
+  write_bytes: 4096
+  read_bytes: 4096
+  depth: 0
+dcp:
+  bufsize: "64MB"
+  chunksize: "128MB"
+  client_processes:
+    np: 16
+hdf5_vol:
+    plugin_path: /usr/lib64/mpich/lib

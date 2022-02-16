@@ -70,7 +70,7 @@ server operations:
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
 |Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
+|[Privileged Helper](https://docs.daos.io/v2.2/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
@@ -329,7 +329,7 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 
 ### use daos command before daos_agent started
 
-	$ daos cont create --pool=$DAOS_POOL
+	$ daos cont create $DAOS_POOL
 	daos ERR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
 	mgmt ERR  src/mgmt/cli_mgmt.c:222 get_attach_info() failed to connect to /var/run/daos_agent/daos_agent.sock DER_MISC(-1025): 'Miscellaneous error'
 	failed to initialize daos: Miscellaneous error (-1025)
@@ -380,7 +380,7 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 
 ## dmg pool create failed due to no space
 
-	$ dmg pool create --size=50G
+	$ dmg pool create --size=50G mypool
 	Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 	ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 
@@ -390,7 +390,7 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 		-----  --------- -------- -------- ---------- --------- ---------
 		boro-8 17 GB     6.0 GB   65 %     0 B        0 B       N/A
 
-		$ dmg pool create --size=2G
+		$ dmg pool create --size=2G mypool
 		Creating DAOS pool with automatic storage allocation: 2.0 GB NVMe + 6.00% SCM
 		Pool created with 100.00% SCM/NVMe ratio
 		-----------------------------------------
