@@ -83,7 +83,6 @@ struct dss_xstream {
 #ifdef ULT_MMAP_STACK
 	/* per-xstream pool of free stacks */
 	d_list_t		stack_free_list;
-	uint64_t		alloced_stacks;
 	uint64_t		free_stacks;
 #endif
 };

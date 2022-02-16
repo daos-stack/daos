@@ -46,7 +46,7 @@ void free_stack(void *arg)
 {
 	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
 	bool do_munmap = false;
-	struct dss_xstream *dx = desc->dx;
+	struct dss_xstream *dx = dss_current_xstream();
 
 	/* XXX
 	 * We may need to reevaluate stack size since a growth may
@@ -57,10 +57,13 @@ void free_stack(void *arg)
 	 * free pool cases.
 	 */
 
+	/* current XStream is preferred, old target otherwise */
+	if (dx == NULL)
+		dx = desc->dx;
+
 	if (dx->free_stacks > MAX_NUMBER_FREE_STACKS &&
-	    dx->free_stacks/dx->alloced_stacks * 100 > MAX_PERCENT_FREE_STACKS) {
+	    dx->free_stacks/nb_mmap_stacks/DSS_XS_NR_TOTAL * 100 > MAX_PERCENT_FREE_STACKS) {
 		do_munmap = true;
-		--dx->alloced_stacks;
 		atomic_fetch_sub(&nb_mmap_stacks, 1);
 	} else {
 		d_list_add_tail(&desc->stack_list, &dx->stack_free_list);
@@ -70,9 +73,9 @@ void free_stack(void *arg)
 		int rc;
 
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd munmap()'ed, dx=%p, alloced="DF_U64", free="
-			DF_U64"\n", desc->stack, desc->stack_size,
-			dx, dx->alloced_stacks, dx->free_stacks);
+			"%p mmap()'ed stack of size %zd munmap()'ed, dx=%p, free="DF_U64", on CPU=%d\n",
+			desc->stack, desc->stack_size, dx, dx->free_stacks,
+			sched_getcpu());
 		rc = munmap(desc->stack, desc->stack_size);
 		/* XXX
 		 * should we re-queue it on free list instead to leak it ?
@@ -82,9 +85,9 @@ void free_stack(void *arg)
 				desc->stack, desc->stack_size, strerror(errno));
 	} else {
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd on free list, dx=%p, alloced="DF_U64",free="
-			DF_U64"\n", desc->stack, desc->stack_size,
-			dx, dx->alloced_stacks, dx->free_stacks);
+			"%p mmap()'ed stack of size %zd on free list, dx=%p, free="DF_U64", on CPU=%d\n",
+			desc->stack, desc->stack_size, dx, dx->free_stacks,
+			sched_getcpu());
 	}
 }
 
@@ -113,6 +116,7 @@ int mmap_stack_thread_create(struct dss_xstream *dx, ABT_pool pool,
 	void *stack;
 	mmap_stack_desc_t *mmap_stack_desc = NULL;
 	size_t stack_size = MMAPED_ULT_STACK_SIZE, new_stack_size;
+	struct dss_xstream *cur_dx = dss_current_xstream();
 
 	if (attr != ABT_THREAD_ATTR_NULL) {
 		ABT_thread_attr_get_stack(attr, &stack, &stack_size);
@@ -135,11 +139,19 @@ int mmap_stack_thread_create(struct dss_xstream *dx, ABT_pool pool,
 		attr = new_attr;
 	}
 
-	if (!d_list_empty(&dx->stack_free_list)) {
+	/* XXX a stack is allocated from the creating XStream
+	 * but will be freed on the running XStream ...
+	 */
+
+	/* if cur_dx is known, allocate stack from it */
+	if (cur_dx == NULL)
+		cur_dx = dx;
+
+	if (!d_list_empty(&cur_dx->stack_free_list)) {
 		d_list_t *cur_stack;
 
-		D_ASSERT(dx->free_stacks != 0);
-		d_list_for_each(cur_stack, &dx->stack_free_list) {
+		D_ASSERT(cur_dx->free_stacks != 0);
+		d_list_for_each(cur_stack, &cur_dx->stack_free_list) {
 			mmap_stack_desc = container_of(cur_stack,
 						       mmap_stack_desc_t,
 						       stack_list);
@@ -151,7 +163,7 @@ int mmap_stack_thread_create(struct dss_xstream *dx, ABT_pool pool,
 			if (mmap_stack_desc->stack_size >= stack_size)
 				break;
 		}
-		if (cur_stack != &dx->stack_free_list) {
+		if (cur_stack != &cur_dx->stack_free_list) {
 			d_list_del_init(cur_stack);
 		} else {
 			D_DEBUG(DB_MEM, "no stack of size >= %zd found on free list\n",
@@ -159,15 +171,15 @@ int mmap_stack_thread_create(struct dss_xstream *dx, ABT_pool pool,
 			goto mmap_alloc;
 		}
 
-		--dx->free_stacks;
+		--cur_dx->free_stacks;
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd from free list, dx=%p, alloced="DF_U64", free="
-			DF_U64"\n", stack, stack_size, dx, dx->alloced_stacks,
-			dx->free_stacks);
+			"%p mmap()'ed stack of size %zd from free list, dx=%p, free="DF_U64", on CPU=%d\n",
+			stack, stack_size, cur_dx, cur_dx->free_stacks,
+			sched_getcpu());
 	} else {
-		D_ASSERT(dx->free_stacks == 0);
+		D_ASSERT(cur_dx->free_stacks == 0);
 mmap_alloc:
 		/* XXX this test is racy, but if max_nb_mmap_stacks value is
 		 * high enough it does not matter as we do not expect so many
@@ -187,14 +199,12 @@ mmap_alloc:
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
 		if (stack == MAP_FAILED) {
-			D_ERROR("Failed mmap() stack of size %zd : %s, alloced="DF_U64", free="
-				DF_U64"\n", stack_size, strerror(errno),
-				dx->alloced_stacks, dx->free_stacks);
+			D_ERROR("Failed to mmap() stack of size %zd : %s, dx=%p, on CPU=%d\n",
+				stack_size, strerror(errno), cur_dx, sched_getcpu());
 			/* return an ABT error */
 			D_GOTO(out_err, rc = ABT_ERR_MEM);
 		}
 
-		++dx->alloced_stacks;
 		atomic_fetch_add(&nb_mmap_stacks, 1);
 
 		/* put descriptor at bottom of mmap()'ed stack */
@@ -204,12 +214,12 @@ mmap_alloc:
 		/* start to fill descriptor */
 		mmap_stack_desc->stack = stack;
 		mmap_stack_desc->stack_size = stack_size;
+		/* store target XStream */
 		mmap_stack_desc->dx = dx;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd allocated, dx=%p, alloced="DF_U64", free="
-			DF_U64"\n", stack, stack_size, dx, dx->alloced_stacks,
-			dx->free_stacks);
+			"%p mmap()'ed stack of size %zd has been allocated, dx=%p, on CPU=%d\n",
+			stack, stack_size, cur_dx, sched_getcpu());
 	}
 
 	/* continue to fill/update descriptor */
@@ -253,6 +263,7 @@ int mmap_stack_thread_create_on_xstream(struct dss_xstream *dx,
 	int rc;
 	void *stack;
 	mmap_stack_desc_t *mmap_stack_desc = NULL;
+	struct dss_xstream *cur_dx = dss_current_xstream();
 
 	size_t stack_size = MMAPED_ULT_STACK_SIZE, new_stack_size;
 
@@ -280,18 +291,23 @@ int mmap_stack_thread_create_on_xstream(struct dss_xstream *dx,
 	/* XXX a stack is allocated from the creating XStream
 	 * but will be freed on the running XStream ...
 	 */
-	if (!d_list_empty(&dx->stack_free_list)) {
+
+	/* if cur_dx is known, allocate stack from it */
+	if (cur_dx == NULL)
+		cur_dx = dx;
+
+	if (!d_list_empty(&cur_dx->stack_free_list)) {
 		d_list_t *cur_stack;
 
-		D_ASSERT(dx->free_stacks != 0);
-		d_list_for_each(cur_stack, &dx->stack_free_list) {
+		D_ASSERT(cur_dx->free_stacks != 0);
+		d_list_for_each(cur_stack, &cur_dx->stack_free_list) {
 			mmap_stack_desc = container_of(cur_stack,
 						       mmap_stack_desc_t,
 						       stack_list);
 			if (mmap_stack_desc->stack_size >= stack_size)
 				break;
 		}
-		if (cur_stack != &dx->stack_free_list) {
+		if (cur_stack != &cur_dx->stack_free_list) {
 			d_list_del_init(cur_stack);
 		} else {
 			D_DEBUG(DB_MEM, "no stack of size >= %zd found on free list\n",
@@ -299,15 +315,15 @@ int mmap_stack_thread_create_on_xstream(struct dss_xstream *dx,
 			goto mmap_alloc;
 		}
 
-		--dx->free_stacks;
+		--cur_dx->free_stacks;
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd from free list, dx=%p, alloced="DF_U64", free="
-			DF_U64"\n", stack, stack_size, dx, dx->alloced_stacks,
-			dx->free_stacks);
+			"%p mmap()'ed stack of size %zd from free list, dx=%p, free="DF_U64", on CPU=%d\n",
+			stack, stack_size, cur_dx, cur_dx->free_stacks,
+			sched_getcpu());
 	} else {
-		D_ASSERT(dx->free_stacks == 0);
+		D_ASSERT(cur_dx->free_stacks == 0);
 mmap_alloc:
 		/* XXX this test is racy, but if max_nb_mmap_stacks value is
 		 * high enough it does not matter as we do not expect so many
@@ -328,14 +344,12 @@ mmap_alloc:
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
 		if (stack == MAP_FAILED) {
-			D_ERROR("Failed to mmap() stack of size %zd : %s, alloced="DF_U64", free="
-				DF_U64"\n", stack_size, strerror(errno),
-				dx->alloced_stacks, dx->free_stacks);
+			D_ERROR("Failed to mmap() stack of size %zd : %s, dx=%p, on CPU=%d\n",
+				stack_size, strerror(errno), cur_dx, sched_getcpu());
 			/* return an ABT error */
 			D_GOTO(out_err, rc = ABT_ERR_MEM);
 		}
 
-		++dx->alloced_stacks;
 		atomic_fetch_add(&nb_mmap_stacks, 1);
 
 		/* put descriptor at bottom of mmap()'ed stack */
@@ -345,11 +359,12 @@ mmap_alloc:
 		/* start to fill descriptor */
 		mmap_stack_desc->stack = stack;
 		mmap_stack_desc->stack_size = stack_size;
+		/* store target XStream */
+		mmap_stack_desc->dx = dx;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd has been allocated, dx=%p, alloced="DF_U64", free="
-			DF_U64"\n", stack, stack_size, dx, dx->alloced_stacks,
-			dx->free_stacks);
+			"%p mmap()'ed stack of size %zd has been allocated, dx=%p, on CPU=%d\n",
+			stack, stack_size, cur_dx, sched_getcpu());
 	}
 
 	/* continue to fill/update descriptor */
