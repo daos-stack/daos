@@ -515,7 +515,7 @@ vos_mod_init(void)
 	if (vos_agg_nvme_thresh > 1)
 		vos_agg_nvme_thresh = (vos_agg_nvme_thresh / 2) * 2;
 
-	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu).\n",
+	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%u).\n",
 	       vos_agg_nvme_thresh, VOS_BLK_SZ);
 
 	return rc;
