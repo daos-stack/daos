@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
+import random, time
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from nvme_utils import ServerFillUp
@@ -152,6 +152,9 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val],
                                                                "0,2")
+                    # Insert a time delay when trying to reintegrate only few targets
+                    # This will avoid intermittent -2031 when we write data to the object.
+                    time.sleep(5)
                 elif (self.test_with_rf is True and val == 0):
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val])
