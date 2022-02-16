@@ -5,7 +5,7 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    libraries = ['vea', 'gurt', 'cart', 'pmemobj', 'cmocka', 'daos_common_pmem']
+    libraries = ['$LIBS', 'vea', 'gurt', 'cart', 'pmemobj', 'cmocka', 'daos_common_pmem']
 
     denv.AppendUnique(LIBPATH=['..'])
     vea_ut = daos_build.test(denv, 'vea_ut', 'vea_ut.c', LIBS=libraries)

@@ -77,9 +77,9 @@ def scons():
     prereqs.require(env, 'isal')
     prereqs.require(env, 'isal_crypto')
 
-    denv = env.Clone(LIBS=[])
+    denv = env.Clone(LIBS=['gcov'])
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
-    denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
+    denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'gcov'])
     build_daos_common(denv, True, prereqs)
 
     control_tgts = [File('control.c')]

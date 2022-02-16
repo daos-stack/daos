@@ -74,6 +74,9 @@ def library(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
+    if 'LIBS' in kwargs:
+        if '$LIBS' not in kwargs['LIBS']:
+            kwargs['LIBS'].append('$LIBS')
     return denv.SharedLibrary(*args, **kwargs)
 
 def program(env, *args, **kwargs):
@@ -81,6 +84,9 @@ def program(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
+    if 'LIBS' in kwargs:
+        if '$LIBS' not in kwargs['LIBS']:
+            kwargs['LIBS'].append('$LIBS')
     return denv.Program(*args, **kwargs)
 
 def test(env, *args, **kwargs):
@@ -88,6 +94,9 @@ def test(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
+    if 'LIBS' in kwargs:
+        if '$LIBS' not in kwargs['LIBS']:
+            kwargs['LIBS'].append('$LIBS')
     return denv.Program(*args, **kwargs)
 
 def install(env, subdir, files):

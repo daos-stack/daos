@@ -11,7 +11,7 @@ def scons():
     denv = env.Clone()
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
+    libraries = ['$LIBS', 'daos_common_pmem', 'gurt', 'cart', 'vos_srv']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c', 'isal']
 

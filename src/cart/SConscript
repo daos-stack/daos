@@ -79,7 +79,7 @@ def scons():
 
     prereqs.require(env, 'mercury', headers_only=True)
 
-    denv = env.Clone(LIBS=[])
+    denv = env.Clone()
 
     denv.AppendUnique(LIBS=['gurt'])
     prereqs.require(denv, 'mercury')
