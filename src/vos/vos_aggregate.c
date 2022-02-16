@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1442,8 +1442,15 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
 			 * physical entry, in addition to re-assigning address.
+			 * Because of ent_in is truncated, the dst buf len
+			 * should always be big enough.
 			 */
-			phy_ent->pe_csum_info = ent_in->ei_csum;
+			D_ASSERT(phy_ent->pe_csum_info.cs_buf_len >=
+				 ent_in->ei_csum.cs_buf_len);
+			phy_ent->pe_csum_info.cs_nr = ent_in->ei_csum.cs_nr;
+			memcpy(phy_ent->pe_csum_info.cs_csum,
+			       ent_in->ei_csum.cs_csum,
+			       ent_in->ei_csum.cs_buf_len);
 		}
 	}
 
@@ -1654,6 +1661,8 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	if (!need_flush(mw, last))
 		return 0;
 
+	D_DEBUG(DB_TRACE, "Flush to merge to window "DF_EXT"\n", DP_EXT(&mw->mw_ext));
+
 	/* Prepare the new segments to be inserted */
 	rc = prepare_segments(mw);
 	if (rc) {
@@ -1713,9 +1722,12 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 		const vos_iter_entry_t *entry, bio_addr_t *addr,
 		struct dcs_csum_info *csum_info, uint32_t ver)
 {
-	struct agg_phy_ent *phy_ent;
+	struct agg_phy_ent	*phy_ent;
+	daos_size_t		 phy_ent_size = sizeof(*phy_ent);
 
-	D_ALLOC_PTR(phy_ent);
+	/* Will append the checksum to the end of the phy_ent structure */
+	phy_ent_size += csum_info->cs_buf_len;
+	D_ALLOC(phy_ent, phy_ent_size);
 	if (phy_ent == NULL)
 		return NULL;
 
@@ -1724,6 +1736,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_rect.rc_minor_epc = entry->ie_minor_epc;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
+	phy_ent->pe_csum_info.cs_csum = (uint8_t *)(&phy_ent[1]);
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
@@ -2017,7 +2030,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 			return rc;
 		}
 	} else {
-		/* Can't be the first logcial entry */
+		/* Can't be the first logical entry */
 		D_ASSERT(phy_ext.ex_lo != lgc_ext.ex_lo);
 	}
 
@@ -2483,6 +2496,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	struct agg_data		*ad;
 	int			 rc;
 
+	D_DEBUG(DB_TRACE, "epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi);
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
