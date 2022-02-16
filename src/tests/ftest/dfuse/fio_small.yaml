@@ -86,3 +86,5 @@ fio:
     numjobs: 1
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
+  thread_count: 8
+  cores: '0-3'
