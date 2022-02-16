@@ -64,6 +64,7 @@ jobs:
     - name: Prepare base image in Docker
       run: docker build . -f utils/docker/Dockerfile.centos.8
                           --build-arg DAOS_DEPS_BUILD=no
+                          --build-arg BASE_DISTRO=fedora:34
     - name: Build dependencies in Docker
       run: docker build . -f utils/docker/Dockerfile.centos.8
                           --build-arg DEPS_JOBS=8 --build-arg DAOS_BUILD=no

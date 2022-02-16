@@ -65,7 +65,7 @@ severity, message, description, and cause.
 
 Engine logging is initially configured by setting the `log_file` and `log_mask`
 parameters in the server config file. Logging is described in detail in the
-[`Debugging System`](https://daos-stack.github.io/admin/troubleshooting/#debugging-system)
+[`Debugging System`](https://docs.daos.io/v2.0/admin/troubleshooting/#debugging-system)
 section.
 
 Engine log levels can be changed dynamically (at runtime) by setting log masks
@@ -227,11 +227,11 @@ can host DAOS pools.
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://daos-stack.github.io/admin/pool_operations/#pool-creationdestroy)
+[`dmg pool create`](https://docs.daos.io/v2.0/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/2.0/utils/config/daos_server.yml)
 then the values supplied to `dmg pool create` should be
 a maximum of the SCM/NVMe free space divided by the number of ranks per host.
 
@@ -481,12 +481,12 @@ removed and storage wiped.
 System commands will be handled by the DAOS Server listening at the access point
 address specified as the first entry in the DMG config file "hostlist" parameter.
 See
-[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/release/2.0/utils/config/daos_control.yml)
 for details.
 
 The "access point" address should be the same as that specified in the server
 config file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/2.0/utils/config/daos_server.yml)
 specified when starting `daos_server` instances.
 
 ### Membership

@@ -663,7 +663,7 @@ class TestWithServers(TestWithoutServers):
             if self.hostlist_clients:
                 hosts.extend(self.hostlist_clients)
             self.log.info("-" * 100)
-            self.stop_leftover_processes(["orterun"], hosts)
+            self.stop_leftover_processes(["orterun", "mpirun"], hosts)
 
             # Ensure write permissions for the daos command log files when
             # using systemctl
