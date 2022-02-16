@@ -150,6 +150,7 @@ USER daos_server:daos_server
 # ease-of-use for users, however in CI everything is turned off and then
 # selectively enabled.  Turning off any step disables all future steps.
 ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_KEEP_BUILD=no
 ARG DAOS_TARGET_TYPE=release
 
 # Now do an update to ensure software is up to date for the deps build.  If the
@@ -167,7 +168,7 @@ ARG DEPS_JOBS=1
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
       TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
-    /bin/rm -rf build *.gz; }
+    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 # force an upgrade to get any newly built RPMs
 USER root:root
@@ -200,8 +201,8 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
       BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
-    /bin/rm -rf build && go clean -cache && \
-    cp -r utils/config/examples /opt/daos; }
+    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&
+    go clean -cache && cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
