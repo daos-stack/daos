@@ -88,10 +88,12 @@ typedef struct {
 	d_iov_t		*constant;
 	/**
 	 * If filter should only be applied starting at an offset of the data.
+	 * Only relevant for keys part type objects.
 	 */
 	size_t		data_offset;
 	/**
-	 * Size of the data to be filtered.
+	 * Size of the data to be filtered. Only relevant for keys part type
+	 * objects.
 	 */
 	size_t		data_len;
 } daos_filter_part_t;
