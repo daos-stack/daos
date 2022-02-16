@@ -283,7 +283,7 @@
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
-   fun:hg_dlog_mkcount321
+   fun:hg_dlog_mkcount32
    ...
    fun:NA_Initialize_opt
    ...

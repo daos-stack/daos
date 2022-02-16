@@ -921,18 +921,6 @@ pipeline {
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
                             archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
-                            publishValgrind failBuildOnInvalidReports: true,
-                                            failBuildOnMissingReports: false,
-                                            failThresholdDefinitelyLost: '0',
-                                            failThresholdInvalidReadWrite: '0',
-                                            failThresholdTotal: '0',
-                                            pattern: '*.memcheck.xml',
-                                            publishResultsForAbortedBuilds: false,
-                                            publishResultsForFailedBuilds: true,
-                                            sourceSubstitutionPaths: '',
-                                            unstableThresholdDefinitelyLost: '0',
-                                            unstableThresholdInvalidReadWrite: '0',
-                                            unstableThresholdTotal: '0'
                         }
                     }
                 } // stage('Fault inection testing')
