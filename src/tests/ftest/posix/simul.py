@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import distro
 from avocado.core.exceptions import TestFail
 from dfuse_test_base import DfuseTestBase
 from env_modules import load_mpi
@@ -102,9 +103,9 @@ class PosixSimul(DfuseTestBase):
             # on a single host.
             load_mpi(mpi)
             if include and not exclude:
-                cmd = "simul -vv -d {0} -i {1}".format(dfuse_mount_dir, include)
+                cmd = "{0} -vv -d {1} -i {2}".format(simul, dfuse_mount_dir, include)
             elif exclude and not include:
-                cmd = "simul -vv -d {0} -e {1}".format(dfuse_mount_dir, exclude)
+                cmd = "{0} -vv -d {1} -e {2}".format(simul, dfuse_mount_dir, exclude)
             else:
                 self.fail("##Both include and exclude tests are selected"
                           " both or empty.")
