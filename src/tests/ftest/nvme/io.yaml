@@ -25,78 +25,78 @@ pool: &pool
  prop_value: disabled
 pool_0: #[6G, 200G, 1M, 16G, 1]
  <<: *pool
- scm_size: 6%
- nvme_size: 20%
+ scm_size: 1%
+ nvme_size: 14%
  stripesize: 1048576
  blocksize: 17179869184
  clientslots: 1
 pool_1: #[1G, 9G, 4k, 1G, 1]
  <<: *pool
  scm_size: 1%
- nvme_size: 10%
+ nvme_size: 1%
  stripesize: 4096
  blocksize: 1073741824
  clientslots: 1
 pool_2: #[10G, 9G, 2k, 1G, 1]
  <<: *pool
- scm_size: 10%
- nvme_size: 10%
+ scm_size: 2%
+ nvme_size: 1%
  stripesize: 2048
  blocksize: 1073741824
  clientslots: 1
 pool_3: #[3G, 9G, 8B, 10M, 1]
  <<: *pool
- scm_size: 4%
- nvme_size: 10%
+ scm_size: 1%
+ nvme_size: 1%
  stripesize: 8
  blocksize: 10485760
  clientslots: 1
 pool_4: #[4G, 9G, 24B, 24M, 1]
  <<: *pool
- scm_size: 5%
- nvme_size: 10%
+ scm_size: 1%
+ nvme_size: 1%
  stripesize: 24
  blocksize: 25165824
  clientslots: 1
 pool_5: #[1G, 9G, 2056, 4M, 1]
  <<: *pool
- scm_size: 2%
- nvme_size: 10%
+ scm_size: 1%
+ nvme_size: 1%
  stripesize: 2056
  blocksize: 4227136
  clientslots: 1
 pool_6: #[6G, 300G, 128M, 32G, 1]
  <<: *pool
- scm_size: 5%
- nvme_size: 50%
+ scm_size: 1%
+ nvme_size: 22%
  stripesize: 134217728
  blocksize: 34359738368
  clientslots: 1
 pool_7: #[10G, 60G, 32B, 42M, 1]
  <<: *pool
- scm_size: 10%
- nvme_size: 20%
+ scm_size: 2%
+ nvme_size: 5%
  stripesize: 32
  blocksize: 44040192
  clientslots: 1
 pool_8: #[58G, 900G, 2k, 1G, 2]
  <<: *pool
- scm_size: 30%
- nvme_size: 60%
+ scm_size: 10%
+ nvme_size: 50%
  stripesize: 2048
  blocksize: 1073741824
  clientslots: 2
 pool_9: #[58G, 900G, 8B, 10M, 2]
  <<: *pool
- scm_size: 30%
- nvme_size: 60%
+ scm_size: 10%
+ nvme_size: 50%
  stripesize: 8
  blocksize: 10485760
  clientslots: 2
 pool_10: #[58G, 900G, 32M, 22G, 5]
  <<: *pool
- scm_size: 30%
- nvme_size: 60%
+ scm_size: 10%
+ nvme_size: 50%
  stripesize: 33554432
  blocksize: 23622320128
  clientslots: 5
