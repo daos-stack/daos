@@ -570,6 +570,8 @@ dtx_batched_commit(void *arg)
 		return;
 	}
 
+	D_INFO("Create DTX aggregation ULT with default stack size\n");
+
 	rc = dss_ult_create(dtx_aggregation_main, NULL,
 			    DSS_XS_SELF, 0, 0, &child);
 	if (rc != 0) {

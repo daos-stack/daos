@@ -252,6 +252,15 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
+	if (t_attr == ABT_THREAD_ATTR_NULL) {
+		D_INFO("Create ULT on XS %d with default stack size\n", dx->dx_xs_id);
+	} else {
+		size_t stacksize = 0;
+
+		ABT_thread_attr_get_stacksize(t_attr, &stacksize);
+		D_INFO("Create ULT on XS %d with stack size %ld\n", dx->dx_xs_id, stacksize);
+	}
+
 	rc = ABT_thread_create(abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }

@@ -264,6 +264,17 @@ dss_nvme_poll_ult(void *args)
 {
 	struct dss_module_info	*dmi = dss_get_module_info();
 	struct dss_xstream	*dx = dss_current_xstream();
+	ABT_thread		 self;
+	size_t			 stacksize = 0;
+	int			 rc;
+
+	rc = ABT_thread_self(&self);
+	D_ASSERT(rc == ABT_SUCCESS);
+
+	rc = ABT_thread_get_stacksize(self, &stacksize);
+	D_ASSERT(rc == ABT_SUCCESS);
+
+	D_INFO("Run nvme pull ult with stack size %ld\n", stacksize);
 
 	D_ASSERT(dx->dx_main_xs);
 	while (!dss_xstream_exiting(dx)) {
@@ -425,6 +436,16 @@ dss_srv_handler(void *arg)
 
 	if (dx->dx_main_xs) {
 		ABT_thread_attr attr;
+		ABT_thread	self;
+		size_t		stacksize = 0;
+
+		rc = ABT_thread_self(&self);
+		D_ASSERT(rc == ABT_SUCCESS);
+
+		rc = ABT_thread_get_stacksize(self, &stacksize);
+		D_ASSERT(rc == ABT_SUCCESS);
+
+		D_INFO("Run srv_handler ult with stack size %ld\n", stacksize);
 
 		/* Initialize NVMe context for main XS which accesses NVME */
 		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
@@ -448,8 +469,7 @@ dss_srv_handler(void *arg)
 		}
 
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
-				       dss_nvme_poll_ult, attr,
-				       ABT_THREAD_ATTR_NULL, NULL);
+				       dss_nvme_poll_ult, NULL, attr, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
