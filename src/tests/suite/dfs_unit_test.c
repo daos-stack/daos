@@ -1331,8 +1331,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 static int
 dfs_setup(void **state)
 {
-	test_arg_t		*arg;
-	int			rc = 0;
+	test_arg_t	*arg;
+	int		rc = 0;
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
 	assert_int_equal(rc, 0);
@@ -1340,6 +1340,14 @@ dfs_setup(void **state)
 	arg = *state;
 
 	if (arg->myrank == 0) {
+		bool	use_dtx = false;
+
+		d_getenv_bool("DFS_USE_DTX", &use_dtx);
+		if (use_dtx)
+			print_message("Running DFS Serial tests with DTX enabled\n");
+		else
+			print_message("Running DFS Serial tests with DTX disabled\n");
+
 		rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
@@ -1384,6 +1392,14 @@ run_dfs_unit_test(int rank, int size)
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
 					 dfs_teardown);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** run tests again with DTX */
+	setenv("DFS_USE_DTX", "1", 1);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
+					  dfs_setup, dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

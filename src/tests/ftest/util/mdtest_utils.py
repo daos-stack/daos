@@ -5,8 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-
-
 import uuid
 import re
 
