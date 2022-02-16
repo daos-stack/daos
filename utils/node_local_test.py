@@ -51,6 +51,7 @@ class NLTestNoFunction(NLTestFail):
 class NLTestTimeout(NLTestFail):
     """Used to indicate that an operation timed out"""
 
+
 instance_num = 0
 
 def get_inc_id():
@@ -2692,7 +2693,7 @@ class posix_tests():
         src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
         with open(join(src_dir.name, 'file'), 'w') as ofd:
             ofd.write('hello')
-
+        os.symlink('file', join(src_dir.name, 'file_s'))
         cmd = ['filesystem',
                'copy',
                '--src',
@@ -2701,6 +2702,11 @@ class posix_tests():
                'daos://{}/{}'.format(self.pool.uuid, self.container)]
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
+        lineresult = rc.stdout.decode('utf-8').splitlines()
+        assert len(lineresult) == 4
+        assert lineresult[1] == '    Directories: 1'
+        assert lineresult[2] == '    Files:       1'
+        assert lineresult[3] == '    Links:       1'
         assert rc.returncode == 0
 
     def test_cont_clone(self):
@@ -3014,6 +3020,7 @@ def check_no_file(dfuse):
     except FileNotFoundError:
         pass
 
+
 lp = None
 lt = None
 
@@ -3128,9 +3135,8 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse___fxstat')
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
-        raise Exception('Max log size exceeded, {} > {}'\
-                        .format(sizeof_fmt(fstat.st_size),
-                                sizeof_fmt(conf.max_log_size)))
+        raise Exception('Max log size exceeded, {} > {}'.format(sizeof_fmt(fstat.st_size),
+                                                                sizeof_fmt(conf.max_log_size)))
 
     return lto.fi_location
 
@@ -3343,9 +3349,8 @@ def run_in_fg(server, conf):
     t_dir = join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
-    print('daos container create --type POSIX ' \
-          '{} --path {}/uns-link'.format(
-              pool, t_dir))
+    print('daos container create --type POSIX '
+          '{} --path {}/uns-link'.format(pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
     print('daos cont list {}'.format(pool))
@@ -4018,8 +4023,14 @@ def test_alloc_fail_copy(server, conf, wf):
 
     pool = server.get_test_pool()
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
-    with open(join(src_dir.name, 'file'), 'w') as ofd:
-        ofd.write('hello')
+    sub_dir = join(src_dir.name, 'new_dir')
+    os.mkdir(sub_dir)
+    for f in range(5):
+        with open(join(sub_dir, 'file.{}'.format(f)), 'w') as ofd:
+            ofd.write('hello')
+
+    os.symlink('broken', join(sub_dir, 'broken_s'))
+    os.symlink('file.0', join(sub_dir, 'link'))
 
     def get_cmd():
         container = str(uuid.uuid4())
@@ -4382,6 +4393,7 @@ def main():
     if fatal_errors.errors:
         print("Significant errors encountered")
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main()

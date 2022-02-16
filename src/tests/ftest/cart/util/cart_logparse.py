@@ -55,6 +55,7 @@ class InvalidPid(Exception):
 class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed."""
 
+
 LOG_LEVELS = {
     'EMIT': 1,
     'FATAL': 2,

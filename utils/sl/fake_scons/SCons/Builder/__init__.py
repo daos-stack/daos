@@ -23,6 +23,7 @@ class Builder:
     """Fake Builder"""
     pass
 
+
 ARGUMENTS = {}
 
 __all__ = ['Builder',
