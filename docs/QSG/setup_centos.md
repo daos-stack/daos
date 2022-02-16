@@ -65,9 +65,10 @@ daos-server RPM.
 1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.0/),
    using the subdirectory that matches the CentOS Linux of the nodes:
 
-   **For CentOS7:**
+	**For CentOS7:**
 
 		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
+
 
 	**For CentOS8:**
 

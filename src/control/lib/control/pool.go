@@ -33,7 +33,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = 60 * time.Second // fail faster if it's going to fail
+	DefaultPoolTimeout = drpc.DefaultCartTimeout * 3
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -165,7 +165,6 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 	}
 
 	out.Uuid = uuid.New().String()
-
 	return
 }
 
@@ -199,7 +198,8 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		switch e {
 		// These pool errors can be retried.
 		case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
-			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable:
+			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable,
+			drpc.DaosExcluded:
 			return true
 		default:
 			return false
@@ -271,6 +271,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 
 	pcr := new(PoolCreateResp)
 	pcr.UUID = pbReq.Uuid
+
 	return pcr, convert.Types(pbPcr, pcr)
 }
 
@@ -570,7 +571,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	if err != nil {
 		return nil, err
 	}
-
 	pbResp, ok := msResp.(*mgmtpb.PoolGetPropResp)
 	if !ok {
 		return nil, errors.New("unable to extract PoolGetPropResp from MS response")

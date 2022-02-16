@@ -1,0 +1,38 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+    - server-F
+  test_clients:
+    - client-G
+timeout: 300
+server_config:
+    name: daos_server
+    engines_per_host: 2
+    servers:
+        0:
+          pinned_numa_node: 0
+          nr_xs_helpers: 1
+          fabric_iface: ib0
+          fabric_iface_port: 31317
+          log_file: daos_server0.log
+          bdev_class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          pinned_numa_node: 1
+          nr_xs_helpers: 1
+          fabric_iface: ib1
+          fabric_iface_port: 31417
+          log_file: daos_server1.log
+          bdev_class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+check_remote_root_access: False

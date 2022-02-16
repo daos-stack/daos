@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019-2021 Intel Corporation
+/* Copyright (C) 2019-2022 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -314,7 +314,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_runner'
+                            label 'docker_ce_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
@@ -349,7 +349,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_runner'
+                            label 'docker_ce_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
@@ -384,7 +384,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_runner'
+                            label 'docker_ce_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
@@ -636,7 +636,7 @@ pipeline {
                         label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
-                        unitTest timeout_time: 30,
+                        unitTest timeout_time: 35,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()

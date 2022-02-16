@@ -391,7 +391,7 @@ public class DaosFileIT {
 
     file = client.getFile("/zjf44");
     long time = System.currentTimeMillis();
-    file.createNewFile(Constants.FILE_DEFAULT_FILE_MODE, DaosObjectType.OC_SX, 4096, false);
+    file.createNewFile(Constants.FILE_DEFAULT_FILE_MODE, DaosObjectClass.OC_SX, 4096, false);
     attributes = file.getStatAttributes();
     Assert.assertTrue(attributes.getBlockSize() == 4096);
 
@@ -437,7 +437,7 @@ public class DaosFileIT {
   @Test
   public void testGetChunkSize() throws Exception {
     DaosFile file = client.getFile("/zjf7");
-    file.createNewFile(0754, DaosObjectType.OC_SX, 2048, false);
+    file.createNewFile(0754, DaosObjectClass.OC_SX, 2048, false);
     Assert.assertEquals(2048, file.getChunkSize());
   }
 

@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2021 Intel Corporation.
+ *  (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1886,6 +1886,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_epr.epr_hi = args->la_auxi.epoch.oe_value;
 		oei->oei_flags |= ORF_ENUM_WITHOUT_EPR;
 	}
+	if ((!obj_args->incr_order) && (opc == DAOS_OBJ_RECX_RPC_ENUMERATE))
+		oei->oei_flags |= ORF_DESCENDING_ORDER;
 
 	oei->oei_nr		= args->la_nr;
 	oei->oei_rec_type	= obj_args->type;
