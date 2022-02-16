@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# A git hook to validate  and correct the copyright date in source files.
+# A git hook to validate and correct the copyright date in source files.
 if [ -n "${NO_PRE_COMMIT:=""}" ]; then
     exit 0
 fi
@@ -10,7 +10,7 @@ year=$(date +%Y)
 errors=0
 
 files=$(git diff --diff-filter=AM --name-only --cached -- \
-       '*.c' '*.h' '*.go' 'Makefile' '*.py' '*.proto' '*.java')
+       '*.c' '*.h' '*.go' 'Makefile' '*.py' '*.proto' '*.java' '*.yaml' 'yml' '*.sh')
 for file in $files; do
     if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]] || \
        [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]]; then
