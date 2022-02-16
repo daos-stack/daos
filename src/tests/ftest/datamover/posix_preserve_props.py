@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -234,7 +234,7 @@ class DmvrPreserveProps(DataMoverTestBase):
             when API is unknown, including
             container properties and user attributes.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,pr
         :avocado: tags=datamover,fs_copy
         :avocado: tags=dm_preserve_props,dm_preserve_props_fs_copy_posix_dfs
         """
