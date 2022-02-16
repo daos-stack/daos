@@ -71,9 +71,22 @@ class PosixSimul(DfuseTestBase):
         If include value is set, exclude value is ignored and vice versa.
         """
         # Assuming all vms use the same OS
+        host_os = distro.linux_distribution()[0].lower()
+        version_os = distro.linux_distribution()[1]
         dfuse_hosts = self.agent_managers[0].hosts
+
+        if "centos" in host_os:
+            if version_os == "8":
+                simul_dict = {"openmpi": "/usr/lib64/openmpi/bin/simul"}
+            else:
+                simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul"}
+        elif "suse" in host_os:
+            simul_dict = {"openmpi": "/usr/lib64/mpi/gcc/openmpi3/bin/simul"}
+        else:
+            self.log.error(host_os)
+            raise NotImplementedError
+
         dfuse_mount_dir = self.params.get("mount_dir", '/run/dfuse/*')
-        mpi_list = self.params.get("mpi_list", '/run/*')
 
         if not self.pool:
             self.log.info("Create a pool")
@@ -84,7 +97,7 @@ class PosixSimul(DfuseTestBase):
         self.start_dfuse(dfuse_hosts, self.pool, self.container)
         self.dfuse.check_running()
 
-        for mpi in mpi_list:
+        for mpi, simul in simul_dict.items():
             # The use of MPI here is to run in parallel all simul tests
             # on a single host.
             load_mpi(mpi)
