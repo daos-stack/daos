@@ -30,7 +30,9 @@ C_SOURCE_FILES = common/drpc.pb-c.c\
 GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/shared/event.pb.go\
 		   common/proto/mgmt/acl.pb.go\
+		   common/proto/mgmt/checker.pb.go\
 		   common/proto/mgmt/cont.pb.go\
+		   common/proto/mgmt/faults.pb.go\
 		   common/proto/mgmt/mgmt.pb.go\
 		   common/proto/mgmt/pool.pb.go\
 		   common/proto/mgmt/svc.pb.go\

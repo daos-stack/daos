@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,8 @@ import "mgmt/cont.proto";
 import "mgmt/svc.proto";
 import "mgmt/acl.proto"; // ACL-related requests
 import "mgmt/system.proto";
+import "mgmt/checker.proto";
+import "mgmt/faults.proto";
 
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management
@@ -76,4 +78,19 @@ service MgmtSvc {
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
 	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
+
+	// Initiate a system checker session
+	rpc SystemCheckerStart(SystemCheckerStartReq) returns(SystemCheckerStatusResp){}
+	// Query system checker status
+	rpc SystemCheckerQuery(SystemCheckerQueryReq) returns(SystemCheckerStatusResp){}
+	// Abort current checker process
+	rpc SystemCheckerAbort(SystemCheckerAbortReq) returns(SystemCheckerStatusResp){}
+	// Reset checker state
+	rpc SystemCheckerReset(SystemCheckerResetReq) returns(SystemCheckerStatusResp){}
+	// Acknowledge a finding
+	rpc SystemCheckerAckFinding(SystemCheckerAckFindingReq) returns(SystemCheckerStatusResp){}
+
+	// NB: These Faults* RPCs are disabled for release builds; calling them
+	// will result in an Unimplemented error.
+	rpc FaultsAddFinding(FaultsAddFindingReq) returns(FaultsAddFindingResp){}
 }

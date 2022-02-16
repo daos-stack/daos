@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,6 +27,7 @@ type SystemCmd struct {
 	Erase       systemEraseCmd   `command:"erase" description:"Erase system metadata prior to reformat"`
 	ListPools   PoolListCmd      `command:"list-pools" description:"List all pools in the DAOS system"`
 	Cleanup     systemCleanupCmd `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
+	Check       systemCheckCmd   `command:"check" description:"Check system health"`
 }
 
 type leaderQueryCmd struct {

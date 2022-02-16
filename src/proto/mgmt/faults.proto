@@ -1,0 +1,20 @@
+//
+// (C) Copyright 2022 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+syntax = "proto3";
+package mgmt;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
+import "mgmt/checker.proto";
+
+message FaultsAddFindingReq {
+	string sys = 1; // DAOS system name
+	SystemCheckerFinding finding = 2;
+}
+
+message FaultsAddFindingResp {
+}

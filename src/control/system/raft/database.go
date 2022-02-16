@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -67,6 +67,7 @@ type (
 		MapVersion    uint32
 		Members       *MemberDatabase
 		Pools         *PoolDatabase
+		Checker       *CheckerDatabase
 		SchemaVersion uint
 	}
 
@@ -94,6 +95,10 @@ type (
 		onRaftShutdown     []onRaftShutdownFn
 		shutdownCb         context.CancelFunc
 		shutdownErrCh      chan error
+
+		// FIXME: Remove this in favor of raft-aware checker state store.
+		// Using it for scaffolding at the moment.
+		InMemCheckerDatabase
 
 		data *dbData
 	}
@@ -204,6 +209,7 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 				Uuids:  make(PoolUuidMap),
 				Labels: make(PoolLabelMap),
 			},
+			Checker:       &CheckerDatabase{},
 			SchemaVersion: CurrentSchemaVersion,
 		},
 	}

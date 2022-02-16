@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -198,15 +198,26 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 	return msResp.Message, nil
 }
 
+// getMSResponse is a helper function to extract the MS response
+// message from a generic UnaryResponse.
+func getMSResponse(ur *UnaryResponse) (proto.Message, error) {
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		if IsConnErr(err) {
+			return nil, errMSConnectionFailure
+		}
+		return nil, err
+	}
+
+	return msResp, nil
+}
+
 // convertMSResponse is a helper function to extract the MS response
 // message from a generic UnaryResponse. The out parameter must be
 // a reference to a compatible concrete type (e.g. PoolQueryResp).
 func convertMSResponse(ur *UnaryResponse, out interface{}) error {
-	msResp, err := ur.getMSResponse()
+	msResp, err := getMSResponse(ur)
 	if err != nil {
-		if IsConnErr(err) {
-			return errMSConnectionFailure
-		}
 		return err
 	}
 

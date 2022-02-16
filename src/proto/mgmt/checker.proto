@@ -1,0 +1,54 @@
+//
+// (C) Copyright 2022 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+syntax = "proto3";
+package mgmt;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
+message SystemCheckerResolution {
+	uint32 id = 1;
+	string description = 2;
+}
+
+message SystemCheckerFinding {
+	string id = 1;
+	string class = 2;
+	uint32 code = 3;
+	string status = 4;
+	bool ignorable = 5;
+	string description = 6;
+	repeated string details = 7;
+	SystemCheckerResolution resolution = 8;
+	repeated SystemCheckerResolution resolutions = 9;
+}
+
+message SystemCheckerStatusResp {
+	string current_pass = 1;
+	repeated SystemCheckerFinding findings = 2;
+}
+
+message SystemCheckerStartReq {
+	string sys = 1; // DAOS system identifier
+}
+
+message SystemCheckerQueryReq {
+	string sys = 1; // DAOS system identifier
+}
+
+message SystemCheckerAbortReq {
+	string sys = 1; // DAOS system identifier
+}
+
+message SystemCheckerResetReq {
+	string sys = 1; // DAOS system identifier
+}
+
+message SystemCheckerAckFindingReq {
+	string sys = 1; // DAOS system identifier
+	string id = 2;
+	uint32 choice = 3;
+}

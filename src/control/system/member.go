@@ -45,6 +45,8 @@ const (
 	MemberStateUnresponsive MemberState = 0x0100
 	// MemberStateAdminExcluded indicates that the rank has been administratively excluded.
 	MemberStateAdminExcluded MemberState = 0x0200
+	// MemberStateCheckerStarted indicates that the rank is running in checker-only mode.
+	MemberStateCheckerStarted MemberState = 0x0400
 
 	// ExcludedMemberFilter defines the state(s) to be used when determining
 	// whether or not a member should be excluded from CaRT group map updates.

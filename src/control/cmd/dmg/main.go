@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -154,24 +154,25 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 }
 
 type cliOptions struct {
-	AllowProxy     bool           `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       string         `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
-	Insecure       bool           `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
-	Debug          bool           `short:"d" long:"debug" description:"Enable debug output"`
-	JSON           bool           `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs       bool           `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	ConfigPath     string         `short:"o" long:"config-path" description:"Client config file path"`
-	Server         serverCmd      `command:"server" alias:"srv" description:"Perform tasks related to remote servers"`
-	Storage        storageCmd     `command:"storage" alias:"sto" description:"Perform tasks related to storage attached to remote servers"`
-	Config         configCmd      `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on remote servers"`
-	System         SystemCmd      `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
-	Network        NetCmd         `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
-	Pool           PoolCmd        `command:"pool" description:"Perform tasks related to DAOS pools"`
-	Cont           ContCmd        `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
-	Version        versionCmd     `command:"version" description:"Print dmg version"`
-	Telemetry      telemCmd       `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
-	firmwareOption                // build with tag "firmware" to enable
-	ManPage        cmdutil.ManCmd `command:"manpage" hidden:"true"`
+	AllowProxy     bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	HostList       string     `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
+	Insecure       bool       `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
+	Debug          bool       `short:"d" long:"debug" description:"Enable debug output"`
+	JSON           bool       `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs       bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath     string     `short:"o" long:"config-path" description:"Client config file path"`
+	Server         serverCmd  `command:"server" alias:"srv" description:"Perform tasks related to remote servers"`
+	Storage        storageCmd `command:"storage" alias:"sto" description:"Perform tasks related to storage attached to remote servers"`
+	Config         configCmd  `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on remote servers"`
+	System         SystemCmd  `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
+	Network        NetCmd     `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
+	Pool           PoolCmd    `command:"pool" description:"Perform tasks related to DAOS pools"`
+	Cont           ContCmd    `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
+	Version        versionCmd `command:"version" description:"Print dmg version"`
+	Telemetry      telemCmd   `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
+	firmwareOption            // build with tag "firmware" to enable
+	faultsCmdRoot
+	ManPage cmdutil.ManCmd `command:"manpage" hidden:"true"`
 }
 
 type versionCmd struct{}
