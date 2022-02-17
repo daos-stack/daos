@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -123,6 +123,9 @@ void ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req);
 int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
 			Ctl__DevReplaceResp *resp);
 int ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp);
+int ds_mgmt_dev_reset_led(uuid_t uuid, Ctl__DevResetLEDResp *resp);
+int ds_mgmt_dev_get_led_state(uuid_t uuid, int *led_state,
+			      Ctl__DevGetLEDStateResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_setup(void);

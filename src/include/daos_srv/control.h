@@ -33,7 +33,17 @@ dpdk_cli_override_opts;
 #define NVME_DEV_STATE_NORMAL	(NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
 #define NVME_DEV_STATE_FAULTY	(NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
 #define NVME_DEV_STATE_NEW	NVME_DEV_FL_PLUGGED
-#define NVME_DEV_STATE_INVALID	(1 << 4)
+#define NVME_DEV_STATE_INVALID	(1 << 4) /* Unsupported device or LED state */
+
+/** VMD LED Device States */
+#define LED_STATE_OFF		0	/* SPDK_VMD_LED_STATE_OFF */
+#define LED_STATE_IDENTIFY	1	/* SPDK_VMD_LED_STATE_IDENTIFY */
+#define LED_STATE_FAULT		2	/* SPDK_VMD_LED_STATE_FAULT */
+#define VMD_LED_STATE_OFF	(1 << 0) /* Status LED is off */
+#define VMD_LED_STATE_IDENTIFY	(1 << 1) /* Status LED is quickly blinking */
+#define VMD_LED_STATE_FAULT	(1 << 2) /* Status LED is on */
+#define VMD_LED_STATE_INVALID	(1 << 3) /* Status LED is in unsupported / invalid state */
+#define VMD_LED_STATE_NA	(1 << 4) /* Status LED is not supported, not a VMD device */
 
 #define BIT_SET(x, m) (((x)&(m)) == (m))
 #define BIT_UNSET(x, m) (!BIT_SET(x, m))
@@ -71,6 +81,7 @@ nvme_state2str(int state)
 static inline int
 nvme_str2state(char *state)
 {
+	/** NVMe device states */
 	if STR_EQ(state, "NORMAL")
 		return NVME_DEV_STATE_NORMAL;
 	if STR_EQ(state, "NEW")
@@ -88,6 +99,43 @@ nvme_str2state(char *state)
 
 	/** not a valid state */
 	return NVME_DEV_STATE_INVALID;
+}
+
+static inline char *
+led_state2str(int state)
+{
+	/** VMD LED states */
+	if (BIT_SET(state, VMD_LED_STATE_OFF))
+		return "OFF";
+
+	if (BIT_SET(state, VMD_LED_STATE_IDENTIFY))
+		return "QUICK-BLINK";
+
+	if (BIT_SET(state, VMD_LED_STATE_FAULT))
+		return "ON";
+
+	if (BIT_SET(state, VMD_LED_STATE_INVALID))
+		return "INVALID";
+
+	/* LED not supported, not a VMD device */
+	return "NA";
+}
+
+static inline int
+led_str2state(char *state)
+{
+	/** VMD LED states */
+	if STR_EQ(state, "OFF")
+		return VMD_LED_STATE_OFF;
+	if STR_EQ(state, "QUICK-BLINK")
+		return VMD_LED_STATE_IDENTIFY;
+	if STR_EQ(state, "ON")
+		return VMD_LED_STATE_FAULT;
+	if STR_EQ(state, "INVALID")
+		return VMD_LED_STATE_INVALID;
+
+	/** not a valid state */
+	return VMD_LED_STATE_NA;
 }
 
 /**

@@ -106,3 +106,45 @@ func Test_NvmeDevStateFromString_invalid(t *testing.T) {
 		})
 	}
 }
+
+func Test_VmdLedState(t *testing.T) {
+	for name, tc := range map[string]struct {
+		state  VmdLedState
+		expStr string
+	}{
+		"normal state": {
+			state:  VmdStateOff,
+			expStr: "OFF",
+		},
+		"faulty state": {
+			state:  VmdStateFault,
+			expStr: "ON",
+		},
+		"identify state": {
+			state:  VmdStateIdentify,
+			expStr: "QUICK-BLINK",
+		},
+		"unknown and unsupported state": {
+			state:  VmdStateInvalid,
+			expStr: "INVALID",
+		},
+		"not a VMD device": {
+			state:  VmdStateNA,
+			expStr: "NA",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expStr, tc.state.String(),
+				"unexpected status string")
+
+			stateNew, err := VmdLedStateFromString(tc.state.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			common.AssertEqual(t, tc.state.String(), stateNew.String(),
+				fmt.Sprintf("expected string %s to yield state %s",
+					tc.state.String(), stateNew.String()))
+		})
+	}
+}

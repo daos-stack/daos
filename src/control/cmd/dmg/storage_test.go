@@ -240,5 +240,23 @@ func TestStorageCommands(t *testing.T) {
 			}),
 			nil,
 		},
+		{
+			"Reset LED state on a VMD device",
+			"storage led-manage reset --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				ResetLED: true,
+			}),
+			nil,
+		},
+		{
+			"Query LED state of a VMD device",
+			"storage led-manage get-state --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdQueryReq{
+				UUID:   "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				GetLED: true,
+			}),
+			nil,
+		},
 	})
 }

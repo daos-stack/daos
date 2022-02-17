@@ -75,12 +75,11 @@ message SmdDevReq {
 
 message SmdDevResp {
 	message Device {
-		reserved 3;
-		reserved "state";
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
-		string tr_addr = 4; // Transport address of blobstore
-		string dev_state = 5; // NVMe device state
+		string tr_addr = 3; // Transport address of blobstore
+		string dev_state = 4; // NVMe device state
+		string led_state = 5; // VMD LED state
 	}
 	int32 status = 1;
 	repeated Device devices = 2;
@@ -104,10 +103,10 @@ message DevStateReq {
 }
 
 message DevStateResp {
-	reserved 3;
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of blobstore
-	string dev_state = 4; // NVMe device state
+	string dev_state = 3; // NVMe device state
+	string led_state = 4; // VMD LED state
 }
 
 message DevReplaceReq {
@@ -117,10 +116,10 @@ message DevReplaceReq {
 }
 
 message DevReplaceResp {
-	reserved 3;
 	int32 status = 1; // DAOS error code
 	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	string dev_state = 4; // NVMe device state
+	string dev_state = 3; // NVMe device state
+	string led_state = 4; // VMD LED state
 }
 
 message DevIdentifyReq {
@@ -128,10 +127,31 @@ message DevIdentifyReq {
 }
 
 message DevIdentifyResp {
-	reserved 3;
-	reserved "led_state";
 	int32 status = 1; // DAOS error code
 	string dev_uuid = 2; // UUID of VMD uuid
+	string led_state = 3; // VMD LED state
+	string dev_state = 4; // NVMe device state
+}
+
+message DevResetLEDReq {
+	string dev_uuid = 1; // UUID of VMD uuid
+}
+
+message DevResetLEDResp {
+	int32 status = 1; // DAOS error code
+	string dev_uuid = 2; // UUID of VMD uuid
+	string led_state = 3; // VMD LED state
+	string dev_state = 4; // NVMe device state
+}
+
+message DevGetLEDStateReq {
+	string dev_uuid = 1; // UUID of VMD uuid
+}
+
+message DevGetLEDStateResp {
+	int32 status = 1; // DAOS error code
+	string dev_uuid = 2; // UUID of VMD uuid
+	string led_state = 3; // VMD LED state
 	string dev_state = 4; // NVMe device state
 }
 
@@ -149,17 +169,18 @@ message SmdQueryReq {
 	bool identify = 10; // set the VMD LED state to quickly blink
 	uint32 state_mask = 11; // show only devices with state matching bit-mask
 	string replace_uuid = 12; // UUID of new device to replace storage with
+	bool reset_led = 13; // for resetting VMD LED, debug only
+	bool get_led = 14; // get LED state of VMD devices
 }
 
 message SmdQueryResp {
 	message Device {
-		reserved 3;
-		reserved "state";
 		string uuid = 1; // UUID of blobstore
 		repeated int32 tgt_ids = 2; // VOS target IDs
-		string tr_addr = 4; // Transport address of blobstore
-		BioHealthResp health = 5; // optional BIO health
-		string dev_state = 6; // NVMe device state
+		string tr_addr = 3; // Transport address of blobstore
+		BioHealthResp health = 4; // optional BIO health
+		string dev_state = 5; // NVMe device state
+		string led_state = 6; // VMD LED state
 	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool

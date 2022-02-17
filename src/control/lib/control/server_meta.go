@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,8 @@ type (
 		NoReint          bool                 `json:"no_reint"`     // for device replacement
 		Identify         bool                 `json:"identify"`     // for VMD LED device identification
 		StateMask        storage.NvmeDevState `json:"state_mask"`   // show devices with state matching mask
+		ResetLED         bool                 `json:"reset_led"`    // for resetting VMD LED, debug only
+		GetLED           bool                 `json:"get_led"`      // get LED state of VMD devices
 	}
 
 	// SmdQueryResp represents the results of performing

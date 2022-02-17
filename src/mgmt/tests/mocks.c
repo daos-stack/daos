@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -491,6 +491,19 @@ ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
 
 int
 ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp)
+{
+	return 0;
+}
+
+int
+ds_mgmt_dev_reset_led(uuid_t uuid, Ctl__DevResetLEDResp *resp)
+{
+	return 0;
+}
+
+int
+ds_mgmt_dev_get_led_state(uuid_t uuid, int *led_state,
+			  Ctl__DevGetLEDStateResp *resp)
 {
 	return 0;
 }

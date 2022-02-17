@@ -88,6 +88,37 @@ func NvmeDevStateFromString(status string) NvmeDevState {
 
 }
 
+// VmdLedState represents the LED state of VMD device.
+type VmdLedState uint32
+
+// VmdLedState values representing individual bit-flags.
+const (
+	VmdStateOff      VmdLedState = C.VMD_LED_STATE_OFF
+	VmdStateIdentify VmdLedState = C.VMD_LED_STATE_IDENTIFY
+	VmdStateFault    VmdLedState = C.VMD_LED_STATE_FAULT
+	VmdStateInvalid  VmdLedState = C.VMD_LED_STATE_INVALID
+	VmdStateNA       VmdLedState = C.VMD_LED_STATE_NA
+)
+
+func (bs VmdLedState) String() string {
+	return C.GoString(C.led_state2str(C.int(bs)))
+}
+
+// Uint32 returns uint32 representation of LED state.
+func (bs VmdLedState) Uint32() uint32 {
+	return uint32(bs)
+}
+
+// VmdLedStateFromString converts a status string into a state bitset.
+func VmdLedStateFromString(status string) (VmdLedState, error) {
+	cStr := C.CString(status)
+	defer C.free(unsafe.Pointer(cStr))
+
+	cState := C.led_str2state(cStr)
+
+	return VmdLedState(cState), nil
+}
+
 // NvmeHealth represents a set of health statistics for a NVMe device
 // and mirrors C.struct_nvme_stats.
 type NvmeHealth struct {
@@ -159,6 +190,7 @@ type SmdDevice struct {
 	UUID       string       `json:"uuid"`
 	TargetIDs  []int32      `hash:"set" json:"tgt_ids"`
 	NvmeState  NvmeDevState `json:"-"`
+	VmdState   VmdLedState  `json:"-"`
 	Rank       system.Rank  `json:"rank"`
 	TotalBytes uint64       `json:"total_bytes"`
 	AvailBytes uint64       `json:"avail_bytes"`
@@ -177,14 +209,16 @@ func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
 	type toJSON SmdDevice
 	return json.Marshal(&struct {
 		NvmeStateStr string `json:"dev_state"`
+		VmdStateStr  string `json:"led_state"`
 		*toJSON
 	}{
 		NvmeStateStr: sd.NvmeState.String(),
+		VmdStateStr:  sd.VmdState.String(),
 		toJSON:       (*toJSON)(sd),
 	})
 }
 
-// UnmarshalJSON unmarshals SmaDevice from JSON.
+// UnmarshalJSON unmarshals SmdDevice from JSON.
 func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		return nil
@@ -195,6 +229,7 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	type fromJSON SmdDevice
 	from := &struct {
 		NvmeStateStr string `json:"dev_state"`
+		VmdStateStr  string `json:"led_state"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sd),
@@ -205,6 +240,12 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	}
 
 	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
+
+	led, err := VmdLedStateFromString(from.VmdStateStr)
+	if err != nil {
+		return err
+	}
+	sd.VmdState = led
 
 	return nil
 }
