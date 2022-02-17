@@ -64,6 +64,7 @@ dnf --nodocs install \
     python3-tabulate \
     python3-yaml \
     sg3_utils \
+    sudo \
     valgrind-devel \
     which \
     yasm
