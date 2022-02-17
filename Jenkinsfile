@@ -313,7 +313,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_ce_runner'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
@@ -348,7 +348,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_ce_runner'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
@@ -383,7 +383,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_ce_runner'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
