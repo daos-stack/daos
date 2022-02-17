@@ -162,6 +162,8 @@ func (m MgmtMethod) String() string {
 		MethodIdentifyStorage:      "IdentifyStorage",
 		MethodPoolGetProp:          "PoolGetProp",
 		MethodPoolUpgrade:          "PoolUpgrade",
+		MethodResetLED:             "ResetLED",
+		MethodGetLEDState:          "GetLEDState",
 	}[m]; ok {
 		return s
 	}
@@ -253,12 +255,16 @@ const (
 	MethodNotifyPoolDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT
 	// MethodNotifyExit defines a method for signaling a clean client shutdown
 	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
-	// MethodIdentifyStorage is a ModuleMgmt method
+	// MethodIdentifyStorage defines a method to identify a VMD device via LED blinking
 	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
 	// MethodPoolGetProp defines a method for getting pool properties
 	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
 	// MethodPoolUpgrade defines a method for upgrade pool
 	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
+	// MethodResetLED defines a method to reset a VMD device LED to OFF
+	MethodResetLED MgmtMethod = C.DRPC_METHOD_MGMT_LED_RESET
+	// MethodGetLEDState defines a method to get the LED state of a VMD device
+	MethodGetLEDState MgmtMethod = C.DRPC_METHOD_MGMT_LED_GET
 )
 
 type srvMethod int32

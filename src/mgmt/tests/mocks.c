@@ -578,3 +578,16 @@ mock_ds_mgmt_pool_upgrade_setup(void)
 	ds_mgmt_pool_upgrade_return = 0;
 	uuid_clear(ds_mgmt_pool_upgrade_uuid);
 }
+
+int
+ds_mgmt_dev_reset_led(uuid_t uuid, Ctl__DevResetLEDResp *resp)
+{
+	return 0;
+}
+
+int
+ds_mgmt_dev_get_led_state(uuid_t uuid, int *led_state,
+			  Ctl__DevGetLEDStateResp *resp)
+{
+	return 0;
+}

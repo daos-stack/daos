@@ -183,8 +183,8 @@ func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOpt
 	}
 
 	iw1 := txtfmt.NewIndentWriter(iw)
-	if _, err := fmt.Fprintf(iw1, "Targets:%+v Rank:%d State:%s\n",
-		dev.TargetIDs, dev.Rank, dev.NvmeState.String()); err != nil {
+	if _, err := fmt.Fprintf(iw1, "Targets:%+v Rank:%d State:%s LED:%s\n",
+		dev.TargetIDs, dev.Rank, dev.NvmeState.String(), dev.VmdState.String()); err != nil {
 
 		return err
 	}

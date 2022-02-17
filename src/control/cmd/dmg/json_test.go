@@ -86,6 +86,10 @@ func TestDmg_JsonOutput(t *testing.T) {
 					"--new-uuid", test.MockUUID())
 			case "storage identify vmd":
 				testArgs = append(testArgs, "--uuid", test.MockUUID())
+			case "storage led-manage reset":
+				testArgs = append(testArgs, "--uuid", test.MockUUID())
+			case "storage led-manage get-state":
+				testArgs = append(testArgs, "--uuid", test.MockUUID())
 			case "pool create":
 				testArgs = append(testArgs, "-s", "1TB")
 			case "pool destroy", "pool evict", "pool query", "pool get-acl":
