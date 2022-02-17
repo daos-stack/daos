@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +8,7 @@ import unittest
 import yaml
 import os
 
-from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, Containers, VosValue, Overhead, ValType, KeyType, VosValueError
+from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, Containers, VosValue, Overhead, ValType, VosValueError
 from storage_estimator.explorer import FileSystemExplorer
 from storage_estimator.util import ObjectClass
 from storage_estimator.parse_csv import ProcessCSV

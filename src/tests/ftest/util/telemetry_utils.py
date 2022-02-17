@@ -596,8 +596,7 @@ class TelemetryUtils():
                         data[name][host] = {}
                     for metric in info[host][name]["metrics"]:
                         if "labels" in metric:
-                            if ("rank" in metric["labels"]
-                                    and "target" in metric["labels"]):
+                            if ("rank" in metric["labels"] and "target" in metric["labels"]):
                                 rank = metric["labels"]["rank"]
                                 target = metric["labels"]["target"]
                                 if rank not in data[name][host]:

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -86,17 +86,19 @@ func (ei *EngineInstance) waitReady(ctx context.Context, errChan chan error) err
 	}
 }
 
-// finishStartup sets up instance once dRPC comms are ready, this includes
-// setting the instance rank, starting management service and loading I/O Engine
-// modules.
+// finishStartup sets up instance once dRPC comms are ready, this includes setting the instance
+// rank, starting management service and loading I/O Engine modules.
 //
 // Instance ready state is set to indicate that all setup is complete.
 func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
 	if err := ei.handleReady(ctx, ready); err != nil {
 		return err
 	}
-	// update engine target count to reflect allocated
-	// number of targets, not number requested when starting
+	// update engine target count to reflect allocated number of targets, not number requested
+	// when starting
+	// NOTE: Engine mem_size passed on engine invocation is based on the number of targets
+	//       requested in config so if number of targets allocated doesn't match the number of
+	//       targets requested the mem_size value may be inappropriate.
 	ei.setTargetCount(int(ready.GetNtgts()))
 
 	ei.ready.SetTrue()

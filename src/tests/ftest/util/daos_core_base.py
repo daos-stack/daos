@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -176,7 +176,6 @@ class DaosCoreBase(TestWithServers):
                 self.fail(
                     "{0} failed with return code={1}.\n".format(
                         cmd, result.result.exit_status))
-
 
     def create_results_xml(self, testname, result, error_message="Test failed to start up"):
         """Create a JUnit result.xml file for the failed command.
