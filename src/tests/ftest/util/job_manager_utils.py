@@ -247,6 +247,7 @@ class Orterun(JobManager):
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
+        self.path = path
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -304,6 +305,15 @@ class Orterun(JobManager):
         """
         self.export.update_default(env_vars.get_list())
 
+    def get_lib_path(self):
+        """Get path to mpi lib.
+
+        Returns: path to mpi lib
+        """
+        if not self.path:
+            raise CommandFailure("MPI path is not defined")
+        return os.path.join(os.path.split(self.path)[0], 'lib')
+
     def run(self):
         """Run the orterun command.
 
@@ -357,6 +367,7 @@ class Mpirun(JobManager):
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
         self.mpitype = mpitype
+        self.path = path
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).
@@ -406,6 +417,15 @@ class Mpirun(JobManager):
                 assign as the default
         """
         self.genv.update_default(env_vars.get_list())
+
+    def get_lib_path(self):
+        """Get path to mpi lib.
+
+        Returns: path to mpi lib
+        """
+        if not self.path:
+            raise CommandFailure("MPI path is not defined")
+        return os.path.join(os.path.split(self.path)[0], 'lib')
 
     def run(self):
         """Run the mpirun command.

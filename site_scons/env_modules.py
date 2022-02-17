@@ -95,7 +95,7 @@ class _env_module(): # pylint: disable=invalid-name
                     unload += value
         else:
             # Support forcing specific mpi modules
-            load = list(mpi)
+            load.append(mpi)
             unload = [item for value in self._mpi_map.values() for item in value if item != mpi]
 
         for to_load in load:
