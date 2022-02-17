@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import distro
 from avocado.core.exceptions import TestFail
 from dfuse_test_base import DfuseTestBase
 from env_modules import load_mpi
@@ -72,22 +71,9 @@ class PosixSimul(DfuseTestBase):
         If include value is set, exclude value is ignored and vice versa.
         """
         # Assuming all vms use the same OS
-        host_os = distro.linux_distribution()[0].lower()
-        version_os = distro.linux_distribution()[1]
         dfuse_hosts = self.agent_managers[0].hosts
-
-        if "centos" in host_os:
-            if version_os == "8":
-                simul_dict = {"openmpi": "/usr/lib64/openmpi/bin/simul"}
-            else:
-                simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul"}
-        elif "suse" in host_os:
-            simul_dict = {"openmpi": "/usr/lib64/mpi/gcc/openmpi3/bin/simul"}
-        else:
-            self.log.error(host_os)
-            raise NotImplementedError
-
         dfuse_mount_dir = self.params.get("mount_dir", '/run/dfuse/*')
+        mpi_list = self.params.get("mpi_list", '/run/*')
 
         if not self.pool:
             self.log.info("Create a pool")
@@ -98,14 +84,14 @@ class PosixSimul(DfuseTestBase):
         self.start_dfuse(dfuse_hosts, self.pool, self.container)
         self.dfuse.check_running()
 
-        for mpi, simul in simul_dict.items():
+        for mpi in mpi_list:
             # The use of MPI here is to run in parallel all simul tests
             # on a single host.
             load_mpi(mpi)
             if include and not exclude:
-                cmd = "{0} -vv -d {1} -i {2}".format(simul, dfuse_mount_dir, include)
+                cmd = "simul -vv -d {0} -i {1}".format(dfuse_mount_dir, include)
             elif exclude and not include:
-                cmd = "{0} -vv -d {1} -e {2}".format(simul, dfuse_mount_dir, exclude)
+                cmd = "simul -vv -d {0} -e {1}".format(dfuse_mount_dir, exclude)
             else:
                 self.fail("##Both include and exclude tests are selected"
                           " both or empty.")
