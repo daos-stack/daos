@@ -59,6 +59,9 @@ def base_setup(env, prereqs=None):
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     if build_type == 'lcov':
+        if compiler != 'gcc':
+            print('lcov builds only work with gcc')
+            Exit(2)
         env.AppendUnique(CCFLAGS=['-O0'])
         env.PrependUnique(CFLAGS=['-fprofile-arcs', '-ftest-coverage', '-lgcov', '--coverage'])
         env.AppendUnique(LIBS=['gcov'])
