@@ -1255,12 +1255,6 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 	return 0;
 }
 
-void
-dfs_free_sb_layout(daos_iod_t *iods[])
-{
-	D_FREE(*iods);
-}
-
 static int
 dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t in_uuid,
 		    dfs_attr_t *attr, daos_handle_t *_coh, dfs_t **_dfs)
