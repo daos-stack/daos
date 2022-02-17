@@ -1298,17 +1298,3 @@ def percent_change(val1, val2):
     if val1 and val2:
         return (float(val2) - float(val1)) / float(val1)
     return 0.0
-
-def module_load(name):
-    """Load mpi env using specified name.
-
-    Args:
-        name (str): name of module to load
-
-    Returns:
-        bool: return True if module load succeeds; otherwise return False
-
-    """
-    cmd = "module load {}".format(name)
-    result = run_command(cmd)
-    return (int(result.exit_status) == 0)
