@@ -59,12 +59,13 @@ def base_setup(env, prereqs=None):
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     if build_type == 'lcov':
-        if compiler != 'gcc':
-            print('lcov builds only work with gcc')
+        if compiler not in ('gcc', 'mpicc'):
+            print("lcov builds only work with gcc '{}'".format(compiler))
             Exit(2)
-        env.AppendUnique(CCFLAGS=['-O0'])
-        env.PrependUnique(CFLAGS=['-fprofile-arcs', '-ftest-coverage', '-lgcov', '--coverage'])
-        env.AppendUnique(LIBS=['gcov'])
+        if compiler == 'gcc':
+            env.AppendUnique(CCFLAGS=['-O0'])
+            env.PrependUnique(CFLAGS=['-fprofile-arcs', '-ftest-coverage', '-lgcov', '--coverage'])
+            env.AppendUnique(LIBS=['gcov'])
     else:
         if build_type == 'release':
             env.AppendUnique(CPPDEFINES='DAOS_BUILD_RELEASE')
