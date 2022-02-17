@@ -252,3 +252,9 @@ err_free:
 	D_FREE(hdl);
 	return rc;
 }
+
+void
+dfs_free_sb_layout(daos_iod_t *iods[])
+{
+	D_FREE(*iods);
+}

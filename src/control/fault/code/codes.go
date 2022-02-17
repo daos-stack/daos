@@ -155,6 +155,8 @@ const (
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
 	ServerConfigInsufficientHugePages
+	ServerConfigNrHugepagesOutOfRange
+	ServerConfigHugepagesDisabled
 )
 
 // SPDK library bindings codes
