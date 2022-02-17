@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -42,8 +42,7 @@ class DaosAdminPrivTest(TestWithServers):
         # regular file, mode 4750
         desired = (stat.S_IFREG|stat.S_ISUID|
                    stat.S_IRWXU|stat.S_IRGRP|stat.S_IXGRP)
-        actual = file_stats.st_mode & ~stat.S_IRWXO # mask out Other
-                                                    # bits for non-RPM
+        actual = file_stats.st_mode & ~stat.S_IRWXO # mask out Other bits for non-RPM
         if (actual ^ desired) > 0:
             self.fail("Incorrect daos_admin permissions: {}".format(oct(actual)))
 

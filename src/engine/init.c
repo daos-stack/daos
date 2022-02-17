@@ -56,10 +56,7 @@ const char	       *dss_nvme_conf;
 /** Socket Directory */
 const char	       *dss_socket_dir = "/var/run/daos_server";
 
-/** NVMe shm_id for enabling SPDK multi-process mode */
-int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
-
-/** NVMe mem_size for SPDK memory allocation when using primary mode */
+/** NVMe mem_size for SPDK memory allocation */
 unsigned int		dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation */
@@ -898,8 +895,6 @@ Options:\n\
       Directory where daos_server sockets are located (default \"%s\")\n\
   --nvme=config, -n config\n\
       NVMe config file (default \"%s\")\n\
-  --shm_id=shm_id, -i shm_id\n\
-      Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --instance_idx=idx, -I idx\n\
       Identifier for this server instance (default %u)\n\
   --pinned_numa_node=numanode, -p numanode\n\
@@ -940,7 +935,6 @@ parse(int argc, char **argv)
 		{ "firstcore",		required_argument,	NULL,	'f' },
 		{ "group",		required_argument,	NULL,	'g' },
 		{ "help",		no_argument,		NULL,	'h' },
-		{ "shm_id",		required_argument,	NULL,	'i' },
 		{ "modules",		required_argument,	NULL,	'm' },
 		{ "nvme",		required_argument,	NULL,	'n' },
 		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
@@ -1004,9 +998,6 @@ parse(int argc, char **argv)
 			break;
 		case 'p':
 			dss_numa_node = atoi(optarg);
-			break;
-		case 'i':
-			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'r':
 			rc = arg_strtoul(optarg, &dss_nvme_mem_size, "\"-r\"");
