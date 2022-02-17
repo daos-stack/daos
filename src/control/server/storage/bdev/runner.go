@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,8 +20,9 @@ import (
 
 const (
 	spdkSetupPath      = "../share/daos/control/setup_spdk.sh"
-	defaultNrHugepages = 4096
+	defaultNrHugepages = 1024 // default number applied by SPDK
 	nrHugepagesEnv     = "_NRHUGE"
+	hugeNodeEnv        = "_HUGENODE"
 	targetUserEnv      = "_TARGET_USER"
 	pciAllowListEnv    = "_PCI_ALLOWED"
 	pciBlockListEnv    = "_PCI_BLOCKED"
@@ -99,7 +100,9 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 	nrHugepages := req.HugePageCount
-	if nrHugepages < 0 {
+	// Always supply non-zero number of hugepages in request otherwise devices cannot be
+	// accessed.
+	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages
 	}
 
@@ -107,6 +110,9 @@ func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 		fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
 		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
+	}
+	if req.HugeNodes != "" {
+		env = append(env, fmt.Sprintf("%s=%s", hugeNodeEnv, req.HugeNodes))
 	}
 	if req.PCIAllowList != "" {
 		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))

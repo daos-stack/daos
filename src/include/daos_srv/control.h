@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,10 +30,10 @@ dpdk_cli_override_opts;
 #define NVME_DEV_FL_IDENTIFY	(1 << 3) /* SSD being identified by LED activity */
 
 /** Device state combinations */
-#define NVME_DEV_STATE_NORMAL (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
-#define NVME_DEV_STATE_FAULTY (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
-#define NVME_DEV_STATE_NEW (NVME_DEV_FL_PLUGGED)
-#define NVME_DEV_STATE_INVALID ((NVME_DEV_STATE_FAULTY | NVME_DEV_FL_IDENTIFY) + 1)
+#define NVME_DEV_STATE_NORMAL	(NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
+#define NVME_DEV_STATE_FAULTY	(NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
+#define NVME_DEV_STATE_NEW	NVME_DEV_FL_PLUGGED
+#define NVME_DEV_STATE_INVALID	(1 << 4)
 
 #define BIT_SET(x, m) (((x)&(m)) == (m))
 #define BIT_UNSET(x, m) (!BIT_SET(x, m))

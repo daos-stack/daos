@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,6 +42,12 @@ struct dm_stats {
 	int total_akeys;
 	uint64_t bytes_read;
 	uint64_t bytes_written;
+};
+
+struct fs_copy_stats {
+	uint64_t		num_dirs;
+	uint64_t		num_files;
+	uint64_t		num_links;
 };
 
 /* general datamover operations */

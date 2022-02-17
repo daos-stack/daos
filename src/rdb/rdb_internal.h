@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,12 +57,12 @@ struct rdb {
 
 	/* rdb_raft fields */
 	raft_server_t	       *d_raft;
+	bool			d_raft_loaded;	/* from storage (see rdb_raft_load) */
 	ABT_mutex		d_raft_mutex;	/* for raft state machine */
 	daos_handle_t		d_lc;		/* log container */
 	struct rdb_lc_record	d_lc_record;	/* of d_lc */
 	daos_handle_t		d_slc;		/* staging log container */
 	struct rdb_lc_record	d_slc_record;	/* of d_slc */
-	d_rank_list_t	       *d_replicas;
 	uint64_t		d_applied;	/* last applied index */
 	uint64_t		d_debut;	/* first entry in a term */
 	ABT_cond		d_applied_cv;	/* for d_applied updates */
@@ -150,6 +150,7 @@ int rdb_raft_remove_replica(struct rdb *db, d_rank_t rank);
 int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
 			  void *result);
 int rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term);
+int rdb_raft_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
 void rdb_requestvote_handler(crt_rpc_t *rpc);
 void rdb_appendentries_handler(crt_rpc_t *rpc);
 void rdb_installsnapshot_handler(crt_rpc_t *rpc);

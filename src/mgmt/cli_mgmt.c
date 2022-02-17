@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -421,7 +421,6 @@ cleanup:
 
 static int send_monitor_request(struct dc_pool *pool, int request_type)
 {
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
 	Mgmt__PoolMonitorReq	 req = MGMT__POOL_MONITOR_REQ__INIT;
 	uint8_t			 *reqb;
@@ -456,8 +455,7 @@ static int send_monitor_request(struct dc_pool *pool, int request_type)
 	}
 	mgmt__pool_monitor_req__pack(&req, reqb);
 
-	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-			      request_type, &dreq);
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT, request_type, &dreq);
 	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_ctx;
@@ -510,7 +508,6 @@ dc_mgmt_notify_pool_connect(struct dc_pool *pool) {
 int
 dc_mgmt_notify_exit(void)
 {
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
 	Drpc__Call		 *dreq;
 	Drpc__Response		 *dresp;
