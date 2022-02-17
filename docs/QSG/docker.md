@@ -24,6 +24,8 @@ DAOS support of virtual networking is still in development. The following are kn
 - 16GB of storage.
 
 ### Software Prerequisites
+- BIOS
+	- Enable VT-d 
 - To build and deploy the Docker images, `docker` 
 	- optionally `docker-compose`
 - Hugepages must be enabled
@@ -40,6 +42,7 @@ DAOS support of virtual networking is still in development. The following are kn
 - OS: Ubuntu 20.0.4LTE. fresh Install
 - Memory: 192GB 
 - PMEM:(12)x16GB (not required for this QSG)
+- BIIOS: VT-d enable
 
 ## Configuring Hugepages
 Additional information in Hugepages is located in the administration portion of this guide <need link> and at (kernel.org)[https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt]
