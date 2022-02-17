@@ -214,7 +214,7 @@ fi
 
 # check if slurm needs to be configured for soak
 if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
-    if ! ./slurm_setup.py -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
+    if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
         exit "${PIPESTATUS[0]}"
     else
         rc=0
