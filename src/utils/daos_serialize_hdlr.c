@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -214,6 +214,7 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 	daos_cont_info_t	src_cont_info = {0};
 	struct dm_args		ca = {0};
 	uuid_t			cont_uuid;
+	char			cont_str[130];
 	bool			label_passed = false;
 	struct dm_stats		stats = {0};
 	daos_prop_t		*props = NULL;
@@ -221,9 +222,6 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 	/* check if label was passed in using --cont-label */
 	if (strlen(ap->cont_str) > 0)
 		label_passed = true;
-
-	/* generate a new cont uuid for deserialization */
-	uuid_generate(cont_uuid);
 
 	/* connect to pool/cont to be serialized */
 	rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RW, &ca.dst_poh, NULL, NULL);
@@ -243,17 +241,18 @@ cont_deserialize_hdlr(struct cmd_args_s *ap)
 	if (label_passed)
 		rc = daos_cont_create_with_label(ca.dst_poh, ap->cont_str, props, &cont_uuid, NULL);
 	else
-		rc = daos_cont_create(ca.dst_poh, cont_uuid, props, NULL);
+		rc = daos_cont_create(ca.dst_poh, &cont_uuid, props, NULL);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "failed to create container");
 		D_GOTO(out_pool, rc);
 	}
+	uuid_unparse(cont_uuid, cont_str);
 
-	D_PRINT("Successfully created container "DF_UUID"\n", DP_UUID(cont_uuid));
+	D_PRINT("Successfully created container "DF_UUIDF"\n", DP_UUID(cont_uuid));
 
-	rc = daos_cont_open(ca.dst_poh, cont_uuid, DAOS_COO_RW, &ca.dst_coh, &src_cont_info, NULL);
+	rc = daos_cont_open(ca.dst_poh, cont_str, DAOS_COO_RW, &ca.dst_coh, &src_cont_info, NULL);
 	if (rc != 0) {
-		DH_PERROR_DER(ap, rc, "failed to open container "DF_UUID, DP_UUID(cont_uuid));
+		DH_PERROR_DER(ap, rc, "failed to open container %s", cont_str);
 		D_GOTO(out_pool, rc);
 	}
 
@@ -287,8 +286,8 @@ out:
 		/* return with error code if cleanup fails*/
 		rc = rc2;
 		D_PRINT("Objects: %d\n", stats.total_oids);
-		D_PRINT("\tDkeys: %d\n", stats.total_dkeys);
-		D_PRINT("\tAkeys: %d\n", stats.total_akeys);
+		D_PRINT("\tD-keys: %d\n", stats.total_dkeys);
+		D_PRINT("\tA-keys: %d\n", stats.total_akeys);
 		D_PRINT("Bytes Written: %lu\n", stats.bytes_written);
 	}
 	return rc;
