@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -13,6 +13,7 @@ from pydaos.raw.daos_io import DaosFile
 
 class DaosIOFailed(Exception):
     """ DAOS I/O failure of some sort. """
+
 
 def write_some_data():
     """
@@ -41,6 +42,7 @@ def write_some_data():
     if not rdata1 == ((sizeinbytes-10) % 256):
         print("value is {0}".format(rdata1))
         raise DaosIOFailed
+
 
 if __name__ == "__main__":
     write_some_data()

@@ -119,5 +119,6 @@ def main():
             restore_prev = 'bc-{}-{}-'.format(target_branch, base_distro)
         set_output('restore_prev', restore_prev)
 
+
 if __name__ == '__main__':
     main()

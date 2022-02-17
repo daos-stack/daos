@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,6 +38,10 @@ daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 
 	return dc_task_schedule(task, true);
 }
+int
+daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
+		 daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+		 __attribute__ ((weak, alias("daos_pool_connect")));
 
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
