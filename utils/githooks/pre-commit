@@ -24,6 +24,7 @@ targets=(
 	'Makefile'
 	'Jenkinsfile'
 	'SConscript'
+	'SConstruct'
 	'Dockerfile*'
 	# Documentation files
 	'*.txt'
