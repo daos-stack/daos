@@ -1,3 +1,9 @@
+daos (2.1.100-20) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
+
+ -- Li Wei <wei.g.li@intel.com>  Thu, 10 Feb 2022 14:33:00 +0800
+
 daos (2.1.100-19) unstable; urgency=low
   [ Michael MacDonald ]
   * Move libdaos_common.so from daos-client to daos package
