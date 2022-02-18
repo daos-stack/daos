@@ -373,12 +373,13 @@ type containerSerializeCmd struct {
 }
 
 func (cmd *containerSerializeCmd) Execute(_ []string) error {
+	if cmd.Args.Source == "" {
+		return errors.New("Source container is required")
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
-	}
-	if cmd.Args.Source == "" {
-		return errors.New("Source container is required")
 	}
 	defer deallocCmdArgs()
 
@@ -410,15 +411,16 @@ type containerDeserializeCmd struct {
 }
 
 func (cmd *containerDeserializeCmd) Execute(_ []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
-	if err != nil {
-		return err
-	}
 	if cmd.Args.Pool == "" {
 		return errors.New("Pool is required")
 	}
 	if cmd.Args.File == "" {
 		return errors.New("File to deserialize is required")
+	}
+
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
 	}
 	defer deallocCmdArgs()
 

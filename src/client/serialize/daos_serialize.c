@@ -1216,8 +1216,8 @@ out:
 }
 
 static int
-serialize_recx_single(struct dsr_h5_args *args, daos_key_t *dkey, daos_handle_t *oh, daos_iod_t *iod,
-		      int *akey_index, uint64_t *bytes_read)
+serialize_recx_single(struct dsr_h5_args *args, daos_key_t *dkey, daos_handle_t *oh,
+		      daos_iod_t *iod, int *akey_index, uint64_t *bytes_read)
 {
 	/* if iod_type is single value just fetch iod size from source
 	 * and update in destination object
@@ -1928,13 +1928,15 @@ write_oid_dset(struct dsr_h5_args *args, int total_oids)
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
-	status = H5Tinsert(oid_memtype, "OID Hi", HOFFSET(struct dsr_h5_oid, oid_hi), H5T_NATIVE_UINT64);
+	status = H5Tinsert(oid_memtype, "OID Hi", HOFFSET(struct dsr_h5_oid, oid_hi),
+			   H5T_NATIVE_UINT64);
 	if (status < 0) {
 		D_ERROR("Failed to insert oid hi\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
-	status = H5Tinsert(oid_memtype, "OID Low", HOFFSET(struct dsr_h5_oid, oid_low), H5T_NATIVE_UINT64);
+	status = H5Tinsert(oid_memtype, "OID Low", HOFFSET(struct dsr_h5_oid, oid_low),
+			   H5T_NATIVE_UINT64);
 	if (status < 0) {
 		D_ERROR("Failed to insert oid low\n");
 		D_GOTO(out, rc = -DER_MISC);
@@ -2088,7 +2090,8 @@ write_akey_dset(struct dsr_h5_args *args, int total_akeys)
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
-	status = H5Tinsert(akey_memtype, "Akey Value", HOFFSET(struct dsr_h5_akey, akey_val), akey_vtype);
+	status = H5Tinsert(akey_memtype, "Akey Value", HOFFSET(struct dsr_h5_akey, akey_val),
+			   akey_vtype);
 	if (status < 0) {
 		D_ERROR("Failed to insert akey value\n");
 		D_GOTO(out, rc = -DER_MISC);
