@@ -297,7 +297,7 @@ def set_provider_environment(interface, args):
         if check_remote_output(task, command):
             # Omni-Path adapter not found; remove verbs as it will not work with OPA devices.
             print("  Excluding verbs provider for Omni-Path adapters")
-            PROVIDER_KEYS.remove("verbs")
+            PROVIDER_KEYS.pop("verbs")
 
         # Detect all supported providers
         command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
