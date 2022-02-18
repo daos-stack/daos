@@ -959,12 +959,20 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 				&new_iod_csums->ic_data[i],
 				&iod_csum->ic_data[i]);
 		if (!match) {
-			D_ERROR("Data corruption found for recx: "DF_RECX". "
-				"Calculated "DF_CI" != "
-				"received "DF_CI"\n",
-				DP_RECX(iod->iod_recxs[i]),
-				DP_CI(new_iod_csums->ic_data[i]),
-				DP_CI(iod_csum->ic_data[i]));
+			if (iod->iod_type == DAOS_IOD_ARRAY)
+				D_ERROR("Data corruption found for recx: "DF_RECX". "
+					"Calculated "DF_CI" != "
+					"received "DF_CI"\n",
+					DP_RECX(iod->iod_recxs[i]),
+					DP_CI(new_iod_csums->ic_data[i]),
+					DP_CI(iod_csum->ic_data[i]));
+			else
+				D_ERROR("Data corruption found for single value. "
+					"Calculated "DF_CI" != "
+					"received "DF_CI"\n",
+					DP_CI(new_iod_csums->ic_data[i]),
+					DP_CI(iod_csum->ic_data[i]));
+
 			D_GOTO(done, rc = -DER_CSUM);
 		}
 	}
