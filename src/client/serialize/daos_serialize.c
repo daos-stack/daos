@@ -57,12 +57,9 @@ struct dsr_h5_args {
 	struct dsr_h5_oid *oid_data;
 	struct dsr_h5_dkey *dkey_data;
 	struct dsr_h5_akey *akey_data;
-	uint64_t oid_buf_size;
-	uint64_t oid_old_buf_size;
-	uint64_t dkey_buf_size;
-	uint64_t dkey_old_buf_size;
-	uint64_t akey_buf_size;
-	uint64_t akey_old_buf_size;
+	uint64_t oid_nr;
+	uint64_t dkey_nr;
+	uint64_t akey_nr;
 };
 
 int
@@ -1588,7 +1585,8 @@ serialize_akeys(struct dsr_h5_args *args, daos_key_t diov, int *dkey_index, int 
 	char			*key_buf = NULL;
 	daos_size_t		key_buf_len = 0;
 	hvl_t			*single_val;
-	struct dsr_h5_akey	*akey_tmp = NULL;
+	struct dsr_h5_akey	*tmp_akey_data = NULL;
+	uint64_t		tmp_akey_nr;
 
 	D_ALLOC(small_key, ENUM_DESC_BUF);
 	if (small_key == NULL)
@@ -1631,12 +1629,12 @@ serialize_akeys(struct dsr_h5_args *args, daos_key_t diov, int *dkey_index, int 
 		if (akey_number == 0)
 			continue;
 
-		args->akey_old_buf_size = args->akey_buf_size;
-		args->akey_buf_size = (akey_number + *total_akeys) * sizeof(struct dsr_h5_akey);
-		D_REALLOC(akey_tmp, args->akey_data, args->akey_old_buf_size, args->akey_buf_size);
-		if (akey_tmp == NULL)
+		tmp_akey_nr = args->akey_nr;
+		args->akey_nr = (akey_number + *total_akeys);
+		D_REALLOC_ARRAY(tmp_akey_data, args->akey_data, tmp_akey_nr, args->akey_nr);
+		if (tmp_akey_data == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		args->akey_data = akey_tmp;
+		args->akey_data = tmp_akey_data;
 
 		/* parse out individual akeys based on key length and number of dkeys returned */
 		for (akey_ptr = key_buf, j = 0; j < akey_number; j++) {
@@ -1756,24 +1754,25 @@ serialize_dkeys(struct dsr_h5_args *args, daos_obj_id_t oid, daos_handle_t coh, 
 		int *dkey_index, int *akey_index, daos_handle_t *oh, bool is_kv,
 		int *total_dkeys, int *total_akeys, uint64_t *bytes_read)
 {
-	int		rc = 0;
-	int		i = 0;
-	daos_anchor_t	dkey_anchor = {0};
-	d_sg_list_t	dkey_sgl;
-	d_iov_t		dkey_iov;
-	daos_key_desc_t	dkey_kds[ENUM_DESC_NR] = {0};
-	uint32_t	dkey_number = ENUM_DESC_NR;
-	char		*dkey = NULL;
-	char		*dkey_ptr;
-	daos_key_t	diov;
-	int		path_len = 0;
-	hvl_t		*dkey_val;
-	char		key_val[ENUM_KEY_BUF];
-	char		*small_key = NULL;
-	char		*large_key = NULL;
-	char		*key_buf = NULL;
-	daos_size_t	key_buf_len = 0;
-	struct dsr_h5_dkey	*dkey_tmp = NULL;
+	int			rc = 0;
+	int			i = 0;
+	daos_anchor_t		dkey_anchor = {0};
+	d_sg_list_t		dkey_sgl;
+	d_iov_t			dkey_iov;
+	daos_key_desc_t		dkey_kds[ENUM_DESC_NR] = {0};
+	uint32_t		dkey_number = ENUM_DESC_NR;
+	char			*dkey = NULL;
+	char			*dkey_ptr;
+	daos_key_t		diov;
+	int			path_len = 0;
+	hvl_t			*dkey_val;
+	char			key_val[ENUM_KEY_BUF];
+	char			*small_key = NULL;
+	char			*large_key = NULL;
+	char			*key_buf = NULL;
+	daos_size_t		key_buf_len = 0;
+	struct dsr_h5_dkey	*tmp_dkey_data = NULL;
+	uint64_t		tmp_dkey_nr;
 
 	D_ALLOC(small_key, ENUM_DESC_BUF);
 	if (small_key == NULL)
@@ -1829,12 +1828,12 @@ serialize_dkeys(struct dsr_h5_args *args, daos_obj_id_t oid, daos_handle_t coh, 
 		if (dkey_number == 0)
 			continue;
 
-		args->dkey_old_buf_size = args->dkey_buf_size;
-		args->dkey_buf_size = (dkey_number + *total_dkeys) * sizeof(struct dsr_h5_dkey);
-		D_REALLOC(dkey_tmp, args->dkey_data, args->dkey_old_buf_size, args->dkey_buf_size);
-		if (dkey_tmp == NULL)
+		tmp_dkey_nr = args->dkey_nr;
+		args->dkey_nr = (dkey_number + *total_dkeys);
+		D_REALLOC_ARRAY(tmp_dkey_data, args->dkey_data, tmp_dkey_nr, args->dkey_nr);
+		if (tmp_dkey_data == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		args->dkey_data = dkey_tmp;
+		args->dkey_data = tmp_dkey_data;
 
 		/* parse out individual dkeys based on key length and
 		 * number of dkeys returned
@@ -2181,13 +2180,14 @@ daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buff
 	hid_t			usr_attr_memtype = -1;
 	hid_t			usr_attr_name_vtype = -1;
 	hid_t			usr_attr_val_vtype = -1;
-	struct dsr_h5_oid		*oid_tmp = NULL;
+	struct dsr_h5_oid	*tmp_oid_data = NULL;
+	uint64_t		tmp_oid_nr;
 
 	if (filename == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	/* Create HDF5 file for serialization */
-	args.file = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+	args.file = H5Fcreate(filename, H5F_ACC_EXCL, H5P_DEFAULT, H5P_DEFAULT);
 	if (args.file < 0) {
 		D_ERROR("Failed to create HDF5 file: %s\n", filename);
 		D_GOTO(out, rc = -DER_IO);
@@ -2258,18 +2258,18 @@ daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buff
 	}
 
 	/* create oid, dkey, akey buffers for container data */
-	D_ALLOC(args.oid_data, sizeof(struct dsr_h5_oid));
+	args.oid_nr = 1;
+	args.dkey_nr = 1;
+	args.akey_nr = 1;
+	D_ALLOC_ARRAY(args.oid_data, args.oid_nr);
 	if (args.oid_data == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC(args.dkey_data, sizeof(struct dsr_h5_dkey));
+	D_ALLOC_ARRAY(args.dkey_data, args.dkey_nr);
 	if (args.dkey_data == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC(args.akey_data, sizeof(struct dsr_h5_akey));
+	D_ALLOC_ARRAY(args.akey_data, args.akey_nr);
 	if (args.akey_data == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	args.oid_buf_size = sizeof(struct dsr_h5_oid);
-	args.dkey_buf_size = sizeof(struct dsr_h5_dkey);
-	args.akey_buf_size = sizeof(struct dsr_h5_akey);
 
 	/* create snapshot, open oit, then starting iterating over oids */
 	rc = daos_cont_create_snap_opt(coh, &epoch, NULL,
@@ -2292,12 +2292,12 @@ daos_cont_serialize(daos_prop_t *props, int num_attrs, char **names, char **buff
 			D_GOTO(out_oit, rc);
 		}
 
-		args.oid_old_buf_size = args.oid_buf_size;
-		args.oid_buf_size = (oids_nr + *total_oids) * sizeof(struct dsr_h5_oid);
-		D_REALLOC(oid_tmp, args.oid_data, args.oid_old_buf_size, args.oid_buf_size);
-		if (oid_tmp == NULL)
+		tmp_oid_nr = args.oid_nr;
+		args.oid_nr = (oids_nr + *total_oids);
+		D_REALLOC_ARRAY(tmp_oid_data, args.oid_data, tmp_oid_nr, args.oid_nr);
+		if (tmp_oid_data == NULL)
 			D_GOTO(out_oit, rc = -DER_NOMEM);
-		args.oid_data = oid_tmp;
+		args.oid_data = tmp_oid_data;
 
 		/* list object ID's */
 		for (i = 0; i < oids_nr; i++) {
@@ -2849,7 +2849,7 @@ daos_cont_deserialize(int *total_oids, int *total_dkeys, int *total_akeys, uint6
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	if (oid_dims[0] > 0) {
-		D_ALLOC(args.oid_data, oid_dims[0] * sizeof(struct dsr_h5_oid));
+		D_ALLOC_ARRAY(args.oid_data, oid_dims[0]);
 		if (args.oid_data == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		status = H5Dread(oid_dset, oid_dtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, args.oid_data);
@@ -2881,7 +2881,7 @@ daos_cont_deserialize(int *total_oids, int *total_dkeys, int *total_akeys, uint6
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	if (dkey_dims[0] > 0) {
-		D_ALLOC(args.dkey_data, dkey_dims[0] * sizeof(struct dsr_h5_dkey));
+		D_ALLOC_ARRAY(args.dkey_data, dkey_dims[0]);
 		if (args.dkey_data == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		status = H5Dread(dkey_dset, dkey_vtype, H5S_ALL, H5S_ALL, H5P_DEFAULT,
@@ -2914,13 +2914,13 @@ daos_cont_deserialize(int *total_oids, int *total_dkeys, int *total_akeys, uint6
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	if (akey_dims[0] > 0) {
-		D_ALLOC(args.akey_data, akey_dims[0] * sizeof(struct dsr_h5_akey));
+		D_ALLOC_ARRAY(args.akey_data, akey_dims[0]);
 		if (args.akey_data == NULL)
 			D_GOTO(out, rc =  -DER_NOMEM);
 		status = H5Dread(akey_dset, akey_vtype, H5S_ALL, H5S_ALL, H5P_DEFAULT,
 				 args.akey_data);
 		if (status < 0) {
-			D_ERROR("Failed to get akey dimensions\n");
+			D_ERROR("Failed to read akey dataset\n");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 	}
