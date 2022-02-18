@@ -122,6 +122,29 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
+                stage('Functional on CentOS 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_FUNCTIONAL_VM9_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: base_branch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional on CentOS 8')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
