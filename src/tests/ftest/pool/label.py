@@ -111,7 +111,8 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=small
-        :avocado: tags=pool,create_valid_labels
+        :avocado: tags=pool
+        :avocado: tags=create_valid_labels
         """
         self.pool = []
         errors = []
@@ -138,7 +139,8 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=small
-        :avocado: tags=pool,create_invalid_labels
+        :avocado: tags=pool
+        :avocado: tags=create_invalid_labels
         """
         self.pool = []
         errors = []
@@ -163,7 +165,8 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=small
-        :avocado: tags=pool,duplicate_label_create
+        :avocado: tags=pool
+        :avocado: tags=duplicate_label_create
         """
         self.pool = []
         label = "TestLabel"
@@ -190,7 +193,8 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=small
-        :avocado: tags=pool,duplicate_label_destroy
+        :avocado: tags=pool
+        :avocado: tags=duplicate_label_destroy
         """
         self.pool = []
 
@@ -202,3 +206,48 @@ class Label(TestWithServers):
 
         # Step 3
         report_errors(self, self.verify_destroy(self.pool[-1], True, True))
+
+    def test_label_update(self):
+        """Test ID: DAOS-7942
+
+        Test Description:
+        1. Create a pool.
+        2. Update the label with dmg pool set-prop.
+        3. Call dmg pool get-prop and verify that the new label is returned.
+        4. Try to destroy the pool with the old label. It should fail.
+        5. Destroy the pool with the new label. Should work.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=pool
+        :avocado: tags=label_update
+        """
+        self.pool = []
+
+        # Step 1
+        old_label = "OldLabel"
+        report_errors(self, self.verify_create(label=old_label, failure_expected=False))
+
+        # Step 2. Update the label.
+        new_label = "NewLabel"
+        self.pool[-1].set_property(prop_name="label", prop_value=new_label)
+        # Update the label in TestPool.
+        self.pool[-1].label.update(new_label)
+
+        # Step 3. Verify the label was set with get-prop.
+        prop_value = self.pool[-1].get_property(prop_name="label")
+        errors = []
+        if prop_value != new_label:
+            msg = "Unexpected label from get-prop! Expected = {}; Actual = {}".format(
+                new_label, prop_value)
+            errors.append(msg)
+
+        # Step 4. Try to destroy the pool with the old label. Should fail.
+        self.pool[-1].label.update(old_label)
+        errors.extend(self.verify_destroy(pool=self.pool[-1], failure_expected=True))
+
+        # Step 5. Destroy the pool with the new label. Should work.
+        self.pool[-1].label.update(new_label)
+        errors.extend(self.verify_destroy(pool=self.pool[-1], failure_expected=False))
+
+        report_errors(test=self, errors=errors)
