@@ -2143,7 +2143,7 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 	/** format: pool label - pool hdl size - pool hdl */
 	strcpy(ptr, dfs->pool_hdl->value);
 	ptr += pool_len;
-	*((daos_size_t *) ptr) = pool_iov.iov_buf_len;
+	*((daos_size_t *)ptr) = pool_iov.iov_buf_len;
 	ptr += sizeof(daos_size_t);
 	pool_iov.iov_buf = ptr;
 	pool_iov.iov_len = pool_iov.iov_buf_len;
@@ -2155,7 +2155,7 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 	/** format: cont label - cont hdl size - cont hdl */
 	strcpy(ptr, dfs->cont_hdl->value);
 	ptr += cont_len;
-	*((daos_size_t *) ptr) = cont_iov.iov_buf_len;
+	*((daos_size_t *)ptr) = cont_iov.iov_buf_len;
 	ptr += sizeof(daos_size_t);
 	cont_iov.iov_buf = ptr;
 	cont_iov.iov_len = cont_iov.iov_buf_len;
@@ -2164,7 +2164,7 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 		return daos_der2errno(rc);
 	ptr += cont_iov.iov_buf_len;
 
-	*((daos_size_t *) ptr) = dfs_iov.iov_buf_len;
+	*((daos_size_t *)ptr) = dfs_iov.iov_buf_len;
 	ptr += sizeof(daos_size_t);
 	dfs_iov.iov_buf = ptr;
 	dfs_iov.iov_len = dfs_iov.iov_buf_len;
@@ -2213,7 +2213,7 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 	pool[DAOS_PROP_LABEL_MAX_LEN] = 0;
 	pool_len = strlen(pool) + 1;
 	ptr += pool_len;
-	pool_iov.iov_buf_len = *((daos_size_t *) ptr);
+	pool_iov.iov_buf_len = *((daos_size_t *)ptr);
 	ptr += sizeof(daos_size_t);
 	pool_iov.iov_buf = ptr;
 	pool_iov.iov_len = pool_iov.iov_buf_len;
@@ -2230,7 +2230,7 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 	cont[DAOS_PROP_LABEL_MAX_LEN] = 0;
 	cont_len = strlen(cont) + 1;
 	ptr += cont_len;
-	cont_iov.iov_buf_len = *((daos_size_t *) ptr);
+	cont_iov.iov_buf_len = *((daos_size_t *)ptr);
 	ptr += sizeof(daos_size_t);
 	cont_iov.iov_buf = ptr;
 	cont_iov.iov_len = cont_iov.iov_buf_len;
@@ -2243,7 +2243,7 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 		D_GOTO(err, rc);
 	cont_h_bump = true;
 
-	dfs_iov.iov_buf_len = *((daos_size_t *) ptr);
+	dfs_iov.iov_buf_len = *((daos_size_t *)ptr);
 	ptr += sizeof(daos_size_t);
 	dfs_iov.iov_buf = ptr;
 	dfs_iov.iov_len = dfs_iov.iov_buf_len;
@@ -3745,7 +3745,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	if (rc != 0) {
-		D_ERROR("Failed to read from array object (%d)\n", rc);
+		D_ERROR("Failed to read from array object, "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
