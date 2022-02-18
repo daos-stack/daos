@@ -62,20 +62,29 @@ except ImportError:
             rmtree(self.name)
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
-YAML_KEYS = OrderedDict({
-    "test_servers": "test_servers",
-    "test_clients": "test_clients",
-    "bdev_list": "nvme",
-    "timeout": "timeout_multiplier",
-    "timeouts": "timeout_multiplier",
-    "clush_timeout": "timeout_multiplier",
-    "ior_timeout": "timeout_multiplier",
-    "job_manager_timeout": "timeout_multiplier",
-    "pattern_timeout": "timeout_multiplier",
-    "pool_query_timeout": "timeout_multiplier",
-    "rebuild_timeout": "timeout_multiplier",
-    "srv_timeout": "timeout_multiplier",
-})
+YAML_KEYS = OrderedDict(
+    [
+        ("test_servers", "test_servers"),
+        ("test_clients", "test_clients"),
+        ("bdev_list", "nvme"),
+        ("timeout", "timeout_multiplier"),
+        ("timeouts", "timeout_multiplier"),
+        ("clush_timeout", "timeout_multiplier"),
+        ("ior_timeout", "timeout_multiplier"),
+        ("job_manager_timeout", "timeout_multiplier"),
+        ("pattern_timeout", "timeout_multiplier"),
+        ("pool_query_timeout", "timeout_multiplier"),
+        ("rebuild_timeout", "timeout_multiplier"),
+        ("srv_timeout", "timeout_multiplier"),
+    ]
+)
+PROVIDER_KEYS = OrderedDict(
+    [
+        ("cxi", "ofi+cxi"),
+        ("verbs", "ofi+verbs"),
+        ("tcp", "ofi+tcp"),
+    ]
+)
 
 
 def display(args, message, level=1):
@@ -280,33 +289,47 @@ def set_provider_environment(interface, args):
     # Use the detected provider if one is not set
     provider = os.environ.get("CRT_PHY_ADDR_STR")
     if provider is None:
-        provider = "ofi+tcp"
-        # Confirm the interface is a Mellanox device - verbs did not work with OPA devices.
-        command = "sudo mst status -v"
+        print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
+
+        # Check for a Omni-Path interface
+        command = "sudo opainfo"
         task = get_remote_output(list(args.test_servers), command)
         if check_remote_output(task, command):
-            # Detect the provider for the specified interface
-            print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
-            command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
-            task = get_remote_output(list(args.test_servers), command)
-            if check_remote_output(task, command):
-                # Verify each server host has the same interface driver
-                output_data = list(task.iter_buffers())
-                if len(output_data) > 1:
-                    print("ERROR: Non-homogeneous drivers detected.")
-                    sys.exit(1)
-                # Select the provider - currently use verbs or tcp
-                for line in output_data[0][0]:
-                    provider_name = line.decode("utf-8").replace(":", "")
-                    # Temporary code to only enable verbs on HW Large stages
-                    if "verbs" in provider_name:
-                        provider = "ofi+verbs"
-                        break
-                    if "tcp" in provider_name:
-                        provider = "ofi+tcp"
-                        break
-        else:
-            print("No Infiniband devices found - using tcp")
+            # Omni-Path adapter not found; remove verbs as it will not work with OPA devices.
+            print("  Excluding verbs provider for Omni-Path adapters")
+            PROVIDER_KEYS.remove("verbs")
+
+        # Detect all supported providers
+        command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
+        task = get_remote_output(list(args.test_servers), command)
+        if check_remote_output(task, command):
+            # Verify each server host has the same interface driver
+            output_data = list(task.iter_buffers())
+            if len(output_data) > 1:
+                print("ERROR: Non-homogeneous drivers detected.")
+                sys.exit(1)
+
+            # Find all supported providers
+            keys_found = []
+            for line in output_data[0][0]:
+                provider_name = line.decode("utf-8").replace(":", "")
+                if provider_name in PROVIDER_KEYS:
+                    keys_found.append(provider_name)
+
+            # Select the preferred found provider based upon PROVIDER_KEYS order
+            print("Supported providers detected: {}".format(keys_found))
+            for key in PROVIDER_KEYS:
+                if key in keys_found:
+                    provider = PROVIDER_KEYS[key]
+                    break
+
+        # Report an error if a provider cannot be found
+        if not provider:
+            print(
+                "Error obtaining a supported provider for {} from: {}".format(
+                    interface, list(PROVIDER_KEYS)))
+            sys.exit(1)
+
         print("  Found {} provider for {}".format(provider, interface))
 
     # Update env definitions
@@ -319,7 +342,7 @@ def set_python_environment():
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
-        os.path.abspath("cart/util"),
+        os.path.abspath("cart"),
     ]
 
     required_python_paths.extend(site.getsitepackages())
@@ -844,6 +867,7 @@ def find_pci_address(value):
 
 
 def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
+    # pylint: disable=too-many-nested-blocks
     """Create a temporary test yaml file with any requested values replaced.
 
     Optionally replace the following test yaml file values if specified by the
@@ -936,9 +960,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
                     # order they are found, e.g.
                     #   0000:81:00.0 --> 0000:12:00.0
                     value_format = "\"{}\""
-                    values_to_replace = [
-                        value_format.format(item)
-                        for item in find_pci_address(yaml_find[key])]
+                    values_to_replace = [value_format.format(item) for item in yaml_find[key]]
                     # if VMD pci address in present under nvme_data,
                     # set DAOS_ENABLE_VMD to True
                     if vmd_flag is True:
@@ -979,8 +1001,8 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
                         replacements[value] = None
 
         # Display the replacement values
-        for value in replacements:
-            display(args, "  - Replacement: {} -> {}".format(value, replacements[value]))
+        for value, replacement in list(replacements.items()):
+            display(args, "  - Replacement: {} -> {}".format(value, replacement))
 
     if replacements:
         # Read in the contents of the yaml file to retain the !mux entries
@@ -1010,7 +1032,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
             print(
                 "Error: Placeholders missing replacements in {}:\n  {}".format(
                     yaml_file, ", ".join(missing_replacements)))
-            return None
+            return None, env_vars
 
         # Write the modified yaml file into a temporary file.  Use the path to
         # ensure unique yaml files for tests with the same filename.
