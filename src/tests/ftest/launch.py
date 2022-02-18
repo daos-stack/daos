@@ -201,7 +201,7 @@ def set_test_environment(args):
     # Python paths required for functional testing
     set_python_environment()
 
-    if args.verbose > 0:
+    if args.verbose > 2:
         print("ENVIRONMENT VARIABLES")
         for key in sorted(os.environ):
             print("  {}: {}".format(key, os.environ[key]))
@@ -689,6 +689,13 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
             "{}.yaml".format(base), args, yaml_dir, vmd_flag)
         test_file["yaml"] = yaml_file
         test_file["env"] = env_vars
+
+        # Display the modified yaml file variants with debug
+        command = ["avocado", "variants", "--mux-yaml", test_file["yaml"]]
+        if args.extra_yaml:
+            command.append(args.extra_yaml)
+        command.extend(["--summary", "3"])
+        display(args, get_output(command, False), 2)
 
     return test_files
 
