@@ -13,7 +13,7 @@ to access DAOS from Hadoop and Spark.
 
 We assume that the DAOS servers and agents have already been deployed in the
 environment. Otherwise, they can be deployed by following the
-[DAOS Installation Guide](https://daos-stack.github.io/admin/installation/).
+[DAOS Installation Guide](https://docs.daos.io/v2.2/admin/installation/).
 
 ## Maven Download
 
@@ -73,8 +73,10 @@ If the DAOS pool and container have not been created, we can use the following
 command to create them and get the pool UUID and container UUID.
 
 ```bash
-$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size>
-$ daos cont create --pool <pool UUID> --type POSIX
+$ export DAOS_POOL="mypool"
+$ export DAOS_CONT="mycont"
+$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size> $DAOS_POOL
+$ daos cont create --label $DAOS_CONT --type POSIX $DAOS_POOL
 ```
 
 After that, configure `daos-site.xml` with the pool and container created.
@@ -173,12 +175,12 @@ DAOS UNS method, `DaosUns.create()`. The "\[sub path\]" is optional. You can
 create the UNS path with below command.
 
 ```bash
-$ daos cont create --pool <pool UUID> -path <your path> --type=POSIX
+$ daos cont create --label $DAOS_CONT --path <your_path> --type POSIX $DAOS_POOL
 ```
 Or
 
 ```bash
-$ java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns create
+$ java -Dpath="your_path" -Dpool_id=$DAOS_POOL -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns create
 ```
 
 After creation, you can use below command to see what DAOS properties set to
@@ -242,8 +244,10 @@ Then replicate `daos-site.xml`, `core-site.xml`, `yarn-site.xml` and
 
 #### Known Issues
 
-If you use Omni-path PSM2 provider in DAOS, you'll get connection issue in
+If you use Omni-Path PSM2 provider in DAOS, you'll get connection issue in
 Yarn container due to PSM2 resource not being released properly in time.
+The PSM2 provides has known issues with DAOS and is not supported in
+production environments.
 
 ### Tune More Configurations
 

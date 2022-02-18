@@ -1,13 +1,12 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 from command_utils_base import CommandFailure
-from daos_utils import DaosCommand
 from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
 from ior_test_base import IorTestBase
@@ -88,6 +87,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
 
+        self.preserve_props_path = None
+
         # List of local test paths to create and remove
         self.posix_local_test_paths = []
 
@@ -108,7 +109,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dfuse_hosts = self.agent_managers[0].hosts
 
         # initialize daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd = self.get_daos_command()
 
         # Get the processes for each explicitly
         # This is needed because both IorTestBase and MdtestBase
@@ -175,9 +176,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # cleanup shared paths (only runs on one node in job)
         if self.posix_shared_test_paths:
-            command = "rm -rf {}".format(self._get_posix_test_path_string(path=self.posix_shared_test_paths))
+            shared_path_strs = self._get_posix_test_path_string(path=self.posix_shared_test_paths)
+            command = "rm -rf {}".format(shared_path_strs)
             try:
-	        # only call rm on one client since this is cleaning up shared dir
+                # only call rm on one client since this is cleaning up shared dir
                 self._execute_command(command, hosts=self.hostlist_clients[0:1])
             except CommandFailure as error:
                 error_list.append(
@@ -216,7 +218,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of quoted posix test path strings
 
         """
-        if path_list == None:
+        if path_list is None:
             path_list = self.posix_local_test_paths
 
         return ["'{}'".format(item) for item in path_list]
@@ -239,7 +241,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             create (bool): Whether to create the directory.
                 Defaults to True.
             mount_dir (bool): Whether or not posix directory will be manually
-	        mounted in tmpfs.
+                mounted in tmpfs.
             parent (str, optional): The parent directory to create the
                 path in. Defaults to self.parent, which has a default of self.tmp.
 
@@ -605,10 +607,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                             self.log.info("Expected:\n%s\nBut got:\n%s",
                                 data[:100] + "...",
                                 actual_idx + "...")
-                            self.log.info(
-                                "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
-                                    str(obj.c_oid.hi), str(obj.c_oid.lo),
-                                    dkey, akey)
+                            self.log.info("For:\nobj: %s.%s\ndkey: %s\nakey: %s",
+                                          str(obj.c_oid.hi), str(obj.c_oid.lo),
+                                          dkey, akey)
                             self.fail("Array verification failed.")
 
             obj.close()
@@ -669,9 +670,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """Set the params for dcp.
         This is a wrapper for DcpCommand.set_params.
 
-        When both src_type and dst_type are DAOS_UNS, a prefix will
-        only work for either the src or the dst, but not both.
-
         Args:
             src_type (str): how to interpret the src params.
                 Must be in PARAM_TYPES.
@@ -716,7 +714,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         src_path=src_cont.path.value)
                 else:
                     self.dcp_cmd.set_params(
-                        daos_prefix=src_cont.path.value,
                         src_path=src_cont.path.value + src_path)
 
         # Set the destination params
@@ -733,7 +730,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         dst_path=dst_cont.path.value)
                 else:
                     self.dcp_cmd.set_params(
-                        daos_prefix=dst_cont.path.value,
                         dst_path=dst_cont.path.value + dst_path)
 
     def _set_dsync_params(self,
@@ -743,9 +739,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                           dst_pool=None, dst_cont=None):
         """Set the params for dsync.
         This is a wrapper for DsyncCommand.set_params.
-
-        When both src_type and dst_type are DAOS_UNS, a prefix will
-        only work for either the src or the dst, but not both.
 
         Args:
             src_type (str): how to interpret the src params.
@@ -781,7 +774,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         src_path=src_cont.path.value)
                 else:
                     self.dsync_cmd.set_params(
-                        daos_prefix=src_cont.path.value,
                         src_path=src_cont.path.value + src_path)
 
         # Set the destination params
@@ -798,7 +790,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         dst_path=dst_cont.path.value)
                 else:
                     self.dsync_cmd.set_params(
-                        daos_prefix=dst_cont.path.value,
                         dst_path=dst_cont.path.value + dst_path)
 
     def _set_fs_copy_params(self,
@@ -807,9 +798,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                             dst_type=None, dst_path=None,
                             dst_pool=None, dst_cont=None):
         """Set the params for fs copy.
-
-        daos fs copy does not support a "prefix" on UNS paths,
-        so the param type for DAOS_UNS must have the path "/".
 
         Args:
             src_type (str): how to interpret the src params.
@@ -837,6 +825,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # First, initialize a new fs copy command
         self.fs_copy_cmd = FsCopy(self.daos_cmd, self.log)
 
+        # set preserve-props path if it was used in test case
+        if self.preserve_props_path:
+            self.fs_copy_cmd.set_fs_copy_params(preserve_props=self.preserve_props_path)
+
         # Set the source params
         if src_type == "POSIX":
             self.fs_copy_cmd.set_fs_copy_params(
@@ -850,7 +842,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 if src_path == "/":
                     path = str(src_cont.path)
                 else:
-                    self.fail("daos fs copy does not support a prefix")
+                    path = str(src_cont.path) + src_path
             self.fs_copy_cmd.set_fs_copy_params(
                 src=path)
 
@@ -867,7 +859,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 if dst_path == "/":
                     path = str(dst_cont.path)
                 else:
-                    self.fail("daos fs copy does not support a prefix")
+                    path = str(dst_cont.path) + dst_path
             self.fs_copy_cmd.set_fs_copy_params(
                 dst=path)
 
@@ -933,7 +925,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.ddeserialize_cmd.set_params(
                 src_path=tmp_path,
                 pool=uuid_from_obj(dst_pool))
-
 
     def set_ior_params(self, param_type, path, pool=None, cont=None,
                        path_suffix=None, flags=None, display=True):
@@ -1209,7 +1200,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Set the tool to use
         self.set_tool(tool)
 
-
         if create_dataset:
             # create initial datasets
             if not pool:
@@ -1262,7 +1252,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 "DAOS", "/", pool, cont2)
         else:
             self.fail("Invalid tool: {}".format(tool))
-
 
         # move data from daos to posix FS and vice versa
         if tool in ['FS_COPY', 'DCP']:

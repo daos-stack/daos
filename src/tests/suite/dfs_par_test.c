@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -370,23 +370,23 @@ dfs_test_ec_short_read(void **state)
 		return;
 
 	/* less than 1 EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 2000);
 
 	/* partial EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 2);
 
 	/* full EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 4);
 
 	/* one full EC stripe + partial EC stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 6);
 
 	/* 2 full stripe */
-	dfs_test_short_read_internal(state, DAOS_OC_EC_K4P2_L32K,
+	dfs_test_short_read_internal(state, OC_EC_4P2G1,
 				     32 * 1024 * 8, 32 * 1024 * 6);
 }
 
@@ -868,19 +868,32 @@ static const struct CMUnitTest dfs_par_tests[] = {
 static int
 dfs_setup(void **state)
 {
-	test_arg_t		*arg;
-	int			rc = 0;
+	test_arg_t	*arg;
+	int		rc = 0;
 
-	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			0, NULL);
+	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
 	assert_int_equal(rc, 0);
 
 	arg = *state;
 
 	if (arg->myrank == 0) {
-		dfs_attr_t attr = {};
+		dfs_attr_t	attr = {};
+		bool		use_dtx = false;
+
+		d_getenv_bool("DFS_USE_DTX", &use_dtx);
+		if (use_dtx)
+			print_message("Running DFS Parallel tests with DTX enabled\n");
+		else
+			print_message("Running DFS Parallel tests with DTX disabled\n");
+
+		attr.da_props = daos_prop_alloc(1);
+		assert_non_null(attr.da_props);
+		attr.da_props->dpp_entries[0].dpe_type =
+					DAOS_PROP_CO_EC_CELL_SZ;
+		attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
 
 		rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+		daos_prop_free(attr.da_props);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
@@ -923,9 +936,16 @@ run_dfs_par_test(int rank, int size)
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel",
-					 dfs_par_tests, dfs_setup,
+	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel", dfs_par_tests, dfs_setup,
 					 dfs_teardown);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** run tests again with DTX */
+	setenv("DFS_USE_DTX", "1", 1);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel_DTX", dfs_par_tests,
+					  dfs_setup, dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

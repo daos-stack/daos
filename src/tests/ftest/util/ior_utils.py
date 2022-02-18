@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,6 +54,7 @@ class IorCommand(ExecutableCommand):
         #   -M=STRING       memoryPerNode -- hog memory on the node
         #   -N=0            numTasks -- num of participating tasks in the test
         #   -o=testFile     testFile -- full name for test
+        #   -D=0            deadlineForStonewalling -- seconds before stopping write or read phase
         #   -O=STRING       string of IOR directives
         #   -O=1            stoneWallingWearOut -- all process finish to access
         #                       the amount of data after stonewalling timeout
@@ -80,6 +81,7 @@ class IorCommand(ExecutableCommand):
         self.num_tasks = FormattedParameter("-N {}")
         self.test_file = FormattedParameter("-o {}")
         self.directives = FormattedParameter("-O {}")
+        self.sw_deadline = FormattedParameter("-D {}")
         self.sw_wearout = FormattedParameter(
             "-O stoneWallingWearOut={}")
         self.sw_wearout_iteration = FormattedParameter(
@@ -250,14 +252,17 @@ class IorCommand(ExecutableCommand):
         and get the read and write metrics.
 
         Args:
-            cmdresult (CmdResult): output of job manager
+            cmdresult (CmdResult/str): output of job manager, or str output
 
         Returns:
             metrics (tuple) : list of write and read metrics from ior run
 
         """
         ior_metric_summary = "Summary of all tests:"
-        messages = cmdresult.stdout_text.splitlines()
+        if isinstance(cmdresult, str):
+            messages = cmdresult.splitlines()
+        else:
+            messages = cmdresult.stdout_text.splitlines()
         # Get the index whre the summary starts and add one to
         # get to the header.
         idx = messages.index(ior_metric_summary)

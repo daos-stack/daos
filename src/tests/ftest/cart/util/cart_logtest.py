@@ -129,6 +129,7 @@ class RegionCounter():
                                                       end_time - start_time,
                                                       data)
 
+
 # Use a global variable here so show_line can remember previously reported
 # error lines.
 shown_logs = set()
@@ -265,10 +266,6 @@ class LogTest():
         for pid in self._li.get_pids():
             if wf:
                 wf.reset_pending()
-            if not self.quiet:
-                self.rpc_reporting(pid)
-                if wf:
-                    wf.reset_pending()
             try:
                 self._check_pid_from_log_file(pid,
                                               abort_on_warning,
@@ -341,7 +338,14 @@ class LogTest():
         trace_lines = 0
         non_trace_lines = 0
 
+        if self.quiet:
+            rpc_r = None
+        else:
+            rpc_r = rpc_reporting()
+
         for line in self._li.new_iter(pid=pid, stateful=True):
+            if rpc_r:
+                rpc_r.add_line(line)
             self.save_log_line(line)
             try:
                 msg = ''.join(line._fields[2:])
@@ -403,7 +407,7 @@ class LogTest():
                         show = False
                     elif show and server_shutdown and \
                          (line.get_msg().endswith(
-                             "DER_SHUTDOWN(-2017): 'Service should shut down'") or \
+                             "DER_SHUTDOWN(-2017): 'Service should shut down'") or
                           line.get_msg().endswith(
                               "DER_NOTLEADER(-2008): 'Not service leader'")):
                         show = False
@@ -528,6 +532,8 @@ class LogTest():
                             err_count += 1
 
         del active_desc['root']
+        if rpc_r:
+            rpc_r.report()
 
         # This isn't currently used anyway.
         #if not have_debug:
@@ -576,73 +582,85 @@ class LogTest():
             raise WarningMode()
 #pylint: enable=too-many-branches,too-many-nested-blocks
 
-    def rpc_reporting(self, pid):
-        """RPC reporting for RPC state machine, for mutiprocesses"""
-        op_state_counters = {}
-        c_states = {}
-        c_state_names = set()
+class rpc_reporting():
+    """Class for reporting a summary of RPC states"""
 
-        # Use to convert from descriptor to opcode.
-        current_opcodes = {}
+    known_functions = frozenset({'crt_hg_req_send',
+                                 'crt_hg_req_destroy',
+                                 'crt_rpc_complete',
+                                 'crt_rpc_priv_alloc',
+                                 'crt_rpc_handler_common',
+                                 'crt_req_send',
+                                 'crt_hg_req_send_cb'})
 
-        for line in self._li.new_iter(pid=pid):
-            rpc_state = None
-            opcode = None
+    def __init__(self):
 
-            function = getattr(line, 'function', None)
-            if not function:
-                continue
-            if line.is_new_rpc():
-                rpc_state = 'ALLOCATED'
-                opcode = line.get_field(-4)
-                if opcode == 'per':
-                    opcode = line.get_field(-8)
-            elif line.is_dereg_rpc():
-                rpc_state = 'DEALLOCATED'
-            elif line.endswith('submitted.'):
-                rpc_state = 'SUBMITTED'
-            elif function == 'crt_hg_req_send' and \
-                 line.get_field(-6) == ('sent'):
-                rpc_state = 'SENT'
+        self._op_state_counters = {}
+        self._c_states = {}
+        self._c_state_names = set()
+        self._current_opcodes = {}
 
-            elif line.is_callback():
-                rpc = line.descriptor
-                rpc_state = 'COMPLETED'
-                result = line.get_field(13).split('(')[0]
-                c_state_names.add(result)
-                opcode = current_opcodes[line.descriptor]
-                try:
-                    c_states[opcode][result] += 1
-                except KeyError:
+    def add_line(self, line):
+        """Parse a output line"""
 
-                    c_states[opcode] = Counter()
-                    c_states[opcode][result] += 1
-            else:
-                continue
+        try:
+            if line.function not in self.known_functions:
+                return
+        except AttributeError:
+            return
 
+        if line.is_new_rpc():
+            rpc_state = 'ALLOCATED'
+            opcode = line.get_field(-4)
+            if opcode == 'per':
+                opcode = line.get_field(-8)
+        elif line.is_dereg_rpc():
+            rpc_state = 'DEALLOCATED'
+        elif line.endswith('submitted.'):
+            rpc_state = 'SUBMITTED'
+        elif line.function == 'crt_hg_req_send' and \
+             line.get_field(-6) == ('sent'):
+            rpc_state = 'SENT'
+        elif line.is_callback():
             rpc = line.descriptor
+            rpc_state = 'COMPLETED'
+            result = line.get_field(13).split('(')[0]
+            self._c_state_names.add(result)
+            opcode = self._current_opcodes[line.descriptor]
+            try:
+                self._c_states[opcode][result] += 1
+            except KeyError:
+                self._c_states[opcode] = Counter()
+                self._c_states[opcode][result] += 1
+        else:
+            return
 
-            if rpc_state == 'ALLOCATED':
-                current_opcodes[rpc] = opcode
-            else:
-                opcode = current_opcodes[rpc]
-            if rpc_state == 'DEALLOCATED':
-                del current_opcodes[rpc]
+        rpc = line.descriptor
 
-            if opcode not in op_state_counters:
-                op_state_counters[opcode] = {'ALLOCATED' :0,
-                                             'DEALLOCATED': 0,
-                                             'SENT':0,
-                                             'COMPLETED':0,
-                                             'SUBMITTED':0}
-            op_state_counters[opcode][rpc_state] += 1
+        if rpc_state == 'ALLOCATED':
+            self._current_opcodes[rpc] = opcode
+        else:
+            opcode = self._current_opcodes[rpc]
+        if rpc_state == 'DEALLOCATED':
+            del self._current_opcodes[rpc]
 
-        if not bool(op_state_counters):
+        if opcode not in self._op_state_counters:
+            self._op_state_counters[opcode] = {'ALLOCATED' :0,
+                                               'DEALLOCATED': 0,
+                                               'SENT':0,
+                                               'COMPLETED':0,
+                                               'SUBMITTED':0}
+        self._op_state_counters[opcode][rpc_state] += 1
+
+    def report(self):
+        """Print report to stdout"""
+
+        if not bool(self._op_state_counters):
             return
 
         table = []
         errors = []
-        names = sorted(c_state_names)
+        names = sorted(self._c_state_names)
         if names:
             try:
                 names.remove('DER_SUCCESS')
@@ -658,7 +676,7 @@ class LogTest():
 
         for state in names:
             headers.append('-{}'.format(state))
-        for (op, counts) in sorted(op_state_counters.items()):
+        for (op, counts) in sorted(self._op_state_counters.items()):
             row = [op,
                    counts['ALLOCATED'],
                    counts['SUBMITTED'],
@@ -667,16 +685,13 @@ class LogTest():
                    counts['DEALLOCATED']]
             for state in names:
                 try:
-                    row.append(c_states[op].get(state, ''))
+                    row.append(self._c_states[op].get(state, ''))
                 except KeyError:
                     row.append('')
             table.append(row)
             if counts['ALLOCATED'] != counts['DEALLOCATED']:
-                errors.append("ERROR: Opcode {}: Alloc'd Total = {}, "
-                              "Dealloc'd Total = {}". \
-                              format(op,
-                                     counts['ALLOCATED'],
-                                     counts['DEALLOCATED']))
+                errors.append("ERROR: Opcode {}: Alloc'd Total = {}, Dealloc'd Total = {}".
+                              format(op, counts['ALLOCATED'], counts['DEALLOCATED']))
 
         if HAVE_TABULATE:
             print('Opcode State Transition Tally')
@@ -684,10 +699,8 @@ class LogTest():
                                     headers=headers,
                                     stralign='right'))
 
-        if errors:
-            for error in errors:
-                print(error)
-
+        for error in errors:
+            print(error)
 
 def run():
     """Trace a single file"""
@@ -722,6 +735,7 @@ def run():
             print('Memory leaks, ignoring')
     if log_iter.file_corrupt:
         sys.exit(1)
+
 
 if __name__ == '__main__':
     run()

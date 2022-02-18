@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -24,6 +24,7 @@ def main():
     Entry point for standalone run.
     """
     print(get_hosts_from_file('/tmp/hostfile'))
+
 
 if __name__ == "__main__":
     main()

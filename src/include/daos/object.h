@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,19 +48,6 @@ enum {
 				 * These 3 XX_SPEC are mostly for testing
 				 * purpose.
 				 */
-	DAOS_OC_EC_K2P1_L32K,	/* Erasure code, 2 data cells, 1 parity cell,
-				 * cell size 32K.
-				 */
-	DAOS_OC_EC_K2P2_L32K,	/* Erasure code, 2 data cells, 2 parity cells,
-				 * cell size 32K.
-				 */
-	DAOS_OC_EC_K4P1_L32K,	/* Erasure code, 4 data cells, 1 parity cells,
-				 * cell size 32K.
-				 */
-
-	DAOS_OC_EC_K4P2_L32K,	/* Erasure code, 4 data cells, 2 parity cells,
-				 * cell size 32K.
-				 */
 };
 
 /* Temporarily keep it to minimize change, remove it in the future */
@@ -89,7 +76,7 @@ enum {
 	/* smallest cell size */
 	DAOS_EC_CELL_MIN	= (4 << 10),
 	/* default cell size */
-	DAOS_EC_CELL_DEF	= (128 << 10),
+	DAOS_EC_CELL_DEF	= (64 << 10),
 	/* largest cell size */
 	DAOS_EC_CELL_MAX	= (1024 << 10),
 };
@@ -219,8 +206,9 @@ struct pl_obj_layout;
 
 int obj_class_init(void);
 void obj_class_fini(void);
-struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv,
+struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid,
 					       uint32_t *nr_grps);
+int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca);
 int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 			      daos_oclass_id_t cid, uint32_t args);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
@@ -643,6 +631,40 @@ daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 
 	return dup_lists;
+}
+
+/* merge adjacent recxs for same epoch */
+static inline void
+daos_recx_ep_list_merge(struct daos_recx_ep_list *lists, unsigned int nr)
+{
+	struct daos_recx_ep_list	*list;
+	struct daos_recx_ep		*recx_ep, *next;
+	unsigned int			 i, j, k;
+
+	for (i = 0; i < nr; i++) {
+		list = &lists[i];
+		if (list->re_nr < 2)
+			continue;
+		for (j = 0; j < list->re_nr - 1; j++) {
+			recx_ep = &list->re_items[j];
+			next = &list->re_items[j + 1];
+			if (recx_ep->re_ep != next->re_ep ||
+			    recx_ep->re_rec_size != next->re_rec_size ||
+			    recx_ep->re_type != next->re_type ||
+			    !DAOS_RECX_ADJACENT(recx_ep->re_recx, next->re_recx))
+				continue;
+
+			recx_ep->re_recx.rx_nr += next->re_recx.rx_nr;
+			if (recx_ep->re_recx.rx_idx > next->re_recx.rx_idx)
+				recx_ep->re_recx.rx_idx = next->re_recx.rx_idx;
+
+			for (k = j + 1; k < list->re_nr - 1; k++)
+				list->re_items[k] = list->re_items[k + 1];
+
+			list->re_nr--;
+			j--;
+		}
+	}
 }
 
 static inline void

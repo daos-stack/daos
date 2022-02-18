@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,7 +17,6 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
 
     :avocado: recursive
     """
-
 
     def verify_io_test_metrics(self, io_test_metrics, metrics_data, threshold):
         """ Verify telemetry io metrics from metrics_data.
@@ -61,8 +60,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                                         status = False
                                         invalid += " *_min > _max"
                                 #Verify if value decremental
-                                if ("_min" in name or \
-                                    "_max" in name) and key > 0:
+                                if ("_min" in name or "_max" in name) and key > 0:
                                     if value < metrics_data[key-1]\
                                         [name][host][rank][target][size]:
                                         status = False
@@ -86,7 +84,6 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                 "\n  %12s: %s",
                 "Initial " if key == 0 else "Test Loop {}".format(key),
                 metrics_data[key])
-
 
     def test_io_telmetry_metrics_basic(self):
         """JIRA ID: DAOS-5241

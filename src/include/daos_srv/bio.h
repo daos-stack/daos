@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,6 +88,8 @@ struct bio_desc;
 struct bio_io_context;
 /* Opaque per-xstream context */
 struct bio_xs_context;
+/* Opaque BIO copy descriptor */
+struct bio_copy_desc;
 
 /**
  * Header for SPDK blob per VOS pool
@@ -217,6 +219,8 @@ bio_iov_alloc_raw_buf(struct bio_iov *biov, uint64_t len)
 static inline void *
 bio_iov2req_buf(const struct bio_iov *biov)
 {
+	if (biov->bi_buf == NULL)
+		return NULL;
 	return biov->bi_buf + biov->bi_prefix_len;
 }
 
@@ -400,7 +404,7 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * Global NVMe initialization.
  *
  * \param[IN] nvme_conf		NVMe config file
- * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
+ * \param[IN] numa_node		NUMA node that engine is assigned to
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
  * \param[IN] hugepage_size	Configured hugepage size on system
  * \paran[IN] tgt_nr		Number of targets
@@ -409,9 +413,9 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-		  int hugepage_size, int tgt_nr, struct sys_db *db,
-		  bool bypass);
+int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
+		  unsigned int hugepage_size, unsigned int tgt_nr,
+		  struct sys_db *db, bool bypass);
 
 /**
  * Global NVMe finilization.
@@ -622,9 +626,10 @@ enum bio_chunk_type {
 /**
  * Prepare all the SG lists of an io descriptor.
  *
- * For SCM IOV, it needs only to convert the PMDK pmemobj offset into direct
- * memory address; For NVMe IOV, it maps the SPDK blob page offset to an
- * internally maintained DMA buffer, it also needs fill the buffer for fetch
+ * For direct accessed SCM IOV, it needs only to convert the PMDK pmemobj
+ * offset into direct memory address; For NVMe IOV (or SCM IOV being accessed
+ * through DMA buffer, it maps the SPDK blob page offset (or SCM address) to
+ * an internally maintained DMA buffer, it also needs fill the buffer for fetch
  * operation.
  *
  * \param biod       [IN]	io descriptor
@@ -641,15 +646,17 @@ int bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
  * Post operation after the RDMA transfer or local copy done for the io
  * descriptor.
  *
- * For SCM IOV, it's a noop operation; For NVMe IOV, it releases the DMA buffer
- * held in bio_iod_prep(), it also needs to write back the data from DMA buffer
- * to the NVMe device for update operation.
+ * For direct accessed SCM IOV, it's a noop operation; For NVMe IOV (or SCM IOV
+ * being accessed through DMA buffer), it releases the DMA buffer held in
+ * bio_iod_prep(), it also needs to write back the data from DMA buffer to the
+ * NVMe device (or SCM) for update operation.
  *
  * \param biod       [IN]	io descriptor
+ * \param err        [IN]	Error code of prior data transfer operation
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_post(struct bio_desc *biod);
+int bio_iod_post(struct bio_desc *biod, int err);
 
 /*
  * Helper function to copy data between SG lists of io descriptor and user
@@ -741,7 +748,7 @@ void bio_get_bs_state(int *blobstore_state, struct bio_xs_context *xs);
 int bio_dev_set_faulty(struct bio_xs_context *xs);
 
 /* Function to increment CSUM media error. */
-void bio_log_csum_err(struct bio_xs_context *b, int tgt_id);
+void bio_log_csum_err(struct bio_xs_context *xs);
 
 /* Too many blob IO queued, need to schedule a NVMe poll? */
 bool bio_need_nvme_poll(struct bio_xs_context *xs);
@@ -816,5 +823,77 @@ void *bio_buf_bulk(struct bio_desc *biod, unsigned int *bulk_off);
  * \return			Buffer address
  */
 void *bio_buf_addr(struct bio_desc *biod);
+
+/*
+ * Prepare source and target bio SGLs for direct data copy between these two
+ * SGLs. bio_copy_post() must be called after a success bio_copy_prep() call.
+ *
+ * \param ioctxt	[IN]	BIO io context
+ * \param bsgl_src	[IN]	Source BIO SGL
+ * \param bsgl_dst	[IN]	Target BIO SGL
+ *
+ * \return			BIO copy descriptor on success, NULL on error
+ */
+struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt,
+				    struct bio_sglist *bsgl_src,
+				    struct bio_sglist *bsgl_dst);
+
+struct bio_csum_desc {
+	uint8_t		*bmd_csum_buf;
+	uint32_t	 bmd_csum_buf_len;
+	uint32_t	 bmd_chunk_sz;
+	uint16_t	 bmd_csum_len;
+	uint16_t	 bmd_csum_type;
+};
+
+/*
+ * Copy data between source and target bio SGLs prepared in @copy_desc
+ *
+ * \param copy_desc	[IN]	Copy descriptor created by bio_copy_prep()
+ * \param copy_size	[IN]	Specified copy size, the size must be aligned
+ *				with source IOVs. 0 means copy all source IOVs
+ * \param csum_desc	[IN]	Checksum descriptor for csum generation
+ *
+ * \return			0 on success, negative value on error
+ */
+int bio_copy_run(struct bio_copy_desc *copy_desc, unsigned int copy_size,
+		 struct bio_csum_desc *csum_desc);
+
+/*
+ * Release resource held by bio_copy_prep(), write data back to NVMe if the
+ * copy target is located on NVMe.
+ *
+ * \param copy_desc	[IN]	Copy descriptor created by bio_copy_prep()
+ * \param err		[IN]	Error code of prior copy operation
+ *
+ * \return			0 on success, negative value on error
+ */
+int bio_copy_post(struct bio_copy_desc *copy_desc, int err);
+
+/*
+ * Get the prepared source or target BIO SGL from a copy descriptor.
+ *
+ * \param copy_desc	[IN]	Copy descriptor created by bio_copy_prep()
+ * \param src		[IN]	Return Source or target BIO SGL?
+ *
+ * \return			Source/Target BIO SGL
+ */
+struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
+
+/*
+ * Copy data from source BIO SGL to target BIO SGL.
+ *
+ * \param ioctxt	[IN]	BIO io context
+ * \param bsgl_src	[IN]	Source BIO SGL
+ * \param bsgl_dst	[IN]	Target BIO SGL
+ * \param copy_size	[IN]	Specified copy size, the size must be aligned
+ *				with source IOVs. 0 means copy all source IOVs
+ * \param csum_desc	[IN]	Checksum descriptor for csum generation
+ *
+ * \return			0 on success, negative value on error
+ */
+int bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
+	     struct bio_sglist *bsgl_dst, unsigned int copy_size,
+	     struct bio_csum_desc *csum_desc);
 
 #endif /* __BIO_API_H__ */

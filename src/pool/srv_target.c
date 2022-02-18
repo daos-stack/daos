@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -356,6 +356,16 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
+	pool->sp_policy_desc.policy =
+			DAOS_MEDIA_POLICY_IO_SIZE; /* default tiering policy */
+
+	/** set up ds_pool metrics */
+	rc = ds_pool_metrics_start(pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to set up ds_pool metrics: %d\n",
+			DP_UUID(key), rc);
+		goto err_done_cond;
+	}
 
 	uuid_unparse_lower(key, group_id);
 	rc = crt_group_secondary_create(group_id, NULL /* primary_grp */,
@@ -363,7 +373,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool group: %d\n",
 			DP_UUID(key), rc);
-		goto err_done_cond;
+		goto err_metrics;
 	}
 
 	rc = ds_iv_ns_create(info->dmi_ctx, pool->sp_uuid, pool->sp_group,
@@ -374,14 +384,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err_group;
 	}
 
-	/** set up ds_pool metrics */
-	rc = ds_pool_metrics_start(pool);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to set up ds_pool metrics: %d\n",
-			DP_UUID(key), rc);
-		goto err_iv_ns;
-	}
-
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
@@ -389,14 +391,12 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
 			DP_UUID(key), DP_RC(rc));
-		goto err_metrics;
+		goto err_iv_ns;
 	}
 
 	*link = &pool->sp_entry;
 	return 0;
 
-err_metrics:
-	ds_pool_metrics_stop(pool);
 err_iv_ns:
 	ds_iv_ns_put(pool->sp_iv_ns);
 err_group:
@@ -404,6 +404,8 @@ err_group:
 	if (rc_tmp != 0)
 		D_ERROR(DF_UUID": failed to destroy pool group: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc_tmp));
+err_metrics:
+	ds_pool_metrics_stop(pool);
 err_done_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 err_cond:
@@ -659,6 +661,8 @@ ds_pool_start(uuid_t uuid)
 	} else if (rc != -DER_NONEXIST) {
 		D_ERROR(DF_UUID": failed to look up pool: %d\n", DP_UUID(uuid),
 			rc);
+		if (rc == -DER_EXIST)
+			rc = -DER_BUSY;
 		return rc;
 	}
 
@@ -721,7 +725,7 @@ ds_pool_stop(uuid_t uuid)
 	pool_fetch_hdls_ult_abort(pool);
 
 	ds_rebuild_abort(pool->sp_uuid, -1);
-	ds_migrate_abort(pool->sp_uuid, -1);
+	ds_migrate_stop(pool, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
 	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
@@ -1354,13 +1358,41 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+static int
+update_vos_prop_on_targets(void *in)
+{
+	struct ds_pool			*pool = (struct ds_pool *)in;
+	struct ds_pool_child		*child = NULL;
+	struct policy_desc_t		policy_desc = {0};
+	int				ret = 0;
+
+	child = ds_pool_child_lookup(pool->sp_uuid);
+	if (child == NULL)
+		return -DER_NONEXIST;	/* no child created yet? */
+
+	policy_desc = pool->sp_policy_desc;
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
+	ds_pool_child_put(child);
+
+	return ret;
+}
+
 int
 ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
-	return 0;
+
+	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
+				   &pool->sp_policy_desc)) {
+		D_ERROR("Failed to parse policy string: %s\n",
+			iv_prop->pip_policy_str);
+		return -DER_MISMATCH;
+	}
+	int ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+
+	return ret;
 }
 
 /**

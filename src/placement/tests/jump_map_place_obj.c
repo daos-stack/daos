@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -980,7 +980,7 @@ all_healthy(void **state)
 		uint32_t grp_nr;
 
 		gen_oid(&oid, 0, 0, object_classes[i]);
-		oa = daos_oclass_attr_find(oid, NULL, &grp_nr);
+		oa = daos_oclass_attr_find(oid, &grp_nr);
 		grp_sz = daos_oclass_grp_size(oa);
 
 		/* skip those gigantic layouts for saving time */
@@ -1693,6 +1693,8 @@ placement_handles_multiple_states_with_addition(void **state)
 
 	/* a new domain is added */
 	jtc_pool_map_extend(&ctx, 1, 1, 4);
+
+	assert_int_equal(pool_map_target_nr(ctx.po_map), 16);
 
 	/* second shard goes down */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 1);

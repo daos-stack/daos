@@ -1,9 +1,11 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+//go:build linux && amd64
 // +build linux,amd64
+
 //
 
 package promexp
@@ -195,6 +197,11 @@ func extractLabels(in string) (labels labelMap, name string) {
 
 	name = extractLatencySize(labels, name, "fetch")
 	name = extractLatencySize(labels, name, "update")
+
+	name = parseNameSubstr(labels, name, `_?xs_(\d+)`, "",
+		func(labels labelMap, matches []string) {
+			labels["xstream"] = matches[1]
+		})
 
 	name = parseNameSubstr(labels, name, `_?tgt_(\d+)`, "",
 		func(labels labelMap, matches []string) {
