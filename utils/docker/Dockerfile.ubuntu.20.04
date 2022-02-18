@@ -102,8 +102,7 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
       BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) && \
-    build && go clean -cache && \
-    cp -r utils/config/examples /opt/daos; }
+    go clean -cache && cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
