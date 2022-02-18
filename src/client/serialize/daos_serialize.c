@@ -1568,26 +1568,26 @@ static int
 serialize_akeys(struct dsr_h5_args *args, daos_key_t diov, int *dkey_index, int *akey_index,
 		daos_handle_t *oh, int *total_akeys, uint64_t *bytes_read)
 {
-	int		rc = 0;
-	int		j = 0;
-	daos_anchor_t	akey_anchor = {0};
-	d_sg_list_t	akey_sgl;
-	d_iov_t		akey_iov;
-	daos_key_desc_t	akey_kds[ENUM_DESC_NR] = {0};
-	uint32_t	akey_number = ENUM_DESC_NR;
-	char		*akey = NULL;
-	char		*akey_ptr = NULL;
-	daos_key_t	aiov = {0};
-	daos_iod_t	iod = {0};
-	size_t		rec_name_len = 32;
-	char		rec_name[rec_name_len];
-	int		path_len = 0;
-	hvl_t		*akey_val;
-	char		*small_key = NULL;
-	char		*large_key = NULL;
-	char		*key_buf = NULL;
-	daos_size_t	key_buf_len = 0;
-	hvl_t		*single_val;
+	int			rc = 0;
+	int			j = 0;
+	daos_anchor_t		akey_anchor = {0};
+	d_sg_list_t		akey_sgl;
+	d_iov_t			akey_iov;
+	daos_key_desc_t		akey_kds[ENUM_DESC_NR] = {0};
+	uint32_t		akey_number = ENUM_DESC_NR;
+	char			*akey = NULL;
+	char			*akey_ptr = NULL;
+	daos_key_t		aiov = {0};
+	daos_iod_t		iod = {0};
+	size_t			rec_name_len = 32;
+	char			rec_name[rec_name_len];
+	int			path_len = 0;
+	hvl_t			*akey_val;
+	char			*small_key = NULL;
+	char			*large_key = NULL;
+	char			*key_buf = NULL;
+	daos_size_t		key_buf_len = 0;
+	hvl_t			*single_val;
 	struct dsr_h5_akey	*akey_tmp = NULL;
 
 	D_ALLOC(small_key, ENUM_DESC_BUF);
