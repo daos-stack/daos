@@ -1737,6 +1737,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
 	phy_ent->pe_csum_info.cs_csum = (uint8_t *)(&phy_ent[1]);
+	memcpy(phy_ent->pe_csum_info.cs_csum, csum_info->cs_csum, csum_info->cs_buf_len);
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
