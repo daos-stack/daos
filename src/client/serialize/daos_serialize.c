@@ -1580,49 +1580,50 @@ serialize_akeys(struct dsr_h5_args *args, daos_key_t diov, int *dkey_index, int 
 	char			rec_name[rec_name_len];
 	int			path_len = 0;
 	hvl_t			*akey_val;
-	char			*small_key = NULL;
-	char			*large_key = NULL;
 	char			*key_buf = NULL;
-	daos_size_t		key_buf_len = 0;
+	daos_size_t		key_buf_len = ENUM_DESC_BUF;
 	hvl_t			*single_val;
 	struct dsr_h5_akey	*tmp_akey_data = NULL;
 	uint64_t		tmp_akey_nr;
 
-	D_ALLOC(small_key, ENUM_DESC_BUF);
-	if (small_key == NULL)
+	D_ALLOC(key_buf, key_buf_len);
+	if (key_buf == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	args->dkey_data[*dkey_index].akey_offset = *akey_index;
 	while (!daos_anchor_is_eof(&akey_anchor)) {
 		memset(akey_kds, 0, sizeof(akey_kds));
-		memset(small_key, 0, ENUM_DESC_BUF);
+		memset(key_buf, 0, key_buf_len);
 		akey_number = ENUM_DESC_NR;
 
 		akey_sgl.sg_nr     = 1;
 		akey_sgl.sg_nr_out = 0;
 		akey_sgl.sg_iovs   = &akey_iov;
 
-		key_buf = small_key;
-		key_buf_len = ENUM_DESC_BUF;
 		d_iov_set(&akey_iov, key_buf, key_buf_len);
 
+retry_list_akey:
 		/* get akeys */
 		rc = daos_obj_list_akey(*oh, DAOS_TX_NONE, &diov, &akey_number, akey_kds,
 					&akey_sgl, &akey_anchor, NULL);
 		if (rc == -DER_KEY2BIG) {
-			/* call list dkey again with bigger buffer */
-			D_ALLOC(large_key, ENUM_LARGE_KEY_BUF);
-			if (large_key == NULL)
+			/* allocate a larger buffer and try again */
+			daos_size_t 	new_len = key_buf_len * 2;
+			char		*new_buf = NULL;
+
+			while (new_len < akey_kds[0].kd_key_len)
+				new_len *= 2;
+
+			D_REALLOC(new_buf, key_buf, key_buf_len, new_len);
+			if (new_buf == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			key_buf = large_key;
-			key_buf_len = ENUM_LARGE_KEY_BUF;
+			key_buf = new_buf;
+			key_buf_len = new_len;
 			d_iov_set(&akey_iov, key_buf, key_buf_len);
-			rc = daos_obj_list_akey(*oh, DAOS_TX_NONE, &diov, &akey_number,
-						akey_kds, &akey_sgl, &akey_anchor, NULL);
-			if (rc != 0) {
-				D_ERROR("Failed to list akeys "DF_RC"\n", DP_RC(rc));
-				D_GOTO(out, rc);
-			}
+			goto retry_list_akey;
+		} else if (rc != 0) {
+			D_ERROR("failed to list akeys "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
 		}
 
 		/* if no akeys returned move on */
@@ -1707,8 +1708,7 @@ serialize_akeys(struct dsr_h5_args *args, daos_key_t diov, int *dkey_index, int 
 out:
 	if (rc != 0)
 		D_FREE(akey);
-	D_FREE(small_key);
-	D_FREE(large_key);
+	D_FREE(key_buf);
 	return rc;
 }
 
@@ -1767,61 +1767,52 @@ serialize_dkeys(struct dsr_h5_args *args, daos_obj_id_t oid, daos_handle_t coh, 
 	int			path_len = 0;
 	hvl_t			*dkey_val;
 	char			key_val[ENUM_KEY_BUF];
-	char			*small_key = NULL;
-	char			*large_key = NULL;
 	char			*key_buf = NULL;
-	daos_size_t		key_buf_len = 0;
+	daos_size_t		key_buf_len = ENUM_DESC_BUF;
 	struct dsr_h5_dkey	*tmp_dkey_data = NULL;
 	uint64_t		tmp_dkey_nr;
 
-	D_ALLOC(small_key, ENUM_DESC_BUF);
-	if (small_key == NULL)
+	D_ALLOC(key_buf, key_buf_len);
+	if (key_buf == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	args->oid_data[*oid_index].dkey_offset = *dkey_index;
 	while (!daos_anchor_is_eof(&dkey_anchor)) {
 		memset(dkey_kds, 0, sizeof(dkey_kds));
-		memset(small_key, 0, ENUM_DESC_BUF);
+		memset(key_buf, 0, key_buf_len);
 
 		dkey_number		= ENUM_DESC_NR;
 		dkey_sgl.sg_nr		= 1;
 		dkey_sgl.sg_nr_out	= 0;
 		dkey_sgl.sg_iovs	= &dkey_iov;
 
-		key_buf = small_key;
-		key_buf_len = ENUM_DESC_BUF;
 		d_iov_set(&dkey_iov, key_buf, key_buf_len);
 
-		if (is_kv) {
-			/* TODO: daos_kv_list in src/include/daos_kv.h does not
-			 * document that it returns DER_KEY2BIG so it just uses
-			 * the small buffer. If it does return DER_KEY2BIG but
-			 * it was not documented this will need to be updated.
-			 */
+retry_list_dkey:
+		if (is_kv)
 			rc = daos_kv_list(*oh, DAOS_TX_NONE, &dkey_number, dkey_kds,
 					  &dkey_sgl, &dkey_anchor, NULL);
-			if (rc != 0) {
-				D_ERROR("failed to list dkeys "DF_RC"\n", DP_RC(rc));
-				D_GOTO(out, rc);
-			}
-		} else {
+		else
 			rc = daos_obj_list_dkey(*oh, DAOS_TX_NONE, &dkey_number,
 						dkey_kds, &dkey_sgl, &dkey_anchor, NULL);
-			if (rc == -DER_KEY2BIG) {
-				/* call list dkey again with bigger buffer */
-				D_ALLOC(large_key, ENUM_LARGE_KEY_BUF);
-				if (large_key == NULL)
-					D_GOTO(out, rc = -DER_NOMEM);
-				key_buf = large_key;
-				key_buf_len = ENUM_LARGE_KEY_BUF;
-				d_iov_set(&dkey_iov, key_buf, key_buf_len);
-				rc = daos_obj_list_dkey(*oh, DAOS_TX_NONE, &dkey_number, dkey_kds,
-							&dkey_sgl, &dkey_anchor, NULL);
-				if (rc != 0) {
-					D_ERROR("failed to list dkeys "DF_RC"\n", DP_RC(rc));
-					D_GOTO(out, rc);
-				}
-			}
+		if (rc == -DER_KEY2BIG) {
+			/* allocate a larger buffer and try again */
+			daos_size_t 	new_len = key_buf_len * 2;
+			char		*new_buf = NULL;
+
+			while (new_len < dkey_kds[0].kd_key_len)
+				new_len *= 2;
+
+			D_REALLOC(new_buf, key_buf, key_buf_len, new_len);
+			if (new_buf == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			key_buf = new_buf;
+			key_buf_len = new_len;
+			d_iov_set(&dkey_iov, key_buf, key_buf_len);
+			goto retry_list_dkey;
+		} else if (rc != 0) {
+			D_ERROR("failed to list dkeys "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
 		}
 
 		/* if no dkeys were returned move on */
@@ -1899,8 +1890,7 @@ serialize_dkeys(struct dsr_h5_args *args, daos_obj_id_t oid, daos_handle_t coh, 
 out:
 	if (rc != 0)
 		D_FREE(dkey);
-	D_FREE(small_key);
-	D_FREE(large_key);
+	D_FREE(key_buf);
 	return rc;
 }
 
