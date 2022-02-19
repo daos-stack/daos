@@ -1608,7 +1608,7 @@ retry_list_akey:
 					&akey_sgl, &akey_anchor, NULL);
 		if (rc == -DER_KEY2BIG) {
 			/* allocate a larger buffer and try again */
-			daos_size_t 	new_len = key_buf_len * 2;
+			daos_size_t	new_len = key_buf_len * 2;
 			char		*new_buf = NULL;
 
 			while (new_len < akey_kds[0].kd_key_len)
@@ -1797,7 +1797,7 @@ retry_list_dkey:
 						dkey_kds, &dkey_sgl, &dkey_anchor, NULL);
 		if (rc == -DER_KEY2BIG) {
 			/* allocate a larger buffer and try again */
-			daos_size_t 	new_len = key_buf_len * 2;
+			daos_size_t	new_len = key_buf_len * 2;
 			char		*new_buf = NULL;
 
 			while (new_len < dkey_kds[0].kd_key_len)

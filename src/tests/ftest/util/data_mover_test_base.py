@@ -922,13 +922,13 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         tmp_path = self.new_posix_test_path(create=False, parent=self.serial_tmp_dir)
 
         # pass tmp_path + src_cont.uuid + .h5 to deserialize for --file, since
-	# the daos deserialize utility only takes a file, not a directory
+        # the daos deserialize utility only takes a file, not a directory
         self.serial_file_path = join(tmp_path, "{}{}".format(src_cont.uuid, ".h5"))
 
         # Set the source params
         if src_pool or src_cont:
-            self.cont_serialize_cmd.set_cont_serialize_params(src=format_daos_path(src_pool,
-	                                                      src_cont), output_path=tmp_path)
+            self.cont_serialize_cmd.set_cont_serialize_params(
+                src=format_daos_path(src_pool, src_cont), output_path=tmp_path)
         if dst_pool:
             pool = uuid_from_obj(dst_pool)
             self.cont_deserialize_cmd.set_cont_deserialize_params(file_path=self.serial_file_path,
