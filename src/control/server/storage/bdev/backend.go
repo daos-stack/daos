@@ -284,7 +284,7 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	}
 
 	if !missing.IsEmpty() {
-		return nil, FaultBdevNotFound(missing.Strings()...)
+		return nil, storage.FaultBdevNotFound(missing.Strings()...)
 	}
 
 	return out, nil
