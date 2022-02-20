@@ -375,22 +375,19 @@ class DaosPool():
                 i += 1
             return results
 
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.handle, no_of_att, ctypes.byref(attr_names_c),
-                      ctypes.byref(buff), sizes, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
+        # Asynchronous mode.
+        event = daos_cref.DaosEvent()
+        params = [self.handle, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
+                  sizes, event]
+        thread = threading.Thread(
+            target=daos_cref.AsyncWorker1, args=(
+                func, params, self.context, cb_func, self))
+        thread.start()
 
-            # Return buff and sizes because at this point, the values aren't set. The
-            # caller should wait with the callback handler. When the wait is over, obtain
-            # the name and value from buff and sizes as in synchronous mode.
-            return (buff, sizes)
+        # Return buff and sizes because at this point, the values aren't set. The
+        # caller should wait with the callback handler. When the wait is over, obtain
+        # the name and value from buff and sizes as in synchronous mode.
+        return (buff, sizes)
 
     # pylint: disable=unused-private-member
     @staticmethod
