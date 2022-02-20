@@ -13,7 +13,7 @@ from pydaos.raw import DaosApiError
 from test_utils_base import CallbackHandler
 
 
-class PoolAttributeTest(TestWithServers):
+class PoolAPIAttributeTest(TestWithServers):
     """Pool Attribute test Class.
 
     Test class Description:

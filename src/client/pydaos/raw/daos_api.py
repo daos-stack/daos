@@ -8,7 +8,6 @@
 # pylint: disable=raise-missing-from
 
 # pylint: disable=relative-beyond-top-level
-from urllib.parse import _ResultMixinBytes
 from .. import pydaos_shim
 # pylint: enable=relative-beyond-top-level
 
