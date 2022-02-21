@@ -42,6 +42,7 @@ pool:
 server_config:
   engines_per_host: 2
   name: daos_server
+  crt_timeout: 10
   servers:
     0:
       pinned_numa_node: 0
