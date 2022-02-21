@@ -224,6 +224,16 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:github.com/jessevdk/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:github.com/jessevdk/*
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Addr8
    fun:github.com/jessevdk/*
 }
@@ -231,6 +241,11 @@
    <insert_a_suppression_name_here>
    Memcheck:Addr8
    fun:reflect.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:unicode/utf8*
 }
 {
    <insert_a_suppression_name_here>
