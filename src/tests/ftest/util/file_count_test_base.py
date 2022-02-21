@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import re
@@ -39,7 +39,6 @@ class FileCountTestBase(IorTestBase, MdtestBase):
 
     :avocado: recursive
     """
-
 
     def add_containers(self, oclass=None):
         """Create a list of containers that the various jobs use for storage.

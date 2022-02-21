@@ -9,7 +9,6 @@
 # install path automatically, otherwise it'll use the defaults.
 
 import os
-import sys
 import json
 
 
