@@ -15,7 +15,6 @@ from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from general_utils import pcmd, get_random_string
 from daos_utils import DaosCommand
-from mpio_utils import MpioUtils
 from test_utils_container import TestContainer
 
 
@@ -215,14 +214,6 @@ class IorTestBase(DfuseTestBase):
             str: the path for the mpi job manager command
 
         """
-        # Initialize MpioUtils if IOR is running in MPIIO or DFS mode
-        if self.ior_cmd.api.value in ["MPIIO", "POSIX", "DFS", "HDF5"]:
-            mpio_util = MpioUtils()
-            if mpio_util.mpich_installed(self.hostlist_clients) is False:
-                self.fail("Exiting Test: Mpich not installed")
-        else:
-            self.fail("Unsupported IOR API: {}".format(self.ior_cmd.api.value))
-
         if custom_ior_cmd:
             self.job_manager = Mpirun(custom_ior_cmd, self.subprocess, "mpich")
         else:

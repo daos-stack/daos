@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,7 +17,6 @@ from ior_utils import IorCommand
 from daos_utils import DaosCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
-from mpio_utils import MpioUtils
 
 
 class NvmeFragmentation(TestWithServers):
@@ -65,9 +64,6 @@ class NvmeFragmentation(TestWithServers):
         cmd = DaosCommand(os.path.join(self.prefix, "bin"))
         cmd.set_sub_command("container")
         cmd.sub_command_class.set_sub_command("destroy")
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
 
         # Iterate through IOR different value and run in sequence
         for oclass, api, test, flags in product(self.ior_dfs_oclass,

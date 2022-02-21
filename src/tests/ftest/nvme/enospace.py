@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -11,7 +11,6 @@ from apricot import skipForTicket
 from nvme_utils import ServerFillUp
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
-from mpio_utils import MpioUtils
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
 from command_utils_base import CommandFailure
@@ -88,9 +87,6 @@ class NvmeEnospace(ServerFillUp):
         Args:
             results (queue): queue for returning thread results
         """
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
 
         # Define the IOR Command and use the parameter from yaml file.
         ior_bg_cmd = IorCommand()

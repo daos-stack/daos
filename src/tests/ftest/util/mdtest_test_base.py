@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from dfuse_test_base import DfuseTestBase
-from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun, Orterun
@@ -83,9 +82,6 @@ class MdtestBase(DfuseTestBase):
         # pylint: disable=redefined-variable-type
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if manager == "MPICH":
-            mpio_util = MpioUtils()
-            if mpio_util.mpich_installed(self.hostlist_clients) is False:
-                self.fail("Exiting Test: Mpich not installed")
             self.job_manager = Mpirun(self.mdtest_cmd, self.subprocess, mpitype="mpich")
         else:
             self.job_manager = Orterun(self.mdtest_cmd, self.subprocess)

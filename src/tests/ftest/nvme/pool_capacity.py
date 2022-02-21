@@ -15,7 +15,6 @@ from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from command_utils_base import CommandFailure
-from mpio_utils import MpioUtils
 import queue
 
 
@@ -60,9 +59,6 @@ class NvmePoolCapacity(TestWithServers):
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
         container_info = {}
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
 
         # Define the arguments for the ior_runner_thread method
         ior_cmd = IorCommand()
