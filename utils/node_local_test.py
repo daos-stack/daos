@@ -3886,7 +3886,7 @@ class AllocFailTest():
 
             if not finished:
                 while len(active) < max_child:
-                    active.append(self._run_cmd(fid))
+                    active.append(self._run_cmd(fid, valgrind=True))
                     fid += 1
 
                     if len(active) > max_count:
