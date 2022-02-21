@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -10,17 +10,20 @@ from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 
 
-class OpenClose(TestWithServers):
+class CloseTest(TestWithServers):
     """
-    Tests DAOS container open/close function with handle parameter.
+    Tests DAOS container close function with handle parameter.
     :avocado: recursive
     """
 
-    def test_closehandle(self):
+    def test_close_handle(self):
         """
         Test container close function with container handle parameter.
 
-        :avocado: tags=all,smoke,full_regression,tiny,container,closehandle
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=smoke,container
+        :avocado: tags=close_handle
         """
         self.container = []
         saved_coh = None
