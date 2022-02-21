@@ -54,7 +54,7 @@ class OpenContainerTest(TestWithServers):
         poh_state = self.params.get("poh", "/run/uuid_poh/*/")
 
         expected_result = RESULT_PASS
-        if uuid_state == RESULT_FAIL or poh_state == RESULT_FAIL:
+        if RESULT_FAIL in (uuid_state, poh_state):
             expected_result = RESULT_FAIL
 
         # Derive the test case number from the PASS/FAIL-PASS/FAIL combination
