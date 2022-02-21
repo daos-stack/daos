@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -405,6 +405,18 @@ btr_hkey_size(struct btr_context *tcx)
 	return btr_hkey_size_const(btr_ops(tcx), tcx->tc_feats);
 }
 
+static int
+btr_verify_key(struct btr_context *tcx, d_iov_t *key)
+{
+	if (btr_is_int_key(tcx) && key->iov_len != sizeof(uint64_t)) {
+		D_ERROR("invalid integer key, expected: %lu, got: "DF_U64"\n",
+			sizeof(uint64_t), key->iov_len);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 static void
 btr_hkey_gen(struct btr_context *tcx, d_iov_t *key, void *hkey)
 {
@@ -414,7 +426,7 @@ btr_hkey_gen(struct btr_context *tcx, d_iov_t *key, void *hkey)
 	}
 	if (btr_is_int_key(tcx)) {
 		/* Use key directory as unsigned integer in lieu of hkey */
-		D_ASSERT(key->iov_len <= sizeof(uint64_t));
+		D_ASSERT(key->iov_len != sizeof(uint64_t));
 		/* NB: This works for little endian architectures.  An
 		 * alternative would be explicit casting based on iov_len but
 		 * this is a little nicer to read.
@@ -1762,6 +1774,10 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
+
 	rc = btr_probe_key(tcx, opc, intent, key);
 	switch (rc) {
 	case PROBE_RC_INPROGRESS:
@@ -1803,6 +1819,7 @@ dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out)
 	struct btr_context	*tcx;
 	struct btr_trace	*trace;
 	struct btr_node		*nd;
+	int			rc;
 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
@@ -1810,6 +1827,10 @@ dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out)
 
 	if (btr_root_empty(tcx)) /* empty tree */
 		return -DER_NONEXIST;
+
+	rc = btr_verify_key(tcx, key_out);
+	if (rc)
+		return rc;
 
 	D_ASSERT(tcx->tc_depth > 0);
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
@@ -1849,6 +1870,10 @@ fetch_sibling(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool next, 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
+	rc = btr_verify_key(tcx, key_out);
+	if (rc)
+		return rc;
 
 	/* Save original trace */
 	if (!move) {
@@ -1956,6 +1981,10 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 	union btr_rec_buf  rec_buf = {0};
 	int		   rc;
 
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
+
 	rec = &rec_buf.rb_rec;
 	btr_hkey_gen(tcx, key, &rec->rec_hkey[0]);
 
@@ -2003,6 +2032,11 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	   uint32_t intent, d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	int	 rc;
+
+
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
 
 	if (probe_opc == BTR_PROBE_BYPASS)
 		rc = tcx->tc_probe_rc; /* trust previous probe... */
@@ -2927,6 +2961,10 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
+
 	if (opc == BTR_PROBE_BYPASS)
 		goto delete;
 
@@ -3783,6 +3821,7 @@ dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor)
 {
 	char hkey[DAOS_HKEY_MAX];
 	struct btr_context  *tcx;
+	int rc;
 
 	D_ASSERT(key != NULL);
 	D_ASSERT(anchor != NULL);
@@ -3790,6 +3829,10 @@ dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor)
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
 
 	if (btr_is_direct_key(tcx)) {
 		btr_key_encode(tcx, key, anchor);
