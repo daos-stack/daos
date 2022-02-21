@@ -205,7 +205,7 @@
    <insert_a_suppression_name_here>
    Memcheck:Addr16
    ...
-   fun:main.createWriteStreamXX.*
+   fun:main.createWriteStream.*
 }
 {
    <insert_a_suppression_name_here>
