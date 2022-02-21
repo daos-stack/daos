@@ -250,6 +250,16 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   fun:strconv.Unquote
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:racecall
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
    fun:github.com/daos-stack/daos/*
 }
 {
