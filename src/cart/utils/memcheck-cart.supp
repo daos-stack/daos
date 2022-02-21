@@ -225,6 +225,16 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   fun:github.com/jessevdk/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:reflect.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
    fun:github.com/daos-stack/daos/*
 }
 {
