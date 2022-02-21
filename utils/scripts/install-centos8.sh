@@ -25,7 +25,6 @@ dnf --nodocs install \
     gcc-c++ \
     git \
     glibc-langpack-en \
-    golang \
     graphviz \
     help2man \
     hwloc-devel \
@@ -77,3 +76,7 @@ if [ -e /etc/fedora-release ]; then
 else
         dnf install maven
 fi
+
+curl -O https://dl.google.com/go/go1.17.7.linux-amd64.tar.gz
+tar -C /usr/local -xzf go1.17.7.linux-amd64.tar.gz
+/bin/rm -f go1.17.7.linux-amd64.tar.gz
