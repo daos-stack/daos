@@ -152,9 +152,9 @@ class EvictTests(TestWithServers):
         # Step 5. Verify that the third pool's file doesn't exist on the half of the
         # hosts that this pool wasn't created on.
         if pools[-1].check_files(half_hosts_without):
-            self.fail("Pool # 3 with UUID {} exists".format(pools[-1].uuid))
+            self.fail("Pool # 2 with UUID {} exists".format(pools[-1].uuid))
         else:
-            self.log.info("Pool # 3 with UUID %s does not exist", pools[-1].uuid)
+            self.log.info("Pool # 2 with UUID %s does not exist", pools[-1].uuid)
 
         # 6. Evict the third pool.
         self.verify_pool_evict(pool=pools[-1])
