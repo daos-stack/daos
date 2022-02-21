@@ -426,7 +426,7 @@ btr_hkey_gen(struct btr_context *tcx, d_iov_t *key, void *hkey)
 	}
 	if (btr_is_int_key(tcx)) {
 		/* Use key directory as unsigned integer in lieu of hkey */
-		D_ASSERT(key->iov_len != sizeof(uint64_t));
+		D_ASSERT(key->iov_len == sizeof(uint64_t));
 		/* NB: This works for little endian architectures.  An
 		 * alternative would be explicit casting based on iov_len but
 		 * this is a little nicer to read.
@@ -3649,6 +3649,12 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 	tcx = btr_hdl2tcx(ih);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
+	if (key) {
+		rc = btr_verify_key(tcx, key);
+		if (rc)
+			return rc;
+	}
 
 	itr = &tcx->tc_itr;
 	if (itr->it_state < BTR_ITR_INIT)
