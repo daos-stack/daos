@@ -35,13 +35,12 @@ enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
       dnf -y install --disablerepo extras --disablerepo baseos  \
+          --disablerepo appstream                               \
           epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
       dnf config-manager --assumeyes --quiet --disable          \
           baseos powertools epel epel-modular extras;           \
-      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
-          -i /etc/dnf/dnf.conf;                                 \
-      dnf -y upgrade epel-release;                              \
+      dnf -y upgrade --disablerepo=appstream epel-release;      \
     else                                                        \
       dnf -y install dnf-plugins-core &&                        \
       dnf config-manager --assumeyes --set-enabled powertools;  \
@@ -52,7 +51,7 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
     dnf clean all
 
 # Currently the appstream REPO can not be part of a repo group
-ARG REPO_APSTREAM
+ARG REPO_APPSTREAM
 RUN if [ -n "$REPO_APPSTREAM" ]; then                           \
       rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_APPSTREAM}/";                  \
@@ -62,7 +61,7 @@ RUN if [ -n "$REPO_APPSTREAM" ]; then                           \
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
-repo_gpgcheck=1\n\
+repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
       dnf config-manager --quiet --disable appstream;           \
     fi
