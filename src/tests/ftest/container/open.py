@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -34,16 +34,18 @@ class OpenContainerTest(TestWithServers):
     """
 
     def test_container_open(self):
-        """JIRA ID: DAOS-3223
+        """JIRA ID: DAOS-9965
 
         Test Description:
             Test container's open function as described above
 
         Use Cases:
-            Open container with valid and invalid pool handle and container
-            UUID
+            Open container with valid and invalid pool handle and container UUID.
 
-        :avocado: tags=all,small,container,full_regression,container_open
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=container_open
         """
         self.pool = []
         self.container = []
