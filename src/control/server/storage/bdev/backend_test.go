@@ -206,7 +206,7 @@ func TestBackend_Scan(t *testing.T) {
 				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
 			},
 			req:    mockScanReq(storage.MockNvmeController(2).PciAddr),
-			expErr: FaultBdevNotFound(storage.MockNvmeController(2).PciAddr),
+			expErr: storage.FaultBdevNotFound(storage.MockNvmeController(2).PciAddr),
 		},
 		"emulated nvme; AIO-file": {
 			req:     mockScanReq(storage.MockNvmeAioFile(2).Path),
