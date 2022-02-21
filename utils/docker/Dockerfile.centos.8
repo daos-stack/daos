@@ -22,7 +22,7 @@ ARG CB0
 # package must be installed and the GPG key it provides must be
 # installed.
 ARG REPO_URL
-ARG REPO_DISTRO_X
+ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
       rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
@@ -69,7 +69,7 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
-ARG REPO_DAOS_X
+ARG REPO_DAOS
 RUN if [ -n "$REPO_DAOS" ]; then                                \
       MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \

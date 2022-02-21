@@ -878,7 +878,7 @@ pipeline {
                         }
                     }
                 } // stage('Scan Leap 15 RPMs')
-                stage('Fault injection testing') {
+                stage('Fault injection testing on CentOS 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -889,7 +889,8 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
-                                                                deps_build: true)
+                                                                deps_build: true) +
+                                                "--build-arg BASE_DISTRO=centos:8"
                             args '--tmpfs /mnt/daos_0'
                         }
                     }
