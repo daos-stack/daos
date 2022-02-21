@@ -1694,6 +1694,8 @@ placement_handles_multiple_states_with_addition(void **state)
 	/* a new domain is added */
 	jtc_pool_map_extend(&ctx, 1, 1, 4);
 
+	assert_int_equal(pool_map_target_nr(ctx.po_map), 16);
+
 	/* second shard goes down */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 1);
 

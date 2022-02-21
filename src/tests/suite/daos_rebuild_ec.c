@@ -82,9 +82,9 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 
 	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
 	if (oclass == OC_EC_2P1G1)
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1);
 	else /* oclass OC_EC_4P2G1 */
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (write_type == PARTIAL_UPDATE)

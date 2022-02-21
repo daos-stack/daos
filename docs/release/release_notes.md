@@ -3,7 +3,7 @@
 We are pleased to announce the release of DAOS version 2.0.
 
 
-# DAOS Version 2.0.1 (2022-01-28)
+# DAOS Version 2.0.1 (2022-01-31)
 
 !!! note
     DAOS version 2.0.1 does not include the latest functional and security
@@ -31,6 +31,36 @@ The DAOS 2.0.1 release contains the following updates on top of DAOS 2.0.0:
   described in [DAOS-9325](https://daosio.atlassian.net/browse/DAOS-9325)
 
 - `spdk` has been updated from 21.07-8 to 21.07-11 (minor fixes only).
+
+## Known Issues and limitations
+
+- Under heavy load, `dmg pool delete` has been observed to fail.
+  In some cases the pool deletion completely fails.
+  In other cases the `dmg pool delete` returns success, but the
+  storage allocation of the affected pool in SCM/PMem is not released
+  on one or multiple engines.
+  See [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9561) and
+  [DAOS-9006](https://daosio.atlassian.net/browse/DAOS-9006).
+
+- During SOAK testing of DAOS 2.0.1,
+  some test jobs have failed with DER\_CSUM(-2021) checksum errors.
+  This sighting is currently being investigated to determine if this is
+  caused by a client-side issue with the checksum verification code,
+  triggered by a hardware media error in the testing environment, or is
+  a bug in the server code that may potentially cause a data corruption.
+  See [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9725).
+
+- daos fs copy does not support symlinks / [DAOS-9254](https://daosio.atlassian.net/browse/DAOS-9254)
+
+- No OPA/PSM2 support.
+  Please refer to the "Fabric Support" section of the
+  [Support Matrix](https://docs.daos.io/v2.0/release/support_matrix/) for details.
+
+- Premature ENOSPC error / [DAOS-8943](https://daosio.atlassian.net/browse/DAOS-8943)
+  Reclaiming free NVMe space is too slow and can cause early out-of-space errors
+  to be reported to applications.
+
+- Misconfiguration of certificates causes server crash at start up / [DAOS-8114](https://daosio.atlassian.net/browse/DAOS-8114)
 
 
 # DAOS Version 2.0.0 (2021-12-23)
@@ -154,6 +184,6 @@ information. All DAOS project source code is maintained in the
 Please visit this [link](https://github.com/daos-stack/daos/blob/master/LICENSE)
 for more information on the licenses.
 
-Refer to the [Software Installation](https://docs.daos.io/v2.0/admin/installation/)
+Refer to the [System Deployment](https://docs.daos.io/v2.0/admin/deployment/)
 section of the [DAOS Administration Guide](https://docs.daos.io/v2.0/admin/hardware/)
 for installation details.

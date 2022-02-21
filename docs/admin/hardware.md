@@ -1,11 +1,9 @@
 # Hardware Requirements
 
-
 The purpose of this section is to describe processor, storage, and
 network requirements to deploy a DAOS system.
 
 ## Deployment Options
-
 
 A DAOS storage system is deployed as a **Pooled Storage Model**.
 The DAOS servers can run on dedicated storage nodes in separate racks.
@@ -14,9 +12,7 @@ all compute nodes. In order to minimize the number of I/O racks and to
 optimize floor space, this approach usually requires high-density storage
 servers.
 
-
 ## Processor Requirements
-
 
 DAOS requires a 64-bit processor architecture and is primarily developed
 on Intel x86\_64 architecture. The DAOS software and the libraries it
@@ -48,14 +44,12 @@ cluster.
 
 ## Storage Requirements
 
-
 DAOS requires each storage node to have direct access to storage-class
 memory (SCM). While DAOS is primarily tested and tuned for Intel
 Optane^TM^ Persistent Memory, the DAOS software stack is built over the
 Persistent Memory Development Kit (PMDK) and the Direct Access (DAX) feature of the
 Linux operating systems as described in the [SNIA NVM Programming
-Model](https://www.snia.org/sites/default/files/
-technical\_work/final/NVMProgrammingModel\_v1.2.pdf).
+Model](https://www.snia.org/sites/default/files/technical_work/final/NVMProgrammingModel_v1.2.pdf).
 As a result, the open-source DAOS software stack should be
 able to run transparently over any storage-class memory supported by the
 PMDK.
@@ -82,7 +76,6 @@ file.
 
 ## Storage Server Design
 
-
 The hardware design of a DAOS storage server balances the network
 bandwidth of the fabric with the aggregate storage bandwidth of the NVMe
 storage devices. This relationship sets the number of NVMe drives
@@ -96,7 +89,6 @@ ratio for DAOS metadata.
 ![](media/image2.png)
 
 ## CPU Affinity
-
 
 Recent Intel Xeon data center platforms use two processor CPUs connected
 together with the Ultra Path Interconnect (UPI). PCIe lanes in these
@@ -118,10 +110,8 @@ to that CPU from that engine instance instance. The DAOS control plane is
 responsible for detecting the storage and network affinity and starting
 the I/O Engines accordingly.
 
-![](media/image3.png)
 
 ## Fault Domains
-
 
 DAOS relies on single-ported storage massively distributed across
 different storage nodes. Each storage node is thus a single point of

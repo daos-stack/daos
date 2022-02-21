@@ -13,7 +13,7 @@ to access DAOS from Hadoop and Spark.
 
 We assume that the DAOS servers and agents have already been deployed in the
 environment. Otherwise, they can be deployed by following the
-[DAOS Installation Guide](https://daos-stack.github.io/admin/installation/).
+[DAOS Installation Guide](https://docs.daos.io/v2.0/admin/installation/).
 
 ## Maven Download
 
@@ -26,7 +26,7 @@ mvn dependency:get -Dartifact=io.daos:daos-java:<version> -Ddest=./
 mvn dependency:get -Dartifact=io.daos:hadoop-daos:<version> -Ddest=./
 ```
 
-Or search these artifacts from maven central(https://search.maven.org) and
+Or search these artifacts from [Maven central](https://search.maven.org/) and
 download them manually.
 
 You can also build artifacts by yourself.

@@ -252,6 +252,8 @@ struct vos_dtx_act_ent {
 	daos_epoch_t			 dae_start_time;
 	/* Link into container::vc_dtx_act_list. */
 	d_list_t			 dae_link;
+	/* Back pointer to the DTX handle. */
+	struct dtx_handle		*dae_dth;
 
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,

@@ -1,3 +1,9 @@
+daos (2.0.1-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
+
+ -- Li Wei <wei.g.li@intel.com>  Wed, 16 Feb 2022 08:57:00 +0800
+
 daos (2.0.1-2) unstable; urgency=medium
   [ Johann Lombardi ]
   * Fix issue in backward compatibility code.

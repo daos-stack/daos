@@ -663,7 +663,7 @@ class TestWithServers(TestWithoutServers):
             if self.hostlist_clients:
                 hosts.extend(self.hostlist_clients)
             self.log.info("-" * 100)
-            self.stop_leftover_processes(["orterun"], hosts)
+            self.stop_leftover_processes(["orterun", "mpirun"], hosts)
 
             # Ensure write permissions for the daos command log files when
             # using systemctl
@@ -842,6 +842,7 @@ class TestWithServers(TestWithoutServers):
                 "Starting server: group=%s, hosts=%s, config=%s",
                 manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
+            manager.manager.job.update_pattern("normal", len(manager.hosts))
             try:
                 manager.manager.run()
             except CommandFailure as error:
