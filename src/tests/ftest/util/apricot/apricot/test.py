@@ -1277,10 +1277,11 @@ class TestWithServers(TestWithoutServers):
         """Tear down after each test case."""
 
         # dump engines ULT stacks upon test failure
-        # XXX check of Avocado test status during teardown is presently useless
+        # check of Avocado test status during teardown is presently useless
         # and about same behavior has been implemented by adding both fail()
         # error() method above, to overload the methods of Avocado base Test
-        # class (see Avocado issue #5217 and associated PR-5224)
+        # class (see DAOS-1452/DAOS-9941 and Avocado issue #5217 with
+        # associated PR-5224)
         if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
             self.dump_engines_stacks("Test status is {}".format(self.status))
 

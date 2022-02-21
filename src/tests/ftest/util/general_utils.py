@@ -703,11 +703,9 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
             "if " + ps_cmd,
             "then rc=1",
             "sudo pkill --signal USR2 daos_engine",
-            # leave time for ABT info/stacks dump vs xstream/pool/ULT number.
+            # leave some time for ABT info/stacks dump to complete.
             # at this time there is no way to know when Argobots ULTs stacks
-            # has completed, this may become possible after a PR will be
-            # available to address this problem that is already reported in
-            # Argobots issue #372.
+            # has completed, see DAOS-1452/DAOS-9942.
 		"sleep 30",
             "fi",
             "exit $rc",
@@ -718,8 +716,7 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
     return result
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
-                   dump_ult_stacks=False):
+def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -730,8 +727,6 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             seconds.
         added_filter (str, optional): negative filter to better identify
             processes.
-        dump_ult_stacks (bool, optional): whether SIGUSR2 should be sent before
-            any other sigs, to dump all ULTs stacks of servers.
 
 
     Returns:
@@ -745,11 +740,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
     """
     result = {}
     log = getLogger()
-    if dump_ult_stacks is True and "daos_engine" in pattern:
-        log.info("First dumping ULT stacks, then Killing any processes on %s "
-                 "that match: %s", hosts, pattern)
-    else:
-        log.info("Killing any processes on %s that match: %s", hosts, pattern)
+    log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     if added_filter:
         ps_cmd = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(
@@ -758,11 +749,6 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
-        if dump_ult_stacks is True and "daos_engine" in pattern:
-            result = dump_engines_stacks(hosts, verbose, timeout, added_filter)
-
-        # in case dump of ULT stacks is still running it may be interrupted by
-        # these following commands
         commands = [
             "rc=0",
             "if " + ps_cmd,
