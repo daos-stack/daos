@@ -1,4 +1,4 @@
-daos (2.1.100-21) unstable; urgency=medium
+daos (2.1.100-22) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Update mercury to include DAOS-9561 workaround
 
