@@ -12,7 +12,7 @@ At this time only emulated hardware storage is supported by this Docker platform
 - SCM (i.e. Storage Class Memory) is emulated with standard RAM memory.
 - NVMe disks are emulated with a file device.
 
-!!!warning
+**!!!Warning**
 DAOS support of virtual networking is still in development. The following are known issues:
 - [bridge](https://docs.docker.com/network/bridge/) 
 - loopback
@@ -62,7 +62,7 @@ Hugetlb:               0 kB
 
 #### Note: 
 Huge pages are supported by all containerized Linux distributions. However support of huge pages 
-with DAOS and its dependencies re not working for some Linux distribution.only the followingdistributions have
+with DAOS and its dependencies re not working for some Linux distribution.only the following distributions have
 been validated:
 - [rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) 
 - [centos:centos8](https://hub.docker.com/_/centos) official docker images.
