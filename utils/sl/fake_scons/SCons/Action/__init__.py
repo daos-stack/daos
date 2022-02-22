@@ -26,6 +26,7 @@ class Action():
     def __init__(self, *args, **kw):
         pass
 
+
 ARGUMENTS = {}
 
 __all__ = ['Action']

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -27,8 +27,9 @@ class BadQueryTest(TestWithServers):
             Pass bad parameters to pool query
 
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=tiny,bad_query
+        :avocado: tags=bad_query
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -38,10 +39,6 @@ class BadQueryTest(TestWithServers):
         handlelist = self.params.get("handle", '/run/querytests/handles/*/')
         handle = handlelist[0]
         expected_for_param.append(handlelist[1])
-
-        infolist = self.params.get("info", '/run/querytests/infoptr/*/')
-        dummy_infoptr = infolist[0]
-        expected_for_param.append(infolist[1])
 
         # if any parameter is FAIL then the test should FAIL, in this test
         # virtually everyone should FAIL since we are testing bad parameters

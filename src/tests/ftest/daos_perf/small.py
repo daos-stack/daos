@@ -1,11 +1,10 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_perf_base import DaosPerfBase
-from apricot import skipForTicket
 
 
 class DaosPerf(DaosPerfBase):

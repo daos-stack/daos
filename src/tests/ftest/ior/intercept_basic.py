@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -39,7 +39,7 @@ class IorIntercept(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse,il
         :avocado: tags=iorinterceptbasic

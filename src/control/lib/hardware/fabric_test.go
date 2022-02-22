@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -882,7 +883,8 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 					MockFabricInterfaceProvider{},
 					MockNetDevClassProvider{},
 				),
-				common.CmpOptIgnoreField("log"),
+				common.CmpOptIgnoreFieldAnyType("log"),
+				cmpopts.IgnoreFields(FabricScanner{}, "mutex"),
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -909,11 +911,12 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
-		config     *FabricScannerConfig
-		nilScanner bool
-		builders   []FabricInterfaceSetBuilder
-		expResult  *FabricInterfaceSet
-		expErr     error
+		config        *FabricScannerConfig
+		cacheTopology *Topology
+		nilScanner    bool
+		builders      []FabricInterfaceSetBuilder
+		expResult     *FabricInterfaceSet
+		expErr        error
 	}{
 		"nil": {
 			nilScanner: true,
@@ -1029,6 +1032,34 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				},
 			),
 		},
+		"topology cached": {
+			config: &FabricScannerConfig{
+				TopologyProvider: &MockTopologyProvider{
+					GetTopoErr: errors.New("mock GetTopology"),
+				},
+				FabricInterfaceProviders: []FabricInterfaceProvider{
+					&MockFabricInterfaceProvider{
+						GetFabricReturn: testFis,
+					},
+				},
+				NetDevClassProvider: &MockNetDevClassProvider{
+					GetNetDevClassReturn: []MockGetNetDevClassResult{
+						{
+							NDC:      Ether,
+							ExpInput: "os_test01",
+						},
+					},
+				},
+			},
+			cacheTopology: testTopo,
+			expResult: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:        "test01",
+					OSDevice:    "os_test01",
+					DeviceClass: Ether,
+				},
+			),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1041,6 +1072,8 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+
+				scanner.topo = tc.cacheTopology
 
 				if len(tc.builders) > 0 {
 					scanner.builders = tc.builders
@@ -1060,6 +1093,60 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 					t.Fatalf("bad test setup: test builders aren't mocks")
 				}
 				common.AssertEqual(t, 1, mock.buildPartCalled, "")
+			}
+		})
+	}
+}
+
+func TestHardware_FabricScanner_CacheTopology(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fs     *FabricScanner
+		topo   *Topology
+		expErr error
+	}{
+		"nil": {
+			topo:   &Topology{},
+			expErr: errors.New("nil"),
+		},
+		"nil input": {
+			fs:     &FabricScanner{},
+			expErr: errors.New("nil"),
+		},
+		"success": {
+			fs:   &FabricScanner{},
+			topo: &Topology{},
+		},
+		"overwrite": {
+			fs: &FabricScanner{
+				topo: &Topology{
+					NUMANodes: NodeMap{
+						0: MockNUMANode(0, 8),
+						1: MockNUMANode(1, 8),
+					},
+				},
+			},
+			topo: &Topology{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.fs != nil {
+				tc.fs.log = log
+			}
+
+			err := tc.fs.CacheTopology(tc.topo)
+
+			common.CmpErr(t, tc.expErr, err)
+
+			if tc.fs == nil {
+				return
+			}
+
+			// Verify the new topology was saved
+			if diff := cmp.Diff(tc.topo, tc.fs.topo); diff != "" {
+				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
 	}
@@ -1095,7 +1182,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 		cmp.AllowUnexported(OSDeviceBuilder{}),
 		cmp.AllowUnexported(MockFabricInterfaceProvider{}),
 		cmp.AllowUnexported(MockNetDevClassProvider{}),
-		common.CmpOptIgnoreField("log"),
+		common.CmpOptIgnoreFieldAnyType("log"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}

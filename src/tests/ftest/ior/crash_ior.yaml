@@ -17,7 +17,7 @@ pool:
   mode: 146
   name: daos_server
   scm_size: 6000000000
-  nvme_size: 60000000000
+  nvme_size: 100000000000
   control_method: dmg
 container:
   type: POSIX
@@ -35,7 +35,7 @@ ior:
   transfersize_blocksize:
     4K:
       transfer_size: '4K'
-      block_size: '4G'
+      block_size: '100G'
   objectclass:
     SX:
       dfs_oclass: "SX"

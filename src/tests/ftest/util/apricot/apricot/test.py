@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -849,6 +849,7 @@ class TestWithServers(TestWithoutServers):
                 "Starting server: group=%s, hosts=%s, config=%s",
                 manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
+            manager.manager.job.update_pattern("normal", len(manager.hosts))
             try:
                 manager.manager.run()
             except CommandFailure as error:
@@ -1636,7 +1637,8 @@ class TestWithServers(TestWithoutServers):
         """
         pool = TestPool(
             context=self.context, dmg_command=self.get_dmg_command(index),
-            label_generator=self.label_generator)
+            label_generator=self.label_generator,
+            crt_timeout=self.server_managers[index].get_config_value("crt_timeout"))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
