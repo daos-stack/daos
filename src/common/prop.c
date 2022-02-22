@@ -17,6 +17,7 @@
 #include <daos_security.h>
 #include <daos/cont_props.h>
 #include <daos_srv/policy.h>
+#include <daos/pool.h>
 
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr)
@@ -322,6 +323,22 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_EC_CELL_SZ:
 		case DAOS_PROP_PO_EC_PDA:
 		case DAOS_PROP_PO_RP_PDA:
+			break;
+		case DAOS_PROP_PO_GLOBAL_VERSION:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > DAOS_PO_GLOBAL_VERSION) {
+				D_ERROR("invald pool global version "DF_U64".\n",
+					val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_UPGRADE_STATUS:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > DAOS_UPGRADE_STATUS_COMPLETED) {
+				D_ERROR("invald pool upgrade status "DF_U64".\n",
+					val);
+				return false;
+			}
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			val = prop->dpp_entries[i].dpe_val;

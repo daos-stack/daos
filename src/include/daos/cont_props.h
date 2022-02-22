@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,6 +30,7 @@
 #define DAOS_PROP_ENTRY_GROUP		"group"
 #define DAOS_PROP_ENTRY_EC_PDA		"ec_pda"
 #define DAOS_PROP_ENTRY_RP_PDA		"rp_pda"
+#define DAOS_PROP_ENTRY_GLOBAL_VERSION	"global_version"
 
 struct cont_props {
 	uint32_t	 dcp_chunksize;

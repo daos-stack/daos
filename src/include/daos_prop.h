@@ -88,6 +88,16 @@ enum daos_pool_props {
 	 * of replicated object.
 	 */
 	DAOS_PROP_PO_RP_PDA,
+
+	/**
+	 * Aggregation of pool/container/object/key disk format
+	 * version.
+	 */
+	DAOS_PROP_PO_GLOBAL_VERSION,
+	/**
+	 * Pool upgrade status.
+	 */
+	DAOS_PROP_PO_UPGRADE_STATUS,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -115,6 +125,14 @@ daos_rf_is_valid(unsigned long long rf)
  * object to different PDs.
  */
 #define DAOS_PROP_PO_EC_PDA_DEFAULT	1
+
+/** DAOS pool upgrade status */
+enum {
+	DAOS_UPGRADE_STATUS_NOT_STARTED = 0,
+	DAOS_UPGRADE_STATUS_IN_PROGRESS = 1,
+	DAOS_UPGRADE_STATUS_COMPLETED = 2,
+	DAOS_UPGRADE_STATUS_FAILED = 3,
+};
 
 /**
  * Number of pool property types
@@ -483,6 +501,9 @@ daos_label_is_valid(const char *label)
 
 /** max length of the policy string */
 #define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
+
+/* default policy string */
+#define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
 
 /** daos properties, for pool or container */
 typedef struct {

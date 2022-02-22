@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -132,7 +132,9 @@ struct container_hdl {
 };
 
 extern daos_prop_t cont_prop_default;
+extern daos_prop_t cont_prop_default_v0;
 
+#define CONT_PROP_NUM_V0 20
 #define CONT_PROP_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
 
 /**

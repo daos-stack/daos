@@ -972,6 +972,65 @@ out:
 }
 
 void
+ds_mgmt_drpc_pool_upgrade(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolUpgradeReq	*req = NULL;
+	Mgmt__PoolUpgradeResp	 resp = MGMT__POOL_UPGRADE_RESP__INIT;
+	uuid_t			 uuid;
+	d_rank_list_t		*svc_ranks = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_upgrade_req__unpack(&alloc.alloc,
+					     drpc_req->body.len,
+					     drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (upgrade pool)\n");
+		return;
+	}
+
+	D_INFO("Received request to upgrade pool %s\n", req->id);
+
+	rc = uuid_parse(req->id, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
+			DP_RC(rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/*
+	 * Todo add real logic here..
+	 */
+	rc = ds_mgmt_pool_upgrade(uuid, svc_ranks);
+
+	d_rank_list_free(svc_ranks);
+
+out:
+	resp.status = rc;
+	len = mgmt__pool_upgrade_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_upgrade_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_upgrade_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
 free_response_props(Mgmt__PoolProperty **props, size_t n_props)
 {
 	int i;

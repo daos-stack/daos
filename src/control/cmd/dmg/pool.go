@@ -42,6 +42,7 @@ type PoolCmd struct {
 	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" description:"Delete an entry from a DAOS pool's Access Control List"`
 	SetProp      PoolSetPropCmd      `command:"set-prop" description:"Set pool property"`
 	GetProp      PoolGetPropCmd      `command:"get-prop" description:"Get pool properties"`
+	Upgrade      PoolUpgradeCmd	 `command:"upgrade" description:"upgrade pool to latest format"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -526,6 +527,26 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 		return err
 	}
 	cmd.log.Info(bld.String())
+	return nil
+}
+
+// PoolUpgradeCmd is the struct representing the command to update a DAOS pool.
+type PoolUpgradeCmd struct {
+	poolCmd
+}
+
+// Execute is run when PoolUpgradeCmd subcommand is activated
+func (cmd *PoolUpgradeCmd) Execute(args []string) error {
+	req := &control.PoolUpgradeReq{
+		ID: cmd.PoolID().String(),
+	}
+
+	err := control.PoolUpgrade(context.Background(), cmd.ctlInvoker, req)
+	if err != nil {
+		return errors.Wrap(err, "pool upgrade failed")
+	}
+
+	cmd.log.Infof("Pool-upgrade command succeed\n")
 	return nil
 }
 

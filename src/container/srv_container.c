@@ -444,8 +444,11 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
 		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
-		D_ASSERTF(entry_def != NULL, "type %d not found in "
-			  "default prop.\n", entry->dpe_type);
+		if (entry_def == NULL) {
+			D_ERROR("type: %d not supportd in default prop.\n",
+				entry->dpe_type);
+			return -DER_INVAL;
+		}
 		switch (entry->dpe_type) {
 		case DAOS_PROP_CO_LABEL:
 			D_FREE(entry_def->dpe_str);
@@ -516,7 +519,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_ec_cell_sz;
 	}
 
-	if (inherit_redunc_fac) {
+	if (pool_hdl->sph_global_ver > 0 && inherit_redunc_fac) {
 		entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_REDUN_FAC);
 		D_ASSERT(entry_def != NULL);
 		/* No specified redun fac from container, inherit from pool */
@@ -524,16 +527,18 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	}
 
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_EC_PDA);
-	D_ASSERT(entry_def != NULL);
-	if (entry_def->dpe_val == 0) {
+	if (pool_hdl->sph_global_ver > 0)
+		D_ASSERT(entry_def != NULL);
+	if (entry_def && entry_def->dpe_val == 0) {
 		/* No specified ec pda from container, inherit from pool */
 		D_ASSERT(pool_hdl->sph_pool->sp_ec_pda != 0);
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_ec_pda;
 	}
 
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_RP_PDA);
-	D_ASSERT(entry_def != NULL);
-	if (entry_def->dpe_val == 0) {
+	if (pool_hdl->sph_global_ver > 0)
+		D_ASSERT(entry_def != NULL);
+	if (entry_def && entry_def->dpe_val == 0) {
 		/* No specified ec pda from container, inherit from pool */
 		D_ASSERT(pool_hdl->sph_pool->sp_rp_pda != 0);
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_rp_pda;
@@ -775,8 +780,10 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	/* duplicate the default properties, overwrite it with cont create
 	 * parameter (write to rdb below).
 	 */
-	prop_dup = daos_prop_dup(&cont_prop_default, false /* pool */,
-				 false /* input */);
+	if (pool_hdl->sph_global_ver < 1)
+		prop_dup = daos_prop_dup(&cont_prop_default_v0, false, false);
+	else
+		prop_dup = daos_prop_dup(&cont_prop_default, false, false);
 	if (prop_dup == NULL) {
 		D_ERROR(DF_CONT" daos_prop_dup failed.\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
@@ -3437,6 +3444,136 @@ out:
 		*ncont = args.ncont;
 		*conts = args.conts;
 	}
+	return rc;
+}
+
+/* argument type for callback function to upgrade containers */
+struct upgrade_cont_iter_args {
+	uuid_t				 pool_uuid;
+
+	struct cont_svc			*svc;
+	struct rdb_tx			*tx;
+	/* total number of containers */
+	uint32_t			cont_nrs;
+	/* number of upgraded containers */
+	uint32_t			cont_upgraded_nrs;
+};
+
+/* callback function for upgrading containers iteration. */
+static int
+upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct upgrade_cont_iter_args	*ap = varg;
+	uuid_t				 cont_uuid;
+	struct cont			*cont;
+	d_iov_t				 value;
+	uint64_t			 pda;
+	int				 rc;
+	bool				 upgraded = false;
+	(void)val;
+
+	if (key->iov_len != sizeof(uuid_t)) {
+		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
+		return -DER_IO;
+	}
+
+	uuid_copy(cont_uuid, key->iov_buf);
+	D_DEBUG(DF_DSMS, "pool/cont: "DF_CONTF"\n",
+		DP_CONT(ap->pool_uuid, cont_uuid));
+
+	rc = cont_lookup(ap->tx, ap->svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		return rc;
+	}
+
+	d_iov_set(&value, &pda, sizeof(pda));
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_ec_pda, &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out_put_cont;
+	if (rc == -DER_NONEXIST) {
+		pda = DAOS_PROP_PO_EC_PDA_DEFAULT;
+		rc = rdb_tx_update(ap->tx, &cont->c_prop,
+				   &ds_cont_prop_ec_pda, &value);
+		if (rc) {
+			D_ERROR("failt to upgrade container ec_pda pool/cont: "DF_CONTF"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid));
+			goto out_put_cont;
+		}
+		upgraded = true;
+	}
+
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda,
+			   &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out_put_cont;
+	if (rc == -DER_NONEXIST) {
+		pda = DAOS_PROP_PO_RP_PDA_DEFAULT;
+		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda,
+				   &value);
+		if (rc) {
+			D_ERROR("failt to upgrade container rp_pda pool/cont: "DF_CONTF"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid));
+			goto out_put_cont;
+		}
+		upgraded = true;
+	}
+out_put_cont:
+	if (rc == 0) {
+		if (upgraded)
+			ap->cont_upgraded_nrs++;
+		else
+			ap->cont_nrs++;
+	}
+	cont_put(cont);
+	return rc;
+}
+
+/**
+ * upgrade all containers in a pool.
+ *
+ * \param[in]	pool_uuid	Pool UUID.
+ */
+int
+ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
+{
+	int				rc;
+	struct rdb_tx			tx;
+	struct upgrade_cont_iter_args	args = { 0 };
+	bool				need_put_leader = false;
+
+	uuid_copy(args.pool_uuid, pool_uuid);
+
+	if (!svc) {
+		rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc,
+					    NULL /* hint **/);
+		if (rc != 0)
+			return rc;
+		need_put_leader = true;
+	}
+
+	args.svc = svc;
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+	args.tx = &tx;
+	ABT_rwlock_wrlock(svc->cs_lock);
+
+	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */,
+			    upgrade_cont_cb, &args);
+
+	if (rc == 0 && args.cont_upgraded_nrs > 0)
+		rc = rdb_tx_commit(&tx);
+
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+
+out_svc:
+	if (need_put_leader)
+		cont_svc_put_leader(svc);
+
 	return rc;
 }
 

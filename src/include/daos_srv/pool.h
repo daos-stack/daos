@@ -92,6 +92,7 @@ struct ds_pool_hdl {
 	uuid_t			sph_uuid;	/* of the pool handle */
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
+	uint32_t		sph_global_ver; /* pool global version */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
 	d_iov_t			sph_cred;
@@ -186,6 +187,7 @@ int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
+int ds_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks);
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
  * Upon successful completion, "buf" returns an array of handle UUIDs if its
@@ -240,7 +242,6 @@ map_ranks_fini(d_rank_list_t *ranks);
 
 int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 		      d_rank_list_t *ranks);
-
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,

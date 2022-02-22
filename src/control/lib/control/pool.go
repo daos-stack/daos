@@ -307,6 +307,36 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	return nil
 }
 
+// PoolUpgradeReq contains the parameters for a pool upgrade request.
+type PoolUpgradeReq struct {
+	poolRequest
+	ID string
+}
+
+// PoolUpgrade performs a pool upgrade operation on a DAOS Management Server instance.
+func PoolUpgrade(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpgradeReq) error {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolUpgrade(ctx, &mgmtpb.PoolUpgradeReq{
+			Sys:   req.getSystem(rpcClient),
+			Id:    req.ID,
+		})
+	})
+
+	rpcClient.Debugf("Upgrade DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool upgrade failed")
+	}
+	rpcClient.Debugf("Upgrade DAOS pool response: %s\n", msResp)
+
+	return nil
+}
+
 // PoolEvictReq contains the parameters for a pool evict request.
 type PoolEvictReq struct {
 	poolRequest

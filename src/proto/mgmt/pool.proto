@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -243,3 +243,14 @@ message PoolGetPropResp {
 	repeated PoolProperty properties = 2;
 }
 
+// PoolUpgradeReq represents a pool query request.
+message PoolUpgradeReq {
+	string sys = 1; // DAOS system identifier
+	string id = 2;
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
+}
+
+// PoolUpgradeResp returns resultant state of upgrade operation.
+message PoolUpgradeResp {
+	int32 status = 1; // DAOS error code
+}

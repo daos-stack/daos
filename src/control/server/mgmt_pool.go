@@ -756,6 +756,28 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	return resp, nil
 }
 
+// PoolUpgrade forwards a pool upgrade request to the I/O Engine.
+func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq) (*mgmtpb.PoolUpgradeResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, req:%+v\n", req)
+
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolUpgradeResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolUpgrade response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, resp:%+v\n", resp)
+
+	return resp, nil
+}
+
 func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.UUID, prop *mgmtpb.PoolProperty) error {
 	if prop.GetNumber() != drpc.PoolPropertyLabel {
 		return errors.New("updatePoolLabel() called with non-label prop")

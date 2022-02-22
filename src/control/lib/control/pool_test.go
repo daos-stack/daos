@@ -101,6 +101,84 @@ func TestControl_PoolDestroy(t *testing.T) {
 	}
 }
 
+func TestControl_PoolUpgrade(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolUpgradeReq
+		expErr error
+	}{
+		"local failure": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"-DER_GRPVER is retried": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+				},
+			},
+		},
+		"-DER_AGAIN is retried": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+				},
+			},
+		},
+		"success": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolUpgradeResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolUpgrade(ctx, mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
 func TestControl_PoolDrain(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic    *MockInvokerConfig
