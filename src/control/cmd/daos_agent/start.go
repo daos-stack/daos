@@ -15,13 +15,8 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
-<<<<<<< HEAD
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
-=======
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
->>>>>>> master
 )
 
 const (
