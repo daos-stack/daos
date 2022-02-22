@@ -306,7 +306,7 @@ class DaosServerManager(SubprocessManager):
             result[res["exit_status"]].add(res["hosts"])
 
         if len(result) > 1 or 0 not in result or \
-            (using_dcpm and "No SCM modules detected; skipping operation" in stdouts):
+           (using_dcpm and "No SCM modules detected; skipping operation" in stdouts):
             dev_type = "nvme"
             if using_dcpm and using_nvme:
                 dev_type = "dcpm & nvme"
@@ -623,8 +623,7 @@ class DaosServerManager(SubprocessManager):
             data = self.get_current_state()
             if not data:
                 # The regex failed to get the rank and state
-                raise ServerFailed(
-                "Error obtaining {} output: {}".format(self.dmg, data))
+                raise ServerFailed("Error obtaining {} output: {}".format(self.dmg, data))
             checks += 1
             if data[rank]["state"] == valid_state:
                 return True

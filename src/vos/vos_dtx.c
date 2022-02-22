@@ -346,14 +346,9 @@ static int
 dtx_cmt_ent_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		  d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
-	struct vos_tls		*tls = vos_tls_get();
-	struct vos_container	*cont = tins->ti_priv;
 	struct vos_dtx_cmt_ent	*dce = val_iov->iov_buf;
 
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, dce);
-	cont->vc_dtx_committed_count++;
-	cont->vc_pool->vp_dtx_committed_count++;
-	d_tm_inc_gauge(tls->vtl_committed, 1);
 
 	return 0;
 }
@@ -362,18 +357,13 @@ static int
 dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 		 void *args)
 {
-	struct vos_tls		*tls = vos_tls_get();
-	struct vos_container	*cont = tins->ti_priv;
 	struct vos_dtx_cmt_ent	*dce;
 
 	dce = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	D_ASSERT(dce != NULL);
 
 	rec->rec_off = UMOFF_NULL;
-	cont->vc_dtx_committed_count--;
-	cont->vc_pool->vp_dtx_committed_count--;
 	D_FREE_PTR(dce);
-	d_tm_dec_gauge(tls->vtl_committed, 1);
 
 	return 0;
 }
@@ -1990,6 +1980,18 @@ vos_dtx_post_handle(struct vos_container *cont,
 		return;
 	}
 
+	if (!abort && dces != NULL) {
+		struct vos_tls		*tls = vos_tls_get();
+
+		for (i = 0; i < count; i++) {
+			if (dces[i] != NULL) {
+				cont->vc_dtx_committed_count++;
+				cont->vc_pool->vp_dtx_committed_count++;
+				d_tm_inc_gauge(tls->vtl_committed, 1);
+			}
+		}
+	}
+
 	for (i = 0; i < count; i++) {
 		if (daes[i] == NULL)
 			continue;
@@ -2208,6 +2210,7 @@ out:
 int
 vos_dtx_aggregate(daos_handle_t coh)
 {
+	struct vos_tls			*tls = vos_tls_get();
 	struct vos_container		*cont;
 	struct vos_cont_df		*cont_df;
 	struct umem_instance		*umm;
@@ -2256,6 +2259,10 @@ vos_dtx_aggregate(daos_handle_t coh)
 				UMOFF_P(dbd_off), DP_RC(rc));
 			goto out;
 		}
+
+		cont->vc_dtx_committed_count--;
+		cont->vc_pool->vp_dtx_committed_count--;
+		d_tm_dec_gauge(tls->vtl_committed, 1);
 	}
 
 	if (epoch != cont_df->cd_newest_aggregated) {
@@ -2902,7 +2909,6 @@ vos_dtx_cache_reset(daos_handle_t coh)
 		}
 
 		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
-		cont->vc_dtx_committed_count = 0;
 		cont->vc_cmt_dtx_indexed = 0;
 	}
 

@@ -609,25 +609,10 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
-	struct daos_prop_entry *lbl_ent;
-	struct daos_prop_entry *def_lbl_ent;
 	struct pool_create_in  *in;
 	struct pool_create_out *out;
 	struct d_backoff_seq	backoff_seq;
 	int			rc;
-
-	/* Check for default label property supplied */
-	def_lbl_ent = daos_prop_entry_get(&pool_prop_default,
-					  DAOS_PROP_PO_LABEL);
-	D_ASSERT(def_lbl_ent != NULL);
-	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_PO_LABEL);
-	if (lbl_ent != NULL) {
-		if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str, DAOS_PROP_LABEL_MAX_LEN) == 0) {
-			D_ERROR(DF_UUID": label is the same as default label\n",
-				DP_UUID(pool_uuid));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-	}
 
 	D_ASSERTF(ntargets == target_addrs->rl_nr, "ntargets=%u num=%u\n",
 		  ntargets, target_addrs->rl_nr);

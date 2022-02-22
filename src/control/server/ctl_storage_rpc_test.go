@@ -296,7 +296,6 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				}
 			}
 
-			// cs.StorageScan should never return err
 			resp, err := cs.StorageScan(context.TODO(), tc.req)
 			if err != nil {
 				t.Fatal(err)

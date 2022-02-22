@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-    (C) Copyright 2020-2021 Intel Corporation.
+    (C) Copyright 2020-2022 Intel Corporation.
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -10,7 +10,6 @@ import os
 
 from apricot import TestWithServers
 from mpio_utils import MpioUtils, MpioFailed
-from daos_utils import DaosCommand
 from env_modules import load_mpi
 
 
