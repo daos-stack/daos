@@ -31,7 +31,10 @@ import (
 )
 
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
-const BdevPciAddrSep = " "
+const (
+	BdevPciAddrSep = " "
+	NilBdevAddress = "<nil>"
+)
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
 type NvmeDevState uint32
@@ -329,6 +332,12 @@ func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
 	}
 
 	return ncs
+}
+
+// NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
+type NvmeAioDevice struct {
+	Path string `json:"path"`
+	Size uint64 `json:"size"` // in unit of bytes
 }
 
 type (
