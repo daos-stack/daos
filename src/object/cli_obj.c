@@ -2002,8 +2002,11 @@ obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
 			return -DER_INVAL;
 		}
 		if (daos_is_akey_uint64(oid) &&
-		    iods[i].iod_name.iov_len > sizeof(uint64_t))
+		    iods[i].iod_name.iov_len != sizeof(uint64_t)) {
+			D_ERROR("Invalid akey len, expected: %lu, got: "DF_U64"\n",
+				sizeof(uint64_t), iods[i].iod_name.iov_len);
 			return -DER_INVAL;
+		}
 		for (j = 0; j < iods[i].iod_nr; j++) {
 			if (iods[i].iod_recxs != NULL && (!spec_shard &&
 			   (iods[i].iod_recxs[j].rx_idx & PARITY_INDICATOR)
@@ -2145,12 +2148,18 @@ obj_key_valid(daos_obj_id_t oid, daos_key_t *key, bool check_dkey)
 {
 	if (check_dkey) {
 		if (daos_is_dkey_uint64(oid) &&
-		    key->iov_len > sizeof(uint64_t))
+		    key->iov_len != sizeof(uint64_t)) {
+			D_ERROR("Invalid dkey len, expected: %lu, got: "DF_U64"\n",
+				sizeof(uint64_t), key->iov_len);
 			return false;
+		}
 	} else {
 		if (daos_is_akey_uint64(oid) &&
-		    key->iov_len > sizeof(uint64_t))
+		    key->iov_len != sizeof(uint64_t)) {
+			D_ERROR("Invalid akey len, expected: %lu, got: "DF_U64"\n",
+				sizeof(uint64_t), key->iov_len);
 			return false;
+		}
 	}
 
 	return key != NULL && key->iov_buf != NULL && key->iov_len != 0;
@@ -3459,12 +3468,17 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 	}
 
 	if (ret) {
-		if (ret != -DER_REC2BIG && !obj_retry_error(ret) &&
-		    !obj_is_modification_opc(obj_auxi->opc) &&
-		    !obj_auxi->is_ec_obj && !obj_auxi->spec_shard &&
-		    !obj_auxi->spec_group && !obj_auxi->to_leader &&
-		    ret != -DER_TX_RESTART &&
-		    !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
+		if (ret == -DER_NONEXIST && obj_is_fetch_opc(obj_auxi->opc)) {
+			/** Conditional fetch returns -DER_NONEXIST if the key doesn't exist. We
+			 *  do not want to try another replica in this case.
+			 */
+			D_DEBUG(DB_IO, "Fetch returned -DER_NONEXIST, no retry on conditional\n");
+			iter_arg->retry = false;
+		} else if (ret != -DER_REC2BIG && !obj_retry_error(ret) &&
+			   !obj_is_modification_opc(obj_auxi->opc) &&
+			   !obj_auxi->is_ec_obj && !obj_auxi->spec_shard &&
+			   !obj_auxi->spec_group && !obj_auxi->to_leader &&
+			   ret != -DER_TX_RESTART && !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
 			int new_tgt;
 
 			/* Check if there are other replicas available to
@@ -5846,6 +5860,8 @@ dc_obj_sync(tse_task_t *task)
 		*args->epochs_p = tmp;
 	} else {
 		D_ASSERT(*args->epochs_p != NULL);
+		D_ASSERTF(*args->nr == obj->cob_grp_nr, "Invalid obj sync args %d/%d\n",
+			  *args->nr, obj->cob_grp_nr);
 
 		for (i = 0; i < *args->nr; i++)
 			*args->epochs_p[i] = 0;

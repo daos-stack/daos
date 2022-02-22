@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -251,4 +251,10 @@ dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls
 err_free:
 	D_FREE(hdl);
 	return rc;
+}
+
+void
+dfs_free_sb_layout(daos_iod_t *iods[])
+{
+	D_FREE(*iods);
 }

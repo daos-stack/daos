@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -713,7 +713,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
                 "then rc=1",
                 "sudo pkill --signal USR2 {}".format(pattern),
                 # leave time for ABT info/stacks dump vs xstream/pool/ULT number
-		"sleep 20",
+                "sleep 20",
                 "fi",
                 "exit $rc",
             ]
