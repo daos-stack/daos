@@ -58,7 +58,7 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
             ior_attr = getattr(ior.command, name, None)
             if ior_attr:
                 if isinstance(ior_attr, BasicParameter):
-                    ior_attr.update(value, ".".join("ior", name))
+                    ior_attr.update(value, ".".join(["ior", name]))
     return ior.run(
         group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
         fail_on_warning)
