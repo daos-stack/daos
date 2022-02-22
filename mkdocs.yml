@@ -109,4 +109,4 @@ nav:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
         - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
-        - 'DAOS API Documentation': 'html/index.html'
+        - 'DAOS API Documentation': 'doxygen/html/index.html'
