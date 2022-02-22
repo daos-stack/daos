@@ -77,6 +77,7 @@ else
         dnf install maven
 fi
 
-curl -O https://dl.google.com/go/go1.17.7.linux-amd64.tar.gz
+# Download and install the latest go compiler.
+curl --silent --location --remote-name https://go.dev/dl/go1.17.7.linux-amd64.tar.gz
 tar -C /usr/local -xzf go1.17.7.linux-amd64.tar.gz
 /bin/rm -f go1.17.7.linux-amd64.tar.gz

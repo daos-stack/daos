@@ -14,6 +14,11 @@ GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
 GO_BIN = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
 
+if not GO_BIN:
+    # Start an environemt with the default PATH to see if go can be found there.
+    sys_env = Environment(ENV = {'PATH' : os.environ['PATH']})
+    GO_BIN = sys_env.WhereIs(GO_COMPILER)
+
 def check_dir_exists(path):
     """
     Check if path points to an existing directory. If it is a file but not a
