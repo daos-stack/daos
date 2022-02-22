@@ -1497,6 +1497,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	uint8_t			new_status;
 	bool			updated;
 	int			i, rc;
+	unsigned		num_pd = 0;
 	uint32_t		num_domain_comps;
 
 	updated = false;
@@ -1512,10 +1513,55 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	D_ASSERT(num_domain_comps > 0);
 	num_domain_comps--; /* remove the root domain - allocated separately */
 
+	if (map == NULL) {
+		/* Temporary hack to pass in the performance domain info before control plane
+		 * support available.
+		 */
+		d_getenv_int("DAOS_PD_NUM", &num_pd);
+		if (num_pd < 2)
+			num_pd = 0;
+		if (num_pd > num_domain_comps) {
+			D_ERROR("invalid num_perf_dom %d > num_fault_dom %d\n",
+				num_pd, num_domain_comps);
+			return -DER_INVAL;
+		}
+		num_domain_comps += num_pd;
+	}
+
 	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);
 	if (map_buf == NULL)
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
 
+	/* firstly add performance domain */
+	if (num_pd > 0) {
+		uint32_t	num_fdom, fdom_per_pd;
+
+		num_fdom = num_domain_comps - num_pd;
+		fdom_per_pd = num_fdom / num_pd;
+		for (i = 0; i < num_pd; i++) {
+			map_comp.co_type = PO_COMP_TP_PD;
+			map_comp.co_status = PO_COMP_ST_UPIN;
+			map_comp.co_padding = 0;
+			map_comp.co_id = i;
+			map_comp.co_rank = i;
+			map_comp.co_ver = map_version;
+			map_comp.co_in_ver = map_version;
+			map_comp.co_fseq = 1;
+			map_comp.co_flags = PO_COMPF_NONE;
+			map_comp.co_nr = fdom_per_pd;
+			if ((num_fdom % num_pd) != 0 && i < (num_fdom % num_pd))
+				map_comp.co_nr++;
+
+			rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+			if (rc != 0) {
+				D_ERROR("failed to attach to pool buf, "DF_RC"\n",
+					DP_RC(rc));
+				D_GOTO(out_map_buf, rc);
+			}
+		}
+	}
+
+	/* then add fault domain */
 	rc = add_domains_to_pool_buf(map, map_buf, map_version, ndomains,
 				     domains);
 	if (rc != 0)

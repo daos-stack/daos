@@ -85,6 +85,13 @@ crc(uint64_t data, uint32_t init_val)
 	return crc64_ecma_refl(init_val, (uint8_t *)&data, sizeof(data));
 }
 
+static void
+jm_obj_placement_fini(struct jm_obj_placement *jmop)
+{
+	if (jmop->jmop_pd_ptrs != NULL && jmop->jmop_pd_ptrs != jmop->jmop_pd_ptrs_inline)
+		D_FREE(jmop->jmop_pd_ptrs);
+}
+
 /** Initialize the PDs for object to prepare for the layout calculation */
 #define LOCAL_PD_ARRAY_SIZE	(4)
 static int
@@ -161,8 +168,8 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 out:
 	if (pd_used != NULL && pd_used != pd_used_array)
 		D_FREE(pd_used);
-	if (rc && jmop->jmop_pd_ptrs != NULL && jmop->jmop_pd_ptrs != jmop->jmop_pd_ptrs_inline)
-		D_FREE(jmop->jmop_pd_ptrs);
+	if (rc)
+		jm_obj_placement_fini(jmop);
 	return rc;
 }
 
@@ -310,13 +317,6 @@ jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		D_ERROR("obj="DF_OID", jm_obj_pd_init failed, "DF_RC"\n", DP_OID(oid), DP_RC(rc));
 
 	return rc;
-}
-
-static void
-jm_obj_placement_fini(struct jm_obj_placement *jmop)
-{
-	if (jmop->jmop_pd_ptrs != NULL && jmop->jmop_pd_ptrs != jmop->jmop_pd_ptrs_inline)
-		D_FREE(jmop->jmop_pd_ptrs);
 }
 
 /**
