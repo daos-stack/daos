@@ -35,6 +35,7 @@ class OpenContainerTest(TestWithServers):
 
     def test_container_open(self):
         """JIRA ID: DAOS-9965
+           JIRA ID: DAOS-3223
 
         Test Description:
             Test container's open function as described above
