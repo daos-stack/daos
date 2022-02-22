@@ -33,7 +33,7 @@ $ sudo reboot
 
 To force SPDK to use UIO rather than VFIO at daos_server runtime, set
 'disable_vfio' in the
-[server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
+[server config file](https://github.com/daos-stack/daos/blob/release/1.2/utils/config/daos_server.yml#L109),
 but note that this will require running daos_server as root.
 
 ## Time Synchronization
@@ -226,7 +226,7 @@ running as a systemd service. Default ulimit settings vary between OSes.
 
 For RPM installations, the service will typically be launched by systemd and
 the limit is pre-set to unlimited in the `daos_server.service` unit file:
-https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service#L16.
+https://github.com/daos-stack/daos/blob/release/1.2/utils/systemd/daos_server.service#L16.
 Note that values set in `/etc/security/limits.conf` are ignored by services
 launched by systemd.
 
