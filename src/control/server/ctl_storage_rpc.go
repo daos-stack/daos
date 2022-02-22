@@ -231,7 +231,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	for _, ei := range instances {
 		if _, hasError := instanceErrored[ei.Index()]; hasError {
 			// if scm errored, indicate skipping bdev format
-			ret := ei.newCret("", nil)
+			ret := ei.newCret(storage.NilBdevAddress, nil)
 			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)
 			continue

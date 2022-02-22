@@ -1,4 +1,4 @@
-daos (2.1.100-21) unstable; urgency=medium
+daos (2.1.100-22) unstable; urgency=medium
   [ Jeff Olivier ]
   * Extract MPI from many binaries create dpar and dpar_mpi providing a
     similar interface to abstract away the direct MPI dependence
