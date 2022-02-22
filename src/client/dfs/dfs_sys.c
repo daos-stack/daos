@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1085,7 +1085,7 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 {
 	int		rc;
 	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
+	dfs_obj_t	*obj = NULL;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1105,7 +1105,8 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 		D_GOTO(out_free_path, rc);
 	}
 
-	dfs_release(obj);
+	if (obj)
+		dfs_release(obj);
 
 out_free_path:
 	sys_path_free(dfs_sys, &sys_path);

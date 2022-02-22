@@ -331,6 +331,12 @@ func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
 	return ncs
 }
 
+// NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
+type NvmeAioDevice struct {
+	Path string `json:"path"`
+	Size uint64 `json:"size"` // in unit of bytes
+}
+
 type (
 	// BdevProvider defines an interface to be implemented by a Block Device provider.
 	BdevProvider interface {
@@ -345,19 +351,22 @@ type (
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
-		HugePageCount         int
-		DisableCleanHugePages bool
-		PCIAllowList          string
-		PCIBlockList          string
-		TargetUser            string
-		Reset_                bool
-		DisableVFIO           bool
-		EnableVMD             bool
+		HugePageCount      int
+		HugeNodes          string
+		CleanHugePagesOnly bool
+		CleanHugePagesPID  uint64
+		PCIAllowList       string
+		PCIBlockList       string
+		TargetUser         string
+		Reset_             bool
+		DisableVFIO        bool
+		EnableVMD          bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		VMDPrepared bool
+		NrHugePagesRemoved uint
+		VMDPrepared        bool
 	}
 
 	// BdevScanRequest defines the parameters for a Scan operation.

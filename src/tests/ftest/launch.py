@@ -1769,10 +1769,10 @@ def install_debuginfos():
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
         cmds.append(
-            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args +
-            ["daos-client-" + rpm_version,
-             "daos-server-" + rpm_version,
-             "daos-tests-" + rpm_version])
+            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
+            + ["daos-client-" + rpm_version,
+               "daos-server-" + rpm_version,
+               "daos-tests-" + rpm_version])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -1943,7 +1943,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             except IOError as error:
                 print("Error writing {}: {}".format(stack_trace_file, error))
                 return_status = False
-            except RuntimeError:
+            except RuntimeError as error:
                 print("Error creating {}: {}".format(stack_trace_file, error))
                 return_status = False
         else:

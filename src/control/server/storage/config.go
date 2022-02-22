@@ -351,6 +351,15 @@ func (bdl *BdevDeviceList) MarshalJSON() ([]byte, error) {
 	return json.Marshal(bdl.Devices())
 }
 
+// PCIAddressSetPtr returns a pointer to the underlying hardware.PCIAddressSet.
+func (bdl *BdevDeviceList) PCIAddressSetPtr() *hardware.PCIAddressSet {
+	if bdl == nil {
+		return nil
+	}
+
+	return &bdl.PCIAddressSet
+}
+
 // Len returns the number of block devices in the list.
 func (bdl *BdevDeviceList) Len() int {
 	if bdl == nil {

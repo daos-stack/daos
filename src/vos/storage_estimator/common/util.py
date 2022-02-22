@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -302,7 +302,7 @@ class Common(CommonBase):
 
     def _create_vos_meta(self):
         vos_size = VOS_SIZE()
-        meta_str = vos_size.get_vos_size_str(self._args.alloc_overhead)
+        meta_str = vos_size.get_vos_size_str(self._args.alloc_overhead, self._args.vospath)
 
         return meta_str
 
