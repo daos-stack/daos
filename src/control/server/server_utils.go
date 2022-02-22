@@ -46,10 +46,6 @@ const (
 func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
 	bdevs := []string{}
 	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
-		if bc.Class != storage.ClassNvme {
-			// don't scan if any tier is using emulated NVMe
-			return new(storage.BdevDeviceList)
-		}
 		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
 	}
 
