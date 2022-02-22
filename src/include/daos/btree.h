@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -541,6 +541,53 @@ int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
 struct umem_instance *btr_hdl2umm(daos_handle_t toh);
+
+/**
+ * hashed key for the key-btree, it is stored in btr_record::rec_hkey
+ */
+
+/** Inline key is max of 15 bytes.  The extra byte in the struct is used
+ *  to encode the type (hash or inline) and the length of the inline key.
+ */
+#define KH_INLINE_MAX 15
+
+
+struct ktr_hkey {
+	/** murmur64 hash */
+	union {
+		/** NB: This assumes little endian.  We already have little
+		 *  endian assumptions with integer keys so this isn't the
+		 *  first violation.  The hkey_gen code will trigger an
+		 *  assertion if this is violated.
+		 */
+		struct {
+			/** Length of key shifted left by 2 bits. */
+			uint32_t	kh_len;
+			/** string32 hash of key */
+			uint32_t	kh_str32;
+			/** Murmur hash of key */
+			uint64_t	kh_murmur64;
+		};
+		struct {
+			/** length shifted left by 2 bits. Low bit means inline
+			 *  key.  An extra bit is reserved for future use.
+			 */
+			char		kh_inline_len;
+			/** Inline key */
+			char		kh_inline[KH_INLINE_MAX];
+		};
+		/** For comparison convenience */
+		uint64_t		kh_hash[2];
+	};
+};
+
+/** hash seed for murmur hash */
+#define BTR_MUR_SEED	0xC0FFEE
+
+D_CASSERT(sizeof(struct ktr_hkey) == 16);
+void hkey_common_gen(d_iov_t *key_iov, void *hkey);
+int hkey_common_cmp(struct ktr_hkey *k1, struct ktr_hkey *k2);
+void hkey_int_gen(d_iov_t *key,  void *hkey);
 
 /******* iterator API ******************************************************/
 
