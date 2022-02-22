@@ -306,7 +306,7 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 				return rc;
 			if (rc != 0) {
 				/** We removed the key so let's reprobe */
-				*acts |= VOS_ITER_CB_YIELD | VOS_ITER_CB_DELETE;
+				*acts |= VOS_ITER_CB_DELETE;
 				inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_DEL);
 				return 0;
 			}
@@ -358,7 +358,7 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 				return rc;
 			if (rc != 0) {
 				/** We removed the key so let's reprobe */
-				*acts |= VOS_ITER_CB_YIELD | VOS_ITER_CB_DELETE;
+				*acts |= VOS_ITER_CB_DELETE;
 				inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_DEL);
 				return 0;
 			}
@@ -456,7 +456,7 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 				return rc;
 			if (rc != 0) {
 				/** We removed the key so let's reprobe */
-				*acts |= VOS_ITER_CB_YIELD | VOS_ITER_CB_DELETE;
+				*acts |= VOS_ITER_CB_DELETE;
 				inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_DEL);
 				return 0;
 			}

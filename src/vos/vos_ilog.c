@@ -156,6 +156,12 @@ vos_parse_ilog(struct vos_ilog_info *info, const daos_epoch_range_t *epr,
 		entry_epc = entry.ie_id.id_epoch;
 		if (entry_epc > epr->epr_hi) {
 			info->ii_full_scan = false;
+			if (epr->epr_lo != 0) {
+				/** If this is non-zero, we know this is used for punch check */
+				D_DEBUG(DB_TRACE, "Detected ilog entries outside epoch range "
+					DF_X64"-"DF_X64"\n", epr->epr_lo, epr->epr_hi);
+				return 0;
+			}
 			if (ilog_has_punch(&entry)) {
 				/** Entry is punched within uncertainty range,
 				 * so restart the transaction.
@@ -225,7 +231,9 @@ vos_parse_ilog(struct vos_ilog_info *info, const daos_epoch_range_t *epr,
 				continue;
 
 			info->ii_full_scan = false;
-			break;
+			D_DEBUG(DB_TRACE, "Detected ilog entries outside epoch range "DF_X64"-"
+				DF_X64"\n", epr->epr_lo, epr->epr_hi);
+			return 0;
 		}
 	}
 
