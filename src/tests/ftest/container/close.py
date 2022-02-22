@@ -10,20 +10,20 @@ from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 
 
-class CloseTest(TestWithServers):
+class ContainerCloseTest(TestWithServers):
     """
     Tests DAOS container close function with handle parameter.
     :avocado: recursive
     """
 
-    def test_close_handle(self):
+    def test_container_close(self):
         """
         Test container close function with container handle parameter.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=smoke,container
-        :avocado: tags=close_handle
+        :avocado: tags=container_close
         """
         self.container = []
         saved_coh = None
