@@ -1,9 +1,11 @@
 # DAOS in Docker
 
-This section describes how to build and deploy Docker images to simulate a small cluster
-using DAOS as backend storage. For a step-by-step quick start guide to running DAOS docker images, see our (Quick Start Guide)[https://github.com/daos-stack/daos/blob/master/docs/QSG/docker.md]
+This section describes some of the subjects that are specific for use with docker images and how to build and deploy Docker images to simulate a small cluster
+using DAOS as backend storage. 
 
-This small cluster will be composed of the following three nodes:
+For a step-by-step quick start guide(QSG) to running DAOS docker images, see our (Quick Start Guide)[https://github.com/daos-stack/daos/blob/master/docs/QSG/docker.md]
+
+The DAOS cluster that we will be building is composed of the following three nodes:
 
 - The `daos-server` node running a DAOS server daemon managing data storage devices such as SCM or
   NVMe disks.
@@ -15,11 +17,11 @@ At this time only emulated hardware storage is supported by this Docker platform
 - SCM (i.e. Storage Class Memory) is emulated with standard RAM memory.
 - NVMe disks are emulated with a file device.
 
-!!! warning
-    Virtual Docker networks such as [bridge](https://docs.docker.com/network/bridge/) are not yet
-    supported well by DAOS.  Thus, one physical network interface (i.e., loopback interface is also
-    not well supported) of the host should be chosen for being used by the containers through the
-    Docker [host](https://docs.docker.com/network/host/) network.
+**!!!Warning**
+DAOSv2 support of virtual networking is still in development. The following are known issues:
+- [bridge](https://docs.docker.com/network/bridge/) 
+- loopback
+	- Workaround - use one physical network interface for the [host](https://docs.docker.com/network/host/) used by the Docker containers network.
 
 
 ## Prerequisites
@@ -42,15 +44,21 @@ following command:
 $ cat /proc/meminfo | grep -e "^Huge"
 ```
 
-The platform was tested and validated with the
-[rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) and
-[centos:centos8](https://hub.docker.com/_/centos) official docker images.  However other RHEL-like
-distributions should be supported.
-
-!!! warning
-    Some distributions are not yet well supported such as
-    [rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux): issue with the
-    management of hugepages with the [spdk](https://spdk.io/) library.
+#### Note: 
+Huge pages are supported by all containerized Linux distributions. However support of huge pages 
+with DAOS and its dependencies re not working for some Linux distribution.only the following distributions have
+been validated:
+- [rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) 
+- [centos:centos8](https://hub.docker.com/_/centos) official docker images.
+The following Linux docker distributions are known not to support hugepages at this time:
+- [rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux)#### Note: 
+Huge pages are supported by all containerized Linux distributions. However support of huge pages 
+with DAOS and its dependencies re not working for some Linux distribution.only the following distributions have
+been validated:
+- [rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) 
+- [centos:centos8](https://hub.docker.com/_/centos) official docker images.
+The following Linux docker distributions are known not to support hugepages at this time:
+- [rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux)
 
 
 
@@ -81,7 +89,7 @@ $ sysctl -p
 ### Base DAOS Image
 
 The first image to create is the `daos-base` image which is not intended to be used as it, but as
-a base image for building the other three daos images.  This first image could be built directly
+a base image for building the other three daos images.  This first image can be built directly
 from GitHub with the following command:
 
 ```bash
@@ -103,7 +111,7 @@ This Docker file accepts the following arguments:
 - `DAOS_REPOS_NOAUTH`: Space-separated list of repos to use without GPG authentication
 	(default "")
 
-For example, building a DAOS base image, with authentication disabled, could be done with the
+For example, building a DAOS base image, with authentication disabled, is done with the
 following command:
 
 ```bash
@@ -119,10 +127,10 @@ $ docker build --tag daos-base:rocky8.4 utils/docker/vcluster/daos-base/el8
 
 ### DAOS Nodes Images
 
-The three images `daos-server`, `daos-admin` and `daos-client` could be built directly from GitHub
-or from a local tree in the same way as for the `daos-base` image.  The following command is used
-to build directly the three images from GitHub:
+The three images `daos-server`, `daos-admin` and `daos-client` is built directly from GitHub
+or from a local tree in the same way as for the `daos-base` image.  
 
+The following command is used to build directly the three images from GitHub:
 ```bash
 $ for image in daos-server daos-admin daos-client ; do \
 	docker build --tag "$image:rocky8.4" \
@@ -159,7 +167,7 @@ From a local tree, a more straightforward way to build these images could be don
 $ docker-compose --file utils/docker/vcluster/docker-compose.yml -- build
 ```
 
-The same arguments are accepted but they must be defined in the Docker Compose environment file
+The same arguments are accepted but they are defined in the Docker Compose environment file
 `utils/docker/vcluster/.env`.
 
 !!! warning
@@ -170,7 +178,7 @@ The same arguments are accepted but they must be defined in the Docker Compose e
 
 ### Via Docker Commands
 
-Once the images are created, the containers could be directly started with docker with the following
+Once the images are created, the containers are directly started with docker with the following
 commands:
 
 ```bash
@@ -207,7 +215,7 @@ section [DAOS Tour](https://docs.daos.io/QSG/tour/).
 
 ### Via docker-compose
 
-From a local tree, a more straightforward way to start the containers could be done with
+From a local tree, a more straightforward way to start the containers is done with
 `docker-compose` and the following commands:
 
 ```bash
