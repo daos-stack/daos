@@ -134,7 +134,7 @@ func resultPCIAddresses(results []*FormatResult) []string {
 		pciAddrs = append(pciAddrs, r.CtrlrPCIAddr)
 	}
 
-	return pciAddrs
+	return common.DedupeStringSlice(pciAddrs)
 }
 
 // Format devices available through SPDK, destructive operation!
