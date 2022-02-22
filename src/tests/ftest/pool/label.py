@@ -110,8 +110,8 @@ class Label(TestWithServers):
         * Random number string of length 50.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_label
         :avocado: tags=create_valid_labels
         """
         self.pool = []
@@ -138,8 +138,8 @@ class Label(TestWithServers):
         * Long label - 128 random chars.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_label
         :avocado: tags=create_invalid_labels
         """
         self.pool = []
@@ -164,8 +164,8 @@ class Label(TestWithServers):
         4. Create a pool with the same label again. It should work this time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_label
         :avocado: tags=duplicate_label_create
         """
         self.pool = []
@@ -192,8 +192,8 @@ class Label(TestWithServers):
         3. Destroy it with the label again. The second destroy should fail.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_label
         :avocado: tags=duplicate_label_destroy
         """
         self.pool = []
@@ -218,8 +218,8 @@ class Label(TestWithServers):
         5. Destroy the pool with the new label. Should work.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_label
         :avocado: tags=label_update
         """
         self.pool = []
