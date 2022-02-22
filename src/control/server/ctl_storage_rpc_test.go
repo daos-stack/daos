@@ -296,7 +296,6 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				}
 			}
 
-			// cs.StorageScan should never return err
 			resp, err := cs.StorageScan(context.TODO(), tc.req)
 			if err != nil {
 				t.Fatal(err)
@@ -1283,7 +1282,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1319,7 +1318,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1388,7 +1387,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
