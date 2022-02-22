@@ -148,7 +148,7 @@ Access Control List:
 Additionally, a pool's properties may be retrieved using the libdaos API
 daos_pool_query() function. Refer to the file src/include/daos_pool.h
 Doxygen comments and the online documentation available
-[here](https://docs.daos.io/v1.2/html/).
+[here](https://docs.daos.io/v1.2/doxygen/html/).
 
 
 ## Access Control Lists

@@ -12,7 +12,7 @@ For other distribution, manual building is required (see next section).
 
 Configure the DAOS package repository as follows:
 ``` bash
-$ sudo wget -O /etc/yum.repos.d/daos-packages.repo http://packages.daos.io/v1.2/CentOS7/packages/x86_64/daos_packages.repo
+$ sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v1.2/CentOS7/packages/x86_64/daos_packages.repo
 ```
 
 epel-release is required for both client and server:
@@ -30,16 +30,16 @@ To install the DAOS server packages:
 $ sudo yum install -y daos-server
 ```
 
-Debug and source RPMs available in the respective [debug](http://packages.daos.io/v1.2/CentOS7/debug/x86_64/daos_debug.repo)
-and [source](http://packages.daos.io/v1.2/CentOS7/source/daos_source.repo)
+Debug and source RPMs available in the respective [debug](https://packages.daos.io/v1.2/CentOS7/debug/x86_64/daos_debug.repo)
+and [source](https://packages.daos.io/v1.2/CentOS7/source/daos_source.repo)
 repositories.
 
 ### openSUSE Leap 15
 
 Add the DAOS package repository via zypper:
 ``` bash
-$ sudo zypper ar http://packages.daos.io/v1.2/Leap15/packages/x86_64/ daos_packages
-$ sudo rpm --import http://packages.daos.io/RPM-GPG-KEY
+$ sudo zypper ar https://packages.daos.io/v1.2/Leap15/packages/x86_64/ daos_packages
+$ sudo rpm --import https://packages.daos.io/RPM-GPG-KEY
 $ sudo zypper --non-interactive ref
 ```
 To install the DAOS client packages:
@@ -52,8 +52,8 @@ To install the DAOS server packages:
 $ sudo zypper install -y daos-server
 ```
 
-Debug and source RPMs available in the respective [debug](http://packages.daos.io/v1.2/Leap15/debug/x86_64/daos_debug.repo)
-and [source](http://packages.daos.io/v1.2/Leaps15/source/daos_source.repo)
+Debug and source RPMs available in the respective [debug](https://packages.daos.io/v1.2/Leap15/debug/x86_64/daos_debug.repo)
+and [source](https://packages.daos.io/v1.2/Leaps15/source/daos_source.repo)
 repositories.
 
 ## DAOS from Scratch
@@ -74,13 +74,13 @@ version of at least 1.10 is required.
 An exhaustive list of packages for each supported Linux distribution is
 maintained in the Docker files (please click on the link):
 
--    [CentOS 7](https://github.com/daos-stack/daos/tree/release/1.2/utils/docker/Dockerfile.centos.7#L19-L79)
--    [openSUSE Leap 15](https://github.com/daos-stack/daos/tree/release/1.2/utils/docker/Dockerfile.leap.15#L36-L85)
--    [Ubuntu 20.04](https://github.com/daos-stack/daos/tree/release/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
+-    [CentOS 7](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/Dockerfile.centos.7#L19-L79)
+-    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/Dockerfile.leap.15#L36-L85)
+-    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
-Check the [utils/docker](https://github.com/daos-stack/daos/tree/release/1.2/utils/docker)
+Check the [utils/docker](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker)
 directory for different Linux distribution versions.
 
 Some DAOS tests use MPI. The DAOS build process uses the environment modules
