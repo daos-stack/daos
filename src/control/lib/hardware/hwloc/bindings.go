@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -244,7 +244,19 @@ type object struct {
 func (o *object) name() string {
 	objName := C.GoString(o.cObj.name)
 	if objName == "" {
-		objName = fmt.Sprintf("%s %d", o.objTypeString(), o.osIndex())
+		var id string
+		switch o.objType() {
+		case objTypeBridge:
+			lo, hi, err := o.busRange()
+			if err != nil {
+				id = "(unknown range)"
+				break
+			}
+			id = fmt.Sprintf("%04x:[%02x-%02x]", lo.Domain, lo.Bus, hi.Bus)
+		default:
+			id = fmt.Sprintf("%d", o.osIndex())
+		}
+		objName = fmt.Sprintf("%s %s", o.objTypeString(), id)
 	}
 	return objName
 }
@@ -325,10 +337,12 @@ func (o *object) objTypeString() string {
 		return "core"
 	case objTypePCIDevice:
 		return "PCI device"
+	case objTypeBridge:
+		return "bridge"
 	case objTypeOSDevice:
 		return "OS device"
 	}
-	return "unknown object type"
+	return fmt.Sprintf("unknown object type %d (0x%x)", o.objType(), o.objType())
 }
 
 func (o *object) busRange() (*hardware.PCIAddress, *hardware.PCIAddress, error) {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -175,6 +175,30 @@ func DefaultCmpOpts() []cmp.Option {
 	return []cmp.Option{
 		protocmp.Transform(), // makes Protobuf structs comparable
 	}
+}
+
+// CmpOptIgnoreFieldAnyType creates a cmp.Option that allows go-cmp comparisons to ignore all
+// fields with a specific name in any type.
+func CmpOptIgnoreFieldAnyType(field string) cmp.Option {
+	return cmp.FilterPath(
+		func(p cmp.Path) bool {
+			return p.Last().String() == field || p.Last().String() == ("."+field)
+		},
+		cmp.Ignore())
+}
+
+// CmpOptEquateErrorMessages creates a cmp.Option that allows go-cmp to compare errors by message.
+func CmpOptEquateErrorMessages() cmp.Option {
+	areConcreteErrors := func(x, y interface{}) bool {
+		_, ok1 := x.(error)
+		_, ok2 := y.(error)
+		return ok1 && ok2
+	}
+	return cmp.FilterValues(areConcreteErrors, cmp.Comparer(func(x, y interface{}) bool {
+		xe := x.(error)
+		ye := y.(error)
+		return xe.Error() == ye.Error()
+	}))
 }
 
 // CreateTestDir creates a temporary test directory.
