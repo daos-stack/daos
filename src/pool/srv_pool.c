@@ -2915,9 +2915,8 @@ out_lock:
 			goto out_svc;
 
 		d_tm_inc_counter(metrics->query_space_total, 1);
-	} else {
-		d_tm_inc_counter(metrics->query_total, 1);
 	}
+	d_tm_inc_counter(metrics->query_total, 1);
 
 out_svc:
 	if (map_version == 0)
