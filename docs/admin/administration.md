@@ -549,7 +549,7 @@ insert the SSD into, if specified then the server will attempt to insert the dev
 specified by the index, if not specified then the server will attempt to insert the device into
 the bdev tier with the lowest index value (the first bdev tier).
 
-The device will now be registered in the engine's persistant NVMe config so that when restarted,
+The device will now be registered in the engine's persistent NVMe config so that when restarted,
 the newly added SSD will be used.
 
 - Replace an excluded SSD with a New Device:
