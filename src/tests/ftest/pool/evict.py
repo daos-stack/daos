@@ -206,7 +206,6 @@ class EvictTests(TestWithServers):
                     self.fail(
                         "Pool {} was evicted, but write_objects worked!".format(index))
             except TestFail as error:
-                self.log.debug("## error = %s", error)
                 if failure_expected and "-1002" in str(error):
                     msg = "Pool # {}: write_objects failed as expected.\n\t{}".format(
                         index, error)
