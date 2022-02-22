@@ -169,7 +169,7 @@ The checksum feature attempts to provide end-to-end data integrity. On an update
  the DAOS client calculates checksums for user data and sends with the RPC to
  the DAOS server. The DAOS server returns the checksum with the data on a fetch
  so the DAOS client can verify the integrity of the data. See [End-to-end Data
- Integrity Overiew](../../docs/overview/data_integrity.md) for more information.
+ Integrity Overview](../../docs/overview/data_integrity.md) for more information.
 
 Checksums are configured at the container level and when a client opens a
  container, the checksum properties will be queried automatically, and, if
