@@ -110,6 +110,13 @@ extern uint32_t dtx_agg_thd_age_up;
  */
 extern uint32_t dtx_agg_thd_age_lo;
 
+/* The threshold for using helper ULT when handle DTX RPC. */
+#define DTX_RPC_HELPER_THD_MAX	(~0U)
+#define DTX_RPC_HELPER_THD_MIN	18
+#define DTX_RPC_HELPER_THD_DEF	(DTX_THRESHOLD_COUNT + 1)
+
+extern uint32_t dtx_rpc_helper_thd;
+
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
 	struct d_tm_node_t	*dpm_batched_total;
