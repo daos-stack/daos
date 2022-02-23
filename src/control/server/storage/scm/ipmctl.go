@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -78,7 +78,7 @@ func run(cmd string) (string, error) {
 // Manage AppDirect/Interleaved memory allocation goals across all DCPMMs on a system.
 const (
 	cmdShowIpmctlVersion = "ipmctl version"
-	cmdShowRegions       = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
+	//cmdShowRegions       = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
 	cmdCreateRegions     = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdRemoveRegions     = "ipmctl create -f -goal MemoryMode=100"
 	cmdDeleteGoal        = "ipmctl delete -goal"
@@ -170,9 +170,9 @@ func (cr *cmdRunner) checkNdctl() error {
 	return nil
 }
 
-// Discover scans the system for SCM modules and returns a list of them.
-func (cr *cmdRunner) Discover() (storage.ScmModules, error) {
-	discovery, err := cr.binding.Discover()
+// GetModules scans the storage host for PMem modules and returns a slice of them.
+func (cr *cmdRunner) GetModules() (storage.ScmModules, error) {
+	discovery, err := cr.binding.GetModules()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover SCM modules")
 	}
@@ -266,14 +266,15 @@ func (cr *cmdRunner) GetPmemState() (storage.ScmState, error) {
 		return storage.ScmStateUnknown, err
 	}
 
-	// TODO: discovery should provide SCM region details
+	// Print ipmctl commandline output for show regions for debug purposes.
 	out, err := cr.showRegions()
 	if err != nil {
-		return storage.ScmStateUnknown, errors.WithMessage(err, "show regions cmd")
+		cr.log.Error(errors.WithMessage(err, "show regions cmd").Error())
+	} else {
+		cr.log.Debugf("show region output: %s\n", out)
 	}
 
-	cr.log.Debugf("show region output: %s\n", out)
-
+	// Retrieve region detail from ipmctl bindings.
 	if strings.Contains(out, outScmNoRegions) {
 		return storage.ScmStateNoRegions, nil
 	}

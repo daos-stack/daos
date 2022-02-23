@@ -36,6 +36,11 @@ var (
 		"storage format invoked on a running system",
 		"stop and erase the system, then retry the format operation",
 	)
+	FaultConfigVMDImbalance = clientFault(
+		code.ClientConfigVMDImbalance,
+		"different number of backing devices behind each engine's VMD addresses",
+		"assign an equal number of NVMe SSDs to each VMD when configuring in BIOS",
+	)
 )
 
 // IsRetryableConnErr indicates whether the error is a connection error that
