@@ -4252,6 +4252,8 @@ oclass_auto_setting(void **state)
 	enum daos_otype_t	feat_kv, feat_array, feat_byte_array;
 	int			rc;
 
+	skip(); /* Skip for DAOS-9974 */
+
 	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
