@@ -1378,7 +1378,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			 * the csum free flag indicates that memory has been allocated and should
 			 * only be allocated once for the phy_ent.
 			 */
-			D_ASSERT(phy_ent->pe_csum_free == false);
+			if (phy_ent->pe_csum_free)
+				D_FREE(phy_ent->pe_csum_info.cs_csum);
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
 			 * physical entry, in addition to re-assigning address.
@@ -1746,6 +1747,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_rect.rc_minor_epc = entry->ie_minor_epc;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
+	phy_ent->pe_csum_free = false;
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
