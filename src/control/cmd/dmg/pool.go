@@ -387,7 +387,7 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 // PoolExcludeCmd is the struct representing the command to exclude a DAOS target.
 type PoolExcludeCmd struct {
 	poolCmd
-	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be excluded"`
+	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be excluded"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
 }
 
@@ -415,7 +415,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 // PoolDrainCmd is the struct representing the command to Drain a DAOS target.
 type PoolDrainCmd struct {
 	poolCmd
-	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be drained"`
+	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be drained"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
 }
 
@@ -474,7 +474,7 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 // PoolReintegrateCmd is the struct representing the command to Add a DAOS target.
 type PoolReintegrateCmd struct {
 	poolCmd
-	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
+	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be reintegrated"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
 }
 

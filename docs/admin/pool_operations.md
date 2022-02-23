@@ -462,7 +462,7 @@ $ dmg pool exclude --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_lab
 
 The pool target exclude command accepts 2 parameters:
 
-* The rank of the target(s) to be excluded.
+* The engine rank of the target(s) to be excluded.
 * The target Indices of the targets to be excluded from that rank (optional).
 
 Upon successful manual exclusion, the self-healing mechanism will be triggered
@@ -488,7 +488,7 @@ $ dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} $DAOS_POOL
 
 The pool target drain command accepts 2 parameters:
 
-* The rank of the target(s) to be drained.
+* The engine rank of the target(s) to be drained.
 * The target Indices of the targets to be drained from that rank (optional).
 
 ### Reintegration
@@ -509,8 +509,8 @@ The pool reintegrate command accepts 3 parameters:
 * The engine rank of the affected targets.
 * The target indices of the targets to be reintegrated on that rank (optional).
 
-When rebuild is triggered it will list the operations and their related targets by their rank ID
-and target index.
+When rebuild is triggered it will list the operations and their related engines/targets
+by their engine rank ID and target index.
 
 ```
 Target (rank 5 idx 0) is down.
@@ -554,7 +554,7 @@ $ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
 ```
 
 The pool extend command accepts one required parameter which is a comma
-separated list of server ranks to include in the pool.
+separated list of engine ranks to include in the pool.
 
 The pool rebalance operation will work most efficiently when the pool is
 extended to its desired size in a single operation, as opposed to multiple,
