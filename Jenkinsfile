@@ -921,18 +921,9 @@ pipeline {
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
                             archiveArtifacts artifacts: 'nlt_logs/centos8.fault-injection/'
-                            publishValgrind failBuildOnInvalidReports: true,
-                                            failBuildOnMissingReports: false,
-                                            failThresholdDefinitelyLost: '0',
-                                            failThresholdInvalidReadWrite: '0',
-                                            failThresholdTotal: '0',
-                                            pattern: '*.memcheck.xml',
-                                            publishResultsForAbortedBuilds: false,
-                                            publishResultsForFailedBuilds: true,
-                                            sourceSubstitutionPaths: '',
-                                            unstableThresholdDefinitelyLost: '0',
-                                            unstableThresholdInvalidReadWrite: '0',
-                                            unstableThresholdTotal: '0'
+                            stash: name 'centos8-fault-inject-memcheck',
+                                   includes '*.memcheck.xml',
+                                   allowEmpty: true
                         }
                     }
                 } // stage('Fault inection testing')
@@ -1055,7 +1046,8 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck']
+                                                     'centos7-gcc-unit-memcheck',
+                                                     'centos8-fault-inject-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
