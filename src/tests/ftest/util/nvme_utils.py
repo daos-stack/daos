@@ -115,6 +115,7 @@ class ServerFillUp(IorTestBase):
         # run IOR Command
         try:
             out = self.run_ior_with_pool(create_cont=create_cont,
+                                         display_space=False,
                                          fail_on_warning=self.fail_on_warning)
             self.ior_matrix = IorCommand.get_ior_metrics(out)
             results.put("PASS")
