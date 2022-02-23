@@ -46,6 +46,21 @@ func TestHwprov_DefaultTopologyProvider(t *testing.T) {
 	}
 }
 
+func TestHwprov_DefaultProcessNUMAProvider(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	expResult := hwloc.NewProvider(log)
+
+	result := DefaultProcessNUMAProvider(log)
+
+	if diff := cmp.Diff(expResult, result,
+		cmpopts.IgnoreUnexported(hwloc.Provider{}),
+	); diff != "" {
+		t.Fatalf("(-want, +got)\n%s\n", diff)
+	}
+}
+
 func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
