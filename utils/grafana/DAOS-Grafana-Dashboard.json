@@ -330,6 +330,10 @@
       },
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "exemplar": false,
           "expr": "sum without (rank, pool, target) (rate(engine_pool_xferred_fetch[15s]))",
           "format": "time_series",
@@ -341,6 +345,10 @@
           "refId": "Fetch"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "exemplar": false,
           "expr": "sum without (rank, pool, target) (rate(engine_pool_xferred_update[15s]))",
           "format": "time_series",
@@ -351,8 +359,12 @@
           "refId": "Update"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "exemplar": false,
-          "expr": "sum without (rank, pool) (rate(engine_pool_xferred_fetch[15s]) + rate(engine_pool_xferred_update[15s]))",
+          "expr": "sum without (rank, pool, target) (rate(engine_pool_xferred_fetch[15s]) + rate(engine_pool_xferred_update[15s]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Total",
@@ -911,6 +923,6 @@
   "timezone": "browser",
   "title": "DAOS",
   "uid": "okaW9iknz",
-  "version": 3,
+  "version": 2,
   "weekStart": ""
 }
