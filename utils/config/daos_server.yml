@@ -170,11 +170,18 @@
 ## Number of hugepages to allocate for use by NVMe SSDs
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. This indicates the number to be used for each spawned
-## I/O Engines, so the total will be this number * number of I/O Engines.
-## Default system hugepage size will be used.
+## through SPDK. Note that each target requires 1 GiB of hugepage space, so
+## this value needs to represent the total amount of hugespace required for
+## all targets across all engines on host, divided by the system hugepage size.
+## If not set here, an appropriate value will be automatically calculated based
+## on the number of targets (using the default system hugepage size).
 #
-## default: 4096
+## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
+#
+## Hugepages are mandatory with NVMe SSDs configured and optional without.
+## To disabled the use of hugepages when no NVMe SSDs are configured, set
+## nr_hugepages to -1.
+#
 #nr_hugepages: 4096
 #
 #
