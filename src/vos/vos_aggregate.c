@@ -56,8 +56,10 @@ struct agg_phy_ent {
 	uint32_t		pe_ref;
 	/* Need to truncate on window flush */
 	bool			pe_trunc_head;
-	/** Mark the entry as removed */
+	/* Mark the entry as removed */
 	bool			pe_remove;
+	/* Need to free the csum buffer when the physical entry is freed */
+	bool			pe_csum_free;
 };
 
 /* Removal record */
@@ -691,6 +693,14 @@ phy_ent_is_removed(struct agg_merge_window *mw, const struct evt_extent *phy_ext
 	}
 
 	return false;
+}
+
+static inline void
+free_phy_ent(struct agg_phy_ent	*phy_ent)
+{
+	if (phy_ent->pe_csum_free)
+		D_FREE(phy_ent->pe_csum_info.cs_csum);
+	D_FREE(phy_ent);
 }
 
 static int
@@ -1439,18 +1449,22 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		phy_ent = lgc_seg->ls_phy_ent;
 
 		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr)) {
+			/*
+			 * the csum free flag indicates that memory has been allocated and should
+			 * only be allocated once for the phy_ent.
+			 */
+			D_ASSERT(phy_ent->pe_csum_free == false);
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
 			 * physical entry, in addition to re-assigning address.
-			 * Because of ent_in is truncated, the dst buf len
-			 * should always be big enough.
 			 */
-			D_ASSERT(phy_ent->pe_csum_info.cs_buf_len >=
-				 ent_in->ei_csum.cs_buf_len);
-			phy_ent->pe_csum_info.cs_nr = ent_in->ei_csum.cs_nr;
-			memcpy(phy_ent->pe_csum_info.cs_csum,
-			       ent_in->ei_csum.cs_csum,
-			       ent_in->ei_csum.cs_buf_len);
+			phy_ent->pe_csum_info = ent_in->ei_csum;
+			D_ALLOC(phy_ent->pe_csum_info.cs_csum, phy_ent->pe_csum_info.cs_buf_len);
+			if (phy_ent->pe_csum_info.cs_csum == NULL)
+				return -DER_NOMEM;
+			phy_ent->pe_csum_free = true;
+			memcpy(phy_ent->pe_csum_info.cs_csum, ent_in->ei_csum.cs_csum,
+			       phy_ent->pe_csum_info.cs_buf_len);
 		}
 	}
 
@@ -1491,7 +1505,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		    phy_ent->pe_remove) {
 			d_list_del(&phy_ent->pe_link);
 			unmark_removals(mw, phy_ent);
-			D_FREE(phy_ent);
+			free_phy_ent(phy_ent);
 			D_ASSERT(mw->mw_phy_cnt > 0);
 			mw->mw_phy_cnt--;
 			continue;
@@ -1578,7 +1592,7 @@ clear_merge_window(struct agg_merge_window *mw)
 	d_list_for_each_entry_safe(phy_ent, tmp, &mw->mw_phy_ents, pe_link) {
 		d_list_del(&phy_ent->pe_link);
 		unmark_removals(mw, phy_ent);
-		D_FREE(phy_ent);
+		free_phy_ent(phy_ent);
 	}
 	mw->mw_phy_cnt = 0;
 }
@@ -1722,12 +1736,9 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 		const vos_iter_entry_t *entry, bio_addr_t *addr,
 		struct dcs_csum_info *csum_info, uint32_t ver)
 {
-	struct agg_phy_ent	*phy_ent;
-	daos_size_t		 phy_ent_size = sizeof(*phy_ent);
+	struct agg_phy_ent *phy_ent;
 
-	/* Will append the checksum to the end of the phy_ent structure */
-	phy_ent_size += csum_info->cs_buf_len;
-	D_ALLOC(phy_ent, phy_ent_size);
+	D_ALLOC_PTR(phy_ent);
 	if (phy_ent == NULL)
 		return NULL;
 
@@ -1736,8 +1747,6 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_rect.rc_minor_epc = entry->ie_minor_epc;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
-	phy_ent->pe_csum_info.cs_csum = (uint8_t *)(&phy_ent[1]);
-	memcpy(phy_ent->pe_csum_info.cs_csum, csum_info->cs_csum, csum_info->cs_buf_len);
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
