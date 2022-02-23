@@ -458,6 +458,8 @@
 #
 #  env_vars:
 #      - CRT_TIMEOUT=100
+#      - FI_OFI_RXM_USE_SRX=1 # set it to 0 if network card does not support
+#                             # shared receive context, eg intel E810-C.
 #
 #  storage:
 #  -
