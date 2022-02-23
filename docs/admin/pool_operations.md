@@ -17,8 +17,8 @@ $ dmg pool create --size=<N>TB tank
 ```
 
 This command creates a pool labeled `tank` distributed across the DAOS servers
-with a target size on each server that is comprised of N TB of NVMe storage
-and N * 0.06 (i.e., 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
+with a target size on each server that is comprised of N * 0.94 TB of NVMe storage
+and N * 0.06 TB (i.e., 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
 may be adjusted at pool creation time as described below.
 
 The UUID allocated to the newly created pool is printed to stdout
@@ -44,12 +44,12 @@ $ dmg pool create --help
       -P, --properties= Pool properties to be set
       -a, --acl-file=   Access Control List file path for DAOS pool
       -z, --size=       Total size of DAOS pool (auto)
-      -t, --tier-ratio= Distribution of pool storage allocation over storage tiers (auto) (default: 6)
+      -t, --tier-ratio= Percentage of SCM,NVMe storage tiers for pool storage (auto) (default: 6,94)
       -k, --nranks=     Number of ranks to use (auto)
       -v, --nsvc=       Number of pool service replicas
-      -s, --scm-size=   Per-server SCM allocation for DAOS pool (manual)
-      -n, --nvme-size=  Per-server NVMe allocation for DAOS pool (manual)
-      -r, --ranks=      Storage server unique identifiers (ranks) for DAOS pool
+      -s, --scm-size=   Per-engine SCM allocation for DAOS pool (manual)
+      -n, --nvme-size=  Per-engine NVMe allocation for DAOS pool (manual)
+      -r, --ranks=      Storage engine unique identifiers (ranks) for DAOS pool
 ```
 
 The typical output of this command is as follows:
@@ -68,7 +68,8 @@ Pool created with 6.00% SCM/NVMe ratio
 ```
 
 This created a pool with UUID 8a05bf3a-a088-4a77-bb9f-df989fce7cc8,
-with redundancy enabled by default (pool service replicas on ranks 1-3).
+with pool service redundancy enabled by default
+(pool service replicas on ranks 1-3).
 
 If no redundancy is desired, use --nsvc=1 in order to specify that only
 a single pool service replica should be created.
@@ -82,7 +83,7 @@ will be distributed as follows:
 Note that it is difficult to determine the usable space by the user and
 currently we cannot provide the precise value. The usable space depends not only
 on pool size, but also on number of targets, target size, object class,
-redundancy factor, etc.
+storage redundancy factor, etc.
 
 ### Listing Pools
 
