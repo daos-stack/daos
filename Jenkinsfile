@@ -921,9 +921,9 @@ pipeline {
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
                             archiveArtifacts artifacts: 'nlt_logs/centos8.fault-injection/'
-                            stash: name: 'centos8-fault-inject-memcheck',
-                                   includes: '*.memcheck.xml',
-                                   allowEmpty: true
+                            stash name: 'centos8-fault-inject-memcheck',
+                                  includes: '*.memcheck.xml',
+                                  allowEmpty: true
                         }
                     }
                 } // stage('Fault inection testing')
