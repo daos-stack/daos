@@ -277,19 +277,27 @@ Three options are supported:
 ### Self-healing Policy (self\_heal)
 
 This property defines whether a failing node is automatically evicted from the
-pool. Once excluded, the self-healing mechasnism will be triggered to restore
+pool. Once excluded, the self-healing mechanism will be triggered to restore
 the pool data redundancy on the surviving storage nodes.
+Two options are supported: "exclude" (default strategy) and "rebuild".
 
-### Reserve Space (space\_rb)
+### Reserved Space for Rebuilds (space\_rb)
 
 This property defines the percentage of total space reserved on each storage
-node for self-healing purpose. The reserved space cannot be consumed by the
-applications.
+node for self-healing purpose. The reserved space cannot be consumed by
+applications. Valid values are 0% to 100%, the default is 0%.
+When setting this property, specifying the percentage symbol is optional:
+`space_rb:2%` and `space_rb:2` both specify two percent of storage capacity.
 
-### EC Cell Size (ec\_cell\_sz)
+### Default EC Cell Size (ec\_cell\_sz)
 
 This property defines the default erasure code cell size inherited to DAOS
-containers. The value is typically between 32K and 1MB.
+containers. The EC cell size can be between 1kiB and 1GiB,
+although it should typically be set to a value between 32kiB and 1MiB.
+The default is 1MiB.
+When setting this property, the cell size can be specified in Bytes
+(as a number with no suffix), with a base-10 suffix like `k` or `MB`,
+or with a base-2 suffix like `ki` or `MiB`.
 
 ## Access Control Lists
 
