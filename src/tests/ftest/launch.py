@@ -742,12 +742,11 @@ def get_device_replacement(args):
 
     # First check for any VMD disks, if requested
     if nvme_args[0] in ["auto", "auto_vmd"]:
+        # Find the VMD controller for the optional matching VMD disks
         vmd_devices = auto_detect_devices(host_list, "NVMe", "5", dev_filter)
-        if vmd_devices:
-            # Find the VMD controller for the matching VMD disks
-            vmd_controllers = auto_detect_devices(host_list, "VMD", "4", None)
-            devices.extend(get_vmd_address_backed_nvme(host_list, vmd_devices, vmd_controllers))
-            device_types.append("VMD")
+        vmd_controllers = auto_detect_devices(host_list, "VMD", "4", None)
+        devices.extend(get_vmd_address_backed_nvme(host_list, vmd_devices, vmd_controllers))
+        device_types.append("VMD")
 
     # Second check for any non-VMD NVMe disks, if requested
     if nvme_args[0] in ["auto", "auto_nvme"]:
@@ -831,13 +830,10 @@ def get_vmd_address_backed_nvme(host_list, vmd_disks, vmd_controllers):
 
     """
     disk_controllers = []
-    command_list = [
-        "ls -l /sys/block/",
-        "grep nvme",
-        "grep -E '({0})'".format("|".join(vmd_disks)),
-        "cut -d'>' -f2",
-        "cut -d'/' -f4",
-    ]
+    command_list = ["ls -l /sys/block/", "grep nvme"]
+    if vmd_disks:
+        command_list.append("grep -E '({0})'".format("|".join(vmd_disks)))
+    command_list.extend(["cut -d'>' -f2", "cut -d'/' -f4"])
     command = " | ".join(command_list) + " || :"
     task = get_remote_output(host_list, command)
 
