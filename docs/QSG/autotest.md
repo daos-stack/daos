@@ -1,4 +1,4 @@
-# Run DAO Autotest
+# Run DAOS Autotest
 
 DAOS autotest tests the proper setup of the DAOS configuration, which is used to test the setup. DAOS autotest
 performs various activities like connecting to a pool, creating and opening
