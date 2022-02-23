@@ -99,6 +99,41 @@ ds_pool_child_put(struct ds_pool_child *child)
 	}
 }
 
+static int
+gc_rate_ctl(void *arg)
+{
+	struct ds_pool_child	*child = (struct ds_pool_child *)arg;
+	struct ds_pool		*pool = child->spc_pool;
+	struct sched_request	*req = child->spc_gc_req;
+
+	if (dss_ult_exiting(req))
+		return -1;
+
+	/* Let GC ULT run in tight mode when system is idle */
+	if (!dss_xstream_is_busy()) {
+		sched_req_yield(req);
+		return 0;
+	}
+
+	/*
+	 * When it's under space pressure, GC will continue run in slack mode
+	 * no matter what reclaim policy is used, otherwise, it'll take an extra
+	 * sleep to minimize the performance impact.
+	 */
+	if (sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
+		uint32_t msecs;
+
+		msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY ||
+			 pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ? 2000 : 50;
+		sched_req_sleep(req, msecs);
+	} else {
+		sched_req_yield(req);
+	}
+
+	/* Let GC ULT run in slack mode when system is busy */
+	return 1;
+}
+
 static void
 gc_ult(void *arg)
 {
@@ -113,8 +148,7 @@ gc_ult(void *arg)
 		goto out;
 
 	while (!dss_ult_exiting(child->spc_gc_req)) {
-		rc = vos_gc_pool(child->spc_hdl, -1, dss_ult_yield,
-				 (void *)child->spc_gc_req);
+		rc = vos_gc_pool(child->spc_hdl, -1, gc_rate_ctl, (void *)child);
 		if (rc < 0)
 			D_ERROR(DF_UUID"[%d]: GC pool run failed. "DF_RC"\n",
 				DP_UUID(child->spc_uuid), dmi->dmi_tgt_id,
@@ -129,7 +163,6 @@ gc_ult(void *arg)
 		else
 			sched_req_sleep(child->spc_gc_req, 10UL * 1000);
 	}
-
 out:
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT stopped\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);

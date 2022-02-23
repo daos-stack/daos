@@ -1495,16 +1495,16 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	return 0;
 }
 
-static inline bool
+static inline int
 rdb_gc_yield(void *arg)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 
 	if (dss_xstream_exiting(dx))
-		return true;
+		return -1;
 
 	ABT_thread_yield();
-	return false;
+	return 0;
 }
 
 /* Daemon ULT for compacting polled entries (i.e., indices <= base). */

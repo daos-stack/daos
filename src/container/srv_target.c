@@ -37,39 +37,47 @@
 
 /* Per VOS container aggregation ULT ***************************************/
 
-/*
- * VOS aggregation should try to avoid aggregating in the epoch range where
- * lots of data records are pending to commit, so the highest aggregate epoch
- * will be:
- *
- * current HLC - (DTX batched commit threshold + buffer period)
- */
-#define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
+static inline struct sched_request *
+cont2req(struct ds_cont_child *cont, bool vos_agg)
+{
+	return vos_agg ? cont->sc_agg_req : cont->sc_ec_agg_req;
+}
 
-#define DAOS_AGG_LAZY_RATE	50 /* ms */
-
-bool
+int
 agg_rate_ctl(void *arg)
 {
 	struct agg_param	*param = arg;
 	struct ds_cont_child	*cont = param->ap_cont;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
-	struct sched_request	*req = param->ap_req;
+	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
 
-	if (dss_ult_exiting(req))
-		return true;
+	/* Abort current round of aggregation */
+	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
+		return -1;
 
-	switch (pool->sp_reclaim) {
-	case DAOS_RECLAIM_DISABLED:
-		return true;
-	default:
-		if (dss_xstream_is_busy() &&
-		    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE)
-			sched_req_sleep(req, DAOS_AGG_LAZY_RATE);
-		else
-			sched_req_yield(req);
-		return false;
+	/* System is idle, let aggregation run in tight mode */
+	if (!dss_xstream_is_busy()) {
+		sched_req_yield(req);
+		return 0;
 	}
+
+	/*
+	 * When it's under space pressure, aggregation will continue run in slack
+	 * mode no matter what reclaim policy is used, otherwise, it'll take an extra
+	 * sleep to minimize the performance impact.
+	 */
+	if (sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
+		uint32_t msecs;
+
+		/* Sleep 2 seconds in lazy mode, it's kind of pausing aggregation */
+		msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY) ? 2000 : 50;
+		sched_req_sleep(req, msecs);
+	} else {
+		sched_req_yield(req);
+	}
+
+	/* System is busy, let aggregation run in slack mode */
+	return 1;
 }
 
 int
@@ -154,7 +162,7 @@ done:
 
 static bool
 cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
-			struct agg_param *param)
+			bool vos_agg)
 {
 	struct ds_pool	*pool = cont->sc_pool->spc_pool;
 
@@ -171,17 +179,17 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	}
 
 	if (pool->sp_reintegrating) {
-		if (param->ap_vos_agg)
+		if (vos_agg)
 			cont->sc_vos_agg_active = 0;
 		else
 			cont->sc_ec_agg_active = 0;
 		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during reintegration %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			param->ap_vos_agg ? "VOS":"EC", pool->sp_reintegrating);
+			vos_agg ? "VOS":"EC", pool->sp_reintegrating);
 		return false;
 	}
 
-	if (param->ap_vos_agg) {
+	if (vos_agg) {
 		if (!cont->sc_vos_agg_active)
 			D_DEBUG(DB_EPC, DF_CONT": resume VOS aggregation after reintegration.\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
@@ -230,14 +238,53 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 	return true;
 }
 
+/* Get HAE (Highest Aggregate Epoch) for EC/VOS aggregation */
+static uint64_t
+get_hae(struct ds_cont_child *cont, bool vos_agg)
+{
+	vos_cont_info_t	cinfo;
+	int		rc;
+
+	/* EC aggregation */
+	if (!vos_agg)
+		return cont->sc_ec_agg_eph;
+	/*
+	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
+	 * in vos_aggregate()
+	 */
+	rc = vos_cont_query(cont->sc_hdl, &cinfo);
+	if (rc) {
+		D_ERROR("cont query failed: rc: %d\n", rc);
+		return 0;
+	}
+
+	return cinfo.ci_hae;
+}
+
+/* Adjust the calculated EC/VOS aggregation upper bound */
+static inline void
+adjust_upper_bound(struct ds_cont_child *cont, bool vos_agg, uint64_t *upper_bound)
+{
+	/* Cap the upper bound when taking snapshot */
+	if (*upper_bound >= cont->sc_aggregation_max)
+		*upper_bound = cont->sc_aggregation_max - 1;
+
+	/* Adjust EC aggregation upper bound, or EC aggregation disabled */
+	if (!vos_agg || unlikely(ec_agg_disabled))
+		return;
+
+	/* Cap VOS aggregation upper bound to EC aggregation HAE */
+	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundry);
+}
+
 #define MAX_SNAPSHOT_LOCAL	16
 static int
 cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
-		     struct agg_param *param, uint64_t *msecs)
+		     struct agg_param *param)
 {
 	daos_epoch_t		epoch_max, epoch_min;
 	daos_epoch_range_t	epoch_range;
-	struct sched_request	*req = param->ap_req;
+	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
 	uint64_t		hlc = crt_hlc_get();
 	uint64_t		change_hlc;
 	uint64_t		interval;
@@ -247,11 +294,6 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
 	uint32_t		flags = 0;
 	int			i, rc = 0;
-
-	/* Check if it's ok to start aggregation in every 2 seconds */
-	*msecs = 2ULL * 1000;
-	if (!cont_aggregate_runnable(cont, req, param))
-		return 0;
 
 	change_hlc = max(cont->sc_snapshot_delete_hlc,
 			 cont->sc_pool->spc_rebuild_end_hlc);
@@ -264,8 +306,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		D_DEBUG(DB_EPC, "change hlc "DF_X64" > full "DF_X64"\n",
 			change_hlc, param->ap_full_scan_hlc);
 	} else {
-		D_ASSERT(param->ap_start_eph_get != NULL);
-		epoch_min = param->ap_start_eph_get(cont);
+		epoch_min = get_hae(cont, param->ap_vos_agg);
 	}
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG) ||
@@ -277,34 +318,23 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 
 	D_ASSERT(hlc > (interval * 2));
 	/*
-	 * Assume 'current hlc - interval' as the highest stable view (all
-	 * transactions under this epoch is either committed or aborted).
+	 * Assume the epoch of 'current hlc - interval' as the highest stable view:
+	 * - Most transactions under this epoch are either committed or aborted;
+	 * - No new transactions would happen under this epoch;
 	 */
 	epoch_max = hlc - interval;
 
-	/* Make sure aggregation will not be executed too often, at least every interval */
-	if (epoch_min >= epoch_max) {
-		/* Nothing can be aggregated */
-		*msecs = max(*msecs, crt_hlc2msec(epoch_min - epoch_max));
+	/*
+	 * When there isn't space pressure, don't aggregate too often, otherwise,
+	 * aggregation will be inefficient because the data to be aggregated could
+	 * be changed by new update very soon.
+	 */
+	if (epoch_min > epoch_max - interval &&
+			sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE)
 		return 0;
-	} else if (epoch_min > epoch_max - interval &&
-		   sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		/*
-		 * When there isn't space pressure, don't aggregate too often,
-		 * otherwise, aggregation will be inefficient because the data
-		 * to be aggregated could be changed by new update very soon.
-		 */
-		return 0;
-	}
 
-	/* Adjust aggregation top boundary */
-	if (epoch_max >= cont->sc_aggregation_max)
-		epoch_max = cont->sc_aggregation_max - 1;
+	adjust_upper_bound(cont, param->ap_vos_agg, &epoch_max);
 
-	if (param->ap_max_eph_get)
-		epoch_max = min(epoch_max, param->ap_max_eph_get(cont));
-
-	/* Check the min/max epoch again after adjustment */
 	if (epoch_min >= epoch_max) {
 		D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n", epoch_min, epoch_max);
 		return 0;
@@ -361,7 +391,6 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	if (epoch_range.epr_lo >= epoch_max)
 		D_GOTO(free, rc = 0);
 
-	*msecs = 0;
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: "DF_X64"; HLC: "DF_X64"\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_min, hlc);
@@ -374,7 +403,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
 		flags |= VOS_AGG_FL_FORCE_MERGE;
-		rc = agg_cb(cont, &epoch_range, flags, param, msecs);
+		rc = agg_cb(cont, &epoch_range, flags, param);
 		if (rc)
 			D_GOTO(free, rc);
 		epoch_range.epr_lo = epoch_range.epr_hi + 1;
@@ -391,15 +420,13 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 
 	if (dss_xstream_is_busy())
 		flags &= ~VOS_AGG_FL_FORCE_MERGE;
-	rc = agg_cb(cont, &epoch_range, flags, param, msecs);
+	rc = agg_cb(cont, &epoch_range, flags, param);
 out:
 	if (rc == 0 && epoch_min == 0)
 		param->ap_full_scan_hlc = hlc;
 
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished, sleep "DF_U64
-		" mseconds: %d\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id,
-		*msecs, rc);
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished. "DF_RC"\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, DP_RC(rc));
 free:
 	if (snapshots != NULL && snapshots != snapshots_local)
 		D_FREE(snapshots);
@@ -412,38 +439,45 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			struct agg_param *param)
 {
 	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
 	int			 rc = 0;
 
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT started\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		dmi->dmi_tgt_id);
 
-	if (param->ap_req == NULL)
+	if (req == NULL)
 		goto out;
 
-	while (!dss_ult_exiting(param->ap_req)) {
-		uint64_t msecs;	/* milli seconds */
+	while (!dss_ult_exiting(req)) {
+		/*
+		 * Sleep 2 seconds before next round when:
+		 * - Aggregation isn't runnable yet, or;
+		 * - Last round of aggregation failed, or;
+		 * - There is no space pressure;
+		 */
+		uint64_t msecs = 2000;
 
-		rc = cont_child_aggregate(cont, cb, param, &msecs);
+		if (!cont_aggregate_runnable(cont, req, param->ap_vos_agg))
+			goto next;
+
+		rc = cont_child_aggregate(cont, cb, param);
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
 			D_ERROR(DF_CONT": VOS aggregate failed. "DF_RC"\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 				DP_RC(rc));
-			/* Sleep 2 seconds when last aggregation failed */
-			msecs = 2ULL * 1000;
-		} else {
-			if (msecs == 0)
-				msecs = 2ULL * 100;
+		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
+			/* Don't sleep too long when there is space pressure */
+			msecs = 2ULL * 100;
 		}
-
-		if (dss_ult_exiting(param->ap_req))
+next:
+		if (dss_ult_exiting(req))
 			break;
 
-		sched_req_sleep(param->ap_req, msecs);
+		sched_req_sleep(req, msecs);
 	}
-
 out:
 	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT stopped\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
@@ -452,7 +486,7 @@ out:
 
 static int
 cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		      uint32_t flags, struct agg_param *param, uint64_t *msecs)
+		      uint32_t flags, struct agg_param *param)
 {
 	int rc;
 
@@ -467,34 +501,6 @@ cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	return rc;
 }
 
-static uint64_t
-cont_agg_start_eph_get(struct ds_cont_child *cont)
-{
-	vos_cont_info_t	cinfo;
-	int		rc;
-
-	/*
-	 * Query the 'Highest Aggregated Epoch', the HAE will be bumped
-	 * in vos_aggregate()
-	 */
-	rc = vos_cont_query(cont->sc_hdl, &cinfo);
-	if (rc) {
-		D_ERROR("cont query failed: rc: %d\n", rc);
-		return 0;
-	}
-
-	return cinfo.ci_hae;
-}
-
-static uint64_t
-cont_agg_max_epoch_get(struct ds_cont_child *cont)
-{
-	if (unlikely(ec_agg_disabled))
-		return DAOS_EPOCH_MAX;
-
-	return cont->sc_ec_agg_eph_boundry;
-}
-
 static void
 cont_agg_ult(void *arg)
 {
@@ -503,11 +509,8 @@ cont_agg_ult(void *arg)
 
 	D_DEBUG(DB_EPC, "start VOS aggregation "DF_UUID"\n",
 		DP_UUID(cont->sc_uuid));
-	param.ap_max_eph_get = cont_agg_max_epoch_get;
-	param.ap_start_eph_get = cont_agg_start_eph_get;
-	param.ap_req = cont->sc_agg_req;
 	param.ap_cont = cont;
-	param.ap_vos_agg = 1;
+	param.ap_vos_agg = true;
 
 	cont_aggregate_interval(cont, cont_vos_aggregate_cb, &param);
 }
