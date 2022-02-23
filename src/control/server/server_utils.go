@@ -46,10 +46,6 @@ const (
 func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
 	bdevs := []string{}
 	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
-		if bc.Class != storage.ClassNvme {
-			// don't scan if any tier is using emulated NVMe
-			return new(storage.BdevDeviceList)
-		}
 		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
 	}
 
@@ -195,11 +191,8 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 				return FaultIommuDisabled
 			}
 		}
-	} else if srv.cfg.NrHugepages == -1 {
+	} else if srv.cfg.NrHugepages < 0 {
 		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: -1 in config")
-		return nil
-	} else if len(srv.cfg.Engines) > 0 && srv.cfg.NrHugepages == 0 {
-		srv.log.Debugf("skip nvme prepare as scm-only cfg and nr_hugepages unset in config")
 		return nil
 	}
 
@@ -236,16 +229,19 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
 			prepReq.HugePageCount, numaNodes)
-	} else if len(srv.cfg.Engines) == 0 && srv.cfg.NrHugepages == 0 {
-		// If nr_hugepages is unset and no engines in config, set minimum needed for
-		// scanning and set number of hugepages for engines to zero for discovery mode.
-		prepReq.HugePageCount = scanMinHugePageCount
-		srv.cfg.NrHugepages = 0
 	} else {
-		// If nr_hugepages has been set manually but no bdevs in config then allocate on
-		// numa node 0 (for example if a bigger number of hugepages are required in
-		// discovery mode for an unusually large number of SSDs).
-		prepReq.HugePageCount = srv.cfg.NrHugepages
+		if srv.cfg.NrHugepages == 0 {
+			// If nr_hugepages is unset then set minimum needed for scanning in prepare
+			// request.
+			prepReq.HugePageCount = scanMinHugePageCount
+		} else {
+			// If nr_hugepages has been set manually but no bdevs in config then
+			// allocate on numa node 0 (for example if a bigger number of hugepages are
+			// required in discovery mode for an unusually large number of SSDs).
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		}
+
+		srv.log.Debugf("allocating %d hugepages on numa node 0", prepReq.HugePageCount)
 	}
 
 	// Run prepare to bind devices to user-space driver and allocate hugepages.
@@ -261,16 +257,22 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 }
 
 // scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
-func scanBdevStorage(srv *server) *storage.BdevScanResponse {
+func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList: cfgGetBdevs(srv.cfg),
+		DeviceList:  cfgGetBdevs(srv.cfg),
+		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
-		srv.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan Failed"))
-		return &storage.BdevScanResponse{}
+		// Return error if fault code is for BdevNotFound.
+		if storage.FaultBdevNotFound().Equals(err) {
+			return nil, err
+		}
+		// Keep going for other scan related failures.
+		srv.log.Errorf("%s\n", errors.Wrap(err, "NVMe Scan Failed"))
+		return &storage.BdevScanResponse{}, nil
 	}
 
-	return nvmeScanResp
+	return nvmeScanResp, nil
 }
 
 // Minimum recommended number of hugepages has already been calculated and set in config so verify

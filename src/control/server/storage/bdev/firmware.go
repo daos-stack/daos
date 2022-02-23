@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -91,7 +91,7 @@ func getDeviceController(pciAddr string, controllers storage.NvmeControllers) (*
 		}
 	}
 
-	return nil, FaultBdevNotFound(pciAddr)
+	return nil, storage.FaultBdevNotFound(pciAddr)
 }
 
 func filterControllersByModelFirmware(controllers storage.NvmeControllers, modelID, fwRev string) storage.NvmeControllers {

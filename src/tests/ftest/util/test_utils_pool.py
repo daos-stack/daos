@@ -136,8 +136,7 @@ class TestPool(TestDaosApiBase):
         if self.label.value is not None:
             if not isinstance(self.label_generator, LabelGenerator):
                 raise CommandFailure(
-                    "Unable to create a unique pool label; " +\
-                        "Undefined label_generator")
+                    "Unable to create a unique pool label; Undefined label_generator")
             self.label.update(self.label_generator.get_label(self.label.value))
 
     @property

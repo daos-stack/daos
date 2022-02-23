@@ -7,6 +7,8 @@ control_log_file: /tmp/daos_server.log
 transport_config:
    allow_insecure: true
 
+telemetry_port: 9191
+
 engines:
 -
   targets: 1

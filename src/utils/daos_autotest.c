@@ -1210,6 +1210,8 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_AUTOTEST);
 
+	uuid_unparse(ap->p_uuid, ap->pool_str);
+
 	autotest_ap = ap;
 
 	if (autotest_ap->deadline_limit)

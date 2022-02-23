@@ -254,7 +254,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		getHpiErr       error
 		hugePagesFree   int
 		bmbc            *bdev.MockBackendConfig
-		smbc            *scm.MockBackendConfig
 		expPrepErr      error
 		expPrepCalls    []storage.BdevPrepareRequest
 		expResetCalls   []storage.BdevPrepareRequest
@@ -282,7 +281,43 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(scmEngine(0), scmEngine(1))
 			},
 		},
-		"nvme prep succeeds; 2 engines both numa 0; hugepage alloc only on numa 0": {
+		"no bdevs configured; nr_hugepages unset": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(0).
+					WithEngines(scmEngine(0), scmEngine(1))
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					Reset_:     true,
+					TargetUser: username,
+				},
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					HugePageCount: scanMinHugePageCount,
+					TargetUser:    username,
+				},
+			},
+		},
+		"no bdevs configured; nr_hugepages set": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(1024).
+					WithEngines(scmEngine(0), scmEngine(1))
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					Reset_:     true,
+					TargetUser: username,
+				},
+			},
+			expPrepCalls: []storage.BdevPrepareRequest{
+				{
+					HugePageCount: 1024,
+					TargetUser:    username,
+				},
+			},
+		},
+		"2 engines both numa 0; hugepage alloc only on numa 0": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1).WithPinnedNumaNode(0)).
@@ -315,7 +350,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		"nvme prep succeeds; 2 engines both numa 1; hugepage alloc only on numa 1": {
+		"2 engines both numa 1; hugepage alloc only on numa 1": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0).WithPinnedNumaNode(1), nvmeEngine(1))
@@ -337,7 +372,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		"nvme prep succeeds; 2 engines; hugepage alloc across numa 0,1": {
+		"2 engines; hugepage alloc across numa 0,1": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1))
@@ -359,7 +394,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		"nvme prep succeeds; 2 engines; hugepage alloc across numa 0,1; insufficient free": {
+		"2 engines; hugepage alloc across numa 0,1; insufficient free": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1))
@@ -380,7 +415,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expMemChkErr: errors.New("0: want 16 GiB (8192 hugepages), got 16 GiB (8191"),
 		},
-		"nvme prep succeeds; 2 engines; scm only; nr_hugepages unset": {
+		"2 engines; scm only; nr_hugepages unset": {
 			hugePagesFree: 128,
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -395,7 +430,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				},
 			},
 		},
-		"nvme prep succeeds; 2 engines; scm only; nr_hugepages unset; insufficient free": {
+		"2 engines; scm only; nr_hugepages unset; insufficient free": {
 			hugePagesFree: 0,
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -411,7 +446,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expMemChkErr: errors.New("requested 128 hugepages; got 0"),
 		},
-		"nvme prep succeeds; 0 engines; nr_hugepages unset": {
+		"0 engines; nr_hugepages unset": {
 			hugePagesFree: 128,
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -426,7 +461,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				},
 			},
 		},
-		"nvme prep succeeds; 0 engines; nr_hugepages unset; insufficient free": {
+		"0 engines; nr_hugepages unset; insufficient free": {
 			hugePagesFree: 0,
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -442,7 +477,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			expMemChkErr: errors.New("requested 128 hugepages; got 0"),
 		},
-		"nvme prep succeeds; 0 engines; nr_hugepages unset; hpi fetch fails": {
+		"0 engines; nr_hugepages unset; hpi fetch fails": {
 			getHpiErr: errors.New("could not find hugepage info"),
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -457,7 +492,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				},
 			},
 		},
-		"nvme prep succeeds; 1 engine; nr_hugepages unset; hpi fetch fails": {
+		"1 engine; nr_hugepages unset; hpi fetch fails": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(8192).
 					WithEngines(nvmeEngine(0))
@@ -479,7 +514,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemChkErr: errors.New("could not find hugepage info"),
 		},
 		// prepare will continue even if reset fails
-		"nvme reset fails; 2 engines": {
+		"reset fails; 2 engines": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
@@ -488,7 +523,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugePagesFree: 16384,
 			bmbc: &bdev.MockBackendConfig{
-				ResetErr: errors.New("backed prep setup failed"),
+				ResetErr: errors.New("backed prep reset failed"),
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -512,7 +547,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		"nvme prep succeeds; 2 engines; vmd enabled": {
+		"reset fails; 2 engines; vmd enabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithNrHugePages(16384).
 					WithEngines(nvmeEngine(0), nvmeEngine(1)).
@@ -522,7 +557,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			},
 			hugePagesFree: 16384,
 			bmbc: &bdev.MockBackendConfig{
-				ResetErr: errors.New("backed prep setup failed"),
+				ResetErr: errors.New("backed prep reset failed"),
 			},
 			expResetCalls: []storage.BdevPrepareRequest{
 				{
@@ -624,6 +659,67 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				"unexpected memory size")
 			common.AssertEqual(t, tc.expHugePageSize, ei.runner.GetConfig().HugePageSz,
 				"unexpected huge page size")
+		})
+	}
+}
+
+// TestServer_scanBdevStorage validates that an error it returned in the case that a SSD is not
+// found and doesn't return an error if SPDK fails to init. Emulated NVMe (SPDK AIO mode) should
+// also be covered.
+func TestServer_scanBdevStorage(t *testing.T) {
+	for name, tc := range map[string]struct {
+		bmbc   *bdev.MockBackendConfig
+		expErr error
+	}{
+		"spdk fails init": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: errors.New("spdk failed"),
+			},
+		},
+		"bdev in config not found by spdk": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: storage.FaultBdevNotFound(common.MockPCIAddr()),
+			},
+			expErr: storage.FaultBdevNotFound(common.MockPCIAddr()),
+		},
+		"successful scan": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.MockNvmeControllers(1),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
+
+			// test only with 2M hugepage size
+			if err := cfg.Validate(log, 2048, nil); err != nil {
+				t.Fatal(err)
+			}
+
+			srv, err := newServer(log, cfg, &system.FaultDomain{})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			mbb := bdev.NewMockBackend(tc.bmbc)
+			mbp := bdev.NewProvider(log, mbb)
+			sp := scm.NewMockSysProvider(log, nil)
+
+			srv.ctlSvc = &ControlService{
+				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
+					sp,
+					scm.NewProvider(log, scm.NewMockBackend(nil), sp),
+					mbp),
+				srvCfg: cfg,
+			}
+
+			_, gotErr := scanBdevStorage(srv)
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
