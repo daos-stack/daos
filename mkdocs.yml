@@ -96,5 +96,5 @@ nav:
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
-        - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/release/v1.2/src/README.md'
+        - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/release/1.2/src/README.md'
         - 'DAOS API Documentation': 'doxygen/html/index.html'
