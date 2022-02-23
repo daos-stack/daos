@@ -53,7 +53,7 @@ $ sudo zypper install -y daos-server
 ```
 
 Debug and source RPMs available in the respective [debug](https://packages.daos.io/v1.2/Leap15/debug/x86_64/daos_debug.repo)
-and [source](https://packages.daos.io/v1.2/Leaps15/source/daos_source.repo)
+and [source](https://packages.daos.io/v1.2/Leap15/source/daos_source.repo)
 repositories.
 
 ## DAOS from Scratch
