@@ -742,11 +742,16 @@ def get_device_replacement(args):
 
     # First check for any VMD disks, if requested
     if nvme_args[0] in ["auto", "auto_vmd"]:
-        # Find the VMD controller for the optional matching VMD disks
         vmd_devices = auto_detect_devices(host_list, "NVMe", "5", dev_filter)
-        vmd_controllers = auto_detect_devices(host_list, "VMD", "4", None)
-        devices.extend(get_vmd_address_backed_nvme(host_list, vmd_devices, vmd_controllers))
-        device_types.append("VMD")
+        if vmd_devices:
+            # Find the VMD controller for the matching VMD disks
+            vmd_controllers = auto_detect_devices(host_list, "VMD", "4", None)
+            devices.extend(get_vmd_address_backed_nvme(host_list, vmd_devices, vmd_controllers))
+        elif not dev_filter:
+            # Use any VMD controller if no VMD disks found w/o a filter
+            devices = auto_detect_devices(host_list, "VMD", "4", None)
+        if devices:
+            device_types.append("VMD")
 
     # Second check for any non-VMD NVMe disks, if requested
     if nvme_args[0] in ["auto", "auto_nvme"]:
@@ -2386,6 +2391,9 @@ def main():
     vmd_flag = False
     if args.nvme and args.nvme.startswith("auto") and not args.list:
         args.nvme, vmd_flag = get_device_replacement(args)
+    elif args.nvme and args.nvme.startswith("vmd:"):
+        args.nvme = args.nvme.replace("vmd:", "")
+        vmd_flag = True
 
     # Process the tags argument to determine which tests to run
     tag_filter, test_list = get_test_list(args.tags)
