@@ -14,10 +14,10 @@ server_config:
  name: daos_server
  servers:
   log_mask: ERR
-  bdev_class: nvme
-  bdev_list: ["0000:81:00.0","0000:da:00.0"]
-  scm_class: dcpm
-  scm_list: ["/dev/pmem0"]
+  #  bdev_class: nvme
+  #bdev_list: ["0000:81:00.0","0000:da:00.0"]
+  #scm_class: dcpm
+  #scm_list: ["/dev/pmem0"]
 pool: &pool
  name: daos_server
  control_method: dmg
@@ -54,49 +54,49 @@ pool_3: #[3G, 9G, 8B, 10M, 1]
 pool_4: #[4G, 9G, 24B, 24M, 1]
  <<: *pool
  scm_size: 1%
- nvme_size: 1%
+ nvme_size: 2%
  stripesize: 24
  blocksize: 25165824
  clientslots: 1
 pool_5: #[1G, 9G, 2056, 4M, 1]
  <<: *pool
  scm_size: 1%
- nvme_size: 1%
+ nvme_size: 3%
  stripesize: 2056
  blocksize: 4227136
  clientslots: 1
 pool_6: #[6G, 300G, 128M, 32G, 1]
  <<: *pool
  scm_size: 1%
- nvme_size: 22%
+ nvme_size: 3%
  stripesize: 134217728
  blocksize: 34359738368
  clientslots: 1
 pool_7: #[10G, 60G, 32B, 42M, 1]
  <<: *pool
- scm_size: 2%
- nvme_size: 5%
+ scm_size: 1%
+ nvme_size: 3%
  stripesize: 32
  blocksize: 44040192
  clientslots: 1
 pool_8: #[58G, 900G, 2k, 1G, 2]
  <<: *pool
- scm_size: 10%
- nvme_size: 50%
+ scm_size: 2%
+ nvme_size: 5%
  stripesize: 2048
  blocksize: 1073741824
  clientslots: 2
 pool_9: #[58G, 900G, 8B, 10M, 2]
  <<: *pool
- scm_size: 10%
- nvme_size: 50%
+ scm_size: 2%
+ nvme_size: 5%
  stripesize: 8
  blocksize: 10485760
  clientslots: 2
 pool_10: #[58G, 900G, 32M, 22G, 5]
  <<: *pool
- scm_size: 10%
- nvme_size: 50%
+ scm_size: 2%
+ nvme_size: 5%
  stripesize: 33554432
  blocksize: 23622320128
  clientslots: 5
