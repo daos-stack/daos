@@ -102,7 +102,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: common.MockPCIAddrs(1),
+					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1)...),
 				},
 			},
 			expOut: `
@@ -157,7 +157,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: common.MockPCIAddrs(1, 2),
+					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1, 2)...),
 				},
 			},
 			expOut: `
@@ -220,7 +220,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: common.MockPCIAddrs(1, 2),
+					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1, 2)...),
 					BusidRange: storage.MustNewBdevBusRange("0x80-0x8f"),
 				},
 			},
@@ -294,7 +294,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: common.MockPCIAddrs(1, 2),
+					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1, 2)...),
 					BusidRange: storage.MustNewBdevBusRange("0x80-0x8f"),
 				},
 			},
@@ -367,7 +367,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: common.MockPCIAddrs(1, 2),
+					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1, 2)...),
 				},
 			},
 			enableHotplug: true,

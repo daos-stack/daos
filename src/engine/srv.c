@@ -365,7 +365,8 @@ dss_srv_handler(void *arg)
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
-	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_list);
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_open_list);
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_close_list);
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_pool_list);
 
 	(void)pthread_setname_np(pthread_self(), dx->dx_name);
@@ -579,7 +580,6 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	dx->dx_progress	= ABT_THREAD_NULL;
 #ifdef ULT_MMAP_STACK
 	D_INIT_LIST_HEAD(&dx->stack_free_list);
-	dx->alloced_stacks = 0;
 	dx->free_stacks = 0;
 #endif
 
@@ -604,10 +604,9 @@ dss_xstream_free(struct dss_xstream *dx)
 	while ((mmap_stack_desc = d_list_pop_entry(&dx->stack_free_list,
 						   mmap_stack_desc_t,
 						   stack_list)) != NULL) {
-		D_INFO("Draining a mmap()'ed stack, dx=%p, alloced="DF_U64", free="DF_U64"\n",
-		       dx, dx->alloced_stacks, dx->free_stacks);
+		D_INFO("Draining a mmap()'ed stack, dx=%p, free="DF_U64"\n",
+		       dx, dx->free_stacks);
 		munmap(mmap_stack_desc->stack, mmap_stack_desc->stack_size);
-		--dx->alloced_stacks;
 		--dx->free_stacks;
 		atomic_fetch_sub(&nb_mmap_stacks, 1);
 	}
@@ -1262,7 +1261,7 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
-	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id, dss_nvme_mem_size,
+	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
 			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get(),
 			   dss_nvme_bypass_health_check);
 	if (rc != 0)

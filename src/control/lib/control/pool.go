@@ -33,7 +33,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = 60 * time.Second // fail faster if it's going to fail
+	DefaultPoolTimeout = drpc.DefaultCartTimeout * 3
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -198,7 +198,8 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		switch e {
 		// These pool errors can be retried.
 		case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
-			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable:
+			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable,
+			drpc.DaosExcluded:
 			return true
 		default:
 			return false

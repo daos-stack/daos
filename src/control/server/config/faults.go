@@ -8,6 +8,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
@@ -89,6 +90,16 @@ var (
 		code.ServerConfigFaultDomainTooManyLayers,
 		"only a single fault domain layer below the root is supported",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
+	)
+	FaultConfigNrHugepagesOutOfRange = serverConfigFault(
+		code.ServerConfigNrHugepagesOutOfRange,
+		"number of hugepages specified is out of range",
+		fmt.Sprintf("specify a nr_hugepages value between -1 and %d", math.MaxInt32),
+	)
+	FaultConfigHugepagesDisabled = serverConfigFault(
+		code.ServerConfigHugepagesDisabled,
+		"hugepages cannot be disabled if bdevs have been specified in config",
+		"remove nr_hugepages parameter from config to have the value automatically calculated",
 	)
 )
 
@@ -188,6 +199,16 @@ func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
 		fmt.Sprintf("ensure that the 'fault_cb' path is under the parent directory %q, "+
 			"not a symbolic link, does not have the setuid bit set, and does not have "+
 			"write permissions for non-owners", requiredDir),
+	)
+}
+
+// FaultConfigInsufficientHugePages creates a fault for the scenario where the
+// number of configured huge pages is less than required.
+func FaultConfigInsufficientHugePages(min, req int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigInsufficientHugePages,
+		fmt.Sprintf("insufficient huge pages configured for the number of targets (%d < %d)", req, min),
+		"update the 'nr_hugepages' parameter or remove it for automatic configuration",
 	)
 }
 

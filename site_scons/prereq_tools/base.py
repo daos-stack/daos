@@ -64,9 +64,8 @@ except ImportError:
 import tarfile
 import copy
 if sys.version_info < (3, 0):
-# pylint: disable=import-error
+    # pylint: disable=import-error
     import ConfigParser
-# pylint: enable=import-error
 else:
     import configparser as ConfigParser
 
@@ -402,7 +401,7 @@ build with random upstream changes.
             self.commit_sha = passed_commit_sha
             self.checkout_commit(subdir)
 
-	# reset patched diff
+        # reset patched diff
         command = ['cd %s && git reset --hard HEAD' % (subdir)]
         if not RUNNER.run_commands(command):
             raise DownloadFailure(self.url, subdir)
@@ -929,8 +928,7 @@ class PreReqComponent():
                   type='choice',
                   choices=['yes', 'no', 'build-only'],
                   default='no',
-                  help="Automatically download and build sources.  " \
-                       "(yes|no|build-only) [no]")
+                  help="Automatically download and build sources.  (yes|no|build-only) [no]")
 
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -1471,7 +1469,7 @@ class _Component():
             return False
 
         path = os.environ.get("PKG_CONFIG_PATH", None)
-        if not path is None:
+        if path is not None:
             env["ENV"]["PKG_CONFIG_PATH"] = path
         if self.component_prefix:
             for path in ["lib", "lib64"]:
@@ -1795,6 +1793,7 @@ class _Component():
         if self.has_missing_targets(envcopy) and not self.__dry_run:
             raise MissingTargets(self.name, None)
         return changes
+
 
 __all__ = ["GitRepoRetriever", "WebRetriever",
            "DownloadFailure", "ExtractionError",
