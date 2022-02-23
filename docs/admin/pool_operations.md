@@ -59,12 +59,12 @@ $ dmg pool create --size 50GB tank
 Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 Pool created with 6.00% SCM/NVMe ratio
 -----------------------------------------
-  UUID          : 8a05bf3a-a088-4a77-bb9f-df989fce7cc8
-  Replica Ranks : [1-3]
-  Target Ranks  : [0-15]
-  Size          : 50 GB
-  SCM           : 3.0 GB (188 MB / rank)
-  NVMe          : 47 GB (3.0 GB / rank)
+  UUID                 : 8a05bf3a-a088-4a77-bb9f-df989fce7cc8
+  Service Ranks        : [1-3]
+  Storage Ranks        : [0-15]
+  Total Size           : 50 GB
+  Storage tier 0 (SCM) : 3.0 GB (188 MB / rank)
+  Storage tier 1 (NVMe): 47 GB (3.0 GB / rank)
 ```
 
 This created a pool with UUID 8a05bf3a-a088-4a77-bb9f-df989fce7cc8,
@@ -80,7 +80,7 @@ will be distributed as follows:
 - 6% is allocated on SCM (i.e., 3GB in the example above)
 - 94% is allocated on NVMe SSD (i.e., 47GB in the example above)
 
-Note that it is difficult to determine the usable space by the user and
+Note that it is difficult to determine the usable space by the user, and
 currently we cannot provide the precise value. The usable space depends not only
 on pool size, but also on number of targets, target size, object class,
 storage redundancy factor, etc.
