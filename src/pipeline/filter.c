@@ -365,13 +365,15 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 
 	if (strncmp(part_type, "DAOS_FILTER_FUNC", comp_size)) /** != FUNC */
 	{
-		comp_part->data_offset = filter->parts[*part_idx]->data_offset;
-		comp_part->data_len = filter->parts[*part_idx]->data_len;
 		*type = (char *) filter->parts[*part_idx]->data_type.iov_buf;
 		*type_len = filter->parts[*part_idx]->data_type.iov_len;
 
 		if (!strncmp(part_type, "DAOS_FILTER_AKEY", part_type_s))
 		{
+			comp_part->data_offset =
+					filter->parts[*part_idx]->data_offset;
+			comp_part->data_len =
+					filter->parts[*part_idx]->data_len;
 			comp_part->iov = &filter->parts[*part_idx]->akey;
 			comp_part->filter_func = getdata_func_akey;
 		}
@@ -379,6 +381,8 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 		{
 			comp_part->iov = &filter->parts[*part_idx]->constant[0];
 			comp_part->filter_func = getdata_func_const;
+			comp_part->data_offset = 0;
+			comp_part->data_len = comp_part->iov->iov_len;
 
 			for (i = 1;
 			     i < filter->parts[*part_idx]->num_constants;
@@ -391,10 +395,16 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 				comp_part->iov =
 					&filter->parts[*part_idx]->constant[i];
 				comp_part->filter_func = getdata_func_const;
+				comp_part->data_offset = 0;
+				comp_part->data_len = comp_part->iov->iov_len;
 			}
 		}
 		else if (!strncmp(part_type, "DAOS_FILTER_DKEY", part_type_s))
 		{
+			comp_part->data_offset =
+					filter->parts[*part_idx]->data_offset;
+			comp_part->data_len =
+					filter->parts[*part_idx]->data_len;
 			comp_part->filter_func = getdata_func_dkey;
 		}
 		D_GOTO(exit, rc = 0);

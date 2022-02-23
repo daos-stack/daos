@@ -9,7 +9,6 @@
 
 #include <daos_pipeline.h>
 
-
 struct filter_part_run_t {
 	d_iov_t				*dkey;
 	uint32_t			nr_iods;
@@ -70,6 +69,12 @@ int pipeline_compile(daos_pipeline_t *pipe,
 
 void pipeline_compile_free(struct pipeline_compiled_t *comp_pipe);
 
+typedef int8_t _int8_t;
+typedef int16_t _int16_t;
+typedef int32_t _int32_t;
+typedef int64_t _int64_t;
+typedef float _float;
+typedef double _double;
 
 filter_func_t filter_func_eq_i1;
 filter_func_t filter_func_eq_i2;
