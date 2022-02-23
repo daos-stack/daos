@@ -33,12 +33,12 @@
  *
  * It's not completed yet, and never can be 100%.
  *
- * fopen can open files amend mode, so we to check for this and disable if needed.
+ * fopen can open files amend mode, so we check for this and disable if needed.
  *
  * We need to intercept, and disable/pass through all these functions:
- * fputc, fputs, fputwc, fputws
- * fgetc, fgets, fgetwc, fgetws
+
  * getline, getdelim
+
  * fgetln
  * fscanf vfscanf
  * fprintf, vfprintf
@@ -2166,6 +2166,273 @@ dfuse_ftello(FILE *stream)
 	return off;
 do_real_ftello:
 	return __real_ftello(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fputc(int __c, FILE *stream)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	entry->fd_err = ENOTSUP;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return EOF;
+
+do_real_fn:
+	return __real_fputc(__c, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fputs(char *__str, FILE *stream)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	entry->fd_err = ENOTSUP;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return EOF;
+
+do_real_fn:
+	return __real_fputs(__str, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fputws(const wchar_t *ws, FILE *stream)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	entry->fd_err = ENOTSUP;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return -1;
+
+do_real_fn:
+	return __real_fputws(ws, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fgetc(FILE *stream)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	entry->fd_err = ENOTSUP;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return EOF;
+
+do_real_fn:
+	return __real_fgetc(stream);
+}
+
+DFUSE_PUBLIC char *
+dfuse_fgets(char *str, int n, FILE *stream)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	entry->fd_err = ENOTSUP;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return NULL;
+
+do_real_fn:
+	return __real_fgets(str, n, stream);
+}
+
+DFUSE_PUBLIC wchar_t *
+dfuse_fgetws(const wchar_t *ws, FILE *stream)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	entry->fd_err = ENOTSUP;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return NULL;
+
+do_real_fn:
+	return __real_fgetws(ws, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_ungetc(int c, FILE *stream)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	vector_decref(&fd_table, entry);
+
+	return EOF;
+
+do_real_fn:
+	return __real_ungetc(c, stream);
+}
+
+DFUSE_PUBLIC int
+dfuse_fscanf(FILE *stream, const char *format, ...)
+{
+	struct fd_entry	*entry = NULL;
+	va_list ap;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return EOF;
+
+do_real_fn:
+	va_start(ap, format);
+	rc = __real_vfscanf(stream, format, ap);
+	va_end(ap);
+	return rc;
+}
+
+DFUSE_PUBLIC int
+dfuse_vfscanf(FILE *stream, const char *format, va_list arg)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return EOF;
+
+do_real_fn:
+	return __real_vfscanf(stream, format, arg);
 }
 
 DFUSE_PUBLIC int

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,8 +63,17 @@
 	ACTION(long,    ftell,     (FILE *))                                  \
 	ACTION(void,    rewind,    (FILE *))                                  \
 	ACTION(off_t,   ftello,    (FILE *))                                  \
-	ACTION(size_t,  fread,     (void *, size_t, size_t, FILE *)) \
-	ACTION(size_t,  fwrite,    (const void *ptr, size_t size, size_t nmemb, FILE *stream))
+	ACTION(size_t,  fread,     (void *, size_t, size_t, FILE *))          \
+	ACTION(size_t,  fwrite,    (const void *ptr, size_t size, size_t nmemb, FILE *stream)) \
+	ACTION(int,     fputc,     (int c, FILE *stream))                     \
+	ACTION(int,     fputs,     (const char *str, FILE *stream))           \
+	ACTION(int,     fputws,    (const wchar_t *ws, FILE *stream))         \
+	ACTION(int,     fgetc,     (FILE *stream))		              \
+	ACTION(char *,  fgets,     (char *str, int, FILE *stream))            \
+	ACTION(wchar_t *, fgetws,   (const wchar_t* ws, FILE* stream))         \
+	ACTION(int,     ungetc,    (int, FILE *))		              \
+	ACTION(int,     fscanf,    (FILE *, const char *, ...))	              \
+	ACTION(int,     vfscanf,   (FILE *, const char *, va_list))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \
