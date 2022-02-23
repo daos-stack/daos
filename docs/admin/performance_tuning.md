@@ -2,7 +2,8 @@
 
 ## Network Performance
 
-The DAOS [CaRT][1] layer can validate and benchmark network communications in
+The DAOS [CaRT](https://github.com/daos-stack/daos/tree/release/2.0/src/cart)
+(Collective and RPC Transport) layer can validate and benchmark network communications in
 the same context as an application and using the same networks/tuning options
 as regular DAOS.
 
@@ -19,8 +20,9 @@ bulk transfers, multiple targets, and the following test scenarios:
 
 ### Building CaRT self_test
 
-The CaRT `self_test` and its tests are delivered as part of the daos_client
-and daos_tests [distribution packages][2]. It can also be built from scratch.
+The CaRT `self_test` and its tests are delivered as part of the daos-client
+and daos-tests [distribution packages](https://packages.daos.io/).
+It can also be built from scratch.
 
 ```bash
 $ git clone --recurse-submodules https://github.com/daos-stack/daos.git
@@ -29,7 +31,8 @@ $ scons --build-deps=yes install
 $ cd install
 ```
 
-For detailed information, please refer to the [DAOS build documentation][3]
+For detailed information, please refer to the
+[DAOS build documentation](https://docs.daos.io/v2.0/admin/installation/#building-daos-dependencies)
 section.
 
 ### Running CaRT self_test
@@ -40,7 +43,9 @@ Instructions to run CaRT `self_test` are as follows.
 
 `self_test` requires DAOS server to be running before attempt running
 `self_test`. For detailed instruction on how to start DAOS server, please refer
-to the [server startup][4] documentation.
+to the
+[server startup](https://docs.daos.io/v2.0/admin/deployment/#server-startup)
+documentation.
 
 **Dump system attachinfo**
 
@@ -56,7 +61,7 @@ file. To create such file, run the following command:
 The list of nodes from which `self_test` will run can be specified in a
 hostfile (referred to as ${hostfile}). Hostfile used here is the same as the
 ones used by OpenMPI. For additional details, please refer to the
-[mpirun documentation][5].
+[mpirun documentation](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile).
 
 **Run CaRT self_test**
 
@@ -140,7 +145,8 @@ benchmarks.
     that are accessed over dfuse. This works without or with the I/O
     interception library (`libioil`). Performance is significantly better when
     using `libioil`. For detailed information on dfuse usage with the IO
-    interception library, please refer to the [POSIX DFUSE section][7].
+    interception library, please refer to the
+    [POSIX DFUSE](https://docs.daos.io/v2.0/user/filesystem/) section.
 
 -   A custom DFS (DAOS File System) plugin for DAOS can be used by building IOR
     with DAOS support, and selecting API=DFS. This integrates IOR directly with the
@@ -152,12 +158,14 @@ benchmarks.
     providing the `daos://` prefix to the filename. This ADIO driver bypasses `dfuse`
     and directly invkes the `libdfs` calls to perform I/O to a DAOS POSIX container.
     The DAOS-enabled MPIIO driver is available in the upstream MPICH repository and
-    included with Intel MPI. Please refer to the [MPI-IO documentation][8].
+    included with Intel MPI. Please refer to the
+    [MPI-IO documentation](https://docs.daos.io/v2.0/user/mpi-io/).
 
 -   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model
     directly to the DAOS data model, and works in conjunction with DAOS containers of
     `--type=HDF5` (in contrast to DAOS container of `--type=POSIX` that are used for
-    the other IOR APIs). Please refer the the [HDF5 with DAOS documentation][9].
+    the other IOR APIs). Please refer the the
+    [HDF5 with DAOS](https://docs.daos.io/v2.0/user/hdf5/) documentation.
 
 IOR has several parameters to characterize performance. The main parameters to
 work with include:
@@ -173,8 +181,9 @@ performance on a system:
 
 mdtest is released in the same repository as IOR. The corresponding backends
 that are listed above support mdtest, except for the MPI-IO and HDF5 backends
-that were only designed to support IOR. The [DAOS README][10] in the hpc/ior
-repository includes some examples to run mdtest with DAOS.
+that were only designed to support IOR. The
+[DAOS README](https://github.com/hpc/ior/blob/main/README_DAOS)
+in the hpc/ior repository includes some examples to run mdtest with DAOS.
 
 The IO-500 workloads for mdtest provide some good criteria for performance
 measurements.
@@ -469,16 +478,7 @@ GetAttachInfo agent caching has been disabled
 
 If the network configuration changes while the Agent is running, it must be
 restarted to gain visibility to these changes. For additional information,
-please refer to the [System Deployment: Agent Startup][6] documentation
-section.
+please refer to the
+[System Deployment: Agent Startup](https://docs.daos.io/v2.0/admin/deployment/#disable-agent-cache-optional)
+documentation section.
 
-[1]: <https://github.com/daos-stack/daos/tree/release/2.0/src/cart> (Collective and RPC Transport)
-[2]: <https://docs.daos.io/v2.0/admin/installation/#distribution-packages> (DAOS distribution packages)
-[3]: <https://docs.daos.io/v2.0/admin/installation/#building-daos--dependencies> (DAOS build documentation)
-[4]: <https://docs.daos.io/v2.0/admin/deployment/#server-startup> (DAOS server startup documentation)
-[5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
-[6]: <https://docs.daos.io/v2.0/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
-[7]: <https://docs.daos.io/v2.0/user/posix/#dfuse>
-[8]: <https://docs.daos.io/v2.0/user/mpi-io/>
-[9]: <https://docs.daos.io/v2.0/user/hdf5/>
-[10]: <https://github.com/hpc/ior/blob/main/README_DAOS>
