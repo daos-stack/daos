@@ -1046,9 +1046,9 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
-	       int result)
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result)
 {
+	struct ds_cont_child		*cont = coh->sch_cont;
 	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct dtx_entry		*dte;
 	struct dtx_memberships		*mbs;
@@ -1075,6 +1075,12 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 
 	if (unlikely(result == -DER_ALREADY))
 		result = 0;
+
+	if (result == 0 && rc == 0 && unlikely(coh->sch_closed)) {
+		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
+			DP_UUID(coh->sch_uuid));
+		result = -DER_IO;
+	}
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
@@ -1686,7 +1692,7 @@ dtx_cont_close(struct ds_cont_child *cont)
 				 * then reset DTX table in VOS to release related resources.
 				 */
 				if (!dtx_cont_opened(cont))
-					vos_dtx_cache_reset(cont->sc_hdl);
+					vos_dtx_cache_reset(cont->sc_hdl, false);
 				return;
 			}
 		}
