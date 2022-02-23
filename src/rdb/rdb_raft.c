@@ -57,6 +57,7 @@ rdb_raft_rc(int raft_rc)
 	case RAFT_ERR_SHUTDOWN:			return -DER_SHUTDOWN;
 	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
 	case RAFT_ERR_SNAPSHOT_ALREADY_LOADED:	return -DER_ALREADY;
+	case RAFT_ERR_INVALID_CFG_CHANGE:	return -DER_INVAL;
 	default:				return -DER_MISC;
 	}
 }
@@ -955,11 +956,23 @@ rdb_raft_cb_recv_installsnapshot_resp(raft_server_t *raft, void *arg,
 		return 0;
 	}
 
-	/*
-	 * If this chunk isn't successfully stored, return a generic error so
-	 * that raft will not retry too eagerly.
-	 */
+	/* If this chunk isn't successfully stored, ... */
 	if (!out->iso_success) {
+		/*
+		 * ... but the whole snapshot is complete, it means the
+		 * follower already matches up my log to the index of this
+		 * snapshot.
+		 */
+		if (resp->complete) {
+			D_DEBUG(DB_TRACE, DF_DB": rank %u: completed snapshot %ld\n", DP_DB(db),
+				rdb_node->dn_rank, resp->last_idx);
+			return 0;
+		}
+
+		/*
+		 * ... and the snapshot is not complete, return a generic error so
+		 * that raft will not retry too eagerly.
+		 */
 		D_DEBUG(DB_TRACE,
 			DF_DB": rank %u: unsuccessful chunk %ld/"DF_U64"("
 			DF_U64")\n", DP_DB(db), rdb_node->dn_rank,
@@ -1930,9 +1943,7 @@ rdb_raft_add_replica(struct rdb *db, d_rank_t rank)
 	entry.type = RAFT_LOGTYPE_ADD_NODE;
 	entry.data.buf = &rank;
 	entry.data.len = sizeof(d_rank_t);
-	ABT_mutex_lock(db->d_raft_mutex);
 	rc = rdb_raft_append_apply_internal(db, &entry, &result);
-	ABT_mutex_unlock(db->d_raft_mutex);
 	return (rc != 0) ? rc : result;
 }
 
@@ -1947,9 +1958,7 @@ rdb_raft_remove_replica(struct rdb *db, d_rank_t rank)
 	entry.type = RAFT_LOGTYPE_REMOVE_NODE;
 	entry.data.buf = &rank;
 	entry.data.len = sizeof(d_rank_t);
-	ABT_mutex_lock(db->d_raft_mutex);
 	rc = rdb_raft_append_apply_internal(db, &entry, &result);
-	ABT_mutex_unlock(db->d_raft_mutex);
 	return (rc != 0) ? rc : result;
 }
 

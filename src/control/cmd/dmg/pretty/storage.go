@@ -166,7 +166,8 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		row := txtfmt.TableRow{hostsTitle: hosts}
 		row[scmTitle] = fmt.Sprintf("%d", len(hss.HostStorage.ScmMountPoints))
-		row[nvmeTitle] = fmt.Sprintf("%d", len(hss.HostStorage.NvmeDevices))
+		row[nvmeTitle] = fmt.Sprintf("%d",
+			len(parseNvmeFormatResults(hss.HostStorage.NvmeDevices)))
 		table = append(table, row)
 	}
 
@@ -183,7 +184,7 @@ func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOpt
 
 	iw1 := txtfmt.NewIndentWriter(iw)
 	if _, err := fmt.Fprintf(iw1, "Targets:%+v Rank:%d State:%s\n",
-		dev.TargetIDs, dev.Rank, dev.NvmeState.StatusString()); err != nil {
+		dev.TargetIDs, dev.Rank, dev.NvmeState.String()); err != nil {
 
 		return err
 	}

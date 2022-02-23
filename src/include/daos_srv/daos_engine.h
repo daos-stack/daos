@@ -139,6 +139,7 @@ bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
 daos_epoch_t dss_get_start_epoch(void);
 void dss_set_start_epoch(void);
+bool dss_has_enough_helper(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
