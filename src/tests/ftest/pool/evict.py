@@ -198,7 +198,7 @@ class EvictTests(TestWithServers):
 
                 pool_info = None
 
-            # 0. Try to write object to the container. It should fail for the evicted pool
+            # 9. Try to write object to the container. It should fail for the evicted pool
             # and should work for other pools.
             try:
                 containers[index].write_objects()
