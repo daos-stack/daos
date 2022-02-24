@@ -461,8 +461,7 @@ dss_srv_handler(void *arg)
 		}
 
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
-				       dss_nvme_poll_ult, attr,
-				       ABT_THREAD_ATTR_NULL, NULL);
+				       dss_nvme_poll_ult, NULL, attr, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
@@ -1428,4 +1427,10 @@ void
 dss_set_start_epoch(void)
 {
 	dss_start_epoch = crt_hlc_get();
+}
+
+bool
+dss_has_enough_helper(void)
+{
+	return dss_tgt_offload_xs_nr > 1 && dss_tgt_offload_xs_nr >= dss_tgt_nr / 4;
 }

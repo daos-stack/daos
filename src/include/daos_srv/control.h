@@ -43,7 +43,10 @@ dpdk_cli_override_opts;
 static inline char *
 nvme_state2str(int state)
 {
-	/** If unplugged, return early */
+	if (state == NVME_DEV_STATE_INVALID)
+		return "UNKNOWN";
+
+	/** Otherwise, if unplugged, return early */
 	if BIT_UNSET(state, NVME_DEV_FL_PLUGGED)
 		return "UNPLUGGED";
 
