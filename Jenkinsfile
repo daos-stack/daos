@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019-2022 Intel Corporation
+/* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
