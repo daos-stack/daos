@@ -274,14 +274,9 @@ class Runner():
         if not self.env:
             raise Exception("PreReqComponent not initialized")
         retval = True
-        old = os.getcwd()
-        if subdir:
-            if self.__dry_run:
-                print('Would change dir to %s' % subdir)
-            else:
-                os.chdir(subdir)
 
-        print('Running commands in %s' % os.getcwd())
+        if subdir:
+            print('Running commands in {}'.format(subdir))
         for command in commands:
             command = self.env.subst(command)
             if self.__dry_run:
@@ -289,12 +284,10 @@ class Runner():
                 retval = True
             else:
                 print('RUN: %s' % command)
-                if subprocess.call(command, shell=True,   # nosec
-                                   env=self.env['ENV']) != 0:
+                cmd = command.split(' ')
+                if subprocess.call(cmd, shell=False, cwd=subdir, env=self.env['ENV']) != 0:
                     retval = False
                     break
-        if subdir:
-            os.chdir(old)
         return retval
 
 
@@ -382,10 +375,10 @@ build with random upstream changes.
             branch = self.branch
         self.branch = branch
         if self.branch:
-            command = ['cd %s && git checkout %s' % (subdir, branch)]
-            if not RUNNER.run_commands(command):
-                command = ['cd %s && git fetch -t -a' % (subdir)]
-                if not RUNNER.run_commands(command):
+            command = ['git checkout %s' % (branch)]
+            if not RUNNER.run_commands(command, subdir=subdir):
+                command = ['git fetch -t -a']
+                if not RUNNER.run_commands(command, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
             self.commit_sha = self.branch
             self.checkout_commit(subdir)
@@ -393,17 +386,17 @@ build with random upstream changes.
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is not None:
-            command = ['cd %s && git checkout %s' % (subdir, passed_commit_sha)]
-            if not RUNNER.run_commands(command):
-                command = ['cd %s && git fetch -t -a' % (subdir)]
-                if not RUNNER.run_commands(command):
+            command = ['git checkout %s' % (passed_commit_sha)]
+            if not RUNNER.run_commands(command, subdir=subdir):
+                command = ['git fetch -t -a']
+                if not RUNNER.run_commands(command, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
             self.commit_sha = passed_commit_sha
             self.checkout_commit(subdir)
 
         # reset patched diff
-        command = ['cd %s && git reset --hard HEAD' % (subdir)]
-        if not RUNNER.run_commands(command):
+        command = ['git reset --hard HEAD']
+        if not RUNNER.run_commands(command, subdir=subdir):
             raise DownloadFailure(self.url, subdir)
         # Now apply any patches specified
         self.apply_patches(subdir, kw.get("patches", None))
@@ -480,12 +473,11 @@ class WebRetriever():
                 print('Would unpack gzipped tar file: %s' % basename)
                 return
             try:
-                tfile = tarfile.open(basename, 'r:gz')
-                members = tfile.getnames()
-                prefix = os.path.commonprefix(members)
-                tfile.extractall()
-                if not RUNNER.run_commands(['mv %s %s' % (prefix, subdir)]):
-                    raise ExtractionError(subdir)
+                with tarfile.open(basename, 'r:gz') as tfile:
+                    members = tfile.getnames()
+                    prefix = os.path.commonprefix(members)
+                    tfile.extractall()
+                os.rename(prefix, subdir)
             except (IOError, tarfile.TarError) as io_error:
                 print(traceback.format_exc())
                 raise ExtractionError(subdir) from io_error
@@ -1775,8 +1767,7 @@ class _Component():
             changes = True
             if self.out_of_src_build:
                 self._rm_old_dir(self.build_path)
-            if not RUNNER.run_commands(self.build_commands,
-                                       subdir=self.build_path):
+            if not RUNNER.run_commands(self.build_commands, subdir=self.build_path):
                 raise BuildFailure(self.name)
 
         # set environment one more time as new directories may be present
