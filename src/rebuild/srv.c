@@ -2243,6 +2243,7 @@ struct dss_module rebuild_module = {
 	.sm_name	= "rebuild",
 	.sm_mod_id	= DAOS_REBUILD_MODULE,
 	.sm_ver		= DAOS_REBUILD_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
 	.sm_cleanup	= rebuild_cleanup,

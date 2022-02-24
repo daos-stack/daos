@@ -228,8 +228,7 @@ modules_load(void)
 
 		rc = dss_module_load(mod);
 		if (rc != 0) {
-			D_ERROR("Failed to load module %s: %d\n",
-				mod, rc);
+			D_ERROR("Failed to load module %s: %d\n", mod, rc);
 			break;
 		}
 

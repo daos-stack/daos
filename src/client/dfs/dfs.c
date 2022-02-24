@@ -652,7 +652,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		break;
 	case S_IFREG:
 	{
-		daos_array_stbuf_t	array_stbuf;
+		daos_array_stbuf_t	array_stbuf = {0};
 
 		if (obj) {
 			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);

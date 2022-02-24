@@ -44,6 +44,7 @@ struct dss_module security_module =  {
 	.sm_name	= "security",
 	.sm_mod_id	= DAOS_SEC_MODULE,
 	.sm_ver		= DAOS_SEC_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
 	.sm_setup	= NULL,

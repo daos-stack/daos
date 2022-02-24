@@ -1991,7 +1991,7 @@ struct obj_query_key_cb_args {
 
 static void
 obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
-			  struct obj_query_key_out *okqo, bool get_max,
+			  struct obj_query_key_1_out *okqo, bool get_max,
 			  bool changed)
 {
 	daos_recx_t		*reply_recx = &okqo->okqo_recx;
@@ -2115,8 +2115,8 @@ static int
 obj_shard_query_key_cb(tse_task_t *task, void *data)
 {
 	struct obj_query_key_cb_args	*cb_args;
-	struct obj_query_key_in		*okqi;
-	struct obj_query_key_out	*okqo;
+	struct obj_query_key_1_in	*okqi;
+	struct obj_query_key_1_out	*okqo;
 	uint32_t			flags;
 	int				opc;
 	int				ret = task->dt_result;
@@ -2264,7 +2264,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 		       unsigned int req_map_ver, daos_handle_t th, tse_task_t *task)
 {
 	struct dc_pool			*pool = NULL;
-	struct obj_query_key_in		*okqi;
+	struct obj_query_key_1_in	*okqi;
 	crt_rpc_t			*req;
 	struct obj_query_key_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
@@ -2288,8 +2288,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d.\n",
 		tgt_ep.ep_rank, tgt_ep.ep_tag);
 
-	rc = obj_req_create(daos_task2ctx(task), &tgt_ep,
-			    DAOS_OBJ_RPC_QUERY_KEY, &req);
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_QUERY_KEY, &req);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

@@ -1056,7 +1056,7 @@ truncate_array(void **state)
 	rc = daos_array_stat(oh, DAOS_TX_NONE, &stbuf, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 1024 * 1024);
-	assert(prev < stbuf.st_max_epoch);
+	assert_true(prev < stbuf.st_max_epoch);
 	prev = stbuf.st_max_epoch;
 	print_message("Size = %zu, EPOCH = %"PRIu64"\n", stbuf.st_size, stbuf.st_max_epoch);
 
@@ -1067,7 +1067,7 @@ truncate_array(void **state)
 	rc = daos_array_stat(oh, DAOS_TX_NONE, &stbuf, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);
-	assert(prev < stbuf.st_max_epoch);
+	assert_true(prev < stbuf.st_max_epoch);
 	prev = stbuf.st_max_epoch;
 	print_message("Size = %zu, EPOCH = %"PRIu64"\n", stbuf.st_size, stbuf.st_max_epoch);
 
@@ -1090,7 +1090,7 @@ truncate_array(void **state)
 	rc = daos_array_stat(oh, DAOS_TX_NONE, &stbuf, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 6);
-	assert(prev < stbuf.st_max_epoch);
+	assert_true(prev < stbuf.st_max_epoch);
 	prev = stbuf.st_max_epoch;
 	print_message("Size = %zu, EPOCH = %"PRIu64"\n", stbuf.st_size, stbuf.st_max_epoch);
 
