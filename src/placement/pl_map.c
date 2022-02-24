@@ -117,13 +117,13 @@ void pl_map_print(struct pl_map *map)
  */
 int
 pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
-	     struct daos_obj_shard_md *shard_md,
+	     unsigned int mode, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp)
 {
 	D_ASSERT(map->pl_ops != NULL);
 	D_ASSERT(map->pl_ops->o_obj_place != NULL);
 
-	return map->pl_ops->o_obj_place(map, md, shard_md, layout_pp);
+	return map->pl_ops->o_obj_place(map, md, mode, shard_md, layout_pp);
 }
 
 /**
