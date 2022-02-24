@@ -34,7 +34,7 @@ def get_version():
         return version_file.read().rstrip()
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "1"
+API_VERSION_MINOR = "2"
 API_VERSION_FIX = "0"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)

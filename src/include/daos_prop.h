@@ -72,6 +72,10 @@ enum daos_pool_props {
 	 */
 	DAOS_PROP_PO_EC_CELL_SZ,
 	/**
+	 * Media selection policy
+	 */
+	DAOS_PROP_PO_POLICY,
+	/**
 	 * Pool redundancy factor.
 	 */
 	DAOS_PROP_PO_REDUN_FAC,
@@ -85,10 +89,6 @@ enum daos_pool_props {
 	 * of replicated object.
 	 */
 	DAOS_PROP_PO_RP_PDA,
-	/**
-	 * Media selection policy
-	 */
-	DAOS_PROP_PO_POLICY,
 	DAOS_PROP_PO_MAX,
 };
 
