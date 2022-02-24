@@ -12,18 +12,24 @@ At this time only emulated hardware storage is supported by this Docker platform
 - SCM (i.e. Storage Class Memory) is emulated with standard RAM memory.
 - NVMe disks are emulated with a file device.
 
-**!!!Warning**
+!!!Warning
 DAOS support of virtual networking is still in development. The following are known issues:
 - [bridge](https://docs.docker.com/network/bridge/) 
 - loopback
 	- Workaround - use one physical network interface for the [host](https://docs.docker.com/network/host/) used by the Docker containers network.
 
 ## Hardware and Software Prerequisites
+
 ### Hardware Prerequisites
-- 5GB of DDR and 
+
+- CPU: Cascade Lake (2) or newer
+- OS: Ubuntu 20.0.4LTE. fresh Install
+- 5GB of DDR  
 - 16GB of storage.
+- BIIOS: VT-d enable
 
 ### Software Prerequisites
+
 - BIOS
 	- Enable VT-d 
 - To build and deploy the Docker images, `docker` 
@@ -36,21 +42,14 @@ DAOS support of virtual networking is still in development. The following are kn
 	- [hugepages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt) enabled
 		-Linux kernel feature shall be enabled on the docker host. At least, 4096 pages of 2048kB should be available. 
 
-### Hardware and software configuration used in this QSG
-- Server Board: Wolf Pass
-- CPU: Cascade Lake (2)
-- OS: Ubuntu 20.0.4LTE. fresh Install
-- Memory: 192GB 
-- PMEM:(12)x16GB (not required for this QSG)
-- BIIOS: VT-d enable
+## Hugepages
 
-## Configuring Hugepages
 Additional information in Hugepages is located in the administration portion of this guide <need link> and at (kernel.org)[https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt]
 	
-### Determining Huge pages
 The default size of a huge page, the number of available huge pages, etc. could be found with the following command: 
 - Ubuntu- ```$ cat /proc/meminfo | grep -e "^Huge" ```
 If the pages are not enabled, you will see something like this:
+
 ```
 HugePages_Total:       0
 HugePages_Free:        0
@@ -60,9 +59,10 @@ Hugepagesize:       2048 kB
 Hugetlb:               0 kB
 ```
 
-#### Note: 
+### Note: 
+
 Huge pages are supported by all containerized Linux distributions. However support of huge pages 
-with DAOS and its dependencies re not working for some Linux distribution.only the following distributions have
+with DAOS and its dependencies are not working for some Linux distribution. Only the following distributions have
 been validated:
 - [rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) 
 - [centos:centos8](https://hub.docker.com/_/centos) official docker images.
