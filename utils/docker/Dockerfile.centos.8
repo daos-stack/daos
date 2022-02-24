@@ -214,11 +214,13 @@ ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
+ENV GOCACHE="/tmp/go-cache"
+
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
       BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
-    /bin/rm -rf build && go clean -cache && \
+    /bin/rm -rf build && rm -rf /tmp/go-cache && \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
