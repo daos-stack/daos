@@ -446,9 +446,7 @@ class WebRetriever():
         # Retry download a few times if it fails
         for i in range(0, retries + 1):
             command = ['curl',
-                       '--silent',
-                       '--show-error',
-                       '--fail-early',
+                       '-sSf',
                        '--location',
                        '--remote-name',
                        self.url]
