@@ -454,7 +454,7 @@ class WebRetriever():
                        self.url]
 
             failure_reason = "Download command failed"
-            if RUNNER.run_commands(' '.join(command)):
+            if RUNNER.run_commands([' '.join(command)]):
                 if self.check_md5(basename):
                     print("Successfully downloaded %s" % self.url)
                     return True
