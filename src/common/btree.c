@@ -466,7 +466,7 @@ btr_hkey_size(struct btr_context *tcx)
 	return btr_hkey_size_const(btr_ops(tcx), tcx->tc_feats);
 }
 
-static int
+static inline int
 btr_verify_key(struct btr_context *tcx, d_iov_t *key)
 {
 	if (btr_is_int_key(tcx) && key->iov_len != sizeof(uint64_t)) {
