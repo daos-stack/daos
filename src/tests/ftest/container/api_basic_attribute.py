@@ -37,6 +37,8 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
                 following format.
                 b'Name1\x00Name2\x00Name3\x00\x00'
                 Each name has following \x00 and one \x00 at the end.
+            is_async (bool): Whether list_attr() was called with asynchronous mode.
+                Defaults to True.
         """
         self.log.info("in_dict = %s", in_dict)
         self.log.info("out_size = %d", out_size)
@@ -55,6 +57,8 @@ class ContainerAPIBasicAttributeTest(TestWithServers):
         total_str_len = sum(len(name) for name in in_names)
         # Add the number of \x00 because the size includes them.
         total_zero_buf_len = len(in_names)
+        # Size from the async mode is one larger than sync. It correctly counts the
+        # number of "\x00"s.
         if is_async:
             total_zero_buf_len += 1
         expected_size = total_str_len + total_zero_buf_len
