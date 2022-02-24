@@ -1408,6 +1408,7 @@ static int
 iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 {
 	daos_anchor_t	anchor;
+	daos_anchor_t	anchor_des;
 	int		key_nr;
 	int		i;
 	uint32_t	number;
@@ -1415,6 +1416,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 	/** Enumerate all mixed NVMe and SCM records */
 	key_nr = 0;
 	memset(&anchor, 0, sizeof(anchor));
+	memset(&anchor_des, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_epoch_range_t	eprs[5];
 		daos_recx_t		recxs[5];
@@ -1428,6 +1430,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 
 		for (i = 0; i < (number - 1); i++) {
 			assert_true(size == iod_size);
+			assert_true(recxs[i].rx_idx < recxs[i+1].rx_idx);
 			/* Print a subset of enumerated records */
 			if ((i + key_nr) % ENUM_PRINT != 0)
 				continue;
@@ -1440,8 +1443,17 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 				      i + key_nr, (int)size,
 				      (int)recxs[i].rx_nr,
 				      (int)recxs[i].rx_idx);
-
 		}
+
+		number = 5;
+		enumerate_rec(DAOS_TX_NONE, dkey, akey, &size,
+			      &number, recxs, eprs, &anchor_des, false, req);
+		if (number == 0)
+			continue;
+		for (i = 0; i < (number - 1); i++) {
+			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
+		}
+
 		key_nr += number;
 	}
 
@@ -4504,20 +4516,26 @@ oclass_auto_setting(void **state)
 }
 
 static void
-int_key_setting(void **state)
+int_key_setting(void **state, int size)
 {
 	test_arg_t              *arg = *state;
 	daos_obj_id_t		oid;
 	daos_handle_t		oh;
 	d_iov_t			dkey;
-	char			dkey_buf[128];
-	char			akey_buf[128];
+	char			*dkey_buf;
+	char			*akey_buf;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iov;
 	daos_iod_t		iod;
 	char			buf[STACK_BUF_LEN];
 	int                     rc;
 
+	dkey_buf = malloc(size);
+	akey_buf = malloc(size);
+	if (!dkey_buf || !akey_buf) {
+		print_message("allocation memory failed\n");
+		return;
+	}
 	/*
 	 * Object with integer dkey / akey should fail IO with -DER_INVAL if
 	 * key size is not correct.
@@ -4526,11 +4544,11 @@ int_key_setting(void **state)
 				arg->myrank);
 
 	dts_buf_render(buf, STACK_BUF_LEN);
-	dts_buf_render(dkey_buf, 128);
-	dts_buf_render(akey_buf, 128);
+	dts_buf_render(dkey_buf, size);
+	dts_buf_render(akey_buf, size);
 
 	/** init dkey */
-	d_iov_set(&dkey, dkey_buf, sizeof(dkey_buf));
+	d_iov_set(&dkey, dkey_buf, size);
 
 	/** init scatter/gather */
 	d_iov_set(&sg_iov, buf, sizeof(buf));
@@ -4539,7 +4557,7 @@ int_key_setting(void **state)
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	d_iov_set(&iod.iod_name, akey_buf, sizeof(akey_buf));
+	d_iov_set(&iod.iod_name, akey_buf, size);
 	iod.iod_size    = STACK_BUF_LEN;
 	iod.iod_type	= DAOS_IOD_SINGLE;
 	iod.iod_recxs	= NULL;
@@ -4595,6 +4613,15 @@ int_key_setting(void **state)
 
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
+
+	free(dkey_buf);
+	free(akey_buf);
+}
+
+static void invalid_int_key_setting(void **state)
+{
+	int_key_setting(state, 128);
+	int_key_setting(state, 3);
 }
 
 static void
@@ -4750,7 +4777,7 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO43: Object class selection",
 	  oclass_auto_setting, async_disable, test_case_teardown},
 	{ "IO44: INT dkey/akey checks",
-	  int_key_setting, async_disable, test_case_teardown},
+	  invalid_int_key_setting, async_disable, test_case_teardown},
 	{ "IO45: enum recxs with aggregation",
 	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
 };

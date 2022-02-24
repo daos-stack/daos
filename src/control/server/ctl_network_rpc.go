@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,17 +16,9 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
-const (
-	defaultExcludeInterfaces = "lo"
-)
-
 // NetworkScan retrieves details of network interfaces on remote hosts.
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
 	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
-	excludes := req.GetExcludeinterfaces()
-	if excludes == "" {
-		excludes = defaultExcludeInterfaces
-	}
 
 	provider := c.srvCfg.Fabric.Provider
 	switch {
@@ -36,17 +28,21 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		provider = req.GetProvider()
 	}
 
+	topo, err := hwprov.DefaultTopologyProvider(c.log).GetTopology(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.fabric.CacheTopology(topo); err != nil {
+		return nil, err
+	}
+
 	result, err := c.fabric.Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := c.fabricInterfaceSetToNetworkScanResp(result, provider)
-
-	topo, err := hwprov.DefaultTopologyProvider(c.log).GetTopology(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	resp.Numacount = int32(topo.NumNUMANodes())
 	resp.Corespernuma = int32(topo.NumCoresPerNUMA())

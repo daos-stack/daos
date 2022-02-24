@@ -169,9 +169,9 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_PREFIX}/bin/vos_perf" -R '"U;p F;p V"' -o 5 -d 5 \
              -a 5 -n 10
     run_test "${SL_PREFIX}/bin/vos_perf" -R '"U;p F;p V"' -o 5 -d 5 \
-             -a 5 -n 10 -A
+             -a 5 -n 10 -A -D /mnt/../mnt/daos
     run_test "${SL_PREFIX}/bin/vos_perf" -R '"U Q;p V"' -o 5 -d 5 \
-             -n 10 -A -i -I
+             -n 10 -A -i -I -D /mnt/daos
     run_test "${SL_PREFIX}/bin/jump_pl_map"
 
     # Tests launched by scripts

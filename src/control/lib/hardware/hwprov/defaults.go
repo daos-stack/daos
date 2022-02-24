@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,6 +26,11 @@ func DefaultTopologyProvider(log logging.Logger) hardware.TopologyProvider {
 			Weight:   90,
 		},
 	)
+}
+
+// DefaultProcessNUMAProvider gets the default provider for process-related NUMA info.
+func DefaultProcessNUMAProvider(log logging.Logger) hardware.ProcessNUMAProvider {
+	return hwloc.NewProvider(log)
 }
 
 // DefaultFabricInterfaceProviders returns the default fabric interface providers.

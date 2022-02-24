@@ -365,7 +365,8 @@ dss_srv_handler(void *arg)
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
-	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_list);
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_open_list);
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_close_list);
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_pool_list);
 
 	(void)pthread_setname_np(pthread_self(), dx->dx_name);
@@ -460,8 +461,7 @@ dss_srv_handler(void *arg)
 		}
 
 		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
-				       dss_nvme_poll_ult, attr,
-				       ABT_THREAD_ATTR_NULL, NULL);
+				       dss_nvme_poll_ult, NULL, attr, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
@@ -1243,7 +1243,7 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
-	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id, dss_nvme_mem_size,
+	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
 			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get(),
 			   dss_nvme_bypass_health_check);
 	if (rc != 0)
@@ -1427,4 +1427,10 @@ void
 dss_set_start_epoch(void)
 {
 	dss_start_epoch = crt_hlc_get();
+}
+
+bool
+dss_has_enough_helper(void)
+{
+	return dss_tgt_offload_xs_nr > 1 && dss_tgt_offload_xs_nr >= dss_tgt_nr / 4;
 }

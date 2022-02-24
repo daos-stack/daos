@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -101,7 +102,6 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 		return newScanNvmeResp(req, resp, err)
 	}
 
-	c.log.Debugf("scanning only bdevs in cfg")
 	resp, err := c.scanAssignedBdevs(ctx, req.GetHealth() || req.GetMeta())
 
 	return newScanNvmeResp(req, resp, err)
@@ -172,6 +172,14 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp.Scm = respScm
 
+	hpi, err := c.getHugePageInfo()
+	if err != nil {
+		return nil, err
+	}
+	if err := convert.Types(hpi, &resp.HugePageInfo); err != nil {
+		return nil, err
+	}
+
 	c.log.Debug("responding to StorageScan RPC")
 
 	return resp, nil
@@ -223,7 +231,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	for _, ei := range instances {
 		if _, hasError := instanceErrored[ei.Index()]; hasError {
 			// if scm errored, indicate skipping bdev format
-			ret := ei.newCret("", nil)
+			ret := ei.newCret(storage.NilBdevAddress, nil)
 			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)
 			continue

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,6 +41,21 @@ func TestHwprov_DefaultTopologyProvider(t *testing.T) {
 		cmp.AllowUnexported(hardware.TopologyFactory{}),
 		cmpopts.IgnoreUnexported(hwloc.Provider{}),
 		cmpopts.IgnoreUnexported(sysfs.Provider{}),
+	); diff != "" {
+		t.Fatalf("(-want, +got)\n%s\n", diff)
+	}
+}
+
+func TestHwprov_DefaultProcessNUMAProvider(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	expResult := hwloc.NewProvider(log)
+
+	result := DefaultProcessNUMAProvider(log)
+
+	if diff := cmp.Diff(expResult, result,
+		cmpopts.IgnoreUnexported(hwloc.Provider{}),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
@@ -132,6 +147,7 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 			sysfs.Provider{},
 		),
 		common.CmpOptIgnoreFieldAnyType("log"),
+		cmpopts.IgnoreFields(hardware.FabricScanner{}, "mutex"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}

@@ -293,7 +293,7 @@ containers. The value is typically between 32K and 1MB.
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
-[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v2.2/overview/security/#access-control-lists).
 Most pool-related tasks are performed using the DMG administrative tool, which
 is authenticated by the administrative certificate rather than user-specific
 credentials.
@@ -309,7 +309,7 @@ Access-controlled client pool accesses include:
 * Deleting containers in the pool.
 
 This is reflected in the set of supported
-[pool permissions](https://daos-stack.github.io/overview/security/#permissions).
+[pool permissions](https://docs.daos.io/v2.2/overview/security/#permissions).
 
 A user must be able to connect to the pool in order to access any containers
 inside, regardless of their permissions on those containers.
@@ -328,14 +328,14 @@ To create a pool with a custom ACL:
 $ dmg pool create --size <size> --acl-file <path> <pool_label>
 ```
 
-The ACL file format is detailed in [here](https://daos-stack.github.io/overview/security/#acl-file).
+The ACL file format is detailed in [here](https://docs.daos.io/v2.2/overview/security/#acl-file).
 
 ### Displaying ACL
 
 To view a pool's ACL:
 
 ```bash
-$ dmg pool get-acl --acl-file <path> <pool_label>
+$ dmg pool get-acl --outfile=<path> <pool_label>
 ```
 
 The output is in the same string format used in the ACL file during creation,
@@ -587,7 +587,7 @@ $ dmg cont set-owner --pool <UUID> --cont <UUID> --group <owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v2.2/overview/security/#principal).
 
 Because this is an administrative action, it does not require the administrator
 to have any privileges assigned in the container ACL.
