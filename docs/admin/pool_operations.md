@@ -510,7 +510,7 @@ The pool reintegrate command accepts 3 parameters:
 * The target indices of the targets to be reintegrated on that rank (optional).
 
 When rebuild is triggered it will list the operations and their related engines/targets
-by their engine rank ID and target index.
+by their engine rank and target index.
 
 ```
 Target (rank 5 idx 0) is down.
