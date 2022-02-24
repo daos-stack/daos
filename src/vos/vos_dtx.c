@@ -2880,7 +2880,7 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth)
 }
 
 int
-vos_dtx_cache_reset(daos_handle_t coh)
+vos_dtx_cache_reset(daos_handle_t coh, bool force)
 {
 	struct vos_container	*cont;
 	struct umem_attr	 uma;
@@ -2888,6 +2888,15 @@ vos_dtx_cache_reset(daos_handle_t coh)
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
+
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+
+	if (!force) {
+		if (cont->vc_dtx_array)
+			lrua_array_aggregate(cont->vc_dtx_array);
+		goto cmt;
+	}
 
 	if (daos_handle_is_valid(cont->vc_dtx_active_hdl)) {
 		rc = dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
@@ -2898,18 +2907,6 @@ vos_dtx_cache_reset(daos_handle_t coh)
 		}
 
 		cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
-	}
-
-	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
-		rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
-		if (rc != 0) {
-			D_ERROR("Failed to destroy committed DTX tree for "DF_UUID": "DF_RC"\n",
-				DP_UUID(cont->vc_id), DP_RC(rc));
-			return rc;
-		}
-
-		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
-		cont->vc_cmt_dtx_indexed = 0;
 	}
 
 	if (cont->vc_dtx_array)
@@ -2923,9 +2920,6 @@ vos_dtx_cache_reset(daos_handle_t coh)
 		return rc;
 	}
 
-	memset(&uma, 0, sizeof(uma));
-	uma.uma_id = UMEM_CLASS_VMEM;
-
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACT_TABLE, 0, DTX_BTREE_ORDER, &uma,
 				      &cont->vc_dtx_active_btr, DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_active_hdl);
@@ -2935,18 +2929,32 @@ vos_dtx_cache_reset(daos_handle_t coh)
 		return rc;
 	}
 
+	rc = vos_dtx_act_reindex(cont);
+	if (rc != 0) {
+		D_ERROR("Fail to reindex active DTX table for "DF_UUID": "DF_RC"\n",
+			DP_UUID(cont->vc_id), DP_RC(rc));
+		return rc;
+	}
+
+cmt:
+	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
+		rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+		if (rc != 0) {
+			D_ERROR("Failed to destroy committed DTX tree for "DF_UUID": "DF_RC"\n",
+				DP_UUID(cont->vc_id), DP_RC(rc));
+			return rc;
+		}
+
+		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
+		cont->vc_dtx_committed_count = 0;
+		cont->vc_cmt_dtx_indexed = 0;
+	}
+
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE, 0, DTX_BTREE_ORDER, &uma,
 				      &cont->vc_dtx_committed_btr, DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_committed_hdl);
 	if (rc != 0) {
 		D_ERROR("Failed to re-create DTX committed tree for "DF_UUID": "DF_RC"\n",
-			DP_UUID(cont->vc_id), DP_RC(rc));
-		return rc;
-	}
-
-	rc = vos_dtx_act_reindex(cont);
-	if (rc != 0) {
-		D_ERROR("Fail to reindex active DTX table for "DF_UUID": "DF_RC"\n",
 			DP_UUID(cont->vc_id), DP_RC(rc));
 		return rc;
 	}
