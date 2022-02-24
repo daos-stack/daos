@@ -205,6 +205,13 @@
 #firmware_helper_log_file: /tmp/daos_firmware.log
 #
 #
+## Enable HTTP endpoint for remote telemetry collection.
+#
+## default endpoint state: disabled
+## default endpoint port: 9191
+#telemetry_port: 9191
+#
+#
 ## When per-engine definitions exist, auto-allocation of resources is not
 ## performed. Without per-engine definitions, node resources will
 ## automatically be assigned to engines based on NUMA ratings.
