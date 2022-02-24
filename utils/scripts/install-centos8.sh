@@ -25,7 +25,6 @@ dnf --nodocs install \
     gcc-c++ \
     git \
     glibc-langpack-en \
-    golang \
     graphviz \
     help2man \
     hwloc-devel \

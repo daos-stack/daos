@@ -25,7 +25,7 @@ import sys
 import platform
 import distro
 from prereq_tools import GitRepoRetriever
-# from prereq_tools import WebRetriever
+from prereq_tools import WebRetriever
 from prereq_tools import ProgramBinary
 
 SCONS_EXE = sys.argv[0]
@@ -371,6 +371,12 @@ def define_components(reqs):
                           'make install'],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
+
+    reqs.define('go',
+                retriever = WebRetriever('https://go.dev/dl/go1.17.7.linux-amd64.tar.gz',
+                                         md5='0c32dc0cb384dc0192f5f5311a7f5577'),
+                commands=['cp -a go/ $GO_PREFIX'],
+                progs=['go'])
 
 
 __all__ = ['define_components']

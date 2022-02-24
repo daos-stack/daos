@@ -445,7 +445,7 @@ class WebRetriever():
         retries = 3
         # Retry download a few times if it fails
         for i in range(0, retries + 1):
-            command = ['curl -L -O %s' % self.url]
+            command = ['curl --silent --show-error --fail-early --location --remote-name %s' % self.url]
 
             failure_reason = "Download command failed"
             if RUNNER.run_commands(command):
@@ -468,10 +468,6 @@ class WebRetriever():
         """Downloads and extracts sources from a url into subdir"""
 
         basename = os.path.basename(self.url)
-
-        if os.path.exists(subdir):
-            # assume that nothing has changed
-            return
 
         if not self.check_md5(basename) and not self.download(basename):
             raise DownloadFailure(self.url, subdir)
@@ -1590,12 +1586,10 @@ class _Component():
 
         # Make sure CheckProg() looks in the component's bin/ dir
         if not self.use_installed and not self.component_prefix == "/usr":
-            env.AppendENVPath('PATH', os.path.join(self.component_prefix,
-                                                   'bin'))
+            env.AppendENVPath('PATH', os.path.join(self.component_prefix, 'bin'))
 
             for path in self.include_path:
-                env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix,
-                                                       path)])
+                env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix, path)])
 
             # The same rules that apply to headers apply to RPATH.   If a build
             # uses a component, that build needs the RPATH of the dependencies.
