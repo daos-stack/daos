@@ -821,7 +821,7 @@ check_name(const char *name, size_t *_len)
 }
 
 static int
-check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
+check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int mask)
 {
 	mode_t	base_mask;
 
@@ -835,10 +835,10 @@ check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
 	/** set base_mask to others at first step */
 	base_mask = S_IRWXO;
 	/** update base_mask if uid matches */
-	if (uid == dfs->uid)
+	if (uid == c_uid)
 		base_mask |= S_IRWXU;
 	/** update base_mask if gid matches */
-	if (gid == dfs->gid)
+	if (gid == c_gid)
 		base_mask |= S_IRWXG;
 
 	/** AND the object mode with the base_mask to determine access */
@@ -1825,31 +1825,6 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 
-	/* Convert the owner information to uid/gid */
-	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
-	D_ASSERT(entry != NULL);
-	rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
-	if (rc == -DER_NONEXIST)
-		/** Set uid to nobody */
-		rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
-	if (rc) {
-		D_ERROR("Unable to convert owner to uid "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(err_dfs, rc = daos_der2errno(rc));
-	}
-
-	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
-	D_ASSERT(entry != NULL);
-	rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
-	if (rc == -DER_NONEXIST)
-		/** Set gid to nobody */
-		rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
-	if (rc) {
-		D_ERROR("Unable to convert owner to gid "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(err_dfs, rc = daos_der2errno(rc));
-	}
-
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	D_ASSERT(entry != NULL);
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
@@ -1867,6 +1842,32 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	rc = open_sb(coh, false, dfs->super_oid, &dfs->attr, &dfs->super_oh, &dfs->layout_v);
 	if (rc)
 		D_GOTO(err_dfs, rc);
+
+	/** older layout versions don't have uid/gid for each entry, so use the ACL. */
+	if (dfs->layout_v <= 2) {
+		/* Convert the owner information to uid/gid */
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
+		D_ASSERT(entry != NULL);
+		rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
+		if (rc == -DER_NONEXIST)
+			/** Set uid to nobody */
+			rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
+		if (rc) {
+			D_ERROR("Unable to convert owner to uid "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
+		D_ASSERT(entry != NULL);
+		rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
+		if (rc == -DER_NONEXIST)
+			/** Set gid to nobody */
+			rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
+		if (rc) {
+			D_ERROR("Unable to convert owner to gid "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+		}
+	}
 
 	/*
 	 * If container was created with balanced mode, only balanced mode
@@ -4224,22 +4225,29 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 			return 0;
 
 		/** Use real uid and gid for access() */
-		return check_access(dfs, getuid(), getgid(), entry.mode, mask);
+		if (dfs->layout_v <= 2)
+			return check_access(dfs->uid, dfs->gid, getuid(), getgid(), entry.mode,
+					    mask);
+		else
+			return check_access(entry.uid, entry.gid, getuid(), getgid(), entry.mode,
+					    mask);
 	}
 
 	D_ASSERT(entry.value);
 
-	rc = lookup_rel_path(dfs, parent, entry.value, O_RDONLY, &sym,
-			     NULL, NULL, 0);
+	rc = lookup_rel_path(dfs, parent, entry.value, O_RDONLY, &sym, NULL, NULL, 0);
 	if (rc) {
-		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n",
-			entry.value);
+		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
 		D_GOTO(out, rc);
 	}
 
-	if (mask != F_OK)
-		rc = check_access(dfs, getuid(), getgid(), sym->mode, mask);
-
+	if (mask != F_OK) {
+		if (dfs->layout_v <= 2)
+			rc = check_access(dfs->uid, dfs->gid, getuid(), getgid(), sym->mode, mask);
+		else
+			rc = check_access(entry.uid, entry.gid, getuid(), getgid(), sym->mode,
+					  mask);
+	}
 	dfs_release(sym);
 
 out:
