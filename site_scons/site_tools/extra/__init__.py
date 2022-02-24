@@ -22,4 +22,4 @@
 #
 """SCons Tools for useful features"""
 
-from .extra import generate, exists
+from .extra import generate, exists # noqa: F401

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -114,12 +114,12 @@ class DaosObjectQuery(TestWithServers):
         actual_oid_lo = query_output["oid"][1]
         if str(expected_oid_hi) != actual_oid_hi:
             errors.append(
-                "Unexpected oid.hi! OC = {}; Expected = {}; "\
+                "Unexpected oid.hi! OC = {}; Expected = {}; "
                 "Actual = {}".format(
                     obj_class, expected_oid_hi, actual_oid_hi))
         if str(expected_oid_lo) != actual_oid_lo:
             errors.append(
-                "Unexpected oid.lo! OC = {}; Expected = {}; "\
+                "Unexpected oid.lo! OC = {}; Expected = {}; "
                 "Actual = {}".format(
                     obj_class, expected_oid_lo, actual_oid_lo))
 
@@ -128,7 +128,7 @@ class DaosObjectQuery(TestWithServers):
         actual_group_num = query_output["grp_nr"]
         if str(expected_group_num) != actual_group_num:
             errors.append(
-                "Unexpected grp_nr! Class = {}; Expected = {}; "\
+                "Unexpected grp_nr! Class = {}; Expected = {}; "
                 "Actual = {}".format(
                     class_name, expected_group_num, actual_group_num))
 
@@ -144,13 +144,13 @@ class DaosObjectQuery(TestWithServers):
             actual_group_rows += 1
         if expected_replica_rows != actual_replica_rows:
             errors.append(
-                "Unexpected replica row count! Class = {}; Expected = {}; "\
+                "Unexpected replica row count! Class = {}; Expected = {}; "
                 "Actual = {}".format(
                     class_name, expected_replica_rows, actual_replica_rows))
         # Also verify the number of group rows; rows that start with "grp".
         if expected_group_num != actual_group_rows:
             errors.append(
-                "Unexpected group row count! Class = {}; Expected = {}; "\
+                "Unexpected group row count! Class = {}; Expected = {}; "
                 "Actual = {}".format(
                     class_name, expected_group_num, actual_group_rows))
 

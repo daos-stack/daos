@@ -1663,7 +1663,8 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		const char *dst_path)
 {
 	int		rc = 0;
-	daos_size_t	len = DFS_MAX_PATH;
+	daos_size_t	len = DFS_MAX_PATH; /* unsigned for dfs_sys_readlink() */
+	ssize_t		len2 = DFS_MAX_PATH; /* signed for readlink() */
 	char		*symlink_value = NULL;
 
 	D_ALLOC(symlink_value, len + 1);
@@ -1671,13 +1672,14 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		D_GOTO(out_copy_symlink, rc = -DER_NOMEM);
 
 	if (src_file_dfs->type == POSIX) {
-		len = readlink(src_path, symlink_value, (size_t)len);
-		if (len < 0) {
+		len2 = readlink(src_path, symlink_value, len2);
+		if (len2 < 0) {
 			rc = daos_errno2der(errno);
 			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on readlink('%s')",
 				      src_path);
 			D_GOTO(out_copy_symlink, rc);
 		}
+		len = (daos_size_t)len2;
 	} else if (src_file_dfs->type == DAOS) {
 		rc = dfs_sys_readlink(src_file_dfs->dfs_sys, src_path, symlink_value, &len);
 		if (rc != 0) {
