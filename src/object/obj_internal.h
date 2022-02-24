@@ -371,6 +371,28 @@ struct shard_punch_args {
 	uint32_t		 pa_opc;
 };
 
+struct shard_sub_anchor {
+	daos_anchor_t	ssa_anchor;
+	/* These two extra anchors are for migration enumeration */
+	daos_anchor_t	*ssa_akey_anchor;
+	daos_anchor_t	*ssa_recx_anchor;
+	d_sg_list_t	ssa_sgl;
+	daos_key_desc_t	*ssa_kds;
+	daos_recx_t	*ssa_recxs;
+};
+
+/**
+ * This structure is attached to daos_anchor_t->da_sub_anchor for
+ * tracking multiple shards enumeration, for example degraded EC
+ * enumeration or EC parity rotate enumeration.
+ */
+struct shard_anchors {
+	d_list_t		sa_merged_list;
+	int			sa_nr;
+	int			sa_anchors_nr;
+	struct shard_sub_anchor	sa_anchors[0];
+};
+
 struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
 	daos_obj_list_t		*la_api_args;
@@ -392,6 +414,7 @@ struct obj_auxi_list_recx {
 
 struct obj_auxi_list_key {
 	d_iov_t		key;
+	struct ktr_hkey	hkey;
 	d_list_t	key_list;
 };
 

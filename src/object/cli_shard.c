@@ -756,7 +756,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		/* single-value, trust the size replied from first shard or parity shard,
 		 * because if overwrite those shards must be updated.
 		 */
-		if ((orw->orw_oid.id_shard % obj_ec_tgt_nr(oca)) ==
+		if ((orw->orw_oid.id_shard % obj_get_grp_size(rw_args->shard_args->auxi.obj)) ==
 		     obj_ec_singv_small_idx(oca, iod) ||
 		    is_ec_parity_shard(orw->orw_oid.id_shard, oca)) {
 			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i] && fetch_rc == 0) {
@@ -2011,7 +2011,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 		return;
 	}
 
-	tgt_idx = shard % obj_ec_tgt_nr(oca);
+	tgt_idx = shard % obj_get_grp_size(cb_args->obj);
 	from_data_tgt = tgt_idx < obj_ec_data_tgt_nr(oca);
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	cell_rec_nr = obj_ec_cell_rec_nr(oca);
