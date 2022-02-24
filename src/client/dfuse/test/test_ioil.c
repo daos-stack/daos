@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -371,9 +371,6 @@ skip_mmap:
 	if (fp != NULL) {
 		rc = fclose(fp);
 		printf("fclose returned %d\n", rc);
-	} else {
-		rc = close(new_fd);
-		printf("close returned %d\n", rc);
 	}
 	CU_ASSERT_EQUAL(rc, 0);
 
