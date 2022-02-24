@@ -65,7 +65,7 @@ Huge pages are supported by all containerized Linux distributions. However suppo
 with DAOS and its dependencies are not working for some Linux distribution. Only the following distributions have
 been validated:
 - [rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) 
-- [centos:centos8](https://hub.docker.com/_/centos) official docker images.
+- [centos:centos8](https://hub.docker.com/_/centos)
 The following Linux docker distributions are known not to support hugepages at this time:
 - [rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux)
 
