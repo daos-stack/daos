@@ -445,18 +445,23 @@ class WebRetriever():
         retries = 3
         # Retry download a few times if it fails
         for i in range(0, retries + 1):
-            command = ['curl --silent --show-error --fail-early --location --remote-name %s' % self.url]
+            command = ['curl',
+                       '--silent',
+                       '--show-error',
+                       '--fail-early',
+                       '--location',
+                       '--remote-name',
+                       self.url]
 
             failure_reason = "Download command failed"
-            if RUNNER.run_commands(command):
+            if RUNNER.run_commands(' '.join(command)):
                 if self.check_md5(basename):
                     print("Successfully downloaded %s" % self.url)
                     return True
 
                 failure_reason = "md5 mismatch"
 
-            print("Try #%d to get %s failed: %s" % (i + 1, self.url,
-                                                    failure_reason))
+            print("Try #%d to get %s failed: %s" % (i + 1, self.url, failure_reason))
 
             if i != retries:
                 time.sleep(initial_sleep)

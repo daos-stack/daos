@@ -140,7 +140,10 @@ def configure_go(denv):
             return 0
 
         context.Display('Checking %s version... ' % GO_BIN)
-        cmd_rc = subprocess.run([GO_BIN, 'version'], check=True, shell=False, stdout=subprocess.PIPE)
+        cmd_rc = subprocess.run([GO_BIN, 'version'],
+                                check=True,
+                                shell=False,
+                                stdout=subprocess.PIPE)
         out = cmd_rc.stdout.decode('utf-8')
         if len(out.split(' ')) < 3:
             context.Result('failed to get version from "%s"' % out)
