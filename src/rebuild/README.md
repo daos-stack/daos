@@ -199,7 +199,10 @@ struct daos_rebuild_status {
 	/**
 	 * rebuild state, DRS_COMPLETED is valid only if @rs_version is non-zero
 	 */
-	int32_t			rs_state;
+	union {
+		int32_t			rs_state;
+		int32_t			rs_done;
+	};
 
 	/* padding of rebuild status */
 	int32_t			rs_padding32;

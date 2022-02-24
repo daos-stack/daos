@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1017,7 +1017,7 @@ rebuild_master_failure(void **state)
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(pinfo.pi_rebuild_st.rs_state, 0);
+	assert_int_equal(pinfo.pi_rebuild_st.rs_state, 2);
 	rc = rebuild_change_leader_cb(arg);
 	assert_int_equal(rc, 0);
 	pinfo_new.pi_bits = DPI_REBUILD_STATUS;

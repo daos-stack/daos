@@ -89,9 +89,9 @@ struct daos_pool_space {
 };
 
 enum daos_rebuild_state_t {
-	DRS_NOT_STARTED		= 0,
-	DRS_IN_PROGRESS		= 1,
-	DRS_COMPLETED		= 2
+	DRS_IN_PROGRESS		= 0,
+	DRS_NOT_STARTED		= 1,
+	DRS_COMPLETED		= 2,
 };
 
 struct daos_rebuild_status {
@@ -101,13 +101,15 @@ struct daos_rebuild_status {
 	uint32_t		rs_seconds;
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
-	/* keep it for not breaking binary compatibility before daos 2.1 */
-	int32_t			rs_done;
-
 	/**
 	 * rebuild state, DRS_COMPLETED is valid only if @rs_version is non-zero
 	 */
-	int32_t			rs_state;
+	union {
+		int32_t		rs_state;
+		int32_t		rs_done;
+	};
+	/* padding of rebuild status */
+	int32_t			rs_padding32;
 
 	/* Failure on which rank */
 	int32_t			rs_fail_rank;
