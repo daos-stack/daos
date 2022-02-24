@@ -852,6 +852,10 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 #define DFS_SET_ATTR_MTIME	(1 << 2)
 /** Option to set size of a file */
 #define DFS_SET_ATTR_SIZE	(1 << 3)
+/** Option to set uid of object */
+#define DFS_SET_ATTR_UID	(1 << 4)
+/** Option to set gid of object */
+#define DFS_SET_ATTR_GID	(1 << 5)
 
 /**
  * set stat attributes for a file and fetch new values.  If the object is a
@@ -901,6 +905,25 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
  */
 int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
+
+/**
+ * Change owner and group. Since uid and gid are not enforced
+ * at the DFS level, we do not also enforce the process privileges to be able to change the uid and
+ * gid. Any process with write access to the DFS container can make changes to the uid and gid using
+ * this function.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the object. Can be NULL if parent is root,
+ *			which means operation will be on root object.
+ * \param[in]	uid	change owner of file (-1 to leave unchanged).
+ * \param[in]	gid	change group of file (-1 to leave unchanged).
+ * \param[in]	flags	if 0, symlinks are dereferenced. Pass O_NOFOLLOW to not dereference.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid, int flags);
 
 /**
  * Sync to commit the latest epoch on the container. This applies to the entire
