@@ -4203,12 +4203,28 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		assert_int_equal(attr->u.rp.r_num, nr);
 	} else if (res == DAOS_RES_EC) {
 		assert_int_equal(attr->u.ec.e_p, nr - 1);
-		if (domain_nr >= 10)
-			assert_int_equal(attr->u.ec.e_k, 8);
-		else if (domain_nr >= 6)
-			assert_int_equal(attr->u.ec.e_k, 4);
-		else
-			assert_int_equal(attr->u.ec.e_k, 2);
+
+		if (nr == 1 || nr == 2) {
+			if (domain_nr >= 18)
+				assert_int_equal(attr->u.ec.e_k, 16);
+			if (domain_nr >= 10)
+				assert_int_equal(attr->u.ec.e_k, 8);
+			else if (domain_nr >= 6)
+				assert_int_equal(attr->u.ec.e_k, 4);
+			else
+				assert_int_equal(attr->u.ec.e_k, 2);
+		} else if (nr == 3) {
+			if (domain_nr >= 20)
+				assert_int_equal(attr->u.ec.e_k, 16);
+			if (domain_nr >= 12)
+				assert_int_equal(attr->u.ec.e_k, 8);
+			else if (domain_nr >= 8)
+				assert_int_equal(attr->u.ec.e_k, 4);
+			else
+				assert_int_equal(attr->u.ec.e_k, 2);
+		} else {
+			D_ASSERT(0);
+		}
 	}
 
 	/** need an easier way to determine grp nr. for now use fit for GX */
@@ -4247,7 +4263,10 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** set the expect EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 10) {
+	if (attr.pa_domain_nr >= 18) {
+		ecidx = OC_EC_16P1GX;
+		ecid1 = OC_EC_16P1G1;
+	} else if (attr.pa_domain_nr >= 10) {
 		ecidx = OC_EC_8P1GX;
 		ecid1 = OC_EC_8P1G1;
 	} else if (attr.pa_domain_nr >= 6) {
@@ -4400,10 +4419,13 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** adjust the expected EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 10) {
+	if (attr.pa_domain_nr >= 20) {
+		ecidx = OC_EC_16P2GX;
+		ecid1 = OC_EC_16P2G1;
+	} else if (attr.pa_domain_nr >= 12) {
 		ecidx = OC_EC_8P2GX;
 		ecid1 = OC_EC_8P2G1;
-	} else if (attr.pa_domain_nr >= 6) {
+	} else if (attr.pa_domain_nr >= 8) {
 		ecidx = OC_EC_4P2GX;
 		ecid1 = OC_EC_4P2G1;
 	} else {
@@ -4424,7 +4446,7 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** oid with EC hint should be OC_EC_NP2G1 */
-	print_message("oid with hint class:\t");
+	print_message("oid with hint DAOS_OCH_RDD_EC class:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_EC, 0,
 			  DAOS_RES_EC, 3, ecid1);
 	assert_rc_equal(rc, 0);
