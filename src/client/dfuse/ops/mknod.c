@@ -11,6 +11,7 @@ void
 dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name, mode_t mode)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	const struct fuse_ctx		*ctx = fuse_req_ctx(req);
 	struct dfuse_inode_entry	*ie;
 	int				rc;
 
@@ -28,6 +29,9 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	if (rc != 0)
 		D_GOTO(err, rc);
 
+	ie->ie_stat.st_uid = ctx->uid;
+	ie->ie_stat.st_gid = ctx->gid;
+
 	rc = dfs_open_stat(parent->ie_dfs->dfs_ns, parent->ie_obj, name, mode,
 			   O_CREAT | O_EXCL | O_RDWR, 0, 0, NULL, &ie->ie_obj, &ie->ie_stat);
 	if (rc)
@@ -39,10 +43,6 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
-	rc = ie_set_uid(ie, req);
-	if (rc)
-		D_GOTO(release, rc);
-
 	LOG_MODES(ie, mode);
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
@@ -53,8 +53,6 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
 	return;
-release:
-	dfs_release(ie->ie_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(ie);

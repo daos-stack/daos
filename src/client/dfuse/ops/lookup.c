@@ -37,12 +37,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
 
-	if (!is_new && ie->ie_dfs->dfs_multi_user) {
-		rc = dfuse_get_uid(ie);
-		if (rc)
-			D_GOTO(out_err, rc);
-	}
-
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;

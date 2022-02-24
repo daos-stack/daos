@@ -225,12 +225,6 @@ struct dfuse_cont {
 
 extern char *duns_xattr_name;
 
-int
-ie_set_uid(struct dfuse_inode_entry *ie, fuse_req_t req);
-
-int
-dfuse_get_uid(struct dfuse_inode_entry *ie);
-
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
@@ -260,14 +254,6 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
  * or directly though dfs/daos but not through dfuse.
  */
 #define DFUSE_XATTR_PREFIX "user.dfuse"
-
-/* Multiuser support */
-#define DFUSE_XID_XATTR_NAME "user.dfuse.ids"
-
-struct uid_entry {
-	uid_t uid;
-	gid_t gid;
-};
 
 /* dfuse_core.c */
 

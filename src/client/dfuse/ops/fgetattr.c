@@ -23,14 +23,6 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	if (ie->ie_dfs->dfs_multi_user) {
-		rc = dfuse_get_uid(ie);
-		if (rc)
-			D_GOTO(err, rc);
-		attr.st_uid = ie->ie_stat.st_uid;
-		attr.st_gid = ie->ie_stat.st_gid;
-	}
-
 	/* Copy the inode number from the inode struct, to avoid having to
 	 * recompute it each time.
 	 */

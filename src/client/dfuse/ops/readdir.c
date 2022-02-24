@@ -119,14 +119,6 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
-	if (ie->ie_dfs->dfs_multi_user) {
-		rc = dfuse_get_uid(ie);
-		if (rc)
-			D_GOTO(out, rc);
-		entry->attr.st_gid = ie->ie_stat.st_gid;
-		entry->attr.st_uid = ie->ie_stat.st_uid;
-	}
-
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(fs_handle, ie, attr, attr_len);
 		if (rc != 0) {

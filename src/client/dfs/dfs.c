@@ -940,8 +940,6 @@ restart:
 		entry->mode = file->mode;
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = chunk_size;
-		entry->uid = geteuid();
-		entry->gid = getegid();
 
 		rc = insert_entry(dfs->layout_v, parent->oh, th, file->name, len,
 				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
@@ -1085,8 +1083,6 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = parent->d.chunk_size;
 		entry->oclass = parent->d.oclass;
-		entry->uid = geteuid();
-		entry->gid = getegid();
 
 		/** since it's a single conditional op, we don't need a DTX */
 		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, dir->name, len,
@@ -1173,8 +1169,6 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		oid_cp(&entry->oid, sym->oid);
 		entry->mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
-		entry->uid = geteuid();
-		entry->gid = getegid();
 		D_STRNDUP(sym->value, value, value_len + 1);
 		if (sym->value == NULL)
 			return ENOMEM;
@@ -2244,7 +2238,7 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 	/** format: pool label - pool hdl size - pool hdl */
 	strcpy(ptr, dfs->pool_hdl->value);
 	ptr += pool_len;
-	*((daos_size_t *) ptr) = pool_iov.iov_buf_len;
+	*((daos_size_t *)ptr) = pool_iov.iov_buf_len;
 	ptr += sizeof(daos_size_t);
 	pool_iov.iov_buf = ptr;
 	pool_iov.iov_len = pool_iov.iov_buf_len;
@@ -2256,7 +2250,7 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 	/** format: cont label - cont hdl size - cont hdl */
 	strcpy(ptr, dfs->cont_hdl->value);
 	ptr += cont_len;
-	*((daos_size_t *) ptr) = cont_iov.iov_buf_len;
+	*((daos_size_t *)ptr) = cont_iov.iov_buf_len;
 	ptr += sizeof(daos_size_t);
 	cont_iov.iov_buf = ptr;
 	cont_iov.iov_len = cont_iov.iov_buf_len;
@@ -2265,7 +2259,7 @@ dfs_local2global_all(dfs_t *dfs, d_iov_t *glob)
 		return daos_der2errno(rc);
 	ptr += cont_iov.iov_buf_len;
 
-	*((daos_size_t *) ptr) = dfs_iov.iov_buf_len;
+	*((daos_size_t *)ptr) = dfs_iov.iov_buf_len;
 	ptr += sizeof(daos_size_t);
 	dfs_iov.iov_buf = ptr;
 	dfs_iov.iov_len = dfs_iov.iov_buf_len;
@@ -2314,7 +2308,7 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 	pool[DAOS_PROP_LABEL_MAX_LEN] = 0;
 	pool_len = strlen(pool) + 1;
 	ptr += pool_len;
-	pool_iov.iov_buf_len = *((daos_size_t *) ptr);
+	pool_iov.iov_buf_len = *((daos_size_t *)ptr);
 	ptr += sizeof(daos_size_t);
 	pool_iov.iov_buf = ptr;
 	pool_iov.iov_len = pool_iov.iov_buf_len;
@@ -2331,7 +2325,7 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 	cont[DAOS_PROP_LABEL_MAX_LEN] = 0;
 	cont_len = strlen(cont) + 1;
 	ptr += cont_len;
-	cont_iov.iov_buf_len = *((daos_size_t *) ptr);
+	cont_iov.iov_buf_len = *((daos_size_t *)ptr);
 	ptr += sizeof(daos_size_t);
 	cont_iov.iov_buf = ptr;
 	cont_iov.iov_len = cont_iov.iov_buf_len;
@@ -2344,7 +2338,7 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 		D_GOTO(err, rc);
 	cont_h_bump = true;
 
-	dfs_iov.iov_buf_len = *((daos_size_t *) ptr);
+	dfs_iov.iov_buf_len = *((daos_size_t *)ptr);
 	ptr += sizeof(daos_size_t);
 	dfs_iov.iov_buf = ptr;
 	dfs_iov.iov_len = dfs_iov.iov_buf_len;
@@ -3514,6 +3508,16 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
 		return ENOMEM;
+
+	if (flags & O_CREAT) {
+		if (stbuf) {
+			entry.uid = stbuf->st_uid;
+			entry.gid = stbuf->st_gid;
+		} else {
+			entry.uid = geteuid();
+			entry.gid = getegid();
+		}
+	}
 
 	strncpy(obj->name, name, len + 1);
 	obj->mode = mode;
