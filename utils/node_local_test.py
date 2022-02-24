@@ -3330,7 +3330,7 @@ def run_in_fg(server, conf, args):
     print('export PATH=$PATH:{}'.format(join(conf['PREFIX'], 'bin')))
     if args.multi_user:
         print('dmg pool --insecure update-acl -e A::root@:rw {}'.format(pool))
-    print('daos container create --type POSIX --path {}/uns-link'.format(t_dir))
+    print('daos container create --type POSIX {} --path {}/uns-link'.format(pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
     print('daos cont list {}'.format(pool))
