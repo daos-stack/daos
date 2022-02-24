@@ -173,8 +173,6 @@
 ## through SPDK. Note that each target requires 1 GiB of hugepage space, so
 ## this value needs to represent the total amount of hugespace required for
 ## all targets across all engines on host, divided by the system hugepage size.
-## If not set here, an appropriate value will be automatically calculated based
-## on the number of targets (using the default system hugepage size).
 #
 ## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
 #
