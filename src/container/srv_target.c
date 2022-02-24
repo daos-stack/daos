@@ -580,6 +580,7 @@ cont_start_agg(struct ds_cont_child *cont)
 }
 
 /* ds_cont_child *******************************************************/
+
 static inline struct ds_cont_child *
 cont_child_obj(struct daos_llink *llink)
 {

@@ -414,6 +414,7 @@ def get_base_env(clean=False):
     env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
+    env['DAOS_STRICT_SHUTDOWN'] = '1'
     return env
 
 class DaosPool():

@@ -142,15 +142,23 @@ pool_tls_fini(void *data)
 	struct ds_pool_child	*child;
 
 	D_ASSERT(tls != NULL);
-	/* pool child cache should be empty now */
 
+	/* pool child cache should be empty now */
 	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
 		D_ERROR(DF_UUID": ref: %d\n",
 			DP_UUID(child->spc_uuid), child->spc_ref);
 	}
 
-	if (!d_list_empty(&tls->dt_pool_list))
-		D_ERROR("pool list not empty\n");
+	if (!d_list_empty(&tls->dt_pool_list)) {
+		bool strict = false;
+
+		d_getenv_bool("DAOS_STRICT_SHUTDOWN", &strict);
+		if (strict)
+			D_ASSERTF(false, "dt_pool_list not empty\n");
+		else
+			D_ERROR("dt_pool_list not empty\n");
+	}
+
 	D_FREE(tls);
 }
 

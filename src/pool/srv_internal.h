@@ -22,12 +22,9 @@ struct pool_metrics {
 	struct d_tm_node_t	*open_hdl_gauge;
 };
 
-/**
- * DSM server thread local storage structure
- */
+/* Pool thread-local storage */
 struct pool_tls {
-	/* in-memory structures TLS instance */
-	struct d_list_head	dt_pool_list;
+	struct d_list_head	dt_pool_list;	/* of ds_pool_child objects */
 };
 
 extern struct dss_module_key pool_module_key;
@@ -39,7 +36,7 @@ pool_tls_get()
 	struct dss_thread_local_storage	*dtc;
 
 	dtc = dss_tls_get();
-	tls = (struct pool_tls *)dss_module_key_get(dtc, &pool_module_key);
+	tls = dss_module_key_get(dtc, &pool_module_key);
 	return tls;
 }
 
@@ -139,6 +136,7 @@ int ds_pool_cache_init(void);
 void ds_pool_cache_fini(void);
 int ds_pool_hdl_hash_init(void);
 void ds_pool_hdl_hash_fini(void);
+void ds_pool_hdl_delete_all(void);
 void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
