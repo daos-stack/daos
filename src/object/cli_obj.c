@@ -302,7 +302,7 @@ dc_obj_hdl2cont_hdl(daos_handle_t oh)
 }
 
 static int
-obj_layout_create(struct dc_object *obj, bool refresh)
+obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 {
 	struct pl_obj_layout	*layout = NULL;
 	struct dc_pool		*pool;
@@ -326,7 +326,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	dc_pool_put(pool);
-	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
+	rc = pl_obj_place(map, &obj->cob_md, mode, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DB_PL, "Failed to generate object layout\n");
@@ -385,7 +385,7 @@ obj_layout_refresh(struct dc_object *obj)
 
 	D_RWLOCK_WRLOCK(&obj->cob_lock);
 	obj_layout_free(obj);
-	rc = obj_layout_create(obj, true);
+	rc = obj_layout_create(obj, 0, true);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
 	return rc;
@@ -1413,7 +1413,7 @@ dc_obj_open(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(fail_rwlock_created, rc);
 
-	rc = obj_layout_create(obj, false);
+	rc = obj_layout_create(obj, obj->cob_mode, false);
 	if (rc != 0)
 		D_GOTO(fail_rwlock_created, rc);
 

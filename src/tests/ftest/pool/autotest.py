@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,19 +8,20 @@ from apricot import TestWithServers
 from command_utils_base import CommandFailure
 
 
-class ContainerAutotestTest(TestWithServers):
+class PoolAutotestTest(TestWithServers):
     # pylint: disable=too-few-public-methods
-    """Tests container autotest.
+    """Tests pool autotest.
 
     :avocado: recursive
     """
 
-    def test_container_autotest(self):
-        """Test container autotest.
+    def test_pool_autotest(self):
+        """Test pool autotest.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=container,autotest,containerautotest,quick
+        :avocado: tags=pool
+        :avocado: tags=autotest,pool_autotest,quick
         """
         self.log.info("Create a pool")
         self.add_pool()
