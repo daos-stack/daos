@@ -335,6 +335,15 @@ struct vos_dtx_cmt_ent {
 extern int vos_evt_feats;
 
 #define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
+#define VOS_TREE_AGG_OPT	(1ULL << 62)
+#define VOS_TREE_AGG_NEEDED	(1ULL << 61)
+#define VOS_TREE_AGG_STARTED	(1ULL << 60)
+#define CHECK_VOS_TREE_FLAG(flag)	\
+	D_CASSERT(((flag) & BTR_FEAT_MASK) == 0)
+CHECK_VOS_TREE_FLAG(VOS_KEY_CMP_LEXICAL);
+CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_OPT);
+CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_NEEDED);
+CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_STARTED);
 
 #define VOS_KEY_CMP_UINT64_SET	(BTR_FEAT_UINT_KEY)
 #define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
@@ -1095,12 +1104,13 @@ gc_reserve_space(daos_size_t *rsrvd);
 
 /**
  * If the object is fully punched, bypass normal aggregation and move it to container
- * discard pool
+ * discard pool.  If aggregation optimization is enabled, it will mark the object
+ * as being aggregated.
  *
  * \param ih[IN]	Iterator handle
  *
  * \return		Zero on Success
- *			Positive value if a reprobe is needed
+ *			(1: entry is removed; 2: entry can be skipped)
  *			Negative value otherwise
  */
 int
@@ -1108,7 +1118,9 @@ oi_iter_pre_aggregate(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the object
- * iterator
+ * iterator. If aggregation optimization is supported, it will clear the
+ * aggregation flag and set the needed flag, accordingly.
+
  *
  * \param ih[IN]		Iterator handle
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
@@ -1123,12 +1135,13 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /**
  * If the key is fully punched, bypass normal aggregation and move it to container
- * discard pool
+ * discard pool. If aggregation optimization is enabled, it will mark the key
+ * as being aggregated.
  *
  * \param ih[IN]	Iterator handle
  *
  * \return		Zero on Success
- *			Positive value if a reprobe is needed
+ *			(1: entry is removed; 2: entry can be skipped)
  *			Negative value otherwise
  */
 int
@@ -1136,7 +1149,8 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
- * iterator
+ * iterator.  If aggregation optimization is supported, it will clear the
+ * aggregation flag and set the needed flag, accordingly.
  *
  * \param ih[IN]		Iterator handle
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)

@@ -39,6 +39,7 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund, 
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
 	struct dcs_csum_info	 csum;
+	int			 rc;
 
 	tree_rec_bundle2iov(rbund, &riov);
 
@@ -1913,6 +1914,8 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
 	int			 rc;
+	uint8_t			 bmap;
+	bool			 punched;
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
 		  iter->it_type == VOS_ITER_DKEY,
@@ -1928,8 +1931,21 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 	krec = rbund.rb_krec;
 	umm = vos_obj2umm(oiter->it_obj);
 
-	if (!vos_ilog_is_punched(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog, &oiter->it_epr,
-				 &oiter->it_punched, &oiter->it_ilog_info))
+	punched = vos_ilog_is_punched(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog, &oiter->it_epr,
+				      &oiter->it_punched, &oiter->it_ilog_info);
+
+	bmap = krec->kr_bmap;
+
+	if (bmap & KREC_BF_AGG_OPT) {
+		if (bmap & KREC_BF_AGG_NEEDED) {
+			if (!punched && oiter->it_punched.pr_epc == 0)
+				return 2;
+
+			bmap |= KREC_BF_AGG_FLAG;
+		}
+	}
+
+	if (!punched && bmap == krec->kr_bmap)
 		return 0;
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
@@ -1937,17 +1953,23 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 	if (rc != 0)
 		goto exit;
 
-	/* Incarnation log is empty, delete the object */
-	D_DEBUG(DB_IO, "Moving %s to gc heap\n",
-		iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
+	if (punched) {
+		/* Incarnation log is empty, delete the object */
+		D_DEBUG(DB_IO, "Moving %s to gc heap\n",
+			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
 
-	rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
-	D_ASSERT(rc != -DER_NONEXIST);
+		rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
+		D_ASSERT(rc != -DER_NONEXIST);
+	} else {
+		rc = umem_tx_add_ptr(umm, &krec->kr_bmap, sizeof(krec->kr_bmap));
+		if (rc == 0)
+			krec->kr_bmap = bmap;
+	}
 
 	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc == 0)
-		return 1;
+		return punched ? 1 : 0;
 
 	return rc;
 }

@@ -2155,6 +2155,70 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 }
 
 /**
+ * Retrieve the tree feats
+ *
+ * \param toh[in]	Tree open handle
+ * \param feats[out]	Retrieved feats
+ *
+ * \return 0 on success
+ */
+int
+dbtree_feats_get(daos_handle_t toh, uint64_t *feats)
+{
+	struct btr_context	*tcx;
+	struct btr_root		*root;
+	int			 rc;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	root = tcx->tc_tins.ti_root;
+
+	return root->tr_feats;
+}
+
+/**
+ * Set the tree feats.
+ *
+ * \param toh[in]	Tree open handle
+ * \param feats[in]	feats to set
+ *
+ * \return 0 on success
+ */
+int
+dbtree_feats_set(daos_handle_t toh, uint64_t feats)
+{
+	struct btr_context	*tcx;
+	struct btr_root		*root;
+	int			 rc;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	root = tcx->tc_tins.ti_root;
+	if (root->tr_feats == feats)
+		return 0;
+
+	if ((root->tr_feats & BTR_FEAT_MASK) != (feats & BTR_FEAT_MASK)) {
+		D_ERROR("Attempt to set internal features via dbtree_feats_set denied\n");
+		return -DER_INVAL;
+	}
+
+	rc = btr_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
+	rc = umem_tx_add_ptr(btr_umm(tcx), &root->tr_feats, sizeof(root->tr_feats));
+
+	if (rc == 0)
+		root->tr_feats = tcx->tc_feats = feats;
+
+	return btr_tx_end(tcx, rc);
+}
+
+/**
  * Update the value of the provided key, or insert it as a new key if
  * there is no match.
  *
@@ -4065,7 +4129,8 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 	if (tc->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)
 		*tree_feats |= BTR_FEAT_SKIP_LEAF_REBAL;
 
-	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
+	/** Only check btree managed bits */
+	if ((*tree_feats & tc->tc_feats) != (*tree_feats & BTR_FEAT_MASK)) {
 		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
 			*tree_feats, tc->tc_feats);
 		return -DER_PROTO;

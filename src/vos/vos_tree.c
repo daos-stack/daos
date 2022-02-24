@@ -718,16 +718,14 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_DKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_KEY_CMP_LEXICAL | BTR_FEAT_UINT_KEY |
-				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_dkey",
 		.ta_ops		= &key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_AKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_KEY_CMP_LEXICAL | BTR_FEAT_UINT_KEY |
-				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_akey",
 		.ta_ops		= &key_btr_ops,
 	},
@@ -885,7 +883,6 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 				tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 		}
 
-
 		ta = obj_tree_find_attr(tclass);
 
 		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x"DF_X64"\n",
@@ -900,9 +897,11 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		}
 	}
 	/* NB: Only happens on create so krec will be in the transaction log
-	 * already.
+	 * already.  Mark that tree supports the aggregation optimizations.
+	 * At akey level, this bit map is used for the optimization.  At higher
+	 * levels, only the tree_feats version is used.
 	 */
-	krec->kr_bmap |= expected_flag;
+	krec->kr_bmap |= expected_flag | KREC_BF_AGG_OPT;
 out:
 	return rc;
 }
@@ -1138,7 +1137,7 @@ obj_tree_init(struct vos_object *obj)
 
 	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
-		uint64_t tree_feats = 0;
+		uint64_t tree_feats = VOS_TREE_AGG_OPT;
 		enum daos_otype_t type;
 
 		D_DEBUG(DB_DF, "Create btree for object\n");

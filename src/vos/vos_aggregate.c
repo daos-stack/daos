@@ -304,10 +304,15 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 			rc = oi_iter_pre_aggregate(ih);
 			if (rc < 0)
 				return rc;
-			if (rc != 0) {
+			if (rc == 1) {
 				/** We removed the key so let's reprobe */
 				*acts |= VOS_ITER_CB_DELETE;
 				inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_DEL);
+				return 0;
+			} else if (rc == 2) {
+				/** Entry is skipped removed the key so let's reprobe */
+				*acts |= VOS_ITER_CB_SKIP;
+				inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SKIP);
 				return 0;
 			}
 			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
@@ -356,10 +361,15 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 			rc = vos_obj_iter_pre_aggregate(ih);
 			if (rc < 0)
 				return rc;
-			if (rc != 0) {
+			if (rc == 1) {
 				/** We removed the key so let's reprobe */
 				*acts |= VOS_ITER_CB_DELETE;
 				inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_DEL);
+				return 0;
+			} else if (rc == 2) {
+				/** Entry is skipped removed the key so let's reprobe */
+				*acts |= VOS_ITER_CB_SKIP;
+				inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SKIP);
 				return 0;
 			}
 			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
@@ -454,10 +464,15 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 			rc = vos_obj_iter_pre_aggregate(ih);
 			if (rc < 0)
 				return rc;
-			if (rc != 0) {
+			if (rc == 1) {
 				/** We removed the key so let's reprobe */
 				*acts |= VOS_ITER_CB_DELETE;
 				inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_DEL);
+				return 0;
+			} else if (rc == 2) {
+				/** Entry is skipped removed the key so let's reprobe */
+				*acts |= VOS_ITER_CB_SKIP;
+				inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SKIP);
 				return 0;
 			}
 			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SCAN);
