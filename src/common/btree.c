@@ -379,6 +379,67 @@ do {									\
 		(trace)->tr_at,	## __VA_ARGS__);			\
 } while (0)
 
+void
+hkey_common_gen(d_iov_t *key_iov, void *hkey)
+{
+	struct ktr_hkey	*kkey  = (struct ktr_hkey *)hkey;
+
+	if (key_iov->iov_len <= KH_INLINE_MAX) {
+		kkey->kh_hash[0] = 0;
+		kkey->kh_hash[1] = 0;
+
+		/** Set the lowest bit for inline key */
+		kkey->kh_inline_len = (key_iov->iov_len << 2) | 1;
+		memcpy(&kkey->kh_inline[0], key_iov->iov_buf, key_iov->iov_len);
+		D_ASSERT(kkey->kh_len & 1);
+		return;
+	}
+
+	kkey->kh_murmur64 = d_hash_murmur64(key_iov->iov_buf, key_iov->iov_len,
+					    BTR_MUR_SEED);
+	kkey->kh_str32 = d_hash_string_u32(key_iov->iov_buf, key_iov->iov_len);
+	/** Lowest bit is clear for hashed key */
+	kkey->kh_len = key_iov->iov_len << 2;
+
+	D_ASSERT(!(kkey->kh_inline_len & 1));
+}
+
+int
+hkey_common_cmp(struct ktr_hkey *k1, struct ktr_hkey *k2)
+{
+	/** Since the low bit is set for inline keys, there will never be
+	 *  a conflict between an inline key and a hashed key so we can
+	 *  simply compare as if they are hashed.  Order doesn't matter
+	 *  as long as it's consistent.
+	 */
+	if (k1->kh_hash[0] < k2->kh_hash[0])
+		return BTR_CMP_LT;
+
+	if (k1->kh_hash[0] > k2->kh_hash[0])
+		return BTR_CMP_GT;
+
+	if (k1->kh_hash[1] < k2->kh_hash[1])
+		return BTR_CMP_LT;
+
+	if (k1->kh_hash[1] > k2->kh_hash[1])
+		return BTR_CMP_GT;
+
+	return BTR_CMP_EQ;
+}
+
+void
+hkey_int_gen(d_iov_t *key,  void *hkey)
+{
+	/* Use key directory as unsigned integer in lieu of hkey */
+	D_ASSERT(key->iov_len == sizeof(uint64_t));
+	/* NB: This works for little endian architectures.  An
+	 * alternative would be explicit casting based on iov_len but
+	 * this is a little nicer to read.
+	 */
+	*(uint64_t *)hkey = 0;
+	memcpy(hkey, key->iov_buf, key->iov_len);
+}
+
 static inline uint32_t
 btr_hkey_size_const(btr_ops_t *ops, uint64_t feats)
 {
@@ -425,14 +486,7 @@ btr_hkey_gen(struct btr_context *tcx, d_iov_t *key, void *hkey)
 		return;
 	}
 	if (btr_is_int_key(tcx)) {
-		/* Use key directory as unsigned integer in lieu of hkey */
-		D_ASSERT(key->iov_len == sizeof(uint64_t));
-		/* NB: This works for little endian architectures.  An
-		 * alternative would be explicit casting based on iov_len but
-		 * this is a little nicer to read.
-		 */
-		*(uint64_t *)hkey = 0;
-		memcpy(hkey, key->iov_buf, key->iov_len);
+		hkey_int_gen(key, hkey);
 		return;
 	}
 	btr_ops(tcx)->to_hkey_gen(&tcx->tc_tins, key, hkey);

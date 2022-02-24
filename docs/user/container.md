@@ -166,7 +166,7 @@ Access Control List   A::OWNER@:rwdtTaAo, A:G:GROUP@:rwtT
 Additionally, a container's properties may be retrieved using the
 libdaos API `daos_cont_query()` function. Refer to the file
 src/include/daos\_cont.h Doxygen comments and the online documentation
-available [here](https://docs.daos.io/v2.2/html/).
+available [here](https://docs.daos.io/v2.2/doxygen/html/).
 
 ### Changing Properties
 
