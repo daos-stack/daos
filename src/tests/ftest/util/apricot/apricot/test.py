@@ -1288,8 +1288,10 @@ class TestWithServers(TestWithoutServers):
         error_list = []
         if self.job_manager:
             self.test_log.info("Stopping test job manager")
-            error_list = self._stop_managers(
-                list(self.job_manager), "test job manager")
+            if isinstance(self.job_manager, list):
+                error_list = self._stop_managers(self.job_manager, "test job manager")
+            else:
+                error_list = self._stop_managers([self.job_manager], "test job manager")
         return error_list
 
     def destroy_containers(self, containers):

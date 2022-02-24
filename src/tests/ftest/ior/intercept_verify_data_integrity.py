@@ -65,7 +65,7 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
         thread_manager = ThreadManager(run_ior, self.timeout - 30)
         index_clients_intercept = [
             (0, self.hostlist_clients[0:-1], os.path.join(self.prefix, 'lib64', 'libioil.so')),
-            (1, list(self.hostlist_clients[-1]), None),
+            (1, self.hostlist_clients[-1:], None),
         ]
         self.job_manager = []
         for index, clients, intercept in index_clients_intercept:

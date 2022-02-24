@@ -552,7 +552,7 @@ class Ior:
             error_message = "IOR Failed: {}".format(error)
 
         finally:
-            if not self.manager.subprocess and display_space:
+            if not self.manager.run_as_subprocess and display_space:
                 self.display_pool_space(pool)
 
         if error_message:
@@ -571,7 +571,7 @@ class Ior:
             CommandFailure: if there is an error stopping the ior subprocess
 
         """
-        if self.manager.subprocess:
+        if self.manager.run_as_subprocess:
             error_message = None
             try:
                 self.manager.stop()
