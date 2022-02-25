@@ -276,3 +276,22 @@
    fun:HG_Init_opt
    ...
 }
+{
+   FI leak 9
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   fun:_dl_allocate_tls
+   fun:pthread_create*
+   ...
+   fun:sock_domain
+   fun:fi_domain
+   fun:na_ofi_domain_open
+   fun:na_ofi_initialize
+   fun:NA_Initialize_opt
+   fun:hg_core_init
+   fun:HG_Core_init_opt
+   fun:HG_Init_opt
+   fun:crt_hg_class_init
+   fun:crt_hg_ctx_init
+}
