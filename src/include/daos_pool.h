@@ -49,7 +49,6 @@ typedef struct {
 	int			foo;
 } daos_target_perf_t;
 
-
 /** Storage tier names */
 enum daos_media_type_t {
 	DAOS_MEDIA_SCM	= 0,
@@ -96,7 +95,7 @@ struct daos_rebuild_status {
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
 	/**
-	 * rebuild is done or not, it is valid only if @rs_version is non-zero
+	 * rebuild is done or not, it is valid only if #rs_version is non-zero
 	 */
 	int32_t			rs_done;
 
@@ -162,7 +161,7 @@ typedef struct {
 /** DAOS pool container information */
 struct daos_pool_cont_info {
 	uuid_t		pci_uuid;
-	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
+	char		pci_label[DAOS_PROP_LABEL_MAX_LEN + 1];
 };
 
 #define DAOS_SYS_NAME_MAX_LEN 127
