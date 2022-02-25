@@ -19,6 +19,8 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	struct dfuse_il_reply	il_reply = {0};
 	int			rc;
 
+	DFUSE_TRA_INFO(oh, "Requested");
+
 	rc = dfs_obj2id(oh->doh_ie->ie_obj, &il_reply.fir_oid);
 	if (rc)
 		D_GOTO(err, rc);
@@ -43,6 +45,8 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	struct dfuse_hs_reply	hs_reply = {0};
 	d_iov_t			iov = {};
 	int			rc;
+
+	DFUSE_TRA_INFO(oh, "Requested");
 
 	hs_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
@@ -187,7 +191,8 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	d_iov_t			iov = {};
 	int			rc;
 
-	/* Handle directory */
+	DFUSE_TRA_INFO(oh, "Requested");
+
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
 	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
@@ -276,23 +281,18 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	uid_t			uid;
 	gid_t			gid;
 
+	DFUSE_TRA_INFO(oh, "ioctl cmd=%#x", cmd);
+
 	if (cmd == TCGETS) {
 		DFUSE_TRA_DEBUG(oh, "Ignoring TCGETS ioctl");
 		D_GOTO(out_err, rc = ENOTTY);
 	}
 
-	if (cmd == TIOCGPGRP) {
-		DFUSE_TRA_DEBUG(oh, "Ignoring TIOCGPGRP ioctl");
-		D_GOTO(out_err, rc = ENOTTY);
-	}
-
 	/* Check the IOCTl type is correct */
 	if (_IOC_TYPE(cmd) != DFUSE_IOCTL_TYPE) {
-		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented cmd=%#x", cmd);
+		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented");
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
-
-	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x", cmd);
 
 	if (cmd == DFUSE_IOCTL_IL) {
 		if (out_bufsz < sizeof(struct dfuse_il_reply))
@@ -335,7 +335,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	if (fc->uid != uid || fc->gid != gid)
 		D_GOTO(out_err, rc = EPERM);
 
-	DFUSE_TRA_DEBUG(oh, "trusted pid %d", fc->pid);
+	DFUSE_TRA_INFO(oh, "trusted pid %d", fc->pid);
 
 	if (cmd == DFUSE_IOCTL_IL_SIZE) {
 		if (out_bufsz < sizeof(struct dfuse_hs_reply))

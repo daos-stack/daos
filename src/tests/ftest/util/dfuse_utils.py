@@ -266,9 +266,6 @@ class Dfuse(DfuseCommand):
             raise CommandFailure(
                 "Dfuse missing environment variables for D_LOG_FILE")
 
-        if 'D_LOG_MASK' not in self.env:
-            self.env['D_LOG_MASK'] = 'INFO'
-
         # create dfuse dir if does not exist
         self.create_mount_point()
 
