@@ -197,8 +197,6 @@ def scons():
             source = join(sprefix, _dir)
             install_dir(denv, source, target)
 
-    prereqs.require(denv, 'go')
-
     configure_go(denv)
 
     # Version-controlled DAOS Go source directory src/control

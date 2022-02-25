@@ -1050,7 +1050,7 @@ class PreReqComponent():
         common_reqs = ['argobots', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4']
         client_reqs = ['fuse', 'json-c']
-        server_reqs = ['pmdk', 'go']
+        server_reqs = ['pmdk']
         test_reqs = ['cmocka']
 
         if not is_arm:
