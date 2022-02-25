@@ -1507,6 +1507,17 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 					   ioc->ioc_coc->sc_csummer,
 					   orwo->orw_iod_csums.ca_arrays,
 					   orw->orw_oid, &orw->orw_dkey);
+			if (orwo->orw_iod_csums.ca_arrays == 0) {
+				int i;
+
+				D_ERROR("No checksums were added for iods[%d] ...\n",
+					orw->orw_iod_array.oia_iod_nr);
+				for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
+					daos_iod_t *iod = &orw->orw_iod_array.oia_iods[i];
+
+					D_ERROR("iod[%d]: "DF_C_IOD"\n", i, DP_C_IOD(iod));
+				}
+			}
 			if (rc) {
 				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
 					DP_UOID(orw->orw_oid), rc);
@@ -1569,18 +1580,19 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			dcf_corrupt(orw->orw_sgls.ca_arrays,
 				    orw->orw_sgls.ca_count);
 		}
-	} else {
+	} else if (obj_rpc_is_fetch(rpc) && orwo->orw_iod_csums.ca_count > 0) {
 		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, orwo->orw_iod_csums.ca_arrays,
 					 biod, ioc->ioc_coc->sc_csummer,
 					 orw->orw_iod_array.oia_iod_nr);
 
 		if (rc != 0)
 			D_ERROR(DF_C_UOID_DKEY " verify_bio_csum failed: "
-				DF_RC"\n",
+					DF_RC"\n",
 				DP_C_UOID_DKEY(orw->orw_oid, dkey),
 				DP_RC(rc));
 	}
-	if (obj_rpc_is_fetch(rpc) && create_map) {
+
+	if (rc == 0 && obj_rpc_is_fetch(rpc) && create_map) {
 		/* EC degraded fetch converted original iod to replica daos ext,
 		 * need to convert back to vos ext before creating iom, or the
 		 * client-side dc_rw_cb_csum_verify() may not work.
