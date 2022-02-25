@@ -56,8 +56,8 @@ Please see ${STAGE_NAME}/framework/ in the artifacts for more info."
             send_mail "Interface $iface found without verbs after reboot"         \
                       "Found interface $iface without verbs driver after reboot."
             report_junit "Interface $iface on $HOSTNAME is missing the verbs driver but we do no know how to rectify this so all we can do is fail this test run. 
-Please file a CORCI ticket if you have any suggestsions on how to rectify this state in order to prevent failed test runs." \
-                         "verbs_driver_test"                                                                                \
+Please file a CORCI ticket if you have any suggestions on how to rectify this state in order to prevent failed test runs." \
+                         "verbs_driver_test"                                                                               \
                          "Missing verbs driver on $HOSTNAME. 
 Please see ${STAGE_NAME}/framework/ in the artifacts for more info."
             exit 1
