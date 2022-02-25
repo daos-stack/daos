@@ -153,30 +153,14 @@ variable "client_number_of_instances" {
   type        = number
 }
 
-variable "daos_disk_type" {
-  description = "Daos disk type to use. For now only suported one is local-ssd"
-  default     = "local-ssd"
-  type        = string
-}
-
 variable "server_daos_disk_count" {
   description = "Number of local ssd's to use"
   default     = null
   type        = number
 }
 
-variable "daos_service_account_scopes" {
-  description = "Scopes for the DAOS server service account"
-  default = [
-    "userinfo-email",
-    "compute-ro",
-    "storage-ro"
-  ]
-  type = list(string)
-}
-
 variable "preemptible" {
   description = "If preemptible instances"
-  default = true
-  type = string
+  default     = true
+  type        = string
 }

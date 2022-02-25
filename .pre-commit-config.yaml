@@ -1,0 +1,27 @@
+---
+repos:
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.64.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+      - id: terraform_validate
+  - repo: local
+    hooks:
+      - id: terraform-readme
+        name: terraform-readme
+        entry: tools/autodoc/terraform_docs.sh
+        language: script
+        types: ['terraform']
+        exclude: \.terraform\/.*$
+        pass_filenames: true
+        require_serial: true
+      - id: packer-readme
+        name: packer-readme
+        entry: tools/autodoc/terraform_docs.sh
+        language: script
+        files: ^.*\.pkr\.hcl$
+        pass_filenames: true
+        require_serial: true

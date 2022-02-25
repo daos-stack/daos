@@ -8,6 +8,21 @@ The resources/services/activations/deletions that this module will create/trigge
 - Create an instance tempate for DAOS clients
 - Create a stateful instance group for DAOS clients
 
+<!-- BEGINNING OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
+Copyright 2021 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
 ## Requirements
 
 | Name | Version |
@@ -40,7 +55,7 @@ No modules.
 |------|-------------|------|---------|:--------:|
 | <a name="input_daos_service_account_scopes"></a> [daos\_service\_account\_scopes](#input\_daos\_service\_account\_scopes) | Scopes for the DAOS client service account | `list(string)` | <pre>[<br>  "userinfo-email",<br>  "compute-ro",<br>  "storage-ro"<br>]</pre> | no |
 | <a name="input_instance_base_name"></a> [instance\_base\_name](#input\_instance\_base\_name) | MIG instance base names to use | `string` | `null` | no |
-| <a name="input_labels"></a> [labels](#input\_labels) | Set of key/value label pairs to assign to daos-client instances | `any` | n/a | no |
+| <a name="input_labels"></a> [labels](#input\_labels) | Set of key/value label pairs to assign to daos-client instances | `any` | `{}` | no |
 | <a name="input_machine_type"></a> [machine\_type](#input\_machine\_type) | GCP machine type. ie. e2-medium | `string` | `null` | no |
 | <a name="input_mig_name"></a> [mig\_name](#input\_mig\_name) | MIG name | `string` | `null` | no |
 | <a name="input_network"></a> [network](#input\_network) | GCP network to use | `string` | `null` | no |
@@ -49,6 +64,7 @@ No modules.
 | <a name="input_os_disk_type"></a> [os\_disk\_type](#input\_os\_disk\_type) | OS disk type ie. pd-ssd, pd-standard | `string` | `"pd-ssd"` | no |
 | <a name="input_os_family"></a> [os\_family](#input\_os\_family) | OS GCP image family | `string` | `null` | no |
 | <a name="input_os_project"></a> [os\_project](#input\_os\_project) | OS GCP image project name | `string` | `null` | no |
+| <a name="input_preemptible"></a> [preemptible](#input\_preemptible) | If preemptible instances | `string` | `false` | no |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The GCP project to use | `string` | `null` | no |
 | <a name="input_region"></a> [region](#input\_region) | The GCP region to create and test resources in | `string` | `null` | no |
 | <a name="input_subnetwork"></a> [subnetwork](#input\_subnetwork) | GCP sub-network to use | `string` | `null` | no |
@@ -59,3 +75,4 @@ No modules.
 ## Outputs
 
 No outputs.
+<!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->

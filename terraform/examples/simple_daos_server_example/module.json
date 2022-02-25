@@ -1,0 +1,146 @@
+{
+  "header": "",
+  "footer": "",
+  "inputs": [
+    {
+      "name": "daos_disk_count",
+      "type": "number",
+      "description": "Number of local ssd's to use",
+      "default": 16,
+      "required": false
+    },
+    {
+      "name": "instance_base_name",
+      "type": "string",
+      "description": "MIG instance base names to use",
+      "default": "daos-server",
+      "required": false
+    },
+    {
+      "name": "labels",
+      "type": "any",
+      "description": "Set of key/value label pairs to assign to daos-server instances",
+      "default": {},
+      "required": false
+    },
+    {
+      "name": "machine_type",
+      "type": "string",
+      "description": "GCP machine type. ie. e2-medium",
+      "default": "n2-custom-20-131072",
+      "required": false
+    },
+    {
+      "name": "mig_name",
+      "type": "string",
+      "description": "MIG name ",
+      "default": "daos-server",
+      "required": false
+    },
+    {
+      "name": "network",
+      "type": "string",
+      "description": "GCP network to use",
+      "default": null,
+      "required": true
+    },
+    {
+      "name": "number_of_instances",
+      "type": "number",
+      "description": "Number of daos servers to bring up",
+      "default": 4,
+      "required": false
+    },
+    {
+      "name": "os_disk_size_gb",
+      "type": "number",
+      "description": "OS disk size in GB",
+      "default": 20,
+      "required": false
+    },
+    {
+      "name": "os_disk_type",
+      "type": "string",
+      "description": "OS disk type ie. pd-ssd, pd-standard",
+      "default": "pd-ssd",
+      "required": false
+    },
+    {
+      "name": "os_family",
+      "type": "string",
+      "description": "OS GCP image family",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "os_project",
+      "type": "string",
+      "description": "OS GCP image project name",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "project_id",
+      "type": "string",
+      "description": "The GCP project to use ",
+      "default": null,
+      "required": true
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "description": "The GCP region to create and test resources in",
+      "default": null,
+      "required": true
+    },
+    {
+      "name": "subnetwork",
+      "type": "string",
+      "description": "GCP sub-network to use",
+      "default": null,
+      "required": true
+    },
+    {
+      "name": "subnetwork_project",
+      "type": "string",
+      "description": "The GCP project where the subnetwork is defined",
+      "default": null,
+      "required": true
+    },
+    {
+      "name": "template_name",
+      "type": "string",
+      "description": "MIG template name",
+      "default": "daos-server",
+      "required": false
+    },
+    {
+      "name": "zone",
+      "type": "string",
+      "description": "The GCP zone to create and test resources in",
+      "default": null,
+      "required": true
+    }
+  ],
+  "modules": [
+    {
+      "name": "daos_server",
+      "source": "../../modules/daos_server",
+      "version": "",
+      "description": null
+    }
+  ],
+  "outputs": [],
+  "providers": [],
+  "requirements": [
+    {
+      "name": "terraform",
+      "version": "\u003e= 0.14.5"
+    },
+    {
+      "name": "google",
+      "version": "\u003e= 3.54.0"
+    }
+  ],
+  "resources": []
+}

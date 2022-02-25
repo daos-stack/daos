@@ -1,0 +1,207 @@
+{
+  "header": "Copyright 2021 Google LLC\n\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n     http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.",
+  "footer": "",
+  "inputs": [
+    {
+      "name": "daos_disk_count",
+      "type": "number",
+      "description": "Number of local ssd's to use",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "daos_disk_type",
+      "type": "string",
+      "description": "Daos disk type to use. For now only suported one is local-ssd",
+      "default": "local-ssd",
+      "required": false
+    },
+    {
+      "name": "daos_service_account_scopes",
+      "type": "list(string)",
+      "description": "Scopes for the DAOS server service account",
+      "default": [
+        "userinfo-email",
+        "compute-ro",
+        "storage-ro"
+      ],
+      "required": false
+    },
+    {
+      "name": "instance_base_name",
+      "type": "string",
+      "description": "MIG instance base names to use",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "labels",
+      "type": "any",
+      "description": "Set of key/value label pairs to assign to daos-server instances",
+      "default": {},
+      "required": false
+    },
+    {
+      "name": "machine_type",
+      "type": "string",
+      "description": "GCP machine type. ie. e2-medium",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "mig_name",
+      "type": "string",
+      "description": "MIG name ",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "network",
+      "type": "string",
+      "description": "GCP network to use",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "number_of_instances",
+      "type": "number",
+      "description": "Number of daos servers to bring up",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "os_disk_size_gb",
+      "type": "number",
+      "description": "OS disk size in GB",
+      "default": 20,
+      "required": false
+    },
+    {
+      "name": "os_disk_type",
+      "type": "string",
+      "description": "OS disk type ie. pd-ssd, pd-standard",
+      "default": "pd-ssd",
+      "required": false
+    },
+    {
+      "name": "os_family",
+      "type": "string",
+      "description": "OS GCP image family",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "os_project",
+      "type": "string",
+      "description": "OS GCP image project name",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "preemptible",
+      "type": "string",
+      "description": "If preemptible instances",
+      "default": false,
+      "required": false
+    },
+    {
+      "name": "project_id",
+      "type": "string",
+      "description": "The GCP project to use ",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "description": "The GCP region to create and test resources in",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "subnetwork",
+      "type": "string",
+      "description": "GCP sub-network to use",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "subnetwork_project",
+      "type": "string",
+      "description": "The GCP project where the subnetwork is defined",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "template_name",
+      "type": "string",
+      "description": "MIG template name",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "zone",
+      "type": "string",
+      "description": "The GCP zone to create and test resources in",
+      "default": null,
+      "required": false
+    }
+  ],
+  "modules": [],
+  "outputs": [],
+  "providers": [
+    {
+      "name": "google",
+      "alias": null,
+      "version": "\u003e= 3.54.0"
+    }
+  ],
+  "requirements": [
+    {
+      "name": "terraform",
+      "version": "\u003e= 0.14.5"
+    },
+    {
+      "name": "google",
+      "version": "\u003e= 3.54.0"
+    }
+  ],
+  "resources": [
+    {
+      "type": "compute_instance_group_manager",
+      "name": "daos_sig",
+      "provider": "google",
+      "source": "hashicorp/google",
+      "mode": "managed",
+      "version": "latest",
+      "description": null
+    },
+    {
+      "type": "compute_instance_template",
+      "name": "daos_sig_template",
+      "provider": "google",
+      "source": "hashicorp/google",
+      "mode": "managed",
+      "version": "latest",
+      "description": null
+    },
+    {
+      "type": "compute_per_instance_config",
+      "name": "named_instances",
+      "provider": "google",
+      "source": "hashicorp/google",
+      "mode": "managed",
+      "version": "latest",
+      "description": null
+    },
+    {
+      "type": "compute_image",
+      "name": "os_image",
+      "provider": "google",
+      "source": "hashicorp/google",
+      "mode": "data",
+      "version": "latest",
+      "description": null
+    }
+  ]
+}

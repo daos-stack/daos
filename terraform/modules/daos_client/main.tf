@@ -47,7 +47,7 @@ resource "google_compute_instance_template" "daos_sig_template" {
   }
 
   scheduling {
-    preemptible = var.preemptible
+    preemptible       = var.preemptible
     automatic_restart = false
   }
 }
@@ -76,9 +76,9 @@ resource "google_compute_per_instance_config" "named_instances" {
     metadata = {
       inst_type      = "daos-client"
       enable-oslogin = "true"
-      // Adding a reference to the instance template used causes the stateful instance to update
-      // if the instance template changes. Otherwise there is no explicit dependency and template
-      // changes may not occur on the stateful instance
+      # Adding a reference to the instance template used causes the stateful instance to update
+      # if the instance template changes. Otherwise there is no explicit dependency and template
+      # changes may not occur on the stateful instance
       instance_template = google_compute_instance_template.daos_sig_template.self_link
     }
   }

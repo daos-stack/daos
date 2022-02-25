@@ -133,6 +133,6 @@ variable "daos_service_account_scopes" {
 
 variable "preemptible" {
   description = "If preemptible instances"
-  default = false
-  type = string
+  default     = false
+  type        = string
 }
