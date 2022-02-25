@@ -3,6 +3,7 @@ name: Doxygen
 on:
   pull_request:
     paths:
+    - 'Doxyfile'
     - 'src/include/*.h'
 
 jobs:
