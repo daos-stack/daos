@@ -120,10 +120,6 @@ func ctrlrPCIAddresses(ctrlrs storage.NvmeControllers) []string {
 // containing any Namespace and DeviceHealth structs.
 // Afterwards remove lockfile for each discovered device.
 func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
-	if n == nil {
-		return nil, errors.New("nil NvmeImpl")
-	}
-
 	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := ctrlrPCIAddresses(ctrlrs)
@@ -146,10 +142,6 @@ func resultPCIAddresses(results []*FormatResult) []string {
 // Attempt wipe of each controller namespace's LBA-0.
 // Afterwards remove lockfile for each formatted device.
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
-	if n == nil {
-		return nil, errors.New("nil NvmeImpl")
-	}
-
 	results, err := collectFormatResults(C.nvme_wipe_namespaces(),
 		"NVMe Format(): C.nvme_wipe_namespaces()")
 
@@ -163,10 +155,6 @@ func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 //
 // Afterwards remove lockfile for the updated device.
 func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
-	if n == nil {
-		return errors.New("nil NvmeImpl")
-	}
-
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
