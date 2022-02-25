@@ -92,7 +92,8 @@
 #
 #
 ## CART: Disable SRX
-## parameters shared with client.
+## parameters shared with client. set it to true if network card
+## does not support shared receive context, eg intel E810-C.
 #
 #disable_srx: false
 #
