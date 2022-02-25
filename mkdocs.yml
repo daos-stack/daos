@@ -97,4 +97,5 @@ nav:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
         - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/release/1.2/src/README.md'
-        - 'DAOS API Documentation': 'doxygen/html/index.html'
+        - 'DAOS API Documentation': 'https://docs.daos.io/v1.2/doxygen/html/index.html'
+        # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...
