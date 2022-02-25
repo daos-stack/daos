@@ -121,6 +121,7 @@ struct ds_pool_child {
 	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
+	ABT_eventual	spc_ref_eventual;
 
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
@@ -150,27 +151,17 @@ int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
-/*
- * TODO: Make the following internal functions of ds_pool after merging in
- * mgmt.
- */
-
-int ds_pool_create(const uuid_t pool_uuid, const char *path,
-		   uuid_t target_uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
-int ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
-		   const d_rank_list_t *rank_list, int ndomains,
+int ds_pool_extend(uuid_t pool_uuid, int ntargets, const d_rank_list_t *rank_list, int ndomains,
 		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
-		       uuid_t target_uuids[], const char *group,
-		       const d_rank_list_t *target_addrs, int ndomains,
-		       const uint32_t *domains, daos_prop_t *prop,
-		       d_rank_list_t *svc_addrs);
+int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
+		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
+		       daos_prop_t *prop, d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
@@ -221,9 +212,7 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
 int ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			     uint32_t version, int *tgt_id);
-int ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			     uint32_t version, bool check_shard);
+			     struct dtx_memberships *mbs, uint32_t version, int *tgt_id);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);

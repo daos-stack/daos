@@ -186,6 +186,12 @@ or query/manage an object inside a container.`
 			defer fini()
 		}
 
+		if argsCmd, ok := cmd.(common.ArgsHandler); ok {
+			if err := argsCmd.CheckArgs(args); err != nil {
+				return err
+			}
+		}
+
 		if err := cmd.Execute(args); err != nil {
 			return err
 		}

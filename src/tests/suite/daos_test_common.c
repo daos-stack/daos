@@ -211,11 +211,14 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 	int rc = 0;
 
 	if (arg->myrank == 0) {
-		/** use daos_test label if none is provided */
 		if (!co_prop || daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL) {
-			print_message("setup: creating container with label \"daos_test\"\n");
-			rc = daos_cont_create_with_label(arg->pool.poh, "daos_test", co_prop,
-							 &arg->co_uuid, NULL);
+			char cont_label[32];
+			static int cont_idx;
+
+			sprintf(cont_label, "daos_test_%d", cont_idx++);
+			print_message("setup: creating container with label %s\n", cont_label);
+			rc = daos_cont_create_with_label(arg->pool.poh, cont_label,
+							 co_prop, &arg->co_uuid, NULL);
 		} else {
 			print_message("setup: creating container\n");
 			rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, co_prop, NULL);

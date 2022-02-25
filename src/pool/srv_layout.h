@@ -44,7 +44,6 @@
 extern d_iov_t ds_pool_prop_version;		/* uint32_t */
 extern d_iov_t ds_pool_prop_map_version;	/* uint32_t */
 extern d_iov_t ds_pool_prop_map_buffer;		/* pool_buf */
-extern d_iov_t ds_pool_prop_map_uuids;		/* uuid_t[] (unused now) */
 extern d_iov_t ds_pool_prop_label;		/* string */
 extern d_iov_t ds_pool_prop_acl;		/* daos_acl */
 extern d_iov_t ds_pool_prop_space_rb;		/* uint64_t */

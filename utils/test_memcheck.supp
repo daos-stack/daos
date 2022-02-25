@@ -167,6 +167,17 @@
    ...
 }
 {
+   libevent
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:?alloc
+   ...
+   obj:*libevent*.so*
+   fun:*event_base_loop
+   ...
+}
+{
    libopen-rte leak
    Memcheck:Leak
    match-leak-kinds: all

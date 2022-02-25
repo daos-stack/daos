@@ -39,6 +39,22 @@
 
 /* ds_pool_child **************************************************************/
 
+static void
+stop_gc_ult(struct ds_pool_child *child)
+{
+	D_ASSERT(child != NULL);
+	/* GC ULT is not started */
+	if (child->spc_gc_req == NULL)
+		return;
+
+	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
+		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	sched_req_wait(child->spc_gc_req, true);
+	sched_req_put(child->spc_gc_req);
+	child->spc_gc_req = NULL;
+}
+
 struct ds_pool_child *
 ds_pool_child_lookup(const uuid_t uuid)
 {
@@ -71,9 +87,15 @@ ds_pool_child_put(struct ds_pool_child *child)
 			DP_UUID(child->spc_uuid));
 		D_ASSERT(d_list_empty(&child->spc_list));
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
+
+		/* only stop gc ULT when all ops ULTs are done */
+		stop_gc_ult(child);
+
 		vos_pool_close(child->spc_hdl);
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
-		D_FREE(child);
+		ABT_eventual_set(child->spc_ref_eventual,
+				 (void *)&child->spc_ref,
+				 sizeof(child->spc_ref));
 	}
 }
 
@@ -87,7 +109,9 @@ gc_ult(void *arg)
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT started\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 
-	D_ASSERT(child->spc_gc_req != NULL);
+	if (child->spc_gc_req == NULL)
+		goto out;
+
 	while (!dss_ult_exiting(child->spc_gc_req)) {
 		rc = vos_gc_pool(child->spc_hdl, -1, dss_ult_yield,
 				 (void *)child->spc_gc_req);
@@ -100,9 +124,13 @@ gc_ult(void *arg)
 			break;
 
 		/* It'll be woke up by container destroy or aggregation */
-		sched_req_sleep(child->spc_gc_req, 10ULL * 1000);
+		if (rc > 0)
+			sched_req_yield(child->spc_gc_req);
+		else
+			sched_req_sleep(child->spc_gc_req, 10UL * 1000);
 	}
 
+out:
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT stopped\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 }
@@ -132,27 +160,11 @@ start_gc_ult(struct ds_pool_child *child)
 	if (child->spc_gc_req == NULL) {
 		D_CRIT(DF_UUID"[%d]: Failed to get req for GC ULT\n",
 		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_join(gc);
+		ABT_thread_free(&gc);
 		return -DER_NOMEM;
 	}
 
 	return 0;
-}
-
-static void
-stop_gc_ult(struct ds_pool_child *child)
-{
-	D_ASSERT(child != NULL);
-	/* GC ULT is not started */
-	if (child->spc_gc_req == NULL)
-		return;
-
-	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
-		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
-
-	sched_req_wait(child->spc_gc_req, true);
-	sched_req_put(child->spc_gc_req);
-	child->spc_gc_req = NULL;
 }
 
 struct pool_child_lookup_arg {
@@ -202,13 +214,21 @@ pool_child_add_one(void *varg)
 	uuid_copy(child->spc_uuid, arg->pla_uuid);
 	child->spc_map_version = arg->pla_map_version;
 	child->spc_ref = 1; /* 1 for the list */
+
+	rc = ABT_eventual_create(sizeof(child->spc_ref),
+				 &child->spc_ref_eventual);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_vos;
+	}
+
 	child->spc_pool = arg->pla_pool;
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
 	rc = start_gc_ult(child);
 	if (rc != 0)
-		goto out_vos;
+		goto out_eventual;
 
 	rc = ds_start_scrubbing_ult(child);
 	if (rc != 0)
@@ -240,6 +260,8 @@ out_scrub:
 	ds_stop_scrubbing_ult(child);
 out_gc:
 	stop_gc_ult(child);
+out_eventual:
+	ABT_eventual_free(&child->spc_ref_eventual);
 out_vos:
 	vos_pool_close(child->spc_hdl);
 out_free:
@@ -256,6 +278,7 @@ static int
 pool_child_delete_one(void *uuid)
 {
 	struct ds_pool_child *child;
+	int *ref, rc;
 
 	child = ds_pool_child_lookup(uuid);
 	if (child == NULL)
@@ -263,17 +286,22 @@ pool_child_delete_one(void *uuid)
 
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
-	stop_gc_ult(child);
 	ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
 	ds_pool_child_put(child); /* -1 for lookup */
 
-	/*
-	 * FIXME: Need to wait for last reference of ds_pool_child dropped,
-	 * since the ds_pool_child references ds_pool by 'spc_pool' without
-	 * holding ds_pool refcount.
+	rc = ABT_eventual_wait(child->spc_ref_eventual, (void **)&ref);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	ABT_eventual_free(&child->spc_ref_eventual);
+
+	/* ds_pool_child must be freed here to keep
+	 * spc_ref_enventual usage safe
 	 */
+	D_FREE(child);
+
 	return 0;
 }
 
@@ -337,13 +365,21 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
 
+	/** set up ds_pool metrics */
+	rc = ds_pool_metrics_start(pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to set up ds_pool metrics: %d\n",
+			DP_UUID(key), rc);
+		goto err_done_cond;
+	}
+
 	uuid_unparse_lower(key, group_id);
 	rc = crt_group_secondary_create(group_id, NULL /* primary_grp */,
 					NULL /* ranks */, &pool->sp_group);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool group: %d\n",
 			DP_UUID(key), rc);
-		goto err_done_cond;
+		goto err_metrics;
 	}
 
 	rc = ds_iv_ns_create(info->dmi_ctx, pool->sp_uuid, pool->sp_group,
@@ -354,14 +390,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err_group;
 	}
 
-	/** set up ds_pool metrics */
-	rc = ds_pool_metrics_start(pool);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to set up ds_pool metrics: %d\n",
-			DP_UUID(key), rc);
-		goto err_iv_ns;
-	}
-
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
@@ -369,14 +397,12 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
 			DP_UUID(key), DP_RC(rc));
-		goto err_metrics;
+		goto err_iv_ns;
 	}
 
 	*link = &pool->sp_entry;
 	return 0;
 
-err_metrics:
-	ds_pool_metrics_stop(pool);
 err_iv_ns:
 	ds_iv_ns_put(pool->sp_iv_ns);
 err_group:
@@ -384,6 +410,8 @@ err_group:
 	if (rc_tmp != 0)
 		D_ERROR(DF_UUID": failed to destroy pool group: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc_tmp));
+err_metrics:
+	ds_pool_metrics_stop(pool);
 err_done_cond:
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 err_cond:
@@ -576,7 +604,7 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 	if (pool->sp_ec_ephs_req == NULL) {
 		D_ERROR(DF_UUID": Failed to get req for ec eph query ULT\n",
 			DP_UUID(pool->sp_uuid));
-		ABT_thread_join(ec_eph_query_ult);
+		ABT_thread_free(&ec_eph_query_ult);
 		return -DER_NOMEM;
 	}
 
@@ -645,6 +673,8 @@ ds_pool_start(uuid_t uuid)
 	} else if (rc != -DER_NONEXIST) {
 		D_ERROR(DF_UUID": failed to look up pool: %d\n", DP_UUID(uuid),
 			rc);
+		if (rc == -DER_EXIST)
+			rc = -DER_BUSY;
 		return rc;
 	}
 

@@ -374,8 +374,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
 		if (cbinfo.cci_rc != 0)
-			RPC_ERROR(rpc_priv, "failed, " DF_RC "\n",
-				  DP_RC(cbinfo.cci_rc));
+			RPC_CERROR(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,
+				   "failed, " DF_RC "\n", DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
 			  "Invoking RPC callback (rank %d tag %d) rc: "
@@ -552,6 +552,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_DEBUG(DB_TRACE, "destroy context (idx %d, force %d), "
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
+		if (i > 5)
+			D_ERROR("destroy context (idx %d, force %d) "
+				"takes too long time. This is attempt %d of %d.\n",
+				ctx->cc_idx, force, i, CRT_SWIM_FLUSH_ATTEMPTS);
 		/* Flush SWIM RPC already sent */
 		rc = crt_context_flush(crt_ctx, timeout_sec);
 		if (rc)
@@ -921,38 +925,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	uint64_t			 ts_now;
 
 	D_ASSERT(crt_ctx != NULL);
-
-	if (crt_gdata.cg_swim_inited) {
-		struct crt_grp_priv	*gp = crt_gdata.cg_grp->gg_primary_grp;
-		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
-		swim_id_t		 self_id = swim_self_get(csm->csm_ctx);
-
-		/*
-		 * Check for network idle in SWIM context.
-		 * If the time passed from last received RPC till now is more
-		 * than 2/3 of suspicion timeout suspends eviction.
-		 * The max_delay should be less suspicion timeout to guarantee
-		 * the already suspected members will not be expired.
-		 */
-		if (crt_ctx->cc_idx == csm->csm_crt_ctx_idx &&
-		    crt_ctx->cc_last_unpack_hlc != 0 &&
-		    self_id != SWIM_ID_INVALID) {
-			uint64_t delay = crt_hlc2msec(crt_hlc_get() -
-						   crt_ctx->cc_last_unpack_hlc);
-			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
-
-			if (delay > max_delay) {
-				D_ERROR("Network outage detected (idle during "
-					"%lu.%lu sec >  maximum allowed "
-					"%lu.%lu sec). Suspend SWIM eviction "
-					"until network stabilized.\n",
-					delay / 1000, delay % 1000,
-					max_delay / 1000, max_delay % 1000);
-				crt_swim_suspend_all();
-				crt_ctx->cc_last_unpack_hlc = 0;
-			}
-		}
-	}
 
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);

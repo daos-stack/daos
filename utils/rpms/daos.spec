@@ -2,19 +2,19 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.1-1%{?dist}
-%global libfabric_version 1.13.2~rc1-1
+%global mercury_version 2.1.0~rc4-3%{?dist}
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
 # https://bugzilla.redhat.com/show_bug.cgi?id=1955184
 %define _use_internal_dependency_generator 0
-%define __find_requires %{_sourcedir}/bz-1955184_find-requires
+%define __find_requires %{SOURCE1}
 %endif
 
 Name:          daos
-Version:       1.3.106
-Release:       2%{?relval}%{?dist}
+Version:       2.0.1
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -31,7 +31,7 @@ BuildRequires: python36-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: mercury-devel = %{mercury_version}
+BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
@@ -84,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.8.1
+BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -119,6 +119,7 @@ BuildRequires: cunit-devel
 BuildRequires: ipmctl-devel
 BuildRequires: python3-devel
 BuildRequires: python3-distro
+BuildRequires: python-rpm-macros
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
@@ -137,7 +138,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -158,12 +159,14 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-Requires: libpmemobj1 >= 1.11
+# When 1.11.2 is released, we can change this to >= 1.11.2
+Requires: libpmemobj1 = 1.11.0-3.suse1500
 %else
 Requires: ipmctl > 02.00.00.3816
-Requires: libpmemobj >= 1.11
+# When 1.11.2 is released, we can change this to >= 1.11.2
+Requires: libpmemobj = 1.11.0-3%{?dist}
 %endif
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
@@ -176,7 +179,7 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
@@ -201,13 +204,16 @@ Requires: fuse < 3, fuse3-libs >= 3.4.2
 This is the package needed to run a DAOS client
 
 %package tests
+Summary: The entire DAOS test suite
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
+
+%description tests
+This is the package is a metapackage to install all of the test packages
+
+%package client-tests
 Summary: The DAOS test suite
-#This is a bit messy and needs some cleanup.  In theory,
-#we should have client tests and server tests in separate
-#packages but some binaries need libraries from both at
-#present.
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
-Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
 Requires: python36-distro
 Requires: python36-tabulate
@@ -225,8 +231,29 @@ Requires: attr
 Requires: libpsm_infinipath1
 %endif
 
-%description tests
-This is the package needed to run the DAOS test suite
+%description client-tests
+This is the package needed to run the DAOS test suite (client tests)
+
+%package client-tests-openmpi
+Summary: The DAOS client test suite - tools which need openmpi
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+
+%description client-tests-openmpi
+This is the package needed to run the DAOS client test suite openmpi tools
+
+%package server-tests
+Summary: The DAOS server test suite (server tests)
+Requires: %{name}-server%{?_isa} = %{version}-%{release}
+
+%description server-tests
+This is the package needed to run the DAOS server test suite (server tests)
+
+%package server-tests-openmpi
+Summary: The DAOS server test suite - tools which need openmpi
+Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
+
+%description server-tests-openmpi
+This is the package needed to run the DAOS server test suite openmpi tools
 
 %package devel
 Summary: The DAOS development libraries and headers
@@ -243,12 +270,12 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %description firmware
 This is the package needed to manage server storage firmware on DAOS servers.
 
-%package daos_serialize
+%package serialize
 Summary: DAOS serialization library that uses HDF5
 BuildRequires: hdf5-devel
 Requires: hdf5
 
-%description daos_serialize
+%description serialize
 This is the package needed to use the DAOS serialization and deserialization
 tools, as well as the preserve option for the filesystem copy tool.
 
@@ -298,7 +325,7 @@ mv test.cov{,-build}
       %{?compiler_args}
 
 %if ("%{?compiler_args}" == "COMPILER=covc")
-mv test.cov-build %{buildroot}/usr/lib/daos/TESTING/ftest/test.cov
+mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
@@ -306,7 +333,7 @@ mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
 install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
-%else if (0%{?rhel} == 8 or  %{?suse_version} == 1500)
+%else
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
@@ -425,30 +452,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_mandir}/man8/daos.8*
 %{_mandir}/man8/dmg.8*
 
-%files tests
-%dir %{_prefix}/lib/daos
-%{_prefix}/lib/daos/TESTING
+%files client-tests
+%dir %{daoshome}
+%{daoshome}/TESTING
 %{_bindir}/hello_drpc
-%{_bindir}/jobtest
 %{_libdir}/libdaos_tests.so
-%{_bindir}/jump_pl_map
-%{_bindir}/ring_pl_map
-%{_bindir}/pl_bench
-%{_bindir}/smd_ut
-%{_bindir}/vea_ut
-%{_bindir}/vea_stress
-%{_bindir}/daos_perf
-%{_bindir}/vos_perf
-%{_bindir}/daos_racer
-%{_bindir}/evt_ctl
 %{_bindir}/io_conf
-%{_bindir}/rdbt
-%{_bindir}/obj_ctl
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
-%{_bindir}/crt_launch
-%{_bindir}/daos_test
-%{_bindir}/dfs_test
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
@@ -457,14 +466,38 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/eq_tests
 %{_bindir}/job_tests
 %{_bindir}/security_test
-%{_bindir}/srv_checksum_tests
-%{_bindir}/vos_tests
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
-%{_prefix}/lib/daos/.build_vars.json
-%{_prefix}/lib/daos/.build_vars.sh
+%{daoshome}/.build_vars.json
+%{daoshome}/.build_vars.sh
+
+%files client-tests-openmpi
+%{_bindir}/crt_launch
+%{_bindir}/daos_perf
+%{_bindir}/daos_racer
+%{_bindir}/daos_test
+%{_bindir}/dfs_test
+%{_bindir}/jobtest
 %{_libdir}/libdts.so
+
+%files server-tests
+%{_bindir}/evt_ctl
+%{_bindir}/jump_pl_map
+%{_bindir}/pl_bench
+%{_bindir}/rdbt
+%{_bindir}/ring_pl_map
+%{_bindir}/smd_ut
+%{_bindir}/srv_checksum_tests
+%{_bindir}/vea_ut
+%{_bindir}/vos_tests
+%{_bindir}/vea_stress
+
+%files server-tests-openmpi
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_run_io_conf
+%{_bindir}/obj_ctl
+%{_bindir}/vos_perf
 
 %files devel
 %{_includedir}/*
@@ -477,17 +510,78 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
-%files daos_serialize
+%files serialize
 %{_libdir}/libdaos_serialize.so
 
+%files tests
+# No files in a meta-package
+
 %changelog
-* Mon Oct 13 2021 David Quigley <david.quigley@intel.com> 1.3.106-2
+* Wed Feb 16 2022 Li Wei <wei.g.li@intel.com> 2.0.1-3
+- Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
+
+* Thu Jan 27 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.1-2
+- Fix issue in backward compatibility code.
+
+* Sat Jan 22 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.1-1
+- Version bump to 2.0.1
+
+* Wed Jan 19 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-6
+- Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
+* Wed Jan 12 2022 Phillip Henderson <phillip.henderson@intel.com> 2.0.0-5
+- Fix name of daos serialize package
+
+* Tue Dec 28 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.0.0-4
+- Update mercury to v2.1.0~rc4-3 to pick a fix for DAOS-9325 high cpu usage
+
+* Thu Dec 16 2021 Brian J. Murrell <brian.murrell@intel.com> 2.0.0-3
+- Add BR: python-rpm-macros for Leap 15 as python3-base dropped that
+  as a R:
+
+* Tue Dec 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.0.0-2
+- Version bump to 2.0.0-2
+
+* Sat Dec 11 2021 Johann Lombardi <johann.lombardi@intel.com> 2.0.0-1
+- Version bump to 2.0.0
+
+* Fri Dec 10 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.106-10
+- Don't make daos-*-tests-openmi a dependency of anything
+  - If they are wanted, they should be installed explicitly, due to
+    potential conflicts with other MPI stacks
+
+* Wed Dec 08 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.106-9
+- Apply OFI patch for DAOS-9173
+
+* Fri Dec 03 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.106-8
+- Update mercury to v2.1.0rc4
+
+* Wed Nov 24 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.106-7
+- Remove invalid "%%else if" syntax
+- Fix a few other rpmlint warnings
+
+* Tue Nov 16 2021 John E. Malmberg <john.e.malmberg@intel.com> 1.3.106-6
+- Fix version of libpemobj1 for suse
+
+* Mon Nov 15 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.106-5
+- Update OFI to v1.14.0rc3
+
+* Thu Oct 28 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.106-4
+
+- Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
+- Rename daos-tests daos-client-tests and make daos-tests require all
+  other test suites to maintain existing behavior
+
+* Wed Oct 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.106-3
+- Explicitly require 1.11.0-3 of PMDK
+
+* Wed Oct 13 2021 David Quigley <david.quigley@intel.com> 1.3.106-2
 - Add defusedxml as a required dependency for the test package.
 
 * Tue Oct 12 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.106-1
 - Version bump to 1.3.106 for 2.0 test build 6
 
-* Wed Oct 8 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.13.105-4
+* Fri Oct 8 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.13.105-4
 - Update OFI to v1.13.2rc1
 
 * Wed Sep 15 2021 Li Wei <wei.g.li@intel.com> 1.3.105-3
@@ -642,7 +736,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - Update to mercury v2.0.1rc1
 
 * Fri Jan 22 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.2.1-5
-- Install daos_metrics utility to %{_bindir}
+- Install daos_metrics utility to %%{_bindir}
 
 * Wed Jan 20 2021 Kenneth Cain <kenneth.c.cain@intel.com> 1.1.2.1-4
 - Version update for API major version 1, libdaos.so.1 (1.0.0)
@@ -848,7 +942,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - Update BR: libisal-devel for Leap
 
 * Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-8
-- Use BR: cart-devel-%{cart_sha1} if available
+- Use BR: cart-devel-%%{cart_sha1} if available
 - Remove cart's BRs as it's -devel Requires them now
 
 * Tue Oct 01 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-7

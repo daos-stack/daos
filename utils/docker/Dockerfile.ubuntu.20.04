@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2021 Intel Corporation
+# Copyright (C) 2018-2022 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Ubuntu-based
@@ -186,4 +186,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ $"DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*

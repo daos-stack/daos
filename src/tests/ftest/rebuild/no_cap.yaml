@@ -4,23 +4,24 @@ hosts:
   test_servers:
     - server-A
     - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
   test_clients:
-    - client-H
-timeout: 120
+    - client-A
+timeout: 180
 server_config:
   name: daos_server
   servers:
     targets: 8
+container:
+  control_method: daos
+  properties: "rf:1"
 pool:
   mode: 511
   name: daos_server
-  scm_size: 16777216
+  scm_size: 6G
   control_method: dmg
   pool_query_timeout: 30
-testparams:
-  ranks:
-    rank_to_kill: 0
+  pool_query_interval: 1
+  test_data_list: [1048576]
+  oclass: "OC_RP_2G1"
+rebuild:
+    rank_to_kill: 1

@@ -1271,7 +1271,6 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 	// simulates prep shutdown followed by stop dRPCs
 	hostRespFail := [][]*control.HostResponse{hrpf, hrsf}
 	hostRespStopFail := [][]*control.HostResponse{hrps, hrsf}
-	hostRespStopSuccess := [][]*control.HostResponse{hrpf, hrss}
 	hostRespSuccess := [][]*control.HostResponse{hrps, hrss}
 	rankResPrepFail := []*sharedpb.RankResult{
 		mockRankFail("prep shutdown", 0, 1), mockRankSuccess("prep shutdown", 1, 1), mockRankFail("prep shutdown", 3, 2),
@@ -1336,25 +1335,13 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 			expAbsentHosts: "10.0.0.3",
 			expDispatched:  expEventsPrepFail,
 		},
-		// with force set in request, prep failure will be ignored
-		"prep fail with force and stop fail": {
-			req:           &mgmtpb.SystemStopReq{Force: true},
+		"prep fail": {
+			req:           &mgmtpb.SystemStopReq{},
 			members:       defaultMembers,
 			mResps:        hostRespFail,
-			expResults:    rankResStopFail,
-			expMembers:    expMembersStopFail,
-			expDispatched: expEventsStopFail,
-		},
-		"prep fail with force and stop success": {
-			req:        &mgmtpb.SystemStopReq{Force: true},
-			members:    defaultMembers,
-			mResps:     hostRespStopSuccess,
-			expResults: rankResStopSuccess,
-			expMembers: system.Members{
-				mockMember(t, 0, 1, "stopped"),
-				mockMember(t, 1, 1, "stopped"),
-				mockMember(t, 3, 2, "stopped"),
-			},
+			expResults:    rankResPrepFail,
+			expMembers:    expMembersPrepFail,
+			expDispatched: expEventsPrepFail,
 		},
 		"prep success stop fail": {
 			req:           &mgmtpb.SystemStopReq{},

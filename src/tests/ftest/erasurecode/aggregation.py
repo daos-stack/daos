@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -74,6 +74,9 @@ class EcodAggregationOff(ErasureCodeIor):
 
                 # Read single IOR
                 self.ior_read_single_dataset(oclass, sizes)
+
+                # Increase the container UUID count and read the latest data.
+                self.cont_number += 1
 
     def test_ec_aggregation_time(self):
         """Jira ID: DAOS-7325.

@@ -25,8 +25,8 @@ import sys
 import errno
 import distro
 import subprocess #nosec
+import shutil
 from subprocess import PIPE, Popen #nosec
-from SCons.Script import WhereIs
 
 class _env_module(): # pylint: disable=invalid-name
     """Class for utilizing Modules component to load environment modules"""
@@ -39,14 +39,10 @@ class _env_module(): # pylint: disable=invalid-name
         """Load Modules for initializing envirables"""
         # Leap 15's lmod-lua doesn't include the usual module path
         # in it's MODULEPATH, for some unknown reason
-        os.environ["MODULEPATH"] = ":".join([os.path.sep +
-                                             os.path.join("usr", "share",
-                                                          "modules"),
-                                             os.path.sep +
-                                             os.path.join("etc",
-                                                          "modulefiles")] +
-                                            os.environ.get("MODULEPATH",
-                                                           "").split(":"))
+        os.environ["MODULEPATH"] = ":".join([os.path.join(os.sep, "usr", "share", "modules"),
+                                             os.path.join(os.sep, "usr", "share", "modulefiles"),
+                                             os.path.join(os.sep, "etc", "modulefiles")] +
+                                            os.environ.get("MODULEPATH", "").split(":"))
         self._module_load = self._init_mpi_module()
 
     def _module_func(self, command, *arguments): # pylint: disable=no-self-use
@@ -120,7 +116,7 @@ class _env_module(): # pylint: disable=invalid-name
         for to_load in load:
             self._module_func('load', to_load)
             print("Looking for %s" % to_load)
-            if WhereIs('mpirun'):
+            if shutil.which('mpirun'):
                 print("Loaded %s" % to_load)
                 return True
         return False
@@ -146,7 +142,7 @@ class _env_module(): # pylint: disable=invalid-name
         if not self._module_load(mpi):
             print("No %s found\n" % mpi)
             return False
-        exe_path = WhereIs('mpirun')
+        exe_path = shutil.which('mpirun')
         if not exe_path:
             print("No mpirun found in path. Could not configure %s\n" % mpi)
             return False
@@ -166,7 +162,7 @@ def load_mpi(mpi):
     # On Ubuntu, MPI stacks use alternatives and need root to change their
     # pointer, so just verify that the desired MPI is loaded
     if distro.id() == "ubuntu":
-        updatealternatives = WhereIs('update-alternatives')
+        updatealternatives = shutil.which('update-alternatives')
         if not updatealternatives:
             print("No update-alternatives found in path.")
             return False

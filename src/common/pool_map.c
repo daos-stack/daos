@@ -1360,6 +1360,10 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	}
 	D_ASSERT(addr - (void *)dst_tree <= size);
 	D_DEBUG(DB_TRACE, "Merged all components\n");
+
+	/* Update the total target number for the root */
+	dst_tree->do_target_nr = cntr.cc_targets;
+
 	/* At this point, I only have valid children pointers for the last
 	 * layer domains, and need to build target pointers for all layers.
 	 */
@@ -1378,15 +1382,6 @@ pool_map_merge(struct pool_map *map, uint32_t version,
  failed:
 	pool_map_destroy(src_map);
 	return rc;
-}
-
-static int
-uuid_compare_cb(const void *a, const void *b)
-{
-	uuid_t *ua = (uuid_t *)a;
-	uuid_t *ub = (uuid_t *)b;
-
-	return uuid_compare(*ua, *ub);
 }
 
 static int
@@ -1467,16 +1462,13 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 }
 
 int
-gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
-		int map_version, int ndomains, int nnodes, int ntargets,
-		const uint32_t *domains, uuid_t target_uuids[],
-		const d_rank_list_t *target_addrs, uuid_t **uuids_out,
-		uint32_t dss_tgt_nr)
+gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
+	     int nnodes, int ntargets, const uint32_t *domains, const d_rank_list_t *ranks,
+	     uint32_t dss_tgt_nr)
 {
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
 	struct pool_domain	*found_dom;
-	uuid_t			*uuids = NULL;
 	uint32_t		num_comps;
 	uint8_t			new_status;
 	bool			updated;
@@ -1496,17 +1488,9 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 	D_ASSERT(num_domain_comps > 0);
 	num_domain_comps--; /* remove the root domain - allocated separately */
 
-	/* Prepare the pool map attribute buffers. */
 	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);
 	if (map_buf == NULL)
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
-
-	/* Make a sorted target UUID array to determine target IDs. */
-	D_ALLOC_ARRAY_NZ(uuids, nnodes);
-	if (uuids == NULL)
-		D_GOTO(out_map_buf, rc = -DER_NOMEM);
-	memcpy(uuids, target_uuids, sizeof(uuid_t) * nnodes);
-	qsort(uuids, nnodes, sizeof(uuid_t), uuid_compare_cb);
 
 	rc = add_domains_to_pool_buf(map, map_buf, map_version, ndomains,
 				     domains);
@@ -1524,12 +1508,8 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 
 	/* fill nodes */
 	for (i = 0; i < nnodes; i++) {
-		uuid_t *p = bsearch(target_uuids[i], uuids, nnodes,
-				    sizeof(uuid_t), uuid_compare_cb);
-
 		if (map) {
-			found_dom = pool_map_find_node_by_rank(map,
-					target_addrs->rl_ranks[i]);
+			found_dom = pool_map_find_node_by_rank(map, ranks->rl_ranks[i]);
 			if (found_dom)
 				continue;
 		}
@@ -1539,8 +1519,8 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
 		map_comp.co_padding = 0;
-		map_comp.co_id = (p - uuids) + num_comps;
-		map_comp.co_rank = target_addrs->rl_ranks[i];
+		map_comp.co_id = ranks->rl_ranks[i];
+		map_comp.co_rank = ranks->rl_ranks[i];
 		map_comp.co_ver = map_version;
 		map_comp.co_in_ver = map_version;
 		map_comp.co_fseq = 1;
@@ -1573,7 +1553,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 			map_comp.co_index = j;
 			map_comp.co_padding = 0;
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
-			map_comp.co_rank = target_addrs->rl_ranks[i];
+			map_comp.co_rank = ranks->rl_ranks[i];
 			map_comp.co_ver = map_version;
 			map_comp.co_in_ver = map_version;
 			map_comp.co_fseq = 1;
@@ -1585,17 +1565,12 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 				D_GOTO(out_map_buf, rc);
 		}
 	}
-	if (uuids_out)
-		*uuids_out = uuids;
-	else
-		D_FREE(uuids);
 
 	*map_buf_out = map_buf;
 	return 0;
 
 out_map_buf:
 	pool_buf_free(map_buf);
-	D_FREE(uuids);
 	return rc;
 }
 

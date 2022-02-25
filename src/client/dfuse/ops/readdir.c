@@ -346,14 +346,14 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			if (plus)
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_obj,
 						 dre->dre_name,
-						 O_RDONLY | O_NOFOLLOW, &obj,
+						 O_RDWR | O_NOFOLLOW, &obj,
 						 &stbuf.st_mode, &stbuf,
 						 1, &duns_xattr_name,
 						 (void **)&outp, &attr_len);
 			else
 				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
 						    dre->dre_name,
-						    O_RDONLY | O_NOFOLLOW,
+						    O_RDWR | O_NOFOLLOW,
 						    &obj, &stbuf.st_mode, NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");

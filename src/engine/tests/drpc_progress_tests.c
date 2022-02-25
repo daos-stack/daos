@@ -352,8 +352,7 @@ test_drpc_progress_poll_failed(void **state)
 	struct drpc_progress_context ctx;
 
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(15));
-	poll_return = -1;
-	errno = ENOMEM;
+	poll_return = -ENOMEM;
 
 	assert_rc_equal(drpc_progress(&ctx, 20), -DER_NOMEM);
 
@@ -492,8 +491,7 @@ test_drpc_progress_session_cleanup_if_recv_fails(void **state)
 
 	poll_revents_return[num_sessions] = POLLIN; /* listener */
 
-	recvmsg_return = -1;
-	errno = ENOMEM;
+	recvmsg_return = -ENOMEM;
 
 	/* the error was handled by closing the sessions */
 	assert_rc_equal(drpc_progress(&ctx, 1), DER_SUCCESS);
@@ -529,8 +527,7 @@ test_drpc_progress_session_fails_if_no_data(void **state)
 
 	poll_revents_return[num_sessions] = POLLIN; /* listener */
 
-	recvmsg_return = -1;
-	errno = EAGAIN; /* No data to fetch */
+	recvmsg_return = -EAGAIN; /* No data to fetch */
 
 	/* Pass up the error this time - we didn't do anything with it */
 	assert_rc_equal(drpc_progress(&ctx, 1), -DER_AGAIN);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -456,7 +456,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	daos_epoch_t		 bound;
 	daos_epoch_range_t	 dkey_epr;
 	struct vos_punch_record	 dkey_punch;
-	daos_ofeat_t		 obj_feats;
+	enum daos_otype_t	 obj_type;
 	daos_epoch_range_t	 obj_epr = {0};
 	struct vos_ts_set	 akey_save = {0};
 	struct vos_ts_set	 dkey_save = {0};
@@ -532,7 +532,8 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 
 	cont = vos_hdl2cont(coh);
 
-	vos_ts_set_add(query->qt_ts_set, cont->vc_ts_idx, NULL, 0);
+	rc = vos_ts_set_add(query->qt_ts_set, cont->vc_ts_idx, NULL, 0);
+	D_ASSERT(rc == 0);
 
 	query->qt_bound = MAX(obj_epr.epr_hi, bound);
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
@@ -550,15 +551,13 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 
 	D_ASSERT(obj != NULL);
 	/* only integer keys supported */
-	obj_feats = daos_obj_id2feat(obj->obj_df->vo_id.id_pub);
-	if ((flags & VOS_GET_DKEY) &&
-	    (obj_feats & DAOS_OF_DKEY_UINT64) == 0) {
+	obj_type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
+	if ((flags & VOS_GET_DKEY) && !daos_is_dkey_uint64_type(obj_type)) {
 		rc = -DER_INVAL;
 		D_ERROR("Only integer dkey supported for query\n");
 		goto out;
 	}
-	if ((flags & VOS_GET_AKEY) &&
-	    (obj_feats & DAOS_OF_AKEY_UINT64) == 0) {
+	if ((flags & VOS_GET_AKEY) && !daos_is_akey_uint64_type(obj_type)) {
 		rc = -DER_INVAL;
 		D_ERROR("Only integer akey supported for query\n");
 		goto out;

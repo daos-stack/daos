@@ -31,10 +31,10 @@ struct vea_entry {
 	 * of DBTREE_CLASS_IV
 	 */
 	struct vea_free_extent	ve_ext;
-	/* Link to vfc_heap */
-	struct d_binheap_node	ve_node;
 	/* Link to one of vfc_lrus or vsi_agg_lru */
 	d_list_t		ve_link;
+	/* Link to vfc_heap */
+	struct d_binheap_node	ve_node;
 	uint32_t		ve_in_heap:1;
 };
 
@@ -116,18 +116,30 @@ struct vea_space_info {
 	 * free extents.
 	 */
 	daos_handle_t			 vsi_agg_btr;
-	/* Last aggregation time */
-	uint64_t			 vsi_agg_time;
 	/* Unmap context to perform unmap against freed extent */
 	struct vea_unmap_context	 vsi_unmap_ctxt;
 	/* Statistics */
 	uint64_t			 vsi_stat[STAT_MAX];
+	/* Last aggregation time */
+	uint32_t			 vsi_agg_time;
 	bool				 vsi_agg_scheduled;
 };
 
 static inline bool ext_is_idle(struct vea_free_extent *vfe)
 {
 	return vfe->vfe_age == VEA_EXT_AGE_MAX;
+}
+
+static inline uint32_t
+get_current_age(void)
+{
+	uint64_t	age = 0;
+	int		rc;
+
+	rc = daos_gettime_coarse(&age);
+	D_ASSERT(rc == 0);
+
+	return (uint32_t)age;
 }
 
 enum vea_free_flags {

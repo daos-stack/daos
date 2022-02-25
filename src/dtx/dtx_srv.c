@@ -195,22 +195,18 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 			break;
 
-		while (i < din->di_dtx_array.ca_count) {
-			if (i + count > din->di_dtx_array.ca_count)
-				count = din->di_dtx_array.ca_count - i;
+		/* Currently, only support to abort single DTX. */
+		if (din->di_dtx_array.ca_count != 1)
+			D_GOTO(out, rc = -DER_PROTO);
 
-			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			if (din->di_epoch != 0)
-				rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
-						    dtis, count);
-			else
-				rc1 = vos_dtx_set_flags(cont->sc_hdl, dtis,
-							count, DTE_CORRUPTED);
-			if (rc == 0 && rc1 < 0)
-				rc = rc1;
-
-			i += count;
-		}
+		if (din->di_epoch != 0)
+			rc = vos_dtx_abort(cont->sc_hdl,
+					   (struct dtx_id *)din->di_dtx_array.ca_arrays,
+					   din->di_epoch);
+		else
+			rc = vos_dtx_set_flags(cont->sc_hdl,
+					       (struct dtx_id *)din->di_dtx_array.ca_arrays,
+					       DTE_CORRUPTED);
 		break;
 	case DTX_CHECK:
 		/* Currently, only support to check single DTX state. */
@@ -240,7 +236,7 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_UNCERTAIN)) {
 			for (i = 0; i < count; i++) {
 				ptr = (int *)dout->do_sub_rets.ca_arrays + i;
-				*ptr = -DER_NONEXIST;
+				*ptr = -DER_TX_UNCERTAIN;
 			}
 
 			D_GOTO(out, rc = 0);
@@ -256,6 +252,25 @@ dtx_handler(crt_rpc_t *rpc)
 			     cont->sc_dtx_resyncing) ||
 			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
 				*ptr = -DER_INPROGRESS;
+
+			if (*ptr == -DER_NONEXIST) {
+				struct dtx_stat		stat = { 0 };
+
+				/* dtx_id::dti_hlc is client side time stamp. If it is
+				 * older than the time of the most new DTX entry that
+				 * has been aggregated, then it may has been removed by
+				 * DTX aggregation. Under such case, return -DER_TX_UNCERTAIN.
+				 */
+				vos_dtx_stat(cont->sc_hdl, &stat, DSF_SKIP_BAD);
+				if (dtis->dti_hlc <= stat.dtx_newest_aggregated) {
+					D_WARN("Not sure about whether the old DTX "
+					       DF_DTI" is committed or not: %lu/%lu\n",
+					       DP_DTI(dtis), dtis->dti_hlc,
+					       stat.dtx_newest_aggregated);
+					*ptr = -DER_TX_UNCERTAIN;
+				}
+			}
+
 			if (mbs[i] != NULL)
 				rc1++;
 		}
@@ -306,7 +321,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, dcks, j, false);
+		rc = dtx_commit(cont, pdte, dcks, j);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
@@ -366,7 +381,7 @@ dtx_init(void)
 		dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
 	}
 
-	dtx_agg_thd_age_lo = dtx_agg_thd_age_up * 6 / 7;
+	dtx_agg_thd_age_lo = dtx_agg_thd_age_up - 30;
 
 	D_INFO("Set DTX aggregation time threshold as %d (seconds)\n",
 	       dtx_agg_thd_age_up);

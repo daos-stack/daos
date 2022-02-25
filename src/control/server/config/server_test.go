@@ -225,6 +225,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
 		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
+		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").

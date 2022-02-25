@@ -57,10 +57,13 @@ gen_maps(int num_domains, int nodes_per_domain, int vos_per_target,
 static void
 gen_oid(daos_obj_id_t *oid, uint64_t lo, uint64_t hi, daos_oclass_id_t cid)
 {
+	int rc;
+
 	oid->lo = lo;
 	/* make sure top 32 bits are unset (DAOS only) */
 	oid->hi = hi & 0xFFFFFFFF;
-	daos_obj_set_oid(oid, 0, cid, 0);
+	rc = daos_obj_set_oid_by_class(oid, 0, cid, 0);
+	assert_rc_equal(rc, cid == OC_UNKNOWN ? -DER_INVAL : 0);
 }
 
 #define assert_placement_success(pl_map, cid) \
@@ -105,12 +108,12 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_RP_2G1);
 	assert_invalid_param(pl_map, OC_RP_3G1);
 	assert_invalid_param(pl_map, OC_RP_4G1);
-	assert_invalid_param(pl_map, OC_RP_8G1);
+	assert_invalid_param(pl_map, OC_RP_6G1);
 
 	/* Multiple groups should fail because there's only 1 target */
 	assert_invalid_param(pl_map, OC_S2);
 	assert_invalid_param(pl_map, OC_S4);
-	assert_invalid_param(pl_map, OC_S512);
+	assert_invalid_param(pl_map, OC_S32);
 	free_pool_and_placement_map(po_map, pl_map);
 
 
@@ -133,10 +136,10 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_RP_2G2);
 	assert_invalid_param(pl_map, OC_RP_3G1);
 	assert_invalid_param(pl_map, OC_RP_4G1);
-	assert_invalid_param(pl_map, OC_RP_8G1);
+	assert_invalid_param(pl_map, OC_RP_6G1);
 	/* The following require more targets than available. */
 	assert_invalid_param(pl_map, OC_S4);
-	assert_invalid_param(pl_map, OC_S512);
+	assert_invalid_param(pl_map, OC_S32);
 	free_pool_and_placement_map(po_map, pl_map);
 
 	/*
@@ -152,7 +155,7 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_RP_2G2);
 	assert_invalid_param(pl_map, OC_RP_2G4);
 
-	assert_invalid_param(pl_map, OC_RP_2G512);
+	assert_invalid_param(pl_map, OC_RP_2G32);
 	assert_invalid_param(pl_map, OC_RP_3G1);
 
 	free_pool_and_placement_map(po_map, pl_map);
@@ -430,10 +433,8 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
-	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version,
-			  domain_tree_len,
-			  node_count, ntargets, domain_tree, target_uuids,
-			  &rank_list, NULL, target_count);
+	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count,
+			  ntargets, domain_tree, &rank_list, target_count);
 	D_FREE(domain_tree);
 	assert_success(rc);
 
@@ -975,13 +976,12 @@ all_healthy(void **state)
 	for (i = 0; i < num_test_oc; ++i) {
 		struct daos_oclass_attr *oa;
 		daos_obj_id_t oid;
-		int	grp_sz;
-		int	grp_nr;
+		int grp_sz;
+		uint32_t grp_nr;
 
 		gen_oid(&oid, 0, 0, object_classes[i]);
-		oa = daos_oclass_attr_find(oid, NULL);
+		oa = daos_oclass_attr_find(oid, NULL, &grp_nr);
 		grp_sz = daos_oclass_grp_size(oa);
-		grp_nr = daos_oclass_grp_nr(oa, NULL);
 
 		/* skip those gigantic layouts for saving time */
 		if (grp_sz != DAOS_OBJ_REPL_MAX &&
@@ -1694,6 +1694,8 @@ placement_handles_multiple_states_with_addition(void **state)
 	/* a new domain is added */
 	jtc_pool_map_extend(&ctx, 1, 1, 4);
 
+	assert_int_equal(pool_map_target_nr(ctx.po_map), 16);
+
 	/* second shard goes down */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 1);
 
@@ -1815,8 +1817,8 @@ same_group_shards_not_in_same_domain(void **state)
 	int	j;
 	int	k;
 
-	jtc_init_with_layout(&ctx, 32, 2, 4, OC_EC_2P1G64, g_verbose);
-	for (i = 0; i < 64; i++) {
+	jtc_init_with_layout(&ctx, 16, 2, 4, OC_EC_2P1G32, g_verbose);
+	for (i = 0; i < 32; i++) {
 		for (j = 0; j < 3; j++) {
 			tgt = jtc_layout_shard_tgt(&ctx, 3 * i + j);
 			for (k = j + 1; k < 3; k++) {
@@ -1829,13 +1831,13 @@ same_group_shards_not_in_same_domain(void **state)
 	jtc_fini(&ctx);
 	assert_rc_equal(miss_cnt, 0);
 
-	jtc_init_with_layout(&ctx, 18, 1, 512, OC_EC_16P2G512, g_verbose);
-	for (i = 0; i < 512; i++) {
+	jtc_init_with_layout(&ctx, 18, 1, 32, OC_EC_16P2G32, g_verbose);
+	for (i = 0; i < 32; i++) {
 		for (j = 0; j < 18; j++) {
 			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
 			for (k = j + 1; k < 18; k++) {
 				other_tgt = jtc_layout_shard_tgt(&ctx, 18 * i + k);
-				if (tgt/512 == other_tgt/512)
+				if (tgt/32 == other_tgt/32)
 					miss_cnt++;
 			}
 		}
@@ -1843,8 +1845,8 @@ same_group_shards_not_in_same_domain(void **state)
 	jtc_fini(&ctx);
 	assert_rc_equal(miss_cnt, 0);
 
-	jtc_init_with_layout(&ctx, 512, 1, 18, OC_EC_16P2G512, g_verbose);
-	for (i = 0; i < 512; i++) {
+	jtc_init_with_layout(&ctx, 32, 1, 18, OC_EC_16P2G32, g_verbose);
+	for (i = 0; i < 32; i++) {
 		for (j = 0; j < 18; j++) {
 			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
 			for (k = j + 1; k < 18; k++) {
@@ -1855,7 +1857,7 @@ same_group_shards_not_in_same_domain(void **state)
 		}
 	}
 	jtc_fini(&ctx);
-	assert_true(miss_cnt < 2);
+	assert_true(miss_cnt < 5);
 }
 
 static void

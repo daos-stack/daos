@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
@@ -407,46 +406,14 @@ func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err
 	return p.scanBdevTiers(direct, p.bdev.Scan)
 }
 
-func filterScanResp(log logging.Logger, resp *BdevScanResponse, pciFilter ...string) (*BdevScanResponse, error) {
-	if resp == nil {
-		return nil, errors.New("unexpected nil response")
-	}
-
-	out := make(NvmeControllers, 0)
-
-	for _, c := range resp.Controllers {
-		if len(pciFilter) != 0 && !common.Includes(pciFilter, c.PciAddr) {
-			continue
-		}
-		cn := *c
-		out = append(out, &cn)
-	}
-
-	if len(out) != len(resp.Controllers) {
-		log.Debugf("bdevs filtered (in/out) %v/%v (devlist %v)", resp.Controllers, out,
-			pciFilter)
-	}
-
-	return &BdevScanResponse{
-		Controllers: out,
-		VMDEnabled:  resp.VMDEnabled,
-	}, nil
-}
-
 type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
 
 func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResponse, scan scanFn) (*BdevScanResponse, error) {
 	if !req.BypassCache && cachedResp != nil && len(cachedResp.Controllers) != 0 {
-		return filterScanResp(log, cachedResp, req.DeviceList...)
+		return cachedResp, nil
 	}
 
-	resp, err := scan(req)
-	if err != nil {
-		return nil, err
-	}
-	log.Debugf("storage provider retrieving bdev details from backend: %+v, %+v", req, resp)
-
-	return filterScanResp(log, resp, req.DeviceList...)
+	return scan(req)
 }
 
 // ScanBdevs either calls into backend bdev provider to scan SSDs or returns
@@ -466,6 +433,12 @@ func (p *Provider) SetBdevCache(resp BdevScanResponse) {
 
 	p.bdevCache = resp
 	p.vmdEnabled = resp.VMDEnabled
+}
+
+// WithVMDEnabled enables VMD on storage provider.
+func (p *Provider) WithVMDEnabled() *Provider {
+	p.vmdEnabled = true
+	return p
 }
 
 // QueryBdevFirmware queries NVMe SSD firmware.

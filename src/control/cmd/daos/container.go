@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"unsafe"
 
@@ -201,18 +202,6 @@ type containerCreateCmd struct {
 	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
 	ContFlag    ContainerID          `long:"cont" short:"c" description:"container UUID (optional)"`
-	Args        struct {
-		Container ContainerID `positional-arg-name:"<container UUID (optional)>"`
-	} `positional-args:"yes"`
-}
-
-func (cmd *containerCreateCmd) getUserUUID() uuid.UUID {
-	for _, id := range []ContainerID{cmd.Args.Container, cmd.ContFlag} {
-		if id.HasUUID() {
-			return id.UUID
-		}
-	}
-	return uuid.Nil
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -222,11 +211,30 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer deallocCmdArgs()
 
-	if cu := cmd.getUserUUID(); cu != uuid.Nil {
-		cmd.contUUID = cu
+	if cmd.ContFlag.HasUUID() {
+		cmd.contUUID = cmd.ContFlag.UUID
 		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
 			return err
 		}
+	}
+
+	if cmd.PoolID().Empty() {
+		if cmd.Path == "" {
+			return errors.New("no pool ID or dfs path supplied")
+		}
+
+		ap.path = C.CString(cmd.Path)
+		rc := C.resolve_duns_pool(ap)
+		freeString(ap.path)
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to resolve pool id from %q; use --pool <id>", filepath.Dir(cmd.Path))
+		}
+
+		pu, err := uuidFromC(ap.p_uuid)
+		if err != nil {
+			return err
+		}
+		cmd.poolBaseCmd.Args.Pool.UUID = pu
 	}
 
 	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
@@ -482,6 +490,8 @@ func listContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
 		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
 	}
+
+	C.free(unsafe.Pointer(cConts))
 
 	return out, nil
 }

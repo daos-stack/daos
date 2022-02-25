@@ -8,6 +8,7 @@ import os
 from time import sleep, time
 import ctypes
 import json
+from datetime import datetime
 
 from test_utils_base import TestDaosApiBase
 from avocado import fail_on
@@ -610,6 +611,26 @@ class TestPool(TestDaosApiBase):
 
         return status
 
+    def get_rebuild_state(self, verbose=True):
+        """Get the rebuild state from the dmg pool query.
+
+        Args:
+            verbose (bool, optional): whether to display the rebuild data. Defaults to True.
+
+        Returns:
+            [type]: [description]
+        """
+        self.set_query_data()
+        try:
+            if verbose:
+                self.log.info(
+                    "Pool %s query rebuild data: %s\n",
+                    self.uuid, self.query_data["response"]["rebuild"])
+            return self.query_data["response"]["rebuild"]["state"]
+        except KeyError as error:
+            self.log.error("Unable to detect rebuild state: %s", error)
+            return None
+
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
 
@@ -625,8 +646,13 @@ class TestPool(TestDaosApiBase):
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
 
+        # Expect the state to be 'busy' or 'done' when waiting for rebuild to start or 'done' when
+        # waiting for rebuild to complete.
+        expected_states = ["busy", "done"] if to_start else ["done"]
+
         start = time()
-        while self.rebuild_complete() == to_start:
+        # while self.rebuild_complete() == to_start:
+        while self.get_rebuild_state() not in expected_states:
             self.log.info(
                 "  Rebuild %s ...",
                 "has not yet started" if to_start else "in progress")

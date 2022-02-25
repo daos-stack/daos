@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -321,6 +321,31 @@ insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 {
 	insert_recxs_nowait(dkey, akey, iod_size, th, recxs, nr, data,
 			    data_size, req);
+	insert_wait(req);
+}
+
+void
+inset_recxs_dkey_uint64(uint64_t *dkey, const char *akey, daos_size_t iod_size,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
+	     daos_size_t data_size, struct ioreq *req)
+{
+	assert_in_range(nr, 1, IOREQ_IOD_NR);
+
+	/* dkey */
+	d_iov_set(&req->dkey, (void *)dkey, sizeof(uint64_t));
+
+	/* akey */
+	ioreq_io_akey_set(req, &akey, 1);
+
+	/* set sgl */
+	if (data != NULL)
+		ioreq_sgl_simple_set(req, &data, &data_size, 1);
+
+	/* iod, recxs */
+	ioreq_iod_recxs_set(req, 0, iod_size, recxs, nr);
+
+	insert_internal_nowait(&req->dkey, 1, req->sgl, req->iod, th, req, 0);
+
 	insert_wait(req);
 }
 
@@ -1722,6 +1747,8 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 			dkeys[0], num_rec_exts);
 	punch_rec_with_rxnr(dkeys[0], "akey1", /*idx*/0, num_rec_exts,
 			    DAOS_TX_NONE, &req);
+	/* punch non-exist long ext (full-stripe for EC) */
+	punch_rec_with_rxnr(dkeys[0], "akey1", 1 << 20, 1 << 20, DAOS_TX_NONE, &req);
 
 
 	/**
@@ -2176,8 +2203,21 @@ next_step:
 	assert_rc_equal(rc, 0);
 
 	/** fetch */
-	iod.iod_size	= DAOS_REC_ANY;
+	print_message("fetch with zero iov_len\n");
+	iod.iod_size	= 1;
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= tmp_len * 1;
+	iod.iod_nr	= 1;
+	sg_iov[0].iov_len = 0;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
+			    NULL);
+	assert_rc_equal(rc, 0);
+
 	print_message("reading data back with less buffer ...\n");
+	recx[0].rx_idx	= 0;
+	recx[0].rx_nr	= tmp_len;
+	iod.iod_nr	= 3;
+	iod.iod_size	= DAOS_REC_ANY;
 	buf_out = step == 1 ? stack_buf_out : bulk_buf_out;
 	memset(buf_out, 0, buf_len);
 	tmp_len = buf_len / 2;
@@ -2406,12 +2446,14 @@ fetch_size(void **state)
 	for (i = 0; i < NUM_AKEYS; i++)
 		iod[i].iod_size	= DAOS_REC_ANY;
 
+	print_message("fetch with unknown iod_size and NULL sgl\n");
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
 			    NULL, NULL);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < NUM_AKEYS; i++)
 		assert_int_equal(iod[i].iod_size, size * (i+1));
 
+	print_message("fetch with unknown iod_size and less buffer\n");
 	for (i = 0; i < NUM_AKEYS; i++) {
 		d_iov_set(&sg_iov[i], buf[i], size * (i+1) - 1);
 		iod[i].iod_size	= DAOS_REC_ANY;
@@ -3164,6 +3206,8 @@ fetch_replica_unavail(void **state)
 	d_rank_t		 rank = 2;
 	char			*buf;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 4 targets, exclude one and another 3 raft nodes */
 	if (!test_runable(arg, 4))
 		skip();
@@ -3347,7 +3391,7 @@ io_obj_key_query(void **state)
 	assert_rc_equal(rc, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_SX,
-				DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64,
+				DAOS_OT_MULTI_UINT64,
 				0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -3371,8 +3415,10 @@ io_obj_key_query(void **state)
 	assert_rc_equal(rc, 0);
 
 	dkey_val = 10;
+	val_iov.iov_buf_len += 1024;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
+	d_iov_set(&val_iov, &update_var, sizeof(update_var));
 
 	recx.rx_idx = 50;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
@@ -3735,6 +3781,8 @@ io_pool_map_refresh_trigger(void **state)
 	d_rank_t	leader;
 	d_rank_t	rank = 1;
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
@@ -4066,6 +4114,8 @@ io_fetch_retry_another_replica(void **state)
 	char		fetch_buf[32];
 	char		update_buf[32];
 
+	FAULT_INJECTION_REQUIRED();
+
 	/* needs at lest 2 targets */
 	if (!test_runable(arg, 2))
 		skip();
@@ -4125,7 +4175,7 @@ compare_oclass(daos_handle_t coh, daos_obj_id_t oid, daos_oclass_id_t ecid)
 
 static int
 check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
-	     daos_ofeat_t feats, enum daos_obj_resil res, unsigned int nr,
+	     enum daos_otype_t type, enum daos_obj_resil res, unsigned int nr,
 	     daos_oclass_id_t ecid)
 {
 	daos_obj_id_t		oid;
@@ -4136,11 +4186,15 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 
 	oid.hi = 1;
 	oid.lo = 1;
-	rc = daos_obj_generate_oid(coh, &oid, feats, 0, hints, 0);
+	rc = daos_obj_generate_oid(coh, &oid, type, 0, hints, 0);
 	assert_rc_equal(rc, 0);
 
 	cid = daos_obj_id2class(oid);
-	attr = daos_oclass_attr_find(oid, NULL);
+	attr = daos_oclass_attr_find(oid, NULL, NULL);
+	if (!attr) {
+		rc = -EINVAL;
+		goto out;
+	}
 
 	daos_oclass_id2name(cid, name);
 	printf("%s\n", name);
@@ -4167,6 +4221,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		rc = -DER_MISMATCH;
 	}
 
+out:
 	return rc;
 }
 
@@ -4182,7 +4237,7 @@ oclass_auto_setting(void **state)
 	struct pl_map_attr	attr;
 	daos_oclass_id_t	ecidx, ecid1;
 	daos_prop_t             *prop = NULL;
-	daos_ofeat_t		feat_kv, feat_array, feat_byte_array;
+	enum daos_otype_t	feat_kv, feat_array, feat_byte_array;
 	int			rc;
 
 	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
@@ -4203,10 +4258,9 @@ oclass_auto_setting(void **state)
 		ecid1 = OC_EC_2P1G1;
 	}
 
-	feat_array = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY;
-	feat_byte_array = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
-		DAOS_OF_ARRAY_BYTE;
-	feat_kv = DAOS_OF_KV_FLAT;
+	feat_array = DAOS_OT_ARRAY;
+	feat_byte_array = DAOS_OT_ARRAY_BYTE;
+	feat_kv = DAOS_OT_KV_HASHED;
 
 	prop = daos_prop_alloc(1);
 	assert_non_null(prop);
@@ -4450,33 +4504,39 @@ oclass_auto_setting(void **state)
 }
 
 static void
-int_key_setting(void **state)
+int_key_setting(void **state, int size)
 {
 	test_arg_t              *arg = *state;
 	daos_obj_id_t		oid;
 	daos_handle_t		oh;
 	d_iov_t			dkey;
-	char			dkey_buf[128];
-	char			akey_buf[128];
+	char			*dkey_buf;
+	char			*akey_buf;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iov;
 	daos_iod_t		iod;
 	char			buf[STACK_BUF_LEN];
 	int                     rc;
 
+	dkey_buf = malloc(size);
+	akey_buf = malloc(size);
+	if (!dkey_buf || !akey_buf) {
+		print_message("allocation memory failed\n");
+		return;
+	}
 	/*
 	 * Object with integer dkey / akey should fail IO with -DER_INVAL if
 	 * key size is not correct.
 	 */
-	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OF_DKEY_UINT64, 0,
+	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OT_DKEY_UINT64, 0,
 				arg->myrank);
 
 	dts_buf_render(buf, STACK_BUF_LEN);
-	dts_buf_render(dkey_buf, 128);
-	dts_buf_render(akey_buf, 128);
+	dts_buf_render(dkey_buf, size);
+	dts_buf_render(akey_buf, size);
 
 	/** init dkey */
-	d_iov_set(&dkey, dkey_buf, sizeof(dkey_buf));
+	d_iov_set(&dkey, dkey_buf, size);
 
 	/** init scatter/gather */
 	d_iov_set(&sg_iov, buf, sizeof(buf));
@@ -4485,7 +4545,7 @@ int_key_setting(void **state)
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	d_iov_set(&iod.iod_name, akey_buf, sizeof(akey_buf));
+	d_iov_set(&iod.iod_name, akey_buf, size);
 	iod.iod_size    = STACK_BUF_LEN;
 	iod.iod_type	= DAOS_IOD_SINGLE;
 	iod.iod_recxs	= NULL;
@@ -4514,7 +4574,7 @@ int_key_setting(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
-	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OF_AKEY_UINT64, 0,
+	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OT_AKEY_UINT64, 0,
 				arg->myrank);
 
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
@@ -4541,6 +4601,78 @@ int_key_setting(void **state)
 
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
+
+	free(dkey_buf);
+	free(akey_buf);
+}
+
+static void invalid_int_key_setting(void **state)
+{
+	int_key_setting(state, 128);
+	int_key_setting(state, 3);
+}
+
+static void
+enum_recxs_with_aggregation_internal(void **state, bool incr)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		data_buf[10];
+	void const *const aggr_disabled[] = {"disabled"};
+	void const *const aggr_set_time[] = {"time"};
+	daos_anchor_t	anchor;
+	bool		enable_agg = false;
+	int		total_size = 0;
+	int		i;
+	int		rc;
+
+	rc = set_pool_reclaim_strategy(state, aggr_disabled);
+	assert_rc_equal(rc, 0);
+	sleep(10);
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	print_message("Insert 10 records\n");
+	memset(data_buf, 'a', 10);
+	for (i = 0; i < 10; i++)
+		insert_single_with_rxnr("dkey", "akey", i, &data_buf[i],
+					1, 1, DAOS_TX_NONE, &req);
+	total_size = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_epoch_range_t	eprs[3];
+		daos_recx_t		recxs[3] = { 0 };
+		daos_size_t		size;
+		uint32_t		number = 3;
+
+		enumerate_rec(DAOS_TX_NONE, "dkey", "akey", &size,
+			      &number, recxs, eprs, &anchor, incr, &req);
+		for (i = 0; i < number; i++)
+			total_size += recxs[i].rx_nr;
+
+		if (!enable_agg) {
+			/* Enabled Pool Aggrgation */
+			print_message("enable aggregation\n");
+			rc = set_pool_reclaim_strategy(state, aggr_set_time);
+			assert_rc_equal(rc, 0);
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					      DAOS_FORCE_EC_AGG, 0, NULL);
+			sleep(40);
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					      0, 0, NULL);
+			enable_agg = true;
+		}
+	}
+
+	assert_rc_equal(total_size, 10);
+}
+
+static void
+enum_recxs_with_aggregation(void **state)
+{
+	enum_recxs_with_aggregation_internal(state, true);
+	enum_recxs_with_aggregation_internal(state, false);
 }
 
 static const struct CMUnitTest io_tests[] = {
@@ -4633,7 +4765,9 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO43: Object class selection",
 	  oclass_auto_setting, async_disable, test_case_teardown},
 	{ "IO44: INT dkey/akey checks",
-	  int_key_setting, async_disable, test_case_teardown},
+	  invalid_int_key_setting, async_disable, test_case_teardown},
+	{ "IO45: enum recxs with aggregation",
+	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
 };
 
 int

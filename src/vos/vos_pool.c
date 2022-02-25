@@ -20,6 +20,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
 #include <errno.h>
@@ -140,6 +142,15 @@ pool_hop_free(struct d_ulink *hlink)
 	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
+	if (pool->vp_size != 0) {
+		rc = munlock((void *)pool->vp_umm.umm_base, pool->vp_size);
+		if (rc != 0)
+			D_WARN("Failed to unlock pool memory at "DF_X64": errno=%d (%s)\n",
+			       pool->vp_umm.umm_base, errno, strerror(errno));
+		else
+			D_DEBUG(DB_MGMT, "Unlocked VOS pool memory: "DF_U64" bytes at "DF_X64"\n",
+				pool->vp_size, pool->vp_umm.umm_base);
+	}
 	if (pool->vp_uma.uma_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
 
@@ -592,7 +603,8 @@ static int
 vos_register_slabs(struct umem_attr *uma)
 {
 	struct pobj_alloc_class_desc	*slab;
-	int				 i, rc;
+	int				 i, rc, j;
+	bool				 skip_set;
 
 	D_ASSERT(uma->uma_pool != NULL);
 	for (i = 0; i < VOS_SLAB_MAX; i++) {
@@ -604,6 +616,22 @@ vos_register_slabs(struct umem_attr *uma)
 			D_ERROR("Failed to get unit size %d. rc:%d\n", i, rc);
 			return rc;
 		}
+
+		skip_set = false;
+		for (j = 0; j < i; j++) {
+			if (uma->uma_slabs[j].unit_size == slab->unit_size) {
+				/** PMDK will fail to register a new slab of the same size
+				 *  so reuse the class id
+				 */
+				slab->class_id = uma->uma_slabs[j].class_id;
+				skip_set = true;
+				D_ASSERT(slab->class_id != 0);
+				break;
+			}
+		}
+
+		if (skip_set)
+			continue;
 
 		rc = pmemobj_ctl_set(uma->uma_pool, "heap.alloc_class.new.desc",
 				     slab);
@@ -617,6 +645,56 @@ vos_register_slabs(struct umem_attr *uma)
 	}
 
 	return 0;
+}
+
+enum {
+	/** Memory locking flag not initialized */
+	LM_FLAG_UNINIT,
+	/** Memory locking disabled */
+	LM_FLAG_DISABLED,
+	/** Memory locking enabled */
+	LM_FLAG_ENABLED
+};
+
+static void
+lock_pool_memory(struct vos_pool *pool)
+{
+	static		 int lock_mem = LM_FLAG_UNINIT;
+	struct rlimit	 rlim;
+	int		 rc;
+
+	if (lock_mem == LM_FLAG_UNINIT) {
+		rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
+		if (rc != 0) {
+			D_WARN("getrlimit() failed; errno=%d (%s)\n", errno, strerror(errno));
+			lock_mem = LM_FLAG_DISABLED;
+			return;
+		}
+
+		if (rlim.rlim_cur != RLIM_INFINITY || rlim.rlim_max != RLIM_INFINITY) {
+			D_WARN("Infinite rlimit not detected, not locking VOS pool memory\n");
+			lock_mem = LM_FLAG_DISABLED;
+			return;
+		}
+
+		lock_mem = LM_FLAG_ENABLED;
+	}
+
+	if (lock_mem == LM_FLAG_DISABLED)
+		return;
+
+	rc = mlock((void *)pool->vp_umm.umm_base, pool->vp_pool_df->pd_scm_sz);
+	if (rc != 0) {
+		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
+		       "; errno=%d (%s)\n", pool->vp_pool_df->pd_scm_sz, pool->vp_umm.umm_base,
+		       errno, strerror(errno));
+		return;
+	}
+
+	/* Only save the size if the locking was successful */
+	pool->vp_size = pool->vp_pool_df->pd_scm_sz;
+	D_DEBUG(DB_MGMT, "Locking VOS pool in memory "DF_U64" bytes at "DF_X64"\n", pool->vp_size,
+		pool->vp_umm.umm_base);
 }
 
 /*
@@ -714,6 +792,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
+	lock_pool_memory(pool);
 	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
 	return 0;
 failed:
@@ -920,14 +999,6 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 		return -DER_NOSYS;
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
-		break;
-	case VOS_PO_CTL_VEA_PLUG:
-		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info, true);
-		break;
-	case VOS_PO_CTL_VEA_UNPLUG:
-		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info, false);
 		break;
 	}
 

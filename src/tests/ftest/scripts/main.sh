@@ -56,7 +56,8 @@ else
     cd "$DAOS_BASE"
 fi
 
-export CRT_PHY_ADDR_STR=ofi+sockets
+# Disable CRT_PHY_ADDR_STR to allow launch.py to set it
+unset CRT_PHY_ADDR_STR
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE
@@ -213,7 +214,7 @@ fi
 
 # check if slurm needs to be configured for soak
 if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
-    if ! ./slurm_setup.py -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
+    if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
         exit "${PIPESTATUS[0]}"
     else
         rc=0

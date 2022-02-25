@@ -85,7 +85,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_tx_restart, sizeof(daos_tx_restart_t)},
 
 	/** Object */
-	{dc_obj_register_class, sizeof(daos_obj_register_class_t)},
+	{dc_obj_register_class, sizeof(struct daos_obj_register_class_t)},
 	{dc_obj_query_class, sizeof(daos_obj_query_class_t)},
 	{dc_obj_list_class, sizeof(daos_obj_list_class_t)},
 	{dc_obj_open, sizeof(daos_obj_open_t)},

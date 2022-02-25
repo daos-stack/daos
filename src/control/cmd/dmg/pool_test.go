@@ -89,6 +89,12 @@ func TestPoolCommands(t *testing.T) {
 
 	runCmdTests(t, []cmdTest{
 		{
+			"Pool create with extra argument",
+			fmt.Sprintf("pool create --size %s foo bar", testSizeStr),
+			"",
+			errors.New("unexpected"),
+		},
+		{
 			"Create pool with label prop and flag",
 			fmt.Sprintf("pool create --label foo --size %s --properties label:foo", testSizeStr),
 			"",

@@ -3665,6 +3665,41 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 	return 0;
 }
 
+
+/** Encode the anchor from a known key
+ *
+ * \param[in]	toh	Tree open handle
+ * \param[in]	key	The key to encode
+ * \param[out]	anchor	Encoded anchor
+ *
+ * \return	0 on success, error otherwise
+ */
+int
+dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor)
+{
+	char hkey[DAOS_HKEY_MAX];
+	struct btr_context  *tcx;
+
+	D_ASSERT(key != NULL);
+	D_ASSERT(anchor != NULL);
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	if (btr_is_direct_key(tcx)) {
+		btr_key_encode(tcx, key, anchor);
+		anchor->da_type = DAOS_ANCHOR_TYPE_KEY;
+
+	} else {
+		btr_hkey_gen(tcx, key, hkey);
+		btr_hkey_copy(tcx, (char *)&anchor->da_buf[0], &hkey[0]);
+		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
+	}
+
+	return 0;
+}
+
 /**
  * Delete the record pointed by the current iterating cursor. This function
  * will reset iterator before return, it means that caller should call

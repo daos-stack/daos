@@ -33,11 +33,25 @@ $ sudo reboot
     'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
     but note that this will require running daos_server as root.
 
+!!! warning
+    If VFIO is not enabled on RHEL 8.x and derivatives, you will run into the issue described in:
+    https://github.com/spdk/spdk/issues/1153
+
+    The problem manifests with the following signature in the kernel logs:
+
+    ```
+    [82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
+    [82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
+    ```
+
+    As a consequence, the use of VFIO on these distributions is a requirement
+    since UIO is not supported.
+
 ## Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
-synchronized across all the storage and client nodes. This can be done
-using NTP or any other equivalent protocol.
+synchronized across all the storage nodes. This can be done using NTP or
+any other equivalent protocol.
 
 ## User/Group Synchronization
 
@@ -47,14 +61,24 @@ The DAOS Agent (running on the client nodes) is responsible for resolving
 UID/GID to user/group names which are added to a signed credential and sent to
 the DAOS storage nodes.
 
-## Multi-rail/NIC Setup
+## Setup for multiple network links
 
-Storage nodes can be configured with multiple network interfaces to run
-multiple engine instances.
+With libfabric, it is not supported to aggregate (or stripe over) multiple
+network links as a single endpoint. So a single DAOS engine can only use
+a single network link.
+But when a storage node runs multiple engine instances, each engine instance
+can and should manage its own network link to achieve optimum performance.
 
+### Subnet
 
-Some special configuration is required to use librdmacm with multiple
-interfaces.
+Since all engines need to be able to communicate, the different network
+interfaces must be on the same subnet or you must configuring routing
+across the different subnets.
+
+### Infiniband Settings
+
+Some special configuration is required to configure the IP layer and
+to use librdmacm with multiple interfaces in the same IP network.
 
 First, the accept_local feature must be enabled on the network interfaces
 to be used by DAOS. This can be done using the following command (<ifaces> must
@@ -95,14 +119,12 @@ the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
-### Subnet
+## Install from Source
 
-Since all engines need to be able to communicate, the different network
-interfaces need to be on the same subnet or routing capabilities across the
-different subnet must be configured.
+When DAOS is installed from source (and not from pre-built packages), extra manual
+settings detailed in this section are required.
 
-
-## Runtime Directory Setup
+### Runtime Directory Setup
 
 DAOS uses a series of Unix Domain Sockets to communicate between its
 various components. On modern Linux systems, Unix Domain Sockets are
@@ -116,7 +138,7 @@ or daos_agent, you may see the message:
 $ mkdir /var/run/daos_server: permission denied
 Unable to create socket directory: /var/run/daos_server
 ```
-### Non-default Directory
+#### Non-default Directory
 
 By default, daos_server and daos_agent will use the directories
 /var/run/daos_server and /var/run/daos_agent respectively. To change
@@ -126,7 +148,15 @@ For the daos_agent, either uncomment and set the runtime_dir configuration value
 /etc/daos/daos_agent.yml or a location can be passed on the command line using
 the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
 
-### Default Directory (non-persistent)
+!!! warning
+    Do not change these when running under `systemd` control.
+    If these directories need to be changed, insure they match the
+    RuntimeDirectory setting in the /usr/lib/systemd/system/daos_agent.service
+    and /usr/lib/systemd/system/daos_server.service configuration files.
+    The socket directories will be created and removed by `systemd` when the
+    services are started and stopped.
+
+#### Default Directory (non-persistent)
 
 Files and directories created in /run and /var/run only survive until
 the next reboot. These directories are required for subsequent runs;
@@ -149,7 +179,7 @@ $ chown user:user /var/run/daos_agent (where user is the user you
     will run daos_agent as)
 ```
 
-### Default Directory (persistent)
+#### Default Directory (persistent)
 
 The following steps are not necessary if DAOS is installed from rpms.
 
@@ -160,8 +190,8 @@ time the system is provisioned and requires a reboot to take effect.
 
 To tell systemd to create the necessary directories for DAOS:
 
--   Copy the file utils/systemd/daosfiles.conf to /etc/tmpfiles.d\
-    cp utils/systemd/daosfiles.conf /etc/tmpfiles.d
+-   Copy the config file:
+    `cp utils/systemd/daosfiles.conf /etc/tmpfiles.d`
 
 -   Modify the copied file to change the user and group fields
     (currently daos) to the user daos will be run as
@@ -169,15 +199,14 @@ To tell systemd to create the necessary directories for DAOS:
 -   Reboot the system, and the directories will be created automatically
     on all subsequent reboots.
 
-## Elevated Privileges
+### Privileged Helper
 
 DAOS employs a privileged helper binary (`daos_admin`) to perform tasks
 that require elevated privileges on behalf of `daos_server`.
 
-### Privileged Helper Configuration
 
 When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
-to the correct location with the correct permissions. The RPM creates a "daos_server"
+to the correct location with the correct permissions. The RPM creates a `daos_server`
 system group and configures permissions such that `daos_admin` may only be invoked
 from `daos_server`.
 
@@ -212,7 +241,7 @@ $ sudo ln -s $daospath/include \
     installation is most appropriate for development and predeployment
     proof-of-concept scenarios.
 
-## Memory Lock Limits
+### Memory Lock Limits
 
 Low ulimit for memlock can cause SPDK to fail and emit the following error:
 
@@ -225,11 +254,14 @@ The memlock limit only needs to be manually adjusted when `daos_server` is not
 running as a systemd service. Default ulimit settings vary between OSes.
 
 For RPM installations, the service will typically be launched by systemd and
-the limit is pre-set to unlimited in the `daos_server.service` unit file:
-https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service#L16.
+the limit is pre-set to unlimited in the `daos_server.service`
+[unit file](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
+
 Note that values set in `/etc/security/limits.conf` are ignored by services
 launched by systemd.
 
 For non-RPM installations where `daos_server` is launched directly from the
-commandline, limits should be adjusted in `/etc/security/limits.conf` as per
-https://software.intel.com/content/www/us/en/develop/blogs/best-known-methods-for-setting-locked-memory-size.html.
+commandline (including source builds), limits should be adjusted in
+`/etc/security/limits.conf` as per
+[this article](https://access.redhat.com/solutions/61334) (which is a RHEL
+specific document but the instructions apply to most Linux distributions).

@@ -400,7 +400,7 @@ update:
 
 	ilog_close(loh);
 
-	if (rc == -DER_ALREADY) /* operation had no effect */
+	if (rc == -DER_ALREADY && (dth == NULL || !dth->dth_already)) /* operation had no effect */
 		rc = 0;
 done:
 	VOS_TX_LOG_FAIL(rc, "Could not update ilog %p at "DF_X64": "DF_RC"\n",
@@ -500,7 +500,7 @@ punch_log:
 
 	ilog_close(loh);
 
-	if (rc == -DER_ALREADY) /* operation had no effect */
+	if (rc == -DER_ALREADY && (dth == NULL || !dth->dth_already)) /* operation had no effect */
 		rc = 0;
 	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
 			DP_RC(rc));

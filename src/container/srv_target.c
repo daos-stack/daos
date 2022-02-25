@@ -170,22 +170,27 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (param->ap_vos_agg) {
-		/* Parse aggregation until reintegrating finish, because
-		 * vos_discard may cause issue if reintegration happened
-		 * at the same time.
-		 */
-		if (pool->sp_reintegrating) {
+	if (pool->sp_reintegrating) {
+		if (param->ap_vos_agg)
 			cont->sc_vos_agg_active = 0;
-			D_DEBUG(DB_EPC, DF_CONT": skip aggregation during reintegration %d.\n",
-				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-				pool->sp_reintegrating);
-			return false;
-		}
+		else
+			cont->sc_ec_agg_active = 0;
+		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during reintegration %d.\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			param->ap_vos_agg ? "VOS":"EC", pool->sp_reintegrating);
+		return false;
+	}
+
+	if (param->ap_vos_agg) {
 		if (!cont->sc_vos_agg_active)
-			D_DEBUG(DB_EPC, DF_CONT": resume aggregation after reintegration.\n",
+			D_DEBUG(DB_EPC, DF_CONT": resume VOS aggregation after reintegration.\n",
 				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		cont->sc_vos_agg_active = 1;
+	} else {
+		if (!cont->sc_ec_agg_active)
+			D_DEBUG(DB_EPC, DF_CONT": resume EC aggregation after reintegration.\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		cont->sc_ec_agg_active = 1;
 	}
 
 	if (!cont->sc_props_fetched)
@@ -471,7 +476,7 @@ cont_start_agg_ult(struct ds_cont_child *cont, void (*func)(void *),
 		D_CRIT(DF_CONT"[%d]: Failed to get req for aggregation ULT\n",
 		       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		       dmi->dmi_tgt_id);
-		ABT_thread_join(agg_ult);
+		ABT_thread_free(&agg_ult);
 		return -DER_NOMEM;
 	}
 
@@ -551,7 +556,6 @@ cont_agg_ult(void *arg)
 	param.ap_req = cont->sc_agg_req;
 	param.ap_cont = cont;
 	param.ap_vos_agg = 1;
-	cont->sc_vos_agg_active = 1;
 
 	cont_aggregate_interval(cont, cont_vos_aggregate_cb, &param);
 }
@@ -869,7 +873,10 @@ cont_child_started(struct ds_cont_child *cont_child)
 static void
 cont_child_stop(struct ds_cont_child *cont_child)
 {
-	if (!cont_child->sc_stopping) {
+	/* Some ds_cont_child will only created by ds_cont_child_lookup().
+	 * never be started at all
+	 */
+	if (cont_child_started(cont_child)) {
 		D_DEBUG(DF_DSMS, DF_CONT"[%d]: Stopping container\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid,
 				cont_child->sc_uuid),
@@ -881,8 +888,6 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		/* cont_stop_agg() may yield */
 		cont_stop_agg(cont_child);
 		ds_cont_child_put(cont_child);
-	} else {
-		D_ASSERT(!cont_child_started(cont_child));
 	}
 }
 
@@ -2214,9 +2219,9 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	struct oid_iv_range		rg;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": oid alloc: num_oids="DF_U64"\n",
-		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 in->num_oids);
+	D_DEBUG(DB_MD, DF_CONT": oid alloc: num_oids="DF_U64"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		in->num_oids);
 
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
@@ -2234,6 +2239,9 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 
 	out->oid = rg.oid;
 
+	D_DEBUG(DB_MD, DF_CONT": allocate "DF_X64"/"DF_U64"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
+		rg.oid, rg.num_oids);
 out:
 	out->coao_op.co_rc = rc;
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
@@ -2457,6 +2465,10 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 
 	D_DEBUG(DB_MD, DF_UUID" start tgt ec query eph ULT\n",
 		DP_UUID(pool->sp_uuid));
+
+	if (pool->sp_ec_ephs_req == NULL)
+		goto out;
+
 	while (!dss_ult_exiting(pool->sp_ec_ephs_req)) {
 		struct dss_coll_ops	coll_ops = { 0 };
 		struct dss_coll_args	coll_args = { 0 };
@@ -2509,6 +2521,7 @@ yield:
 		sched_req_sleep(pool->sp_ec_ephs_req, EC_TGT_AGG_INTV);
 	}
 
+out:
 	D_DEBUG(DB_MD, DF_UUID" stop tgt ec aggregation\n",
 		DP_UUID(pool->sp_uuid));
 

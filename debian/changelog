@@ -1,3 +1,102 @@
+daos (2.0.1-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
+
+ -- Li Wei <wei.g.li@intel.com>  Wed, 16 Feb 2022 08:57:00 +0800
+
+daos (2.0.1-2) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Fix issue in backward compatibility code.
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Thu, 27 Jan 2022 10:00:00 -0100
+
+daos (2.0.1-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump to 2.0.1
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Sat, 22 Jan 2022 10:00:00 -0100
+
+daos (2.0.0-6) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 19 Jan 2022 10:00:00 -0100
+
+daos (2.0.0-4) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update mercury to v2.1.0~rc4-3 to pick a fix for DAOS-9325 high cpu usage
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 28 Dec 2021 15:08:11 -0400
+
+daos (2.0.0-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 16 Dec 2021 15:08:11 -0400
+
+daos (2.0.0-2) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Version bump for 2.0.0 RC2
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 14 Dec 2021 15:03:00 -0100
+
+daos (2.0.0-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump to 2.0.0
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Sat, 11 Dec 2021 10:00:00 -0100
+
+daos (1.3.106-10) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Don't make daos-*-tests-openmi a dependency of anything
+    - If they are wanted, they should be installed explicitly, due to
+      potential conflicts with other MPI stacks
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 10 Dec 2021 09:44:14 -0400
+
+daos (1.3.106-9) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Apply OFI patch for DAOS-9173
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 08 Dec 2021 13:16:00 -0000
+
+daos (1.3.106-8) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to mercury v2.1.0rc4
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Fri, 03 Dec 2021 13:16:00 -0000
+
+daos (1.3.106-6) unstable; urgency=medium
+  [ John E. Malmberg ]
+  * Fix for RPM packaging on SUSE
+
+ -- John E. Malmberg <john.e.malmberg@intel.com>  Tue, 16 Nov 2021 13:16:00 -0000
+
+daos (1.3.106-5) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update OFI to v1.14.0rc3
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Sat, 13 Nov 2021 10:00:01 -0100
+
+daos (1.3.106-4) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
+  * Rename daos-tests daos-client-tests and make daos-tests require all
+    other test suites to maintain existing behavior
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 28 Oct 2021 16:43:51 -0400
+
+daos (1.3.106-3) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Explicitly require 1.11.0-3 of PMDK
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 20 Oct 2021 010:00:01 -100
+
+daos (1.3.106-2) unstable; urgency=medium
+  [ David Quigley ]
+  * Add defusedxml as a required dependency for the test package.
+
+ -- David Quigley <david.quigley@intel.com> Wed, 13 Oct 2021 10:00:00 +0800
+
 daos (1.3.106-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Version bump to 1.3.106 for 2.0 test build 6

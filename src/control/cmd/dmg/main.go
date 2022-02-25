@@ -127,6 +127,9 @@ type cmdLogger interface {
 }
 
 type logCmd struct {
+	common.NoArgsCmd // Hack: Since everything embeds this type,
+	// just embed the args handler in here. We should probably
+	// create a new baseCmd type to cut down on boilerplate.
 	log *logging.LeveledLogger
 }
 
@@ -271,6 +274,12 @@ and access control settings, along with system wide operations.`
 
 		if cfgCmd, ok := cmd.(cmdConfigSetter); ok {
 			cfgCmd.setConfig(ctlCfg)
+		}
+
+		if argsCmd, ok := cmd.(common.ArgsHandler); ok {
+			if err := argsCmd.CheckArgs(args); err != nil {
+				return err
+			}
 		}
 
 		if err := cmd.Execute(args); err != nil {

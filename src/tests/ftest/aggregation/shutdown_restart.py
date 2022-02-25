@@ -47,8 +47,8 @@ class IoAggregation(IorTestBase):
             for 4 attempts.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=daosio,io_aggregation,tx
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=daosio,ioaggregation,tx
         """
         # update ior signature option
         self.ior_cmd.signature.update("123")
@@ -61,9 +61,9 @@ class IoAggregation(IorTestBase):
         # create snapshot
         self.container.create_snap()
 
-        # write to same ior file again
+        # write to same ior file again, expect warning
         self.ior_cmd.signature.update("456")
-        self.run_ior_with_pool(create_cont=False)
+        self.run_ior_with_pool(create_cont=False, fail_on_warning=False)
 
         # capture free space after second ior write
         free_space_before_snap_destroy = self.get_nvme_free_space()

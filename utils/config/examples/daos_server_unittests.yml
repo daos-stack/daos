@@ -4,9 +4,10 @@ name: daos_server           # sys group daos_server
 access_points: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
 provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
-socket_dir: /tmp/daos_sockets
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log
+
+telemetry_port: 9191
 
 ## Transport Credentials Specifying certificates to secure communications
 ##

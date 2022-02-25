@@ -828,7 +828,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 
-	RPC_TRACE(DB_TRACE, rpc_priv,
+	RPC_TRACE(DB_ALL, rpc_priv,
 		  "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
@@ -1100,8 +1100,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_rc = rc;
 
 	if (crt_cbinfo.cci_rc != 0)
-		RPC_ERROR(rpc_priv, "RPC failed; rc: " DF_RC "\n",
-			  DP_RC(crt_cbinfo.cci_rc));
+		RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
+			   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
 
 	RPC_TRACE(DB_TRACE, rpc_priv,
 		  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",

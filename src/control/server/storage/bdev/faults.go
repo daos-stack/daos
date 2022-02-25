@@ -42,7 +42,7 @@ func FaultBadPCIAddr(pciAddr string) *fault.Fault {
 }
 
 // FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
-// match a given PCI address.
+// match expected PCI addresses.
 func FaultBdevNotFound(bdevs ...string) *fault.Fault {
 	return bdevFault(
 		code.BdevNotFound,

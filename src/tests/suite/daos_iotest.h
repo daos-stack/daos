@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -91,6 +91,11 @@ insert_wait(struct ioreq *req);
 
 void
 insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
+	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
+	     daos_size_t data_size, struct ioreq *req);
+
+void
+inset_recxs_dkey_uint64(uint64_t *dkey, const char *akey, daos_size_t iod_size,
 	     daos_handle_t th, daos_recx_t *recxs, int nr, void *data,
 	     daos_size_t data_size, struct ioreq *req);
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -333,7 +333,6 @@ static void
 ut_free(void **state)
 {
 	struct vea_ut_args *args = *state;
-	struct vea_hint_context *h_ctxt;
 	struct vea_resrvd_ext *ext;
 	d_list_t *r_list;
 	uint64_t blk_off;
@@ -361,17 +360,8 @@ ut_free(void **state)
 	print_message("persistent free extents:\n");
 	vea_dump(args->vua_vsi, false);
 
-	/* wait for free extents expire */
-	print_message("wait for %d seconds ...\n", VEA_MIGRATE_INTVL);
-	sleep(VEA_MIGRATE_INTVL);
-	/* call reserve to trigger free extents migration */
-	r_list = &args->vua_resrvd_list[0];
-	h_ctxt = args->vua_hint_ctxt[0];
-	rc = vea_reserve(args->vua_vsi, 1, h_ctxt, r_list);
-	assert_rc_equal(rc, 0);
-
-	rc = vea_cancel(args->vua_vsi, h_ctxt, r_list);
-	assert_int_equal(rc, 0);
+	/* call vea_flush to trigger free extents migration */
+	vea_flush(args->vua_vsi, true);
 
 	r_list = &args->vua_alloc_list;
 	d_list_for_each_entry(ext, r_list, vre_link) {
