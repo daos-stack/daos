@@ -170,11 +170,12 @@
 ## Number of hugepages to allocate for use by NVMe SSDs
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. Note that each target requires 1 GiB of hugepage space, so
-## this value needs to represent the total amount of hugespace required for
-## all targets across all engines on host, divided by the system hugepage size.
+## through SPDK. Note that each target requires 1 GiB of hugepage space.
+## In DAOS version 2.0 and older, nr_hugepages specifies the per-engine value.
+## It needs to represent the total amount of hugepages memory required for
+## all targets on one engine, divided by the system hugepage size.
 #
-## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
+## Example: (16 targets/engine * 1GiB) / 2MiB hugepage size = 8192 per engine
 #
 ## Hugepages are mandatory with NVMe SSDs configured and optional without.
 ## To disabled the use of hugepages when no NVMe SSDs are configured, set
