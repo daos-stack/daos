@@ -2035,10 +2035,6 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 	union btr_rec_buf  rec_buf = {0};
 	int		   rc;
 
-	rc = btr_verify_key(tcx, key);
-	if (rc)
-		return rc;
-
 	rec = &rec_buf.rb_rec;
 	btr_hkey_gen(tcx, key, &rec->rec_hkey[0]);
 
@@ -2087,10 +2083,6 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 {
 	int	 rc;
 
-
-	rc = btr_verify_key(tcx, key);
-	if (rc)
-		return rc;
 
 	if (probe_opc == BTR_PROBE_BYPASS)
 		rc = tcx->tc_probe_rc; /* trust previous probe... */
@@ -2179,6 +2171,10 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
+
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
@@ -2213,6 +2209,10 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
 
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
