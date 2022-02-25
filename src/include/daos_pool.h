@@ -256,10 +256,13 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
 
 /**
  * Query pool information. User should provide at least one of \a info and
- * \a tgts as output buffer.
+ * \a ranks as output buffer.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[out]	tgts	Optional, returned storage targets in this pool.
+ * \param[out]	ranks	Optional, returned storage ranks in this pool.
+ *			If any pool targets are disabled, \a ranks is the list of affected engines.
+ *			If no pool targets are disabled, \a ranks is the list of all engines.
+ *			Caller is responsible for freeing the list with d_rank_list_free().
  * \param[in,out]
  *		info	Optional, returned pool information,
  *			see daos_pool_info_bit.
@@ -288,7 +291,7 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
  *			-DER_NO_HDL	Invalid pool handle
  */
 int
-daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
+daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev);
 
 /**
