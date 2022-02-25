@@ -1714,13 +1714,13 @@ mount:
 		if (rc)
 			D_GOTO(err, rc);
 	} else {
+		cont_h_bump = true;
 		rc = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
 		if (rc) {
 			D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
 			D_GOTO(err, rc);
 		}
 	}
-	cont_h_bump = true;
 
 	dfs->pool_hdl = pool_hdl;
 	dfs->cont_hdl = cont_hdl;
