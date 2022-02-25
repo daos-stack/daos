@@ -12,7 +12,8 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+//
+@Library(value="pipeline-lib@centos-7-qb") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
