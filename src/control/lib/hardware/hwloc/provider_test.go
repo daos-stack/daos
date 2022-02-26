@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -57,12 +56,10 @@ func TestHwloc_Cleanup(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		ctx              context.Context
-		expErr           error
 		expCleanupCalled int
 	}{
 		"no cleanup cached": {
-			ctx:    context.Background(),
-			expErr: errors.New("no hwloc cleanup"),
+			ctx: context.Background(),
 		},
 		"success": {
 			ctx:              context.WithValue(context.Background(), cleanupKey, mockCleanup),
@@ -72,9 +69,7 @@ func TestHwloc_Cleanup(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cleanupCalled = 0
 
-			err := Cleanup(tc.ctx)
-
-			common.CmpErr(t, tc.expErr, err)
+			Cleanup(tc.ctx)
 			common.AssertEqual(t, tc.expCleanupCalled, cleanupCalled, "")
 		})
 	}
@@ -341,4 +336,50 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 		})
 
 	}
+}
+
+func TestHwloc_Provider_GetNUMANodeForPID_Parallel(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	runTest_GetNUMANodeForPID_Parallel(t, context.Background(), log)
+}
+
+func runTest_GetNUMANodeForPID_Parallel(t *testing.T, ctx context.Context, log logging.Logger) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	p := NewProvider(log)
+
+	doneCh := make(chan error)
+	total := 1000
+
+	for i := 0; i < total; i++ {
+		go func() {
+			_, err := p.GetNUMANodeIDForPID(ctx, int32(os.Getpid()))
+			doneCh <- err
+		}()
+	}
+
+	for i := 0; i < total; i++ {
+		err := <-doneCh
+		if err != nil && err != hardware.ErrNoNUMANodes {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestHwloc_Provider_GetNUMANodeForPID_Parallel_Cached(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	cachedCtx, err := CacheContext(context.Background(), log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Cleanup(cachedCtx)
+
+	runTest_GetNUMANodeForPID_Parallel(t, cachedCtx, log)
 }

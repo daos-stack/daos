@@ -26,7 +26,7 @@ const (
 func CacheContext(parent context.Context, log logging.Logger) (context.Context, error) {
 	topo, cleanup, err := NewProvider(log).initTopology()
 	if err != nil {
-		return parent, err
+		return nil, err
 	}
 
 	topoCtx := context.WithValue(parent, topoKey, topo)
@@ -34,13 +34,12 @@ func CacheContext(parent context.Context, log logging.Logger) (context.Context, 
 }
 
 // Cleanup frees the hwloc cache in the context, if any.
-func Cleanup(ctx context.Context) error {
+func Cleanup(ctx context.Context) {
 	cleanup, ok := ctx.Value(cleanupKey).(func())
 	if !ok {
-		return errors.New("context has no hwloc cleanup function")
+		return
 	}
 	cleanup()
-	return nil
 }
 
 func topologyFromContext(ctx context.Context) (*topology, error) {
@@ -128,9 +127,6 @@ func (p *Provider) initTopology() (*topology, func(), error) {
 	if err := checkVersion(p.api); err != nil {
 		return nil, nil, err
 	}
-
-	p.api.Lock()
-	defer p.api.Unlock()
 
 	topo, cleanup, err := p.api.newTopology()
 	if err != nil {
@@ -385,40 +381,63 @@ func osDevTypeToHardwareDevType(osType int) hardware.DeviceType {
 	return hardware.DeviceTypeUnknown
 }
 
+type numaResult struct {
+	numaNode uint
+	err      error
+}
+
 // GetNUMANodeIDForPID fetches the NUMA node ID associated with a given process ID.
 func (p *Provider) GetNUMANodeIDForPID(ctx context.Context, pid int32) (uint, error) {
+	ch := make(chan numaResult)
+	go p.getNUMANodeIDForPIDAsync(ctx, pid, ch)
+
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case result := <-ch:
+		return result.numaNode, result.err
+	}
+}
+
+func (p *Provider) getNUMANodeIDForPIDAsync(ctx context.Context, pid int32, ch chan numaResult) {
 	topo, cleanupTopo, err := p.getRawTopology(ctx)
 	if err != nil {
-		return 0, errors.Wrap(err, "initializing topology")
+		ch <- numaResult{err: errors.Wrap(err, "initializing topology")}
+		return
 	}
 	defer cleanupTopo()
 
 	// If there are no NUMA nodes detected, there's nothing to do here.
 	currentNode, err := topo.getNextObjByType(objTypeNUMANode, nil)
 	if err != nil {
-		return 0, hardware.ErrNoNUMANodes
+		ch <- numaResult{err: hardware.ErrNoNUMANodes}
+		return
 	}
 
 	cpuSet, cleanupCPUSet, err := topo.getProcessCPUSet(pid, 0)
 	if err != nil {
-		return 0, errors.Wrapf(err, "getting CPU set for PID %d", pid)
+		ch <- numaResult{err: errors.Wrapf(err, "getting CPU set for PID %d", pid)}
+		return
 	}
 	defer cleanupCPUSet()
 
 	nodeSet, cleanupNodeSet, err := cpuSet.toNodeSet()
 	if err != nil {
-		return 0, errors.Wrapf(err, "converting PID %d CPU set to NUMA node set", pid)
+		ch <- numaResult{err: errors.Wrapf(err, "converting PID %d CPU set to NUMA node set", pid)}
+		return
 	}
 	defer cleanupNodeSet()
 
 	for err == nil {
 		if nodeSet.intersects(currentNode.nodeSet()) ||
 			cpuSet.intersects(currentNode.cpuSet()) {
-			return currentNode.osIndex(), nil
+			ch <- numaResult{numaNode: currentNode.osIndex()}
+			return
 		}
 
+		p.log.Debug("checking next numa node")
 		currentNode, err = topo.getNextObjByType(objTypeNUMANode, nil)
 	}
 
-	return 0, errors.Errorf("no NUMA node could be associated with PID %d", pid)
+	ch <- numaResult{err: errors.Errorf("no NUMA node could be associated with PID %d", pid)}
 }
