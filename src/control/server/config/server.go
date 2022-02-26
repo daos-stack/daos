@@ -525,6 +525,10 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 	}
 
 	if cfgHasBdevs {
+		if cfg.NrHugepages == -1 {
+			return FaultConfigHugepagesDisabled
+		}
+
 		// Calculate minimum number of hugepages for all configured engines.
 		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount)
 		if err != nil {
@@ -533,14 +537,13 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 
 		// If the config doesn't specify hugepages, use the minimum. Otherwise, validate
 		// that the configured amount is sufficient.
-		switch {
-		case cfg.NrHugepages == -1:
-			return FaultConfigHugepagesDisabled
-		case cfg.NrHugepages == 0:
+		if cfg.NrHugepages == 0 {
 			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages,
 				cfgTargetCount)
 			cfg.NrHugepages = minHugePages
-		case cfg.NrHugepages < minHugePages:
+		}
+
+		if cfg.NrHugepages < minHugePages {
 			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
 		}
 	}

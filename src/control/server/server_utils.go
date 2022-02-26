@@ -258,6 +258,11 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 // scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
 func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
+	if srv.cfg.NrHugepages < 0 {
+		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
+		return &storage.BdevScanResponse{}, nil
+	}
+
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
 		DeviceList:  cfgGetBdevs(srv.cfg),
 		BypassCache: true, // init cache on first scan
