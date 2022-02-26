@@ -706,7 +706,7 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
             # leave some time for ABT info/stacks dump to complete.
             # at this time there is no way to know when Argobots ULTs stacks
             # has completed, see DAOS-1452/DAOS-9942.
-		"sleep 30",
+            "sleep 30",
             "fi",
             "exit $rc",
         ]

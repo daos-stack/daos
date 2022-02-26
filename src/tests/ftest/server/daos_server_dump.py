@@ -27,13 +27,14 @@ class DaosServerDumpTest(TestWithServers):
         self.setup_start_agents = False
 
     def tearDown(self):
+        # pylint: disable=unused-private-member
         """Tear down after each test case."""
         super().tearDown()
 
         # force test status !!
         self.__status = 'PASS'
 
-        # XXX may need to check for one file per engine...
+        # DAOS-1452 may need to check for one file per engine...
         ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump*.txt")
         # Report any failures
         if len(ret_codes) > 1 or 0 not in ret_codes:
@@ -49,7 +50,7 @@ class DaosServerDumpTest(TestWithServers):
     def test_daos_server_dump_basic(self):
         """JIRA ID: DAOS-1452.
 
-        Test Description: Test engine ULT stacks dump.
+        Test Description: Test engine ULT stacks dump (basic).
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
@@ -75,7 +76,7 @@ class DaosServerDumpTest(TestWithServers):
     def test_daos_server_dump_on_error(self):
         """JIRA ID: DAOS-1452.
 
-        Test Description: Test engine ULT stacks dump.
+        Test Description: Test engine ULT stacks dump (error case).
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
@@ -88,7 +89,7 @@ class DaosServerDumpTest(TestWithServers):
     def test_daos_server_dump_on_fail(self):
         """JIRA ID: DAOS-1452.
 
-        Test Description: Test engine ULT stacks dump.
+        Test Description: Test engine ULT stacks dump (failure case).
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
@@ -101,7 +102,7 @@ class DaosServerDumpTest(TestWithServers):
     def test_daos_server_dump_on_timeout(self):
         """JIRA ID: DAOS-1452.
 
-        Test Description: Test engine ULT stacks dump.
+        Test Description: Test engine ULT stacks dump (timeout case).
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
@@ -109,14 +110,12 @@ class DaosServerDumpTest(TestWithServers):
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_timeout
         """
 
-        self.timeout = 1
-        time.sleep(2)
-        self.report_timeout()
+        time.sleep(30)
 
     def test_daos_server_dump_on_unexpected_engine_status(self):
         """JIRA ID: DAOS-1452.
 
-        Test Description: Test engine ULT stacks dump.
+        Test Description: Test engine ULT stacks dump (unexpected engine status case).
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
