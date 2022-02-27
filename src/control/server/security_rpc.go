@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"crypto"
 	"fmt"
 	"path/filepath"
@@ -81,7 +80,7 @@ func (m *SecurityModule) validateRespWithStatus(status drpc.DaosStatus) ([]byte,
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+func (m *SecurityModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
 	if method != drpc.MethodValidateCredentials {
 		return nil, drpc.UnknownMethodFailure()
 	}

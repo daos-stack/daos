@@ -8,7 +8,6 @@ package common
 
 import (
 	"fmt"
-	"math"
 	"net"
 	"strings"
 )
@@ -59,27 +58,9 @@ func MockPCIAddr(varIdx ...int32) string {
 	return fmt.Sprintf("0000:%02d:00.0", idx)
 }
 
-// MockPCIAddrs returns slice of mock PCIAddr values for use in tests.
 func MockPCIAddrs(idxs ...int) (addrs []string) {
 	for _, i := range idxs {
 		addrs = append(addrs, MockPCIAddr(int32(i)))
-	}
-
-	return
-}
-
-// MockVMDPCIAddr returns mock PCIAddr values for use in tests.
-// VMD PCI address domains start at 0x10000 to avoid overlapping with standard ACPI addresses.
-func MockVMDPCIAddr(dom int32, varIdx ...int32) string {
-	idx := GetIndex(varIdx...)
-
-	return fmt.Sprintf("%06x:%02x:00.0", (math.MaxUint16+1)*dom, idx)
-}
-
-// MockVMDPCIAddrs returns slice of mock VMD PCIAddr values for use in tests.
-func MockVMDPCIAddrs(dom int, idxs ...int) (addrs []string) {
-	for _, i := range idxs {
-		addrs = append(addrs, MockVMDPCIAddr(int32(dom), int32(i)))
 	}
 
 	return

@@ -24,21 +24,17 @@ const engineBin = "daos_engine"
 
 // Runner starts and manages an instance of a DAOS I/O Engine
 type Runner struct {
-	Config   *Config
-	log      logging.Logger
-	running  atm.Bool
-	sigCh    chan os.Signal
-	sigErrCh chan error
-	pidCh    chan int
+	Config  *Config
+	log     logging.Logger
+	running atm.Bool
+	cmd     *exec.Cmd
 }
 
 // NewRunner returns a configured engine.Runner
 func NewRunner(log logging.Logger, config *Config) *Runner {
 	return &Runner{
-		Config:   config,
-		log:      log,
-		sigCh:    make(chan os.Signal),
-		sigErrCh: make(chan error),
+		Config: config,
+		log:    log,
 	}
 }
 
@@ -78,41 +74,26 @@ func (r *Runner) run(ctx context.Context, args, env []string, errOut chan<- erro
 		return errors.Wrapf(common.GetExitStatus(err),
 			"%s (instance %d) failed to start", binPath, r.Config.Index)
 	}
+	r.cmd = cmd
 
-	r.pidCh = make(chan int, 1)
-	cmdDone := make(chan struct{})
-	// Start a goroutine to wait for the command to finish.
+	waitDone := make(chan struct{})
 	go func() {
 		r.running.SetTrue()
 		defer r.running.SetFalse()
 
-		errOut <- errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", cmd.Path)
-		r.pidCh <- cmd.ProcessState.Pid()
-		close(r.pidCh)
-		close(cmdDone)
+		errOut <- errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", binPath)
+
+		close(waitDone)
 	}()
 
-	// Start a monitoring goroutine to handle context cancellation, signals, and command completion.
 	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				r.log.Infof("%s:%d context canceled; shutting down", engineBin, r.Config.Index)
-				if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-					r.log.Errorf("%s:%d failed to cleanly kill process: %s", engineBin, r.Config.Index, err)
-					cmd.Process.Signal(syscall.SIGKILL)
-				}
-				return
-			case sig := <-r.sigCh:
-				r.log.Infof("%s:%d received signal %s", engineBin, r.Config.Index, sig)
-				var err error
-				if err = cmd.Process.Signal(sig); err != nil {
-					r.log.Errorf("%s:%d failed to send signal %s to process: %s", engineBin, r.Config.Index, sig, err)
-				}
-				r.sigErrCh <- err
-			case <-cmdDone:
-				return
+		select {
+		case <-ctx.Done():
+			r.log.Infof("%s:%d context canceled; shutting down", engineBin, r.Config.Index)
+			if err := r.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+				r.log.Errorf("%s:%d failed to kill process: %s", engineBin, r.Config.Index, err)
 			}
+		case <-waitDone:
 		}
 	}()
 
@@ -145,16 +126,19 @@ func (r *Runner) Signal(signal os.Signal) error {
 		return nil
 	}
 
-	r.sigCh <- signal
-	return <-r.sigErrCh
+	r.log.Debugf("Signalling I/O Engine instance %d (%s)", r.Config.Index, signal)
+
+	return r.cmd.Process.Signal(signal)
 }
 
-// GetLastPid returns the PID after runner has exited. It
-// is usually an error to call this with a running process,
-// as the PID is not available on the channel until the
-// process exits, and therefore the call may block.
+// GetLastPid returns the PID after runner has exited, return
+// zero if no cmd or ProcessState exists.
 func (r *Runner) GetLastPid() uint64 {
-	return uint64(<-r.pidCh)
+	if r.cmd == nil || r.cmd.ProcessState == nil {
+		return 0
+	}
+
+	return uint64(r.cmd.ProcessState.Pid())
 }
 
 // GetConfig returns the runner's configuration

@@ -22,7 +22,7 @@ type mockModule struct {
 	IDValue            ModuleID
 }
 
-func (m *mockModule) HandleCall(_ context.Context, session *Session, method Method, input []byte) ([]byte, error) {
+func (m *mockModule) HandleCall(session *Session, method Method, input []byte) ([]byte, error) {
 	return m.HandleCallResponse, m.HandleCallErr
 }
 
