@@ -14,10 +14,10 @@ server_config:
  name: daos_server
  servers:
   log_mask: ERR
-  #  bdev_class: nvme
-  #bdev_list: ["0000:81:00.0","0000:da:00.0"]
-  #scm_class: dcpm
-  #scm_list: ["/dev/pmem0"]
+  bdev_class: nvme
+  bdev_list: ["0000:81:00.0","0000:da:00.0"]
+  scm_class: dcpm
+  scm_list: ["/dev/pmem0"]
 pool: &pool
  name: daos_server
  control_method: dmg
@@ -26,7 +26,7 @@ pool: &pool
 pool_0: #[6G, 200G, 1M, 16G, 1]
  <<: *pool
  scm_size: 1%
- nvme_size: 14%
+ nvme_size: 1%
  stripesize: 1048576
  blocksize: 17179869184
  clientslots: 1
