@@ -106,13 +106,13 @@ bio_spdk_env_init(void)
 
 	opts.env_context = (char *)dpdk_cli_override_opts;
 
-	if (bio_nvme_configured()) {
+	/*if (bio_nvme_configured()) {
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
 			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
-	}
+	}*/
 
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
