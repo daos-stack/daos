@@ -57,6 +57,7 @@ rdb_raft_rc(int raft_rc)
 	case RAFT_ERR_SHUTDOWN:			return -DER_SHUTDOWN;
 	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
 	case RAFT_ERR_SNAPSHOT_ALREADY_LOADED:	return -DER_ALREADY;
+	case RAFT_ERR_INVALID_CFG_CHANGE:	return -DER_INVAL;
 	default:				return -DER_MISC;
 	}
 }
@@ -1942,9 +1943,7 @@ rdb_raft_add_replica(struct rdb *db, d_rank_t rank)
 	entry.type = RAFT_LOGTYPE_ADD_NODE;
 	entry.data.buf = &rank;
 	entry.data.len = sizeof(d_rank_t);
-	ABT_mutex_lock(db->d_raft_mutex);
 	rc = rdb_raft_append_apply_internal(db, &entry, &result);
-	ABT_mutex_unlock(db->d_raft_mutex);
 	return (rc != 0) ? rc : result;
 }
 
@@ -1959,9 +1958,7 @@ rdb_raft_remove_replica(struct rdb *db, d_rank_t rank)
 	entry.type = RAFT_LOGTYPE_REMOVE_NODE;
 	entry.data.buf = &rank;
 	entry.data.len = sizeof(d_rank_t);
-	ABT_mutex_lock(db->d_raft_mutex);
 	rc = rdb_raft_append_apply_internal(db, &entry, &result);
-	ABT_mutex_unlock(db->d_raft_mutex);
 	return (rc != 0) ? rc : result;
 }
 
