@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,26 +19,41 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
-// ScmState represents the probed state of SCM modules on the system.
+// ScmState represents the probed state of PMem modules on the system.
 //go:generate stringer -type=ScmState
 type ScmState int
 
 const (
 	// ScmStateUnknown represents the default (unknown) state.
 	ScmStateUnknown ScmState = iota
-	// ScmStateNoRegions indicates that SCM modules exist, but
-	// no regions have been created.
+	// ScmStateNoRegions indicates that PMem modules exist, but no regions have been created.
 	ScmStateNoRegions
-	// ScmStateFreeCapacity indicates that SCM modules exist with
-	// configured regions that have available capacity.
+	// ScmStateFreeCapacity indicates that PMem modules exist with configured regions with
+	// available free capacity.
 	ScmStateFreeCapacity
-	// ScmStateNoCapacity indicates that SCM modules exist with
-	// configured regions but not available capacity.
-	ScmStateNoCapacity
+	// ScmStateNoFreeCapacity indicates that PMem modules exist with configured regions and no free
+	// capacity.
+	ScmStateNoFreeCapacity
+	// ScmStateNotInterleaved indicates that PMem modules exist with configured regions but not
+	// in AppDirect interleaved/persistent mirror mode.
+	ScmStateNotInterleaved
+	// ScmStateNoModules indicates that no PMem modules exist.
+	ScmStateNoModules
 )
 
+func (ss ScmState) String() string {
+	return map[ScmState]string{
+		ScmStateUnknown:        "Unknown",
+		ScmStateNoRegions:      "NoRegions",
+		ScmStateFreeCapacity:   "FreeCapacity",
+		ScmStateNoFreeCapacity: "NoFreeCapacity",
+		ScmStateNotInterleaved: "NotInterleaved",
+		ScmStateNoModules:      "NoModules",
+	}[ss]
+}
+
 type (
-	// ScmModule represents a SCM DIMM.
+	// ScmModule represents a PMem DIMM.
 	//
 	// This is a simplified representation of the raw struct used in the ipmctl package.
 	ScmModule struct {
@@ -56,7 +71,7 @@ type (
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
 	ScmModules []*ScmModule
 
-	// ScmMountPoint represents location SCM filesystem is mounted.
+	// ScmMountPoint represents location PMem filesystem is mounted.
 	ScmMountPoint struct {
 		Class      Class    `json:"class"`
 		DeviceList []string `json:"device_list"`
@@ -85,7 +100,7 @@ type (
 	// ScmFirmwareUpdateStatus represents the status of a firmware update on the module.
 	ScmFirmwareUpdateStatus uint32
 
-	// ScmFirmwareInfo describes the firmware information of an SCM module.
+	// ScmFirmwareInfo describes the firmware information of an PMem module.
 	ScmFirmwareInfo struct {
 		ActiveVersion     string
 		StagedVersion     string
@@ -157,12 +172,12 @@ func (sms ScmModules) Summary() string {
 		common.Pluralise("module", len(sms)))
 }
 
-// Capacity reports total storage capacity (bytes) of SCM namespace (pmem block device).
+// Capacity reports total storage capacity (bytes) of PMem namespace (pmem block device).
 func (sn ScmNamespace) Capacity() uint64 {
 	return sn.Size
 }
 
-// Total returns the total bytes on mounted SCM namespace as reported by OS.
+// Total returns the total bytes on mounted PMem namespace as reported by OS.
 func (sn ScmNamespace) Total() uint64 {
 	if sn.Mount == nil {
 		return 0
@@ -170,7 +185,7 @@ func (sn ScmNamespace) Total() uint64 {
 	return sn.Mount.TotalBytes
 }
 
-// Free returns the available free bytes on mounted SCM namespace as reported by OS.
+// Free returns the available free bytes on mounted PMem namespace as reported by OS.
 func (sn ScmNamespace) Free() uint64 {
 	if sn.Mount == nil {
 		return 0
@@ -186,7 +201,7 @@ func (sns ScmNamespaces) Capacity() (tb uint64) {
 	return
 }
 
-// Total returns the cumulative total bytes on all mounted SCM namespaces.
+// Total returns the cumulative total bytes on all mounted PMem namespaces.
 func (sns ScmNamespaces) Total() (tb uint64) {
 	for _, sn := range sns {
 		tb += (*ScmNamespace)(sn).Total()
@@ -194,7 +209,7 @@ func (sns ScmNamespaces) Total() (tb uint64) {
 	return
 }
 
-// Free returns the cumulative available bytes on all mounted SCM namespaces.
+// Free returns the cumulative available bytes on all mounted PMem namespaces.
 func (sns ScmNamespaces) Free() (tb uint64) {
 	for _, sn := range sns {
 		tb += (*ScmNamespace)(sn).Free()
@@ -216,22 +231,20 @@ func (sns ScmNamespaces) Summary() string {
 }
 
 const (
-	ScmMsgRebootRequired     = "A reboot is required to process new SCM memory allocation goals."
-	ScmMsgNoModules          = "no SCM modules to prepare"
-	ScmMsgNotInited          = "SCM storage could not be accessed"
-	ScmMsgClassNotSupported  = "operation unsupported on SCM class"
+	ScmMsgRebootRequired     = "A reboot is required to process new PMem memory allocation goals."
+	ScmMsgNotInited          = "PMem storage could not be accessed"
+	ScmMsgClassNotSupported  = "operation unsupported on PMem class"
 	ScmMsgIpmctlDiscoverFail = "ipmctl module discovery"
 )
 
 type (
-	// ScmProvider defines an interface to be implemented by a SCM provider.
+	// ScmProvider defines an interface to be implemented by a PMem provider.
 	ScmProvider interface {
 		Mount(ScmMountRequest) (*ScmMountResponse, error)
 		Unmount(ScmMountRequest) (*ScmMountResponse, error)
 		Format(ScmFormatRequest) (*ScmFormatResponse, error)
 		CheckFormat(ScmFormatRequest) (*ScmFormatResponse, error)
 		Scan(ScmScanRequest) (*ScmScanResponse, error)
-		GetPmemState() (ScmState, error)
 		Prepare(ScmPrepareRequest) (*ScmPrepareResponse, error)
 		QueryFirmware(ScmFirmwareQueryRequest) (*ScmFirmwareQueryResponse, error)
 		UpdateFirmware(ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error)
@@ -240,7 +253,7 @@ type (
 	// ScmPrepareRequest defines the parameters for a Prepare operation.
 	ScmPrepareRequest struct {
 		pbin.ForwardableRequest
-		// Reset indicates that the operation should reset (clear) DCPM namespaces.
+		// Reset indicates that the operation should reset (clear) PMem namespaces.
 		Reset bool
 	}
 
@@ -254,8 +267,6 @@ type (
 	// ScmScanRequest defines the parameters for a Scan operation.
 	ScmScanRequest struct {
 		pbin.ForwardableRequest
-		Rescan     bool
-		DeviceList []string
 	}
 
 	// ScmScanResponse contains information gleaned during a successful Scan operation.
@@ -265,8 +276,7 @@ type (
 		Namespaces ScmNamespaces
 	}
 
-	// DcpmParams defines the sub-parameters of a Format operation that
-	// will use DCPM
+	// DcpmParams defines the sub-parameters of a Format operation that will use PMem
 	DcpmParams struct {
 		Device string
 	}
@@ -320,7 +330,7 @@ type (
 	}
 
 	// ScmModuleFirmware represents the results of a firmware query for a specific
-	// SCM module.
+	// PMem module.
 	ScmModuleFirmware struct {
 		Module ScmModule
 		Info   *ScmFirmwareInfo
@@ -342,7 +352,7 @@ type (
 	}
 
 	// ScmFirmwareUpdateResult represents the result of a firmware update for
-	// a specific SCM module.
+	// a specific PMem module.
 	ScmFirmwareUpdateResult struct {
 		Module ScmModule
 		Error  string
@@ -440,15 +450,6 @@ func (f *ScmAdminForwarder) Scan(req ScmScanRequest) (*ScmScanResponse, error) {
 	return res, nil
 }
 
-// GetPmemState gets the state of DCPM.
-func (f *ScmAdminForwarder) GetPmemState() (ScmState, error) {
-	resp, err := f.Scan(ScmScanRequest{})
-	if err != nil {
-		return ScmStateUnknown, err
-	}
-	return resp.State, nil
-}
-
 // Prepare forwards a request to prep the SCM.
 func (f *ScmAdminForwarder) Prepare(req ScmPrepareRequest) (*ScmPrepareResponse, error) {
 	req.Forwarded = true
@@ -463,10 +464,10 @@ func (f *ScmAdminForwarder) Prepare(req ScmPrepareRequest) (*ScmPrepareResponse,
 
 const (
 	// ScmFirmwareQueryMethod is the method name used when forwarding the request
-	// to query SCM firmware.
+	// to query PMem firmware.
 	ScmFirmwareQueryMethod = "ScmFirmwareQuery"
 	// ScmFirmwareUpdateMethod is the method name used when forwarding the request
-	// to update SCM firmware.
+	// to update PMem firmware.
 	ScmFirmwareUpdateMethod = "ScmFirmwareUpdate"
 )
 
@@ -490,7 +491,7 @@ func (f *ScmFwForwarder) checkSupport() error {
 		return nil
 	}
 
-	return errors.Errorf("SCM firmware operations are not supported on this system")
+	return errors.Errorf("PMem firmware operations are not supported on this system")
 }
 
 // Query forwards an SCM firmware query request.

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,10 +33,10 @@ func skipNoPerms(t *testing.T) {
 }
 
 // Fetch all devices in the system - and skip the test if there are none
-func getDevices(t *testing.T, mgmt NvmMgmt) []DeviceDiscovery {
+func discoverDevices(t *testing.T, mgmt NvmMgmt) []DeviceDiscovery {
 	t.Helper()
 
-	devs, err := mgmt.Discover()
+	devs, err := mgmt.GetModules()
 	if err != nil {
 		t.Fatalf("Discovery failed: %s", err.Error())
 	}
@@ -52,7 +52,7 @@ func TestNvmDiscovery(t *testing.T) {
 	skipNoPerms(t)
 
 	mgmt := NvmMgmt{}
-	_, err := mgmt.Discover()
+	_, err := mgmt.GetModules()
 	if err != nil {
 		t.Fatalf("Discovery failed: %s", err.Error())
 	}
@@ -62,7 +62,7 @@ func TestNvmFwInfo(t *testing.T) {
 	skipNoPerms(t)
 
 	mgmt := NvmMgmt{}
-	devs := getDevices(t, mgmt)
+	devs := discoverDevices(t, mgmt)
 
 	for _, d := range devs {
 		fwInfo, err := mgmt.GetFirmwareInfo(d.Uid)
@@ -121,7 +121,7 @@ func TestNvmFwUpdate(t *testing.T) {
 	f.Close()
 
 	mgmt := NvmMgmt{}
-	devs := getDevices(t, mgmt)
+	devs := discoverDevices(t, mgmt)
 
 	for _, d := range devs {
 		err := mgmt.UpdateFirmware(d.Uid, filename, false)
@@ -130,4 +130,15 @@ func TestNvmFwUpdate(t *testing.T) {
 		common.CmpErr(t, errors.New("update_device_fw"), err)
 		fmt.Printf("Update firmware for device %s: %v\n", d.Uid.String(), err)
 	}
+}
+
+// The actual test functions are in nvm_ctest.go file so that they can use cgo (import "C").
+// These wrappers are here for gotest to find.
+
+func TestGetModules(t *testing.T) {
+	testGetModules(t)
+}
+
+func TestGetRegions(t *testing.T) {
+	testGetRegions(t)
 }

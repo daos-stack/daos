@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,8 +19,8 @@ var (
 		code.ScmUnknown, "unknown scm error", "",
 	)
 
-	// FaultDiscoveryFailed represents an SCM discovery failure.
-	FaultDiscoveryFailed = scmFault(
+	// FaultGetModulesFailed represents an SCM discovery failure.
+	FaultGetModulesFailed = scmFault(
 		code.ScmDiscoveryFailed, "module discovery failed", "",
 	)
 
