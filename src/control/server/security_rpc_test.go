@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -65,7 +64,7 @@ func TestSrvSecurityModule_BadMethod(t *testing.T) {
 }
 
 func callValidateCreds(mod *SecurityModule, body []byte) ([]byte, error) {
-	return mod.HandleCall(context.Background(), nil, drpc.MethodValidateCredentials, body)
+	return mod.HandleCall(nil, drpc.MethodValidateCredentials, body)
 }
 
 func TestSrvSecurityModule_ValidateCred_InvalidReq(t *testing.T) {
