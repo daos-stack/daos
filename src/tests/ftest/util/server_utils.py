@@ -519,20 +519,6 @@ class DaosServerManager(SubprocessManager):
 
     def stop(self):
         """Stop the server through the runner."""
-        self.log.info("<SERVER> Printing daos_admin stack traces")
-
-        prefix = "/var/tmp"
-        corefile_ss = "core.daos_admin"
-        gdb_cmd = "gdb -ex bt -ex quit"
-
-        bash_cmd = "for p in `ls %s`; do echo $p; [[ \"$p\" == *\"%s\"* ]] && %s %s/$p; done".format{
-            prefix, corefile_ss, gdb_cmd, prefix}
-
-        results = pcmd(self._hosts, bash_cmd, verbose)
-
-        self.log.info("<SERVER> remote results: %s\n\n", results)
-        self.log.info("<SERVER> Finished printing daos_admin stack traces")
-
         self.log.info("<SERVER> Stopping server %s command", self.manager.command)
 
         # Maintain a running list of errors detected trying to stop
