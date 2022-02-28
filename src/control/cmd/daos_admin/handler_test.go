@@ -142,6 +142,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	dcpmFormatReqPayload, err := json.Marshal(storage.ScmFormatRequest{
 		Mountpoint: testTarget,
 		OwnerUID:   os.Getuid(),
@@ -199,22 +200,22 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 			},
 			expErr: nilPayloadErr,
 		},
-		"ScmCheckFormat success": {
+		"ScmCheckFormat success; ram": {
 			req: &pbin.Request{
 				Method:  "ScmCheckFormat",
 				Payload: scmFormatReqPayload,
 			},
 			expPayload: &storage.ScmFormatResponse{Mountpoint: testTarget},
 		},
-		"ScmCheckFormat scan failure": {
+		"ScmCheckFormat success; dcpm": {
 			req: &pbin.Request{
-				Method:  "ScmFormat",
+				Method:  "ScmCheckFormat",
 				Payload: dcpmFormatReqPayload,
 			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scan failed"),
+			expPayload: &storage.ScmFormatResponse{
+				Mountpoint: testTarget,
+				Formatted:  true,
 			},
-			expErr: pbin.PrivilegedHelperRequestFailed("scan failed"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -266,7 +267,10 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 				Method:  "ScmPrepare",
 				Payload: scmPrepareReqPayload,
 			},
-			expPayload: &storage.ScmPrepareResponse{},
+			expPayload: &storage.ScmPrepareResponse{
+				State:      storage.ScmStateNoModules,
+				Namespaces: storage.ScmNamespaces{},
+			},
 		},
 		"ScmPrepare failure": {
 			req: &pbin.Request{
@@ -274,7 +278,7 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 				Payload: scmPrepareReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scan failed"),
+				GetModulesErr: errors.New("scan failed"),
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed("scan failed"),
 		},
@@ -328,7 +332,9 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 				Method:  "ScmScan",
 				Payload: scmScanReqPayload,
 			},
-			expPayload: &storage.ScmScanResponse{},
+			expPayload: &storage.ScmScanResponse{
+				State: storage.ScmStateNoModules,
+			},
 		},
 		"ScmScan failure": {
 			req: &pbin.Request{
@@ -336,7 +342,7 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 				Payload: scmScanReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scan failed"),
+				GetModulesErr: errors.New("scan failed"),
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed("scan failed"),
 		},

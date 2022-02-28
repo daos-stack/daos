@@ -74,6 +74,8 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
+	ScmNotInterleaved
+	ScmNoModules
 )
 
 // Bdev fault codes

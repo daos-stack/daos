@@ -75,8 +75,8 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule()},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -99,7 +99,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
+				GetModulesRes: storage.ScmModules{storage.MockScmModule()},
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -117,8 +117,8 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				ScanErr: errors.New("spdk scan failed"),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule()},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -140,7 +140,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scm discover failed"),
+				GetModulesErr: errors.New("scm discover failed"),
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -155,12 +155,36 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
+		"scm get state failure": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{ctrlr},
+				},
+			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule()},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				GetStateErr:      errors.New("scm get state failed"),
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{ctrlrPB},
+					State:  new(ctlpb.ResponseState),
+				},
+				Scm: &ctlpb.ScanScmResp{
+					State: &ctlpb.ResponseState{
+						Error:  "scm get state failed",
+						Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
+					},
+				},
+			},
+		},
 		"all discover fail": {
 			bmbc: &bdev.MockBackendConfig{
 				ScanErr: errors.New("spdk scan failed"),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scm discover failed"),
+				GetModulesErr: errors.New("scm discover failed"),
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -713,8 +737,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Nvme: new(ctlpb.ScanNvmeReq),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule(0)},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageResps: []scm.GetfsUsageRetval{
@@ -751,8 +775,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Nvme: new(ctlpb.ScanNvmeReq),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule(0)},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageResps: []scm.GetfsUsageRetval{
@@ -791,8 +815,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Nvme: new(ctlpb.ScanNvmeReq),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule(0)},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageResps: []scm.GetfsUsageRetval{
@@ -842,10 +866,10 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			csCtrlrs: &storage.NvmeControllers{newCtrlr(1), newCtrlr(2)},
 			eCtrlrs:  []*storage.NvmeControllers{{newCtrlr(1)}, {newCtrlr(2)}},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{
+				GetModulesRes: storage.ScmModules{
 					storage.MockScmModule(0),
 				},
-				GetPmemNamespaceRes: storage.ScmNamespaces{
+				GetNamespacesRes: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
