@@ -180,6 +180,10 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 	D_ASSERT(!(ent->ie_dtx_flags & DTE_INVALID));
 
+	/* Skip the DTX entry which leader resides on current target and may be still alive. */
+	if (ent->ie_dtx_flags & DTE_LEADER)
+		return 0;
+
 	/* Skip corrupted entry that will be handled via other special tool. */
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
 		return 0;
