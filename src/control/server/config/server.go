@@ -416,6 +416,24 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
 		cfg.EnableHotplug, cfg.EnableVMD)
 
+	// A config without engines is valid when initially discovering hardware prior to adding
+	// per-engine sections with device allocations.
+	if len(cfg.Engines) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode",
+			build.DataPlaneName, build.ControlPlaneName)
+		cfg.Engines = nil
+		return nil
+	}
+
+	switch {
+	case cfg.Fabric.Provider == "":
+		return FaultConfigNoProvider
+	case cfg.ControlPort <= 0:
+		return FaultConfigBadControlPort
+	case cfg.TelemetryPort < 0:
+		return FaultConfigBadTelemetryPort
+	}
+
 	// Update access point addresses with control port if port is not supplied.
 	newAPs := make([]string, 0, len(cfg.AccessPoints))
 	for _, ap := range cfg.AccessPoints {
@@ -431,29 +449,11 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 	}
 	cfg.AccessPoints = newAPs
 
-	// A config without engines is valid when initially discovering hardware prior to adding
-	// per-engine sections with device allocations.
-	if len(cfg.Engines) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode",
-			build.DataPlaneName, build.ControlPlaneName)
-		cfg.Engines = nil
-		return nil
-	}
-
 	switch {
 	case len(cfg.AccessPoints) < 1:
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
-	}
-
-	switch {
-	case cfg.Fabric.Provider == "":
-		return FaultConfigNoProvider
-	case cfg.ControlPort <= 0:
-		return FaultConfigBadControlPort
-	case cfg.TelemetryPort < 0:
-		return FaultConfigBadTelemetryPort
 	}
 
 	cfgHasBdevs := false
