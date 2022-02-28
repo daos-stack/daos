@@ -7,7 +7,7 @@
 from dfuse_test_base import DfuseTestBase
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from job_manager_utils import Mpirun, Orterun
 
 

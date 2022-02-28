@@ -20,7 +20,8 @@ from ClusterShell.NodeSet import NodeSet
 
 from fault_config_utils import FaultInjection
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
-from command_utils_base import CommandFailure, EnvironmentVariables
+from command_utils_base import EnvironmentVariables
+from exception_utils import CommandFailure, MPILoadError
 from agent_utils import DaosAgentManager, include_local_host
 from dmg_utils import get_dmg_command
 from daos_utils import DaosCommand
@@ -419,7 +420,7 @@ class TestWithoutServers(Test):
         """Set up run before each test."""
         super().setUp()
         if not load_mpi("openmpi"):
-            self.fail("Failed to load openmpi")
+            raise MPILoadError("openmpi")
 
         self.orterun = find_executable('orterun')
         if self.orterun is None:
