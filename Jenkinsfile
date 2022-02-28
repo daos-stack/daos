@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth */
+/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -50,29 +50,31 @@ void job_step_update(def value) {
 }
 
 // For master, this is just some wildly high number
-next_version = "1000"
+String next_version = '1000'
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
-def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
+String sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (!env.BRANCH_NAME.startsWith("weekly-testing") &&
-     !env.BRANCH_NAME.startsWith("release/") &&
-     env.BRANCH_NAME != "master")) {
+    (!env.BRANCH_NAME.startsWith('weekly-testing') &&
+     !env.BRANCH_NAME.startsWith('release/') &&
+     !env.BRANCH_NAME.startsWith('ci-') &&
+     env.BRANCH_NAME != 'master')) {
    currentBuild.result = 'SUCCESS'
    return
-}
+     }
 
 // The docker agent setup and the provisionNodes step need to know the
 // UID that the build agent is running under.
 cached_uid = 0
-def getuid() {
-    if (cached_uid == 0)
+Integer getuid() {
+    if (cached_uid == 0) {
         cached_uid = sh(label: 'getuid()',
-                        script: "id -u",
+                        script: 'id -u',
                         returnStdout: true).trim()
+    }
     return cached_uid
 }
 
@@ -80,14 +82,15 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
+        /* groovylint-disable-next-line AddEmptyString */
         cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' )
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
-        SSH_KEY_ARGS = "-ici_key"
+        SSH_KEY_ARGS = '-ici_key'
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
@@ -104,6 +107,7 @@ pipeline {
 
     parameters {
         string(name: 'BuildPriority',
+               /* groovylint-disable-next-line UnnecessaryGetter */
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
@@ -111,7 +115,8 @@ pipeline {
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'BuildType',
                defaultValue: '',
-               description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  Defaults to release on an RC or dev otherwise.')
+               description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
+                            'Defaults to release on an RC or dev otherwise.')
         string(name: 'TestRepeat',
                defaultValue: '',
                description: 'Test-repeat to use for this run.  Specifies the ' +
@@ -167,9 +172,16 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Memcheck CI tests')
+        booleanParam(name: 'CI_FI_el8_TEST',
+                     defaultValue: true,
+                     description: 'Run the Fault Injection on EL 8 CI tests')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
+        booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
+                     defaultValue: false,
+                     description: 'Run the functional CentOS 8 CI tests' +
+                                  ' with Valgrind')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
                      description: 'Run the functional EL 8 CI tests')
@@ -214,13 +226,25 @@ pipeline {
         string(name: 'CI_PROVISIONING_POOL',
                defaultValue: '',
                description: 'The pool of images to provision test nodes from')
+        // TODO: add parameter support for per-distro CI_PR_REPOS
         string(name: 'CI_PR_REPOS',
                defaultValue: '',
                description: 'Repos to add to the build and test ndoes')
-        // TODO: add parameter support for per-distro CI_PR_REPOS
+        string(name: 'CI_BUILD_DESCRIPTION',
+               defaultValue: '',
+               description: 'A description of the build')
     }
 
     stages {
+        stage('Set Description') {
+            steps {
+                script {
+                    if (params.CI_BUILD_DESCRIPTION) {
+                        buildDescription params.CI_BUILD_DESCRIPTION
+                    }
+                }
+            }
+        }
         stage('Get Commit Message') {
             steps {
                 script {
@@ -251,16 +275,19 @@ pipeline {
                 stage('Used Required Git Hooks') {
                     steps {
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
-                                   message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
+                                   message: 'PR did not get committed with required git hooks.  ' +
+                                            'Please see utils/githooks/README.md.') {
                             sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
-                                   echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                                   echo 'PR did not get committed with required git hooks.  ' +
+                                        'Please see utils/githooks/README.md.'
                                    exit 1
                                 fi'''
                         }
                     }
                     post {
                         unsuccessful {
-                            echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                            echo 'PR did not get committed with required git hooks.  ' +
+                                 'Please see utils/githooks/README.md.'
                         }
                     }
                 } // stage('Used Required Git Hooks')
@@ -290,13 +317,13 @@ pipeline {
         stage('Pre-build') {
             when {
                 beforeAgent true
-                expression { ! skipStage() }
+                expression { !skipStage() }
             }
             parallel {
                 stage('checkpatch') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -309,17 +336,18 @@ pipeline {
                     steps {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:" +
-                                                  "*.pb-c.[ch]:" +
-                                                  "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
-                                                  "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
-                                                  "src/client/java/daos-java/src/main/native/include/daos_jni_common.h:" +
-                                                  "*.crt:" +
-                                                  "*.pem:" +
-                                                  "*_test.go:" +
-                                                  "src/cart/_structures_from_macros_.h:" +
-                                                  "src/tests/ftest/*.patch:" +
-                                                  "src/tests/ftest/large_stdout.txt"
+                                   ignored_files: 'src/control/vendor/*:' +
+                                                  '*.pb-c.h:' +
+                                                  'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
+                                                  'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
+                                                  /* groovylint-disable-next-line LineLength */
+                                                  'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
+                                                  '*.crt:' +
+                                                  '*.pem:' +
+                                                  '*_test.go:' +
+                                                  'src/cart/_structures_from_macros_.h:' +
+                                                  'src/tests/ftest/*.patch:' +
+                                                  'src/tests/ftest/large_stdout.txt'
                     }
                     post {
                         always {
@@ -356,7 +384,7 @@ pipeline {
                 stage('Python Bandit check') {
                     when {
                       beforeAgent true
-                      expression { ! skipStage() }
+                      expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -389,18 +417,18 @@ pipeline {
             //failFast true
             when {
                 beforeAgent true
-                expression { ! skipStage() }
+                expression { !skipStage() }
             }
             parallel {
                 stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--cap-add=SYS_ADMIN'
@@ -431,12 +459,12 @@ pipeline {
                 stage('Build RPM on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--cap-add=SYS_ADMIN'
@@ -467,12 +495,12 @@ pipeline {
                 stage('Build DEB on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.ubuntu.20.04'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--cap-add=SYS_ADMIN'
@@ -503,7 +531,7 @@ pipeline {
                 stage('Build on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -524,9 +552,9 @@ pipeline {
                     }
                     post {
                         unsuccessful {
-                            sh """if [ -f config.log ]; then
+                            sh '''if [ -f config.log ]; then
                                       mv config.log config.log-centos7-gcc
-                                  fi"""
+                                  fi'''
                             archiveArtifacts artifacts: 'config.log-centos7-gcc',
                                              allowEmptyArchive: true
                         }
@@ -538,7 +566,7 @@ pipeline {
                 stage('Build on CentOS 7 Bullseye') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -560,9 +588,9 @@ pipeline {
                     }
                     post {
                         unsuccessful {
-                            sh """if [ -f config.log ]; then
+                            sh '''if [ -f config.log ]; then
                                       mv config.log config.log-centos7-covc
-                                  fi"""
+                                  fi'''
                             archiveArtifacts artifacts: 'config.log-centos7-covc',
                                              allowEmptyArchive: true
                         }
@@ -574,7 +602,7 @@ pipeline {
                 stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -584,19 +612,19 @@ pipeline {
                                                                 parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15" +
-                                                " --build-arg COMPILER=icc"
+                                                ' --build-arg COMPILER=icc'
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
-                                   scons_args: sconsFaultsArgs() + " PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
+                                   scons_args: sconsFaultsArgs() + ' PREFIX=/opt/daos TARGET_TYPE=release',
+                                   build_deps: 'no'
                     }
                     post {
                         unsuccessful {
-                            sh """if [ -f config.log ]; then
+                            sh '''if [ -f config.log ]; then
                                       mv config.log config.log-leap15-intelc
-                                  fi"""
+                                  fi'''
                             archiveArtifacts artifacts: 'config.log-leap15-intelc',
                                              allowEmptyArchive: true
                         }
@@ -610,13 +638,13 @@ pipeline {
         stage('Unit Tests') {
             when {
                 beforeAgent true
-                expression { ! skipStage() }
+                expression { !skipStage() }
             }
             parallel {
                 stage('Unit Test') {
                     when {
                       beforeAgent true
-                      expression { ! skipStage() }
+                      expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -627,7 +655,7 @@ pipeline {
                                  inst_rpms: unitPackages()
                     }
                     post {
-                      always {
+                        always {
                             unitTestPost artifacts: ['unit_test_logs/*']
                             job_status_update()
                         }
@@ -636,7 +664,7 @@ pipeline {
                 stage('NLT') {
                     when {
                       beforeAgent true
-                      expression { ! skipStage() }
+                      expression { !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -648,7 +676,7 @@ pipeline {
                                  inst_rpms: unitPackages()
                     }
                     post {
-                      always {
+                        always {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
@@ -657,7 +685,7 @@ pipeline {
                                          failOnError: false,
                                          ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
-                                         name: "NLT server leaks",
+                                         name: 'NLT server leaks',
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
@@ -669,7 +697,7 @@ pipeline {
                 stage('Unit Test Bullseye') {
                     when {
                       beforeAgent true
-                      expression { ! skipStage() }
+                      expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -696,7 +724,7 @@ pipeline {
                 stage('Unit Test with memcheck') {
                     when {
                       beforeAgent true
-                      expression { ! skipStage() }
+                      expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -721,13 +749,13 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                expression { ! skipStage() }
+                expression { !skipStage() }
             }
             parallel {
                 stage('Coverity on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -742,14 +770,16 @@ pipeline {
                         }
                     }
                     steps {
-                        sconsBuild coverity: "daos-stack/daos",
+                        sconsBuild coverity: 'daos-stack/daos',
                                    parallel_build: parallelBuild()
                     }
                     post {
                         success {
+                            /* groovylint-disable-next-line DuplicateMapLiteral */
                             coverityPost condition: 'success'
                         }
                         unsuccessful {
+                            /* groovylint-disable-next-line DuplicateMapLiteral */
                             coverityPost condition: 'unsuccessful'
                         }
                         cleanup {
@@ -760,14 +790,14 @@ pipeline {
                 stage('Functional on EL 8 with Valgrind') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -780,14 +810,14 @@ pipeline {
                 stage('Functional on EL 8') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -800,14 +830,14 @@ pipeline {
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -820,14 +850,14 @@ pipeline {
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -840,7 +870,7 @@ pipeline {
                 stage('Scan EL 8 RPMs') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -859,7 +889,7 @@ pipeline {
                 stage('Scan Leap 15 RPMs') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -878,7 +908,7 @@ pipeline {
                 stage('Fault injection testing') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -892,10 +922,10 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: true,
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
-                                   build_deps: "no"
-                        sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
-                            label: 'Fault injection testing using NLT')
+                                   scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
+                                   build_deps: 'no'
+                        sh label: 'Fault injection testing using NLT',
+                           script: './utils/docker_nlt.sh --class-name centos7.fault-injection fi'
                     }
                     post {
                         always {
@@ -933,25 +963,25 @@ pipeline {
             }
             steps {
                 storagePrepTest inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi")
+                                inst_rpms: functionalPackages(1, next_version,
+                                                              'client-tests-openmpir')
             }
             post {
                 cleanup {
                     job_status_update()
                 }
-
             }
         } // stage('Test Storage Prep')
         stage('Test Hardware') {
             when {
                 beforeAgent true
-                expression { ! skipStage() }
+                expression { !skipStage() }
             }
             parallel {
                 stage('Functional Hardware Small') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
@@ -959,7 +989,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -972,7 +1002,7 @@ pipeline {
                 stage('Functional Hardware Medium') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
@@ -980,9 +1010,9 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
-                   }
+                    }
                     post {
                         always {
                             functionalTestPostV2()
@@ -993,7 +1023,7 @@ pipeline {
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        expression { !skipStage() }
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
@@ -1001,7 +1031,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -1013,12 +1043,12 @@ pipeline {
                 } // stage('Functional_Hardware_Large')
             } // parallel
         } // stage('Test Hardware')
-        stage ('Test Report') {
+        stage('Test Report') {
             parallel {
                 stage('Bullseye Report') {
                     when {
                       beforeAgent true
-                      expression { ! skipStage() }
+                      expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
