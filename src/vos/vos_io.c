@@ -1169,8 +1169,10 @@ stop_check(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod, int *rc,
 	if (*rc != -DER_NONEXIST)
 		return true;
 
-	if (vos_dtx_hit_inprogress())
+	if (vos_dtx_hit_inprogress()) {
+		*rc = -DER_INPROGRESS;
 		return true;
+	}
 
 	if (ioc->ic_check_existence)
 		goto check;
@@ -2114,13 +2116,12 @@ akey_update_begin(struct vos_io_context *ioc)
 		media = vos_policy_media_select(vos_cont2pool(ioc->ic_cont),
 					 iod->iod_type, size, VOS_IOS_GENERIC);
 
-		recx_csum = (iod_csums != NULL) ? &iod_csums[i] : NULL;
-
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			rc = vos_reserve_single(ioc, media, size);
 		} else {
 			daos_size_t csum_len;
 
+			recx_csum = recx_csum_at(iod_csums, i, iod);
 			csum_len = recx_csum_len(&iod->iod_recxs[i], recx_csum,
 						 iod->iod_size);
 			rc = vos_reserve_recx(ioc, media, size, recx_csum,

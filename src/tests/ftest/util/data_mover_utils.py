@@ -320,7 +320,7 @@ class FsCopy():
         self.log.info("Starting daos filesystem copy")
 
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
-	    preserve_props=self.preserve_props)
+                                             preserve_props=self.preserve_props)
 
 class ContClone():
     """Class defining an object of type ContClone.
