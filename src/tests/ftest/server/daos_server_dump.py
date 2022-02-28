@@ -27,12 +27,14 @@ class DaosServerDumpTest(TestWithServers):
         self.setup_start_agents = False
 
     def tearDown(self):
-        # pylint: disable=unused-private-member
         """Tear down after each test case."""
         super().tearDown()
 
         # force test status !!
-        self.__status = 'PASS'
+        # use mangling trick described at
+        # https://stackoverflow.com/questions/3385317/private-variables-and-methods-in-python
+        # to do so
+        self._Test__status = 'PASS'
 
         # DAOS-1452 may need to check for one file per engine...
         ret_codes = pcmd(self.hostlist_servers, r"ls /tmp/daos_dump*.txt")
@@ -45,7 +47,7 @@ class DaosServerDumpTest(TestWithServers):
             print(
                 "no ULT stacks dump found on following hosts: {}".format(
                 ", ".join(failed)))
-            self.__status = 'FAIL'
+            self._Test__status = 'FAIL'
 
     def test_daos_server_dump_basic(self):
         """JIRA ID: DAOS-1452.
@@ -84,6 +86,7 @@ class DaosServerDumpTest(TestWithServers):
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_error
         """
 
+        self.log.info("Forcing test error!")
         self.error()
 
     def test_daos_server_dump_on_fail(self):
@@ -97,6 +100,7 @@ class DaosServerDumpTest(TestWithServers):
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_fail
         """
 
+        self.log.info("Forcing test failure!")
         self.fail()
 
     def test_daos_server_dump_on_timeout(self):
@@ -110,6 +114,7 @@ class DaosServerDumpTest(TestWithServers):
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_timeout
         """
 
+        self.log.info("Sleeping to trigger test timeout!")
         time.sleep(30)
 
     def test_daos_server_dump_on_unexpected_engine_status(self):
@@ -123,6 +128,7 @@ class DaosServerDumpTest(TestWithServers):
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_unexpected_engine_status
         """
 
-        # set stopped servers state to make teardown unhappy
+        self.log.info("Forcing servers expected state to make teardown unhappy!")
+        # set stopped servers expected state to make teardown unhappy
         self.server_managers[0].update_expected_states(
             None, ["stopped", "excluded", "errored"])

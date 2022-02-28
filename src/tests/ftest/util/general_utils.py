@@ -667,7 +667,7 @@ def convert_list(value, separator=","):
 
 
 def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
-    """Signal the engines on each hosts tog their ULT stacks dump.
+    """Signal the engines on each hosts to generate their ULT stacks dump.
 
     Args:
         hosts (list): hosts on which to signal the engines
