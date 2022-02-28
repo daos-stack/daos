@@ -54,7 +54,7 @@ distro_custom() {
         # Need to remove the upstream [debuginfo] repos
         # But need to have the files present so that re-installation is blocked
         for file in /etc/yum.repos.d/{Rocky-Debuginfo,epel{,{,-testing}-modular}}.repo; do
-            true > $file 
+            true > $file
         done
 
         # add local debuginfo repos

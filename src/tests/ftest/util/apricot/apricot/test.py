@@ -18,7 +18,8 @@ from ClusterShell.NodeSet import NodeSet
 
 from agent_utils import DaosAgentManager, include_local_host
 from cart_ctl_utils import CartCtl
-from command_utils_base import CommandFailure, EnvironmentVariables
+from exception_utils import CommandFailure, MPILoadError
+from command_utils_base import EnvironmentVariables
 from daos_utils import DaosCommand
 from distro_utils import detect
 from distutils.spawn import find_executable
@@ -417,7 +418,7 @@ class TestWithoutServers(Test):
         """Set up run before each test."""
         super().setUp()
         if not load_mpi("openmpi"):
-            self.fail("Failed to load openmpi")
+            raise MPILoadError("openmpi")
 
         self.orterun = find_executable('orterun')
         if self.orterun is None:
