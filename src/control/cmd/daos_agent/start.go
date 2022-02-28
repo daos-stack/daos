@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 const (
@@ -39,7 +39,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	sockPath := filepath.Join(cmd.cfg.RuntimeDir, agentSockName)
 	cmd.log.Debugf("Full socket path is now: %s", sockPath)
 
-	drpcServer, err := drpc.NewDomainSocketServer(cmd.log, sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(ctx, cmd.log, sockPath)
 	if err != nil {
 		cmd.log.Errorf("Unable to create socket server: %v", err)
 		return err
@@ -61,6 +61,18 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 	defer hwprovFini()
 
+	netCtx, err := netdetect.Init(context.Background())
+	defer netdetect.CleanUp(netCtx)
+	if err != nil {
+		cmd.log.Errorf("Unable to initialize netdetect services")
+		return err
+	}
+
+	numaAware := netdetect.HasNUMA(netCtx)
+	if !numaAware {
+		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
+	}
+
 	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 
@@ -79,18 +91,12 @@ func (cmd *startCmd) Execute(_ []string) error {
 		ctlInvoker: cmd.ctlInvoker,
 		attachInfo: newAttachInfoCache(cmd.log, aicEnabled),
 		fabricInfo: fabricCache,
-		numaGetter: hwprov.DefaultProcessNUMAProvider(cmd.log),
+		numaAware:  numaAware,
+		netCtx:     netCtx,
 		monitor:    procmon,
 	})
 
-	// Cache hwloc data in context on startup, since it'll be used extensively at runtime.
-	hwlocCtx, err := hwloc.CacheContext(ctx, cmd.log)
-	if err != nil {
-		return err
-	}
-	defer hwloc.Cleanup(hwlocCtx)
-
-	err = drpcServer.Start(hwlocCtx)
+	err = drpcServer.Start()
 	if err != nil {
 		cmd.log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
 		return err
@@ -123,6 +129,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		}
 	}()
 	<-finish
+	drpcServer.Shutdown()
 
 	cmd.log.Debugf("shutdown complete in %s", time.Since(shutdownRcvd))
 	return nil

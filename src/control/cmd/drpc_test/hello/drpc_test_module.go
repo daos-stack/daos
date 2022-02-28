@@ -7,8 +7,6 @@
 package hello
 
 import (
-	"context"
-	"errors"
 	"fmt"
 
 	"google.golang.org/protobuf/proto"
@@ -44,9 +42,9 @@ const (
 type HelloModule struct{}
 
 //HandleCall is the handler for calls to the Hello module
-func (m HelloModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
+func (m HelloModule) HandleCall(session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
 	if method != methodGreeting {
-		return nil, errors.New("attempt to call unregistered function")
+		return nil, fmt.Errorf("Attempt to call unregistered function")
 	}
 
 	helloMsg := &Hello{}

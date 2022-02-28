@@ -202,7 +202,7 @@ func (s *Provider) getPCIAddress(path string) (*hardware.PCIAddress, error) {
 	return nil, errors.Errorf("unable to parse PCI address from %q", path)
 }
 
-// GetFabricInterfaces harvests fabric interfaces from sysfs.
+// GetFabricInterfaces harvests the CXI fabric interfaces from sysfs.
 func (s *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInterfaceSet, error) {
 	if s == nil {
 		return nil, errors.New("sysfs provider is nil")

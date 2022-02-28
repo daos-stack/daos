@@ -266,10 +266,6 @@ func (srv *server) addEngines(ctx context.Context) error {
 		return err
 	}
 
-	if len(srv.cfg.Engines) == 0 {
-		return nil
-	}
-
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {

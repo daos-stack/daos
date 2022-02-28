@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,7 +43,7 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 						      ie->ie_parent,
 						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 
-		if (rc)
+		if (rc && rc != -ENOENT)
 			DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
 	}
 
@@ -93,8 +93,7 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(out, rc);
 
-	DFUSE_TRA_INFO(newparent, "Renamed '%s' to '%s' in %p",
-		       name, newname, newparent);
+	DFUSE_TRA_DEBUG(newparent, "Renamed '%s' to '%s' in %p", name, newname, newparent);
 
 	/* update moid */
 	dfuse_oid_moved(fs_handle, &moid, parent, name, newparent, newname);

@@ -7,8 +7,6 @@
 package drpc
 
 import (
-	"context"
-
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
@@ -18,7 +16,7 @@ import (
 // Module is an interface that a type must implement to provide the
 // functionality needed by the ModuleService to process dRPC requests.
 type Module interface {
-	HandleCall(context.Context, *Session, Method, []byte) ([]byte, error)
+	HandleCall(*Session, Method, []byte) ([]byte, error)
 	ID() ModuleID
 }
 
@@ -94,7 +92,7 @@ func marshalResponse(sequence int64, status Status, body []byte) ([]byte, error)
 // ProcessMessage is the main entry point into the ModuleService. It accepts a
 // marshaled drpc.Call instance, processes it, calls the handler in the
 // appropriate Module, and marshals the result into the body of a drpc.Response.
-func (r *ModuleService) ProcessMessage(ctx context.Context, session *Session, msgBytes []byte) ([]byte, error) {
+func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byte, error) {
 	msg := &Call{}
 
 	err := proto.Unmarshal(msgBytes, msg)
@@ -111,7 +109,7 @@ func (r *ModuleService) ProcessMessage(ctx context.Context, session *Session, ms
 	if err != nil {
 		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_METHOD, nil)
 	}
-	respBody, err := module.HandleCall(ctx, session, method, msg.GetBody())
+	respBody, err := module.HandleCall(session, method, msg.GetBody())
 	if err != nil {
 		r.log.Errorf("HandleCall for %s:%s failed: %s\n", module.ID().String(), method.String(), err)
 		return marshalResponse(msg.GetSequence(), ErrorToStatus(err), nil)
