@@ -188,7 +188,7 @@ func NewPCIAddress(addr string) (*PCIAddress, error) {
 	}, nil
 }
 
-// MustNewPCIAddress creates a new PCIAddress from input string,
+// MustNewPCIAddressSet creates a new PCIAddressSet from input string,
 // which must be valid, otherwise a panic will occur.
 func MustNewPCIAddress(addr string) *PCIAddress {
 	pa, err := NewPCIAddress(addr)
@@ -348,21 +348,6 @@ func (pas *PCIAddressSet) Difference(in *PCIAddressSet) *PCIAddressSet {
 	return difference
 }
 
-// HasVMD returns true if any of the addresses in set is for a VMD backing device.
-func (pas *PCIAddressSet) HasVMD() bool {
-	if pas == nil {
-		return false
-	}
-
-	for _, inAddr := range pas.Addresses() {
-		if inAddr.IsVMDBackingAddress() {
-			return true
-		}
-	}
-
-	return false
-}
-
 // BackingToVMDAddresses converts all VMD backing device PCI addresses (with the VMD address
 // encoded in the domain component of the PCI address) in set back to the PCI address of the VMD
 // e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
@@ -399,23 +384,12 @@ func (pas *PCIAddressSet) BackingToVMDAddresses(log logging.Logger) (*PCIAddress
 
 // NewPCIAddressSet takes a variable number of strings and attempts to create an address set.
 func NewPCIAddressSet(addrs ...string) (*PCIAddressSet, error) {
-	as := &PCIAddressSet{}
-	if err := as.AddStrings(addrs...); err != nil {
+	al := &PCIAddressSet{}
+	if err := al.AddStrings(addrs...); err != nil {
 		return nil, err
 	}
 
-	return as, nil
-}
-
-// MustNewPCIAddressSet creates a new PCIAddressSet from input strings,
-// which must be valid, otherwise a panic will occur.
-func MustNewPCIAddressSet(addrs ...string) *PCIAddressSet {
-	as, err := NewPCIAddressSet(addrs...)
-	if err != nil {
-		panic(err)
-	}
-
-	return as
+	return al, nil
 }
 
 // NewPCIAddressSetFromString takes a space-separated string and attempts to create an address set.
