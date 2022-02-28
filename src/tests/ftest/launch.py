@@ -31,7 +31,7 @@ ET.SubElement = SubElement
 ET.tostring = tostring
 
 
-from avocado.utils.distro import detect
+from distro_utils import detect
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
