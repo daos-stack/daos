@@ -105,7 +105,6 @@ const (
 	ClientConnectionClosed
 	ClientFormatRunningSystem
 	ClientRpcTimeout
-	ClientConfigVMDImbalance
 )
 
 // server fault codes

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,6 +32,8 @@ const MaxMsgSize = 1 << 17
 type DomainSocketServer struct {
 	log           logging.Logger
 	sockFile      string
+	ctx           context.Context
+	cancelCtx     func()
 	listener      net.Listener
 	service       *ModuleService
 	sessions      map[net.Conn]*Session
@@ -49,9 +51,9 @@ func (d *DomainSocketServer) closeSession(s *Session) {
 
 // listenSession runs the listening loop for a Session. It listens for incoming
 // dRPC calls and processes them.
-func (d *DomainSocketServer) listenSession(ctx context.Context, s *Session) {
+func (d *DomainSocketServer) listenSession(s *Session) {
 	for {
-		if err := s.ProcessIncomingMessage(ctx); err != nil {
+		if err := s.ProcessIncomingMessage(); err != nil {
 			d.closeSession(s)
 			break
 		}
@@ -60,9 +62,9 @@ func (d *DomainSocketServer) listenSession(ctx context.Context, s *Session) {
 
 // Listen listens for incoming connections on the UNIX domain socket and
 // creates individual sessions for each one.
-func (d *DomainSocketServer) Listen(ctx context.Context) {
+func (d *DomainSocketServer) Listen() {
 	go func() {
-		<-ctx.Done()
+		<-d.ctx.Done()
 		d.log.Debug("Quitting listener")
 		d.listener.Close()
 	}()
@@ -71,7 +73,7 @@ func (d *DomainSocketServer) Listen(ctx context.Context) {
 		conn, err := d.listener.Accept()
 		if err != nil {
 			// If we're shutting down anyhow, don't print connection errors.
-			if ctx.Err() == nil {
+			if d.ctx.Err() == nil {
 				d.log.Errorf("%s: failed to accept connection: %v", d.sockFile, err)
 			}
 			return
@@ -81,12 +83,12 @@ func (d *DomainSocketServer) Listen(ctx context.Context) {
 		d.sessionsMutex.Lock()
 		d.sessions[conn] = c
 		d.sessionsMutex.Unlock()
-		go d.listenSession(ctx, c)
+		go d.listenSession(c)
 	}
 }
 
 // Start sets up the dRPC server socket and kicks off the listener goroutine.
-func (d *DomainSocketServer) Start(ctx context.Context) error {
+func (d *DomainSocketServer) Start() error {
 	// Just in case an old socket file is still lying around
 	if err := syscall.Unlink(d.sockFile); err != nil && !os.IsNotExist(err) {
 		return errors.Wrapf(err, "Unable to unlink %s", d.sockFile)
@@ -105,8 +107,14 @@ func (d *DomainSocketServer) Start(ctx context.Context) error {
 		return errors.Wrapf(err, "Unable to set permissions on %s", d.sockFile)
 	}
 
-	go d.Listen(ctx)
+	go d.Listen()
 	return nil
+}
+
+// Shutdown places the state of the server to shutdown which terminates the
+// Listen go routine and starts the cleanup of all open connections.
+func (d *DomainSocketServer) Shutdown() {
+	d.cancelCtx()
 }
 
 // RegisterRPCModule takes a Module and associates it with the given
@@ -117,17 +125,20 @@ func (d *DomainSocketServer) RegisterRPCModule(mod Module) {
 
 // NewDomainSocketServer returns a new unstarted instance of a
 // DomainSocketServer for the specified unix domain socket path.
-func NewDomainSocketServer(log logging.Logger, sock string) (*DomainSocketServer, error) {
+func NewDomainSocketServer(ctx context.Context, log logging.Logger, sock string) (*DomainSocketServer, error) {
 	if sock == "" {
 		return nil, errors.New("Missing Argument: sockFile")
 	}
 	service := NewModuleService(log)
 	sessions := make(map[net.Conn]*Session)
+	dssCtx, cancelCtx := context.WithCancel(ctx)
 	return &DomainSocketServer{
-		log:      log,
-		sockFile: sock,
-		service:  service,
-		sessions: sessions}, nil
+		log:       log,
+		sockFile:  sock,
+		ctx:       dssCtx,
+		cancelCtx: cancelCtx,
+		service:   service,
+		sessions:  sessions}, nil
 }
 
 // Session represents an individual client connection to the Domain Socket Server.
@@ -138,7 +149,7 @@ type Session struct {
 
 // ProcessIncomingMessage listens for an incoming message on the session,
 // calls its handler, and sends the response.
-func (s *Session) ProcessIncomingMessage(ctx context.Context) error {
+func (s *Session) ProcessIncomingMessage() error {
 	buffer := make([]byte, MaxMsgSize)
 
 	bytesRead, err := s.Conn.Read(buffer)
@@ -148,7 +159,7 @@ func (s *Session) ProcessIncomingMessage(ctx context.Context) error {
 		return err
 	}
 
-	response, err := s.mod.ProcessMessage(ctx, s, buffer[:bytesRead])
+	response, err := s.mod.ProcessMessage(s, buffer[:bytesRead])
 	if err != nil {
 		// The only way we hit here is if we fail to marshal the module's
 		// response. Should not actually be possible. ProcessMessage
