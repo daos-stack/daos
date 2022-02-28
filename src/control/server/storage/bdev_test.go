@@ -70,39 +70,23 @@ func Test_NvmeDevState(t *testing.T) {
 				"unexpected IsNormal() result")
 			common.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
 				"unexpected IsFaulty() result")
-			common.AssertEqual(t, tc.expStr, tc.state.String(),
+			common.AssertEqual(t, tc.expStr, tc.state.StatusString(),
 				"unexpected status string")
 
-			stateNew := NvmeDevStateFromString(tc.state.String())
+			stateNew, err := NvmeDevStateFromString(tc.state.StatusString())
+			if err != nil {
+				t.Fatal(err)
+			}
 
-			common.AssertEqual(t, tc.state.String(), stateNew.String(),
+			common.AssertEqual(t, tc.state.StatusString(), stateNew.StatusString(),
 				fmt.Sprintf("expected string %s to yield state %s",
-					tc.state.String(), stateNew.String()))
+					tc.state.StatusString(), stateNew.StatusString()))
 		})
 	}
 }
 
 func Test_NvmeDevStateFromString_invalid(t *testing.T) {
-	for name, tc := range map[string]struct {
-		inStr    string
-		expState NvmeDevState
-		expStr   string
-	}{
-		"empty string": {
-			expState: NvmeStateUnknown,
-			expStr:   "UNKNOWN",
-		},
-		"unrecognized string": {
-			inStr:    "BAD",
-			expState: NvmeStateUnknown,
-			expStr:   "UNKNOWN",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			state := NvmeDevStateFromString(tc.inStr)
-
-			common.AssertEqual(t, tc.expState, state, "unexpected state")
-			common.AssertEqual(t, tc.expStr, state.String(), "unexpected states string")
-		})
+	if _, err := NvmeDevStateFromString("BAR"); err == nil {
+		t.Fatal("should fail")
 	}
 }
