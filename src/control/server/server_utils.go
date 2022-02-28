@@ -268,13 +268,9 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
-		// Return error if fault code is for BdevNotFound.
-		if storage.FaultBdevNotFound().Equals(err) {
-			return nil, err
-		}
-		// Keep going for other scan related failures.
-		srv.log.Errorf("%s\n", errors.Wrap(err, "NVMe Scan Failed"))
-		return &storage.BdevScanResponse{}, nil
+		err = errors.Wrap(err, "NVMe Scan Failed")
+		srv.log.Errorf("%s", err)
+		return nil, err
 	}
 
 	return nvmeScanResp, nil
