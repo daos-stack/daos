@@ -2048,7 +2048,8 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		bmap = krec->kr_bmap;
 		if (bmap & KREC_BF_AGG_FLAG) {
 			/** We got through aggregation without anyone clearing the flag,
-			 *  so we can clear the needed flag */
+			 *  so we can clear the needed flag
+			 */
 			bmap = bmap & ~(KREC_BF_AGG_FLAG | KREC_BF_AGG_NEEDED);
 			rc = umem_tx_add_ptr(umm, &krec->kr_bmap, sizeof(krec->kr_bmap));
 			if (rc == 0)

@@ -311,8 +311,8 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 				return 0;
 			} else if (rc == 2) {
 				/** Entry is skipped removed the key so let's reprobe */
-				D_DEBUG(DB_EPC, "Skipping aggregation for object "DF_UOID", nothing to do\n",
-					DP_UOID(entry->ie_oid));
+				D_DEBUG(DB_EPC, "Skipping aggregation for object "DF_UOID
+					", nothing to do\n", DP_UOID(entry->ie_oid));
 				*acts |= VOS_ITER_CB_SKIP;
 				inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SKIP);
 				return 0;
@@ -370,8 +370,8 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 				return 0;
 			} else if (rc == 2) {
 				/** Entry is skipped removed the key so let's reprobe */
-				D_DEBUG(DB_EPC, "Skipping aggregation for dkey "DF_KEY", nothing to do\n",
-					DP_KEY(&entry->ie_key));
+				D_DEBUG(DB_EPC, "Skipping aggregation for dkey "DF_KEY
+					", nothing to do\n", DP_KEY(&entry->ie_key));
 				*acts |= VOS_ITER_CB_SKIP;
 				inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SKIP);
 				return 0;
@@ -476,8 +476,8 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 				return 0;
 			} else if (rc == 2) {
 				/** Entry is skipped removed the key so let's reprobe */
-				D_DEBUG(DB_EPC, "Skipping aggregation for akey "DF_KEY", nothing to do\n",
-					DP_KEY(&entry->ie_key));
+				D_DEBUG(DB_EPC, "Skipping aggregation for akey "DF_KEY
+					", nothing to do\n", DP_KEY(&entry->ie_key));
 				*acts |= VOS_ITER_CB_SKIP;
 				inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SKIP);
 				return 0;
