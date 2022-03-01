@@ -445,7 +445,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 ') {
+                stage('Build on CentOS 7') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
