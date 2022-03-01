@@ -553,8 +553,13 @@ int  dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc,
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
-int  dbtree_feats_get(daos_handle_t toh, uint64_t *feats);
-int  dbtree_feats_set(daos_handle_t toh, uint64_t feats);
+
+static inline uint64_t
+dbtree_feats_get(struct btr_root *root)
+{
+	return root->tr_feats;
+}
+int  dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats);
 struct umem_instance *btr_hdl2umm(daos_handle_t toh);
 
 /**

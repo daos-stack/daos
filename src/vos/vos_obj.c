@@ -39,7 +39,6 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund, 
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
 	struct dcs_csum_info	 csum;
-	int			 rc;
 
 	tree_rec_bundle2iov(rbund, &riov);
 
@@ -1937,10 +1936,10 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 	bmap = krec->kr_bmap;
 
 	if (bmap & KREC_BF_AGG_OPT) {
-		if (bmap & KREC_BF_AGG_NEEDED) {
+		if ((bmap & KREC_BF_AGG_NEEDED) == 0) {
 			if (!punched && oiter->it_punched.pr_epc == 0)
 				return 2;
-
+		} else {
 			bmap |= KREC_BF_AGG_FLAG;
 		}
 	}
@@ -1986,6 +1985,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct vos_rec_bundle	 rbund;
 	bool			 delete = false, invisible = false;
 	int			 rc;
+	uint8_t			 bmap;
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
 		  iter->it_type == VOS_ITER_DKEY,
@@ -2032,10 +2032,21 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		}
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
-	} else if (rc == -DER_NONEXIST) {
-		/* Key no longer exists at epoch but isn't empty */
-		invisible = true;
-		rc = 0;
+	} else {
+		if (rc == -DER_NONEXIST) {
+			/* Key no longer exists at epoch but isn't empty */
+			invisible = true;
+			rc = 0;
+		}
+		bmap = krec->kr_bmap;
+		if (bmap & KREC_BF_AGG_FLAG) {
+			/** We got through aggregation without anyone clearing the flag,
+			 *  so we can clear the needed flag */
+			bmap = bmap & ~(KREC_BF_AGG_FLAG | KREC_BF_AGG_NEEDED);
+			rc = umem_tx_add_ptr(umm, &krec->kr_bmap, sizeof(krec->kr_bmap));
+			if (rc == 0)
+				krec->kr_bmap = bmap;
+		}
 	}
 
 end:

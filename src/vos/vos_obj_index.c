@@ -659,6 +659,8 @@ oi_iter_pre_aggregate(daos_handle_t ih)
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	int			 rc;
+	uint64_t		 feats;
+	bool			 punched;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
@@ -672,8 +674,20 @@ oi_iter_pre_aggregate(daos_handle_t ih)
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
-	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
-				 NULL, &oiter->oit_ilog_info))
+	punched = vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
+				      NULL, &oiter->oit_ilog_info);
+
+	feats = dbtree_feats_get(&obj->vo_tree);
+	if (feats & VOS_TREE_AGG_OPT) {
+		if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
+			if (!punched)
+				return 2;
+		} else {
+			feats |= VOS_TREE_AGG_FLAG;
+		}
+	}
+
+	if (!punched && feats == dbtree_feats_get(&obj->vo_tree))
 		return 0;
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */

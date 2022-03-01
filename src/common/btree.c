@@ -2155,49 +2155,19 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 }
 
 /**
- * Retrieve the tree feats
+ * Set the tree feats.  Must be in tx.
  *
- * \param toh[in]	Tree open handle
- * \param feats[out]	Retrieved feats
- *
- * \return 0 on success
- */
-int
-dbtree_feats_get(daos_handle_t toh, uint64_t *feats)
-{
-	struct btr_context	*tcx;
-	struct btr_root		*root;
-	int			 rc;
-
-	tcx = btr_hdl2tcx(toh);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
-
-	root = tcx->tc_tins.ti_root;
-
-	return root->tr_feats;
-}
-
-/**
- * Set the tree feats.
- *
- * \param toh[in]	Tree open handle
+ * \param root[in]	Tree roo
+ * \param umm[in]	umem instance
  * \param feats[in]	feats to set
  *
  * \return 0 on success
  */
 int
-dbtree_feats_set(daos_handle_t toh, uint64_t feats)
+dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats)
 {
-	struct btr_context	*tcx;
-	struct btr_root		*root;
 	int			 rc;
 
-	tcx = btr_hdl2tcx(toh);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
-
-	root = tcx->tc_tins.ti_root;
 	if (root->tr_feats == feats)
 		return 0;
 
@@ -2206,16 +2176,12 @@ dbtree_feats_set(daos_handle_t toh, uint64_t feats)
 		return -DER_INVAL;
 	}
 
-	rc = btr_tx_begin(tcx);
-	if (rc != 0)
-		return rc;
-
-	rc = umem_tx_add_ptr(btr_umm(tcx), &root->tr_feats, sizeof(root->tr_feats));
+	rc = umem_tx_add_ptr(umm, &root->tr_feats, sizeof(root->tr_feats));
 
 	if (rc == 0)
 		root->tr_feats = tcx->tc_feats = feats;
 
-	return btr_tx_end(tcx, rc);
+	return rc;
 }
 
 /**
