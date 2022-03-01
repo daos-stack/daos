@@ -211,7 +211,7 @@ class IorTestBase(DfuseTestBase):
 
         """
         return get_job_manager(self, "Mpirun", self.ior_cmd, self.subprocess, "mpich")
- 
+
     def check_subprocess_status(self, operation="write"):
         """Check subprocess status."""
         if operation == "write":
