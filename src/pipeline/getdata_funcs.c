@@ -222,3 +222,44 @@ int getdata_func_const_raw(struct filter_part_run_t *args)
 	args->data_len_out    = args->parts[args->part_idx].data_len;
 	return 0;
 }
+
+int getdata_func_const_st(struct filter_part_run_t *args)
+{
+	char   *buf;
+	size_t offset;
+	size_t len;
+
+	args->iov_out = args->parts[args->part_idx].iov;
+	buf           = (char *) args->parts[args->part_idx].iov->iov_buf;
+	offset        = args->parts[args->part_idx].data_offset;
+	len           = *((size_t *) &buf[offset]);
+
+	if (len > args->parts[args->part_idx].data_len)
+	{
+		return 1;
+	}
+	args->data_offset_out = offset + sizeof(size_t);
+	args->data_len_out    = len;
+	return 0;
+}
+
+int getdata_func_const_cst(struct filter_part_run_t *args)
+{
+	char   *buf;
+	size_t offset;
+	size_t len;
+
+	args->iov_out = args->parts[args->part_idx].iov;
+	buf           = (char *) args->parts[args->part_idx].iov->iov_buf;
+	offset        = args->parts[args->part_idx].data_offset;
+	buf           = &buf[offset];
+	len           = strlen(buf);
+
+	if (len > args->parts[args->part_idx].data_len)
+	{
+		return 1;
+	}
+	args->data_offset_out = offset;
+	args->data_len_out    = len;
+	return 0;
+}

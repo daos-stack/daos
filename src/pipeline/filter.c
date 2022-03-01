@@ -12,61 +12,62 @@
 #include <daos/common.h>
 
 #define NTYPES 9
-#define TOTALFUNCS 25
 
 static filter_func_t *
-filter_func_ptrs[TOTALFUNCS] = { filter_func_eq,
-				 filter_func_eq_st,
-				 filter_func_ne,
-				 filter_func_ne_st,
-				 filter_func_lt,
-				 filter_func_lt_st,
-				 filter_func_le,
-				 filter_func_le_st,
-				 filter_func_ge,
-				 filter_func_ge_st,
-				 filter_func_gt,
-				 filter_func_gt_st,
-				 filter_func_add,
-				 filter_func_sub,
-				 filter_func_mul,
-				 filter_func_div,
-				 aggr_func_sum,
-				 aggr_func_max,
-				 aggr_func_min,
-				 filter_func_like,
-				 filter_func_isnull,
-				 filter_func_isnotnull,
-				 filter_func_not,
-				 filter_func_and,
-				 filter_func_or };
+filter_func_ptrs[25] = { filter_func_eq,
+			 filter_func_eq_st,
+			 filter_func_ne,
+			 filter_func_ne_st,
+			 filter_func_lt,
+			 filter_func_lt_st,
+			 filter_func_le,
+			 filter_func_le_st,
+			 filter_func_ge,
+			 filter_func_ge_st,
+			 filter_func_gt,
+			 filter_func_gt_st,
+			 filter_func_add,
+			 filter_func_sub,
+			 filter_func_mul,
+			 filter_func_div,
+			 aggr_func_sum,
+			 aggr_func_max,
+			 aggr_func_min,
+			 filter_func_like,
+			 filter_func_isnull,
+			 filter_func_isnotnull,
+			 filter_func_not,
+			 filter_func_and,
+			 filter_func_or };
 
 static filter_func_t *
-getd_func_ptrs[TOTALFUNCS] = { getdata_func_dkey_i1,
-			       getdata_func_dkey_i2,
-			       getdata_func_dkey_i4,
-			       getdata_func_dkey_i8,
-			       getdata_func_dkey_r4,
-			       getdata_func_dkey_r8,
-			       getdata_func_dkey_raw,
-			       getdata_func_dkey_st,
-			       getdata_func_dkey_cst,
-			       getdata_func_akey_i1,
-			       getdata_func_akey_i2,
-			       getdata_func_akey_i4,
-			       getdata_func_akey_i8,
-			       getdata_func_akey_r4,
-			       getdata_func_akey_r8,
-			       getdata_func_akey_raw,
-			       getdata_func_akey_st,
-			       getdata_func_akey_cst,
-			       getdata_func_const_i1,
-			       getdata_func_const_i2,
-			       getdata_func_const_i4,
-			       getdata_func_const_i8,
-			       getdata_func_const_r4,
-			       getdata_func_const_r8,
-			       getdata_func_const_raw };
+getd_func_ptrs[27] = { getdata_func_dkey_i1,
+		       getdata_func_dkey_i2,
+		       getdata_func_dkey_i4,
+		       getdata_func_dkey_i8,
+		       getdata_func_dkey_r4,
+		       getdata_func_dkey_r8,
+		       getdata_func_dkey_raw,
+		       getdata_func_dkey_st,
+		       getdata_func_dkey_cst,
+		       getdata_func_akey_i1,
+		       getdata_func_akey_i2,
+		       getdata_func_akey_i4,
+		       getdata_func_akey_i8,
+		       getdata_func_akey_r4,
+		       getdata_func_akey_r8,
+		       getdata_func_akey_raw,
+		       getdata_func_akey_st,
+		       getdata_func_akey_cst,
+		       getdata_func_const_i1,
+		       getdata_func_const_i2,
+		       getdata_func_const_i4,
+		       getdata_func_const_i8,
+		       getdata_func_const_r4,
+		       getdata_func_const_r8,
+		       getdata_func_const_raw,
+		       getdata_func_const_st,
+		       getdata_func_const_cst };
 
 void
 pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
@@ -332,10 +333,6 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 		}
 		else if (!strncmp(part_type, "DAOS_FILTER_CONST", part_type_s))
 		{
-			if (func_idx > 6)
-			{
-				D_GOTO(exit, rc = -DER_INVAL);
-			}
 			func_idx += NTYPES*2;
 			comp_part->data_offset = 0;
 			comp_part->iov = &filter->parts[*part_idx]->constant[0];
@@ -393,6 +390,7 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 			func_idx++;
 		}
 	}
+
 	comp_part->filter_func = filter_func_ptrs[func_idx];
 
 exit:

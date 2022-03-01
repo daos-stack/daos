@@ -139,5 +139,7 @@ filter_func_t getdata_func_const_i8;
 filter_func_t getdata_func_const_r4;
 filter_func_t getdata_func_const_r8;
 filter_func_t getdata_func_const_raw;
+filter_func_t getdata_func_const_st;
+filter_func_t getdata_func_const_cst;
 
 #endif /* __DAOS_PIPE_INTERNAL_H__ */
