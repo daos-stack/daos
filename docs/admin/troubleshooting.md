@@ -292,12 +292,12 @@ sudo ipcrm -M 0x10242049
 
 ### Errors creating a Pool
 1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
-1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMEM. Next, check the size of the existing pool. Then check that this new pool being created will fit into the remaining disk space.
+1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMem. Next, check the size of the existing pool. Then check that this new pool being created will fit into the remaining disk space.
 
 ### Problems creating a container
 1. Check that the path to daos is your intended binary. It's usually `/usr/bin/daos`.
 1. When the server configuration is changed, it's necessary to restart the agent.
-1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMEM and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
+1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
 1. Check the interface used in the server config (`fabric_iface`) also exists in the client and can communicate with the server.
 1. Check the access_points of the agent config points to the correct server host.
 1. Call `daos pool query` and check that the pool exists and has free space.
@@ -420,9 +420,9 @@ IPMCTL utility is used for Intel® Optane™ persistent memory for managing, dia
 [IPMCTL user guide](https://docs.pmem.io/ipmctl-user-guide/) has more details about the utility.
 
 DAOS user can use the [diagnostic](https://docs.pmem.io/ipmctl-user-guide/debug/run-diagnostic) and
-[show error log](https://docs.pmem.io/ipmctl-user-guide/debug/show-error-log) functionality to debug the PCMEM related issues.
+[show error log](https://docs.pmem.io/ipmctl-user-guide/debug/show-error-log) functionality to debug the PMem related issues.
 
-#### ipmctl show command to get the DIMM ID connected to specific CPU. Example shows Eight NVDIMM is connected to both CPU0 and CPU1.
+#### ipmctl show command to get the DIMM ID connected to specific CPU. Example shows Eight PMem DIMMs are connected to both CPU0 and CPU1.
 ```
 # ipmctl show -topology
  DimmID | MemoryType                  | Capacity    | PhysicalID| DeviceLocator
@@ -446,8 +446,8 @@ DAOS user can use the [diagnostic](https://docs.pmem.io/ipmctl-user-guide/debug/
 ```
 
 #### Run a quick diagnostic test on clean system
-This test will verify the PCMEM health parameters are under acceptable values. It will return the single State indication
-('OK', 'Warning', 'Failed', 'Aborted') based on health information from all the PCMEM modules.
+This test will verify the PMem health parameters are under acceptable values. It will return the single State indication
+('OK', 'Warning', 'Failed', 'Aborted') based on health information from all the PMem modules.
 ```
 #ipmctl start -diagnostic
 ```
@@ -479,7 +479,7 @@ This test will verify the PCMEM health parameters are under acceptable values. I
           Message.1 = The quick health check detected that PMem module 0x0001 is reporting a bad health state Noncritical failure (Package Sparing occurred).
           Message.2 = The quick health check detected that PMem module 0x0001 is reporting that it has no package spares available.
 ```
-#### Run quick diagnostic test on system where PCMEM life remaining percentage is below threshold
+#### Run quick diagnostic test on system where PMem life remaining percentage is below threshold
 ```
 #ipmctl start -diagnostic quick
 --Test = Quick
@@ -557,7 +557,7 @@ Show Error executed successfully
 ```
 ### ndctl
 
-NDCTL is another utility library for managing the PCMEM. The ndctl provides functional used for PCMEM and namespace management,
+NDCTL is another utility library for managing the PMem. The ndctl provides functional used for PMem and namespace management,
 device list, update firmware and more.
 It can detect the media errors and scrub it to avoid accesses that could lead to uncorrectable memory error handling events.
 [NDCTL user guide](https://docs.pmem.io/ndctl-user-guide/) has more details about the utility.
@@ -571,8 +571,8 @@ This utility can be used after ipmctl where name space is already created by ipm
 #### ndctl list command on clean system.
 Please refer the [ndctl-list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list) command guide for more details about the command options.
 
-Total Sixteen PCMEM connected to single system. Eight NVDIMM is connected to single socket (reference "ipmctl show -topology" section under ipmctl). 
-The SCM modules are typically configured in AppDirect interleaved mode. They are thus presented to the operating system as a single PMEM namespace per socket (in fsdax mode).
+Total Sixteen PMem connected to single system. Eight PMem DIMMs are connected to single socket (reference "ipmctl show -topology" section under ipmctl). 
+The SCM modules are typically configured in AppDirect interleaved mode. They are thus presented to the operating system as a single PMem namespace per socket (in fsdax mode).
 
 * -M : Include Media Error
 ```
@@ -607,9 +607,9 @@ Please refer the [ndctl start-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl
 Persistent memory uncorrectable errors are persistent. Unlike volatile memory, if power is lost or an application crashes and restarts, the uncorrectable error will remain on the hardware.
 This can lead to an application getting stuck in an infinite loop on IO operation or it might get crash.
 
-* Ideally to use this scrub check when system is recovered from PCMEM error or when PCMEM was replace and it need to check for any uncorrectable errors.
+* Ideally to use this scrub check when system is recovered from PMem error or when PMem was replace and it need to check for any uncorrectable errors.
 
-**Scrubbing takes time and this command will take longer time (From minutes to hours) based on number of PCMEM on the system and capacity.**
+**Scrubbing takes time and this command will take longer time (From minutes to hours) based on number of PMem on the system and capacity.**
 
 ```
 # ndctl start-scrub
