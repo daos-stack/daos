@@ -77,6 +77,7 @@ struct vos_io_context {
 				 ic_check_existence:1,
 				 ic_remove:1,
 				 ic_skip_fetch:1,
+				 ic_agg_needed:1,
 				 ic_ec:1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
@@ -637,6 +638,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_dedup = ((vos_flags & VOS_OF_DEDUP) != 0);
 	ioc->ic_dedup_verify = ((vos_flags & VOS_OF_DEDUP_VERIFY) != 0);
 	ioc->ic_skip_fetch = ((vos_flags & VOS_OF_SKIP_FETCH) != 0);
+	ioc->ic_agg_needed = 0; /** Will be set if we detect a need for aggregation */
 	ioc->ic_dedup_th = dedup_th;
 	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
 		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
@@ -1659,6 +1661,71 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	return rc;
 }
 
+int
+vos_key_flags_set(struct umem_instance *umm, struct vos_krec_df *krec)
+{
+	int	rc;
+	uint8_t	bmap;
+
+	bmap = krec->kr_bmap;
+	if ((bmap & KREC_BF_AGG_OPT) == 0)
+		return 0;
+
+	if ((bmap & KREC_BF_AGG_NEEDED) == 0)
+		bmap |= KREC_BF_AGG_NEEDED;
+	else if (bmap & KREC_BF_AGG_FLAG)
+		bmap &= ~KREC_BF_AGG_FLAG;
+
+	if (bmap == krec->kr_bmap)
+		return 0;
+
+	rc = umem_tx_add_ptr(umm, &krec->kr_bmap, sizeof(krec->kr_bmap));
+	if (rc == 0)
+		krec->kr_bmap = bmap;
+
+	return rc;
+}
+
+static int
+vos_tree_flags_set(struct umem_instance *umm, struct btr_root *root)
+{
+	uint64_t	feats;
+
+	feats = dbtree_feats_get(root);
+	if ((feats & VOS_TREE_AGG_OPT) == 0)
+		return 0;
+
+	if ((feats & VOS_TREE_AGG_NEEDED) == 0)
+		feats |= VOS_TREE_AGG_NEEDED;
+	else if (feats & VOS_TREE_AGG_FLAG)
+		feats &= ~VOS_TREE_AGG_FLAG;
+
+	return dbtree_feats_set(root, umm, feats, true);
+}
+
+int
+vos_obj_flags_set(struct umem_instance *umm, struct btr_root *obj_root,
+		      struct btr_root *cont_root)
+{
+	int	rc;
+
+	rc = vos_tree_flags_set(umm, obj_root);
+	if (rc == 0)
+		rc = vos_tree_flags_set(umm, cont_root);
+
+	return rc;
+}
+
+static int
+vos_flags_set(struct vos_io_context *ioc)
+{
+	if (!ioc->ic_agg_needed)
+		return 0;
+
+	return vos_obj_flags_set(vos_ioc2umm(ioc), &ioc->ic_obj->obj_df->vo_tree,
+				 &ioc->ic_cont->vc_cont_df->cd_obj_root);
+}
+
 static int
 akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	    uint16_t minor_epc)
@@ -1685,10 +1752,15 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
 			      &krec, &toh, ioc->ic_ts_set);
-	if (rc != 0) {
+	if (rc != 0 && rc != 1) {
 		D_ERROR("akey "DF_KEY" update, key_tree_prepare failed, "DF_RC"\n",
 			DP_KEY(&iod->iod_name), DP_RC(rc));
 		return rc;
+	}
+
+	if (rc == 1) {
+		rc = 0;
+		ioc->ic_agg_needed = 1;
 	}
 
 	if (ioc->ic_ts_set) {
@@ -1771,6 +1843,9 @@ out:
 	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, is_array);
 
+	if (rc == 0 && ioc->ic_agg_needed)
+		rc = vos_key_flags_set(vos_ioc2umm(ioc), krec);
+
 	return rc;
 }
 
@@ -1839,6 +1914,9 @@ out:
 
 release:
 	key_tree_release(ak_toh, false);
+
+	if (rc == 0 && ioc->ic_agg_needed)
+		rc = vos_key_flags_set(vos_ioc2umm(ioc), krec);
 
 	return rc;
 }
@@ -2308,6 +2386,9 @@ abort:
 		if (err == 0)
 			ioc->ic_obj->obj_df->vo_max_write = ioc->ic_epr.epr_hi;
 	}
+
+	if (err == 0)
+		err = vos_flags_set(ioc);
 
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);

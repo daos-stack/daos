@@ -1013,7 +1013,15 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
  out:
 	D_CDEBUG(rc == 0, DB_TRACE, DB_IO, "prepare tree, flags=%x, tclass=%d %d\n",
 		 flags, tclass, rc);
-	return rc;
+
+	if (rc != 0 || tclass != VOS_BTR_AKEY || !(flags & SUBTR_CREATE))
+		return rc;
+
+	/* As a first cut for aggregation detection, just return 1 if it's not the first update.
+	 * This can be improved upon for evtree to take into account actual extent overlap but
+	 * this is a simpler solution for now.
+	 */
+	return created ? 0 : 1;
 }
 
 /** Close the opened trees */
@@ -1112,6 +1120,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			D_GOTO(done, rc);
 		*known_key |= 0x1;
 	}
+
+	rc = vos_key_flags_set(vos_obj2umm(obj), krec);
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 

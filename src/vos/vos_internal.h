@@ -1389,4 +1389,10 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
 }
 
+int
+vos_obj_flags_set(struct umem_instance *umm, struct btr_root *obj_root,
+		      struct btr_root *cont_root);
+int
+vos_key_flags_set(struct umem_instance *umm, struct vos_krec_df *krec);
+
 #endif /* __VOS_INTERNAL_H__ */

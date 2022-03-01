@@ -311,8 +311,11 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 					 VOS_ITER_AKEY);
 	}
 
-	if (rc != 1)
+	if (rc != 1) {
+		/** Otherwise, key_tree_punch will handle it */
+		rc = vos_key_flags_set(vos_cont2umm(obj->obj_cont), krec);
 		goto out;
+	}
 	/** else propagate the punch */
 
 punch_dkey:
@@ -498,6 +501,10 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				if (rc == 0)
 					obj->obj_df->vo_max_write = epr.epr_hi;
 			}
+
+			if (rc == 0)
+				rc = vos_obj_flags_set(vos_cont2umm(cont), &obj->obj_df->vo_tree,
+						       &cont->vc_cont_df->cd_obj_root);
 
 			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 		}
