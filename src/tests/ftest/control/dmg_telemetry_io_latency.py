@@ -340,8 +340,8 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         if errors:
             self.fail("Test FAILED")
 
-
-    def get_initial_io_dtx_committed_metrics(self, metrics_data, test_metrics, transfer_size):
+    def get_initial_io_dtx_committed_metrics(self, metrics_data, test_metrics,
+                                             transfer_size):
         """Get baseline IO dtx metrics before running IOR.
 
         Args:
@@ -377,12 +377,13 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
 
         return metrics
 
-
-    def verify_io_dtx_committed_metrics(self, baseline_data, metrics_data, test_metrics, transfer_size):
+    def verify_io_dtx_committed_metrics(self, baseline_data, metrics_data, test_metrics,
+                                        transfer_size):
         """Verify IO dtx metrics after running IOR.
 
         Args:
-            baseline_data (dict): dictionary of the initial io dtx "committed" metrics before IOR run
+            baseline_data (dict): dictionary of the initial io dtx "committed" metrics
+                                  before IOR run
             metrics_data (dict): dictionary of io dtx "committed" metrics
             test_metrics (dict): io dtx "committed" telemetry metrics
             transfer_size(str): transfer_size used with ior
@@ -405,12 +406,16 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
                     for target in range(self.server_managers[-1].get_config_value("targets")):
                         value = metrics_data[test_metric][host][str(rank)][str(target)]["-"]
                         metrics[test_metric] = metrics[test_metric] + value
-        dtx_value = metrics["engine_io_dtx_committed"] - baseline_data["engine_io_dtx_committed"]
-        self.log.info("committed: %s - %s = %s", metrics["engine_io_dtx_committed"],  baseline_data["engine_io_dtx_committed"], dtx_value)
-        min_value = metrics["engine_io_dtx_committed_min"] - baseline_data["engine_io_dtx_committed_min"]
-        max_value = metrics["engine_io_dtx_committed_max"] - baseline_data["engine_io_dtx_committed_max"]
-        mean_value = metrics["engine_io_dtx_committed_mean"] - baseline_data["engine_io_dtx_committed_mean"]
-        stddev_value = metrics["engine_io_dtx_committed_stddev"] - baseline_data["engine_io_dtx_committed_stddev"]
+        dtx_value = metrics["engine_io_dtx_committed"]
+        dtx_value -= baseline_data["engine_io_dtx_committed"]
+        min_value = metrics["engine_io_dtx_committed_min"]
+        min_value -= baseline_data["engine_io_dtx_committed_min"]
+        max_value = metrics["engine_io_dtx_committed_max"]
+        max_value -= baseline_data["engine_io_dtx_committed_max"]
+        mean_value = metrics["engine_io_dtx_committed_mean"]
+        mean_value -= baseline_data["engine_io_dtx_committed_mean"]
+        stddev_value = metrics["engine_io_dtx_committed_stddev"]
+        stddev_value -= baseline_data["engine_io_dtx_committed_stddev"]
 
         # DTX committed value should be equal to the number of transactions.
         if transfer_size == "512":
@@ -427,8 +432,8 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             self.log.error("engine_io_dtx_committed NOT verified, %s != %s",
                            dtx_value, num_operations)
             status = False
-        if min_value != 1:
-            self.log.error("engine_io_dtx_committed_min != 1")
+        if min_value != 0:
+            self.log.error("engine_io_dtx_committed_min != 0")
             status = False
         if not ((max_value >= dtx_value >= min_value) and (
                 max_value > mean_value > min_value) and (
