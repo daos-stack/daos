@@ -562,6 +562,18 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 		cmd.Args.Props.ToSet = []*control.PoolProperty{p}
 	}
 
+	for _, prop := range cmd.Args.Props.ToSet {
+		if prop.Name == "rf" {
+			return errors.New("can't set redun factor if pool is created.")
+		}
+		if prop.Name == "ec_pda" {
+			return errors.New("can't set ec pda if pool is created.")
+		}
+		if prop.Name == "rp_pda" {
+			return errors.New("can't set rp pda if pool is created.")
+		}
+	}
+
 	req := &control.PoolSetPropReq{
 		ID:         cmd.PoolID().String(),
 		Properties: cmd.Args.Props.ToSet,

@@ -561,6 +561,24 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("invalid value"),
 		},
 		{
+			"Set pool rf property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
+			"",
+			errors.New("can't set redun factor if pool is created"),
+		},
+		{
+			"Set pool ec_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb ec_pda:1",
+			"",
+			errors.New("can't set ec pda if pool is created"),
+		},
+		{
+			"Set pool rp_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rp_pda:1",
+			"",
+			errors.New("can't set rp pda if pool is created"),
+		},
+		{
 			"Get pool property",
 			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label",
 			strings.Join([]string{
