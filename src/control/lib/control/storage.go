@@ -67,7 +67,7 @@ type HostStorage struct {
 
 	// HugePageInfo contains information about the host's
 	// hugepages.
-	HugePageInfo HugePageInfo `json:"huge_page_info"`
+	HugePageInfo *HugePageInfo `json:"huge_page_info"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into

@@ -15,70 +15,11 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
-
-func TestHwloc_CacheContext(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	ctx, err := CacheContext(context.Background(), log)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	topo, ok := ctx.Value(topoKey).(*topology)
-	if !ok {
-		t.Fatalf("key %q not added to context", topoKey)
-	}
-	if topo == nil {
-		t.Fatal("topology was nil")
-	}
-
-	cleanup, ok := ctx.Value(cleanupKey).(func())
-	if !ok {
-		t.Fatalf("key %q not added to context", cleanupKey)
-	}
-	if cleanup == nil {
-		t.Fatal("cleanup function was nil")
-	}
-	cleanup()
-}
-
-func TestHwloc_Cleanup(t *testing.T) {
-	cleanupCalled := 0
-	mockCleanup := func() {
-		cleanupCalled++
-	}
-
-	for name, tc := range map[string]struct {
-		ctx              context.Context
-		expErr           error
-		expCleanupCalled int
-	}{
-		"no cleanup cached": {
-			ctx:    context.Background(),
-			expErr: errors.New("no hwloc cleanup"),
-		},
-		"success": {
-			ctx:              context.WithValue(context.Background(), cleanupKey, mockCleanup),
-			expCleanupCalled: 1,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			cleanupCalled = 0
-
-			err := Cleanup(tc.ctx)
-
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expCleanupCalled, cleanupCalled, "")
-		})
-	}
-}
 
 func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 	_, filename, _, _ := runtime.Caller(0)
