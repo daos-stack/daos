@@ -38,7 +38,7 @@ func (ei *EngineInstance) newMntRet(mountPoint string, inErr error) *ctlpb.ScmMo
 func (ei *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeControllerResult {
 	var info string
 	if pciAddr == "" {
-		pciAddr = storage.NilBdevAddress
+		pciAddr = "<nil>"
 	}
 	if inErr != nil && fault.HasResolution(inErr) {
 		info = fault.ShowResolutionFor(inErr)
@@ -65,21 +65,20 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 }
 
 func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
+	ei.log.Debugf("instance %d: calling into storage provider to format tiers", ei.Index())
+
 	for _, tr := range ei.storage.FormatBdevTiers() {
 		if tr.Error != nil {
 			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
 			continue
 		}
-		for devAddr, status := range tr.Result.DeviceResponses {
-			ei.log.Debugf("instance %d: tier %d: device fmt of %s, status %+v",
-				ei.Index(), tr.Tier, devAddr, status)
-
+		for dev, status := range tr.Result.DeviceResponses {
 			// TODO DAOS-5828: passing status.Error directly triggers segfault
 			var err error
 			if status.Error != nil {
 				err = status.Error
 			}
-			results = append(results, ei.newCret(devAddr, err))
+			results = append(results, ei.newCret(dev, err))
 		}
 	}
 

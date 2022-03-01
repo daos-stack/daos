@@ -222,6 +222,8 @@ Requires: python3-tabulate
 Requires: python3-defusedxml
 %endif
 Requires: fio
+Requires: meson
+Requires: python3-pyelftools
 Requires: dbench
 Requires: lbzip2
 Requires: attr
