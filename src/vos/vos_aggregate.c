@@ -302,7 +302,6 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 			reset_agg_pos(VOS_ITER_DKEY, agg_param);
 			reset_agg_pos(VOS_ITER_AKEY, agg_param);
 			rc = oi_iter_pre_aggregate(ih);
-			D_DEBUG(DB_EPC, "iter_pre_aggregate returned "DF_RC"\n", DP_RC(rc));
 			if (rc < 0)
 				return rc;
 			if (rc == 1) {
@@ -362,7 +361,6 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_dkey = entry->ie_key;
 			reset_agg_pos(VOS_ITER_AKEY, agg_param);
 			rc = vos_obj_iter_pre_aggregate(ih);
-			D_DEBUG(DB_EPC, "iter_pre_aggregate returned "DF_RC"\n", DP_RC(rc));
 			if (rc < 0)
 				return rc;
 			if (rc == 1) {
@@ -2576,7 +2574,6 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 
 	feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
 	if (feats & VOS_TREE_AGG_OPT) {
-		D_DEBUG(DB_EPC, "Checking container\n");
 		if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
 			D_DEBUG(DB_EPC, "Skipping aggregation for container "DF_CONT
 				", nothing to do\n", DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
