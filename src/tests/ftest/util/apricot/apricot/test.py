@@ -27,12 +27,13 @@ from daos_utils import DaosCommand
 from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
-    get_partition_hosts, stop_processes, get_job_manager_class, \
+    get_partition_hosts, stop_processes, \
     get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
 from logger_utils import TestLogger
 from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
 from write_host_file import write_host_file
+from job_manager_utils import get_job_manager
 
 
 def skipForTicket(ticket):  # pylint: disable=invalid-name
@@ -694,17 +695,7 @@ class TestWithServers(TestWithoutServers):
                     "removed from continually running servers.")
 
         # Setup a job manager command for running the test command
-        manager_class_name = self.params.get(
-            "job_manager_class_name", default=None)
-        manager_subprocess = self.params.get(
-            "job_manager_subprocess", default=False)
-        manager_mpi_type = self.params.get(
-            "job_manager_mpi_type", default="mpich")
-        if manager_class_name is not None:
-            self.job_manager = get_job_manager_class(
-                manager_class_name, None, manager_subprocess, manager_mpi_type)
-            self.set_job_manager_timeout()
-            self.job_manager.tmpdir_base.update(self.test_dir, "tmpdir_base")
+        get_job_manager(self, class_name_default=None)
 
         # Mark the end of setup
         self.log.info("=" * 100)
@@ -736,27 +727,6 @@ class TestWithServers(TestWithoutServers):
                 "Unable to write message to the server log: %d servers groups "
                 "running / %d agent groups running",
                 len(self.server_managers), len(self.agent_managers))
-
-    def set_job_manager_timeout(self):
-        """Set the timeout for the job manager.
-
-        Use the following priority when setting the job_manager timeout:
-            1) use the test method specific timeout from the test yaml, e.g.
-                job_manager_timeout:
-                    test_one: 30
-                    test_two: 60
-            2) use the common job_manager timeout from the test yaml, e.g.
-                job_manager_timeout: 45
-            3) use the avocado test timeout minus 30 seconds
-        """
-        if self.job_manager:
-            self.job_manager.timeout = self.params.get(
-                self.get_test_name(), "/run/job_manager_timeout/*", None)
-            if self.job_manager.timeout is None:
-                self.job_manager.timeout = self.params.get(
-                    "job_manager_timeout", default=None)
-                if self.job_manager.timeout is None:
-                    self.job_manager.timeout = self.timeout - 30
 
     def start_agents(self, agent_groups=None, force=False):
         """Start the daos_agent processes.

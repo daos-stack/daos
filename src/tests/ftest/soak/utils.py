@@ -908,7 +908,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         sbatch_cmds.extend(dfuse_start_cmdlist)
                         ior_cmd.test_file.update(
                             os.path.join(dfuse.mount_dir.value, "testfile"))
-                    mpirun_cmd = Mpirun(ior_cmd, mpitype=self.mpi_module)
+                    mpirun_cmd = Mpirun(ior_cmd, mpi_type=self.mpi_module)
                     # add envs if api is HDF5-VOL
                     if api == "HDF5-VOL":
                         vol = True
@@ -1009,8 +1009,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             sbatch_cmds.extend(dfuse_start_cmdlist)
                             mdtest_cmd.test_dir.update(
                                 dfuse.mount_dir.value)
-                        mpirun_cmd = Mpirun(
-                            mdtest_cmd, mpitype=self.mpi_module)
+                        mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
                         mpirun_cmd.assign_environment(env, True)
                         mpirun_cmd.ppn.update(ppn)

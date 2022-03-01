@@ -1135,10 +1135,9 @@ def run_tests(test_files, tag_filter, args):
                 collect_crash_files(avocado_logs_dir)
             return_code |= run_return_code
 
-            if not args.disable_state_check:
-                # Stop any agents or servers running via systemd
-                return_code |= stop_daos_agent_services(test_file["py"], args)
-                return_code |= stop_daos_server_service(test_file["py"], args)
+            # Stop any agents or servers running via systemd
+            return_code |= stop_daos_agent_services(test_file["py"], args)
+            return_code |= stop_daos_server_service(test_file["py"], args)
 
             # Optionally store all of the server and client config files
             # and archive remote logs and report big log files, if any.
@@ -2287,10 +2286,6 @@ def main():
         help="directory in which to write the modified yaml files. A temporary "
              "directory - which only exists for the duration of the launch.py "
              "command - is used by default.")
-    parser.add_argument(
-        "-dsc", "--disable_state_check",
-        action="store_false",
-        help="disable state check of server/client after test completion")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 

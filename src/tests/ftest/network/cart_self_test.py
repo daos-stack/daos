@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +9,7 @@ from apricot import TestWithServers
 from command_utils_base import \
     EnvironmentVariables, FormattedParameter, CommandFailure
 from command_utils import ExecutableCommand
-from job_manager_utils import Orterun
+from job_manager_utils import get_job_manager
 
 class CartSelfTest(TestWithServers):
     """Runs a few variations of CaRT self-test.
@@ -89,7 +89,7 @@ class CartSelfTest(TestWithServers):
         :avocado: tags=all,pr,daily_regression,smoke,unittest,tiny,cartselftest
         """
         # Setup the orterun command
-        orterun = Orterun(self.SelfTest(self.bin))
+        orterun = get_job_manager(self, "Orterun", self.SelfTest(self.bin), mpi_type="openmpi")
         orterun.map_by.update(None, "orterun/map_by")
         orterun.enable_recovery.update(False, "orterun/enable_recovery")
 

@@ -16,7 +16,7 @@ from write_host_file import write_host_file
 from ior_utils import IorCommand
 from daos_utils import DaosCommand
 from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun
+from job_manager_utils import get_job_manager
 
 
 class NvmeFragmentation(TestWithServers):
@@ -81,18 +81,18 @@ class NvmeFragmentation(TestWithServers):
             ior_cmd.flags.update(flags)
 
             # Define the job manager for the IOR command
-            self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
+            job_manager = get_job_manager(self, "Mpirun", ior_cmd, mpi_type="mpich")
             cont_uuid = str(uuid.uuid4())
-            self.job_manager.job.dfs_cont.update(cont_uuid)
-            env = ior_cmd.get_default_env(str(self.job_manager))
-            self.job_manager.assign_hosts(
+            job_manager.job.dfs_cont.update(cont_uuid)
+            env = ior_cmd.get_default_env(str(job_manager))
+            job_manager.assign_hosts(
                 self.hostlist_clients, self.workdir, None)
-            self.job_manager.assign_processes(processes)
-            self.job_manager.assign_environment(env, True)
+            job_manager.assign_processes(processes)
+            job_manager.assign_environment(env, True)
 
             # run IOR Command
             try:
-                self.job_manager.run()
+                job_manager.run()
                 container_info["{}{}{}"
                                .format(oclass,
                                        api,

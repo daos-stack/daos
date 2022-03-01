@@ -12,7 +12,7 @@ from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun
+from job_manager_utils import get_job_manager
 from general_utils import pcmd, get_random_string
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
@@ -203,24 +203,15 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
-    def get_ior_job_manager_command(self, custom_ior_cmd=None):
+    def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
 
-        Args:
-            custom_ior_cmd (IorCommand): Custom IorCommand instance to create
-            job_manager with.
-
         Returns:
-            str: the path for the mpi job manager command
+            JobManager: the mpi job manager object
 
         """
-        if custom_ior_cmd:
-            self.job_manager = Mpirun(custom_ior_cmd, self.subprocess, "mpich")
-        else:
-            self.job_manager = Mpirun(self.ior_cmd, self.subprocess, "mpich")
-
-        return self.job_manager
-
+        return get_job_manager(self, "Mpirun", self.ior_cmd, self.subprocess, "mpich")
+ 
     def check_subprocess_status(self, operation="write"):
         """Check subprocess status."""
         if operation == "write":
@@ -435,7 +426,7 @@ class IorTestBase(DfuseTestBase):
         ior_command.test_file.update(testfile)
 
         # Get the custom job manager that's associated with this thread.
-        manager = self.get_ior_job_manager_command(custom_ior_cmd=ior_command)
+        manager = get_job_manager(self, "Mpirun", ior_command, self.subprocess, "mpich")
 
         procs = (self.processes // len(self.hostlist_clients)) * len(clients)
         env = ior_command.get_default_env(str(manager), self.client_log)

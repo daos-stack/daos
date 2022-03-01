@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,7 +33,7 @@ class MacsioTestBase(TestWithServers):
 
         """
         # Create the macsio command
-        path = self.params.get("macsio_path", default="")
+        path = self.params.get("macsio_path", "/run/job_manager/*", default="")
         macsio = MacsioCommand(path)
         macsio.get_params(self)
         # Create all the macsio output files in the same directory as the other

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -66,7 +66,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         :avocado: tags=io,DAOS_5610,dfuse
         :avocado: tags=macsio_daos_vol
         """
-        plugin_path = self.params.get("plugin_path")
+        plugin_path = self.params.get("plugin_path", "/run/job_manager/*")
 
         # Create a pool
         self.add_pool()
