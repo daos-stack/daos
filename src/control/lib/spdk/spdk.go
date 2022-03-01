@@ -79,20 +79,15 @@ type EnvOptions struct {
 	EnableVMD    bool                    // flag if VMD functionality should be enabled
 }
 
-func (eo *EnvOptions) sanitizeAllowList(log logging.Logger) error {
-	if eo == nil {
-		return errors.New("nil EnvOptions")
+func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
+	if o.EnableVMD {
+		// DPDK will not accept VMD backing device addresses so convert to VMD addresses
+		newSet, err := o.PCIAllowList.BackingToVMDAddresses(log)
+		if err != nil {
+			return err
+		}
+		o.PCIAllowList = newSet
 	}
-	if eo.PCIAllowList == nil {
-		return errors.New("nil EnvOptions.PCIAllowList")
-	}
-
-	// DPDK will not accept VMD backing device addresses so convert to VMD addresses
-	newSet, err := eo.PCIAllowList.BackingToVMDAddresses(log)
-	if err != nil {
-		return err
-	}
-	eo.PCIAllowList = newSet
 
 	return nil
 }
@@ -102,17 +97,7 @@ func (eo *EnvOptions) sanitizeAllowList(log logging.Logger) error {
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (ei *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
-	if ei == nil {
-		return errors.New("nil EnvImpl")
-	}
-	if opts == nil {
-		return errors.New("nil EnvOptions")
-	}
-	if opts.PCIAllowList == nil {
-		opts.PCIAllowList = hardware.MustNewPCIAddressSet()
-	}
-
+func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	log.Debugf("spdk init go opts: %+v", opts)
 
 	// Only print error and more severe to stderr.
@@ -150,14 +135,7 @@ func (ei *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 }
 
 // FiniSPDKEnv initializes the SPDK environment.
-func (ei *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
-	if ei == nil {
-		return
-	}
-	if opts == nil {
-		return
-	}
-
+func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 	log.Debugf("spdk fini go opts: %+v", opts)
 
 	if opts.EnableVMD {
