@@ -275,7 +275,7 @@ out:
 }
 
 static void
-pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool down)
+pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool enabled)
 {
 	const size_t	MAXBYTES = 512;
 	char		line[MAXBYTES];
@@ -286,7 +286,7 @@ pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool down
 	int		i;
 
 	ret = snprintf(linepos, remaining, DF_UUID": %s ranks: ", DP_UUID(pool->dp_pool),
-		       down ? "DOWN" : "UP");
+		       enabled ? "ENABLED" : "DISABLED");
 	if (ret < 0)
 		goto err;
 	written += ret;
@@ -316,36 +316,36 @@ err:
 	D_ERROR(DF_UUID": snprintf failed, %d\n", DP_UUID(pool->dp_pool), ret);
 }
 
+/* Return a list of engine ranks from the pool map.
+ * get_enabled == true: ranks of engines whose targets are all up or draining (i.e., not disabled).
+ * get_enabled != true: ranks of engines having one or more targets disabled (i.e., down).
+ */
 static int
-pool_map_get_ranks(struct dc_pool *pool, struct pool_map *map, bool get_partly_down,
+pool_map_get_ranks(struct dc_pool *pool, struct pool_map *map, bool get_enabled,
 		   d_rank_list_t **ranks)
 {
-	int				rc;
-	int				i;
-	int				j;
-	unsigned int			nnodes_tot;
-	unsigned int			nnodes_alloc;
-	unsigned int			nnodes_up = 0;
-	unsigned int			nnodes_partly_down = 0;
-	const unsigned int		UP_STATUS = (PO_COMP_ST_UP | PO_COMP_ST_UPIN);
-	struct pool_domain	       *domains = NULL;
-	d_rank_list_t		       *ranklist = NULL;
+	int			 rc;
+	int			 i;
+	int			 j;
+	unsigned int		 nnodes_tot;
+	unsigned int		 nnodes_alloc;
+	unsigned int		 nnodes_enabled = 0;	/* nodes with all targets enabled */
+	unsigned int		 nnodes_disabled = 0;	/* nodes with some, all targets disabled */
+	const unsigned int	 ENABLED = (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN);
+	struct pool_domain	*domains = NULL;
+	d_rank_list_t		*ranklist = NULL;
 
 	nnodes_tot = pool_map_find_nodes(map, PO_COMP_ID_ALL, &domains);
 	for (i = 0; i < nnodes_tot; i++) {
-		if (pool_map_node_status_match(&domains[i], UP_STATUS))
-			nnodes_up++;
+		if (pool_map_node_status_match(&domains[i], ENABLED))
+			nnodes_enabled++;
 		else
-			nnodes_partly_down++;
+			nnodes_disabled++;
 	}
-	D_DEBUG(DF_DSMC, DF_UUID": nnodes=%u, nnodes_up=%u, nnodes_partly_down=%u\n",
-		DP_UUID(pool->dp_pool), nnodes_tot, nnodes_up, nnodes_partly_down);
+	D_DEBUG(DF_DSMC, DF_UUID": nnodes=%u, nnodes_enabled=%u, nnodes_disabled=%u\n",
+		DP_UUID(pool->dp_pool), nnodes_tot, nnodes_enabled, nnodes_disabled);
 
-	if (get_partly_down)
-		nnodes_alloc = nnodes_partly_down;
-	else
-		nnodes_alloc = nnodes_up;
-
+	nnodes_alloc = get_enabled ? nnodes_enabled : nnodes_disabled;
 	ranklist = d_rank_list_alloc(nnodes_alloc);
 	if (!ranklist) {
 		D_ERROR(DF_UUID": failed to allocate ranklist with %u ranks\n",
@@ -356,8 +356,8 @@ pool_map_get_ranks(struct dc_pool *pool, struct pool_map *map, bool get_partly_d
 	for (i = 0, j = 0; i < nnodes_tot; i++) {
 		struct	pool_domain *d = &domains[i];
 
-		if ((get_partly_down && !pool_map_node_status_match(d, UP_STATUS)) ||
-		    (!get_partly_down && pool_map_node_status_match(d, UP_STATUS))) {
+		if ((get_enabled && pool_map_node_status_match(d, ENABLED)) ||
+		    (!get_enabled && !pool_map_node_status_match(d, ENABLED))) {
 			D_ASSERT(j < ranklist->rl_nr);
 			ranklist->rl_ranks[j++] = domains[i].do_comp.co_rank;
 		}
@@ -386,10 +386,8 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	struct pool_map	       *map;
 	int			rc;
 
-	D_DEBUG(DF_DSMC, DF_UUID": info=%p, ranks=%p\n", DP_UUID(pool->dp_pool), info, ranks);
-	if (info)
-		D_DEBUG(DF_DSMC, DF_UUID": infobits="DF_X64"\n", DP_UUID(pool->dp_pool),
-			info->pi_bits);
+	D_DEBUG(DF_DSMC, DF_UUID": info=%p (pi_bits="DF_X64"), ranks=%p\n",
+		DP_UUID(pool->dp_pool), info, info ? info->pi_bits : 0, ranks);
 
 	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
@@ -419,15 +417,15 @@ out_unlock:
 	 * If some targets disabled, report the affected engine ranks (associated with the targets).
 	 */
 	if (ranks && rc == 0) {
-		bool	get_excluded = (info && (info->pi_ndisabled > 0)) ? true : false;
+		bool	get_enabled = (info && (info->pi_ndisabled > 0)) ? false : true;
 
-		rc = pool_map_get_ranks(pool, map, get_excluded, ranks);
+		rc = pool_map_get_ranks(pool, map, get_enabled, ranks);
 		if (rc == 0) {
 			d_rank_range_list_t	*range_list;
 
 			range_list = d_rank_range_list_create_from_ranks(*ranks);
 			if (range_list) {
-				pool_print_range_list(pool, range_list, get_excluded);
+				pool_print_range_list(pool, range_list, get_enabled);
 				d_rank_range_list_free(range_list);
 			} else {
 				D_ERROR(DF_UUID": failed to get rank range list\n",
@@ -1393,6 +1391,8 @@ pool_query_cb(tse_task_t *task, void *data)
 	struct pool_buf		       *map_buf = arg->dqa_map_buf;
 	struct pool_query_in	       *in = crt_req_get(arg->rpc);
 	struct pool_query_out	       *out = crt_reply_get(arg->rpc);
+	d_rank_list_t		       *ranks;
+	d_rank_list_t		      **ranks_arg;
 	int				rc = task->dt_result;
 
 	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
@@ -1428,15 +1428,18 @@ pool_query_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	ranks_arg = arg->dqa_ranks ? arg->dqa_ranks : &ranks;
 	rc = process_query_reply(arg->dqa_pool, map_buf,
 				 out->pqo_op.po_map_version,
 				 out->pqo_op.po_hint.sh_rank,
 				 &out->pqo_space, &out->pqo_rebuild_st,
-				 arg->dqa_ranks, arg->dqa_info,
+				 ranks_arg /* arg->dqa_ranks */, arg->dqa_info,
 				 arg->dqa_prop, out->pqo_prop, false);
-	if (arg->dqa_ranks && (rc == 0)) {
+	if (rc == 0) {
 		D_DEBUG(DF_DSMC, DF_UUID": got ranklist with %u ranks\n",
-			DP_UUID(arg->dqa_pool->dp_pool), (*arg->dqa_ranks)->rl_nr);
+			DP_UUID(arg->dqa_pool->dp_pool), (*ranks_arg)->rl_nr);
+		if (ranks_arg == &ranks)
+			d_rank_list_free(ranks);
 	}
 
 out:
