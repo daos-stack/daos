@@ -314,6 +314,16 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 out_unlock:
 	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
+	/* Cache redun factor */
+	if (rc == 0 && !pool->dp_rf_valid) {
+		struct daos_prop_entry	*entry;
+
+		entry = daos_prop_entry_get(prop_reply, DAOS_PROP_PO_REDUN_FAC);
+		if (entry) {
+			pool->dp_rf = entry->dpe_val;
+			pool->dp_rf_valid = 1;
+		}
+	}
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	if (prop_req != NULL && rc == 0)
@@ -2787,9 +2797,24 @@ out_task:
 int dc_pool_get_redunc(daos_handle_t poh)
 {
 	struct daos_prop_entry	*entry;
-	daos_prop_t		*prop_query = daos_prop_alloc(1);
+	daos_prop_t		*prop_query;
 	int			rf;
+	struct dc_pool		*pool = dc_hdl2pool(poh);
 
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	if (pool->dp_rf_valid) {
+		rf = pool->dp_rf;
+		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+		dc_pool_put(pool);
+		return rf;
+	}
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+	dc_pool_put(pool);
+
+	prop_query = daos_prop_alloc(1);
 	if (prop_query == NULL)
 		return -DER_NOMEM;
 
