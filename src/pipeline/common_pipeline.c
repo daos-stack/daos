@@ -163,12 +163,13 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 {
 	size_t i;
 
-	// TODO: Check that only function 'IN' has array of constants
 	// TODO: Check that functions' operands always have the same type
 	// TODO: Check that functions 'like', 'null', and 'notnull' don't have
 	//       functions as parameters
 	// TODO: Check that arithmetic functions only support number types
 	// TODO: Check that constants have offset set to zero
+	// TODO: Check that parts of type CTRING always end in \0
+	// TODO: Check that parts of type STRING have a sane size
 
 	/** -- Check 0: Check that pipeline is not NULL. */
 

@@ -269,7 +269,6 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	struct pipeline_compiled_t	pipeline_compiled	= { 0 };
 	struct filter_part_run_t	pipe_run_args		= { 0 };
 
-
 	rc = d_pipeline_check(&pipeline);
 	if (rc != 0)
 	{
@@ -300,15 +299,6 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 	pipe_run_args.nr_iods			= *nr_iods;
 	pipe_run_args.iods			= iods;
-
-	D_ALLOC(pipe_run_args.iov_extra.iov_buf, sizeof(double));
-	if (pipe_run_args.iov_extra.iov_buf == NULL)
-	{
-		D_GOTO(exit, rc = -DER_NOMEM);
-	}
-
-	pipe_run_args.iov_extra.iov_buf_len	= sizeof(double);
-	pipe_run_args.iov_extra.iov_len		= 0;
 
 	/** -- "compile" pipeline */
 
@@ -538,10 +528,6 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 exit:
 	pipeline_compile_free(&pipeline_compiled);
 
-	if (pipe_run_args.iov_extra.iov_buf != NULL)
-	{
-		D_FREE(pipe_run_args.iov_extra.iov_buf);
-	}
 	for (i = 0; i < j; i++)
 	{
 		D_FREE(sgl_recx_iter_iovs[i].iov_buf);
@@ -719,7 +705,6 @@ exit:
 		pro->pro_sgl_agg.ca_arrays	= sgl_aggr;
 		//pro->pro_epoch // TODO
 	}
-
 	pro->pro_ret = rc;
 
 	/** send RPC back */

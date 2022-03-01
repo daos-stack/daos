@@ -10,1220 +10,294 @@
 #include <daos/common.h>
 #include "pipeline_internal.h"
 
-#define filter_func_eq(typename, typec) \
-int filter_func_eq_##typename(struct filter_part_run_t *args) \
-{\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	int      rc;\
-\
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-		args->log_out = (left == right);\
-	}\
-	return 0;\
-}
-
-filter_func_eq(i1, int8_t)
-filter_func_eq(i2, int16_t)
-filter_func_eq(i4, int32_t)
-filter_func_eq(i8, int64_t)
-filter_func_eq(r4, float)
-filter_func_eq(r8, double)
-
-int
-filter_func_eq_st(struct filter_part_run_t *args)
+static int filter_func_getdata(struct filter_part_run_t *args, double *data)
 {
-	d_iov_t		*left;
-	d_iov_t		*right;
-	char		*left_str;
-	char		*right_str;
-	size_t		left_offset;
-	size_t		left_size;
-	size_t		right_offset;
-	size_t		right_size;
-	int		rc;
+	int     rc;
+	d_iov_t *iov;
 
 	args->part_idx += 1;
-
-	left_offset = args->parts[args->part_idx].data_offset;
-	left_size   = args->parts[args->part_idx].data_len;
 	rc = args->parts[args->part_idx].filter_func(args);
 	if (unlikely(rc != 0))
 	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
+		return rc;
 	}
-	left = args->iov_out;
-
-	args->part_idx += 1;
-
-	right_offset = args->parts[args->part_idx].data_offset;
-	right_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
+	iov    = args->iov_out;
+	if (iov == NULL)
 	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
+		return 1;
 	}
-	right = args->iov_out;
+	*data = args->value_out;
 
-	if (left == NULL || right == NULL || left_offset >= left->iov_len ||
-		right_offset >= right->iov_len)
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc = 0);
-	}
-
-	if (left_offset + left_size > left->iov_len)
-	{
-		left_size = left->iov_len - left_offset;
-	}
-	if (right_offset + right_size > right->iov_len)
-	{
-		right_size = right->iov_len - right_offset;
-	}
-
-	if (left_size != right_size)
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc = 0);
-	}
-
-	left_str  = (char *) left->iov_buf;
-	left_str  = &left_str[left_offset];
-	right_str = (char *) right->iov_buf;
-	right_str = &right_str[right_offset];
-
-	args->log_out = (memcmp(left_str, right_str, right_size) == 0);
-
-exit:
-	return rc;
+	return 0;
 }
 
-int
-filter_func_eq_raw(struct filter_part_run_t *args)
+static bool logfunc_eq(double left, double right)
 {
-	return filter_func_eq_st(args);
+	return left == right;
 }
 
-#define filter_func_in(typename, typec) \
-int filter_func_in_##typename(struct filter_part_run_t *args)\
+static bool logfunc_ne(double left, double right)
+{
+	return left != right;
+}
+
+static bool logfunc_lt(double left, double right)
+{
+	return left < right;
+}
+
+static bool logfunc_le(double left, double right)
+{
+	return left <= right;
+}
+
+static bool logfunc_ge(double left, double right)
+{
+	return left >= right;
+}
+
+static bool logfunc_gt(double left, double right)
+{
+	return left > right;
+}
+
+#define filter_func_log(op)\
+int filter_func_##op(struct filter_part_run_t *args)\
 {\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
+	double left;\
+	double right;\
 	uint32_t comparisons;\
 	uint32_t i = 0;\
-	int      rc;\
+	int    rc;\
 \
 	comparisons = args->parts[args->part_idx].num_operands - 1;\
 \
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
+	rc = filter_func_getdata(args, &left);\
 	if (unlikely(rc != 0))\
 	{\
-		args->log_out = false;\
 		D_GOTO(exit, rc);\
 	}\
-	left_iov      = args->iov_out;\
-	if (left_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len)\
-	{\
-		args->log_out = false;\
-		D_GOTO(exit, rc = 0);\
-	}\
-	left_ptr = left_iov->iov_buf;\
-	left     = *((_##typec *) &left_ptr[left_offset]);\
-\
 	for (; i < comparisons; i++)\
 	{\
-		args->part_idx += 1;\
-		right_offset = args->parts[args->part_idx].data_offset;\
-		rc = args->parts[args->part_idx].filter_func(args);\
+		rc = filter_func_getdata(args, &right);\
 		if (unlikely(rc != 0))\
 		{\
-			args->log_out = false;\
-			D_GOTO(exit, rc);\
+			return rc;\
 		}\
-		right_iov = args->iov_out;\
-		if (right_iov == NULL ||\
-			right_offset + sizeof(_##typec) > right_iov->iov_len)\
-		{\
-			args->log_out = false;\
-			D_GOTO(exit, rc = 0);\
-		}\
-		right_ptr = right_iov->iov_buf;\
-		right     = *((_##typec *) &right_ptr[right_offset]);\
-\
-		if ((args->log_out = (left == right)))\
+		if ((args->log_out = logfunc_##op(left, right)))\
 		{\
 			i++;\
 			D_GOTO(exit, rc = 0);\
 		}\
 	}\
-\
 exit:\
 	args->part_idx += comparisons - i;\
-	return rc;\
-}
-
-filter_func_in(i1, int8_t)
-filter_func_in(i2, int16_t)
-filter_func_in(i4, int32_t)
-filter_func_in(i8, int64_t)
-filter_func_in(r4, float)
-filter_func_in(r8, double)
-
-int
-filter_func_in_st(struct filter_part_run_t *args)
-{
-	d_iov_t		*left;
-	d_iov_t		*right;
-	char		*left_str;
-	char		*right_str;
-	size_t		left_offset;
-	size_t		left_size;
-	size_t		right_offset;
-	size_t		right_size;
-	uint32_t	comparisons;
-	uint32_t	i = 0;
-	int		rc;
-
-	comparisons = args->parts[args->part_idx].num_operands - 1;
-
-	args->part_idx += 1;
-	left_offset = args->parts[args->part_idx].data_offset;
-	left_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
-	}
-	left = args->iov_out;
-	if (left == NULL || left_offset >= left->iov_len)
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc = 0);
-	}
-
-	if (left_offset + left_size > left->iov_len)
-	{
-		left_size = left->iov_len - left_offset;
-	}
-	left_str  = (char *) left->iov_buf;
-	left_str  = &left_str[left_offset];
-
-	for (; i < comparisons; i++)
-	{
-		args->part_idx += 1;
-		right_offset = args->parts[args->part_idx].data_offset;
-		right_size   = args->parts[args->part_idx].data_len;
-		rc = args->parts[args->part_idx].filter_func(args);
-		if (unlikely(rc != 0))
-		{
-			args->log_out = false;
-			D_GOTO(exit, rc);
-		}
-		right = args->iov_out;
-
-		if (right == NULL || right_offset >= right->iov_len)
-		{
-			continue;
-		}
-
-		if (right_offset + right_size > right->iov_len)
-		{
-			right_size = right->iov_len - right_offset;
-		}
-
-		right_str = (char *) right->iov_buf;
-		right_str = &right_str[right_offset];
-
-		if (left_size != right_size)
-		{
-			continue;
-		}
-
-		if ((args->log_out =
-				(memcmp(left_str, right_str, right_size) == 0)))
-		{
-			i++;
-			D_GOTO(exit, rc = 0);
-		}
-	}
-
-	args->log_out = false;
-exit:
-	args->part_idx += comparisons - i;
-	return rc;
-}
-
-int
-filter_func_in_raw(struct filter_part_run_t *args)
-{
-	return filter_func_in_st(args);
-}
-
-#define filter_func_ne(typename, typec)\
-int filter_func_ne_##typename(struct filter_part_run_t *args)\
-{\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	int      rc;\
-\
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
+	if (rc < 0)\
 	{\
 		args->log_out = false;\
-		return rc;\
-	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-		args->log_out = (left != right);\
 	}\
 	return 0;\
 }
 
-filter_func_ne(i1, int8_t)
-filter_func_ne(i2, int16_t)
-filter_func_ne(i4, int32_t)
-filter_func_ne(i8, int64_t)
-filter_func_ne(r4, float)
-filter_func_ne(r8, double)
+filter_func_log(eq)
+filter_func_log(ne)
+filter_func_log(lt)
+filter_func_log(le)
+filter_func_log(ge)
+filter_func_log(gt)
 
-int
-filter_func_ne_st(struct filter_part_run_t *args)
+static bool logfunc_eq_st(char *l, size_t ll, char *r, size_t rl)
 {
-	d_iov_t		*left;
-	d_iov_t		*right;
-	char		*left_str;
-	char		*right_str;
-	size_t		left_offset;
-	size_t		left_size;
-	size_t		right_offset;
-	size_t		right_size;
-	int		rc;
+	if (ll != rl)
+	{
+		return false;
+	}
+	return (memcmp(l, r, rl) == 0);
+}
+
+static bool logfunc_ne_st(char *l, size_t ll, char *r, size_t rl)
+{
+	if (ll != rl)
+	{
+		return true;
+	}
+	return (memcmp(l, r, rl) != 0);
+}
+
+static bool logfunc_lt_st(char *l, size_t ll, char *r, size_t rl)
+{
+	size_t len = ll <= rl ? ll : rl;
+	return (memcmp(l, r, len) < 0);
+}
+
+static bool logfunc_le_st(char *l, size_t ll, char *r, size_t rl)
+{
+	if (ll != rl)
+	{
+		size_t len = ll <= rl ? ll : rl;
+		return (memcmp(l, r, len) < 0);
+	}
+	return (memcmp(l, r, rl) <= 0);
+}
+
+static bool logfunc_ge_st(char *l, size_t ll, char *r, size_t rl)
+{
+	if (ll != rl)
+	{
+		size_t len = ll <= rl ? ll : rl;
+		return (memcmp(l, r, len) > 0);
+	}
+	return (memcmp(l, r, rl) >= 0);
+}
+
+static bool logfunc_gt_st(char *l, size_t ll, char *r, size_t rl)
+{
+	size_t len = ll <= rl ? ll : rl;
+	return (memcmp(l, r, len) > 0);
+}
+
+static int filter_func_getdata_st(struct filter_part_run_t *args,
+				  char **st, size_t *st_len)
+{
+	int     rc;
+	d_iov_t *iov;
+	char    *buf;
 
 	args->part_idx += 1;
-	left_offset = args->parts[args->part_idx].data_offset;
-	left_size   = args->parts[args->part_idx].data_len;
 	rc = args->parts[args->part_idx].filter_func(args);
 	if (unlikely(rc != 0))
 	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
+		return rc;
 	}
-	left = args->iov_out;
-
-	args->part_idx += 1;
-	right_offset = args->parts[args->part_idx].data_offset;
-	right_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
+	iov    = args->iov_out;
+	if (iov == NULL)
 	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
+		return 1;
 	}
-	right = args->iov_out;
+	buf     = (char *) iov->iov_buf;
+	buf     = &buf[args->data_offset_out];
+	*st     = buf;
+	*st_len = args->data_len_out;
 
-	if (left == NULL || right == NULL || left_offset >= left->iov_len ||
-		right_offset >= right->iov_len)
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc = 0);
-	}
-
-	if (left_offset + left_size > left->iov_len)
-	{
-		left_size = left->iov_len - left_offset;
-	}
-	if (right_offset + right_size > right->iov_len)
-	{
-		right_size = right->iov_len - right_offset;
-	}
-
-	if (left_size != right_size)
-	{
-		args->log_out = true;
-		D_GOTO(exit, rc = 0);
-	}
-
-	left_str  = (char *) left->iov_buf;
-	left_str  = &left_str[left_offset];
-	right_str = (char *) right->iov_buf;
-	right_str = &right_str[right_offset];
-
-	args->log_out = (memcmp(left_str, right_str, right_size) != 0);
-
-exit:
-	return rc;
+	return 0;
 }
 
-int
-filter_func_ne_raw(struct filter_part_run_t *args)
-{
-	return filter_func_ne_st(args);
-}
-
-#define filter_func_lt(typename, typec)\
-int filter_func_lt_##typename(struct filter_part_run_t *args)\
+#define filter_func_log_st(op)\
+int filter_func_##op##_st(struct filter_part_run_t *args)\
 {\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	int      rc;\
+	char   *left;\
+	size_t left_size;\
+	char   *right;\
+	size_t right_size;\
+	uint32_t comparisons;\
+	uint32_t i = 0;\
+	int    rc;\
 \
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
+	comparisons = args->parts[args->part_idx].num_operands - 1;\
+\
+	rc = filter_func_getdata_st(args, &left, &left_size);\
 	if (unlikely(rc != 0))\
 	{\
-		args->log_out = false;\
-		return rc;\
+		D_GOTO(exit, rc);\
 	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
+	for (; i < comparisons; i++)\
 	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-		args->log_out = (left < right);\
-	}\
-	return 0;\
-}
-
-filter_func_lt(i1, int8_t)
-filter_func_lt(i2, int16_t)
-filter_func_lt(i4, int32_t)
-filter_func_lt(i8, int64_t)
-filter_func_lt(r4, float)
-filter_func_lt(r8, double)
-
-int
-filter_func_lt_st(struct filter_part_run_t *args)
-{
-	d_iov_t		*left;
-	d_iov_t		*right;
-	char		*left_str;
-	char		*right_str;
-	size_t		left_offset;
-	size_t		left_size;
-	size_t		right_offset;
-	size_t		right_size;
-	size_t		cmp_size;
-	int		rc;
-
-	args->part_idx += 1;
-	left_offset = args->parts[args->part_idx].data_offset;
-	left_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
-	}
-	left = args->iov_out;
-
-	args->part_idx += 1;
-	right_offset = args->parts[args->part_idx].data_offset;
-	right_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
-	}
-	right = args->iov_out;
-
-	if (left == NULL || right == NULL || left_offset >= left->iov_len ||
-		right_offset >= right->iov_len)
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc = 0);
-	}
-
-	if (left_offset + left_size > left->iov_len)
-	{
-		left_size = left->iov_len - left_offset;
-	}
-	if (right_offset + right_size > right->iov_len)
-	{
-		right_size = right->iov_len - right_offset;
-	}
-
-	cmp_size  = left_size <= right_size ? left_size : right_size;
-
-	left_str  = (char *) left->iov_buf;
-	left_str  = &left_str[left_offset];
-	right_str = (char *) right->iov_buf;
-	right_str = &right_str[right_offset];
-
-	args->log_out = (memcmp(left_str, right_str, cmp_size) < 0);
-
-exit:
-	return rc;
-}
-
-int
-filter_func_lt_raw(struct filter_part_run_t *args)
-{
-	return filter_func_ne_st(args);
-}
-
-#define filter_func_le(typename, typec)\
-int filter_func_le_##typename(struct filter_part_run_t *args)\
-{\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	int      rc;\
-\
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-		args->log_out = (left <= right);\
-	}\
-	return 0;\
-}
-
-filter_func_le(i1, int8_t)
-filter_func_le(i2, int16_t)
-filter_func_le(i4, int32_t)
-filter_func_le(i8, int64_t)
-filter_func_le(r4, float)
-filter_func_le(r8, double)
-
-int
-filter_func_le_st(struct filter_part_run_t *args)
-{
-	d_iov_t		*left;
-	d_iov_t		*right;
-	char		*left_str;
-	char		*right_str;
-	size_t		left_offset;
-	size_t		left_size;
-	size_t		right_offset;
-	size_t		right_size;
-	size_t		cmp_size;
-	int		rc;
-
-	args->part_idx += 1;
-	left_offset = args->parts[args->part_idx].data_offset;
-	left_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
-	}
-	left = args->iov_out;
-
-	args->part_idx += 1;
-	right_offset = args->parts[args->part_idx].data_offset;
-	right_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
-	}
-	right = args->iov_out;
-
-	if (left == NULL || right == NULL || left_offset >= left->iov_len ||
-		right_offset >= right->iov_len)
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc = 0);
-	}
-
-	if (left_offset + left_size > left->iov_len)
-	{
-		left_size = left->iov_len - left_offset;
-	}
-	if (right_offset + right_size > right->iov_len)
-	{
-		right_size = right->iov_len - right_offset;
-	}
-
-	cmp_size  = left_size <= right_size ? left_size : right_size;
-
-	left_str  = (char *) left->iov_buf;
-	left_str  = &left_str[left_offset];
-	right_str = (char *) right->iov_buf;
-	right_str = &right_str[right_offset];
-
-	args->log_out = (memcmp(left_str, right_str, cmp_size) <= 0);
-
-exit:
-	return rc;
-}
-
-int
-filter_func_le_raw(struct filter_part_run_t *args)
-{
-	return filter_func_le_st(args);
-}
-
-#define filter_func_ge(typename, typec)\
-int filter_func_ge_##typename(struct filter_part_run_t *args)\
-{\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	int      rc;\
-\
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-		args->log_out = (left >= right);\
-	}\
-	return 0;\
-}
-
-filter_func_ge(i1, int8_t)
-filter_func_ge(i2, int16_t)
-filter_func_ge(i4, int32_t)
-filter_func_ge(i8, int64_t)
-filter_func_ge(r4, float)
-filter_func_ge(r8, double)
-
-int
-filter_func_ge_st(struct filter_part_run_t *args)
-{
-	d_iov_t		*left;
-	d_iov_t		*right;
-	char		*left_str;
-	char		*right_str;
-	size_t		left_offset;
-	size_t		left_size;
-	size_t		right_offset;
-	size_t		right_size;
-	size_t		cmp_size;
-	int		rc;
-
-	args->part_idx += 1;
-	left_offset = args->parts[args->part_idx].data_offset;
-	left_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
-	}
-	left = args->iov_out;
-
-	args->part_idx += 1;
-	right_offset = args->parts[args->part_idx].data_offset;
-	right_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
-	}
-	right = args->iov_out;
-
-	if (left == NULL || right == NULL || left_offset >= left->iov_len ||
-		right_offset >= right->iov_len)
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc = 0);
-	}
-
-	if (left_offset + left_size > left->iov_len)
-	{
-		left_size = left->iov_len - left_offset;
-	}
-	if (right_offset + right_size > right->iov_len)
-	{
-		right_size = right->iov_len - right_offset;
-	}
-
-	cmp_size  = left_size <= right_size ? left_size : right_size;
-
-	left_str  = (char *) left->iov_buf;
-	left_str  = &left_str[left_offset];
-	right_str = (char *) right->iov_buf;
-	right_str = &right_str[right_offset];
-
-	args->log_out = (memcmp(left_str, right_str, cmp_size) >= 0);
-
-exit:
-	return rc;
-}
-
-int
-filter_func_ge_raw(struct filter_part_run_t *args)
-{
-	return filter_func_ge_st(args);
-}
-
-#define filter_func_gt(typename, typec)\
-int filter_func_gt_##typename(struct filter_part_run_t *args)\
-{\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	int      rc;\
-\
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-		args->log_out = (left > right);\
-	}\
-	return 0;\
-}
-
-filter_func_gt(i1, int8_t)
-filter_func_gt(i2, int16_t)
-filter_func_gt(i4, int32_t)
-filter_func_gt(i8, int64_t)
-filter_func_gt(r4, float)
-filter_func_gt(r8, double)
-
-int
-filter_func_gt_st(struct filter_part_run_t *args)
-{
-	d_iov_t		*left;
-	d_iov_t		*right;
-	char		*left_str;
-	char		*right_str;
-	size_t		left_offset;
-	size_t		left_size;
-	size_t		right_offset;
-	size_t		right_size;
-	size_t		cmp_size;
-	int		rc;
-
-	args->part_idx += 1;
-	left_offset = args->parts[args->part_idx].data_offset;
-	left_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
-	}
-	left = args->iov_out;
-
-	args->part_idx += 1;
-	right_offset = args->parts[args->part_idx].data_offset;
-	right_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc);
-	}
-	right = args->iov_out;
-
-	if (left == NULL || right == NULL || left_offset >= left->iov_len ||
-		right_offset >= right->iov_len)
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc = 0);
-	}
-
-	if (left_offset + left_size > left->iov_len)
-	{
-		left_size = left->iov_len - left_offset;
-	}
-	if (right_offset + right_size > right->iov_len)
-	{
-		right_size = right->iov_len - right_offset;
-	}
-
-	cmp_size  = left_size <= right_size ? left_size : right_size;
-
-	left_str  = (char *) left->iov_buf;
-	left_str  = &left_str[left_offset];
-	right_str = (char *) right->iov_buf;
-	right_str = &right_str[right_offset];
-
-	args->log_out = (memcmp(left_str, right_str, cmp_size) > 0);
-
-exit:
-	return rc;
-}
-
-int
-filter_func_gt_raw(struct filter_part_run_t *args)
-{
-	return filter_func_gt_st(args);
-}
-
-#define filter_func_add(typename, typec)\
-int filter_func_add_##typename(struct filter_part_run_t *args)\
-{\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	_##typec *v_out;\
-	int      rc;\
-\
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		v_out         = (_##typec *) args->iov_extra.iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-\
-		*v_out                  = left + right;\
-		args->iov_extra.iov_len = sizeof(_##typec);\
-		args->iov_out           = &args->iov_extra;\
-	}\
-	return 0;\
-}
-
-filter_func_add(i1, int8_t)
-filter_func_add(i2, int16_t)
-filter_func_add(i4, int32_t)
-filter_func_add(i8, int64_t)
-filter_func_add(r4, float)
-filter_func_add(r8, double)
-
-#define filter_func_sub(typename, typec)\
-int filter_func_sub_##typename(struct filter_part_run_t *args)\
-{\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	_##typec *v_out;\
-	int      rc;\
-\
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		v_out         = (_##typec *) args->iov_extra.iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-\
-		*v_out                  = left - right;\
-		args->iov_extra.iov_len = sizeof(_##typec);\
-		args->iov_out           = &args->iov_extra;\
-	}\
-	return 0;\
-}
-
-filter_func_sub(i1, int8_t)
-filter_func_sub(i2, int16_t)
-filter_func_sub(i4, int32_t)
-filter_func_sub(i8, int64_t)
-filter_func_sub(r4, float)
-filter_func_sub(r8, double)
-
-#define filter_func_mul(typename, typec)\
-int filter_func_mul_##typename(struct filter_part_run_t *args)\
-{\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	_##typec *v_out;\
-	int      rc;\
-\
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		v_out         = (_##typec *) args->iov_extra.iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-\
-		*v_out                  = left * right;\
-		args->iov_extra.iov_len = sizeof(_##typec);\
-		args->iov_out           = &args->iov_extra;\
-	}\
-	return 0;\
-}
-
-filter_func_mul(i1, int8_t)
-filter_func_mul(i2, int16_t)
-filter_func_mul(i4, int32_t)
-filter_func_mul(i8, int64_t)
-filter_func_mul(r4, float)
-filter_func_mul(r8, double)
-
-#define filter_func_div(typename, typec)\
-int filter_func_div_##typename(struct filter_part_run_t *args)\
-{\
-	d_iov_t  *left_iov;\
-	char     *left_ptr;\
-	d_iov_t  *right_iov;\
-	char     *right_ptr;\
-	_##typec left;\
-	size_t   left_offset;\
-	_##typec right;\
-	size_t   right_offset;\
-	_##typec *v_out;\
-	int      rc;\
-\
-	args->part_idx += 1;\
-	left_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	left_iov = args->iov_out;\
-\
-	args->part_idx += 1;\
-	right_offset = args->parts[args->part_idx].data_offset;\
-	rc = args->parts[args->part_idx].filter_func(args);\
-	if (unlikely(rc != 0))\
-	{\
-		args->log_out = false;\
-		return rc;\
-	}\
-	right_iov = args->iov_out;\
-\
-	if (left_iov == NULL ||\
-		right_iov == NULL ||\
-		left_offset + sizeof(_##typec) > left_iov->iov_len ||\
-		right_offset + sizeof(_##typec) > right_iov->iov_len)\
-	{\
-		args->log_out = false;\
-	}\
-	else\
-	{\
-		left_ptr      = left_iov->iov_buf;\
-		right_ptr     = right_iov->iov_buf;\
-		v_out         = (_##typec *) args->iov_extra.iov_buf;\
-		left          = *((_##typec *) &left_ptr[left_offset]);\
-		right         = *((_##typec *) &right_ptr[right_offset]);\
-		if (unlikely(right == ((_##typec) 0)))\
+		rc = filter_func_getdata_st(args, &right, &right_size);\
+		if (unlikely(rc != 0))\
 		{\
-			return -DER_DIV_BY_ZERO;\
+			return rc;\
 		}\
 \
-		*v_out                  = left / right;\
-		args->iov_extra.iov_len = sizeof(_##typec);\
-		args->iov_out           = &args->iov_extra;\
+		if ((args->log_out = logfunc_##op##_st(left, left_size,\
+						       right, right_size)))\
+		{\
+			i++;\
+			D_GOTO(exit, rc = 0);\
+		}\
+	}\
+exit:\
+	args->part_idx += comparisons - i;\
+	if (rc < 0)\
+	{\
+		args->log_out = false;\
 	}\
 	return 0;\
 }
 
-filter_func_div(i1, int8_t)
-filter_func_div(i2, int16_t)
-filter_func_div(i4, int32_t)
-filter_func_div(i8, int64_t)
-filter_func_div(r4, float)
-filter_func_div(r8, double)
+filter_func_log_st(eq)
+filter_func_log_st(ne)
+filter_func_log_st(lt)
+filter_func_log_st(le)
+filter_func_log_st(ge)
+filter_func_log_st(gt)
+
+static int arithfunc_add(double left, double right, double *res)
+{
+	*res = left + right;
+	return 0;
+}
+
+static int arithfunc_sub(double left, double right, double *res)
+{
+	*res = left - right;
+	return 0;
+}
+
+static int arithfunc_mul(double left, double right, double *res)
+{
+	*res = left * right;
+	return 0;
+}
+
+static int arithfunc_div(double left, double right, double *res)
+{
+	if (right == 0.0)
+	{
+		return -DER_DIV_BY_ZERO;
+	}
+	*res = left / right;
+	return 0;
+}
+
+#define filter_func_arith(op) \
+int filter_func_##op(struct filter_part_run_t *args) \
+{\
+	double left;\
+	double right;\
+	int    rc = 0;\
+\
+	rc = filter_func_getdata(args, &left);\
+	if (unlikely(rc != 0))\
+	{\
+		D_GOTO(exit, rc);\
+	}\
+	rc = filter_func_getdata(args, &right);\
+	if (unlikely(rc != 0))\
+	{\
+		D_GOTO(exit, rc);\
+	}\
+\
+	rc = arithfunc_##op(left, right, &args->value_out);\
+exit:\
+	if (rc < 0)\
+	{\
+		return rc;\
+	}\
+	return 0;\
+}
+
+filter_func_arith(add)
+filter_func_arith(sub)
+filter_func_arith(mul)
+filter_func_arith(div)
 
 int
-filter_func_like_st(struct filter_part_run_t *args)
+filter_func_like(struct filter_part_run_t *args)
 {
-	d_iov_t		*left;
-	d_iov_t		*right;
 	char		*left_str;
 	char		*right_str;
-	size_t		left_offset;
 	size_t		left_size;
 	size_t		left_pos;
-	size_t		right_offset;
 	size_t		right_size;
 	size_t		right_pos;
 	size_t		right_anchor;
@@ -1231,48 +305,18 @@ filter_func_like_st(struct filter_part_run_t *args)
 	bool		scaping;
 	int		rc = 0;
 
-	args->part_idx += 1;
-	left_offset = args->parts[args->part_idx].data_offset;
-	left_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
+	rc = filter_func_getdata_st(args, &left_str, &left_size);
 	if (unlikely(rc != 0))
 	{
 		args->log_out = false;
 		D_GOTO(exit, rc);
 	}
-	left = args->iov_out;
-
-	args->part_idx += 1;
-	right_offset = args->parts[args->part_idx].data_offset;
-	right_size   = args->parts[args->part_idx].data_len;
-	rc = args->parts[args->part_idx].filter_func(args);
+	rc = filter_func_getdata_st(args, &right_str, &right_size);
 	if (unlikely(rc != 0))
 	{
 		args->log_out = false;
 		D_GOTO(exit, rc);
 	}
-	right = args->iov_out;
-
-	if (left == NULL || right == NULL || left_offset >= left->iov_len ||
-		right_offset >= right->iov_len)
-	{
-		args->log_out = false;
-		D_GOTO(exit, rc = 0);
-	}
-
-	if (left_offset + left_size > left->iov_len)
-	{
-		left_size = left->iov_len - left_offset;
-	}
-	if (right_offset + right_size > right->iov_len)
-	{
-		right_size = right->iov_len - right_offset;
-	}
-
-	left_str  = (char *) left->iov_buf;
-	left_str  = &left_str[left_offset];
-	right_str = (char *) right->iov_buf;
-	right_str = &right_str[right_offset];
 
 	left_pos 		= 0;
 	right_pos		= 0;
@@ -1338,7 +382,7 @@ exit:
 }
 
 int
-filter_func_isnull_raw(struct filter_part_run_t *args)
+filter_func_isnull(struct filter_part_run_t *args)
 {
 	int    rc;
 
@@ -1354,7 +398,7 @@ filter_func_isnull_raw(struct filter_part_run_t *args)
 }
 
 int
-filter_func_isnotnull_raw(struct filter_part_run_t *args)
+filter_func_isnotnull(struct filter_part_run_t *args)
 {
 	int    rc;
 
@@ -1433,5 +477,4 @@ filter_func_or(struct filter_part_run_t *args)
 	args->log_out = (left || args->log_out);
 
 	return 0;
-
 }

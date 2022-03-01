@@ -60,7 +60,8 @@ typedef struct {
 	 * Type of data. Only relevant for keys and constant filter part type
 	 * objects:
 	 *          DAOS_FILTER_TYPE_BINARY
-	 *          DAOS_FILTER_TYPE_STRING
+	 *          DAOS_FILTER_TYPE_STRING:	First 8B (size_t) indicate size
+	 *          DAOS_FILTER_TYPE_CSTRING:	Always null ('\0') terminated
 	 *          DAOS_FILTER_TYPE_INTEGER1
 	 *          DAOS_FILTER_TYPE_INTEGER2
 	 *          DAOS_FILTER_TYPE_INTEGER4
