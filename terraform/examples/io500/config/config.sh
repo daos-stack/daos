@@ -58,6 +58,8 @@ export TF_VAR_preemptible="${PREEMPTIBLE_INSTANCES}"
 # Servers
 export TF_VAR_server_number_of_instances=${DAOS_SERVER_INSTANCE_COUNT}
 export TF_VAR_server_daos_disk_count=${DAOS_SERVER_DISK_COUNT}
+export TF_VAR_server_daos_crt_timeout=${DAOS_SERVER_CRT_TIMEOUT}
+export TF_VAR_server_daos_scm_size=${DAOS_SERVER_SCM_SIZE}
 export TF_VAR_server_instance_base_name="${DAOS_SERVER_BASE_NAME}"
 export TF_VAR_server_os_disk_size_gb=20
 export TF_VAR_server_os_disk_type="pd-ssd"

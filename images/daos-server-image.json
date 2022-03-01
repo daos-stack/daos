@@ -40,24 +40,6 @@
         "./scripts/tune.sh",
         "./scripts/install_daos.sh"
       ]
-    },
-    {
-      "type": "file",
-      "source": "./configs",
-      "destination": "/tmp/"
-    },
-    {
-      "type": "file",
-      "source": "./scripts/gcp_metadata.sh",
-      "destination": "/tmp/"
-    },
-    {
-      "type": "shell",
-      "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
-      "environment_vars": [
-        "DAOS_VERSION={{user `daos_version`}}"
-      ],
-      "script": "./scripts/setup_server.sh"
     }
   ]
 }

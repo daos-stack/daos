@@ -1,15 +1,19 @@
-access_points: [changeap]
+#
+# DAOS server configuration file
+#
+
+access_points: ${jsonencode(access_points)}
 transport_config:
   allow_insecure: true
 provider: ofi+tcp;ofi_rxm
 disable_vfio: true
-crt_timeout: 300
-nr_hugepages: 4096
+crt_timeout: ${crt_timeout}
+nr_hugepages: ${nr_hugepages}
 control_log_file: /var/daos/server.log
 
 engines:
 -
-   targets: 8
+   targets: ${targets}
    nr_xs_helpers: 0
    first_core: 0
    bypass_health_chk: true
@@ -27,7 +31,7 @@ engines:
    -
       scm_mount: /var/daos/ram
       class: ram
-      scm_size: 100
+      scm_size: ${scm_size}
    -
       class: nvme
       bdev_list: ["0000:00:04.0"]

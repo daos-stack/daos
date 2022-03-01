@@ -1,3 +1,0 @@
-hostlist: [changehosts]
-transport_config:
-  allow_insecure: true

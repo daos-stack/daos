@@ -1,0 +1,27 @@
+#!/bin/bash
+
+METADATA_URL="http://metadata.google.internal/computeMetadata/v1/instance/attributes"
+DAOS_CONFIG_DIR="/etc/daos"
+
+fetch_attr()
+{
+  local attr_name=$*
+  curl -s ${METADATA_URL}/${attr_name} -H "Metadata-Flavor: Google"
+}
+
+echo "BEGIN: Setting up DAOS Client"
+
+systemctl stop daos_agent
+
+# Create agent config files
+mkdir -p "${DAOS_CONFIG_DIR}"
+cd "${DAOS_CONFIG_DIR}"
+fetch_attr "daos_control_yaml_content" > daos_control.yml
+fetch_attr "daos_agent_yaml_content" > daos_agent.yml
+
+# enable daos_agent in systemd (will be started automatically at boot time)
+systemctl enable daos_agent
+
+systemctl start daos_agent
+
+echo "END: Setting up DAOS Client"

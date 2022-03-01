@@ -485,7 +485,6 @@ main() {
   configure_first_client_nat_ip
   configure_ssh
   copy_files_to_first_client
-  configure_daos
   show_instances
   show_run_steps
 }

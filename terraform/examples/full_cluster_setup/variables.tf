@@ -164,3 +164,21 @@ variable "preemptible" {
   default     = true
   type        = string
 }
+
+variable "access_points" {
+  description = "List of servers to add to client .yml files"
+  default     = null
+  type        = list(string)
+}
+
+variable "server_daos_crt_timeout" {
+  description = "crt_timeout"
+  default = null
+  type = number
+}
+
+variable "server_daos_scm_size" {
+  description = "scm_size"
+  default = null
+  type = number
+}

@@ -85,3 +85,9 @@ variable "number_of_instances" {
   default     = 2
   type        = number
 }
+
+variable "access_points" {
+  description = "List of servers to add to client .yml files"
+  default     = ["daos-server-0001"]
+  type        = list(string)
+}

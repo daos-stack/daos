@@ -1,26 +1,26 @@
-project_id = "<my_project_id>"
-network = "<my_VPC_network>"
-subnetwork = "<my_VPC_subnetwork>"
-subnetwork_project = "<my_project_id>"
-region = "europe-west4"
-zone = "europe-west4-a"
+project_id         = "<project_id>"
+network            = "default"
+subnetwork         = "default"
+subnetwork_project = "<project_id>"
+region             = "us-central1"
+zone               = "us-central1-f"
+
 labels = {
-  example="simple_daos_server_example"
+  example = "simple_daos_server_example"
 }
 
-number_of_instances = 4 # Allow 3-way replication with extra spare for rebuild
-daos_disk_count = 16
+number_of_instances = 2
+daos_disk_count     = 16
+daos_crt_timeout    = 300
+daos_scm_size       = 200
 
 instance_base_name = "daos-server"
-os_disk_size_gb = 20
-os_disk_type = "pd-ssd"
-template_name = "daos-server" #TODO add some sort of unique postfix here
-mig_name = "daos-server" #TODO add some sort of unique postfix here
-machine_type = "n2-custom-20-131072" # 10x physical cores, using 8x targets
+os_disk_size_gb    = 20
+os_disk_type       = "pd-ssd"
+template_name      = "daos-server"
+mig_name           = "daos-server"
+machine_type       = "n2-custom-36-262144"
 
 # the image must be built before (see build folder)
-os_project = "<my_project_id>"
-os_family = "daos-server-centos-7"
-
-
-
+os_project = "<project_id>"
+os_family  = "daos-server-centos-7"

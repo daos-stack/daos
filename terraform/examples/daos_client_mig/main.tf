@@ -11,9 +11,7 @@ module "daos_client" {
   region             = var.region
   zone               = var.zone
   labels             = var.labels
-
   number_of_instances = var.number_of_instances
-
   instance_base_name = var.instance_base_name
   os_disk_size_gb    = var.os_disk_size_gb
   os_disk_type       = var.os_disk_type
@@ -22,4 +20,5 @@ module "daos_client" {
   machine_type       = var.machine_type
   os_project         = var.os_project
   os_family          = var.os_family
+  access_points      = var.access_points
 }

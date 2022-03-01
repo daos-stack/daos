@@ -1,24 +1,28 @@
-project_id         = ""
+project_id         = "<project_id>"
 network            = "default"
 subnetwork         = "default"
-subnetwork_project = ""
+subnetwork_project = "<project_id>"
 region             = "us-central1"
-zone               = "us-central1-a"
+zone               = "us-central1-f"
 preemptible        = "false"
+
 # Server
 server_number_of_instances = 1
 server_daos_disk_count     = 8
+server_daos_crt_timeout    = 300
+server_daos_scm_size       = 100
 server_instance_base_name  = "daos-server"
 server_os_disk_size_gb     = 20
 server_os_disk_type        = "pd-ssd"
 server_template_name       = "daos-server"
 server_mig_name            = "daos-server"
 server_machine_type        = "n2-highmem-32"
-server_os_project          = ""
+server_os_project          = "<project_id>"
 server_os_family           = "daos-server-centos-7"
 server_labels = {
   example = "full_cluster_setup"
 }
+
 # Client
 client_number_of_instances = 1
 client_instance_base_name  = "daos-client"
@@ -27,7 +31,7 @@ client_os_disk_type        = "pd-ssd"
 client_template_name       = "daos-client"
 client_mig_name            = "daos-client"
 client_machine_type        = "c2-standard-16"
-client_os_project          = ""
+client_os_project          = "<project_id>"
 client_os_family           = "daos-client-hpc-centos-7"
 client_labels = {
   example = "full_cluster_setup"

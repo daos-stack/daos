@@ -1,3 +1,0 @@
-access_points: [changeap]
-transport_config:
-  allow_insecure: true

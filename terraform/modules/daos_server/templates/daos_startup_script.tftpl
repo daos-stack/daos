@@ -1,0 +1,37 @@
+#!/bin/bash
+
+METADATA_URL="http://metadata.google.internal/computeMetadata/v1/instance/attributes"
+DAOS_SERVER_SYSTEMD_FILE="/usr/lib/systemd/system/daos_server.service"
+DAOS_CONFIG_DIR="/etc/daos"
+DAOS_MOUNT_DIR="/var/daos"
+
+fetch_attr()
+{
+  local attr_name=$*
+  curl -s ${METADATA_URL}/${attr_name} -H "Metadata-Flavor: Google"
+}
+
+echo "BEGIN: Setting up DAOS server"
+
+systemctl stop daos_server
+
+# Create server config files
+mkdir -p "${DAOS_CONFIG_DIR}"
+cd "${DAOS_CONFIG_DIR}"
+fetch_attr "daos_server_yaml_content" > daos_server.yml
+fetch_attr "daos_control_yaml_content" > daos_control.yml
+fetch_attr "daos_agent_yaml_content" > daos_agent.yml
+
+# Create directory for engine logs and tmpfs mount point
+mkdir -p "${DAOS_MOUNT_DIR}"
+
+# Modify systemd script for GCP
+# First, run daos_server as root since GCP does not support VFIO
+sed -i "s/User=daos_server/User=root/; s/Group=daos_server/Group=root/" ${DAOS_SERVER_SYSTEMD_FILE}
+
+# enable daos_server in systemd (will be started automatically at boot time)
+systemctl enable daos_server
+
+systemctl start daos_server
+
+echo "END: Setting up DAOS server"
