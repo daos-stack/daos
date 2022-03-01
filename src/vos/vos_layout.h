@@ -275,6 +275,12 @@ enum vos_krec_bf {
 	KREC_BF_BTR			= (1 << 1),
 	/* it's a dkey, otherwise is akey */
 	KREC_BF_DKEY			= (1 << 2),
+	/* Aggregation optimization supported */
+	KREC_BF_AGG_OPT			= (1 << 3),
+	/* Aggregation needed (only meaningful if KREC_BF_AGG_OPT is set) */
+	KREC_BF_AGG_NEEDED		= (1 << 4),
+	/* Set when aggregation is running, cleared if another update happens */
+	KREC_BF_AGG_FLAG		= (1 << 5),
 };
 
 /**

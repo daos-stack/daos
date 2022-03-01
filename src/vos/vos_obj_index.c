@@ -659,6 +659,8 @@ oi_iter_pre_aggregate(daos_handle_t ih)
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	int			 rc;
+	uint64_t		 feats;
+	bool			 punched;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
@@ -672,8 +674,20 @@ oi_iter_pre_aggregate(daos_handle_t ih)
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
-	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
-				 NULL, &oiter->oit_ilog_info))
+	punched = vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
+				      NULL, &oiter->oit_ilog_info);
+
+	feats = dbtree_feats_get(&obj->vo_tree);
+	if (feats & VOS_TREE_AGG_OPT && !iter->it_for_discard) {
+		if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
+			if (!punched)
+				return 2;
+		} else {
+			feats |= VOS_TREE_AGG_FLAG;
+		}
+	}
+
+	if (!punched && feats == dbtree_feats_get(&obj->vo_tree))
 		return 0;
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
@@ -681,22 +695,26 @@ oi_iter_pre_aggregate(daos_handle_t ih)
 	if (rc != 0)
 		goto exit;
 
-	/* Incarnation log is empty, delete the object */
-	D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
-		DP_UOID(oid));
-	/* Evict the object from cache */
-	rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
-				  oiter->oit_cont, oid);
-	if (rc != 0)
-		D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
-			DP_UOID(oid), DP_RC(rc));
-	rc = dbtree_iter_delete(oiter->oit_hdl, oiter->oit_cont);
-	D_ASSERT(rc != -DER_NONEXIST);
+	if (punched) {
+		/* Incarnation log is empty, delete the object */
+		D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
+			DP_UOID(oid));
+		/* Evict the object from cache */
+		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+					  oiter->oit_cont, oid);
+		if (rc != 0)
+			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
+				DP_UOID(oid), DP_RC(rc));
+		rc = dbtree_iter_delete(oiter->oit_hdl, oiter->oit_cont);
+		D_ASSERT(rc != -DER_NONEXIST);
+	} else {
+		rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont), feats, true);
+	}
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 exit:
 	if (rc == 0)
-		return 1;
+		return punched ? 1 : 0;
 
 	return rc;
 }
@@ -709,6 +727,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
+	uint64_t		 feats;
 	bool			 delete = false, invisible = false;
 	int			 rc;
 
@@ -750,10 +769,18 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 				DP_UOID(oid), DP_RC(rc));
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
-	} else if (rc == -DER_NONEXIST) {
-		/** ilog isn't visible in range but still has some enrtries */
-		invisible = true;
-		rc = 0;
+	} else {
+		if (rc == -DER_NONEXIST) {
+			/** ilog isn't visible in range but still has some enrtries */
+			invisible = true;
+			rc = 0;
+		}
+		feats = dbtree_feats_get(&obj->vo_tree);
+		if (feats & VOS_TREE_AGG_FLAG) {
+			feats = feats & ~(VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED);
+			rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont), feats,
+					      true);
+		}
 	}
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);

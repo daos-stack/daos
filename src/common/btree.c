@@ -2155,6 +2155,46 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 }
 
 /**
+ * Set the tree feats.  Must be in tx.
+ *
+ * \param root[in]	Tree roo
+ * \param umm[in]	umem instance
+ * \param feats[in]	feats to set
+ * \param in_tx[in]	in transaction already
+ *
+ * \return 0 on success
+ */
+int
+dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx)
+{
+	int			 rc;
+
+	if (root->tr_feats == feats)
+		return 0;
+
+	if ((root->tr_feats & BTR_FEAT_MASK) != (feats & BTR_FEAT_MASK)) {
+		D_ERROR("Attempt to set internal features via dbtree_feats_set denied\n");
+		return -DER_INVAL;
+	}
+
+	if (!in_tx) {
+		rc = umem_tx_begin(umm, NULL);
+		if (rc != 0)
+			return rc;
+	}
+
+	rc = umem_tx_add_ptr(umm, &root->tr_feats, sizeof(root->tr_feats));
+
+	if (rc == 0)
+		root->tr_feats = feats;
+
+	if (!in_tx)
+		rc = umem_tx_end(umm, rc);
+
+	return rc;
+}
+
+/**
  * Update the value of the provided key, or insert it as a new key if
  * there is no match.
  *
@@ -4065,7 +4105,8 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 	if (tc->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)
 		*tree_feats |= BTR_FEAT_SKIP_LEAF_REBAL;
 
-	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
+	/** Only check btree managed bits */
+	if ((*tree_feats & tc->tc_feats) != (*tree_feats & BTR_FEAT_MASK)) {
 		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
 			*tree_feats, tc->tc_feats);
 		return -DER_PROTO;
