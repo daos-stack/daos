@@ -328,7 +328,6 @@ class DaosServerYamlParameters(YamlParameters):
         REQUIRED_ENV_VARS = {
             "common": [
                 "D_LOG_FILE_APPEND_PID=1",
-                "DAOS_TARGET_OVERSUBSCRIBE=1",
                 "COVFILE=/tmp/test.cov"],
             "ofi+tcp": [
                 "CRT_SWIM_RPC_TIMEOUT=10"],
@@ -387,6 +386,7 @@ class DaosServerYamlParameters(YamlParameters):
                 "ABT_ENV_MAX_NUM_XSTREAMS=100",
                 "ABT_MAX_NUM_XSTREAMS=100",
                 "DAOS_MD_CAP=1024",
+                "DAOS_TARGET_OVERSUBSCRIBE=1",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
             ]
             default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])

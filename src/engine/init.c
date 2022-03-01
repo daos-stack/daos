@@ -279,7 +279,7 @@ retry:
 		goto retry;
 	}
 
-	if (tgt_nr != nr) {
+	if (nr >= 1 && tgt_nr != nr) {
 		if (!oversubscribe)
 			return -DER_INVAL;
 		D_PRINT("%d target XS(xstream) requested (#cores %d); "
