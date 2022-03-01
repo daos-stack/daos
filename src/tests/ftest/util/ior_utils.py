@@ -549,7 +549,10 @@ class Ior:
             result = self.manager.run()
 
         except CommandFailure as error:
-            error_message = "IOR Failed: {}".format(error)
+            if self.manager.result:
+                error_message = "IOR Failed: {}".format(self.manager.result)
+            else:
+                error_message = "IOR Failed: {}".format(error)
 
         finally:
             if not self.manager.run_as_subprocess and display_space:

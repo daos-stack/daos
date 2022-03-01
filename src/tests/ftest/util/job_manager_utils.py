@@ -17,8 +17,59 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from command_utils_base import CommandFailure
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd
+from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class
 from write_host_file import write_host_file
+
+
+def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=None, timeout=None,
+                    namespace="/run/job_manager/*", class_name_default="Mpirun"):
+    """Get a JobManager object.
+
+    Create a JobManager class using either:
+        - the provided arguments
+        - the test yaml arguments (if no arguments are provided)
+        - default values (if no arguments are provided and there are no test yaml entries)
+
+    Args:
+        test (Test): avocado Test object
+        class_name (str, optional): JobManager class name. Defaults to None.
+        job (ExecutableCommand, optional): command object to manage. Defaults to None.
+        subprocess (bool, optional): whether the command is run as a subprocess. Defaults to False.
+        mpi_type (str, optional): MPI type to use with the Mpirun class only. Defaults to "openmpi".
+        timeout (int, optional): job manager timeout. Defaults to None.
+        namespace (str, optional): location of yaml parameters used to define unset inputs. Defaults
+            to "/run/job_manager/*".
+        class_name_default (str, optional): default class_name to use when. Defaults to "Mpirun".
+
+    Returns:
+        JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
+
+    """
+    job_manager = None
+    if class_name is None:
+        class_name = test.params.get("class_name", namespace, default=class_name_default)
+    if subprocess is None:
+        subprocess = test.params.get("subprocess", namespace, default=False)
+    if mpi_type is None:
+        mpi_type = test.params.get("mpi_type", namespace, default="mpich")
+    if timeout is None:
+        timeout = test.params.get(test.get_test_name(), namespace.replace("*", "timeout/*"), None)
+        if timeout is None:
+            timeout = test.params.get("timeout", namespace, None)
+            if timeout is None:
+                timeout = test.timeout - 30
+
+    # Setup a job manager command for running the test command
+    if class_name is not None:
+        job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
+        job_manager.timeout = timeout
+        job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
+        if isinstance(test.job_manager, list):
+            test.job_manager.append(job_manager)
+        else:
+            test.job_manager = job_manager
+
+    return job_manager
 
 
 class JobManager(ExecutableCommand):

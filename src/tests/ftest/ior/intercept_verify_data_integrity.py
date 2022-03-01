@@ -7,7 +7,7 @@
 import os
 from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand, run_ior
-from job_manager_utils import Mpirun
+from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
 
@@ -70,9 +70,7 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
         self.job_manager = []
         for index, clients, intercept in index_clients_intercept:
             # Add a job manager for each ior command
-            self.job_manager.append(Mpirun(None, False, mpitype="mpich"))
-            self.job_manager[-1].timeout = self.timeout - 35
-            self.job_manager[-1].tmpdir_base.update(self.test_dir, "tmpdir_base")
+            job_manager = get_job_manager(self, "Mpirun", None, False, "mpich", self.timeout - 35)
 
             # Create a unique ior test file for each thread
             test_file_items = ["testfile", str(index)]
@@ -83,7 +81,7 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
             # Define the parameters that will be used to run an ior command in this thread
             thread_manager.add(
                 test=self,
-                manager=self.job_manager[-1],
+                manager=job_manager,
                 log=self.client_log,
                 hosts=clients,
                 path=self.workdir,
