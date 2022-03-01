@@ -1254,7 +1254,7 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		rc = pl_obj_layout_alloc(rop.rop_grp_size, rop.rop_grp_nr,
 				&reint_layout);
 		if (rc) {
-			D_FREE(layout);
+			pl_obj_layout_free(layout);
 			return rc;
 		}
 	} else {
