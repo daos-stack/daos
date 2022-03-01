@@ -31,10 +31,7 @@ import (
 )
 
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
-const (
-	BdevPciAddrSep = " "
-	NilBdevAddress = "<nil>"
-)
+const BdevPciAddrSep = " "
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
 type NvmeDevState uint32
@@ -45,7 +42,6 @@ const (
 	NvmeStateInUse    NvmeDevState = C.NVME_DEV_FL_INUSE
 	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
 	NvmeStateIdentify NvmeDevState = C.NVME_DEV_FL_IDENTIFY
-	NvmeStateUnknown  NvmeDevState = C.NVME_DEV_STATE_INVALID
 )
 
 // IsNew returns true if SSD is not in use by DAOS.
@@ -63,12 +59,12 @@ func (bs NvmeDevState) IsFaulty() bool {
 	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty != 0
 }
 
-func (bs NvmeDevState) String() string {
+// StatusString summarizes the device status.
+func (bs NvmeDevState) StatusString() string {
 	return C.GoString(C.nvme_state2str(C.int(bs)))
 }
 
-// States lists each flag in state bitset.
-func (bs NvmeDevState) States() string {
+func (bs NvmeDevState) String() string {
 	return fmt.Sprintf("plugged: %v, in-use: %v, faulty: %v, identify: %v",
 		bs&C.NVME_DEV_FL_PLUGGED != 0, bs&C.NVME_DEV_FL_INUSE != 0,
 		bs&C.NVME_DEV_FL_FAULTY != 0, bs&C.NVME_DEV_FL_IDENTIFY != 0)
@@ -80,12 +76,17 @@ func (bs NvmeDevState) Uint32() uint32 {
 }
 
 // NvmeDevStateFromString converts a status string into a state bitset.
-func NvmeDevStateFromString(status string) NvmeDevState {
+func NvmeDevStateFromString(status string) (NvmeDevState, error) {
 	cStr := C.CString(status)
 	defer C.free(unsafe.Pointer(cStr))
 
-	return NvmeDevState(C.nvme_str2state(cStr))
+	cState := C.nvme_str2state(cStr)
 
+	if cState == C.NVME_DEV_STATE_INVALID {
+		return NvmeDevState(0), errors.Errorf("%q is an invalid nvme dev status string", status)
+	}
+
+	return NvmeDevState(cState), nil
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -179,7 +180,7 @@ func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
 		NvmeStateStr string `json:"dev_state"`
 		*toJSON
 	}{
-		NvmeStateStr: sd.NvmeState.String(),
+		NvmeStateStr: sd.NvmeState.StatusString(),
 		toJSON:       (*toJSON)(sd),
 	})
 }
@@ -204,7 +205,11 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
+	state, err := NvmeDevStateFromString(from.NvmeStateStr)
+	if err != nil {
+		return err
+	}
+	sd.NvmeState = state
 
 	return nil
 }
