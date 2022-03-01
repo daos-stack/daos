@@ -88,7 +88,7 @@ class IorTestBase(DfuseTestBase):
         if pool.dmg:
             pool.set_query_data()
 
-    def run_ior_with_pool(self, intercept=None, test_file_suffix="",
+    def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
@@ -102,6 +102,8 @@ class IorTestBase(DfuseTestBase):
         Args:
             intercept (str, optional): path to the interception library. Shall
                     be used only for POSIX through DFUSE. Defaults to None.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to True.
             test_file_suffix (str, optional): suffix to add to the end of the
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
@@ -151,8 +153,8 @@ class IorTestBase(DfuseTestBase):
         job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
         try:
-            out = self.run_ior(job_manager, self.processes,
-                               intercept, plugin_path=plugin_path,
+            out = self.run_ior(job_manager, self.processes, intercept,
+                               display_space=display_space, plugin_path=plugin_path,
                                fail_on_warning=fail_on_warning,
                                out_queue=out_queue, env=env)
         finally:
