@@ -311,8 +311,11 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 					 VOS_ITER_AKEY);
 	}
 
-	if (rc != 1)
+	if (rc != 1) {
+		/** Otherwise, key_tree_punch will handle it */
+		rc = vos_key_flags_set(vos_cont2umm(obj->obj_cont), krec);
 		goto out;
+	}
 	/** else propagate the punch */
 
 punch_dkey:
@@ -498,6 +501,10 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				if (rc == 0)
 					obj->obj_df->vo_max_write = epr.epr_hi;
 			}
+
+			if (rc == 0)
+				rc = vos_obj_flags_set(vos_cont2umm(cont), &obj->obj_df->vo_tree,
+						       &cont->vc_cont_df->cd_obj_root);
 
 			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 		}
@@ -1913,6 +1920,8 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
 	int			 rc;
+	uint8_t			 bmap;
+	bool			 punched;
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
 		  iter->it_type == VOS_ITER_DKEY,
@@ -1928,8 +1937,21 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 	krec = rbund.rb_krec;
 	umm = vos_obj2umm(oiter->it_obj);
 
-	if (!vos_ilog_is_punched(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog, &oiter->it_epr,
-				 &oiter->it_punched, &oiter->it_ilog_info))
+	punched = vos_ilog_is_punched(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog, &oiter->it_epr,
+				      &oiter->it_punched, &oiter->it_ilog_info);
+
+	bmap = krec->kr_bmap;
+
+	if (bmap & KREC_BF_AGG_OPT) {
+		if ((bmap & KREC_BF_AGG_NEEDED) == 0) {
+			if (!punched && oiter->it_punched.pr_epc == 0)
+				return 2;
+		} else {
+			bmap |= KREC_BF_AGG_FLAG;
+		}
+	}
+
+	if (!punched && bmap == krec->kr_bmap)
 		return 0;
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
@@ -1937,17 +1959,23 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 	if (rc != 0)
 		goto exit;
 
-	/* Incarnation log is empty, delete the object */
-	D_DEBUG(DB_IO, "Moving %s to gc heap\n",
-		iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
+	if (punched) {
+		/* Incarnation log is empty, delete the object */
+		D_DEBUG(DB_IO, "Moving %s to gc heap\n",
+			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
 
-	rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
-	D_ASSERT(rc != -DER_NONEXIST);
+		rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
+		D_ASSERT(rc != -DER_NONEXIST);
+	} else {
+		rc = umem_tx_add_ptr(umm, &krec->kr_bmap, sizeof(krec->kr_bmap));
+		if (rc == 0)
+			krec->kr_bmap = bmap;
+	}
 
 	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc == 0)
-		return 1;
+		return punched ? 1 : 0;
 
 	return rc;
 }
@@ -1964,6 +1992,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct vos_rec_bundle	 rbund;
 	bool			 delete = false, invisible = false;
 	int			 rc;
+	uint8_t			 bmap;
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
 		  iter->it_type == VOS_ITER_DKEY,
@@ -2010,10 +2039,22 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		}
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
-	} else if (rc == -DER_NONEXIST) {
-		/* Key no longer exists at epoch but isn't empty */
-		invisible = true;
-		rc = 0;
+	} else {
+		if (rc == -DER_NONEXIST) {
+			/* Key no longer exists at epoch but isn't empty */
+			invisible = true;
+			rc = 0;
+		}
+		bmap = krec->kr_bmap;
+		if (bmap & KREC_BF_AGG_FLAG) {
+			/** We got through aggregation without anyone clearing the flag,
+			 *  so we can clear the needed flag
+			 */
+			bmap = bmap & ~(KREC_BF_AGG_FLAG | KREC_BF_AGG_NEEDED);
+			rc = umem_tx_add_ptr(umm, &krec->kr_bmap, sizeof(krec->kr_bmap));
+			if (rc == 0)
+				krec->kr_bmap = bmap;
+		}
 	}
 
 end:
