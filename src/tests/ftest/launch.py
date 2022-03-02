@@ -11,6 +11,7 @@
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from datetime import datetime
+import distro
 import errno
 import json
 import os
@@ -30,8 +31,6 @@ ET.Element = Element
 ET.SubElement = SubElement
 ET.tostring = tostring
 
-
-from distro_utils import detect
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -1724,9 +1723,10 @@ def install_debuginfos():
         on this node also.
 
     """
-    distro_info = detect()
+    distro_info = distro.os_release_info()
+
     install_pkgs = [{'name': 'gdb'}]
-    if "centos" in distro_info.name.lower():
+    if "centos" in distro_info["id"].lower():
         install_pkgs.append({'name': 'python3-debuginfo'})
 
     cmds = []
@@ -1753,21 +1753,18 @@ def install_debuginfos():
     if USE_DEBUGINFO_INSTALL:
         dnf_args = ["--exclude", "ompi-debuginfo"]
         if os.getenv("TEST_RPMS", 'false') == 'true':
-            if "suse" in distro_info.name.lower():
+            if "suse" in distro_info["id"].lower():
                 dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
-            elif "centos" in distro_info.name.lower() and \
-                 distro_info.version == "7":
+            elif "centos" in distro_info["id"].lower() and distro_info["version"] == "7":
                 dnf_args.extend(["--enablerepo=*-debuginfo", "--exclude",
                                  "nvml-debuginfo", "libpmemobj",
                                  "python36", "openmpi3", "gcc"])
-            elif "centos" in distro_info.name.lower() and \
-                 distro_info.version == "8":
+            elif "centos" in distro_info["id"].lower() and distro_info["version"] == "8":
                 dnf_args.extend(["--enablerepo=*-debuginfo", "libpmemobj",
                                  "python3", "openmpi", "gcc"])
             else:
                 raise RuntimeError(
-                    "install_debuginfos(): Unsupported distro: {}".format(
-                        distro_info))
+                    "install_debuginfos(): Unsupported distro: {}".format(distro_info))
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
         cmds.append(
@@ -1796,7 +1793,7 @@ def install_debuginfos():
 
     # Now install a few pkgs that debuginfo-install wouldn't
     cmd = ["sudo", "dnf", "-y"]
-    if "centos" in distro_info.name.lower():
+    if "centos" in distro_info["id"].lower():
         cmd.append("--enablerepo=*debug*")
     cmd.append("install")
     for pkg in install_pkgs:
@@ -1821,7 +1818,7 @@ def install_debuginfos():
     if retry:
         print("Going to refresh caches and try again")
         cmd_prefix = ["sudo", "dnf"]
-        if "centos" in distro_info.name.lower():
+        if "centos" in distro_info["id"].lower():
             cmd_prefix.append("--enablerepo=*debug*")
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
