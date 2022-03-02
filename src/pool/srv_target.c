@@ -824,7 +824,7 @@ static int
 pool_hdl_delete_all_cb(d_list_t *link, void *arg)
 {
 	uuid_copy(arg, pool_hdl_obj(link)->sph_uuid);
-	return 0;
+	return 1;
 }
 
 void
