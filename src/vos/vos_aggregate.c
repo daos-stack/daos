@@ -472,7 +472,6 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_akey = entry->ie_key;
 			full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
 			rc = vos_obj_iter_pre_aggregate(ih, full_scan);
-			D_DEBUG(DB_EPC, "iter_pre_aggregate returned "DF_RC"\n", DP_RC(rc));
 			if (rc < 0)
 				return rc;
 			if (rc == 1) {

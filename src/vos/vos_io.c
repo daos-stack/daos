@@ -1704,14 +1704,13 @@ vos_tree_mark_agg(struct umem_instance *umm, struct btr_root *root)
 }
 
 int
-vos_mark_agg(struct umem_instance *umm, struct btr_root *obj_root,
-		      struct btr_root *cont_root)
+vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root)
 {
 	int	rc;
 
-	rc = vos_tree_mark_agg(umm, obj_root);
+	rc = vos_tree_mark_agg(umm, dkey_root);
 	if (rc == 0)
-		rc = vos_tree_mark_agg(umm, cont_root);
+		rc = vos_tree_mark_agg(umm, obj_root);
 
 	return rc;
 }

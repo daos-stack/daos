@@ -312,8 +312,9 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	}
 
 	if (rc != 1) {
-		/** Otherwise, key_tree_punch will handle it */
-		rc = vos_key_mark_agg(vos_cont2umm(obj->obj_cont), krec);
+		/** key_tree_punch will handle dkey flags if punch is propagated */
+		if (rc == 0)
+			rc = vos_key_mark_agg(vos_cont2umm(obj->obj_cont), krec);
 		goto out;
 	}
 	/** else propagate the punch */
