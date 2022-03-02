@@ -449,7 +449,6 @@ class CartTest(TestWithoutServers):
         for filename in memcheck_files:
             xml_file = os.path.join(daos_test_shared_dir, filename)
 
-
             with open(xml_file, 'r') as fd:
                 with open('{}.xml'.format(xml_file), 'w') as ofd:
                     for line in fd:
@@ -459,7 +458,6 @@ class CartTest(TestWithoutServers):
                         else:
                             ofd.write(line)
             os.unlink(xml_file)
-
 
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
