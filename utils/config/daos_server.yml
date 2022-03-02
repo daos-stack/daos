@@ -92,7 +92,8 @@
 #
 #
 ## CART: Disable SRX
-## parameters shared with client.
+## parameters shared with client. set it to true if network card
+## does not support shared receive context, eg intel E810-C.
 #
 #disable_srx: false
 #
@@ -216,6 +217,13 @@
 #
 ## default: disabled (errors only to control plane log)
 #firmware_helper_log_file: /tmp/daos_firmware.log
+#
+#
+## Enable HTTP endpoint for remote telemetry collection.
+#
+## default endpoint state: disabled
+## default endpoint port: 9191
+#telemetry_port: 9191
 #
 #
 ## When per-engine definitions exist, auto-allocation of resources is not

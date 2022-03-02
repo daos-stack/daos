@@ -55,7 +55,7 @@ static struct daos_prop_co_roots dummy_roots;
 struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_CO_LABEL,
-		.dpe_str	= DAOS_PROP_CO_LABEL_DEFAULT,
+		.dpe_str	= "container_label_not_set",
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
 		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKNOWN,
