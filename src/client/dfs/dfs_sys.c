@@ -702,6 +702,28 @@ dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode)
 }
 
 int
+dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid, int flags)
+{
+	int		rc;
+	struct sys_path	sys_path;
+
+	if (dfs_sys == NULL)
+		return EINVAL;
+	if (path == NULL)
+		return EINVAL;
+
+	rc = sys_path_parse(dfs_sys, &sys_path, path);
+	if (rc != 0)
+		return rc;
+
+	rc = dfs_chown(dfs_sys->dfs, sys_path.parent, sys_path.name, uid, gid, flags);
+
+	sys_path_free(dfs_sys, &sys_path);
+
+	return rc;
+}
+
+int
 dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf,
 		int flags, int sflags)
 {
@@ -1085,7 +1107,7 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 {
 	int		rc;
 	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
+	dfs_obj_t	*obj = NULL;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1105,7 +1127,8 @@ dfs_sys_symlink(dfs_sys_t *dfs_sys, const char *target, const char *path)
 		D_GOTO(out_free_path, rc);
 	}
 
-	dfs_release(obj);
+	if (obj)
+		dfs_release(obj);
 
 out_free_path:
 	sys_path_free(dfs_sys, &sys_path);

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -27,8 +27,7 @@ class ObjUpdateBadParam(TestWithServers):
             # create a container
             self.container = DaosContainer(self.context)
             self.container.create(self.pool.pool.handle)
-            self.plog.info("Container %s created.",
-			                        self.container.get_uuid_str())
+            self.plog.info("Container %s created.", self.container.get_uuid_str())
             # now open it
             self.container.open()
         except DaosApiError as excep:

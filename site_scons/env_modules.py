@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (c) 2019-2020 Intel Corporation
+# Copyright 2019-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -69,9 +69,12 @@ class _env_module(): # pylint: disable=invalid-name
 
             return ns['_mlstatus'], stderr.decode()
 
-        exec(stdout.decode()) # nosec
+        # Should not get to this point.
+        assert False
 
-        return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
+        # exec(stdout.decode()) # nosec
+
+        # return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
         # pylint: enable=exec-used
 
     def _init_mpi_module(self):
