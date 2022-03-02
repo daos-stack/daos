@@ -30,6 +30,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -386,7 +387,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	})
 }
 
-func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) {
+func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *raft.Database, joinFn systemJoinFn) {
 	if !sysdb.IsReplica() {
 		return
 	}
