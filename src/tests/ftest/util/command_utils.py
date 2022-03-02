@@ -1245,8 +1245,8 @@ class SubprocessManager():
         if set_expected:
             # Assign the expected states to the current job process states
             self.log.info(
-                "<%s> Assigning expected %s states.",
-                self._id.upper(), self._id)
+                "<%s> Assigning expected %s states: %s",
+                self._id.upper(), self._id, current_states)
             self._expected_states = current_states.copy()
 
         # Verify the expected states match the current states
@@ -1254,7 +1254,7 @@ class SubprocessManager():
             "<%s> Verifying %s states: group=%s, hosts=%s",
             self._id.upper(), self._id, self.get_config_value("name"),
             NodeSet.fromlist(self._hosts))
-        if current_states:
+        if current_states and self._expected_states:
             log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
             self.log.info(
                 log_format,
