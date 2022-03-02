@@ -668,14 +668,14 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  *			Target parent directory object. If NULL, use root obj.
  * \param[in]	new_name
  *			New link name of object.
- * \param[in]	oid	Optionally return the DAOS Object ID of a removed obj
- *			as a result of a rename.
+ * \param[out]	oid	Optional: return the intenal object ID of the removed obj
+ *			if the move clobbered it.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name, daos_obj_id_t *oid);
+dfs_move(dfs_t *dfs, dfs_obj_t *parent, const char *name, dfs_obj_t *new_parent,
+	 const char *new_name, daos_obj_id_t *oid);
 
 /**
  * Exchange two objects.
@@ -689,8 +689,8 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1,
-	     dfs_obj_t *parent2, char *name2);
+dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *parent2,
+	     const char *name2);
 
 /**
  * Retrieve mode of an open object.
