@@ -844,7 +844,7 @@ ds_pool_hdl_delete_all(void)
 		uuid_clear(arg);
 
 		rc = d_hash_table_traverse(pool_hdl_hash, pool_hdl_delete_all_cb, arg);
-		D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+		D_ASSERTF(rc == 0 || rc == 1, DF_RC"\n", DP_RC(rc));
 
 		if (uuid_is_null(arg))
 			break;
