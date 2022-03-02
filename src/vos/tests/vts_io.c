@@ -17,7 +17,6 @@
 #include <daos/checksum.h>
 #include <daos_srv/srv_csum.h>
 #include "vts_array.h"
-//#include <linux/limits.h>
 
 #define NO_FLAGS	    (0)
 
