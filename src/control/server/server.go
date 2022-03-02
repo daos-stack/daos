@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
@@ -107,7 +108,7 @@ type server struct {
 
 	harness      *EngineHarness
 	membership   *system.Membership
-	sysdb        *system.Database
+	sysdb        *raft.Database
 	pubSub       *events.PubSub
 	evtForwarder *control.EventForwarder
 	evtLogger    *control.EventLogger
@@ -160,7 +161,7 @@ func (srv *server) createServices(ctx context.Context) error {
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	sysdb, err := system.NewDatabase(srv.log, &system.DatabaseConfig{
+	sysdb, err := raft.NewDatabase(srv.log, &raft.DatabaseConfig{
 		Replicas:   dbReplicas,
 		RaftDir:    cfgGetRaftDir(srv.cfg),
 		SystemName: srv.cfg.SystemName,

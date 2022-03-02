@@ -175,7 +175,7 @@ type Member struct {
 	Addr           *net.TCPAddr `json:"addr"`
 	FabricURI      string       `json:"fabric_uri"`
 	FabricContexts uint32       `json:"fabric_contexts"`
-	state          MemberState
+	State          MemberState  `json:"-"`
 	Info           string       `json:"info"`
 	FaultDomain    *FaultDomain `json:"fault_domain"`
 	LastUpdate     time.Time    `json:"last_update"`
@@ -197,7 +197,7 @@ func (sm *Member) MarshalJSON() ([]byte, error) {
 		*toJSON
 	}{
 		Addr:        sm.Addr.String(),
-		State:       strings.ToLower(sm.state.String()),
+		State:       strings.ToLower(sm.State.String()),
 		FaultDomain: sm.FaultDomain.String(),
 		toJSON:      (*toJSON)(sm),
 	})
@@ -231,7 +231,7 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	}
 	sm.Addr = addr
 
-	sm.state = memberStateFromString(from.State)
+	sm.State = memberStateFromString(from.State)
 
 	fd, err := NewFaultDomainFromString(from.FaultDomain)
 	if err != nil {
@@ -243,12 +243,7 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 }
 
 func (sm *Member) String() string {
-	return fmt.Sprintf("%s/%d/%s", sm.Addr, sm.Rank, sm.State())
-}
-
-// State retrieves member state.
-func (sm *Member) State() MemberState {
-	return sm.state
+	return fmt.Sprintf("%s/%d/%s", sm.Addr, sm.Rank, sm.State)
 }
 
 // WithInfo adds info field and returns updated member.
@@ -269,7 +264,7 @@ func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberSt
 	// or else change the return signature to include an error
 	newUUID := uuid.MustParse(uuidStr)
 	return &Member{Rank: rank, UUID: newUUID, FabricURI: uri, Addr: addr,
-		state: state, FaultDomain: MustCreateFaultDomain(),
+		State: state, FaultDomain: MustCreateFaultDomain(),
 		LastUpdate: time.Now()}
 }
 
