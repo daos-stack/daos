@@ -1501,12 +1501,15 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 
 		if (ioc->ioc_coc->sc_props.dcp_csum_enabled) {
+			struct daos_csummer *csummer = daos_csummer_copy(ioc->ioc_coc->sc_csummer);
+
 			rc = csum_add2iods(ioh,
 					   orw->orw_iod_array.oia_iods,
 					   orw->orw_iod_array.oia_iod_nr,
-					   ioc->ioc_coc->sc_csummer,
+					   csummer,
 					   orwo->orw_iod_csums.ca_arrays,
 					   orw->orw_oid, &orw->orw_dkey);
+			daos_csummer_destroy(&csummer);
 			if (orwo->orw_iod_csums.ca_arrays == 0) {
 				int i;
 
