@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-package drpc
+package daos
 
 import (
 	"math"

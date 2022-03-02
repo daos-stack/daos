@@ -20,6 +20,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -437,7 +438,7 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 
 		if engineResp.Status != 0 {
 			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(),
-				drpc.DaosStatus(engineResp.Status)))
+				daos.Status(engineResp.Status)))
 		}
 	}
 
