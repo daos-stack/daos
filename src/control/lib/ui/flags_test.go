@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
@@ -51,15 +51,15 @@ func TestFlags_LabelOrUUIDFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := ui.LabelOrUUIDFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.isEmpty, f.Empty(), "unexpected Empty()")
-			common.AssertEqual(t, tc.hasUUID, f.HasUUID(), "unexpected HasUUID()")
-			common.AssertEqual(t, tc.hasLabel, f.HasLabel(), "unexpected HasLabel()")
-			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+			test.AssertEqual(t, tc.isEmpty, f.Empty(), "unexpected Empty()")
+			test.AssertEqual(t, tc.hasUUID, f.HasUUID(), "unexpected HasUUID()")
+			test.AssertEqual(t, tc.hasLabel, f.HasLabel(), "unexpected HasLabel()")
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 
 			if diff := cmp.Diff(tc.expFlag, &f, cmpopts.IgnoreUnexported(ui.LabelOrUUIDFlag{})); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)

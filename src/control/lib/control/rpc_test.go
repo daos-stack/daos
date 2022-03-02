@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -143,7 +143,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			goRoutinesAtStart := runtime.NumGoroutine()
 
@@ -168,7 +168,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				tc.withCancel.cancel()
 			}
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -451,7 +451,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			client := NewClient(
 				WithConfig(clientCfg),
@@ -477,7 +477,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			}
 			gotResp, gotErr := client.InvokeUnaryRPC(ctx, tc.req)
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -487,7 +487,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 			if tc.withCancel == nil {
 				cmpOpts := []cmp.Option{
 					cmpopts.IgnoreUnexported(UnaryResponse{}),
-					cmp.Comparer(func(x, y error) bool { return common.CmpErrBool(x, y) }),
+					cmp.Comparer(func(x, y error) bool { return test.CmpErrBool(x, y) }),
 					cmp.Transformer("Sort", func(in []*HostResponse) []*HostResponse {
 						out := append([]*HostResponse(nil), in...)
 						sort.Slice(out, func(i, j int) bool { return out[i].Addr < out[j].Addr })

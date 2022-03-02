@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,10 +9,9 @@ package drpc
 import (
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/daos-stack/daos/src/control/common"
 )
 
 func TestMarshal_Success(t *testing.T) {
@@ -28,7 +27,7 @@ func TestMarshal_Success(t *testing.T) {
 	pMsg := &Call{}
 	_ = proto.Unmarshal(result, pMsg)
 
-	cmpOpts := common.DefaultCmpOpts()
+	cmpOpts := test.DefaultCmpOpts()
 	if diff := cmp.Diff(message, pMsg, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got)\n%s", diff)
 	}

@@ -16,9 +16,9 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -279,7 +279,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := NewMockInvoker(log, &MockInvokerConfig{
 				UnaryError: tc.uErr,
@@ -299,7 +299,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			}
 
 			netDetails, gotErr := getNetworkDetails(context.TODO(), req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			var gotHostErrs *HostErrorsResp
 			if cge, ok := gotErr.(*ConfigGenerateError); ok {
 				gotHostErrs = &cge.HostErrorsResp
@@ -312,14 +312,14 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 				t.Fatal("expected or received host errors without outer error")
 			}
 
-			common.AssertEqual(t, len(tc.expIfs), len(netDetails.numaIfaces),
+			test.AssertEqual(t, len(tc.expIfs), len(netDetails.numaIfaces),
 				"unexpected number of network interfaces")
 			for nn, iface := range netDetails.numaIfaces {
 				if diff := cmp.Diff(tc.expIfs[nn], iface); diff != "" {
 					t.Fatalf("unexpected interfaces (-want, +got):\n%s\n", diff)
 				}
 			}
-			common.AssertEqual(t, tc.expCoresPerNuma, netDetails.numaCoreCount,
+			test.AssertEqual(t, tc.expCoresPerNuma, netDetails.numaCoreCount,
 				"unexpected numa cores")
 		})
 	}
@@ -575,7 +575,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := NewMockInvoker(log, &MockInvokerConfig{
 				UnaryError: tc.uErr,
@@ -599,7 +599,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 			}
 
 			storageDetails, gotErr := getStorageDetails(context.TODO(), req, tc.engineCount)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 
 			var gotHostErrs *HostErrorsResp
 			if cge, ok := gotErr.(*ConfigGenerateError); ok {
@@ -613,7 +613,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				t.Fatal("expected or received host errors without outer error")
 			}
 
-			common.AssertEqual(t, len(tc.expPMems), len(storageDetails.numaPMems),
+			test.AssertEqual(t, len(tc.expPMems), len(storageDetails.numaPMems),
 				"unexpected number of pmem devices")
 			for nn, pmems := range storageDetails.numaPMems {
 				if diff := cmp.Diff(tc.expPMems[nn], []string(pmems)); diff != "" {
@@ -621,7 +621,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				}
 			}
 
-			common.AssertEqual(t, len(tc.expSSDs), len(storageDetails.numaSSDs),
+			test.AssertEqual(t, len(tc.expSSDs), len(storageDetails.numaSSDs),
 				"unexpected number of ssds")
 			for nn, ssds := range storageDetails.numaSSDs {
 				if diff := cmp.Diff(tc.expSSDs[nn], []string(ssds)); diff != "" {
@@ -678,17 +678,17 @@ func TestControl_AutoConfig_getCPUDetails(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			numaSSDs := make(numaSSDsMap)
 			for nn, count := range tc.ssdListSizes {
 				for i := 0; i < count; i++ {
-					numaSSDs[nn] = append(numaSSDs[nn], common.MockPCIAddr(int32(i)))
+					numaSSDs[nn] = append(numaSSDs[nn], test.MockPCIAddr(int32(i)))
 				}
 			}
 
 			nccs, gotErr := getCPUDetails(log, numaSSDs, tc.numaCoreCount)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -841,7 +841,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"hostX:10002"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       numaSSDsMap{0: []string{common.MockPCIAddr(1)}},
+			numaSSDs:       numaSSDsMap{0: []string{test.MockPCIAddr(1)}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
@@ -856,7 +856,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddr(1)),
+							WithBdevDeviceList(test.MockPCIAddr(1)),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -868,7 +868,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
 			numaIfaces:   numaNetIfaceMap{0: ib0, 1: ib1},
 			numaSSDs: numaSSDsMap{
-				0: common.MockPCIAddrs(0, 1, 2, 3), 1: common.MockPCIAddrs(4, 5, 6),
+				0: test.MockPCIAddrs(0, 1, 2, 3), 1: test.MockPCIAddrs(4, 5, 6),
 			},
 			numaCoreCounts: numaCoreCountsMap{
 				0: &coreCounts{16, 7}, 1: &coreCounts{15, 6},
@@ -886,7 +886,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2)...),
+							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -905,7 +905,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
+							WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
 					).
 					WithStorageNumaNodeIndex(1).
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
@@ -918,7 +918,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"hostX:10002"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       numaSSDsMap{0: []string{common.MockPCIAddr(1)}},
+			numaSSDs:       numaSSDsMap{0: []string{test.MockPCIAddr(1)}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{8, 2}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(4096).WithEngines(
 				defaultEngineCfg(0).
@@ -933,7 +933,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddr(1)),
+							WithBdevDeviceList(test.MockPCIAddr(1)),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -946,7 +946,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
 			numaIfaces:   numaNetIfaceMap{0: ib0, 1: ib1},
 			numaSSDs: numaSSDsMap{
-				0: common.MockPCIAddrs(0, 1, 2, 3), 1: common.MockPCIAddrs(4, 5, 6),
+				0: test.MockPCIAddrs(0, 1, 2, 3), 1: test.MockPCIAddrs(4, 5, 6),
 			},
 			numaCoreCounts: numaCoreCountsMap{
 				0: &coreCounts{12, 2}, 1: &coreCounts{6, 0},
@@ -964,7 +964,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2)...),
+							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -984,7 +984,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
+							WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
 					).
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -995,7 +995,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			nd := &networkDetails{
 				engineCount: tc.engineCount,
@@ -1010,7 +1010,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			gotCfg, gotErr := genConfig(log, mockEngineCfg,
 				tc.accessPoints, nd, sd, tc.numaCoreCounts)
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

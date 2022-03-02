@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	. "github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/security"
 )
 

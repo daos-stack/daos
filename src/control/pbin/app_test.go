@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,7 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -47,11 +47,11 @@ func TestPbin_NewApp(t *testing.T) {
 	}
 
 	expectDefaultProcess(t, app)
-	common.AssertNotEqual(t, app.log, nil, "expected non-nil logger")
-	common.AssertEqual(t, len(app.allowedCallers), 0, "expected no callers by default")
-	common.AssertEqual(t, len(app.handlers), 1, "expected only ping handler by default")
-	common.AssertEqual(t, app.input, os.Stdin, "default input should be stdin")
-	common.AssertEqual(t, app.output, os.Stdout, "default output should be stdout")
+	test.AssertNotEqual(t, app.log, nil, "expected non-nil logger")
+	test.AssertEqual(t, len(app.allowedCallers), 0, "expected no callers by default")
+	test.AssertEqual(t, len(app.handlers), 1, "expected only ping handler by default")
+	test.AssertEqual(t, app.input, os.Stdin, "default input should be stdin")
+	test.AssertEqual(t, app.output, os.Stdout, "default output should be stdout")
 }
 
 func TestPbinApp_WithCallers(t *testing.T) {
@@ -67,7 +67,7 @@ func TestPbinApp_WithCallers(t *testing.T) {
 }
 
 func TestPbinApp_WithLogFile_GoodPath(t *testing.T) {
-	logDir, cleanup := common.CreateTestDir(t)
+	logDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	logFile := filepath.Join(logDir, "test.log")
@@ -78,7 +78,7 @@ func TestPbinApp_WithLogFile_GoodPath(t *testing.T) {
 		t.Fatal("resulting app was nil")
 	}
 
-	common.AssertNotEqual(t, app.log, nil, "expected non-nil logger")
+	test.AssertNotEqual(t, app.log, nil, "expected non-nil logger")
 
 	_, err := os.Stat(logFile)
 	if err != nil {
@@ -94,7 +94,7 @@ func TestPbinApp_WithLogFile_BadPath(t *testing.T) {
 		t.Fatal("resulting app was nil")
 	}
 
-	common.AssertNotEqual(t, app.log, nil, "expected non-nil logger")
+	test.AssertNotEqual(t, app.log, nil, "expected non-nil logger")
 }
 
 func TestPbinApp_WithInput(t *testing.T) {
@@ -105,7 +105,7 @@ func TestPbinApp_WithInput(t *testing.T) {
 		t.Fatal("resulting app was nil")
 	}
 
-	common.AssertEqual(t, app.input, expInput, "input should be custom")
+	test.AssertEqual(t, app.input, expInput, "input should be custom")
 }
 
 func TestPbinApp_WithOutput(t *testing.T) {
@@ -116,7 +116,7 @@ func TestPbinApp_WithOutput(t *testing.T) {
 		t.Fatal("resulting app was nil")
 	}
 
-	common.AssertEqual(t, app.output, expOutput, "output should be custom")
+	test.AssertEqual(t, app.output, expOutput, "output should be custom")
 }
 
 func expectHandlerAdded(t *testing.T, app *App, name string, handler RequestHandler, expLen int) {
@@ -126,7 +126,7 @@ func expectHandlerAdded(t *testing.T, app *App, name string, handler RequestHand
 	if _, ok := app.handlers[name]; !ok {
 		t.Fatal("added handler not found in map")
 	}
-	common.AssertEqual(t, len(app.handlers), expLen, "incorrect resulting number of handlers")
+	test.AssertEqual(t, len(app.handlers), expLen, "incorrect resulting number of handlers")
 }
 
 func TestPbinApp_AddHandler(t *testing.T) {
@@ -145,7 +145,7 @@ func TestPbinApp_Name(t *testing.T) {
 	mockProcess := defaultMockProcess()
 	app := newTestApp(mockProcess)
 
-	common.AssertEqual(t, mockProcess.name, app.Name(), "name didn't come from process")
+	test.AssertEqual(t, mockProcess.name, app.Name(), "name didn't come from process")
 }
 
 // testPayload is a Response payload used by the test handler.
@@ -289,7 +289,7 @@ func TestPbinApp_Run(t *testing.T) {
 
 			err := app.Run()
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResp, rw.getWrittenResponse(t)); diff != "" {
 				t.Errorf("bad response (-want, +got):\n%s\n", diff)

@@ -23,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
+	st "github.com/daos-stack/daos/src/control/system/test"
 )
 
 // Utilities for internal server package tests
@@ -206,7 +207,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	harness.started.SetTrue()
 
 	db := raft.MockDatabase(t, log)
-	ms := system.MockMembership(t, log, db, mockTCPResolver)
+	ms := st.MockMembership(t, log, db, mockTCPResolver)
 	return newMgmtSvc(harness, ms, db, nil, events.NewPubSub(context.Background(), log))
 }
 

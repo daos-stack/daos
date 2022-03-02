@@ -15,7 +15,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -35,7 +35,7 @@ Pool space info:
 		},
 		"normal response": {
 			pqr: &control.PoolQueryResp{
-				UUID: common.MockUUID(),
+				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:    2,
 					DisabledTargets: 1,
@@ -70,11 +70,11 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild busy, 42 objs, 21 recs
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
-				UUID: common.MockUUID(),
+				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:    2,
 					DisabledTargets: 1,
@@ -110,7 +110,7 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild failed, rc=0, status=2
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -145,7 +145,7 @@ func TestPretty_PrintPoolCreateResp(t *testing.T) {
 		},
 		"basic": {
 			pcr: &control.PoolCreateResp{
-				UUID:     common.MockUUID(),
+				UUID:     test.MockUUID(),
 				SvcReps:  mockRanks(0, 1, 2),
 				TgtRanks: mockRanks(0, 1, 2, 3),
 				TierBytes: []uint64{
@@ -163,11 +163,11 @@ Pool created with 5.66%%,94.34%% storage tier ratio
   Storage tier 0 (SCM) : 2.4 GB (600 MB / rank)              
   Storage tier 1 (NVMe): 40 GB (10 GB / rank)                
 
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
 		"no nvme": {
 			pcr: &control.PoolCreateResp{
-				UUID:     common.MockUUID(),
+				UUID:     test.MockUUID(),
 				SvcReps:  mockRanks(0, 1, 2),
 				TgtRanks: mockRanks(0, 1, 2, 3),
 				TierBytes: []uint64{
@@ -183,13 +183,13 @@ Pool created with 100.00%% storage tier ratio
   Total Size           : 2.4 GB                              
   Storage tier 0 (SCM) : 2.4 GB (600 MB / rank)              
 
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
 			gotErr := PrintPoolCreateResponse(tc.pcr, &bld)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -233,7 +233,7 @@ no pools in system
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 					},
 				},
@@ -260,14 +260,14 @@ Pool     Size Used Imbalance Disabled
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
 					},
 					{
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						Label:           "one",
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage:           exampleUsage[1:],
@@ -282,7 +282,7 @@ Pool     Size Used Imbalance Disabled
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
@@ -290,7 +290,7 @@ Pool     Size Used Imbalance Disabled
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage:           exampleUsage,
 						TargetsTotal:    64,
@@ -311,7 +311,7 @@ two      6.0 TB 83%  12%       8/64
 				Pools: []*control.Pool{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
@@ -319,7 +319,7 @@ two      6.0 TB 83%  12%       8/64
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage: []*control.PoolTierUsage{
 							exampleUsage[0],
@@ -343,7 +343,7 @@ two  100 GB 80%  12%       8/64
 				Pools: []*control.Pool{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
@@ -351,7 +351,7 @@ two  100 GB 80%  12%       8/64
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						QueryErrorMsg:   "stats unavailable",
 					},
@@ -371,20 +371,20 @@ one  6.0 TB 83%  12%       0/16
 				Pools: []*control.Pool{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
 					},
 					{
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						QueryErrorMsg:   "stats unavailable",
 					},
 					{
 						Label:           "three",
-						UUID:            common.MockUUID(3),
+						UUID:            test.MockUUID(3),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						QueryStatusMsg:  "DER_UNINIT",
 					},
@@ -411,7 +411,7 @@ no pools in system
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
@@ -431,7 +431,7 @@ Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalan
 				Pools: []*control.Pool{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
@@ -439,7 +439,7 @@ Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalan
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage:           exampleUsage,
 						TargetsTotal:    64,
@@ -463,7 +463,7 @@ two   00000002-0002-0002-0002-000000000002 [3-5]   100 GB   80 GB    12%        
 			// pass the same io writer to standard and error stream
 			// parameters to mimic combined output seen on terminal
 			err := PrintListPoolsResponse(&bld, &bld, tc.resp, tc.verbose)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}

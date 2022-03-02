@@ -18,11 +18,13 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
+	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	. "github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
+	. "github.com/daos-stack/daos/src/control/system/test"
 )
 
 var (
@@ -92,7 +94,7 @@ func TestSystem_Membership_Get(t *testing.T) {
 
 func TestSystem_Membership_AddRemove(t *testing.T) {
 	dupeRankMember := MockMember(t, 1, MemberStateUnknown)
-	dupeRankMember.UUID = uuid.MustParse(common.MockUUID(2))
+	dupeRankMember.UUID = uuid.MustParse(test.MockUUID(2))
 	dupeUUIDMember := MockMember(t, 1, MemberStateUnknown)
 	dupeUUIDMember.Rank = 2
 
@@ -344,7 +346,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateExcluded),
-		NewMember(Rank(4), common.MockUUID(4), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(4), test.MockUUID(4), "", addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -434,7 +436,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 		MockMember(t, 3, MemberStateExcluded),
 		MockMember(t, 4, MemberStateJoined),
 		MockMember(t, 5, MemberStateJoined),
-		NewMember(Rank(6), common.MockUUID(6), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(6), test.MockUUID(6), "", addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -842,7 +844,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 			}
 
 			gotResp, gotErr := ms.Join(tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -959,7 +961,7 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			)
 
 			gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -1209,7 +1211,7 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			db := MockDatabase(t, log)
 			db.data.Members.FaultDomains = tc.tree
@@ -1217,7 +1219,7 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 
 			result, err := membership.CompressedFaultDomainTree(tc.inputRanks...)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)

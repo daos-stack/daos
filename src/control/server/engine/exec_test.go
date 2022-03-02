@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -94,7 +95,7 @@ func TestRunnerContextExit(t *testing.T) {
 	os.Setenv(testModeVar, "RunnerContextExit")
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	cfg := MockConfig().
 		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
@@ -131,7 +132,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	os.Setenv(allowedUserEnv, allowedUserVal)
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	cfg := MockConfig().
 		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",

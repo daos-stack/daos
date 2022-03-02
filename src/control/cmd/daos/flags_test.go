@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestFlags_EpochFlag(t *testing.T) {
@@ -73,12 +73,12 @@ func TestFlags_EpochFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := EpochFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 
 			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
@@ -177,12 +177,12 @@ func TestFlags_EpochRangeFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := EpochRangeFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 
 			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
@@ -234,12 +234,12 @@ func TestFlags_ChunkSizeFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := ChunkSizeFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 
 			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
@@ -294,12 +294,12 @@ func TestFlags_OidFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := OidFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 		})
 	}
 }
@@ -330,7 +330,7 @@ func TestFlags_ObjClassFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := ObjClassFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -341,7 +341,7 @@ func TestFlags_ObjClassFlag(t *testing.T) {
 			}
 			defer flagTestFini()
 
-			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 
 			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
@@ -384,12 +384,12 @@ func TestFlags_ConsModeFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := ConsModeFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 
 			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
@@ -424,7 +424,7 @@ func TestFlags_ContTypeFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := ContTypeFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -435,7 +435,7 @@ func TestFlags_ContTypeFlag(t *testing.T) {
 			}
 			defer flagTestFini()
 
-			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 
 			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)

@@ -16,7 +16,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -260,10 +260,10 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			_, err := os.Stat(tc.hwlocXMLFile)
-			common.AssertEqual(t, err, nil, "unable to read hwloc XML file")
+			test.AssertEqual(t, err, nil, "unable to read hwloc XML file")
 			os.Setenv("HWLOC_XMLFILE", tc.hwlocXMLFile)
 			defer os.Unsetenv("HWLOC_XMLFILE")
 

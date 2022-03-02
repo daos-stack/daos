@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/pkg/errors"
 )
 
@@ -60,7 +60,7 @@ func TestTelemetry_GetTimestamp(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := GetTimestamp(tc.ctx, tc.metricName)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expResult != nil {
 				if result == nil {
@@ -68,15 +68,15 @@ func TestTelemetry_GetTimestamp(t *testing.T) {
 				}
 
 				testMetricBasics(t, tc.expResult, result)
-				common.AssertEqual(t, result.Type(), MetricTypeTimestamp, "bad type")
+				test.AssertEqual(t, result.Type(), MetricTypeTimestamp, "bad type")
 
 				// guarantee it's in a reasonable range
 				val := result.Value()
 				createTime := time.Unix(int64(tc.expResult.Cur), 0)
-				common.AssertTrue(t, val.Equal(createTime) || val.After(createTime), fmt.Sprintf("value %v too early", val))
-				common.AssertTrue(t, val.Equal(time.Now()) || val.Before(time.Now()), fmt.Sprintf("value %v too late", val))
+				test.AssertTrue(t, val.Equal(createTime) || val.After(createTime), fmt.Sprintf("value %v too early", val))
+				test.AssertTrue(t, val.Equal(time.Now()) || val.Before(time.Now()), fmt.Sprintf("value %v too late", val))
 
-				common.AssertEqual(t, float64(val.Unix()), result.FloatValue(), "expected float value and time value equal")
+				test.AssertEqual(t, float64(val.Unix()), result.FloatValue(), "expected float value and time value equal")
 			} else {
 				if result != nil {
 					t.Fatalf("expected nil result, got %+v", result)

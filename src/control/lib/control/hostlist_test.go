@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,10 +9,9 @@ package control
 import (
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/common"
 )
 
 type testTgtChooser struct {
@@ -80,7 +79,7 @@ func TestControl_getRequestHosts(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotOut, gotErr := getRequestHosts(tc.cfg, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

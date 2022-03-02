@@ -15,6 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -130,7 +131,7 @@ func MockDatabase(t *testing.T, log logging.Logger) *Database {
 func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*Database, func()) {
 	t.Helper()
 
-	testDir, cleanup := common.CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 
 	if len(replicas) == 0 {
 		replicas = append(replicas, common.LocalhostCtrlAddr())

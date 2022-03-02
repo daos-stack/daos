@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,14 +20,10 @@ free_strings(char **str, size_t str_count)
 */
 import "C"
 import (
-	"fmt"
-	"os"
 	"strings"
 	"unsafe"
 
 	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 func getAclStrings(e *C.struct_daos_prop_entry) (out []string) {
@@ -211,7 +207,7 @@ func (cmd *containerDeleteACLCmd) Execute(args []string) error {
 	return nil
 }
 
-func convertACLProps(props []*property) (acl *control.AccessControlList) {
+/*func convertACLProps(props []*property) (acl *control.AccessControlList) {
 	acl = new(control.AccessControlList)
 
 	for _, prop := range props {
@@ -226,7 +222,7 @@ func convertACLProps(props []*property) (acl *control.AccessControlList) {
 	}
 
 	return
-}
+}*/
 
 type containerGetACLCmd struct {
 	existingContainerCmd
@@ -243,7 +239,7 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
+	/*aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to query ACL for container %s", cmd.contUUID)
@@ -272,7 +268,7 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 		return outputJSON(output, acl, nil)
 	}
 
-	_, err = fmt.Fprintf(output, control.FormatACL(acl, cmd.Verbose))
+	_, err = fmt.Fprintf(output, control.FormatACL(acl, cmd.Verbose))*/
 	return err
 }
 

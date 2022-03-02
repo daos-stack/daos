@@ -14,7 +14,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -39,7 +39,7 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 var nilPayloadErr = pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input")
 
 func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
-	testTarget, cleanup := common.CreateTestDir(t)
+	testTarget, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	mountReqPayload, err := json.Marshal(storage.ScmMountRequest{
@@ -109,7 +109,7 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
 			handler := &scmMountUnmountHandler{scmHandler: scmHandler{scmProvider: sp}}
@@ -128,7 +128,7 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 }
 
 func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
-	testTarget, cleanup := common.CreateTestDir(t)
+	testTarget, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	scmFormatReqPayload, err := json.Marshal(storage.ScmFormatRequest{
@@ -219,7 +219,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
 			handler := &scmFormatCheckHandler{scmHandler: scmHandler{scmProvider: sp}}
@@ -281,7 +281,7 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
 			handler := &scmPrepHandler{scmHandler: scmHandler{scmProvider: sp}}
@@ -343,7 +343,7 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sp := scm.NewMockProvider(log, tc.smbc, tc.smsc)
 			handler := &scmScanHandler{scmHandler: scmHandler{scmProvider: sp}}
@@ -404,7 +404,7 @@ func TestDaosAdmin_BdevScanHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			bp := bdev.NewMockProvider(log, tc.bmbc)
 			handler := &bdevScanHandler{bdevHandler: bdevHandler{bdevProvider: bp}}
@@ -465,7 +465,7 @@ func TestDaosAdmin_BdevPrepHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			bp := bdev.NewMockProvider(log, tc.bmbc)
 			handler := &bdevPrepHandler{bdevHandler: bdevHandler{bdevProvider: bp}}
@@ -488,7 +488,7 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 		ForwardableRequest: pbin.ForwardableRequest{Forwarded: true},
 		Properties: storage.BdevTierProperties{
 			Class:      storage.ClassNvme,
-			DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
+			DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1)),
 		},
 	})
 	if err != nil {
@@ -545,7 +545,7 @@ func TestDaosAdmin_BdevFormatHandler(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			bp := bdev.NewMockProvider(log, tc.bmbc)
 			handler := &bdevFormatHandler{bdevHandler: bdevHandler{bdevProvider: bp}}

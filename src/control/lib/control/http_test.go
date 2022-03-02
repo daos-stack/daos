@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,10 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/common"
 )
 
 func TestControl_httpReq_canRetry(t *testing.T) {
@@ -68,7 +67,7 @@ func TestControl_httpReq_canRetry(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := tc.req.canRetry(tc.inErr, tc.cur)
 
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
@@ -84,13 +83,13 @@ func TestControl_httpReq_onRetry(t *testing.T) {
 func TestControl_httpReq_retryAfter(t *testing.T) {
 	req := &httpReq{}
 	result := req.retryAfter(0)
-	common.AssertEqual(t, time.Second, result, "")
+	test.AssertEqual(t, time.Second, result, "")
 }
 
 func TestControl_httpReq_getRetryTimeout(t *testing.T) {
 	req := &httpReq{}
 	result := req.getRetryTimeout()
-	common.AssertEqual(t, httpReqTimeout, result, "")
+	test.AssertEqual(t, httpReqTimeout, result, "")
 }
 
 type mockReadCloser struct {
@@ -231,7 +230,7 @@ func TestControl_httpGetBody(t *testing.T) {
 
 			result, err := httpGetBody(ctx, tc.url, tc.getFn, tc.timeout)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
@@ -332,8 +331,8 @@ func TestControl_httpGetBodyRetry(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := httpGetBodyRetry(context.TODO(), tc.req)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, bytes.Compare(tc.expResult, result), 0, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, bytes.Compare(tc.expResult, result), 0, "")
 		})
 	}
 }

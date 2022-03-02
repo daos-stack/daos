@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,10 +9,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/common"
 )
 
 func TestPbin_decodeResponse(t *testing.T) {
@@ -55,7 +54,7 @@ func TestPbin_decodeResponse(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotRes, gotErr := decodeResponse(tc.input)
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr == nil {
 				return
 			}

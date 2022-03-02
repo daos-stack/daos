@@ -13,6 +13,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -118,13 +119,13 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cs := mockControlService(t, log, config.DefaultServer(), nil, nil, nil)
 
 			result := cs.fabricInterfaceSetToNetworkScanResp(tc.fis, tc.provider)
 
-			if diff := cmp.Diff(tc.expResult, result, common.DefaultCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})

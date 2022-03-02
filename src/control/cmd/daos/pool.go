@@ -16,10 +16,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
@@ -166,7 +162,7 @@ type poolQueryCmd struct {
 	poolBaseCmd
 }
 
-func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *mgmtpb.StorageUsageStats {
+/*func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *mgmtpb.StorageUsageStats {
 	if in == nil {
 		return nil
 	}
@@ -233,7 +229,7 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*control.PoolQueryResp, error) 
 
 	pqr := new(control.PoolQueryResp)
 	return pqr, convert.Types(pqp, pqr)
-}
+}*/
 
 const (
 	dpiQuerySpace   = C.DPI_SPACE
@@ -257,7 +253,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 			"failed to query pool %s", cmd.poolUUID)
 	}
 
-	pqr, err := convertPoolInfo(&pinfo)
+	/*pqr, err := convertPoolInfo(&pinfo)
 	if err != nil {
 		return err
 	}
@@ -271,7 +267,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.log.Info(bld.String())
+	cmd.log.Info(bld.String())*/
 
 	return nil
 }

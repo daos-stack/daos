@@ -11,7 +11,7 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common/test"
 )
 
 // TestParseTopology uses XML topology data to simulate real systems.

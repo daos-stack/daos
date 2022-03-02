@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -51,7 +51,7 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 	evt1 := mockEvtDied(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	ctx := context.Background()
 
@@ -70,10 +70,10 @@ func TestEvents_PubSub_Basic(t *testing.T) {
 	<-tly1.finished
 	<-tly2.finished
 
-	common.AssertStringsEqual(t, []string{
+	test.AssertStringsEqual(t, []string{
 		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly1.getRx(), "tly1 unexpected slice of received events")
-	common.AssertStringsEqual(t, []string{
+	test.AssertStringsEqual(t, []string{
 		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly2.getRx(), "tly2 unexpected slice of received events")
 }
@@ -82,7 +82,7 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 	evt1 := mockEvtDied(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	tly1 := newTally(2)
 	tly2 := newTally(2)
@@ -100,10 +100,10 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 
 	ps.Reset()
 
-	common.AssertStringsEqual(t, []string{
+	test.AssertStringsEqual(t, []string{
 		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly1.getRx(), "unexpected slice of received events")
-	common.AssertEqual(t, 0, len(tly2.getRx()), "unexpected number of received events")
+	test.AssertEqual(t, 0, len(tly2.getRx()), "unexpected number of received events")
 
 	tly1 = newTally(2)
 	tly2 = newTally(2)
@@ -116,10 +116,10 @@ func TestEvents_PubSub_Reset(t *testing.T) {
 	<-tly2.finished
 	ps.Close()
 
-	common.AssertStringsEqual(t, []string{
+	test.AssertStringsEqual(t, []string{
 		RASTypeStateChange.String(), RASTypeStateChange.String(),
 	}, tly2.getRx(), "unexpected slice of received events")
-	common.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
+	test.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
 }
 
 func TestEvents_PubSub_DisableEvent(t *testing.T) {
@@ -127,7 +127,7 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	evt2 := mockEvtSvcReps(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	tly1 := newTally(2)
 
@@ -145,7 +145,7 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	ps.Publish(evt2)
 
 	<-ctx.Done()
-	common.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
+	test.AssertEqual(t, 0, len(tly1.getRx()), "unexpected number of received events")
 
 	ps.EnableEventIDs(evt1.ID, evt2.ID)
 
@@ -153,14 +153,14 @@ func TestEvents_PubSub_DisableEvent(t *testing.T) {
 	ps.Publish(evt1)
 
 	<-tly1.finished
-	common.AssertEqual(t, 2, len(tly1.getRx()), "unexpected number of received events")
+	test.AssertEqual(t, 2, len(tly1.getRx()), "unexpected number of received events")
 }
 
 func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	evt1 := mockEvtDied(t)
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	ctx := context.Background()
 
@@ -180,13 +180,13 @@ func TestEvents_PubSub_SubscribeAnyTopic(t *testing.T) {
 	<-tly1.finished
 	<-tly2.finished
 
-	common.AssertStringsEqual(t, []string{
+	test.AssertStringsEqual(t, []string{
 		RASTypeInfoOnly.String(),
 		RASTypeStateChange.String(),
 		RASTypeStateChange.String(),
 	}, tly1.getRx(), "tly1 unexpected slice of received events")
 
-	common.AssertStringsEqual(t, []string{
+	test.AssertStringsEqual(t, []string{
 		RASTypeStateChange.String(),
 		RASTypeStateChange.String(),
 	}, tly2.getRx(), "tly2 unexpected slice of received events")
