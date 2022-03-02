@@ -10,6 +10,7 @@ timeouts:
 server_config:
   name: daos_server
   servers:
+    targets: 4
     scm_size: 16
 pool:
   scm_size: 8G
