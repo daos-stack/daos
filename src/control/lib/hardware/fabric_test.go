@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -34,7 +35,7 @@ func TestHardware_IsUnsupportedFabric(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, IsUnsupportedFabric(tc.err), "")
+			test.AssertEqual(t, tc.expResult, IsUnsupportedFabric(tc.err), "")
 		})
 	}
 }
@@ -54,7 +55,7 @@ func TestHardware_IsFabricNotReady(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, IsFabricNotReady(tc.err), "")
+			test.AssertEqual(t, tc.expResult, IsFabricNotReady(tc.err), "")
 		})
 	}
 }
@@ -74,7 +75,7 @@ func TestHardware_IsProviderNotOnDevice(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, IsProviderNotOnDevice(tc.err), "")
+			test.AssertEqual(t, tc.expResult, IsProviderNotOnDevice(tc.err), "")
 		})
 	}
 }
@@ -126,7 +127,7 @@ func TestHardware_FabricInterface_String(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.fi.String(), "")
+			test.AssertEqual(t, tc.expResult, tc.fi.String(), "")
 		})
 	}
 }
@@ -183,7 +184,7 @@ func TestHardware_FabricInterface_SupportsProvider(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := tc.fi.SupportsProvider(tc.in)
 
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
@@ -218,8 +219,8 @@ func TestHardware_FabricInterface_TopologyName(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.fi.TopologyName()
 
-			common.AssertEqual(t, tc.expResult, result, "")
-			common.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
@@ -338,7 +339,7 @@ func TestHardware_FabricInterfaceSet_Names(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := tc.fis.Names()
 
-			common.AssertEqual(t, len(tc.expResult), tc.fis.NumFabricInterfaces(), "")
+			test.AssertEqual(t, len(tc.expResult), tc.fis.NumFabricInterfaces(), "")
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -402,7 +403,7 @@ func TestHardware_FabricInterfaceSet_NetDevices(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := tc.fis.NetDevices()
 
-			common.AssertEqual(t, len(tc.expResult), tc.fis.NumNetDevices(), "")
+			test.AssertEqual(t, len(tc.expResult), tc.fis.NumNetDevices(), "")
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -725,7 +726,7 @@ func TestHardware_FabricInterfaceSet_GetInterface(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.fis.GetInterface(tc.name)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -871,7 +872,7 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.fis.GetInterfaceOnNetDevice(tc.netDev, tc.provider)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -958,7 +959,7 @@ func TestHardware_NetDevClass_String(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.ndc.String(), "")
+			test.AssertEqual(t, tc.expResult, tc.ndc.String(), "")
 		})
 	}
 }
@@ -1019,7 +1020,7 @@ func TestHardware_FabricScannerConfig_IsValid(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.config.Validate())
+			test.CmpErr(t, tc.expErr, tc.config.Validate())
 		})
 	}
 }
@@ -1042,11 +1043,11 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			result, err := NewFabricScanner(log, tc.config)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result,
 				cmp.AllowUnexported(
@@ -1055,7 +1056,7 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 					MockFabricInterfaceProvider{},
 					MockNetDevClassProvider{},
 				),
-				common.CmpOptIgnoreFieldAnyType("log"),
+				test.CmpOptIgnoreFieldAnyType("log"),
 				cmpopts.IgnoreFields(FabricScanner{}, "mutex"),
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
@@ -1235,7 +1236,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var scanner *FabricScanner
 			if !tc.nilScanner {
@@ -1254,7 +1255,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 
 			result, err := scanner.Scan(context.TODO())
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, cmp.AllowUnexported(FabricInterfaceSet{})); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -1264,7 +1265,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				if !ok {
 					t.Fatalf("bad test setup: test builders aren't mocks")
 				}
-				common.AssertEqual(t, 1, mock.buildPartCalled, "")
+				test.AssertEqual(t, 1, mock.buildPartCalled, "")
 			}
 		})
 	}
@@ -1302,7 +1303,7 @@ func TestHardware_FabricScanner_CacheTopology(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.fs != nil {
 				tc.fs.log = log
@@ -1310,7 +1311,7 @@ func TestHardware_FabricScanner_CacheTopology(t *testing.T) {
 
 			err := tc.fs.CacheTopology(tc.topo)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.fs == nil {
 				return
@@ -1343,7 +1344,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 	}
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	result := defaultFabricInterfaceSetBuilders(log, config)
 
@@ -1354,7 +1355,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 		cmp.AllowUnexported(NetworkDeviceBuilder{}),
 		cmp.AllowUnexported(MockFabricInterfaceProvider{}),
 		cmp.AllowUnexported(MockNetDevClassProvider{}),
-		common.CmpOptIgnoreFieldAnyType("log"),
+		test.CmpOptIgnoreFieldAnyType("log"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
@@ -1479,7 +1480,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.builder != nil {
 				tc.builder.log = log
@@ -1487,7 +1488,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 
 			err := tc.builder.BuildPart(context.Background(), tc.set)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set,
 				cmp.AllowUnexported(FabricInterfaceSet{}),
 			); diff != "" {
@@ -1696,7 +1697,7 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.builder != nil {
 				tc.builder.log = log
@@ -1704,7 +1705,7 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 
 			err := tc.builder.BuildPart(context.Background(), tc.set)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set,
 				cmp.AllowUnexported(FabricInterfaceSet{}),
 			); diff != "" {
@@ -1850,7 +1851,7 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.builder != nil {
 				tc.builder.log = log
@@ -1858,7 +1859,7 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 
 			err := tc.builder.BuildPart(context.Background(), tc.set)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set,
 				cmp.AllowUnexported(FabricInterfaceSet{}),
 			); diff != "" {
@@ -1999,7 +2000,7 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.builder != nil {
 				tc.builder.log = log
@@ -2007,7 +2008,7 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 
 			err := tc.builder.BuildPart(context.Background(), tc.set)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set,
 				cmp.AllowUnexported(FabricInterfaceSet{}),
 			); diff != "" {
@@ -2106,7 +2107,7 @@ func TestHardware_WaitFabricReady(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var ctx context.Context
 
@@ -2123,7 +2124,7 @@ func TestHardware_WaitFabricReady(t *testing.T) {
 				FabricIfaces: tc.ifaces,
 			})
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

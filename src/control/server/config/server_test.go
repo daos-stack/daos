@@ -21,7 +21,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -50,7 +51,7 @@ var (
 		}),
 	}
 
-	defHugePageInfo = &HugePageInfo{
+	defHugePageInfo = &common.HugePageInfo{
 		PageSizeKb: 2048,
 	}
 )
@@ -201,7 +202,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithEnableVMD(true).     // vmd disabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
-		WithControlLogMask(ControlLogLevelError).
+		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
 		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
@@ -862,7 +863,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 
 		lcp := strings.Split(legacyConfig, "/")
 		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
-		if err := CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
+		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
 			return nil, err
 		}
 

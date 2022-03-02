@@ -20,6 +20,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -162,18 +163,18 @@ func TestConfig_GetEnvVar(t *testing.T) {
 			value, err := cfg.GetEnvVar(tc.key)
 
 			if err != nil {
-				common.AssertTrue(t, tc.expErr != nil,
+				test.AssertTrue(t, tc.expErr != nil,
 					fmt.Sprintf("Unexpected error %q", err))
-				common.CmpErr(t, tc.expErr, err)
-				common.AssertEqual(t, value, "",
+				test.CmpErr(t, tc.expErr, err)
+				test.AssertEqual(t, value, "",
 					fmt.Sprintf("Unexpected value %q for key %q",
 						tc.key, value))
 				return
 			}
 
-			common.AssertTrue(t, tc.expErr == nil,
+			test.AssertTrue(t, tc.expErr == nil,
 				fmt.Sprintf("Expected error %q", tc.expErr))
-			common.AssertEqual(t, value, tc.expValue, "Invalid value returned")
+			test.AssertEqual(t, value, tc.expValue, "Invalid value returned")
 		})
 	}
 }
@@ -346,9 +347,9 @@ func TestConfig_ScmValidation(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate(log, nil))
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate(log, nil))
 		})
 	}
 }
@@ -395,7 +396,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(2)),
 				),
 		},
 		"nvme class; duplicate pci address": {
@@ -403,7 +404,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(1)),
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(1)),
 				),
 			expErr: errors.New("bdev_list"),
 		},
@@ -412,7 +413,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), "0000:00:00"),
+						WithBdevDeviceList(test.MockPCIAddr(1), "0000:00:00"),
 				),
 			expErr: errors.New("valid PCI addresses"),
 		},
@@ -474,9 +475,9 @@ func TestConfig_BdevValidation(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate(log, nil))
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate(log, nil))
 			if tc.expErr != nil {
 				return
 			}
@@ -486,14 +487,14 @@ func TestConfig_BdevValidation(t *testing.T) {
 				if tc.expCls == "" {
 					tc.expCls = storage.ClassNvme // default if unset
 				}
-				common.AssertEqual(t, tc.expCls,
+				test.AssertEqual(t, tc.expCls,
 					tc.cfg.Storage.Tiers.BdevConfigs()[0].Class,
 					"unexpected bdev class")
 
 				ecp = filepath.Join(tc.cfg.Storage.Tiers.ScmConfigs()[0].Scm.MountPoint,
 					storage.BdevOutConfName)
 			}
-			common.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath,
+			test.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath,
 				"unexpected config path")
 		})
 	}
@@ -501,7 +502,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 
 func TestConfig_Validation(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	bad := MockConfig()
 
@@ -563,7 +564,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := tc.cfg.Validate()
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -748,7 +749,7 @@ func TestConfig_setAffinity(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var fis *hardware.FabricInterfaceSet
 			if tc.fi != nil {
@@ -756,11 +757,11 @@ func TestConfig_setAffinity(t *testing.T) {
 			}
 
 			err := tc.cfg.setAffinity(log, fis)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
-			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
+			test.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
 				"unexpected storage numa node id")
-			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
+			test.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
 				"unexpected fabric numa node id")
 		})
 	}

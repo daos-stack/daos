@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,9 +16,9 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	. "github.com/daos-stack/daos/src/control/system"
@@ -42,7 +42,7 @@ func waitForEngineReady(t *testing.T, instance *EngineInstance) {
 
 func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	instance := getTestEngineInstance(log)
 
@@ -74,7 +74,7 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			instance := getTestEngineInstance(log)
 			if !tc.notReady {
 				cfg := &mockDrpcClientConfig{
@@ -85,7 +85,7 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 
 			_, err := instance.CallDrpc(context.TODO(),
 				drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
@@ -127,7 +127,7 @@ func TestEngineInstance_DrespToRankResult(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.daosResp == nil {
 				tc.daosResp = &mgmtpb.DaosResp{Status: 0}
@@ -147,7 +147,7 @@ func TestEngineInstance_DrespToRankResult(t *testing.T) {
 			}
 
 			gotResult := drespToMemberResult(Rank(dRank), resp, tc.inErr, tc.targetState)
-			if diff := cmp.Diff(tc.expResult, gotResult, common.DefaultCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expResult, gotResult, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})
