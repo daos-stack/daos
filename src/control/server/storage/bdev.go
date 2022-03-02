@@ -331,6 +331,12 @@ func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
 	return ncs
 }
 
+// NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
+type NvmeAioDevice struct {
+	Path string `json:"path"`
+	Size uint64 `json:"size"` // in unit of bytes
+}
+
 type (
 	// BdevProvider defines an interface to be implemented by a Block Device provider.
 	BdevProvider interface {
