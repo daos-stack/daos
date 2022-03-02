@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
-
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
@@ -24,7 +23,6 @@ class RbldContainerCreate(IorTestBase):
             qty (int, optional): the number of containers to create
             index (int, optional): the container index to perform write
                 during rebuild
-
         """
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
         object_qty = self.params.get("object_qty", "/run/io/*")
@@ -35,15 +33,19 @@ class RbldContainerCreate(IorTestBase):
         cont_oclass = self.params.get("oclass", "/run/io/*")
         count = 0
         self.container = []
-        while not self.pool.rebuild_complete() and count < qty:
+        rebuild_done = False
+        self.log.info("..Create %s containers and write data during rebuild.",
+                      qty)
+        while not rebuild_done and count < qty:
             count += 1
             self.log.info(
                 "..Creating container %s/%s in pool %s during rebuild",
                 count, qty, self.pool.uuid)
             self.container.append(self.get_container(self.pool))
+            rebuild_done = self.pool.rebuild_complete()
+            self.log.info(
+                "..Rebuild status, rebuild_done= %s", rebuild_done)
 
-        self.log.info("..Create %s containers and write data during rebuild.",
-                      qty)
         self.container[index].object_qty.value = object_qty
         self.container[index].record_qty.value = record_qty
         self.container[index].data_size.value = data_size
@@ -58,7 +60,6 @@ class RbldContainerCreate(IorTestBase):
             index (int): index of the daos container object to open/close
         Returns:
             bool: was the opening and closing of the container successful
-
         """
         status = True
         container = self.container[index]
@@ -80,7 +81,7 @@ class RbldContainerCreate(IorTestBase):
             Test steps:
             (1)Start IOR before rebuild.
             (2)Starting rebuild by killing rank.
-            (3)Wait for rebuild to start.
+            (3)Wait for rebuild to start for race condition.
             (4)Race condition, create containers, data write/read during
                rebuild.
             (5)Wait for rebuild to finish.
@@ -89,10 +90,9 @@ class RbldContainerCreate(IorTestBase):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
         :avocado: tags=all,full_regression
-        :avocado: tags=large
+        :avocado: tags=hw,large
         :avocado: tags=rebuild
         :avocado: tags=rebuild_cont_create
-
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
@@ -136,7 +136,7 @@ class RbldContainerCreate(IorTestBase):
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start.
-        self.log.info("..(3)Wait for rebuild to start")
+        self.log.info("..(3)Wait for rebuild to start for race condition")
         self.pool.wait_for_rebuild(True, interval=1)
 
         # Race condition, create containers write and read during rebuild.

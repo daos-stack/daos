@@ -19,7 +19,7 @@ testparams:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 7G
+  scm_size: 8G
   svcn: 1
   control_method: dmg
   pool_query_timeout: 15
