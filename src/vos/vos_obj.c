@@ -313,7 +313,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 
 	if (rc != 1) {
 		/** Otherwise, key_tree_punch will handle it */
-		rc = vos_key_flags_set(vos_cont2umm(obj->obj_cont), krec);
+		rc = vos_key_mark_agg(vos_cont2umm(obj->obj_cont), krec);
 		goto out;
 	}
 	/** else propagate the punch */
@@ -503,8 +503,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			}
 
 			if (rc == 0)
-				rc = vos_obj_flags_set(vos_cont2umm(cont), &obj->obj_df->vo_tree,
-						       &cont->vc_cont_df->cd_obj_root);
+				rc = vos_mark_agg(vos_cont2umm(cont), &obj->obj_df->vo_tree,
+						  &cont->vc_cont_df->cd_obj_root);
 
 			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 		}
@@ -1910,7 +1910,7 @@ exit:
 }
 
 int
-vos_obj_iter_pre_aggregate(daos_handle_t ih)
+vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
@@ -1944,7 +1944,7 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 
 	if (bmap & KREC_BF_AGG_OPT) {
 		if ((bmap & KREC_BF_AGG_NEEDED) == 0) {
-			if (!punched && oiter->it_punched.pr_epc == 0)
+			if (!full_scan && !punched && oiter->it_punched.pr_epc == 0)
 				return 2;
 		} else {
 			bmap |= KREC_BF_AGG_FLAG;

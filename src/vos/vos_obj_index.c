@@ -651,7 +651,7 @@ exit:
 }
 
 int
-oi_iter_pre_aggregate(daos_handle_t ih)
+oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
@@ -680,7 +680,7 @@ oi_iter_pre_aggregate(daos_handle_t ih)
 	feats = dbtree_feats_get(&obj->vo_tree);
 	if (feats & VOS_TREE_AGG_OPT) {
 		if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
-			if (!punched)
+			if (!full_scan && !punched)
 				return 2;
 		} else {
 			feats |= VOS_TREE_AGG_FLAG;

@@ -1662,7 +1662,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 }
 
 int
-vos_key_flags_set(struct umem_instance *umm, struct vos_krec_df *krec)
+vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec)
 {
 	int	rc;
 	uint8_t	bmap;
@@ -1687,7 +1687,7 @@ vos_key_flags_set(struct umem_instance *umm, struct vos_krec_df *krec)
 }
 
 static int
-vos_tree_flags_set(struct umem_instance *umm, struct btr_root *root)
+vos_tree_mark_agg(struct umem_instance *umm, struct btr_root *root)
 {
 	uint64_t	feats;
 
@@ -1704,26 +1704,26 @@ vos_tree_flags_set(struct umem_instance *umm, struct btr_root *root)
 }
 
 int
-vos_obj_flags_set(struct umem_instance *umm, struct btr_root *obj_root,
+vos_mark_agg(struct umem_instance *umm, struct btr_root *obj_root,
 		      struct btr_root *cont_root)
 {
 	int	rc;
 
-	rc = vos_tree_flags_set(umm, obj_root);
+	rc = vos_tree_mark_agg(umm, obj_root);
 	if (rc == 0)
-		rc = vos_tree_flags_set(umm, cont_root);
+		rc = vos_tree_mark_agg(umm, cont_root);
 
 	return rc;
 }
 
 static int
-vos_flags_set(struct vos_io_context *ioc)
+vos_ioc_mark_agg(struct vos_io_context *ioc)
 {
 	if (!ioc->ic_agg_needed)
 		return 0;
 
-	return vos_obj_flags_set(vos_ioc2umm(ioc), &ioc->ic_obj->obj_df->vo_tree,
-				 &ioc->ic_cont->vc_cont_df->cd_obj_root);
+	return vos_mark_agg(vos_ioc2umm(ioc), &ioc->ic_obj->obj_df->vo_tree,
+			    &ioc->ic_cont->vc_cont_df->cd_obj_root);
 }
 
 static int
@@ -1844,7 +1844,7 @@ out:
 		key_tree_release(toh, is_array);
 
 	if (rc == 0 && ioc->ic_agg_needed)
-		rc = vos_key_flags_set(vos_ioc2umm(ioc), krec);
+		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec);
 
 	return rc;
 }
@@ -1916,7 +1916,7 @@ release:
 	key_tree_release(ak_toh, false);
 
 	if (rc == 0 && ioc->ic_agg_needed)
-		rc = vos_key_flags_set(vos_ioc2umm(ioc), krec);
+		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec);
 
 	return rc;
 }
@@ -2388,7 +2388,7 @@ abort:
 	}
 
 	if (err == 0)
-		err = vos_flags_set(ioc);
+		err = vos_ioc_mark_agg(ioc);
 
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);

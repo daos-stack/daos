@@ -1108,13 +1108,14 @@ gc_reserve_space(daos_size_t *rsrvd);
  * as being aggregated.
  *
  * \param ih[IN]	Iterator handle
+ * \param full_scan[IN]	Full scan flag is set
  *
  * \return		Zero on Success
  *			(1: entry is removed; 2: entry can be skipped)
  *			Negative value otherwise
  */
 int
-oi_iter_pre_aggregate(daos_handle_t ih);
+oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan);
 
 /**
  * Aggregate the creation/punch records in the current entry of the object
@@ -1139,13 +1140,14 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard);
  * as being aggregated.
  *
  * \param ih[IN]	Iterator handle
+ * \param full_scan[IN]	Full scan flag is set
  *
  * \return		Zero on Success
  *			(1: entry is removed; 2: entry can be skipped)
  *			Negative value otherwise
  */
 int
-vos_obj_iter_pre_aggregate(daos_handle_t ih);
+vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
@@ -1389,10 +1391,25 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
 }
 
+/** Mark that the object and container need aggregation. Caller must be in PMDK transaction
+ *
+ * \param[in] umm	umem instance
+ * \param[in] dkey_root	Root of dkey tree (marked for object)
+ * \param[in] obj_root	Root of object tree (marked for container)
+ *
+ * \return 0 on success, error otherwise
+ */
 int
-vos_obj_flags_set(struct umem_instance *umm, struct btr_root *obj_root,
-		      struct btr_root *cont_root);
+vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root);
+
+/** Mark that the key needs aggregation. Caller must be in PMDK transaction
+ *
+ * \param[in] umm	umem instance
+ * \param[in] krec	The key's record
+ *
+ * \return 0 on success, error otherwise
+ */
 int
-vos_key_flags_set(struct umem_instance *umm, struct vos_krec_df *krec);
+vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec);
 
 #endif /* __VOS_INTERNAL_H__ */

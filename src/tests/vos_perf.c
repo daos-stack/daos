@@ -467,11 +467,14 @@ pf_aggregate(struct pf_test *ts, struct pf_param *param)
 	daos_epoch_range_t	epr = {0, ++epoch};
 	int			rc = 0;
 	uint64_t		start = 0;
+	uint64_t		flags = VOS_AGG_FL_FORCE_MERGE;
 
 	TS_TIME_START(&param->pa_duration, start);
 
-	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL,
-			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
+	if (param->pa_agg.full_scan)
+		flags |= VOS_AGG_FL_FORCE_SCAN;
+
+	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, flags);
 
 	TS_TIME_END(&param->pa_duration, start);
 
@@ -614,9 +617,25 @@ pf_parse_iterate(char *str, struct pf_param *pa, char **strp)
 }
 
 static int
+pf_parse_aggregate_cb(char *str, struct pf_param *pa, char **strp)
+{
+	switch (*str) {
+	default:
+		str++;
+		break;
+	case 'f':
+		pa->pa_agg.full_scan = true;
+		str++;
+		break;
+	}
+	*strp = str;
+	return 0;
+}
+
+static int
 pf_parse_aggregate(char *str, struct pf_param *pa, char **strp)
 {
-	return pf_parse_common(str, pa, NULL, strp);
+	return pf_parse_common(str, pa, pf_parse_aggregate_cb, strp);
 }
 
 /* predefined test cases */
