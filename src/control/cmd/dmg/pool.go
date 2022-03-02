@@ -56,7 +56,7 @@ type PoolCreateCmd struct {
 	Properties    PoolSetPropsFlag `short:"P" long:"properties" description:"Pool properties to be set"`
 	ACLFile       string           `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	Size          string           `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
-	TierRatio     string           `short:"t" long:"tier-ratio" default:"6% SCM, 94% NVMe" description:"Percentage of storage tiers for pool storage (auto)"`
+	TierRatio     string           `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
 	NumRanks      uint32           `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps    uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
 	ScmSize       string           `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
