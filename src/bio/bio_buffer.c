@@ -300,6 +300,8 @@ struct bio_copy_args {
 	int		 ca_sgl_idx;
 	/* Current IOV index inside of current sgl */
 	int		 ca_iov_idx;
+	/* zero-copy fetch */
+	bool		 ca_zc_fetch;
 	/* Current offset inside of current IOV */
 	ssize_t		 ca_iov_off;
 	/* Total size to be copied */
@@ -359,8 +361,14 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 		if (addr != NULL) {
 			D_DEBUG(DB_TRACE, "bio copy %p size %zd\n",
 				addr, nob);
-			bio_memcpy(biod, media, addr, iov->iov_buf +
-					arg->ca_iov_off, nob);
+			if (arg->ca_zc_fetch) {
+				/* just use the DMA buffer */
+				iov->iov_buf = addr;
+			} else {
+				bio_memcpy(biod, media, addr,
+					   iov->iov_buf +
+					   arg->ca_iov_off, nob);
+			}
 			addr += nob;
 		} else {
 			/* fetch on hole */
@@ -1192,7 +1200,8 @@ bio_iod_post(struct bio_desc *biod, int err)
 }
 
 int
-bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
+bio_iod_copy(struct bio_desc *biod, bool zc_fetch,
+	     d_sg_list_t *sgls, unsigned int nr_sgl)
 {
 	struct bio_copy_args arg = { 0 };
 
@@ -1204,6 +1213,7 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 
 	arg.ca_sgls = sgls;
 	arg.ca_sgl_cnt = nr_sgl;
+	arg.ca_zc_fetch = zc_fetch;
 
 	return iterate_biov(biod, copy_one, &arg);
 }
@@ -1290,7 +1300,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	for (i = 0; i < bsgl->bs_nr; i++)
 		D_ASSERT(bio_iov2raw_buf(&bsgl->bs_iovs[i]) != NULL);
 
-	rc = bio_iod_copy(biod, sgl, 1 /* single sgl */);
+	rc = bio_iod_copy(biod, false, sgl, 1 /* single sgl */);
 	if (rc)
 		D_ERROR("Copy biod failed, "DF_RC"\n", DP_RC(rc));
 

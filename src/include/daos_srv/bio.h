@@ -668,7 +668,8 @@ int bio_iod_post(struct bio_desc *biod, int err);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl);
+int bio_iod_copy(struct bio_desc *biod, bool zc_copy,
+		 d_sg_list_t *sgls, unsigned int nr_sgl);
 
 /*
  * Helper function to flush memory vectors in SG lists of io descriptor
