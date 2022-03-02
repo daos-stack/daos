@@ -277,7 +277,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			member.Rank, req.peerAddr, member.FabricURI)
 	} else {
 		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
-			member.Rank, member.FabricURI, joinResponse.PrevState, member.State())
+			member.Rank, member.FabricURI, joinResponse.PrevState, member.State)
 	}
 
 	resp := &batchJoinResponse{
