@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1129,7 +1129,9 @@ err_ie_remove:
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
 	D_FREE(ie);
+#if 0
 	fuse_session_destroy(fs_handle->dpi_info->di_session);
+#endif
 	return rc;
 }
 
