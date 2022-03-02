@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  *
@@ -155,12 +155,17 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			 * Need to update this target AND all of its parents
 			 * domains from NEW -> UPIN
 			 */
-
 			target->ta_comp.co_flags = 0;
 			rc = pool_map_activate_new_target(map,
 						target->ta_comp.co_id);
 			D_ASSERT(rc != 0); /* This target must be findable */
 			target->ta_comp.co_in_ver = ++(*version);
+			if (print_changes)
+				D_PRINT(DF_TARGET " is reintegrated.\n",
+					DP_TARGET(target));
+			else
+				D_INFO(DF_TARGET " is reintegrated.\n",
+				       DP_TARGET(target));
 			break;
 		}
 		break;

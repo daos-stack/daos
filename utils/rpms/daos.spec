@@ -3,8 +3,8 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-3%{?dist}
-%global libfabric_version 1.14.0~rc3-2
+%global mercury_version 2.1.0~rc4-4%{?dist}
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       17%{?relval}%{?dist}
+Release:       22%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -67,10 +67,7 @@ BuildRequires: fuse3-devel >= 3
 BuildRequires: fuse3-devel >= 3.4.2
 %endif
 %if (0%{?suse_version} >= 1500)
-# NB: OpenSUSE is stupid about this... If we just
-# specify go >= 1.X, it installs go=1.11 AND 1.X.
-BuildRequires: go1.14
-BuildRequires: go1.14-race
+BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
 %else
@@ -85,17 +82,17 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.8.1
+BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
+BuildRequires: go >= 1.14
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
-BuildRequires: golang-bin >= 1.12
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
@@ -225,6 +222,8 @@ Requires: python3-tabulate
 Requires: python3-defusedxml
 %endif
 Requires: fio
+Requires: meson
+Requires: python3-pyelftools
 Requires: dbench
 Requires: lbzip2
 Requires: attr
@@ -395,6 +394,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
+%{_libdir}/libdaos_common.so
 %doc
 
 %files server
@@ -438,7 +438,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysctldir}/%{sysctl_script_name}
 
 %files client
-%{_libdir}/libdaos_common.so
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -452,7 +451,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
-%{_libdir}/libdfs_internal.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
@@ -539,6 +537,21 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Feb 22 2022 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-22
+- Update mercury to include DAOS-9561 workaround
+
+* Sun Feb 13 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-21
+- Update go toolchain requirements
+
+* Thu Feb 10 2022 Li Wei <wei.g.li@intel.com> 2.1.100-20
+- Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
+
+* Wed Jan 19 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-19
+- Move libdaos_common.so from daos-client to daos package
+
+* Mon Jan 17 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-18
+- Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
 * Thu Dec 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-17
 - Update to v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage
 - Change mercury pinning to be >= instead of strict =

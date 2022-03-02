@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2191,7 +2191,7 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
 
 	md.omd_id = oid->id_pub;
 	md.omd_ver = version;
-	rc = pl_obj_place(map, &md, NULL, &layout);
+	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
 	if (rc != 0)
 		goto out;
 
@@ -2489,7 +2489,7 @@ out:
  */
 static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		     bool full_scan, struct agg_param *agg_param, uint64_t *msec)
+		     uint32_t flags, struct agg_param *agg_param, uint64_t *msec)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	struct dtx_handle	 *dth = NULL;

@@ -218,8 +218,8 @@ class CartTest(TestWithoutServers):
         log_path = log_path.replace(";", "_")
 
         log_file = os.path.join(log_path, log_dir,
-                                test_name + "_" + \
-                                env_CCSA + "_" + \
+                                test_name + "_" +
+                                env_CCSA + "_" +
                                 env_PHY_ADDR_STR + "_cart.log").replace(";", "_")
 
         # Default env vars for orterun to None

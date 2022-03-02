@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,10 +39,7 @@ extern const char	*dss_nvme_conf;
 /** Socket Directory */
 extern const char	*dss_socket_dir;
 
-/** NVMe shm_id for enabling SPDK multi-process mode */
-extern int		 dss_nvme_shm_id;
-
-/** NVMe mem_size for SPDK memory allocation when using primary mode (in MB) */
+/** NVMe mem_size for SPDK memory allocation (in MB) */
 extern unsigned int	dss_nvme_mem_size;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation (in MB) */
@@ -137,10 +134,12 @@ void dss_unregister_key(struct dss_module_key *key);
 /* Opaque xstream configuration data */
 struct dss_xstream;
 
+int  dss_xstream_set_affinity(struct dss_xstream *dxs);
 bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
 daos_epoch_t dss_get_start_epoch(void);
 void dss_set_start_epoch(void);
+bool dss_has_enough_helper(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -153,7 +152,8 @@ struct dss_module_info {
 	/* the cart context id */
 	int			dmi_ctx_id;
 	uint32_t		dmi_dtx_batched_started:1;
-	d_list_t		dmi_dtx_batched_cont_list;
+	d_list_t		dmi_dtx_batched_cont_open_list;
+	d_list_t		dmi_dtx_batched_cont_close_list;
 	d_list_t		dmi_dtx_batched_pool_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
@@ -212,6 +212,7 @@ enum {
 
 enum {
 	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
+	SCHED_REQ_FL_PERIODIC	= (1 << 1),
 };
 
 struct sched_req_attr {
@@ -390,10 +391,6 @@ dss_ult_yield(void *arg)
 struct dss_module_ops {
 	/* Get schedule request attributes from RPC */
 	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
-
-	/* Each module to start/stop the profiling */
-	int	(*dms_profile_start)(char *path, int avg);
-	int	(*dms_profile_stop)(void);
 };
 
 int srv_profile_stop();

@@ -131,12 +131,17 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
-   fun:internal/bytealg.IndexByte
+   fun:internal/bytealg*IndexByte*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:internal/bytealg*IndexByte*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
-   fun:internal/bytealg.IndexByte
+   fun:internal/bytealg*IndexByte*
 }
 {
    <insert_a_suppression_name_here>
