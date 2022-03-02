@@ -287,7 +287,7 @@ pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool enab
 
 	ret = snprintf(linepos, remaining, DF_UUID": %s ranks: ", DP_UUID(pool->dp_pool),
 		       enabled ? "ENABLED" : "DISABLED");
-	if (ret < 0)
+	if ((ret < 0) || (ret >= remaining))
 		goto err;
 	written += ret;
 	remaining -= ret;
@@ -302,7 +302,7 @@ pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool enab
 			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
 		else
 			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
-		if (ret < 0)
+		if ((ret < 0) || (ret >= remaining))
 			goto err;
 		written += ret;
 		remaining -= ret;
@@ -312,7 +312,7 @@ pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool enab
 	return;
 err:
 	if (written > 0)
-		D_DEBUG(DF_DSMC, "%s\n", line);
+		D_DEBUG(DF_DSMC, "%s%s\n", line, (ret >= remaining) ? " ...(TRUNCATED): " : "");
 	D_ERROR(DF_UUID": snprintf failed, %d\n", DP_UUID(pool->dp_pool), ret);
 }
 
@@ -384,6 +384,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		    bool connect)
 {
 	struct pool_map	       *map;
+	unsigned int		num_disabled = 0;
 	int			rc;
 
 	D_DEBUG(DF_DSMC, DF_UUID": info=%p (pi_bits="DF_X64"), ranks=%p\n",
@@ -391,33 +392,28 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 
 	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
-		D_ERROR("failed to create local pool map: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("failed to create local pool map: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
 	rc = dc_pool_map_update(pool, map, connect);
 	if (rc)
-		D_GOTO(out_unlock, rc);
+		goto out_unlock;
 
-	/* Scan all targets for info->pi_ndisabled and/or ranks. */
-	if (info != NULL) {
-		unsigned int num_disabled = 0;
-
-		rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
-		if (rc == 0)
-			info->pi_ndisabled = num_disabled;
-		else
-			D_ERROR("Couldn't get failed targets, "DF_RC"\n",
-				DP_RC(rc));
-	}
-out_unlock:
-	/* Fill ranks. If no targets disabled, report all pool storage engine ranks.
-	 * If some targets disabled, report the affected engine ranks (associated with the targets).
+	/* Scan all targets for populating info->pi_ndisabled and ranks.
+	 * If no targets disabled, get all pool storage engine ranks.
+	 * Otherwise, get the ranks associated with the disabled targets.
 	 */
-	if (ranks && rc == 0) {
-		bool	get_enabled = (info && (info->pi_ndisabled > 0)) ? false : true;
+	rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
+	if (rc != 0) {
+		D_ERROR("Couldn't get failed targets, "DF_RC"\n", DP_RC(rc));
+		goto out_unlock;
+	}
+	if (info != NULL)
+		info->pi_ndisabled = num_disabled;
+	if (ranks != NULL) {
+		bool	get_enabled = (num_disabled == 0) ? true : false;
 
 		rc = pool_map_get_ranks(pool, map, get_enabled, ranks);
 		if (rc == 0) {
@@ -434,6 +430,7 @@ out_unlock:
 		}
 	}
 
+out_unlock:
 	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
@@ -1433,7 +1430,7 @@ pool_query_cb(tse_task_t *task, void *data)
 				 out->pqo_op.po_map_version,
 				 out->pqo_op.po_hint.sh_rank,
 				 &out->pqo_space, &out->pqo_rebuild_st,
-				 ranks_arg /* arg->dqa_ranks */, arg->dqa_info,
+				 ranks_arg, arg->dqa_info,
 				 arg->dqa_prop, out->pqo_prop, false);
 	if (rc == 0) {
 		D_DEBUG(DF_DSMC, DF_UUID": got ranklist with %u ranks\n",
