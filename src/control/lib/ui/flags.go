@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 var (
@@ -57,7 +57,7 @@ func (f LabelOrUUIDFlag) String() string {
 
 // SetLabel validates the supplied label and sets it if valid.
 func (f *LabelOrUUIDFlag) SetLabel(l string) error {
-	if !drpc.LabelIsValid(l) {
+	if !daos.LabelIsValid(l) {
 		return errors.Errorf("invalid label %q", l)
 	}
 

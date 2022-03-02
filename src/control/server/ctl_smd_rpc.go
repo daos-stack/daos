@@ -17,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -160,7 +161,7 @@ func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQuer
 		}
 
 		if rankDevResp.Status != 0 {
-			return errors.Wrapf(drpc.DaosStatus(rankDevResp.Status),
+			return errors.Wrapf(daos.Status(rankDevResp.Status),
 				"rank %d ListPools failed", engineRank)
 		}
 
@@ -249,7 +250,7 @@ func (svc *ControlService) smdSetFaulty(ctx context.Context, req *ctlpb.SmdQuery
 	}
 
 	if dsr.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(dsr.Status), "smdSetFaulty failed")
+		return nil, errors.Wrap(daos.Status(dsr.Status), "smdSetFaulty failed")
 	}
 
 	return &ctlpb.SmdQueryResp{
@@ -302,7 +303,7 @@ func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryRe
 	}
 
 	if drr.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(drr.Status), "smdReplace failed")
+		return nil, errors.Wrap(daos.Status(drr.Status), "smdReplace failed")
 	}
 
 	return &ctlpb.SmdQueryResp{
@@ -353,7 +354,7 @@ func (svc *ControlService) smdIdentify(ctx context.Context, req *ctlpb.SmdQueryR
 	}
 
 	if drr.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(drr.Status), "smdIdentify failed")
+		return nil, errors.Wrap(daos.Status(drr.Status), "smdIdentify failed")
 	}
 
 	return &ctlpb.SmdQueryResp{

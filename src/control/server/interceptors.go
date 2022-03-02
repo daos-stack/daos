@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -131,7 +131,7 @@ func dErrFromStatus(sg statusGetter) error {
 		return nil
 	}
 
-	return drpc.DaosStatus(dStatus)
+	return daos.Status(dStatus)
 }
 
 func unaryStatusInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {

@@ -3,14 +3,14 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-package drpc_test
+package daos_test
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 func TestDrpc_LabelIsValid(t *testing.T) {
@@ -22,13 +22,13 @@ func TestDrpc_LabelIsValid(t *testing.T) {
 		expResult bool
 	}{
 		"zero-length fails": {"", false},
-		"overlength fails":  {strings.Repeat("x", drpc.MaxLabelLength+1), false},
+		"overlength fails":  {strings.Repeat("x", daos.MaxLabelLength+1), false},
 		"uuid fails":        {"54f26bfd-628f-4762-a28a-1c42bcb6565b", false},
-		"max-length ok":     {strings.Repeat("x", drpc.MaxLabelLength), true},
+		"max-length ok":     {strings.Repeat("x", daos.MaxLabelLength), true},
 		"valid chars ok":    {"this:is_a_valid-label.", true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotResult := drpc.LabelIsValid(tc.label)
+			gotResult := daos.LabelIsValid(tc.label)
 			test.AssertEqual(t, tc.expResult, gotResult, "unexpected label check result")
 		})
 	}

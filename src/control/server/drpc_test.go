@@ -19,6 +19,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -281,12 +282,12 @@ func TestServer_DrpcRetryCancel(t *testing.T) {
 			req: &retryableDrpcReq{
 				Message:    &mgmtpb.PoolDestroyReq{},
 				RetryAfter: 1 * time.Microsecond,
-				RetryableStatuses: []drpc.DaosStatus{
-					drpc.DaosBusy,
+				RetryableStatuses: []daos.Status{
+					daos.Busy,
 				},
 			},
 			resp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosBusy),
+				Status: int32(daos.Busy),
 			},
 			method:  drpc.MethodPoolDestroy,
 			timeout: 10 * time.Microsecond,
@@ -296,12 +297,12 @@ func TestServer_DrpcRetryCancel(t *testing.T) {
 			req: &retryableDrpcReq{
 				Message:    &mgmtpb.PoolDestroyReq{},
 				RetryAfter: 1 * time.Microsecond,
-				RetryableStatuses: []drpc.DaosStatus{
-					drpc.DaosBusy,
+				RetryableStatuses: []daos.Status{
+					daos.Busy,
 				},
 			},
 			resp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosBusy),
+				Status: int32(daos.Busy),
 			},
 			method:       drpc.MethodPoolDestroy,
 			timeout:      1 * time.Second,

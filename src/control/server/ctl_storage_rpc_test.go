@@ -27,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -930,7 +931,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					{Message: smdDevRespStateNew},
 					{
 						Message: &ctlpb.BioHealthResp{
-							Status: int32(drpc.DaosNonexistant),
+							Status: int32(daos.Nonexistent),
 						},
 					},
 				},
@@ -961,7 +962,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					{Message: smdDevRespStateNew},
 					{
 						Message: &ctlpb.BioHealthResp{
-							Status: int32(drpc.DaosFreeMemError),
+							Status: int32(daos.FreeMemError),
 						},
 					},
 				},
@@ -992,7 +993,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					{Message: newSmdDevResp(1)},
 					{
 						Message: &ctlpb.BioHealthResp{
-							Status: int32(drpc.DaosNonexistant),
+							Status: int32(daos.Nonexistent),
 						},
 					},
 				},

@@ -24,6 +24,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
@@ -132,7 +133,7 @@ func TestSrvSecurityModule_ValidateCred_NoCred(t *testing.T) {
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosInvalidInput),
+		Status: int32(daos.InvalidInput),
 	})
 }
 
@@ -153,7 +154,7 @@ func TestSrvSecurityModule_ValidateCred_NoToken(t *testing.T) {
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosInvalidInput),
+		Status: int32(daos.InvalidInput),
 	})
 }
 
@@ -174,7 +175,7 @@ func TestSrvSecurityModule_ValidateCred_NoVerifier(t *testing.T) {
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosInvalidInput),
+		Status: int32(daos.InvalidInput),
 	})
 }
 
@@ -238,7 +239,7 @@ func TestSrvSecurityModule_ValidateCred_Insecure_BadVerifier(t *testing.T) {
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosNoPermission),
+		Status: int32(daos.NoPermission),
 	})
 }
 
@@ -315,7 +316,7 @@ func TestSrvSecurityModule_ValidateCred_Secure_LoadingCertFailed(t *testing.T) {
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosBadPath),
+		Status: int32(daos.BadPath),
 	})
 }
 
@@ -341,6 +342,6 @@ func TestSrvSecurityModule_ValidateCred_Secure_BadVerifier(t *testing.T) {
 	}
 
 	expectValidateResp(t, resp, &auth.ValidateCredResp{
-		Status: int32(drpc.DaosNoPermission),
+		Status: int32(daos.NoPermission),
 	})
 }

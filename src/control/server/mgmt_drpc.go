@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -105,7 +106,7 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 
 	ps, err := mod.sysdb.FindPoolServiceByUUID(uuid)
 	if err != nil {
-		resp.Status = int32(drpc.DaosNonexistant)
+		resp.Status = int32(daos.Nonexistent)
 		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 		return proto.Marshal(resp)
 	}
@@ -129,7 +130,7 @@ func (mod *srvModule) handlePoolFindByLabel(reqb []byte) ([]byte, error) {
 
 	ps, err := mod.sysdb.FindPoolServiceByLabel(req.GetLabel())
 	if err != nil {
-		resp.Status = int32(drpc.DaosNonexistant)
+		resp.Status = int32(daos.Nonexistent)
 		mod.log.Debugf("PoolFindByLabelResp: %+v", resp)
 		return proto.Marshal(resp)
 	}

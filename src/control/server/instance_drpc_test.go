@@ -20,6 +20,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	. "github.com/daos-stack/daos/src/control/system"
 )
@@ -104,10 +105,10 @@ func TestEngineInstance_DrespToRankResult(t *testing.T) {
 			expResult: &MemberResult{Rank: dRank, State: MemberStateJoined},
 		},
 		"rank failure": {
-			daosResp: &mgmtpb.DaosResp{Status: int32(drpc.DaosNoSpace)},
+			daosResp: &mgmtpb.DaosResp{Status: int32(daos.NoSpace)},
 			expResult: &MemberResult{
 				Rank: dRank, State: MemberStateErrored, Errored: true,
-				Msg: fmt.Sprintf("rank %d: %s", dRank, drpc.DaosNoSpace),
+				Msg: fmt.Sprintf("rank %d: %s", dRank, daos.NoSpace),
 			},
 		},
 		"drpc failure": {

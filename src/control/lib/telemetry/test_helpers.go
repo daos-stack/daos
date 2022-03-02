@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 /*
@@ -122,13 +122,13 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 		case MetricTypeGauge:
 			rc := C.add_metric(&tm.node, C.D_TM_GAUGE, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
+				t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
 			}
 			C.d_tm_set_gauge(tm.node, C.uint64_t(tm.Cur))
 		case MetricTypeStatsGauge:
 			rc := C.add_metric(&tm.node, C.D_TM_STATS_GAUGE, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %s", tm.Name, drpc.DaosStatus(rc))
+				t.Fatalf("failed to add %s: %s", tm.Name, daos.Status(rc))
 			}
 			for _, val := range []float64{tm.min, tm.max, tm.Cur} {
 				C.d_tm_set_gauge(tm.node, C.uint64_t(val))
@@ -136,13 +136,13 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 		case MetricTypeCounter:
 			rc := C.add_metric(&tm.node, C.D_TM_COUNTER, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
+				t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
 			}
 			C.d_tm_inc_counter(tm.node, C.ulong(tm.Cur))
 		case MetricTypeDuration:
 			rc := C.add_metric(&tm.node, C.D_TM_DURATION|C.D_TM_CLOCK_REALTIME, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
+				t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
 			}
 			C.d_tm_mark_duration_start(tm.node, C.D_TM_CLOCK_REALTIME)
 			time.Sleep(time.Duration(tm.Cur))
@@ -150,24 +150,24 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 		case MetricTypeTimestamp:
 			rc := C.add_metric(&tm.node, C.D_TM_TIMESTAMP, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
+				t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
 			}
 			C.d_tm_record_timestamp(tm.node)
 		case MetricTypeSnapshot:
 			rc := C.add_metric(&tm.node, C.D_TM_TIMER_SNAPSHOT|C.D_TM_CLOCK_REALTIME, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
+				t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
 			}
 			C.d_tm_take_timer_snapshot(tm.node, C.D_TM_CLOCK_REALTIME)
 		case MetricTypeDirectory:
 			rc := C.add_metric(&tm.node, C.D_TM_DIRECTORY, C.CString(tm.desc), C.CString(tm.units), C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
+				t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
 			}
 		case MetricTypeLink:
 			rc := C.add_eph_dir(&tm.node, 1024, C.CString(fullName))
 			if rc != 0 {
-				t.Fatalf("failed to add %s: %s", fullName, drpc.DaosStatus(rc))
+				t.Fatalf("failed to add %s: %s", fullName, daos.Status(rc))
 			}
 		default:
 			t.Fatalf("metric type %d not supported", mt)
@@ -186,7 +186,7 @@ func RemoveTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 		fullName := tm.FullPath()
 		rc := C.del_eph_dir(C.CString(fullName))
 		if rc != 0 {
-			t.Fatalf("failed to remove %s: %s", fullName, drpc.DaosStatus(rc))
+			t.Fatalf("failed to remove %s: %s", fullName, daos.Status(rc))
 		}
 	}
 }

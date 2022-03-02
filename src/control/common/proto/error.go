@@ -15,8 +15,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -26,7 +26,7 @@ const (
 	AnnotatedFaultType = "proto.fault.Fault"
 	// AnnotatedDaosStatusType defines an identifier for DaosStatus errors serialized
 	// as gRPC status metadata.
-	AnnotatedDaosStatusType = "proto.drpc.DaosStatus"
+	AnnotatedDaosStatusType = "proto.daos.DaosStatus"
 	// AnnotatedSystemErrNotLeader defines an identifier for ErrNotLeader errors
 	// serialized as gRPC status metadata.
 	AnnotatedSystemErrNotLeader = "proto.system.ErrNotLeader"
@@ -88,7 +88,7 @@ func AnnotateError(in error) error {
 			Domain:   et.Domain,
 			Metadata: MetaFromFault(et),
 		}
-	case drpc.DaosStatus:
+	case daos.Status:
 		details = &errdetails.ErrorInfo{
 			Reason: AnnotatedDaosStatusType,
 			Domain: "DAOS",
@@ -152,7 +152,7 @@ func UnwrapError(st *status.Status) error {
 				if err != nil {
 					return err
 				}
-				return drpc.DaosStatus(i)
+				return daos.Status(i)
 			case AnnotatedSystemErrNotReplica:
 				return ErrFromMeta(t.Metadata, new(system.ErrNotReplica))
 			case AnnotatedSystemErrNotLeader:

@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 type testStatus struct {
@@ -42,7 +42,7 @@ func TestServer_unaryStatusInterceptor(t *testing.T) {
 			handlerResp: &testStatus{
 				Status: -1005,
 			},
-			expErr: drpc.DaosNonexistant,
+			expErr: daos.Nonexistent,
 		},
 		"non-status resp": {
 			handlerResp: 42,

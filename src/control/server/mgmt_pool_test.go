@@ -25,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -71,7 +72,7 @@ func addTestPools(t *testing.T, sysdb *raft.Database, poolUUIDs ...string) {
 func testPoolLabelProp() []*mgmtpb.PoolProperty {
 	return []*mgmtpb.PoolProperty{
 		{
-			Number: drpc.PoolPropertyLabel,
+			Number: daos.PoolPropertyLabel,
 			Value: &mgmtpb.PoolProperty_Strval{
 				Strval: "test",
 			},
@@ -87,19 +88,19 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 		"creating": {
 			state: system.PoolServiceStateCreating,
 			expResp: &mgmtpb.PoolCreateResp{
-				Status: int32(drpc.DaosTryAgain),
+				Status: int32(daos.TryAgain),
 			},
 		},
 		"ready": {
 			state: system.PoolServiceStateReady,
 			expResp: &mgmtpb.PoolCreateResp{
-				Status: int32(drpc.DaosAlready),
+				Status: int32(daos.Already),
 			},
 		},
 		"destroying": {
 			state: system.PoolServiceStateDestroying,
 			expResp: &mgmtpb.PoolCreateResp{
-				Status: int32(drpc.DaosTryAgain),
+				Status: int32(daos.TryAgain),
 			},
 		},
 	} {
@@ -645,11 +646,11 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
-					Status: int32(drpc.DaosBusy),
+					Status: int32(daos.Busy),
 				}, nil)
 			},
 			expResp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosBusy),
+				Status: int32(daos.Busy),
 			},
 			expSvcState: stateAddr(system.PoolServiceStateReady),
 		},
@@ -664,11 +665,11 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
-					Status: int32(drpc.DaosMiscError),
+					Status: int32(daos.MiscError),
 				}, nil)
 			},
 			expResp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosMiscError),
+				Status: int32(daos.MiscError),
 			},
 			expSvcState: stateAddr(system.PoolServiceStateDestroying),
 		},
@@ -683,11 +684,11 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
-					Status: int32(drpc.DaosMiscError),
+					Status: int32(daos.MiscError),
 				}, nil)
 			},
 			expResp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosMiscError),
+				Status: int32(daos.MiscError),
 			},
 			expSvcState: stateAddr(system.PoolServiceStateDestroying),
 		},
@@ -700,7 +701,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
-					Status: int32(drpc.DaosMiscError),
+					Status: int32(daos.MiscError),
 				}, nil)
 			},
 			poolSvc: &system.PoolService{
@@ -712,7 +713,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosMiscError),
+				Status: int32(daos.MiscError),
 			},
 		},
 		"force=true already destroying, destroy dRPC fails due to engine error": {
@@ -725,7 +726,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
-					Status: int32(drpc.DaosMiscError),
+					Status: int32(daos.MiscError),
 				}, nil)
 			},
 			poolSvc: &system.PoolService{
@@ -737,7 +738,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosMiscError),
+				Status: int32(daos.MiscError),
 			},
 		},
 		"evict dRPC fails with -DER_NOTLEADER on first try": {
@@ -751,11 +752,11 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
-					Status: int32(drpc.DaosNotLeader),
+					Status: int32(daos.NotLeader),
 				}, nil)
 			},
 			expResp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosNotLeader),
+				Status: int32(daos.NotLeader),
 			},
 			expSvcState: stateAddr(system.PoolServiceStateDestroying),
 		},
@@ -769,7 +770,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
-					Status: int32(drpc.DaosNotLeader),
+					Status: int32(daos.NotLeader),
 				}, nil)
 			},
 			poolSvc: &system.PoolService{
@@ -793,11 +794,11 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
-					Status: int32(drpc.DaosNotReplica),
+					Status: int32(daos.NotReplica),
 				}, nil)
 			},
 			expResp: &mgmtpb.PoolDestroyResp{
-				Status: int32(drpc.DaosNotReplica),
+				Status: int32(daos.NotReplica),
 			},
 			expSvcState: stateAddr(system.PoolServiceStateDestroying),
 		},
@@ -811,7 +812,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
-					Status: int32(drpc.DaosNotReplica),
+					Status: int32(daos.NotReplica),
 				}, nil)
 			},
 			poolSvc: &system.PoolService{
@@ -1771,7 +1772,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				Id: mockUUID,
 				Properties: []*mgmt.PoolProperty{
 					{
-						Number: drpc.PoolPropertyLabel,
+						Number: daos.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"0"},
 					},
 				},
@@ -1793,12 +1794,12 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				Id: test.MockUUID(3),
 				Properties: []*mgmt.PoolProperty{
 					{
-						Number: drpc.PoolPropertyLabel,
+						Number: daos.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"0"},
 					},
 					{
-						Number: drpc.PoolPropertySpaceReclaim,
-						Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
+						Number: daos.PoolPropertySpaceReclaim,
+						Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSpaceReclaimDisabled},
 					},
 				},
 			},
@@ -1811,7 +1812,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				Id: mockUUID,
 				Properties: []*mgmt.PoolProperty{
 					{
-						Number: drpc.PoolPropertyLabel,
+						Number: daos.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"0"},
 					},
 				},
@@ -1822,7 +1823,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				Id:       mockUUID,
 				Properties: []*mgmt.PoolProperty{
 					{
-						Number: drpc.PoolPropertyLabel,
+						Number: daos.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"0"},
 					},
 				},
@@ -1833,12 +1834,12 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				Id: mockUUID,
 				Properties: []*mgmt.PoolProperty{
 					{
-						Number: drpc.PoolPropertyLabel,
+						Number: daos.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"ok"},
 					},
 					{
-						Number: drpc.PoolPropertySpaceReclaim,
-						Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
+						Number: daos.PoolPropertySpaceReclaim,
+						Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSpaceReclaimDisabled},
 					},
 				},
 			},
@@ -1849,8 +1850,8 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				Id:       mockUUID,
 				Properties: []*mgmt.PoolProperty{
 					{
-						Number: drpc.PoolPropertySpaceReclaim,
-						Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
+						Number: daos.PoolPropertySpaceReclaim,
+						Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSpaceReclaimDisabled},
 					},
 				},
 			},
@@ -1909,7 +1910,7 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 				Id: mockUUID,
 				Properties: []*mgmt.PoolProperty{
 					{
-						Number: drpc.PoolPropertyLabel,
+						Number: daos.PoolPropertyLabel,
 					},
 				},
 			},
@@ -1930,10 +1931,10 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 				Id: mockUUID,
 				Properties: []*mgmt.PoolProperty{
 					{
-						Number: drpc.PoolPropertyLabel,
+						Number: daos.PoolPropertyLabel,
 					},
 					{
-						Number: drpc.PoolPropertySpaceReclaim,
+						Number: daos.PoolPropertySpaceReclaim,
 					},
 				},
 			},

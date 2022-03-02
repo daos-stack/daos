@@ -18,7 +18,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -53,7 +53,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
-					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
+					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
 				},
 			},
@@ -64,7 +64,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
-					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", daos.TryAgain, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
 				},
 			},
@@ -244,10 +244,10 @@ func TestControl_PoolCreate(t *testing.T) {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
-					MockMSResponse("host1", drpc.DaosIOError, nil),
+					MockMSResponse("host1", daos.IOError, nil),
 				},
 			},
-			expErr: drpc.DaosIOError,
+			expErr: daos.IOError,
 		},
 		"missing storage params": {
 			req:    &PoolCreateReq{},
@@ -259,7 +259,7 @@ func TestControl_PoolCreate(t *testing.T) {
 				Properties: []*PoolProperty{
 					{
 						Name:   "label",
-						Number: drpc.PoolPropertyLabel,
+						Number: daos.PoolPropertyLabel,
 						Value:  PoolPropertyValue{"yikes!"},
 					},
 				},
@@ -270,7 +270,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
-					MockMSResponse("host1", drpc.DaosTimedOut, nil),
+					MockMSResponse("host1", daos.TimedOut, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
@@ -280,7 +280,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
-					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
+					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
@@ -290,7 +290,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
-					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", daos.TryAgain, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
@@ -302,7 +302,7 @@ func TestControl_PoolCreate(t *testing.T) {
 				Properties: []*PoolProperty{
 					{
 						Name:   "label",
-						Number: drpc.PoolPropertyLabel,
+						Number: daos.PoolPropertyLabel,
 						Value:  PoolPropertyValue{"foo"},
 					},
 				},
@@ -401,7 +401,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: drpc.MediaTypeScm,
+								MediaType: daos.MediaTypeScm,
 							},
 							{
 								Total:     123456,
@@ -409,7 +409,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: drpc.MediaTypeNvme,
+								MediaType: daos.MediaTypeNvme,
 							},
 						},
 					},
@@ -685,11 +685,11 @@ func TestPoolGetProp(t *testing.T) {
 						},
 						{
 							Number: propWithVal("reclaim", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
+							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSpaceReclaimDisabled},
 						},
 						{
 							Number: propWithVal("self_heal", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSelfHealingAutoExclude},
+							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSelfHealingAutoExclude},
 						},
 						{
 							Number: propWithVal("ec_cell_sz", "").Number,
@@ -1073,7 +1073,7 @@ func TestControl_ListPools(t *testing.T) {
 						},
 					}),
 					MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
-						Status: int32(drpc.DaosNotInit),
+						Status: int32(daos.NotInit),
 					}),
 					MockMSResponse("host1", nil, queryResp(2)),
 				},

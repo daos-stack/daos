@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,9 +19,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -56,10 +56,10 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 	if cmdErr != nil {
 		errStr = new(string)
 		*errStr = cmdErr.Error()
-		if s, ok := errors.Cause(cmdErr).(drpc.DaosStatus); ok {
+		if s, ok := errors.Cause(cmdErr).(daos.Status); ok {
 			status = int(s)
 		} else {
-			status = int(drpc.DaosMiscError)
+			status = int(daos.MiscError)
 		}
 	}
 
