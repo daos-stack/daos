@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,8 +56,10 @@ struct agg_phy_ent {
 	uint32_t		pe_ref;
 	/* Need to truncate on window flush */
 	bool			pe_trunc_head;
-	/** Mark the entry as removed */
+	/* Mark the entry as removed */
 	bool			pe_remove;
+	/* Need to free the csum buffer when the physical entry is freed */
+	bool			pe_csum_free;
 };
 
 /* Removal record */
@@ -691,6 +693,14 @@ phy_ent_is_removed(struct agg_merge_window *mw, const struct evt_extent *phy_ext
 	}
 
 	return false;
+}
+
+static inline void
+free_phy_ent(struct agg_phy_ent	*phy_ent)
+{
+	if (phy_ent->pe_csum_free)
+		D_FREE(phy_ent->pe_csum_info.cs_csum);
+	D_FREE(phy_ent);
 }
 
 static int
@@ -1439,11 +1449,23 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		phy_ent = lgc_seg->ls_phy_ent;
 
 		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr)) {
+			/*
+			 * the csum free flag indicates that memory has been allocated and should
+			 * only be allocated once for the phy_ent.
+			 */
+			if (phy_ent->pe_csum_free)
+				D_FREE(phy_ent->pe_csum_info.cs_csum);
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
 			 * physical entry, in addition to re-assigning address.
 			 */
 			phy_ent->pe_csum_info = ent_in->ei_csum;
+			D_ALLOC(phy_ent->pe_csum_info.cs_csum, phy_ent->pe_csum_info.cs_buf_len);
+			if (phy_ent->pe_csum_info.cs_csum == NULL)
+				return -DER_NOMEM;
+			phy_ent->pe_csum_free = true;
+			memcpy(phy_ent->pe_csum_info.cs_csum, ent_in->ei_csum.cs_csum,
+			       phy_ent->pe_csum_info.cs_buf_len);
 		}
 	}
 
@@ -1484,7 +1506,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		    phy_ent->pe_remove) {
 			d_list_del(&phy_ent->pe_link);
 			unmark_removals(mw, phy_ent);
-			D_FREE(phy_ent);
+			free_phy_ent(phy_ent);
 			D_ASSERT(mw->mw_phy_cnt > 0);
 			mw->mw_phy_cnt--;
 			continue;
@@ -1571,7 +1593,7 @@ clear_merge_window(struct agg_merge_window *mw)
 	d_list_for_each_entry_safe(phy_ent, tmp, &mw->mw_phy_ents, pe_link) {
 		d_list_del(&phy_ent->pe_link);
 		unmark_removals(mw, phy_ent);
-		D_FREE(phy_ent);
+		free_phy_ent(phy_ent);
 	}
 	mw->mw_phy_cnt = 0;
 }
@@ -1654,6 +1676,8 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	if (!need_flush(mw, last))
 		return 0;
 
+	D_DEBUG(DB_TRACE, "Flush to merge to window "DF_EXT"\n", DP_EXT(&mw->mw_ext));
+
 	/* Prepare the new segments to be inserted */
 	rc = prepare_segments(mw);
 	if (rc) {
@@ -1724,6 +1748,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_rect.rc_minor_epc = entry->ie_minor_epc;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
+	phy_ent->pe_csum_free = false;
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
@@ -2017,7 +2042,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 			return rc;
 		}
 	} else {
-		/* Can't be the first logcial entry */
+		/* Can't be the first logical entry */
 		D_ASSERT(phy_ext.ex_lo != lgc_ext.ex_lo);
 	}
 
@@ -2483,6 +2508,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	struct agg_data		*ad;
 	int			 rc;
 
+	D_DEBUG(DB_TRACE, "epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi);
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
