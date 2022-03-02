@@ -54,6 +54,8 @@ struct pf_param {
 		struct {
 			/* full scan */
 			bool	full_scan;
+			/* Force merge */
+			bool	force_merge;
 		} pa_agg;
 	};
 };
