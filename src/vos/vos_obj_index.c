@@ -678,12 +678,14 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 				      NULL, &oiter->oit_ilog_info);
 
 	feats = dbtree_feats_get(&obj->vo_tree);
-	if (feats & VOS_TREE_AGG_OPT) {
-		if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
-			if (!full_scan && !punched)
-				return 2;
-		} else {
-			feats |= VOS_TREE_AGG_FLAG;
+	if (iter->it_for_purge) {
+		if (feats & VOS_TREE_AGG_OPT) {
+			if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
+				if (!full_scan && !punched)
+					return 2;
+			} else {
+				feats |= VOS_TREE_AGG_FLAG;
+			}
 		}
 	}
 
@@ -775,11 +777,13 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 			invisible = true;
 			rc = 0;
 		}
-		feats = dbtree_feats_get(&obj->vo_tree);
-		if (feats & VOS_TREE_AGG_FLAG) {
-			feats = feats & ~(VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED);
-			rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont), feats,
-					      true);
+		if (iter->it_for_purge) {
+			feats = dbtree_feats_get(&obj->vo_tree);
+			if (feats & VOS_TREE_AGG_FLAG) {
+				feats = feats & ~(VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED);
+				rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont),
+						      feats, true);
+			}
 		}
 	}
 

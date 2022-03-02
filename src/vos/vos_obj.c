@@ -1942,8 +1942,7 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 				      &oiter->it_punched, &oiter->it_ilog_info);
 
 	bmap = krec->kr_bmap;
-
-	if (bmap & KREC_BF_AGG_OPT) {
+	if (oiter->it_iter.it_for_purge && bmap & KREC_BF_AGG_OPT) {
 		if ((bmap & KREC_BF_AGG_NEEDED) == 0) {
 			if (!full_scan && !punched && oiter->it_punched.pr_epc == 0)
 				return 2;
@@ -2047,7 +2046,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 			rc = 0;
 		}
 		bmap = krec->kr_bmap;
-		if (bmap & KREC_BF_AGG_FLAG) {
+		if (oiter->it_iter.it_for_purge && bmap & KREC_BF_AGG_FLAG) {
 			/** We got through aggregation without anyone clearing the flag,
 			 *  so we can clear the needed flag
 			 */
