@@ -18,7 +18,8 @@ import glob
 from apricot import TestWithoutServers
 from general_utils import stop_processes
 from write_host_file import write_host_file
-from job_manager_utils import get_job_manager
+from job_manager_utils import Orterun
+
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
@@ -427,7 +428,7 @@ class CartTest(TestWithoutServers):
         if tst_arg is not None:
             tst_cmd += " " + tst_arg
 
-        job = get_job_manager(self, "Orterun", tst_cmd, mpi_type="openmpi")
+        job = Orterun(tst_cmd)
         job.mca.update(mca_flags)
         job.hostfile.update(hostfile)
         job.pprnode.update(tst_ppn)
