@@ -345,8 +345,9 @@ DFuse needs 'r' permission for pools only.
 
 #### Container permissions.
 
-DFuse needs 'r', 't', and 'a' permissions to run: read for accessing the data, 't' to read container
-properties to know the container type and 'a' to read the ACLs to know the container owner.
+DFuse needs 'r' and 't' permissions to run: read for accessing the data, 't' to read container
+properties to know the container type. For older layout versions (containers created by DAOS v2.0.x
+and before), 'a' permission is also required to read the ACLs to know the container owner.
 
 Write permission for the container is optional; however, without it the container will be read-only.
 
