@@ -116,7 +116,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error
 		if err != nil {
 			return nil, err
 		}
-		if m.State()&system.AvailableMemberFilter == 0 {
+		if m.State&system.AvailableMemberFilter == 0 {
 			continue
 		}
 		readyRanks = append(readyRanks, r)

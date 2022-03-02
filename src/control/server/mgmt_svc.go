@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
@@ -25,7 +26,7 @@ type mgmtSvc struct {
 	log               logging.Logger
 	harness           *EngineHarness
 	membership        *system.Membership // if MS leader, system membership list
-	sysdb             *system.Database
+	sysdb             *raft.Database
 	rpcClient         control.UnaryInvoker
 	events            *events.PubSub
 	clientNetworkHint *mgmtpb.ClientNetHint
@@ -34,7 +35,7 @@ type mgmtSvc struct {
 	lastMapVer        uint32
 }
 
-func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
+func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
 	return &mgmtSvc{
 		log:               h.log,
 		harness:           h,
