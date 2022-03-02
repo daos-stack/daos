@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.1.0~rc4-3%{?dist}
+%global mercury_version 2.1.0~rc4-4%{?dist}
 %global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.1
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -514,6 +514,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Wed Mar 02 2022 Liu Xuezhao <xuezhao.liu@intel.com> 2.0.1-5
+- Update mercury to include DAOS-9561 workaround
+
 * Tue Feb 22 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.0.1-4
 - Update go toolchain requirements
 
