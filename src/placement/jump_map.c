@@ -129,7 +129,7 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	jmop->jmop_pd_nr = min(pd_grp_nr, pd_nr);
 
 	D_ASSERT(pd_nr >= 1);
-	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_PD, PO_COMP_ID_ALL, &pds);
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &pds);
 	D_ASSERT(rc == pd_nr);
 	rc = 0;
 
@@ -1109,7 +1109,7 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 
 	jmap->jmp_redundant_dom = mia->ia_jump_map.domain;
 
-	rc = pool_map_find_domain(poolmap, PO_COMP_TP_PD, PO_COMP_ID_ALL, &doms);
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &doms);
 	if (rc < 0)
 		goto ERR;
 	jmap->jmp_pd_nr = rc;

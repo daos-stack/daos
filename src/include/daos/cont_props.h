@@ -145,4 +145,10 @@ daos_cont_prop2rp_pda(daos_prop_t *prop);
 uint32_t
 daos_cont_prop2global_version(daos_prop_t *prop);
 
+static inline uint32_t
+daos_cont_props2pda(struct cont_props *props, bool is_ec_obj)
+{
+	return is_ec_obj ? props->dcp_ec_pda : props->dcp_rp_pda;
+}
+
 #endif /** __DAOS_CONT_PROPS_H__ */

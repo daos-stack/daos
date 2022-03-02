@@ -134,9 +134,9 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "rack",
 	},
 	{
-		.td_type	= PO_COMP_TP_PD,
+		.td_type	= PO_COMP_TP_GRP,
 		.td_abbr	= 'g',
-		.td_name	= "group",	/* performance domain group */
+		.td_name	= "group",
 	},
 	{
 		.td_type	= PO_COMP_TP_ROOT,
@@ -470,7 +470,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 			buf->pb_target_nr);
 		return -DER_INVAL;
 	}
-	if (buf->pb_domain_nr != 0 && buf->pb_comps[0].co_type != PO_COMP_TP_PD &&
+	if (buf->pb_domain_nr != 0 && buf->pb_comps[0].co_type != PO_COMP_TP_GRP &&
 	    buf->pb_comps[0].co_type != PO_COMP_TP_NODE) {
 		D_DEBUG(DB_MGMT, "Invalid co_type %s[%d] for first domain.\n",
 			pool_comp_type2str(buf->pb_comps[0].co_type), buf->pb_comps[0].co_type);
@@ -504,12 +504,12 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 		parent->do_child_nr = buf->pb_node_nr;
 	} else {
 		comp = &buf->pb_comps[0];
-		if (comp->co_type == PO_COMP_TP_PD) {
+		if (comp->co_type == PO_COMP_TP_GRP) {
 			nr = 0;
 			do {
 				nr++;
 				comp++;
-			} while (comp->co_type == PO_COMP_TP_PD);
+			} while (comp->co_type == PO_COMP_TP_GRP);
 			parent->do_child_nr = nr;
 			D_DEBUG(DB_TRACE, "root do_child_nr %d, with performance domain\n",
 				parent->do_child_nr);
@@ -1539,7 +1539,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 		num_fdom = num_domain_comps - num_pd;
 		fdom_per_pd = num_fdom / num_pd;
 		for (i = 0; i < num_pd; i++) {
-			map_comp.co_type = PO_COMP_TP_PD;
+			map_comp.co_type = PO_COMP_TP_GRP;
 			map_comp.co_status = PO_COMP_ST_UPIN;
 			map_comp.co_padding = 0;
 			map_comp.co_id = i;
