@@ -134,6 +134,11 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "rack",
 	},
 	{
+		.td_type	= PO_COMP_TP_PD,
+		.td_abbr	= 'g',
+		.td_name	= "group",	/* performance domain group */
+	},
+	{
 		.td_type	= PO_COMP_TP_ROOT,
 		.td_abbr	= 'o',
 		.td_name	= "root",
@@ -448,21 +453,27 @@ pool_buf_unpack(struct pool_buf *buf)
 static int
 pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 {
-	struct pool_domain *tree;
-	struct pool_domain *domain;
-	struct pool_domain *parent;
-	struct pool_target *targets;
-	pool_comp_type_t    type;
-	int		    size;
-	int		    i;
-	int		    rc = 0;
+	struct pool_domain	*tree;
+	struct pool_domain	*domain;
+	struct pool_domain	*parent;
+	struct pool_target	*targets;
+	struct pool_component	*comp;
+	pool_comp_type_t	 type;
+	int			 size;
+	int			 i, nr;
+	int			 rc = 0;
 
 	if (buf->pb_target_nr == 0 || buf->pb_node_nr == 0 ||
-	    buf->pb_domain_nr + buf->pb_node_nr + buf->pb_target_nr !=
-								buf->pb_nr) {
+	    buf->pb_domain_nr + buf->pb_node_nr + buf->pb_target_nr != buf->pb_nr) {
 		D_DEBUG(DB_MGMT, "Invalid number of components: %d/%d/%d/%d\n",
 			buf->pb_nr, buf->pb_domain_nr, buf->pb_node_nr,
 			buf->pb_target_nr);
+		return -DER_INVAL;
+	}
+	if (buf->pb_domain_nr != 0 && buf->pb_comps[0].co_type != PO_COMP_TP_PD &&
+	    buf->pb_comps[0].co_type != PO_COMP_TP_NODE) {
+		D_DEBUG(DB_MGMT, "Invalid co_type %s[%d] for first domain.\n",
+			pool_comp_type2str(buf->pb_comps[0].co_type), buf->pb_comps[0].co_type);
 		return -DER_INVAL;
 	}
 
@@ -489,10 +500,24 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	parent->do_comp.co_status = PO_COMP_ST_UPIN;
 	if (buf->pb_domain_nr == 0) {
 		/* nodes are directly attached under the root */
-		parent->do_target_nr = buf->pb_node_nr;
+		parent->do_target_nr = buf->pb_target_nr;
 		parent->do_child_nr = buf->pb_node_nr;
 	} else {
-		parent->do_child_nr = buf->pb_domain_nr;
+		comp = &buf->pb_comps[0];
+		if (comp->co_type == PO_COMP_TP_PD) {
+			nr = 0;
+			do {
+				nr++;
+				comp++;
+			} while (comp->co_type == PO_COMP_TP_PD);
+			parent->do_child_nr = nr;
+			D_DEBUG(DB_TRACE, "root do_child_nr %d, with performance domain\n",
+				parent->do_child_nr);
+		} else if (comp->co_type == PO_COMP_TP_NODE) {
+			parent->do_child_nr = buf->pb_domain_nr;
+			D_DEBUG(DB_TRACE, "root do_child_nr %d, without performance domain\n",
+				parent->do_child_nr);
+		}
 	}
 	parent->do_children = &tree[1];
 
@@ -500,9 +525,8 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	type = buf->pb_comps[0].co_type;
 
 	for (i = 1;; i++) {
-		struct pool_component *comp = &tree[i].do_comp;
-		int		       nr = 0;
-
+		nr = 0;
+		comp = &tree[i].do_comp;
 		*comp = buf->pb_comps[i - 1];
 		if (comp->co_type >= PO_COMP_TP_ROOT) {
 			D_ERROR("Invalid type %d/%d\n", type, comp->co_type);
@@ -1473,6 +1497,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	uint8_t			new_status;
 	bool			updated;
 	int			i, rc;
+	unsigned		num_pd = 0;
 	uint32_t		num_domain_comps;
 
 	updated = false;
@@ -1488,10 +1513,55 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	D_ASSERT(num_domain_comps > 0);
 	num_domain_comps--; /* remove the root domain - allocated separately */
 
+	if (map == NULL) {
+		/* Temporary hack to pass in the performance domain info before control plane
+		 * support available.
+		 */
+		d_getenv_int("DAOS_PD_NUM", &num_pd);
+		if (num_pd < 2)
+			num_pd = 0;
+		if (num_pd > num_domain_comps) {
+			D_ERROR("invalid num_perf_dom %d > num_fault_dom %d\n",
+				num_pd, num_domain_comps);
+			return -DER_INVAL;
+		}
+		num_domain_comps += num_pd;
+	}
+
 	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);
 	if (map_buf == NULL)
 		D_GOTO(out_map_buf, rc = -DER_NOMEM);
 
+	/* firstly add performance domain */
+	if (num_pd > 0) {
+		uint32_t	num_fdom, fdom_per_pd;
+
+		num_fdom = num_domain_comps - num_pd;
+		fdom_per_pd = num_fdom / num_pd;
+		for (i = 0; i < num_pd; i++) {
+			map_comp.co_type = PO_COMP_TP_PD;
+			map_comp.co_status = PO_COMP_ST_UPIN;
+			map_comp.co_padding = 0;
+			map_comp.co_id = i;
+			map_comp.co_rank = i;
+			map_comp.co_ver = map_version;
+			map_comp.co_in_ver = map_version;
+			map_comp.co_fseq = 1;
+			map_comp.co_flags = PO_COMPF_NONE;
+			map_comp.co_nr = fdom_per_pd;
+			if ((num_fdom % num_pd) != 0 && i < (num_fdom % num_pd))
+				map_comp.co_nr++;
+
+			rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+			if (rc != 0) {
+				D_ERROR("failed to attach to pool buf, "DF_RC"\n",
+					DP_RC(rc));
+				D_GOTO(out_map_buf, rc);
+			}
+		}
+	}
+
+	/* then add fault domain */
 	rc = add_domains_to_pool_buf(map, map_buf, map_version, ndomains,
 				     domains);
 	if (rc != 0)

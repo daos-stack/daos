@@ -121,7 +121,8 @@ typedef struct {
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;
 	uint32_t		omd_ver;
-	uint32_t		omd_padding;
+	/* Performance domain affinity */
+	uint32_t		omd_pda;
 	union {
 		uint32_t	omd_split;
 		uint64_t	omd_loff;

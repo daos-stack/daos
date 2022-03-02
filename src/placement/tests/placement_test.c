@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  *
@@ -15,13 +15,17 @@
 #include <daos/tests_lib.h>
 
 
-const char *s_opts = "he:f:v";
+const char *s_opts = "he:f:vpdn:l:";
 static int idx;
 static struct option l_opts[] = {
 	{"exclude", required_argument, NULL, 'e'},
 	{"filter",  required_argument, NULL, 'f'},
 	{"help",    no_argument,       NULL, 'h'},
 	{"verbose", no_argument,       NULL, 'v'},
+	{"pda",     no_argument,       NULL, 'p'},
+	{"distribute", no_argument,    NULL, 'd'},
+	{"num_objs", required_argument, NULL, 'n'},
+	{"obj_class", required_argument, NULL, 'l'},
 };
 
 static bool
@@ -53,17 +57,21 @@ print_usage(char *name)
 		"\n\nCOMMON TESTS\n==========================\n");
 	print_message("%s -e|--exclude <TESTS>\n", name);
 	print_message("%s -f|--filter <TESTS>\n", name);
+	print_message("%s -p|--pda <TESTS>\n", name);
+	print_message("%s -d|--distribut [-n num_objs] [-l obj_class] <TESTS>\n", name);
 	print_message("%s -h|--help\n", name);
 	print_message("%s -v|--verbose\n", name);
 }
 
-int placement_tests_run(bool verbose);
-
 int main(int argc, char *argv[])
 {
-	int	opt;
-	char	filter[1024];
-	bool	verbose = false;
+	int		opt;
+	char		filter[1024];
+	bool		pda_test = false;
+	bool		dist_test = false;
+	bool		verbose = false;
+	uint32_t	num_objs = 0;
+	int		obj_class = 0;
 
 	assert_success(daos_debug_init(DAOS_LOG_DEFAULT));
 
@@ -100,11 +108,32 @@ int main(int argc, char *argv[])
 			D_PRINT("filter not enabled. %s not applied", filter);
 #endif
 			break;
+		case 'p':
+			pda_test = true;
+			break;
+		case 'd':
+			dist_test = true;
+			break;
+		case 'n':
+			num_objs = atoi(optarg);
+			break;
+		case 'l':
+			obj_class = daos_oclass_name2id(optarg);
+			if (obj_class == OC_UNKNOWN) {
+				D_ERROR("invalid obj class %s\n", optarg);
+				return -1;
+			}
+			break;
 		default:
 			break;
 		}
 	}
-	placement_tests_run(verbose);
+	if (pda_test)
+		pda_tests_run(verbose);
+	if (dist_test)
+		dist_tests_run(verbose, num_objs, obj_class);
+	else
+		placement_tests_run(verbose);
 
 	daos_debug_fini();
 

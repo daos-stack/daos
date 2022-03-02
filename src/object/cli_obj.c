@@ -1472,10 +1472,10 @@ dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md)
 	/* For predefined object classes, do nothing at here. But for those
 	 * customized classes, we need to fetch for the remote OI table.
 	 */
-	md->omd_id      = oid;
-	md->omd_ver     = 0;
-	md->omd_padding = 0;
-	md->omd_loff    = 0;
+	md->omd_id	= oid;
+	md->omd_ver	= 0;
+	md->omd_pda	= 0;
+	md->omd_loff	= 0;
 	return 0;
 }
 

@@ -12,6 +12,8 @@ def scons():
     ring_test_tgt = denv.SharedObject(['ring_map_place_obj.c',
                                        'place_obj_common.c'])
     jump_test_tgt = denv.SharedObject(['jump_map_place_obj.c',
+                                       'jump_map_pda.c',
+                                       'jump_map_dist.c',
                                        'place_obj_common.c',
                                        'placement_test.c'])
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
@@ -27,7 +29,7 @@ def scons():
                                       ['../../pool/srv_pool_map.c'],
                                       LIBS=['daos', 'daos_common', 'gurt',
                                             'cart', 'placement', 'uuid',
-                                            'pthread', 'isal', 'cmocka'])
+                                            'pthread', 'isal', 'cmocka', 'm'])
 
     pl_bench = daos_build.program(denv, 'pl_bench', pl_bench_tgt + common_tgts,
                                   LIBS=['daos', 'daos_common', 'gurt', 'cart',

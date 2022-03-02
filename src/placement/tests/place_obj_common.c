@@ -40,7 +40,7 @@ print_layout(struct pl_obj_layout *layout)
 }
 
 int
-plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
+plt_obj_place(daos_obj_id_t oid, uint32_t pda, struct pl_obj_layout **layout,
 		struct pl_map *pl_map, bool print_layout_flag)
 {
 	struct daos_obj_md	 md;
@@ -48,6 +48,7 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 
 	memset(&md, 0, sizeof(md));
 	md.omd_id  = oid;
+	md.omd_pda = pda;
 	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
@@ -538,26 +539,40 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 }
 
 void
-gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
+gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
 			   int vos_per_target, pl_map_type_t pl_type,
-			   struct pool_map **po_map_out,
-			   struct pl_map **pl_map_out)
+			   struct pool_map **po_map_out, struct pl_map **pl_map_out)
 {
 	struct pool_buf         *buf;
 	int                      i;
 	struct pl_map_init_attr  mia;
-	int                      nr;
+	int                      nr = 0;
 	struct pool_component   *comps;
 	struct pool_component   *comp;
+	int			 num_domains;
 	int                      rc;
 
-	nr = num_domains + (nodes_per_domain * num_domains) +
-	     (num_domains * nodes_per_domain * vos_per_target);
+	if (num_pds < 1)
+		num_pds = 1;
+	num_domains = num_pds * fdoms_per_pd;
+	if (num_pds >= 2)
+		nr = num_pds;
+	nr += num_domains + (nodes_per_domain * num_domains) +
+	      (num_domains * nodes_per_domain * vos_per_target);
 	D_ALLOC_ARRAY(comps, nr);
 	D_ASSERT(comps != NULL);
 
 	comp = &comps[0];
 	/* fake the pool map */
+	for (i = 0; i < num_pds && num_pds >= 2; i++, comp++) {
+		comp->co_type   = PO_COMP_TP_PD;
+		comp->co_status = PO_COMP_ST_UPIN;
+		comp->co_id     = i;
+		comp->co_rank   = i;
+		comp->co_ver    = 1;
+		comp->co_nr     = fdoms_per_pd;
+	}
+
 	for (i = 0; i < num_domains; i++, comp++) {
 		comp->co_type   = PO_COMP_TP_NODE;
 		comp->co_status = PO_COMP_ST_UPIN;
@@ -602,9 +617,8 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 	/* No longer needed, copied into pool map */
 	D_FREE(buf);
 
-	mia.ia_type         = pl_type;
-	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_NODE;
+	mia.ia_type		= pl_type;
+	mia.ia_jump_map.domain	= PO_COMP_TP_NODE;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);
