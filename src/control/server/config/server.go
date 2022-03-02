@@ -9,6 +9,7 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -519,7 +520,15 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 			ec.Fabric.NumaNodeIndex, ec.Storage.NumaNodeIndex)
 	}
 
+	if cfg.NrHugepages < -1 || cfg.NrHugepages > math.MaxInt32 {
+		return FaultConfigNrHugepagesOutOfRange
+	}
+
 	if cfgHasBdevs {
+		if cfg.NrHugepages == -1 {
+			return FaultConfigHugepagesDisabled
+		}
+
 		// Calculate minimum number of hugepages for all configured engines.
 		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount)
 		if err != nil {
@@ -532,7 +541,9 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 			log.Debugf("calculated nr_hugepages: %d for %d targets", minHugePages,
 				cfgTargetCount)
 			cfg.NrHugepages = minHugePages
-		} else if cfg.NrHugepages < minHugePages {
+		}
+
+		if cfg.NrHugepages < minHugePages {
 			return FaultConfigInsufficientHugePages(minHugePages, cfg.NrHugepages)
 		}
 	}

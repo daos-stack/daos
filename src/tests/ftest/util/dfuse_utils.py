@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -25,6 +25,7 @@ class DfuseCommand(ExecutableCommand):
         self.cuuid = FormattedParameter("--container {}")
         self.mount_dir = FormattedParameter("--mountpoint {}")
         self.sys_name = FormattedParameter("--sys-name {}")
+        self.thread_count = FormattedParameter("--thread-count {}")
         self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.enable_caching = FormattedParameter("--enable-caching", False)
@@ -246,13 +247,14 @@ class Dfuse(DfuseCommand):
                 "No %s dfuse mount point directory found on %s",
                 self.mount_dir.value, self.hosts)
 
-    def run(self, check=True):
+    def run(self, check=True, bind_cores=None):
         # pylint: disable=arguments-differ
         """Run the dfuse command.
 
         Args:
             check (bool): Check if dfuse mounted properly after
                 mount is executed.
+            bind_cores (str): List of CPU cores to pass to taskset
         Raises:
             CommandFailure: In case dfuse run command fails
 
@@ -264,11 +266,18 @@ class Dfuse(DfuseCommand):
             raise CommandFailure(
                 "Dfuse missing environment variables for D_LOG_FILE")
 
+        if 'D_LOG_MASK' not in self.env:
+            self.env['D_LOG_MASK'] = 'INFO'
+
         # create dfuse dir if does not exist
         self.create_mount_point()
 
         # run dfuse command
-        cmd = "".join([self.env.get_export_str(), self.__str__()])
+        cmd = self.env.get_export_str()
+        if bind_cores:
+            cmd += 'taskset -c {} '.format(bind_cores)
+        cmd += str(self)
+        self.log.info("Command is '%s'", cmd)
         ret_code = pcmd(self.hosts, cmd, timeout=30)
 
         if 0 in ret_code:
