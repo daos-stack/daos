@@ -64,6 +64,16 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
+   fun:bytes.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:bytes.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
    fun:internal/bytealg*IndexByte*
 }
 {
@@ -75,11 +85,6 @@
    <insert_a_suppression_name_here>
    Memcheck:Addr8
    fun:internal/bytealg*IndexByte*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:indexbytebody
 }
 {
    <insert_a_suppression_name_here>
@@ -154,76 +159,103 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
+   ...
    fun:regexp*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr2
+   ...
    fun:regexp*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr4
+   ...
    fun:regexp*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   ...
    fun:regexp*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr16
+   ...
    fun:regexp*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   ...
    fun:sort.*
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:encoding/*
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Addr8
+   ...
+   fun:encoding/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
    fun:encoding/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
+   ...
    fun:hash/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr4
+   ...
    fun:hash/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr16
+   ...
    fun:hash/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Value8
+   ...
    fun:hash/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
+   ...
    fun:compress/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   ...
    fun:compress/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   ...
    fun:sync.*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr16
+   ...
    fun:sync.*
 }
 {
@@ -233,31 +265,31 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:memeqbody
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Cond
    fun:memeqbody
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr32
-   fun:indexbytebody
-}
-{
-   <insert_a_suppression_name_here>
    Memcheck:Addr1
    ...
-   fun:main.createWriteStream.*
+   fun:main.*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
    ...
-   fun:main.createWriteStream.*
+   fun:main.*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr16
    ...
-   fun:main.createWriteStream.*
+   fun:main.*
 }
 {
    <insert_a_suppression_name_here>
@@ -331,6 +363,11 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:reflect.*
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Addr8
    fun:unicode/utf8*
 }
@@ -351,7 +388,20 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:indexbytebody
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr32
+   ...
+   fun:indexbytebody
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Cond
+   ...
    fun:indexbytebody
 }
 {
