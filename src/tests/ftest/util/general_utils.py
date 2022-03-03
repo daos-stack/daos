@@ -262,7 +262,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         # Block until the command is complete or times out
         return process.run(**kwargs)
 
-    except TypeError as error:
+    except (TypeError, FileNotFoundError) as error:
         # Can occur if using env with a non-string dictionary values
         msg = "Error running '{}': {}".format(command, error)
         if env is not None:

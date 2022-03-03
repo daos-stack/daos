@@ -457,6 +457,7 @@ class Ior:
         self.manager.assign_hosts(hosts, path, slots)
         self.manager.job = IorCommand(namespace)
         self.manager.job.get_params(test)
+        self.manager.output_check = "combined"
         self.timeout = test.params.get("timeout", namespace, None)
         self.env = self.command.get_default_env(str(self.manager), log)
 
@@ -549,10 +550,7 @@ class Ior:
             result = self.manager.run()
 
         except CommandFailure as error:
-            if self.manager.result:
-                error_message = "IOR Failed: {}".format(self.manager.result)
-            else:
-                error_message = "IOR Failed: {}".format(error)
+            error_message = "IOR Failed:\n  {}".format("\n  ".join(str(error).split("\n")))
 
         finally:
             if not self.manager.run_as_subprocess and display_space:

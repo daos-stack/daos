@@ -154,7 +154,7 @@ class ExecutableCommand(CommandWithParameters):
 
         except DaosTestError as error:
             # Command failed or possibly timed out
-            raise CommandFailure from error
+            raise CommandFailure(str(error))
 
         if self.exit_status_exception and not self.check_results():
             # Command failed if its output contains bad keywords
