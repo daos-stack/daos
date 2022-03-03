@@ -22,7 +22,8 @@ class AgentFailure(IorTestBase):
 
     :avocado: recursive
     """
-    def get_journalctl(self, hosts, since, until, journalctl_type):
+    @staticmethod
+    def get_journalctl(hosts, since, until, journalctl_type):
         """Run the journalctl on the hosts.
 
         Args:
@@ -45,8 +46,8 @@ class AgentFailure(IorTestBase):
 
         return results
 
-    def run_custom_ior_cmd(self, results, job_num, file_name):
-        """Run IOR command.
+    def run_ior_collect_error(self, results, job_num, file_name):
+        """Run IOR command and store error in results.
 
         Args:
             results (dict): A dictionary object to store the ior metrics
@@ -110,7 +111,7 @@ class AgentFailure(IorTestBase):
         job_num = 1
         self.log.info("Run IOR with thread")
         job = threading.Thread(
-            target=self.run_custom_ior_cmd, args=[ior_results, job_num, "test_file_1"])
+            target=self.run_ior_collect_error, args=[ior_results, job_num, "test_file_1"])
 
         self.log.info("Start IOR 1 (thread)")
         job.start()
@@ -169,7 +170,7 @@ class AgentFailure(IorTestBase):
 
         # 8. Run IOR again.
         self.log.info("Start IOR 2")
-        self.run_custom_ior_cmd(
+        self.run_ior_collect_error(
             job_num=job_num, results=ior_results, file_name="test_file_2")
 
         # Verify that there's no error this time.
