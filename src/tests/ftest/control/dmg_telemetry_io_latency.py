@@ -436,9 +436,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         if min_value != 1:
             self.log.error("engine_io_dtx_committed_min != 1")
             status = False
-        if not ((max_value >= dtx_value >= min_value) and (
-                max_value > mean_value > min_value) and (
-                    stddev_value < (max_value-min_value))):
+        if not (max_value >= dtx_value >= min_value):
             status = False
 
         return status
