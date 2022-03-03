@@ -76,6 +76,8 @@ class DaosBuild(DfuseTestBase):
         mount_dir = self.dfuse.mount_dir.value
         build_dir = os.path.join(mount_dir, 'daos')
 
+        preload_cmd = 'export LD_PRELOAD=/usr/lib64/libioil.so; export D_LOG_FILE=/tmp/daos.log'
+
         cmds = ['git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
@@ -83,7 +85,8 @@ class DaosBuild(DfuseTestBase):
         for cmd in cmds:
             try:
                 # Set a timeout of 1500 seconds, the whole test will timeout after 1800
-                ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=1500)
+                command = '{};{}'.format(preload_cmd, cmd)
+                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=1500)
                 if 0 in ret_code:
                     continue
                 self.log.info(ret_code)
