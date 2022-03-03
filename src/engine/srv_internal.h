@@ -76,6 +76,7 @@ struct dss_xstream {
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
+	bool			dx_progress_started;	/* Network poll started */
 };
 
 /** Engine module's metrics */
