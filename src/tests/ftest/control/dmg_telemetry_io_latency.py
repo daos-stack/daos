@@ -414,9 +414,10 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         max_value -= baseline_data["engine_io_dtx_committed_max"]
         # expected min value after the test should be 1
         min_value = metrics["engine_io_dtx_committed_min"]
+        # TODO: Validate stddev and mean value metrics
         # mean and std dev metrics only rely on the after test values
-        mean_value = metrics["engine_io_dtx_committed_mean"]
-        stddev_value = metrics["engine_io_dtx_committed_stddev"]
+        # mean_value = metrics["engine_io_dtx_committed_mean"]
+        # stddev_value = metrics["engine_io_dtx_committed_stddev"]
 
         # DTX committed value should be equal to the number of transactions.
         if transfer_size == "512":
@@ -436,7 +437,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         if min_value != 1:
             self.log.error("engine_io_dtx_committed_min != 1")
             status = False
-        if not (max_value >= dtx_value >= min_value):
+        if not max_value >= dtx_value >= min_value:
             status = False
 
         return status
@@ -450,7 +451,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=telemetry
+        :avocado: tags=telemetry,control
         :avocado: tags=test_ior_dtx_telemetry
 
         """
