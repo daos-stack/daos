@@ -45,7 +45,7 @@ extern ATOMIC int nb_mmap_stacks;
 /* mmap()'ed stacks can allow for a bigger size with no impact on
  * memory footprint if unused
  */
-#define MMAPED_ULT_STACK_SIZE (2 * 1024 * 1024)
+#define MMAPED_ULT_STACK_SIZE (1 * 1024 * 1024)
 
 /* ABT_key for mmap()'ed ULT stacks */
 extern ABT_key stack_key;
