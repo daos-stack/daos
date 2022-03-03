@@ -28,7 +28,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	DFUSE_TRA_INFO(ie, "obj is %p", ie->ie_obj);
+	DFUSE_TRA_DEBUG(ie, "obj is %p", ie->ie_obj);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_parent = parent->ie_stat.st_ino;

@@ -6,7 +6,7 @@ site_author: DAOS Project
 # Repository
 repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
-copyright: Copyright &copy; 2016 - 2022 Intel Corporation
+copyright: Copyright 2016-2022 Intel Corporation
 
 # Theme
 theme:
@@ -109,4 +109,5 @@ nav:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
         - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
-        - 'DAOS API Documentation': 'doxygen/html/index.html'
+        - 'DAOS API Documentation': 'https://docs.daos.io/v2.2/doxygen/html/index.html'
+        # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...
